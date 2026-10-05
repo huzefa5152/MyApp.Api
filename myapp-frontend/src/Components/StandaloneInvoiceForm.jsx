@@ -1,5 +1,6 @@
 import { defaultFurtherTaxRate } from "../utils/furtherTax";
 import DocumentTaxFields from "./DocumentTaxFields";
+import FreightChargesField from "./FreightChargesField";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { MdAdd, MdDelete, MdCheck, MdInfo, MdLock, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
 import { createStandaloneInvoice } from "../api/invoiceApi";
@@ -140,6 +141,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [furtherTaxRate, setFurtherTaxRate] = useState(null);
   const [withholdingTaxRate, setWithholdingTaxRate] = useState(() => company?.defaultWithholdingTaxRate ?? null);
   const [withholdingTaxAmount, setWithholdingTaxAmount] = useState(null);
+  const [freightCharges, setFreightCharges] = useState(0);
   const [groupTaxInvoiceByItemType, setGroupTaxInvoiceByItemType] = useState(() => !!company?.defaultGroupTaxInvoiceByItemType);
   useEffect(() => { setGroupTaxInvoiceByItemType(!!company?.defaultGroupTaxInvoiceByItemType); }, [companyId, company?.defaultGroupTaxInvoiceByItemType]);
   // Document Type is locked to Sale Invoice (4) on the no-challan flow.
@@ -480,6 +482,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const gstAmount = Math.round(subtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
   const furtherTaxAmount = Math.round(subtotal * (Number(furtherTaxRate) || 0)) / 100;
   const grandTotal = subtotal + gstAmount + furtherTaxAmount;
+  const commercialTotal = grandTotal + (billsMode ? Number(freightCharges || 0) : 0);
 
   const rowErrors = (r) => {
     const errs = [];
@@ -532,6 +535,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         furtherTaxRate: furtherTaxRate === null || furtherTaxRate === "" ? null : Number(furtherTaxRate),
         withholdingTaxRate: withholdingTaxRate === null || withholdingTaxRate === "" ? null : Number(withholdingTaxRate),
         withholdingTaxAmount: withholdingTaxAmount === null || withholdingTaxAmount === "" ? null : Number(withholdingTaxAmount),
+        freightCharges: billsMode ? Number(freightCharges || 0) : 0,
         paymentTerms: paymentTerms || null,
         notes: notes.trim() || null,
         scenarioId: scenarioCode || null,
@@ -1337,7 +1341,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                         <div style={styles.totalRow}><span>GST ({gstRate}%):</span><span>Rs. {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
                         {furtherTaxAmount > 0 && <div style={styles.totalRow}><span>Further tax ({furtherTaxRate}%):</span><span>Rs. {furtherTaxAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>}
                         <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
-                          <span>Grand Total:</span><span>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          <span>Grand Total:</span><span>Rs. {commercialTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
                       </div>
                     </div>
@@ -1346,7 +1350,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
               </>
             )}
 
-            <DocumentTaxFields subtotal={subtotal} gstAmount={gstAmount}
+            {billsMode && <FreightChargesField value={freightCharges} onChange={setFreightCharges} />}
+            <DocumentTaxFields freightCharges={billsMode ? Number(freightCharges || 0) : 0} subtotal={subtotal} gstAmount={gstAmount}
               furtherTaxRate={furtherTaxRate} onFurtherTaxRateChange={setFurtherTaxRate}
               withholdingTaxRate={withholdingTaxRate} withholdingTaxAmount={withholdingTaxAmount}
               onWithholdingChange={({ rate, amount }) => { setWithholdingTaxRate(rate); setWithholdingTaxAmount(amount); }} />

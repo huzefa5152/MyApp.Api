@@ -722,7 +722,7 @@ namespace MyApp.Api.Services.Implementations
             foreach (var inv in invoices)
             {
                 // The collectible, not the grand total — see InvoiceService.Collectible.
-                var collectible = WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount);
+                var collectible = CommercialTotalCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount, inv.FreightCharges);
                 var balance = PaymentStatusCalculator.BalanceDue(collectible, inv.AmountPaid);
                 var isPaid = balance <= 0m;
                 if (status == "unpaid" && isPaid) continue;
@@ -750,7 +750,7 @@ namespace MyApp.Api.Services.Implementations
                     InvoiceDate = inv.Date.Date,
                     DcNumbers = dc,
                     BillNumber = inv.InvoiceNumber.ToString(),
-                    Amount = Round2(inv.GrandTotal),
+                    Amount = Round2(CommercialTotalCalculator.Total(inv.GrandTotal, inv.FreightCharges)),
                     Paid = Round2(inv.AmountPaid),
                     Balance = Round2(balance),
                     Status = st.ToString(),

@@ -239,7 +239,7 @@ namespace MyApp.Api.Services.Implementations
         /// Equal to the grand total on every invoice that withholds nothing,
         /// which is all of them until an operator says otherwise.</summary>
         private static decimal Collectible(Invoice inv) =>
-            WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount);
+            CommercialTotalCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount, inv.FreightCharges);
 
         /// <summary>Allocate tax pennies so grouped and individual layouts retain the same total.</summary>
         private static void ReconcilePrintTaxes(List<PrintTaxItemDto> rows, decimal rate)
@@ -303,6 +303,7 @@ namespace MyApp.Api.Services.Implementations
             GSTRate = inv.GSTRate,
             GSTAmount = inv.GSTAmount,
             GrandTotal = inv.GrandTotal,
+            FreightCharges = inv.FreightCharges,
             AmountInWords = inv.AmountInWords,
             GroupTaxInvoiceByItemType = inv.GroupTaxInvoiceByItemType,
             PaymentTerms = inv.PaymentTerms,
@@ -640,6 +641,7 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<InvoiceDto> CreateAsync(CreateInvoiceDto dto)
         {
+            var freightCharges = CommercialTotalCalculator.Validate(dto.FreightCharges);
             var company = await _companyRepo.GetByIdAsync(dto.CompanyId);
             if (company == null) throw new KeyNotFoundException("Company not found.");
 
@@ -981,6 +983,7 @@ namespace MyApp.Api.Services.Implementations
                         WithholdingTaxRate = withholdingTaxRate,
                         WithholdingTaxAmount = withholdingTaxAmount,
                         GrandTotal = grandTotal,
+                    FreightCharges = freightCharges,
                         AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                         GroupTaxInvoiceByItemType = dto.GroupTaxInvoiceByItemType ?? company.DefaultGroupTaxInvoiceByItemType,
                         PaymentTerms = dto.PaymentTerms,
@@ -1133,6 +1136,7 @@ namespace MyApp.Api.Services.Implementations
         //     against the picked UOMs.
         public async Task<InvoiceDto> CreateStandaloneAsync(CreateStandaloneInvoiceDto dto)
         {
+            var freightCharges = CommercialTotalCalculator.Validate(dto.FreightCharges);
             var company = await _companyRepo.GetByIdAsync(dto.CompanyId);
             if (company == null) throw new KeyNotFoundException("Company not found.");
 
@@ -1374,6 +1378,7 @@ namespace MyApp.Api.Services.Implementations
                         WithholdingTaxRate = withholdingTaxRate,
                         WithholdingTaxAmount = withholdingTaxAmount,
                         GrandTotal = grandTotal,
+                    FreightCharges = freightCharges,
                         AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                         GroupTaxInvoiceByItemType = dto.GroupTaxInvoiceByItemType ?? company.DefaultGroupTaxInvoiceByItemType,
                         PaymentTerms = finalPaymentTerms,
@@ -1544,6 +1549,8 @@ namespace MyApp.Api.Services.Implementations
         {
             var invoice = await _invoiceRepo.GetByIdAsync(id);
             if (invoice == null) return null;
+            var freightCharges = dto.FreightCharges.HasValue
+                ? CommercialTotalCalculator.Validate(dto.FreightCharges.Value) : invoice.FreightCharges;
 
             if (!IsInvoiceEditable(invoice))
                 throw new InvalidOperationException(invoice.IsCancelled
@@ -1660,6 +1667,7 @@ namespace MyApp.Api.Services.Implementations
                 // is never trusted, only the fixed-amount withholding figure,
                 // and even that is clamped.
                 invoice.FurtherTaxRate = dto.FurtherTaxRate is > 0m ? dto.FurtherTaxRate : null;
+                invoice.FreightCharges = freightCharges;
                 invoice.WithholdingTaxRate = dto.WithholdingTaxRate;
                 invoice.WithholdingTaxAmount = dto.WithholdingTaxAmount ?? 0m;
                 if (dto.GroupTaxInvoiceByItemType.HasValue)
@@ -1783,6 +1791,8 @@ namespace MyApp.Api.Services.Implementations
                     invoice.Subtotal, invoice.GSTAmount, invoice.FurtherTaxAmount);
                 invoice.WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(
                     invoice.WithholdingTaxRate, invoice.GrandTotal, invoice.WithholdingTaxAmount);
+                if (dto.FreightCharges.HasValue && invoice.AmountPaid > CommercialTotalCalculator.Collectible(invoice.GrandTotal, invoice.WithholdingTaxAmount, invoice.FreightCharges))
+                    throw new InvalidOperationException("The commercial bill total cannot be less than receipts already allocated to this bill.");
                 invoice.AmountInWords = NumberToWordsConverter.Convert(invoice.GrandTotal);
 
                 // Any edit invalidates a previous validation
@@ -3309,6 +3319,7 @@ namespace MyApp.Api.Services.Implementations
                         FurtherTaxRate   = original.FurtherTaxRate,
                         FurtherTaxAmount = FurtherTaxCalculator.Resolve(original.FurtherTaxRate, subtotal),
                         GrandTotal    = grandTotal,
+                    FreightCharges = !partial && docType == 10 ? original.FreightCharges : 0m,
                         AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                         PaymentTerms  = original.PaymentTerms,   // carries [SNxxx] scenario tag
                         DocumentType  = docType,
@@ -3679,11 +3690,14 @@ namespace MyApp.Api.Services.Implementations
                 // Round to whole rupees for the printed bill so the displayed
                 // grand total matches AmountInWords. Stored DB value keeps
                 // 2-dp precision; this is purely a print transformation.
-                GrandTotal = NumberToWordsConverter.RoundForDisplay(inv.GrandTotal),
+                FreightCharges = inv.FreightCharges,
+                TotalBeforeFreight = inv.GrandTotal,
+                CommercialTotal = CommercialTotalCalculator.Total(inv.GrandTotal, inv.FreightCharges),
+                GrandTotal = NumberToWordsConverter.RoundForDisplay(CommercialTotalCalculator.Total(inv.GrandTotal, inv.FreightCharges)),
                 // Recompute words at print time so old bills (whose stored
                 // AmountInWords was written under the prior ceil rule) stay in
                 // sync with the rounded total without needing a re-save.
-                AmountInWords = NumberToWordsConverter.Convert(inv.GrandTotal),
+                AmountInWords = NumberToWordsConverter.Convert(CommercialTotalCalculator.Total(inv.GrandTotal, inv.FreightCharges)),
                 PaymentTerms = inv.PaymentTerms,
                 Notes = inv.Notes,
                 Items = inv.Items.Select((ii, idx) => new PrintBillItemDto

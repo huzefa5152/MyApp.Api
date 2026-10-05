@@ -87,6 +87,7 @@ namespace MyApp.Api.Controllers
             {
                 companyId = DCompanyId, clientId = new { type = "integer", minimum = 1 }, date = new { type = "string", format = "date", description = "Defaults to today (Pakistan time); never in the future." },
                 gstRate = new { type = "string", description = "Percent, up to 2 decimals. Default 18." },
+                freightCharges = new { type = "string", description = "Optional non-negative PKR transport / cartage / freight charge, up to 2 decimals. Added only to the commercial bill; sales tax remains unchanged." },
                 paymentTerms = new { type = "string", maxLength = 200 }, paymentMode = new { type = "string", @enum = PaymentModes },
                 poNumber = new { type = "string", maxLength = 100 }, poDate = new { type = "string", format = "date" }, notes = new { type = "string", maxLength = 2000 },
                 challanIds = new { type = "array", minItems = 1, maxItems = 20, items = new { type = "integer", minimum = 1 }, description = "Bill these challans. Omit for a standalone bill." },
@@ -265,6 +266,9 @@ namespace MyApp.Api.Controllers
             var date = OptDate(args, "date") ?? PkToday();
             if (date.Date > PkToday()) throw new ToolError("A bill cannot be dated in the future (FBR rule 0043).");
             var gst = Has(args, "gstRate") ? Dec(args.GetProperty("gstRate"), "gstRate", 0, 100, 2) : 18m;
+            var freight = Has(args, "freightCharges")
+                ? CommercialTotalCalculator.Validate(Dec(args.GetProperty("freightCharges"), "freightCharges", 0m, 9999999999999999.99m, 2))
+                : 0m;
             var mode = OptText(args, "paymentMode", 20);
             if (!string.IsNullOrEmpty(mode) && !PaymentModes.Contains(mode)) throw new ToolError("paymentMode must be one of: " + string.Join(", ", PaymentModes) + ".");
 
@@ -327,6 +331,7 @@ namespace MyApp.Api.Controllers
             var gstAmount = Math.Round(unrounded * gst / 100m, 2);
             var subtotal = RoundAway(unrounded);
             var grand = RoundAway(unrounded + gstAmount);
+            var commercial = CommercialTotalCalculator.Total(grand, freight);
 
             var payload = new
             {
@@ -335,11 +340,11 @@ namespace MyApp.Api.Controllers
                 poNumber = OptText(args, "poNumber", 100), poDate = OptDate(args, "poDate")?.ToString("yyyy-MM-dd"), notes = OptText(args, "notes", 2000),
                 challanIds, standalone = !fromChallans,
                 items = lines.Select(l => new { l.DeliveryItemId, l.Description, l.Quantity, l.Unit, l.UnitPrice, l.ItemTypeId, lineTotal = RoundAway(l.Quantity * l.UnitPrice) }),
-                subtotal, gstAmount, grandTotal = grand, currency = "PKR",
+                subtotal, gstAmount, grandTotal = grand, freightCharges = freight, commercialTotal = commercial, currency = "PKR",
                 note = "The bill number is assigned when it is saved. The ERP finalises the exact figures and reports them back. It is not submitted to FBR.",
             };
             var what = fromChallans ? $"Bill challan(s) {string.Join(", ", challanIds!)}" : "Create a standalone bill";
-            var summary = $"{what} for \"{client.Name}\" in company {companyId}: {lines.Count} line(s), GST {gst}%, total about {grand:0.00} PKR";
+            var summary = $"{what} for \"{client.Name}\" in company {companyId}: {lines.Count} line(s), GST {gst}%, freight {freight:0.00}, commercial total about {commercial:0.00} PKR";
             return await StorePlanAsync(agent, fromChallans ? "bill.create" : "bill.standalone", companyId, payload, summary, key);
         }
 
@@ -387,6 +392,7 @@ namespace MyApp.Api.Controllers
             {
                 CompanyId = companyId, ClientId = p.GetProperty("clientId").GetInt32(), Date = h.Date, GSTRate = p.GetProperty("gstRate").GetDecimal(),
                 PaymentTerms = h.Terms, PaymentMode = h.Mode, PoNumber = h.Po, PoDate = h.PoDate, Notes = h.Notes,
+                FreightCharges = p.TryGetProperty("freightCharges", out var freight) ? CommercialTotalCalculator.Validate(freight.GetDecimal()) : 0m,
                 ChallanIds = p.GetProperty("challanIds").EnumerateArray().Select(e => e.GetInt32()).ToList(),
                 Items = p.GetProperty("items").EnumerateArray().Select(i => new CreateInvoiceItemDto
                 {
@@ -404,6 +410,7 @@ namespace MyApp.Api.Controllers
             {
                 CompanyId = companyId, ClientId = p.GetProperty("clientId").GetInt32(), Date = h.Date, GSTRate = p.GetProperty("gstRate").GetDecimal(),
                 PaymentTerms = h.Terms, PaymentMode = h.Mode, PoNumber = h.Po, PoDate = h.PoDate, Notes = h.Notes,
+                FreightCharges = p.TryGetProperty("freightCharges", out var freight) ? CommercialTotalCalculator.Validate(freight.GetDecimal()) : 0m,
                 Items = p.GetProperty("items").EnumerateArray().Select(i => new CreateStandaloneInvoiceItemDto
                 {
                     Description = i.GetProperty("description").GetString()!, Quantity = i.GetProperty("quantity").GetDecimal(),

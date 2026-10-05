@@ -21,6 +21,9 @@ namespace MyApp.Api.DTOs
         public decimal GSTRate { get; set; }
         public decimal GSTAmount { get; set; }
         public decimal GrandTotal { get; set; }
+        public decimal FreightCharges { get; set; }
+        public decimal CommercialTotal => GrandTotal + FreightCharges;
+        public string CommercialAmountInWords => MyApp.Api.Helpers.NumberToWordsConverter.Convert(CommercialTotal);
         // ── Document taxes ──
         // Both default to NONE: a null rate means the operator did not select
         // the tax, which is how every existing document reads.
@@ -279,6 +282,7 @@ namespace MyApp.Api.DTOs
 
     public class CreateInvoiceDto
     {
+        public decimal FreightCharges { get; set; }
         public bool? GroupTaxInvoiceByItemType { get; set; }
         public string? Notes { get; set; }
         public DateTime Date { get; set; }
@@ -357,6 +361,7 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class CreateStandaloneInvoiceDto
     {
+        public decimal FreightCharges { get; set; }
         public bool? GroupTaxInvoiceByItemType { get; set; }
         // ── Document taxes — both optional, both default to NONE ──
         /// <summary>Further tax (s.3(1A)) rate %. Null or 0 = not charged. The
@@ -582,6 +587,7 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class UpdateInvoiceDto
     {
+        public decimal? FreightCharges { get; set; }
         public bool? GroupTaxInvoiceByItemType { get; set; }
         // ── Document taxes — both optional, both default to NONE ──
         /// <summary>Further tax (s.3(1A)) rate %. Null or 0 = not charged. The

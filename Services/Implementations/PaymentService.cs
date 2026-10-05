@@ -137,9 +137,9 @@ namespace MyApp.Api.Services.Implementations
             {
                 var inv = invoices.First(i => i.Id == grp.Key);
                 var newTotal = inv.AmountPaid + grp.Sum(a => a.Amount);
-                if (newTotal > WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount))
+                if (newTotal > CommercialTotalCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount, inv.FreightCharges))
                     throw new InvalidOperationException(
-                        $"Receipt would over-pay Invoice #{inv.InvoiceNumber} (balance due is {WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount) - inv.AmountPaid:0.00}).");
+                        $"Receipt would over-pay Invoice #{inv.InvoiceNumber} (balance due is {CommercialTotalCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount, inv.FreightCharges) - inv.AmountPaid:0.00}).");
             }
             foreach (var grp in dto.Allocations.Where(a => a.PurchaseBillId.HasValue)
                          .GroupBy(a => a.PurchaseBillId!.Value))
@@ -278,9 +278,9 @@ namespace MyApp.Api.Services.Implementations
                 var paidByOthers = await _context.PaymentAllocations
                     .Where(pa => pa.InvoiceId == grp.Key && pa.PaymentId != id && !pa.Payment.IsCancelled && pa.Payment.ChequeStatus != ChequeStatus.Bounced)
                     .SumAsync(pa => (decimal?)pa.Amount) ?? 0m;
-                if (paidByOthers + grp.Sum(a => a.Amount) > WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount))
+                if (paidByOthers + grp.Sum(a => a.Amount) > CommercialTotalCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount, inv.FreightCharges))
                     throw new InvalidOperationException(
-                        $"Receipt would over-pay Invoice #{inv.InvoiceNumber} (available is {WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount) - paidByOthers:0.00}).");
+                        $"Receipt would over-pay Invoice #{inv.InvoiceNumber} (available is {CommercialTotalCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount, inv.FreightCharges) - paidByOthers:0.00}).");
             }
             foreach (var grp in dto.Allocations.Where(a => a.PurchaseBillId.HasValue).GroupBy(a => a.PurchaseBillId!.Value))
             {

@@ -135,7 +135,7 @@ namespace MyApp.Api.Services.Implementations
                             Name = i.Client!.Name,
                             i.Date,
                             i.DueDate,
-                            Collectible = i.GrandTotal - i.WithholdingTaxAmount,
+                            Collectible = i.GrandTotal + i.FreightCharges - i.WithholdingTaxAmount,
                             i.AmountPaid,
                         })
                         .ToListAsync())

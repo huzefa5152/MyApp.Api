@@ -139,8 +139,11 @@ export const SAMPLE_DATA = {
     subtotal: 150000,
     gstRate: 18,
     gstAmount: 27000,
-    grandTotal: 177000,
-    amountInWords: "One Hundred Seventy Seven Thousand Rupees Only",
+    grandTotal: 181000,
+    freightCharges: 4000,
+    totalBeforeFreight: 177000,
+    commercialTotal: 181000,
+    amountInWords: "One Hundred Eighty One Thousand Rupees Only",
     items: [
       { sNo: 1, quantity: 10, description: "Sample Item One", itemTypeName: "Pneumatic", hsCode: "8481.8090", unitPrice: 8000, lineTotal: 80000, valueExclTax: 80000, gstRate: 18, gstAmount: 14400, totalInclTax: 94400 },
       { sNo: 2, quantity: 5, description: "Sample Item Two", itemTypeName: "Pneumatic", hsCode: "8412.2100", unitPrice: 14000, lineTotal: 70000, valueExclTax: 70000, gstRate: 18, gstAmount: 12600, totalInclTax: 82600 },

@@ -187,6 +187,7 @@ export function buildBillPrintHtml(d) {
     <div class="totals-box">
       <div class="total-row"><span class="lbl">SUB TOTAL</span><span>Rs${fmt(d.subtotal)}</span></div>
       <div class="total-row"><span class="lbl">GST (${d.gstRate}%)</span><span>Rs${fmt(d.gstAmount)}</span></div>
+      ${Number(d.freightCharges) > 0 ? `<div class="total-row"><span class="lbl">FREIGHT / CARTAGE</span><span>Rs${fmtDec(d.freightCharges)}</span></div>` : ""}
       <div class="total-row grand"><span class="lbl">GRAND TOTAL</span><span>Rs${fmt(d.grandTotal)}</span></div>
     </div>
   </div>

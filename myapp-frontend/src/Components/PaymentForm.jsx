@@ -97,13 +97,21 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
         const shown = (data.items || [])
           .filter((d) => !d.isCancelled)
           .map((d) => {
-            const balanceDue = d.balanceDue ?? (d.grandTotal - (d.amountPaid || 0));
+            const total = isReceipt
+              ? (d.commercialTotal ?? ((Number(d.grandTotal) || 0) + (Number(d.freightCharges) || 0)))
+              : d.grandTotal;
+            const collectible = isReceipt
+              ? (d.collectible ?? Math.max(0, total - (Number(d.withholdingTaxAmount) || 0)))
+              : d.grandTotal;
+            const balanceDue = d.balanceDue ?? (isReceipt
+              ? Math.max(0, collectible - (d.amountPaid || 0))
+              : d.grandTotal - (d.amountPaid || 0));
             const own = ownAlloc[d.id] || 0;
             return {
               id: d.id,
               number: isReceipt ? d.invoiceNumber : d.purchaseBillNumber,
               date: d.date,
-              grandTotal: d.grandTotal,
+              grandTotal: total,
               balanceDue,
               available: balanceDue + own,   // headroom this payment can apply
             };

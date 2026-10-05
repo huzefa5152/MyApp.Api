@@ -24,6 +24,15 @@ export default function PaymentHistoryDialog({ mode, companyId, doc, onClose }) 
   const isReceipt = mode === "receipts";
   const noun = isReceipt ? "Receipt" : "Payment";
   const docLabel = isReceipt ? "Invoice" : "Bill";
+  const total = isReceipt
+    ? (doc.commercialTotal ?? ((Number(doc.grandTotal) || 0) + (Number(doc.freightCharges) || 0)))
+    : doc.grandTotal;
+  const collectible = isReceipt
+    ? (doc.collectible ?? Math.max(0, total - (Number(doc.withholdingTaxAmount) || 0)))
+    : doc.grandTotal;
+  const balanceDue = isReceipt
+    ? (doc.balanceDue ?? Math.max(0, collectible - (doc.amountPaid || 0)))
+    : doc.balanceDue;
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -60,7 +69,7 @@ export default function PaymentHistoryDialog({ mode, companyId, doc, onClose }) 
           <div style={summaryGrid}>
             <div style={summaryCell}>
               <span style={summaryLabel}>Total</span>
-              <span style={summaryValue}>{money(doc.grandTotal)}</span>
+              <span style={summaryValue}>{money(total)}</span>
             </div>
             <div style={summaryCell}>
               <span style={summaryLabel}>{isReceipt ? "Received" : "Paid"}</span>
@@ -68,7 +77,7 @@ export default function PaymentHistoryDialog({ mode, companyId, doc, onClose }) 
             </div>
             <div style={summaryCell}>
               <span style={summaryLabel}>Balance due</span>
-              <span style={{ ...summaryValue, color: (doc.balanceDue || 0) > 0 ? "#c62828" : colors.textPrimary }}>{money(doc.balanceDue)}</span>
+              <span style={{ ...summaryValue, color: balanceDue > 0 ? "#c62828" : colors.textPrimary }}>{money(balanceDue)}</span>
             </div>
             <div style={{ ...summaryCell, alignItems: "flex-start", justifyContent: "center" }}>
               <span style={summaryLabel}>Status</span>

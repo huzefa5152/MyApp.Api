@@ -61,6 +61,9 @@ namespace MyApp.Api.DTOs
         public decimal Subtotal { get; set; }
         public decimal GSTRate { get; set; }
         public decimal GSTAmount { get; set; }
+        public decimal FreightCharges { get; set; }
+        public decimal TotalBeforeFreight { get; set; }
+        public decimal CommercialTotal { get; set; }
         public decimal GrandTotal { get; set; }
         public string AmountInWords { get; set; } = "";
         public string? PaymentTerms { get; set; }

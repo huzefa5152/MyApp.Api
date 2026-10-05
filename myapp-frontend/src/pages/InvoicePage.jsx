@@ -1219,7 +1219,8 @@ export default function InvoicePage({ mode = "invoices" }) {
                     <div style={{ ...cardStyles.amountBox, alignItems: "center" }}>
                       <span style={{ display: "flex", flexDirection: "column" }}>
                         <span style={cardStyles.amountLabel}>Grand Total</span>
-                        <span style={cardStyles.amount}>Rs. {inv.grandTotal?.toLocaleString()}</span>
+                        {isBillsMode && Number(inv.freightCharges) > 0 && <span style={cardStyles.amountLabel}>Includes freight / cartage: Rs. {Number(inv.freightCharges).toLocaleString()}</span>}
+                        <span style={cardStyles.amount}>Rs. {(isBillsMode ? (inv.commercialTotal ?? ((Number(inv.grandTotal) || 0) + (Number(inv.freightCharges) || 0))) : inv.grandTotal)?.toLocaleString()}</span>
                       </span>
                       {/* Payment status (AR) sits with the amount — gated by
                           accounting.paymentstatus.view; hidden on cancelled docs

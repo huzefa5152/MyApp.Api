@@ -265,7 +265,7 @@ namespace MyApp.Api.Services.Implementations
                 .GroupBy(_ => 1)
                 .Select(g => new
                 {
-                    TotalGross = g.Sum(i => i.GrandTotal),
+                    TotalGross = g.Sum(i => i.GrandTotal + i.FreightCharges),
                     GstAmount  = g.Sum(i => i.GSTAmount),
                 })
                 .FirstOrDefaultAsync();
@@ -309,7 +309,7 @@ namespace MyApp.Api.Services.Implementations
                 .GroupBy(_ => 1)
                 .Select(g => new
                 {
-                    Total = g.Sum(i => i.GrandTotal),
+                    Total = g.Sum(i => i.GrandTotal + i.FreightCharges),
                     Count = g.Count(),
                 })
                 .FirstOrDefaultAsync();
@@ -342,7 +342,7 @@ namespace MyApp.Api.Services.Implementations
                     // master Name (group sync keeps them aligned). Max
                     // is just a deterministic picker.
                     Name = g.Max(x => x.Client!.Name) ?? "(unknown)",
-                    Value = g.Sum(i => i.GrandTotal),
+                    Value = g.Sum(i => i.GrandTotal + i.FreightCharges),
                     Count = g.Count(),
                 })
                 .OrderByDescending(x => x.Value)
@@ -362,7 +362,7 @@ namespace MyApp.Api.Services.Implementations
                     Number = i.InvoiceNumber,
                     Date = i.Date,
                     CounterpartyName = i.Client!.Name ?? "",
-                    GrandTotal = i.GrandTotal,
+                    GrandTotal = i.GrandTotal + i.FreightCharges,
                     Status = i.FbrStatus,
                 })
                 .ToListAsync();
@@ -397,7 +397,7 @@ namespace MyApp.Api.Services.Implementations
                 {
                     g.Key.Year,
                     g.Key.Month,
-                    Value = g.Sum(i => i.GrandTotal),
+                    Value = g.Sum(i => i.GrandTotal + i.FreightCharges),
                 })
                 .ToListAsync();
 

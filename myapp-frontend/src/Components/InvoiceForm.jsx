@@ -22,6 +22,7 @@ import ItemTypeForm from "./ItemTypeForm";
 import PermissionLackedHint from "./PermissionLackedHint";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import DocumentTaxFields from "./DocumentTaxFields";
+import FreightChargesField from "./FreightChargesField";
 // 2026-05-08: Same UOM autocomplete the ChallanForm uses, hooked up
 // to /lookup/units. Replaces the plain text input on each row's UOM
 // cell so operators get the saved-units suggestions instead of having
@@ -126,6 +127,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [furtherTaxRate, setFurtherTaxRate] = useState(null);
   const [withholdingTaxRate, setWithholdingTaxRate] = useState(() => company?.defaultWithholdingTaxRate ?? null);
   const [withholdingTaxAmount, setWithholdingTaxAmount] = useState(null);
+  const [freightCharges, setFreightCharges] = useState(0);
   const [paymentTerms, setPaymentTerms] = useState("");
   const [notes, setNotes] = useState("");
   const [groupTaxInvoiceByItemType, setGroupTaxInvoiceByItemType] = useState(() => !!company?.defaultGroupTaxInvoiceByItemType);
@@ -548,6 +550,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     ? 0
     : Math.round(subtotal * (Number(furtherTaxRate) || 0) / 100 * 100) / 100;
   const grandTotal = subtotal + gstAmount + furtherTaxAmount;
+  const commercialTotal = grandTotal + (billsMode ? Number(freightCharges || 0) : 0);
 
   const allPricesValid = allItems.length > 0 && allItems.every((i) => itemPrices[i.id] && parseFloat(itemPrices[i.id]) > 0);
   // Item Type is required on every line so the invoice can always group by
@@ -648,6 +651,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         furtherTaxRate: furtherTaxRate === null || furtherTaxRate === "" ? null : parseFloat(furtherTaxRate),
         withholdingTaxRate: withholdingTaxRate === null || withholdingTaxRate === "" ? null : parseFloat(withholdingTaxRate),
         withholdingTaxAmount: withholdingTaxAmount === null || withholdingTaxAmount === "" ? null : parseFloat(withholdingTaxAmount),
+        freightCharges: billsMode ? Number(freightCharges || 0) : 0,
         groupTaxInvoiceByItemType,
         paymentTerms: paymentTermsToSave,
         notes: notes.trim() || null,
@@ -1592,7 +1596,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             <div style={styles.totalRow}><span>Further tax ({furtherTaxRate}%):</span><span>Rs. {furtherTaxAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
                           )}
                           <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
-                            <span>Grand Total:</span><span>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                            <span>Grand Total:</span><span>Rs. {commercialTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                           </div>
                         </div>
 
@@ -1604,7 +1608,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
               </>
             )}
 
+            {billsMode && <FreightChargesField value={freightCharges} onChange={setFreightCharges} />}
                         <DocumentTaxFields
+                          freightCharges={billsMode ? Number(freightCharges || 0) : 0}
                           subtotal={subtotal}
                           gstAmount={gstAmount}
                           furtherTaxRate={furtherTaxRate}

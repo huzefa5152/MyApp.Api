@@ -13,6 +13,8 @@ namespace MyApp.Api.Models
         public decimal GSTRate { get; set; }
         public decimal GSTAmount { get; set; }
         public decimal GrandTotal { get; set; }
+        // Commercial charge only: excluded from GST, tax totals and FBR filing.
+        public decimal FreightCharges { get; set; }
         public string AmountInWords { get; set; } = "";
         public string? PaymentTerms { get; set; }
 

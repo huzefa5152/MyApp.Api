@@ -454,14 +454,14 @@ namespace MyApp.Api.Controllers
                     {
                         var created = await _invoices.CreateAsync(BillFromChallansPlan(p, plan.CompanyId));
                         (resultRef, resultSummary) = ($"Invoice:{created.Id}",
-                            $"Created bill #{created.InvoiceNumber} (id {created.Id}) for \"{created.ClientName}\", total {created.GrandTotal:0.00} PKR. Not submitted to FBR");
+                            $"Created bill #{created.InvoiceNumber} (id {created.Id}) for \"{created.ClientName}\", total {CommercialTotalCalculator.Total(created.GrandTotal, created.FreightCharges):0.00} PKR. Not submitted to FBR");
                         break;
                     }
                     case "bill.standalone":
                     {
                         var created = await _invoices.CreateStandaloneAsync(StandaloneBillFromPlan(p, plan.CompanyId));
                         (resultRef, resultSummary) = ($"Invoice:{created.Id}",
-                            $"Created bill #{created.InvoiceNumber} (id {created.Id}) for \"{created.ClientName}\", total {created.GrandTotal:0.00} PKR. Not submitted to FBR");
+                            $"Created bill #{created.InvoiceNumber} (id {created.Id}) for \"{created.ClientName}\", total {CommercialTotalCalculator.Total(created.GrandTotal, created.FreightCharges):0.00} PKR. Not submitted to FBR");
                         break;
                     }
                     default: throw new ToolError("Unknown plan type.");

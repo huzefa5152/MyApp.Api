@@ -399,6 +399,31 @@ err, sk2 = tool(TW, "prepare_bill", {**SB, "idempotencyKey": f"mail-{RUN}-b"})
 check("a bill idempotency key returns the same plan", sk["planId"] == sk2["planId"])
 tool(TW, "cancel_action", {"planId": sk["planId"]})
 
+# Commercial charges require the same reviewed prepare/commit flow as the goods.
+print("\n== commercial freight bill ==")
+freight_before = invoice_count()
+err, refused_freight = tool(TW, "prepare_bill", {**SB, "freightCharges": "-1"})
+check("negative freight prepare refused", err, refused_freight)
+check("negative freight prepare saves nothing", invoice_count() == freight_before)
+err, freight_plan = tool(TW, "prepare_bill", {**SB, "freightCharges": "4000"})
+check("freight prepare exposes charge and commercial total", not err
+      and freight_plan["details"].get("freightCharges") == 4000
+      and freight_plan["details"].get("commercialTotal") == 4118.01
+      and freight_plan["details"]["grandTotal"] == 118.01, freight_plan)
+check("freight plan still saves nothing", invoice_count() == freight_before)
+if not err:
+    err, freight_commit = tool(TW, "commit_action", {"planId": freight_plan["planId"]})
+    check("approved freight plan commits", not err and freight_commit.get("resultRef", "").startswith("Invoice:"), freight_commit)
+    if not err:
+        freight_id = int(freight_commit["resultRef"].split(":")[1])
+        made_bills.append(freight_id)
+        fs, freight_bill = http("GET", f"/api/invoices/{freight_id}", admin)
+        check("MCP freight bill stores commercial charge without changing tax", fs == 200
+              and freight_bill.get("freightCharges") == 4000
+              and freight_bill.get("commercialTotal") == 4118.01
+              and freight_bill.get("grandTotal") == 118.01
+              and freight_bill.get("gstAmount") == 18, freight_bill)
+
 # ── ceilings and gates ───────────────────────────────────────────────
 print("\n== hourly ceiling and gates at commit ==")
 for i in range(10):

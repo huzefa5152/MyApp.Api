@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
+using MyApp.Api.Helpers;
 using MyApp.Api.Models;
 using MyApp.Api.Models.Accounting;
 using MyApp.Api.Services.Interfaces;
@@ -45,7 +46,7 @@ namespace MyApp.Api.Services.Implementations
             // A demo bill is excluded from every KPI, a cancelled one has been
             // withdrawn, and a zero-total one moves nothing. None of the three
             // is a transaction, so none of them leaves an entry behind.
-            if (invoice.IsDemo || invoice.IsCancelled || invoice.GrandTotal == 0m)
+            if (invoice.IsDemo || invoice.IsCancelled || invoice.GrandTotal + invoice.FreightCharges == 0m)
             {
                 await RemoveForSourceAsync(invoice.CompanyId, SourceDocType.Invoice, invoice.Id);
                 return;
@@ -78,7 +79,8 @@ namespace MyApp.Api.Services.Implementations
             // collectible, and the withheld slice becomes a receivable from FBR
             // rather than money we have lost.
             var wht = invoice.WithholdingTaxAmount;
-            var collectible = invoice.GrandTotal - wht;
+            var collectible = CommercialTotalCalculator.Collectible(
+                invoice.GrandTotal, wht, invoice.FreightCharges);
 
             var lines = new List<JournalLine>
             {
@@ -95,6 +97,11 @@ namespace MyApp.Api.Services.Implementations
             };
 
             AddLine(lines, sales.Id, debit: isCreditNote ? net : 0m, credit: isCreditNote ? 0m : net, label);
+
+            AddLine(lines, sales.Id,
+                debit: isCreditNote ? invoice.FreightCharges : 0m,
+                credit: isCreditNote ? 0m : invoice.FreightCharges,
+                $"{label} — Freight / cartage charges");
 
             if (invoice.GSTAmount != 0m)
             {
@@ -521,7 +528,7 @@ namespace MyApp.Api.Services.Implementations
                 foreach (var i in invoices.Where(i => IsOpen(i.Date)))
                 {
                     await PostInvoiceAsync(i);
-                    if (!i.IsDemo && !i.IsCancelled && i.GrandTotal != 0m) result.PostedInvoices++;
+                    if (!i.IsDemo && !i.IsCancelled && i.GrandTotal + i.FreightCharges != 0m) result.PostedInvoices++;
                 }
 
                 var bills = await _context.PurchaseBills

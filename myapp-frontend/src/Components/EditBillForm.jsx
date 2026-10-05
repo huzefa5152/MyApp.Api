@@ -1,3 +1,4 @@
+import FreightChargesField from "./FreightChargesField";
 import { defaultFurtherTaxRate } from "../utils/furtherTax";
 import { Fragment, useState, useEffect, useMemo, useRef } from "react";
 import { toLocalYmd, todayYmd } from "../utils/dateInput";
@@ -178,6 +179,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
   const [billNumberOk, setBillNumberOk] = useState(true);
   const [paymentTerms, setPaymentTerms] = useState("");
   const [notes, setNotes] = useState("");
+  const [freightCharges, setFreightCharges] = useState(0);
   const [paymentMode, setPaymentMode] = useState("");
   const [documentType, setDocumentType] = useState(4);
   const [loading, setLoading] = useState(true);
@@ -316,6 +318,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
         const pt = data.paymentTerms ?? "";
         setPaymentTerms(pt);
         setNotes(data.notes || "");
+        setFreightCharges(data.freightCharges ?? 0);
         setPaymentMode(data.paymentMode ?? "");
         setDocumentType(data.documentType ?? 4);
 
@@ -1506,6 +1509,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
           groupTaxInvoiceByItemType: billsMode ? invoice.groupTaxInvoiceByItemType : groupedView,
           paymentTerms: ptToSave,
           notes: notes.trim() || null,
+          ...(billsMode ? { freightCharges: Number(freightCharges || 0) } : {}),
           documentType: documentType || null,
           paymentMode: paymentMode || null,
           // Only send clientId when it would actually change — backend
@@ -2445,6 +2449,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                   </div>
                 )}
 
+                {billsMode && <FreightChargesField value={freightCharges} onChange={setFreightCharges} disabled={lockNonItemType || !invoice?.isEditable} />}
+
                 {/* Totals */}
                 <div style={styles.totalsBox}>
                   <div style={styles.totalsRow}>
@@ -2463,7 +2469,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                   )}
                   <div style={{ ...styles.totalsRow, borderTop: `1px solid ${colors.cardBorder}`, paddingTop: "0.5rem", marginTop: "0.5rem" }}>
                     <span style={{ fontWeight: 700 }}>Grand Total:</span>
-                    <strong style={{ fontSize: "1.1rem", color: colors.blue }}>Rs. {grandTotal.toLocaleString()}</strong>
+                    <strong style={{ fontSize: "1.1rem", color: colors.blue }}>Rs. {(grandTotal + (billsMode ? Number(freightCharges || 0) : 0)).toLocaleString()}</strong>
                   </div>
                   {(!billsMode || lockNonItemType || effectiveReadOnly) && Number(invoice?.withholdingTaxAmount) > 0 && (
                     <>
@@ -2496,6 +2502,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                 {billsMode && !lockNonItemType && (
                   <DocumentTaxFields
                     subtotal={subtotal}
+                    freightCharges={Number(freightCharges || 0)}
                     gstAmount={gstAmount}
                     furtherTaxRate={furtherTaxRate}
                     onFurtherTaxRateChange={setFurtherTaxRate}
