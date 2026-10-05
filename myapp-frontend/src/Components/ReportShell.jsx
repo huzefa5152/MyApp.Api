@@ -15,6 +15,7 @@ import { exportToPdf } from "../utils/exportUtils";
 import { useCompany } from "../contexts/CompanyContext";
 import { getCustomerLedgerInvoiceLayout } from "../api/printTemplateApi";
 import { buildCustomerLedgerHtml, selectLedgerInvoiceTemplate } from "../utils/customerLedgerPrint";
+import { brandAccountingReport } from "../utils/accountingReportPrint";
 import "./ReportShell.css";
 
 /**
@@ -49,6 +50,7 @@ export default function ReportShell({
   categoryTitle,
   printReportId,
   printDivisionId,
+  printCompanyId,
   loadPrintReport,
 }) {
   const { selectedCompany } = useCompany();
@@ -58,13 +60,14 @@ export default function ReportShell({
   const customerLedger = printReportId === "customer-ledger";
   const printable = !!report && !loading && !error;
   const printHtml = async () => {
-    if (!customerLedger) return buildReportHtml(report);
     const company = { ...selectedCompany };
+    if (Number(company.id) !== Number(printCompanyId)) throw new Error("Report company changed");
     const [{ data: invoiceLayout }, ledger] = await Promise.all([
       getCustomerLedgerInvoiceLayout(company.id, printDivisionId), loadPrintReport ? loadPrintReport() : report,
     ]);
     const template = selectLedgerInvoiceTemplate(invoiceLayout ? [invoiceLayout] : [], company.id, printDivisionId);
-    return buildCustomerLedgerHtml(ledger, company, template);
+    return customerLedger ? buildCustomerLedgerHtml(ledger, company, template)
+      : brandAccountingReport(buildReportHtml(ledger), company, template);
   };
 
   const columns = report?.columns || [];
@@ -107,7 +110,8 @@ export default function ReportShell({
     setPrintError("");
     try {
       await exportToPdf(await printHtml(), slug(report.title), customerLedger
-        ? { marginMm: 12, repeatTableHeader: ".ledger-table" } : {});
+        ? { marginMm: 12, repeatTableHeader: ".ledger-table" }
+        : { marginMm: 12, repeatTableHeader: ".accounting-table", orientation: report.statement ? "portrait" : "landscape" });
     } catch {
       setPrintError("Could not build the PDF. Check template access and try again.");
     } finally { setBusy(null); }
@@ -773,7 +777,7 @@ const slug = (s) => (s || "report").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/
  * and the totals — an emailed report has to explain itself. Both consumers
  * (writeAndPrint, exportToPdf) take a full document with a <style> block.
  */
-function buildReportHtml(report) {
+export function buildReportHtml(report) {
   if (!report) return "<html><body></body></html>";
   const cols = report.columns || [];
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) =>

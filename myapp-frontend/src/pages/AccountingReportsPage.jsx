@@ -356,8 +356,9 @@ function GenericReport({ companyId, report, canExport, onBack, onNavigate }) {
         onOpenRow={openRow}
         onOpenAccount={(accountId) => drill("accountId", accountId)}
         printReportId={report.id}
+        printCompanyId={companyId}
         printDivisionId={filters.divisionId}
-        loadPrintReport={report.id === "customer-ledger" ? loadPrintReport : undefined}
+        loadPrintReport={loadPrintReport}
       />
     </div>
   );

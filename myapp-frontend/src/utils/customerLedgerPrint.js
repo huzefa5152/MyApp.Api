@@ -28,8 +28,9 @@ export function selectLedgerInvoiceTemplate(templates, companyId, divisionId) {
 
 // Keep only the invoice's company merge-field branches. Flatten their computed
 // styles in an isolated frame so invoice CSS cannot restyle the ledger table.
-async function invoiceBranding(template, company) {
+export async function invoiceBranding(template, company) {
   const source = new DOMParser().parseFromString(template.htmlContent, "text/html");
+  source.querySelectorAll(".seller").forEach((el) => el.setAttribute("data-ledger-brand", ""));
   const companyField = /\{\{\{?\s*(?:nl2br\s+)?company(?:BrandName|Name|LogoPath|Address|Phone|Email|NTN|STRN)\b/;
   for (const el of source.body.querySelectorAll("*")) {
     const direct = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join("");
@@ -61,9 +62,15 @@ async function invoiceBranding(template, company) {
     const view = frame.contentWindow;
     await doc.fonts.ready;
     const bodyStyle = view.getComputedStyle(doc.body);
-    const headerStyle = doc.querySelector("thead th") ? view.getComputedStyle(doc.querySelector("thead th")) : null;
+    const header = doc.querySelector("thead th, table th");
+    const headerStyle = header ? view.getComputedStyle(header) : null;
+    let background = header;
+    while (background && ["rgba(0, 0, 0, 0)", "transparent"].includes(view.getComputedStyle(background).backgroundColor)) {
+      background = background.parentElement;
+    }
     const theme = { font: bodyStyle.fontFamily, color: bodyStyle.color,
-      headerBackground: headerStyle?.backgroundColor || "#f1f4f8", headerColor: headerStyle?.color || "#1a2332" };
+      headerBackground: background ? view.getComputedStyle(background).backgroundColor : "#f1f4f8",
+      headerColor: headerStyle?.color || "#1a2332" };
     const properties = ["font-family", "font-size", "font-weight", "font-style", "color", "background-color",
       "text-align", "text-transform", "letter-spacing", "line-height", "display", "align-items", "justify-content",
       "flex-direction", "gap", "padding", "margin", "border", "border-radius", "height", "max-width", "object-fit"];

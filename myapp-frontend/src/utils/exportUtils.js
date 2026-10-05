@@ -131,7 +131,7 @@ export async function renderIntoPdf(pdf, html, opts = {}) {
     repeatHeader.querySelectorAll("th").forEach((th, i) => {
       th.style.width = `${originalCells[i].getBoundingClientRect().width}px`;
     });
-    content.appendChild(repeatHeader);
+    repeatTable.parentElement.appendChild(repeatHeader);
   }
 
   await new Promise((r) => setTimeout(r, 400));
@@ -234,7 +234,7 @@ export async function renderIntoPdf(pdf, html, opts = {}) {
  */
 export async function exportToPdf(html, filename, opts = {}) {
   const { default: jsPDF } = await import("jspdf");
-  const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+  const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: opts.orientation || "portrait" });
   await renderIntoPdf(pdf, html, opts);
   pdf.save(`${String(filename || "report").replace(/(?:\.pdf)+$/i, "")}.pdf`);
 }
