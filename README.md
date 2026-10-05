@@ -295,6 +295,8 @@ Publish output optimized from 79 MB to 37 MB via:
 ## Changelog
 
 ### 2026-10-05
+
+- Show freight/cartage below GST in commercial bill creation and edit totals when a charge is entered.
 - Preserve application files while entering deployment maintenance, resume only after a successful upload, and queue overlapping deployments.
 - Add optional freight/cartage charges to commercial bills, including creation, editing, printing, template fields, customer balances and accounting. Sales-tax and FBR totals exclude freight. Existing bills default to zero freight.
 

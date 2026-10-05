@@ -1945,6 +1945,12 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                     <span>GST ({gstRate}%):</span>
                     <strong>Rs. {gstAmount.toLocaleString()}</strong>
                   </div>
+                  {billsMode && Number(freightCharges) > 0 && (
+                    <div style={styles.totalsRow}>
+                      <span>Freight / cartage:</span>
+                      <strong>Rs. {Number(freightCharges).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                    </div>
+                  )}
                   <div style={{ ...styles.totalsRow, borderTop: `1px solid ${colors.cardBorder}`, paddingTop: "0.5rem", marginTop: "0.5rem" }}>
                     <span style={{ fontWeight: 700 }}>Grand Total:</span>
                     <strong style={{ fontSize: "1.1rem", color: colors.blue }}>Rs. {(grandTotal + (billsMode ? Number(freightCharges || 0) : 0)).toLocaleString()}</strong>
