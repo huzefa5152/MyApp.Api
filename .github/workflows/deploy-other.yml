@@ -18,6 +18,10 @@ on:
   push:
     branches: [customize-solution-for-other]
 
+concurrency:
+  group: customize-production-deploy
+  cancel-in-progress: false
+
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
@@ -149,21 +153,20 @@ jobs:
           mkdir -p ./publish/wwwroot
           cp -r wwwroot/* ./publish/wwwroot/
 
-      - name: Stop app (upload app_offline.htm)
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER_OTHER }}
-          username: ${{ secrets.FTP_USERNAME_OTHER }}
-          password: ${{ secrets.FTP_PASSWORD_OTHER }}
-          local-dir: ./.github/offline/
-          server-dir: /wwwroot/
-          # Shared with "Deploy via FTP": this step deletes what the last
-          # deploy recorded and that step uploads it all again. If a run dies
-          # mid-delete the server no longer matches the recorded state and
-          # every rerun fails ("550 CD issue"); changing this name on BOTH
-          # steps starts a fresh state, so the next deploy uploads everything.
-          state-name: .ftp-deploy-state-v2.json
-          dangerous-clean-slate: false
+      - name: Stop app (upload maintenance file only)
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER_OTHER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME_OTHER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD_OTHER }}
+        run: |
+          python3 - <<'PY'
+          import ftplib, os
+          with ftplib.FTP(os.environ["FTP_SERVER"], timeout=60) as ftp:
+              ftp.login(os.environ["FTP_USERNAME"], os.environ["FTP_PASSWORD"])
+              ftp.cwd("/wwwroot")
+              with open(".github/offline/app_offline.htm", "rb") as page:
+                  ftp.storbinary("STOR app_offline.htm", page)
+          PY
 
       - name: Wait for app to stop
         run: sleep 5
@@ -184,6 +187,7 @@ jobs:
           state-name: .ftp-deploy-state-v2.json
           dangerous-clean-slate: false
           exclude: |
+            **/app_offline.htm
             **/.pdb
             **/runtimes/linux-*/**
             **/runtimes/osx-*/**
@@ -196,3 +200,17 @@ jobs:
             # .example templates are dev-side documentation — no business
             # being on the prod server.
             **/appsettings.*.example.json
+
+      - name: Start app after successful upload
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER_OTHER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME_OTHER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD_OTHER }}
+        run: |
+          python3 - <<'PY'
+          import ftplib, os
+          with ftplib.FTP(os.environ["FTP_SERVER"], timeout=60) as ftp:
+              ftp.login(os.environ["FTP_USERNAME"], os.environ["FTP_PASSWORD"])
+              ftp.cwd("/wwwroot")
+              ftp.delete("app_offline.htm")
+          PY
