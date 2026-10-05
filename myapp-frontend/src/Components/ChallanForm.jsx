@@ -511,11 +511,11 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
                 divisionId={divisionId}
                 itemsLabel="Items"
               />
-              <ChallanPrivateCosts items={items} onItemsChange={setItems} suppliers={suppliers} />
+              <ChallanPrivateCosts companyId={companyId} items={items} onItemsChange={setItems} suppliers={suppliers} />
             </div>
             )}
 
-            {fromOrder && <ChallanPrivateCosts
+            {fromOrder && <ChallanPrivateCosts companyId={companyId}
               items={deliveredItems.map((item) => ({ ...item, ...orderPrivate[item.id] }))}
               suppliers={suppliers}
               onItemsChange={(updated) => setOrderPrivate((previous) => {

@@ -399,7 +399,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
               coerceEmptyQtyToOne
               itemsLabel="Items *"
             />
-            <ChallanPrivateCosts items={items} onItemsChange={setItems} suppliers={suppliers} />
+            <ChallanPrivateCosts companyId={challan.companyId} items={items} onItemsChange={setItems} suppliers={suppliers} />
             {savedAwaitingPurchase && <div style={{ padding: 12, marginTop: 10, background: "#fff3e0", borderRadius: 8 }}>
               Your challan was saved. Purchase bills still need to be created.
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
