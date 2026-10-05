@@ -298,6 +298,10 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-10-05 — Import Tax Desk, dated restatements
+
+- **Reconcile to my stock sheet now dates its GD restatement on the sheet's date** (e.g. 30 Sep for a September sheet) and compares quantities as they stood that day. It used to be dated the day it was applied, so the month's own monthly sheet, Annex-H1 and tie-out did not reflect it.
+
 ### 2026-10-03 — Annex-H1 stock statement
 
 - **Claim month is never left blank on GD lines (FIFO companies).** A GD line with no claim month now takes the GD date's month, shown on the review screen so it can be changed if the input was claimed later.

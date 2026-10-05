@@ -341,6 +341,9 @@
     public class FifoRestatementRequestDto
     {
         public string? SourceFile { get; set; }
+        /// <summary>The day the sheet describes; the restatement is dated on it
+        /// and quantities are checked as they stood that day. Null = today.</summary>
+        public DateTime? AsOf { get; set; }
         public bool Commit { get; set; }
         public List<FifoRestatementLineDto> Lines { get; set; } = new();
     }

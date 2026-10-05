@@ -152,6 +152,12 @@ def main():
         check("the quantity correction is dated at the sheet's month end",
               any(m["sourceType"] == "Adjustment" and m["movementDate"][:10] == "2026-09-30" for m in mv),
               str([(m["sourceType"], m["movementDate"][:10]) for m in mv]))
+        # The restatement too (2026-10-05): dated "today" it sat after the month it
+        # restated, and that month's sheet, Annex-H1 and tie-out never saw it.
+        check("the GD restatement is dated at the sheet's month end, not today",
+              any(m["sourceType"] == "Revaluation" and m["movementDate"][:10] == "2026-09-30" for m in mv)
+              and not any(m["sourceType"] == "Revaluation" and m["movementDate"][:10] != "2026-09-30" for m in mv),
+              str([(m["sourceType"], m["movementDate"][:10]) for m in mv]))
         gd = requests.get(f"{api}/stock/company/{cid}/gd-details", headers=h, timeout=60).json()
         names = sorted({g["gdNumber"] for g in gd})
         check("both items now hold the sheet's GD lines", {"GD-R1", "GD-R2", "GD-R3", "GD-R4"} <= set(names), str(names))

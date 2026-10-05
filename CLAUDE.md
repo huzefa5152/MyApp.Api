@@ -1388,7 +1388,13 @@ GD panel and Excel export all say which GDs it took.
   columns are formulas). The GD panel and export show only the latest
   restatement's lines for a restated item. Bills dated BEFORE a restatement
   are walked before it: date them honestly, and restate on the day the sheet
-  describes.
+  describes. The restatement IS dated on that day (`FifoRestatementRequestDto.AsOf`,
+  2026-10-05; Reconcile passes its sheet date) and its quantity check reads the
+  position AS AT that day, as does the Reconcile plan. It used to be dated
+  "today": Alpha's September sheet applied on 5 Oct sat after September, so
+  September's own monthly sheet, Annex-H1 and tie-out never saw it. A GD whose
+  GD date is before an earlier restatement is still replaced by it -- restate
+  again after importing a back-dated GD.
 - **The Inventory tab's ledger is in MONEY** (2026-09-28). Each GD line in
   and each document out shows Excluding / Sales Tax / Including / Actual Cost /
   Margin and a running value balance; quantity columns sit in the ledger's

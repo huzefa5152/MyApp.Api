@@ -2028,10 +2028,20 @@ namespace MyApp.Api.Controllers
                     ItemTypeId = g.Key, Qty = g.Sum(o => o.Quantity), Value = g.Sum(o => o.ValueExcludingTax),
                     ActualCost = g.Sum(o => o.ActualCostExcludingTax), Rate = g.Max(o => o.SalesTaxRate),
                 }).ToDictionaryAsync(x => x.ItemTypeId);
-            var moves = (await _context.StockMovements.AsNoTracking()
-                    .Where(m => m.CompanyId == companyId).ToListAsync())
+            // A restatement is dated on the day its sheet describes (2026-10-05).
+            // Dated "today" it sat after the month it restated, so the month's
+            // own sheet, Annex-H1 and tie-out never saw it (Alpha, Sep 2026).
+            // Quantities are checked as they stood on that day, so a sale made
+            // since does not refuse a sheet that was right when it was taken.
+            var restateOn = (req.AsOf ?? PakistanClock.Today).Date;
+            if (restateOn > PakistanClock.Today)
+                return BadRequest(new { message = "The sheet's date is in the future." });
+            var cutoff = restateOn.AddDays(1);
+            var allMoves = await _context.StockMovements.AsNoTracking()
+                .Where(m => m.CompanyId == companyId).ToListAsync();
+            var moves = allMoves.Where(m => m.MovementDate < cutoff)
                 .GroupBy(m => m.ItemTypeId).ToDictionary(g => g.Key, g => g.ToList());
-            var held = openings.Keys.Union(moves.Keys).Distinct().ToList();
+            var held = openings.Keys.Union(allMoves.Select(m => m.ItemTypeId)).Distinct().ToList();
             var names = await _context.ItemTypes.AsNoTracking().Where(i => held.Contains(i.Id))
                 .Select(i => new { i.Id, i.Name, i.HSCode }).ToDictionaryAsync(i => i.Id);
             var costing = await StockCosting.LoadAsync(_context, companyId, held);
@@ -2086,7 +2096,6 @@ namespace MyApp.Api.Controllers
             result.CanCommit = result.Items.Count > 0 && result.Items.All(i => i.Error == null);
             if (!req.Commit || !result.CanCommit) return Ok(result);
 
-            var today = PakistanClock.Today;
             var file = string.IsNullOrWhiteSpace(req.SourceFile) ? null
                 : Path.GetFileName(req.SourceFile.Trim()) is var f && f.Length > 260 ? f[..260] : Path.GetFileName(req.SourceFile.Trim());
             // Joins a caller's transaction when there is one (Reconcile to sheet).
@@ -2101,7 +2110,7 @@ namespace MyApp.Api.Controllers
                     {
                         CompanyId = companyId, ItemTypeId = item.ItemTypeId,
                         Direction = StockMovementDirection.In, Quantity = 0m,
-                        SourceType = StockMovementSourceType.Revaluation, MovementDate = today,
+                        SourceType = StockMovementSourceType.Revaluation, MovementDate = restateOn,
                         ValueAdjustmentExcludingTax = Money(item.SheetValue - waValue) is var d && d != 0m ? d : null,
                         Notes = $"FIFO restatement to stock sheet{(file != null ? $" {file}" : "")}: {lines.Count} GD lines",
                     };
@@ -2132,8 +2141,8 @@ namespace MyApp.Api.Controllers
                 if (tx != null) await tx.CommitAsync();
             }
 
-            // The value change is an adjustment in this month's relief.
-            await _posting.PostInventoryPeriodsAsync(companyId, today);
+            // The value change is an adjustment in the relief of the sheet's month.
+            await _posting.PostInventoryPeriodsAsync(companyId, restateOn);
             await _audit.LogAsync(new AuditLog
             {
                 Timestamp = DateTime.UtcNow,
@@ -2206,7 +2215,7 @@ namespace MyApp.Api.Controllers
                 }
                 var restate = new FifoRestatementRequestDto
                 {
-                    SourceFile = file, Commit = true,
+                    SourceFile = file, Commit = true, AsOf = plan.AsOf,
                     Lines = plan.Items.Where(i => i.Error == null).SelectMany(i => i.Lines.Select(l => new FifoRestatementLineDto
                     {
                         ItemTypeId = i.ItemTypeId, GdNumber = l.GdNumber, GdDate = l.GdDate,
@@ -2256,9 +2265,14 @@ namespace MyApp.Api.Controllers
             if (await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId) != null)
                 return (StatusCode(403, new { message = "Reconciling stock needs access to every division." }), null);
 
+            if (req.AsOf.Date > PakistanClock.Today)
+                return (BadRequest(new { message = "The sheet's date is in the future." }), null);
             var (rows, _) = await BuildOnHandAsync(companyId, withMovements: false);
             var ids = rows.Select(r => r.ItemTypeId).ToList();
-            var fifo = await FifoResultsAsync(companyId, ids) ?? new Dictionary<int, GdFifoValuation.Result>();
+            // The books as they stood on the sheet's date -- the same cut the
+            // restatement Apply writes is dated at.
+            var fifo = (await FifoResultsBeforeAsync(companyId, ids, req.AsOf.Date.AddDays(1)))?.Results
+                       ?? new Dictionary<int, GdFifoValuation.Result>();
             var lotHs = await _context.OpeningStockLots.AsNoTracking()
                 .Where(l => l.OpeningStockBalance.CompanyId == companyId)
                 .Select(l => new { l.Id, l.HsCode }).ToDictionaryAsync(l => l.Id, l => l.HsCode);
@@ -2278,7 +2292,7 @@ namespace MyApp.Api.Controllers
                 var names = all.Select(p => p.Description ?? "").Where(n => n.Length > 0)
                     .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                 return new StockSheetReconciler.Item(r.ItemTypeId, r.ItemTypeName, r.HSCode, r.UOM,
-                    r.OnHand, r.ValueExcludingTax, pools, names);
+                    res?.Position.Quantity ?? 0m, res?.Position.ValueExcludingTax ?? 0m, pools, names);
             }).ToList();
 
             return (null, StockSheetReconciler.Plan(req, items));
