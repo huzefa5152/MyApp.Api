@@ -1208,8 +1208,8 @@ namespace MyApp.Api.Services.Implementations
                             SaleType = first.SaleType,
                             SroScheduleNo = first.SroScheduleNo,
                             SroItemSerialNo = first.SroItemSerialNo,
-                            // ProductDescription = the ItemTypeName so the
-                            // FBR row matches the Tax Invoice print row.
+                            // The group's name. Not filed: ProductDescription
+                            // is sent blank (see the payload below).
                             Description = g.Key,
                             // Sum the value-bearing columns.
                             Quantity = g.Sum(ii => ii.Quantity),
@@ -1280,7 +1280,13 @@ namespace MyApp.Api.Services.Implementations
                 fbrRequest.Items.Add(new FbrInvoiceItemRequest
                 {
                     HsCode = item.HSCode ?? "",
-                    ProductDescription = SanitizeForFbr(item.Description),
+                    // Deliberately EMPTY (maintainer's decision, 2026-10-06):
+                    // the operator does not want product wording filed with
+                    // FBR. PRAL's spec lists the field as required, but the
+                    // sandbox validates "" (and an omitted field) as Valid, so
+                    // the key is kept and sent blank. The bill's own lines and
+                    // prints keep their descriptions -- only the filing is blank.
+                    ProductDescription = "",
                     // FBR wants its OWN rate description here, and for an
                     // exempt supply that word is "Exempt", not "0%" -- which is
                     // what saletyperates returns for transaction type 81

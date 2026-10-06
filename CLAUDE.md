@@ -1814,6 +1814,13 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
   comes back as an EMPTY list, which reads like "this company has no rates"
   rather than "you asked wrongly". Bitten once; worth knowing before debugging
   an empty dropdown.
+- **`productDescription` is sent BLANK** (maintainer's decision, 2026-10-06).
+  The operator does not want product wording filed with FBR. PRAL's spec lists
+  the field as required, but the sandbox validates `""` (and an omitted field)
+  as Valid on every scenario suite H files, and its error table has no code for
+  it. Only the PAYLOAD is blank: the bill, its edit screen and both prints keep
+  the line description, and View FBR shows the payload as sent. Do not
+  "restore" the description in `FbrService` without the maintainer asking.
 - **Never guess a rate for a sale type.** FBR answers `[0046] Provided Rate is
   not correct` for a mismatch, and some transaction types list 21 rates (reduced
   rate runs 0.5% to Rs.700/MT). Resolve it: transaction type -> `saletyperates`

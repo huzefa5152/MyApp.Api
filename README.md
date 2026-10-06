@@ -298,6 +298,10 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-10-06 — FBR filings no longer carry the product description
+
+- **Validate and Submit send each line's product description to FBR blank**, and **View FBR** shows it blank, because that is the payload being sent. The bill screen, the Bill print and the Tax Invoice print/PDF keep every line's description exactly as typed. Verified on the FBR sandbox, which accepts a blank description on every scenario we file.
+
 ### 2026-10-06 — GD charges, customs units, letters of credit
 
 - **GD charges**: freight, the clearing agent's bill, wharfage, demurrage and port charges can be added to a GD on the Consignments screen. They are spread over the GD's lines by assessed value into landed cost (the margin figure), what the GD owes rises by the charge, and the stock's declared value does not move. Removing a charge puts every figure back.
