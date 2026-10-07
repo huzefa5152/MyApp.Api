@@ -393,6 +393,18 @@ if s == 200:
         status, _ = request("PUT", f"/api/mcp/catalog/{uA1['id']}", token=credential, body=body)
         check("mcp", actor + " cannot edit another user's MCP grants", status == 404, str(status))
 
+print("\n=== Account unlock is seed-only ===")
+for actor, credential in (("parent A", tA), ("sibling B", tB)):
+    status, _ = request("POST", f"/api/users/{uA1['id']}/unlock", token=credential)
+    check("unlock", actor + " cannot unlock a user", status == 404, str(status))
+    status, visible = request("GET", "/api/users", token=credential)
+    check("unlock", actor + " cannot read lockout details", status == 200 and all(row.get("lockoutUntil") is None and row.get("failedLoginAttempts") is None for row in visible))
+status, _ = request("POST", f"/api/users/{uA1['id']}/unlock", token=seed)
+check("unlock", "seed can unlock a user", status == 200, str(status))
+status, visible = request("GET", "/api/users", token=seed)
+unlocked = next(row for row in visible if row["id"] == uA1["id"])
+check("unlock", "seed sees cleared lockout state", unlocked.get("failedLoginAttempts") == 0 and unlocked.get("lockoutUntil") is None)
+
 print("\n=== DELETE: removing Administrator A re-parents its tree to seed ===")
 s, d = request("DELETE", f"/api/users/{A['id']}", token=seed)
 check("delete", "seed deletes A -> 200", s == 200, f"{s} {d}")

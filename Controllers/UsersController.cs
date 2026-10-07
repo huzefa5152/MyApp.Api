@@ -55,11 +55,29 @@ namespace MyApp.Api.Controllers
                     u.FullName,
                     u.Role,
                     u.AvatarPath,
-                    u.CreatedAt
+                    u.CreatedAt,
+                    FailedLoginAttempts = CurrentUserId == _seedAdminUserId ? (int?)u.FailedLoginAttempts : null,
+                    LockoutUntil = CurrentUserId == _seedAdminUserId && u.Id != _seedAdminUserId
+                        ? u.LockoutUntil : null
                 })
                 .ToListAsync();
 
             return Ok(users);
+        }
+
+        [HttpPost("{id:int}/unlock")]
+        [HasPermission("users.manage.update")]
+        public async Task<ActionResult> UnlockUser(int id)
+        {
+            if (CurrentUserId != _seedAdminUserId) return NotFound();
+            var affected = await _context.Users.Where(u => u.Id == id).ExecuteUpdateAsync(set => set
+                .SetProperty(u => u.FailedLoginAttempts, 0)
+                .SetProperty(u => u.LockoutUntil, (DateTime?)null)
+                .SetProperty(u => u.LastFailedLogin, (DateTime?)null));
+            if (affected == 0) return NotFound(new { message = "User not found" });
+            HttpContext.RequestServices.GetRequiredService<ILogger<UsersController>>()
+                .LogInformation("Seed administrator {ActorId} unlocked user {UserId}", CurrentUserId, id);
+            return Ok(new { message = "Account unlocked. The user can sign in with their existing password." });
         }
 
         // GET /api/users/{id}
