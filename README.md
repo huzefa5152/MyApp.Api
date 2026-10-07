@@ -296,6 +296,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-10-08
 
+- Preserve company colors in accounting reports when printing with browser background graphics disabled.
+
 - Allow ten failed sign-in attempts, show remaining attempts and lock expiry, exempt the seed administrator, and let only the seed administrator see blocked accounts and unlock users.
 
 

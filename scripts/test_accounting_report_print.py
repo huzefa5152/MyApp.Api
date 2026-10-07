@@ -101,6 +101,15 @@ with tempfile.TemporaryFile() as log:
                     page.set_viewport_size({"width": width, "height": 900})
                     assert page.locator('.report-letterhead').is_visible()
                 page.screenshot(path=str(args.output / "company-report.png"), full_page=False)
+                printed = page.pdf(prefer_css_page_size=True, print_background=False)
+                (args.output / "browser-print.pdf").write_bytes(printed)
+                import fitz
+                document = fitz.open(stream=printed, filetype="pdf")
+                assert "REF-99" in "".join(p.get_text() for p in document)
+                pixels = document[0].get_pixmap().samples
+                green = sum(1 for r, g, b in zip(*[iter(pixels)] * 3) if abs(r-25) <= 1 and abs(g-59) <= 1 and abs(b-37) <= 1)
+                assert green > 100, "Company heading lost its background in browser Print"
+                print("Browser Print keeps every row and company colors with background graphics off")
             browser.close()
             print(f'{result["checks"]} checks passed; {len(templates)} distinct template inputs; 2 PDF layouts verified')
     finally:

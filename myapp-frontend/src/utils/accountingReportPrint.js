@@ -29,7 +29,7 @@ export async function brandAccountingReport(html, company, template) {
   theme.textContent = `
     @page { size:A4 ${doc.querySelector(".chk") || /A4 portrait/.test(html) ? "portrait" : "landscape"}; margin:12mm; }
     .accounting-print { font-family:${brand.font}; color:${brand.color}; margin:0; }
-    .accounting-print * { box-sizing:border-box; }
+    .accounting-print * { box-sizing:border-box; print-color-adjust:exact; -webkit-print-color-adjust:exact; }
     .accounting-print .report-letterhead { margin-bottom:16px; }
     .accounting-print .ttl,.accounting-print h3,.accounting-print tr.g td { color:${brand.headerColor}; }
     .accounting-print .ttl,.accounting-print tr.g td { background:${brand.headerBackground}; padding:6px; }
