@@ -291,6 +291,11 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-10-08
+
+- Allow ten failed sign-in attempts, show remaining attempts and lock expiry, exempt the seed administrator, and let only the seed administrator see blocked accounts and unlock users.
+
+
 ### 2026-10-05
 
 - Add suppliers directly while creating or editing delivery challans using the shared supplier form, automatically select the new supplier, and clarify actual cost as a per-unit price.

@@ -17,7 +17,7 @@ namespace MyApp.Api.Models
         // password change, and role change.
         public string SecurityStamp { get; set; } = Guid.NewGuid().ToString("N");
 
-        // Account lockout (5 consecutive failures → 2h lock). State lives
+        // Account lockout (10 consecutive failures → 2h lock). State lives
         // ONLY in these columns — never cached — so an admin can unlock
         // directly via SQL: UPDATE Users SET FailedLoginAttempts = 0,
         // LockoutUntil = NULL WHERE Id = @UserId.

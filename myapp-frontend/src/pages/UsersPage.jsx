@@ -17,7 +17,7 @@ import {
   MdDevices,
   MdSmartToy,
 } from "react-icons/md";
-import { getUsers, createUser, updateUser, deleteUser } from "../api/usersApi";
+import { getUsers, createUser, updateUser, deleteUser, unlockUser } from "../api/usersApi";
 import { getRoles, getUserRoles, assignUserRoles } from "../api/rbacApi";
 import { useAuth } from "../contexts/AuthContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -251,7 +251,27 @@ export default function UsersPage() {
     }
   };
 
-  const filtered = users.filter(
+  const [unlocking, setUnlocking] = useState(null);
+  const [blockedOnly, setBlockedOnly] = useState(false);
+  const [lockClock, setLockClock] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setLockClock(Date.now()), 10000);
+    return () => clearInterval(timer);
+  }, []);
+  const isBlocked = u => u.id !== seedAdminUserId && u.lockoutUntil
+    && new Date(u.lockoutUntil.endsWith("Z") ? u.lockoutUntil : `${u.lockoutUntil}Z`).getTime() > lockClock;
+  const blockedCount = users.filter(isBlocked).length;
+  const handleUnlock = async u => {
+    setUnlocking(u.id);
+    try {
+      await unlockUser(u.id);
+      notify(`${u.fullName} (@${u.username}) is unlocked.`, "success");
+      await fetchUsers();
+    } catch (err) { notify(err.response?.data?.message || "Could not unlock this account.", "error"); }
+    finally { setUnlocking(null); }
+  };
+
+  const filtered = users.filter(u => !isSeedAdmin || !blockedOnly || isBlocked(u)).filter(
     (u) =>
       u.username.toLowerCase().includes(search.toLowerCase()) ||
       u.fullName.toLowerCase().includes(search.toLowerCase())
@@ -305,6 +325,12 @@ export default function UsersPage() {
       )}
 
       <div role="tabpanel" id="users-panel-users" hidden={isSeedAdmin && tab !== "users"}>
+      {isSeedAdmin && <div role="status" style={{ display:"flex", gap:12, alignItems:"center", flexWrap:"wrap", marginBottom:16 }}>
+        <strong>{blockedCount} blocked {blockedCount === 1 ? "user" : "users"}</strong>
+        <label style={{ display:"flex", gap:8, alignItems:"center", minHeight:44 }}><input type="checkbox" checked={blockedOnly} onChange={e => setBlockedOnly(e.target.checked)} />Show blocked users only</label>
+        <span>Seed admin is exempt from automatic lockout.</span>
+      </div>}
+
       {/* Search */}
       <div style={styles.searchWrap}>
         <MdSearch style={{ color: colors.textSecondary, fontSize: "1.25rem" }} />
@@ -345,9 +371,11 @@ export default function UsersPage() {
                     </div>
                     <div style={{ color: colors.textSecondary, fontSize: "0.84rem" }}>
                       @{u.username}
+                      {isSeedAdmin && isBlocked(u) && <div style={{ color:colors.danger, fontWeight:600 }}>Blocked</div>}
                     </div>
                   </div>
                   <span style={styles.roleBadge}>{u.role}</span>
+
                 </div>
                 <div style={styles.userCardMeta}>
                   <span style={{ color: colors.textSecondary, fontSize: "0.82rem" }}>
@@ -360,6 +388,10 @@ export default function UsersPage() {
                       <span>MCP access</span>
                     </button>
                   )}
+                  {isSeedAdmin && isBlocked(u) && <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+                    <span>Unlocks {new Date(u.lockoutUntil.endsWith("Z") ? u.lockoutUntil : `${u.lockoutUntil}Z`).toLocaleString()}</span>
+                    {canUpdate && <button style={{...styles.editBtn, minHeight:44}} disabled={unlocking !== null} onClick={() => handleUnlock(u)}>Unlock @{u.username}</button>}
+                  </div>}
                   {u.id !== seedAdminUserId && (canAssignRoles || canUpdate || canDelete) && (
                     <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                       {canAssignRoles && (
