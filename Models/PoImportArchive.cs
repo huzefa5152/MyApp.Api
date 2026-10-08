@@ -13,6 +13,8 @@ namespace MyApp.Api.Models
     public class PoImportArchive
     {
         public int Id { get; set; }
+        public string? DocumentKind { get; set; }
+        public int? DocumentId { get; set; }
 
         // Tenant + user context — both nullable because the parse endpoint
         // accepts an optional companyId (legacy callers) and we want to

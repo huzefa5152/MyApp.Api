@@ -594,7 +594,7 @@ export default function DashboardLayout() {
               <Can permission="poformats.manage.view">
                 <NavLink to="/po-formats" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdDescription className="dl-subitem__icon" aria-hidden="true" />
-                  <span>PO Formats</span>
+                  <span>Customer Document Formats</span>
                 </NavLink>
               </Can>
               <Can permission="printtemplates.manage.update">
@@ -815,7 +815,7 @@ function getBreadcrumb(pathname) {
     "/users": "User Management",
     "/roles": "Roles & Permissions",
     "/templates": "Configuration / Print Templates",
-    "/po-formats": "Configuration / PO Formats",
+    "/po-formats": "Configuration / Customer Document Formats",
     "/units": "Configuration / Units",
     "/fbr-settings": "Configuration / FBR Settings",
     "/fbr-sandbox": "Configuration / FBR Sandbox",

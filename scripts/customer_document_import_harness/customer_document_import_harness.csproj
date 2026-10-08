@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net9.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup><PackageReference Include="ClosedXML" Version="0.104.2" /><Compile Include="../../Helpers/CustomerWorkbookReader.cs" Link="CustomerWorkbookReader.cs" /><Compile Include="../../Helpers/CustomerEmailTextReader.cs" Link="CustomerEmailTextReader.cs" /><Compile Include="../../DTOs/ParsedPODto.cs" Link="ParsedPODto.cs" /></ItemGroup>
+</Project>

@@ -64,16 +64,18 @@ namespace MyApp.Api.Controllers
                 throw new KeyNotFoundException("PO format not found.");
         }
 
-        private async Task<Client> ValidateClientAsync(int? companyId, int? clientId, int? exceptId = null)
+        private async Task<Client> ValidateClientAsync(int? companyId, int? clientId, int? exceptId = null, string? name = null)
         {
+            if (string.IsNullOrWhiteSpace(name) || name.Length > 200)
+                throw new InvalidOperationException("Enter a format name up to 200 characters.");
             if (companyId is not > 0 || clientId is not > 0)
                 throw new InvalidOperationException("Choose a company and one of its clients.");
             await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
             var client = await _db.Clients.FirstOrDefaultAsync(c => c.Id == clientId && c.CompanyId == companyId);
             if (client == null)
                 throw new InvalidOperationException("The client does not belong to the selected company.");
-            if (await _db.POFormats.AnyAsync(f => f.CompanyId == companyId && f.ClientId == clientId && f.Id != exceptId))
-                throw new InvalidOperationException("A PO format already exists for this client in this company.");
+            if (await _db.POFormats.AnyAsync(f => f.CompanyId == companyId && f.ClientId == clientId && f.Id != exceptId && f.Name == name))
+                throw new InvalidOperationException("A format with this name already exists for this customer. Choose a different name.");
             return client;
         }
 
@@ -165,7 +167,7 @@ namespace MyApp.Api.Controllers
             if (string.IsNullOrWhiteSpace(dto.Name))
                 return BadRequest(new { error = "name is required." });
 
-            var client = await ValidateClientAsync(dto.CompanyId, dto.ClientId);
+            var client = await ValidateClientAsync(dto.CompanyId, dto.ClientId, name: dto.Name?.Trim());
             dto.ClientGroupId = client.ClientGroupId;
 
             var createdBy = User?.Identity?.Name;
@@ -190,7 +192,7 @@ namespace MyApp.Api.Controllers
                 || string.IsNullOrWhiteSpace(dto.QuantityHeader))
                 return BadRequest(new { error = "descriptionHeader and quantityHeader are required." });
 
-            var client = await ValidateClientAsync(dto.CompanyId, dto.ClientId);
+            var client = await ValidateClientAsync(dto.CompanyId, dto.ClientId, name: dto.Name?.Trim());
             var newClientGroupId = client.ClientGroupId;
 
             var ruleSet = BuildSimpleRuleSet(dto);
@@ -198,7 +200,7 @@ namespace MyApp.Api.Controllers
 
             var createDto = new POFormatCreateDto
             {
-                Name = dto.Name,
+                Name = dto.Name ?? "",
                 CompanyId = dto.CompanyId,
                 ClientId = dto.ClientId,
                 ClientGroupId = newClientGroupId,
@@ -227,7 +229,10 @@ namespace MyApp.Api.Controllers
                 return BadRequest(new { error = "descriptionHeader and quantityHeader are required." });
 
             await AssertOwnerAsync(format);
-            var client = await ValidateClientAsync(format.CompanyId, dto.ClientId, id);
+            using (var existingRules = JsonDocument.Parse(format.RuleSetJson))
+                if (!existingRules.RootElement.TryGetProperty("engine", out var engine) || engine.GetString() != "simple-headers-v1")
+                    return BadRequest(new { error = "This format uses advanced or Excel rules. Its rules cannot be replaced by the PDF header editor." });
+            var client = await ValidateClientAsync(format.CompanyId, dto.ClientId, id, dto.Name?.Trim());
             var newClientGroupId = client.ClientGroupId;
 
             format.Name = dto.Name?.Trim() ?? format.Name;
@@ -274,6 +279,22 @@ namespace MyApp.Api.Controllers
                 .Include(f => f.Client)
                 .FirstAsync(f => f.Id == id);
             return Ok(ToDto(reloaded));
+        }
+
+        [HttpPut("{id}/metadata")]
+        [HasPermission("poformats.manage.update")]
+        public async Task<IActionResult> UpdateMetadata(int id, [FromBody] POFormatUpdateMetaDto dto)
+        {
+            var format = await _db.POFormats.FirstOrDefaultAsync(f => f.Id == id);
+            if (format == null) return NotFound();
+            await AssertOwnerAsync(format);
+            var name = dto.Name?.Trim() ?? "";
+            if (name.Length is < 1 or > 200)
+                return BadRequest(new { error = "Enter a format name up to 200 characters." });
+            await ValidateClientAsync(format.CompanyId, format.ClientId, id, name);
+            format.Name = name; format.IsActive = dto.IsActive; format.Notes = dto.Notes; format.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+            return Ok(ToDto(format));
         }
 
         // Hard delete. The versions and any golden samples cascade via FK

@@ -17,7 +17,7 @@ namespace MyApp.Api.Models
         public Company? Company { get; set; }
 
         // Client scope — which client (vendor) this PO template belongs to.
-        // Each (CompanyId, ClientId) pair has exactly one format in the
+        // Each (CompanyId, ClientId) pair has multiple named formats in the
         // Configuration UI; null = legacy pre-ClientId format.
         public int? ClientId { get; set; }
         public Client? Client { get; set; }

@@ -87,7 +87,7 @@ namespace MyApp.Api.Controllers
         [HasPermission("poformats.import.create")]
         [RequestSizeLimit(10 * 1024 * 1024)]
         [EnableRateLimiting("import")]
-        public async Task<IActionResult> ParsePdf(IFormFile file, [FromQuery] int? companyId)
+        public async Task<IActionResult> ParsePdf(IFormFile file, [FromQuery] int? companyId, [FromQuery] int? clientId = null)
         {
             // The company chooses which saved PO formats the parser matches
             // against, so an unchecked id reads another tenant's layouts.
@@ -133,16 +133,19 @@ namespace MyApp.Api.Controllers
                     await TryPersistArchiveAsync(archive);
                     return UnprocessableEntity(new ParseMissDto
                     {
+                        ArchiveId = archive.Id > 0 ? archive.Id : null,
                         Reason = "unreadable",
                         Message = "Could not extract text from this PDF — it may be scanned/image-based. Please fill the challan manually.",
                         RawText = "",
                     });
                 }
 
-                var (result, outcome) = await RouteParseAsync(rawText, companyId);
+                var (result, outcome) = await RouteParseAsync(rawText, companyId, clientId: clientId);
                 sw.Stop();
                 ApplyOutcomeToArchive(archive, outcome, sw.ElapsedMilliseconds);
                 await TryPersistArchiveAsync(archive);
+                if (result is OkObjectResult { Value: ParsedPODto parsed }) parsed.ArchiveId = archive.Id > 0 ? archive.Id : null;
+                if (result is ObjectResult { Value: ParseMissDto miss }) miss.ArchiveId = archive.Id > 0 ? archive.Id : null;
                 return result;
             }
             catch (Exception ex)
@@ -162,7 +165,7 @@ namespace MyApp.Api.Controllers
 
         [HttpPost("parse-text")]
         [HasPermission("poformats.import.create")]
-        public async Task<IActionResult> ParseText([FromBody] ParseTextRequest request, [FromQuery] int? companyId)
+        public async Task<IActionResult> ParseText([FromBody] ParseTextRequest request, [FromQuery] int? companyId, [FromQuery] int? clientId = null)
         {
             // Same as ParsePdf: the company selects whose saved formats match.
             if (companyId is not > 0)
@@ -171,10 +174,13 @@ namespace MyApp.Api.Controllers
             if (string.IsNullOrWhiteSpace(request.Text))
                 return BadRequest(new { error = "No text provided." });
 
-            // No PDF to archive in the text-only path — operator pasted
-            // raw text, nothing to retain. Keep this lean and skip the
-            // archive write entirely.
-            var (result, _) = await RouteParseAsync(request.Text, companyId);
+            if (request.Text.Length > 200_000)
+                return BadRequest(new { error = "Paste up to 200,000 characters at a time." });
+            if (clientId.HasValue && !await _context.Clients.AsNoTracking().AnyAsync(c => c.Id == clientId && c.CompanyId == companyId))
+                return BadRequest(new { error = "Choose a customer from this company." });
+            var email = MyApp.Api.Helpers.CustomerEmailTextReader.Parse(request.Text);
+            if (email.Items.Count > 0) return Ok(email);
+            var (result, _) = await RouteParseAsync(request.Text, companyId, clientId: clientId);
             return result;
         }
 
@@ -196,7 +202,7 @@ namespace MyApp.Api.Controllers
         [HasPermission("poformats.import.create")]
         [RequestSizeLimit(12 * 1024 * 1024)]
         [EnableRateLimiting("import")]
-        public async Task<IActionResult> ParseImage(IFormFile file, [FromForm] string words, [FromQuery] int? companyId)
+        public async Task<IActionResult> ParseImage(IFormFile file, [FromForm] string words, [FromQuery] int? companyId, [FromQuery] int? clientId = null)
         {
             // The company chooses whose saved PO formats match, and the archive
             // row is filed under it — never trust it unchecked.
@@ -257,10 +263,12 @@ namespace MyApp.Api.Controllers
                     });
                 }
 
-                var (result, outcome) = await RouteParseAsync(rawText, companyId, fromImage: true);
+                var (result, outcome) = await RouteParseAsync(rawText, companyId, fromImage: true, clientId: clientId);
                 sw.Stop();
                 ApplyOutcomeToArchive(archive, outcome, sw.ElapsedMilliseconds);
                 await TryPersistArchiveAsync(archive);
+                if (result is OkObjectResult { Value: ParsedPODto parsed }) parsed.ArchiveId = archive.Id > 0 ? archive.Id : null;
+                if (result is ObjectResult { Value: ParseMissDto miss }) miss.ArchiveId = archive.Id > 0 ? archive.Id : null;
                 return result;
             }
             catch (Exception ex)
@@ -306,12 +314,12 @@ namespace MyApp.Api.Controllers
         // matches the incoming PDF text and runs the stored rules against
         // it. No LLM, no generic fallback — operator onboards each client
         // layout once through the Configuration UI.
-        private async Task<(IActionResult Result, ParseOutcomeInfo Outcome)> RouteParseAsync(string rawText, int? companyId, bool fromImage = false)
+        private async Task<(IActionResult Result, ParseOutcomeInfo Outcome)> RouteParseAsync(string rawText, int? companyId, bool fromImage = false, int? clientId = null)
         {
             // Text read from an image also gets the OCR-tolerant match.
-            var match = fromImage
-                ? await _formatRegistry.FindMatchForOcrAsync(rawText, companyId)
-                : await _formatRegistry.FindMatchAsync(rawText, companyId);
+            if (clientId.HasValue && !await _context.Clients.AsNoTracking().AnyAsync(c => c.Id == clientId && c.CompanyId == companyId))
+                return (BadRequest(new { error = "Choose a customer from this company." }), new ParseOutcomeInfo { Outcome = "error" });
+            var match = await _formatRegistry.FindCustomerMatchAsync(rawText, companyId, clientId, fromImage);
             // Accept both exact hash matches AND high-confidence fuzzy matches
             // (Jaccard ≥ 0.70, enforced upstream in POFormatRegistry). Fuzzy
             // matches catch the common case where two POs from the same client
@@ -486,6 +494,8 @@ namespace MyApp.Api.Controllers
                     a.UploadedByUserId,
                     a.UploadedAt,
                     a.OriginalFileName,
+                    a.DocumentKind,
+                    a.DocumentId,
                     a.FileSizeBytes,
                     a.ContentSha256,
                     a.ParseOutcome,
@@ -525,7 +535,7 @@ namespace MyApp.Api.Controllers
             // filename so the operator's download keeps a recognisable name.
             var stream = new FileStream(abs, FileMode.Open, FileAccess.Read, FileShare.Read);
             // Images read by OCR are archived with their own extension.
-            var contentType = OcrFileTypes.TryGetValue(Path.GetExtension(row.StoredPath), out var t) ? t : "application/pdf";
+            var contentType = Path.GetExtension(row.StoredPath) == ".xlsx" ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : OcrFileTypes.TryGetValue(Path.GetExtension(row.StoredPath), out var t) ? t : "application/pdf";
             return File(stream, contentType, row.OriginalFileName);
         }
 
@@ -622,6 +632,7 @@ namespace MyApp.Api.Controllers
     // exactly why and whether the raw text is worth showing.
     public class ParseMissDto
     {
+        public int? ArchiveId { get; set; }
         public string Reason { get; set; } = "";       // "no-format", "rules-empty", "unreadable"
         public string Message { get; set; } = "";
         public string RawText { get; set; } = "";

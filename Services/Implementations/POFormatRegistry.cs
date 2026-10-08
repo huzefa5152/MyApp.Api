@@ -30,7 +30,9 @@ namespace MyApp.Api.Services.Implementations
             _logger = logger;
         }
 
-        public async Task<POFormatMatchResult?> FindMatchAsync(string rawText, int? companyId)
+        public Task<POFormatMatchResult?> FindMatchAsync(string rawText, int? companyId) => FindCustomerMatchAsync(rawText, companyId, null);
+
+        public async Task<POFormatMatchResult?> FindCustomerMatchAsync(string rawText, int? companyId, int? clientId, bool ocr = false)
         {
             if (companyId is not > 0) return null;
             var fp = _fingerprint.Compute(rawText);
@@ -39,7 +41,7 @@ namespace MyApp.Api.Services.Implementations
             // Never match another company or an unowned legacy format.
             var candidates = await _db.POFormats
                 .AsNoTracking()
-                .Where(f => f.IsActive && f.CompanyId == companyId && f.Client != null && f.Client.CompanyId == companyId)
+                .Where(f => f.IsActive && !f.RuleSetJson.Contains("excel-columns-v1") && (clientId == null || f.ClientId == clientId) && f.CompanyId == companyId && f.Client != null && f.Client.CompanyId == companyId)
                 .OrderBy(f => f.Id)
                 .ToListAsync();
 
@@ -76,6 +78,13 @@ namespace MyApp.Api.Services.Implementations
                 return new POFormatMatchResult(best, bestScore, IsExactMatch: false);
             }
 
+            if (ocr)
+            {
+                var ranked = candidates.Select(f => (Format: f, Coverage: POFormatFingerprintService.OcrCoverageScore(rawText, f.KeywordSignature),
+                    Fuzzy: POFormatFingerprintService.MatchScore(incomingSet, POFormatFingerprintService.StoredMatchKeywords(f.KeywordSignature))))
+                    .OrderByDescending(x => x.Coverage).ThenByDescending(x => x.Fuzzy).First();
+                if (ranked.Coverage >= OcrCoverageFloor) return new POFormatMatchResult(ranked.Format, ranked.Coverage, false);
+            }
             return null;
         }
 
@@ -85,37 +94,8 @@ namespace MyApp.Api.Services.Implementations
         // documents with no saved format at most 0.73.
         private const double OcrCoverageFloor = 0.85;
 
-        public async Task<POFormatMatchResult?> FindMatchForOcrAsync(string rawText, int? companyId)
-        {
-            // The normal matcher first: a clean photo can match exactly as its PDF would.
-            var normal = await FindMatchAsync(rawText, companyId);
-            if (normal != null) return normal;
-            if (string.IsNullOrWhiteSpace(rawText) || companyId is not > 0) return null;
-
-            // The same candidates FindMatchAsync considers: never another
-            // company's format, never an unowned legacy one.
-            var candidates = await _db.POFormats
-                .AsNoTracking()
-                .Where(f => f.IsActive && f.CompanyId == companyId && f.Client != null && f.Client.CompanyId == companyId)
-                .OrderBy(f => f.Id)
-                .ToListAsync();
-            if (candidates.Count == 0) return null;
-
-            // Highest coverage wins; near-identical layouts (the Meko family)
-            // can tie, and the regular fuzzy score breaks the tie.
-            var incoming = POFormatFingerprintService.ComputeMatchKeywords(rawText);
-            var best = candidates
-                .Select(f => (Format: f,
-                    Coverage: POFormatFingerprintService.OcrCoverageScore(rawText, f.KeywordSignature),
-                    Fuzzy: POFormatFingerprintService.MatchScore(incoming, POFormatFingerprintService.StoredMatchKeywords(f.KeywordSignature))))
-                .OrderByDescending(x => x.Coverage).ThenByDescending(x => x.Fuzzy)
-                .First();
-            if (best.Coverage < OcrCoverageFloor) return null;
-
-            _logger.LogInformation("PO format OCR match: formatId={FormatId} name={Name} coverage={Coverage:F2}",
-                best.Format.Id, best.Format.Name, best.Coverage);
-            return new POFormatMatchResult(best.Format, best.Coverage, IsExactMatch: false);
-        }
+        public Task<POFormatMatchResult?> FindMatchForOcrAsync(string rawText, int? companyId) =>
+            FindCustomerMatchAsync(rawText, companyId, null, ocr: true);
 
         public Task<List<POFormat>> ListAsync(int? companyId)
         {

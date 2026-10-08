@@ -185,7 +185,7 @@ export default function SalesQuotePage() {
         {companies.length > 0 && (canCreate || canImportPo) && (
           <div style={{ display: "flex", gap: "0.5rem" }}>
             {canCreate && <button style={st.addBtn} onClick={() => selectedCompany && (setEditQuote(null), setShowForm(true))}><MdAdd size={18} /> New Quote</button>}
-            {canImportPo && <button style={{ ...st.addBtn, background: colors.teal, boxShadow: "0 4px 14px rgba(0,137,123,0.25)" }} onClick={() => selectedCompany && setShowImport(true)}><MdUploadFile size={18} /> Import PO</button>}
+            {canImportPo && <button style={{ ...st.addBtn, background: colors.teal, boxShadow: "0 4px 14px rgba(0,137,123,0.25)" }} onClick={() => selectedCompany && setShowImport(true)}><MdUploadFile size={18} /> Import Enquiry / Demand</button>}
           </div>
         )}
       </div>
@@ -230,6 +230,7 @@ export default function SalesQuotePage() {
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <AttachmentBadge count={attachCounts[q.id]} onClick={() => setAttachTarget(q)} />
                     <span style={{ ...st.badge, background: `${STATUS_COLORS[q.status] || "#5f6d7e"}18`, color: STATUS_COLORS[q.status] || "#5f6d7e" }}>{q.status}</span>
+                    {Number(q.subtotal) === 0 && <span style={{ ...st.badge, color: "#9a5700", background: "#fff3e0" }}>Needs pricing</span>}
                   </div>
                 </div>
                 <div style={st.client}>{q.clientName}</div>

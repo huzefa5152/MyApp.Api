@@ -372,9 +372,11 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<ClientGroup>()
                 .HasIndex(g => g.NormalizedName);
 
+            modelBuilder.Entity<PoImportArchive>().Property(a => a.DocumentKind).HasMaxLength(32);
+
             // ClientGroup is metadata only. Formats are private to each company/client.
             modelBuilder.Entity<POFormat>()
-                .HasIndex(f => new { f.CompanyId, f.ClientId })
+                .HasIndex(f => new { f.CompanyId, f.ClientId, f.Name })
                 .IsUnique().HasFilter("[CompanyId] IS NOT NULL AND [ClientId] IS NOT NULL");
             modelBuilder.Entity<POFormat>()
                 .HasOne(f => f.ClientGroup)
