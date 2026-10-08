@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   MdDashboard,
+  MdEmail,
   MdSettings,
   MdBusiness,
   MdPeople,
@@ -254,6 +255,7 @@ export default function DashboardLayout() {
   // recomputing on every render.
   const activeSection = useMemo(() => {
     const p = location.pathname.toLowerCase();
+    if (p === "/email-workspace") return "email-workspace";
     if (p.startsWith("/challans") || p === "/bills" || p === "/invoices" || p === "/credit-notes" || p === "/debit-notes" || p === "/credit-debit-notes" || p === "/item-rate-history" || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders")) return "sales";
     if (p.startsWith("/purchase-bills") || p.startsWith("/goods-receipts") || p.startsWith("/stock") || p.startsWith("/fbr-import/purchase")) return "purchases";
     if (p.startsWith("/withholding-tax-receipts") || p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/chart-of-accounts") || p.startsWith("/journal-entries") || p.startsWith("/accounting")) return "accounting";
@@ -343,6 +345,15 @@ export default function DashboardLayout() {
             <span className="dl-item__label">Dashboard</span>
           </NavLink>
           </>}
+
+          {has("email.workspace.use") && has("email.inbox.view") && (
+            <NavGroup id="email-workspace" icon={MdEmail} title="Email Workspace" count={1}
+              defaultOpen={activeSection === "email-workspace"} isChildActive={activeSection === "email-workspace"}>
+              <NavLink to="/email-workspace" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <MdEmail className="dl-subitem__icon" aria-hidden="true" /><span>Inbox &amp; Connections</span>
+              </NavLink>
+            </NavGroup>
+          )}
 
           {canSeeSales && (
             <NavGroup
@@ -804,6 +815,7 @@ function getBreadcrumb(pathname) {
     "/item-types": "Configuration / Item Types",
     "/import-data": "Configuration / Import Data",
     "/challans": "Sales / Delivery Challans",
+    "/email-workspace": "Email Workspace / Inbox",
     "/challans/import": "Sales / Import Challans",
     "/bills": "Sales / Bills",
     "/invoices": "Sales / Invoices",

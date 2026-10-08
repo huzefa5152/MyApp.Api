@@ -34,6 +34,10 @@ export const PERMISSION_SECTIONS = [
     modules: [{ key: "Dashboard" }],
   },
   {
+    section: "Email Workspace",
+    modules: [{ key: "EmailWorkspace", label: "Email Workspace" }],
+  },
+  {
     section: "Sales",
     modules: [
       { key: "SalesQuotes", label: "Sales Quotes" },

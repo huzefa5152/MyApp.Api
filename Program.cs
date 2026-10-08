@@ -433,6 +433,11 @@ builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 // depends on ISalesOrderService (convert-to-order); SalesOrder depends on
 // IDeliveryChallanService (create-challan-from-order). No true DI cycle.
 builder.Services.AddScoped<ISalesQuoteService, SalesQuoteService>();
+builder.Services.AddScoped<EmailWorkspaceService>();
+builder.Services.AddHttpClient<IGmailProvider, GmailProvider>(client => client.Timeout = TimeSpan.FromSeconds(30))
+    .RemoveAllLoggers()
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddHostedService<MyApp.Api.Services.HostedServices.GmailSyncService>();
 builder.Services.AddScoped<ISalesOrderService, SalesOrderService>();
 // Receipts (money in) + Payments (money out) — AR/AP subledger.
 builder.Services.AddScoped<IPaymentService, PaymentService>();
