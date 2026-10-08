@@ -56,14 +56,14 @@ export default function WithholdingTaxReceiptForm({ onClose, onSaved, companyId,
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>
             {isEdit ? `Edit Withholding Tax Receipt #${receipt.receiptNumber}` : "New Withholding Tax Receipt"}
           </h5>
           <button data-admin-close="" aria-label="Close" type="button" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
-          <div style={formStyles.body}>
+          <div data-admin-body="" style={formStyles.body}>
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
             <div style={{ marginBottom: "1rem" }}>
               <SelectDropdown
@@ -74,7 +74,7 @@ export default function WithholdingTaxReceiptForm({ onClose, onSaved, companyId,
                 placeholder="Choose customer"
               />
             </div>
-            <div className="k-form-grid" style={{ marginBottom: "1rem", alignItems: "end" }}>
+            <div data-admin-form-row="" className="k-form-grid" style={{ marginBottom: "1rem", alignItems: "end" }}>
               <Field label="Date">
                 <input type="date" className="k-input" value={date} onChange={(e) => setDate(e.target.value)} />
               </Field>
@@ -109,7 +109,7 @@ export default function WithholdingTaxReceiptForm({ onClose, onSaved, companyId,
               title="Certificate"
             />
           </div>
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.6 : 1 }} disabled={disabled}>
               {saving ? "Saving..." : isEdit ? "Update Receipt" : "Save Receipt"}

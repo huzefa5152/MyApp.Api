@@ -25,7 +25,7 @@ export default function ChallanModal({ challan, onClose }) {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>
             <MdReceipt size={18} style={{ marginRight: 6, verticalAlign: "middle" }} />
             Challan #{challan.challanNumber} Details
@@ -34,7 +34,7 @@ export default function ChallanModal({ challan, onClose }) {
         </div>
 
         {/* Body */}
-        <div style={formStyles.body}>
+        <div data-admin-body="" style={formStyles.body}>
           {/* Info grid — every field the operator can set on the
               edit form is mirrored here so View matches Edit one-for-
               one. Optional fields (Indent, Site, PO Date) only render
@@ -142,7 +142,7 @@ export default function ChallanModal({ challan, onClose }) {
         </div>
 
         {/* Footer */}
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           <button data-admin-close=""
             type="button"
             style={{ ...formStyles.button, ...formStyles.cancel }}

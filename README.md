@@ -302,6 +302,7 @@ Publish output optimized from 79 MB to 37 MB via:
 
 - Merge current Trader into the selectable-theme branch, preserving Classic and Workspace alongside current billing, OAuth, security and accessible admin workflows.
 
+- Refine admin screens and create/edit dialogs with compact desktop controls, responsive mobile layouts, consistent spacing, and clearer scrolling and actions.
 
 ### 2026-10-08
 

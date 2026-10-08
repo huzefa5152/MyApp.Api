@@ -105,3 +105,148 @@ body.admin-ui .admin-skip-link { position: fixed; top: 8px; left: 12px; z-index:
 body.admin-ui .admin-skip-link:focus { transform: translateY(0); }
 
 body.admin-ui [data-admin-dialog]:not([data-admin-backdrop]) { display: flex; flex-direction: column; overflow: hidden; }
+
+/* Dense admin forms: section geometry is independent from control geometry. */
+html:not([data-ui-layout="workspace"]) body.admin-ui {
+ --admin-control-height: 34px;
+ --admin-input-padding: 6px 10px;
+ --admin-button-padding: 6px 12px;
+ --admin-dialog-header-padding: 8px 16px;
+ --admin-dialog-body-padding: 14px 16px;
+ --admin-dialog-footer-padding: 9px 16px;
+ --admin-dialog-body-max: none;
+ --admin-card-padding: 14px;
+ --admin-card-gap: 12px;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui :is(.dl-main,[data-admin-dialog]) { font-size: 13px; line-height: 1.45; }
+html:not([data-ui-layout="workspace"]) body.admin-ui :is(.dl-main,[data-admin-dialog]) button {
+ min-height: var(--admin-control-height) !important;
+ padding-block: 6px !important;
+ line-height: 1.3;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui :is(.dl-main,[data-admin-dialog]) :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),select) {
+ min-height: var(--admin-control-height) !important;
+ padding-block: 6px !important;
+ line-height: 1.35;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] { border-radius: 12px !important; }
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-header] { padding: var(--admin-dialog-header-padding) !important; gap: 12px; }
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-header] :is(h1,h2,h3,h4,h5,h6) { margin: 0 !important; font-size: 16px !important; }
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-header] [data-admin-close] { padding: 0 !important; min-width: 34px !important; min-height: 34px !important; height: 34px !important; line-height: 1; }
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] > form:has(> [data-admin-body]) { overflow: hidden; flex: 1 1 auto; }
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-body] { padding: var(--admin-dialog-body-padding) !important; max-height: none !important; min-width: 0; overflow-y: auto; flex: 1 1 auto; }
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-footer] { padding: var(--admin-dialog-footer-padding) !important; gap: 8px !important; }
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-footer] button { margin: 0; }
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-form-row] { gap: 12px !important; margin-bottom: 12px !important; }
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-form-row] > * { min-width: 0 !important; }
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] label { line-height: 1.4; margin-bottom: 4px; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-copy { padding: 8px 10px !important; margin-bottom: 12px !important; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-number { display: grid; grid-template-columns: minmax(120px, .9fr) minmax(140px, 1.1fr); gap: 6px 8px; align-items: start; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-number > label { grid-column: 1 / -1; margin: 0 !important; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-number > div:has(> button[title*="sequence"]) { margin: 0 !important; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-number > div:not(:has(> button[title*="sequence"])):not(:has(> input)) { grid-column: 1 / -1; margin-top: 0 !important; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-number > input { min-width: 0; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-number > div:has(> input) { min-width: 0; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-number button { padding-inline: 8px !important; }
+@media (max-width: 767.98px) {
+ html:not([data-ui-layout="workspace"]) body.admin-ui { --admin-control-height: 44px; --admin-dialog-header-padding: 8px 12px; --admin-dialog-body-padding: 12px; --admin-dialog-footer-padding: 8px 12px; }
+ html:not([data-ui-layout="workspace"]) body.admin-ui :is(.dl-main,[data-admin-dialog]) button { padding-block: 8px !important; }
+ html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-header] [data-admin-close] { min-width: 44px !important; min-height: 44px !important; height: 44px !important; padding: 0 !important; }
+ html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-form-row] { flex-direction: column; gap: 10px !important; }
+ html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-form-row] > * { width: 100%; flex: auto !important; }
+ html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-number { grid-template-columns: minmax(120px,.9fr) minmax(120px,1.1fr); }
+}
+@media (max-height: 500px) and (min-width: 768px) {
+ html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-backdrop] { padding: 6px !important; }
+ html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] { max-height: calc(100dvh - 12px) !important; }
+}
+
+html:not([data-ui-layout="workspace"]) body.admin-ui { --admin-field-gap: 12px; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-page-header] { margin-bottom: 16px !important; gap: 12px !important; flex-wrap: wrap; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-page-icon] { width: 38px !important; height: 38px !important; border-radius: 10px !important; flex-shrink: 0; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-page-icon] svg { width: 22px; height: 22px; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-toolbar] { gap: 12px !important; margin-bottom: 16px !important; min-width: 0; }
+@media(max-width:767.98px) {
+ html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-toolbar] { flex-wrap: wrap; }
+ html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-toolbar] > * { min-width: 0 !important; max-width: 100%; }
+}
+
+@media(min-width:768px) {
+ html:not([data-ui-layout="workspace"]) body.admin-ui .admin-quote-body:has(> .admin-document-copy) { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 12px; align-content: start; }
+ html:not([data-ui-layout="workspace"]) body.admin-ui .admin-quote-body:has(> .admin-document-copy) > * { grid-column: 1 / -1; }
+ html:not([data-ui-layout="workspace"]) body.admin-ui .admin-quote-body > .admin-document-copy { grid-column: 1 !important; grid-row: 1; align-self: start; margin-bottom: 0 !important; }
+ html:not([data-ui-layout="workspace"]) body.admin-ui .admin-quote-body:has(> .admin-document-copy) > div:has(> .admin-document-number) { grid-column: 2; grid-row: 1; max-width: none !important; margin-bottom: 0 !important; }
+}
+
+/* Consistent visual grouping for create and edit workflows. */
+html:not([data-ui-layout="workspace"]) body.admin-ui :is(.admin-details-panel,.admin-items-panel) { min-width: 0; border: 1px solid #e8edf3; border-radius: 10px; padding: 14px; margin-bottom: 16px; background: #fff; }
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] .admin-section-heading { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; padding: 0 0 10px; border-bottom: 1px solid #e8edf3; font-size: 13px !important; font-weight: 700; line-height: 1.4; color: #0d47a1; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-section-heading::before { content: ''; width: 3px; height: 15px; border-radius: 3px; background: #00897b; flex-shrink: 0; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-details-panel > [data-admin-form-row]:last-child { margin-bottom: 0 !important; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-items-panel > div:first-child { margin-bottom: 12px; gap: 12px; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-items-panel > div:first-child > label { font-weight: 700; color: #0d47a1; }
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-field] { min-width: 0; }
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] :is(input,select,textarea):not(:disabled):hover { border-color: #00897b; }
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] :is(input,select,textarea):focus-visible { outline-offset: 2px; }
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] textarea { padding: 8px 10px; line-height: 1.5; }
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-footer] { align-items: center; }
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-footer] button[type=submit] { min-width: 112px; }
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-footer] button:not(:disabled):hover { filter: brightness(1.05); }
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-header] [data-admin-close]:hover { background-color: rgba(255,255,255,.3) !important; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-toolbar] { align-items: end; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-page-header] > div:first-child { gap: 12px !important; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-table-region] { border-radius: 10px; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main table :is(th,td) { vertical-align: middle; }
+html:not([data-ui-layout="workspace"]) body.admin-ui :is(.dl-main,[data-admin-dialog]) button { transition: background-color .16s ease,border-color .16s ease,box-shadow .16s ease,filter .16s ease; }
+@media(min-width:992px) {
+ html:not([data-ui-layout="workspace"]) body.admin-ui .admin-order-party-row { display: grid !important; grid-template-columns: minmax(0,1.15fr) minmax(0,1.5fr) minmax(0,1fr); align-items: start; }
+}
+@media(min-width:768px) and (max-width:991.98px) {
+ html:not([data-ui-layout="workspace"]) body.admin-ui .admin-order-party-row { display: grid !important; grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+ html:not([data-ui-layout="workspace"]) body.admin-ui .admin-order-party-row > :last-child { grid-column: 1 / -1; }
+}
+@media(max-width:767.98px) {
+ html:not([data-ui-layout="workspace"]) body.admin-ui :is(.admin-details-panel,.admin-items-panel) { padding: 12px; margin-bottom: 12px; }
+ html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] .admin-section-heading { margin-bottom: 12px; }
+ html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-footer] button[type=submit] { flex: 1 1 auto; }
+ html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-footer] button { min-width: 88px; }
+ html:not([data-ui-layout="workspace"]) body.admin-ui .admin-items-panel > div:first-child { align-items: flex-start; }
+}
+@media(prefers-reduced-motion:reduce) {
+ html:not([data-ui-layout="workspace"]) body.admin-ui :is(.dl-main,[data-admin-dialog]) button { transition: none; }
+}
+
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] label:has(> input[type=checkbox]) { align-items: center; gap: 8px; }
+@media(min-width:768px) {
+ html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] label:has(> input[type=checkbox]) { min-height: 34px !important; }
+}
+@media(max-width:767.98px) {
+ html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] label:has(> input[type=checkbox]) { min-height: 44px; }
+}
+
+/* A collapsed secondary action should not reserve a full bordered panel. */
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-copy[data-open=false] { display: inline-block; width: fit-content; max-width: 100%; padding: 0 !important; border: 0 !important; border-radius: 0 !important; margin-bottom: 8px !important; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-copy[data-open=true] { width: 100%; padding: 12px !important; margin-bottom: 12px !important; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-copy > button:first-child { padding-inline: 10px; }
+@media(min-width:768px) {
+ html:not([data-ui-layout="workspace"]) body.admin-ui .admin-quote-body > .admin-document-copy[data-open=true] { grid-column: 1 / -1 !important; grid-row: auto; }
+ html:not([data-ui-layout="workspace"]) body.admin-ui .admin-quote-body:has(> .admin-document-copy[data-open=true]) > div:has(> .admin-document-number) { grid-column: 1 / -1; grid-row: auto; }
+}
+
+html:not([data-ui-layout="workspace"]) body.admin-ui .pof-header__title { text-align: left; }
+
+html:not([data-ui-layout="workspace"]) body.admin-ui .tenant-page [data-admin-page-header] h1 { text-align: left; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-view-mode { flex-wrap: nowrap !important; flex-shrink: 0; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-view-mode > button { flex: 1 0 auto; white-space: nowrap; }
+@media(max-width:767.98px) {
+ html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-toolbar] > div:has(> input) { flex-basis: 100% !important; width: 100%; }
+}
+
+html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-page-header] :is(h1,h2,h3) { text-align: left; }
+
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-stock-modal { padding: 0 !important; overflow: hidden !important; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-stock-modal > form { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+
+html:not([data-ui-layout="workspace"]) body.admin-ui .dash-kpi-card__label { align-items: flex-start !important; min-height: 30px; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .dash-kpi-card__label > span:last-child { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .dash-mov-row__name { white-space: normal !important; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }

@@ -157,12 +157,12 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? `Edit Sales Order #${order.salesOrderNumber}` : "Create Sales Order"}</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
-          <div style={formStyles.body}>
+          <div data-admin-body="" style={formStyles.body}>
             <DocumentCopyPicker companyId={companyId} destination="Order" allowDetails={!isEdit} disabled={!!salesQuoteId}
               onCopy={(source,lines,details) => {
                 setItems(prev => appendCopiedLines(details ? [] : prev, lines, blankItem));
@@ -185,7 +185,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
               />
               {quoteLoadedMsg && <div style={{ fontSize: "0.72rem", color: "var(--k-teal)", fontWeight: 600 }}>{quoteLoadedMsg}</div>}
             </Field>
-            <div className="k-form-grid" style={s.grid}>
+            <div data-admin-form-row="" className="k-form-grid" style={s.grid}>
               <Field label="Client">
                 <SearchableClientSelect
                   clients={clients}
@@ -226,7 +226,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
                 })()}
               </Field>
             </div>
-            <div className="k-form-grid" style={s.grid}>
+            <div data-admin-form-row="" className="k-form-grid" style={s.grid}>
               <Field label="Order Date">
                 <input type="date" className="k-input" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} />
               </Field>
@@ -267,7 +267,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
               <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="SalesOrder" entityId={order?.id ?? null} mode="edit" />
             </div>
           </div>
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.6 : 1 }} disabled={disabled}>{saving ? "Saving..." : isEdit ? "Update Order" : "Save Order"}</button>
           </div>

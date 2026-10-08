@@ -193,7 +193,7 @@ export default function BillNumberField({
   };
 
   return (
-    <div>
+    <div className="admin-document-number">
       <label style={{ display: "block", marginBottom: "var(--ui-label-gap, 0.35rem)", fontWeight: 600, fontSize: "var(--ui-label-size, 0.85rem)", color: colors.textSecondary }}>
         {documentLabel} No.
       </label>

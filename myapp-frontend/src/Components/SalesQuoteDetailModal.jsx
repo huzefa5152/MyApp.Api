@@ -22,7 +22,7 @@ export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPr
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={{ ...formStyles.title, display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <MdRequestQuote size={20} /> Quote #{quote.quoteNumber}
             <span style={{ ...st.badge, background: `${STATUS_COLORS[quote.status] || "#5f6d7e"}18`, color: STATUS_COLORS[quote.status] || "#5f6d7e" }}>{quote.status}</span>
@@ -30,7 +30,7 @@ export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPr
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}><MdClose size={18} /></button>
         </div>
 
-        <div style={formStyles.body}>
+        <div data-admin-body="" style={formStyles.body}>
           <div style={st.clientName}>{quote.clientName}</div>
 
           <Facts
@@ -96,7 +96,7 @@ export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPr
           )}
         </div>
 
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           {canPrint && (
             <button style={{ ...formStyles.button, ...formStyles.cancel, display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => onPrint?.(quote)}>
               <MdPrint size={16} /> Print

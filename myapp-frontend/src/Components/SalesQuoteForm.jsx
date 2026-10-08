@@ -148,12 +148,12 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? `Edit Quote #${quote.quoteNumber}` : "Create Sales Quote"}</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
-          <div style={formStyles.body}>
+          <div data-admin-body="" className="admin-quote-body" style={formStyles.body}>
             <DocumentCopyPicker companyId={companyId} destination="Quote" allowDetails={!isEdit} disabled={false}
               onCopy={(source,lines,details) => {
                 setItems(prev => appendCopiedLines(details ? [] : prev, lines, blankItem));
@@ -161,7 +161,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
               }} />
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
             {<div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="quote" variant={quote ? "edit" : "create"} currentNumber={quote?.quoteNumber} editRecordId={quote?.id} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>}
-            <div className="k-form-grid" style={s.grid}>
+            <div data-admin-form-row="" className="k-form-grid" style={s.grid}>
               <Field label="Client">
                 <SearchableClientSelect
                   clients={clients}
@@ -190,7 +190,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
                 <input type="number" min={1} step={1} className="k-input" value={validForDays} onChange={(e) => setValidForDays(e.target.value)} placeholder="blank = no expiry" />
               </Field>
             </div>
-            <div className="k-form-grid" style={s.grid}>
+            <div data-admin-form-row="" className="k-form-grid" style={s.grid}>
               <Field label={<>Customer Enquiry Ref <span style={s.opt}>(optional)</span></>}>
                 <input type="text" className="k-input" value={enquiryRef} onChange={(e) => setEnquiryRef(e.target.value)} placeholder="Their RFQ / enquiry number" />
               </Field>
@@ -243,7 +243,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
               <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="SalesQuote" entityId={quote?.id ?? null} mode="edit" />
             </div>
           </div>
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.6 : 1 }} disabled={disabled}>{saving ? "Saving..." : isEdit ? "Update Quote" : "Save Quote"}</button>
           </div>

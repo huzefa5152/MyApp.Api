@@ -332,11 +332,11 @@ export default function AdministratorsPage() {
       {showCreate && (
         <div data-admin-backdrop="" style={formStyles.backdrop} onClick={() => !saving && setShowCreate(false)}>
           <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onClick={(e) => e.stopPropagation()}>
-            <div style={formStyles.header}>
+            <div data-admin-header="" style={formStyles.header}>
               <h3 style={formStyles.title}>New Administrator</h3>
               <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={() => setShowCreate(false)} aria-label="Close"><MdClose /></button>
             </div>
-            <div style={formStyles.body}>
+            <div data-admin-body="" style={formStyles.body}>
               <p style={{ ...styles.mutedInline, marginBottom: "1rem" }}>
                 The account is created under you, receives the Administrator role, and starts with no company
                 access. Grant companies afterwards with "Edit access".
@@ -355,7 +355,7 @@ export default function AdministratorsPage() {
                 <div style={styles.hint}>At least 8 characters with a letter and a digit.</div>
               </div>
             </div>
-            <div style={formStyles.footer}>
+            <div data-admin-footer="" style={formStyles.footer}>
               <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setShowCreate(false)} disabled={saving}>Cancel</button>
               <button type="button" style={{ ...formStyles.button, ...formStyles.submit, ...styles.iconLabel }} onClick={submitCreate} disabled={saving}>
                 <MdSave size={18} /> {saving ? "Creating..." : "Create"}
@@ -369,11 +369,11 @@ export default function AdministratorsPage() {
       {accessTarget && (
         <div data-admin-backdrop="" style={formStyles.backdrop} onClick={() => !saving && setAccessTarget(null)}>
           <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onClick={(e) => e.stopPropagation()}>
-            <div style={formStyles.header}>
+            <div data-admin-header="" style={formStyles.header}>
               <h3 style={formStyles.title}>Company access — {accessTarget.fullName}</h3>
               <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={() => setAccessTarget(null)} aria-label="Close"><MdClose /></button>
             </div>
-            <div style={formStyles.body}>
+            <div data-admin-body="" style={formStyles.body}>
               {allCompanies.length === 0 ? (
                 <p style={styles.mutedInline}>No companies exist yet.</p>
               ) : (
@@ -394,7 +394,7 @@ export default function AdministratorsPage() {
                 Unticking every company leaves the account signed-in but on the "No Company Configured" screen.
               </p>
             </div>
-            <div style={formStyles.footer}>
+            <div data-admin-footer="" style={formStyles.footer}>
               <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setAccessTarget(null)} disabled={saving}>Cancel</button>
               <button type="button" style={{ ...formStyles.button, ...formStyles.submit, ...styles.iconLabel }} onClick={submitAccess} disabled={saving}>
                 <MdSave size={18} /> {saving ? "Saving..." : "Save access"}

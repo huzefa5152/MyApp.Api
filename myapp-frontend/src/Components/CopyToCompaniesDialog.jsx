@@ -81,7 +81,7 @@ export default function CopyToCompaniesDialog({
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={() => !submitting && onCancel?.()}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: 520, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h3 style={{ ...formStyles.title, display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
             <MdContentCopy size={20} aria-hidden="true" style={{ flexShrink: 0 }} />
             {title}
@@ -98,7 +98,7 @@ export default function CopyToCompaniesDialog({
           </button>
         </div>
 
-        <div style={formStyles.body}>
+        <div data-admin-body="" style={formStyles.body}>
           {subjectLabel && (
             <p style={styles.subjectLine}>
               <strong>{subjectLabel}</strong>
@@ -154,7 +154,7 @@ export default function CopyToCompaniesDialog({
           {errorMsg && <div style={{ ...formStyles.error, marginTop: "0.75rem", marginBottom: 0 }}>{errorMsg}</div>}
         </div>
 
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           <button data-admin-close=""
             type="button"
             style={{ ...formStyles.button, ...formStyles.cancel }}

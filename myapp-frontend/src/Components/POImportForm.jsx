@@ -434,14 +434,14 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>
             {step === 1 ? (target === "salesquote" ? "Import Enquiry / Demand" : "Import Customer PO") : `Review & ${cfg.verb}`}
           </h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
 
-        <div style={{ ...formStyles.body, maxHeight: "72vh", overflowY: "auto" }}>
+        <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "72vh", overflowY: "auto" }}>
           {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
           {step === 1 && (
@@ -584,7 +584,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
               )}
 
               {/* Header row: Client / Site / Date */}
-              <div className="k-form-grid" style={styles.grid}>
+              <div data-admin-form-row="" className="k-form-grid" style={styles.grid}>
                 <Field label="Client *">
                   <SearchableClientSelect
                     clients={clients}
@@ -618,7 +618,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
               </div>
 
               {/* PO row: Number + Date (+ Indent No for challan target) */}
-              <div className="k-form-grid" style={styles.grid}>
+              <div data-admin-form-row="" className="k-form-grid" style={styles.grid}>
                 <Field label={target === "salesquote" ? "Enquiry Reference" : "PO Number"}>
                   <input className="k-input" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="e.g. PO-2026-001" />
                 </Field>
@@ -778,7 +778,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
           )}
         </div>
 
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           {step === 2 && (
             <button
               type="button"

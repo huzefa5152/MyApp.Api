@@ -70,7 +70,7 @@ export default function ApplyStarterModal({ template, onClose, onApplied }) {
   return (
     <div data-admin-backdrop="" style={s.overlay}>
       <div style={s.modal} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="apply-starter-title">
-        <div style={{ ...formStyles.header, alignItems: "flex-start", gap: "0.75rem" }}>
+        <div data-admin-header="" style={{ ...formStyles.header, alignItems: "flex-start", gap: "0.75rem" }}>
           <div style={{ minWidth: 0 }}>
             <h3 id="apply-starter-title" style={{ ...formStyles.title, ...s.titleClamp }}>Apply starter to “{template.name}”</h3>
             <p style={s.subtitle}>
@@ -108,7 +108,7 @@ export default function ApplyStarterModal({ template, onClose, onApplied }) {
           <div style={{ ...s.compareCol, borderLeft: "2px solid var(--k-line-strong)" }}><PreviewPane html={starterHtml} isMobile={false} /></div>
         </div>
 
-        <div style={{ ...formStyles.footer, justifyContent: "space-between", alignItems: "center" }}>
+        <div data-admin-footer="" style={{ ...formStyles.footer, justifyContent: "space-between", alignItems: "center" }}>
           <div style={s.warn}><MdWarningAmber size={16} /> This overwrites the current design and is recorded in the audit log. It cannot be undone from here.</div>
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel, ...s.btnInline }} onClick={() => setStarter(null)} disabled={busy}><MdArrowBack size={16} /> Choose another</button>

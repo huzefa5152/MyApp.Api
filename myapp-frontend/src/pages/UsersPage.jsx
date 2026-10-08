@@ -411,7 +411,7 @@ export default function UsersPage() {
         // click can't drop the half-typed user form.
         <div data-admin-backdrop="" style={styles.overlay}>
           <div data-admin-dialog="" style={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.modalHeader}>
+            <div data-admin-header="" style={styles.modalHeader}>
               <h3 style={formStyles.title}>
                 {editUser ? "Edit User" : "Add New User"}
               </h3>
@@ -420,7 +420,7 @@ export default function UsersPage() {
               </button>
             </div>
 
-            <div style={styles.modalBody}>
+            <div data-admin-body="" style={styles.modalBody}>
               {msg && (
                 <Alert tone={msgTone(msg.type)}>
                   {msg.text}
@@ -520,7 +520,7 @@ export default function UsersPage() {
         // Backdrop click is a no-op — explicit Cancel / X only.
         <div data-admin-backdrop="" style={styles.overlay}>
           <div data-admin-dialog="" style={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.modalHeader}>
+            <div data-admin-header="" style={styles.modalHeader}>
               <h3 style={formStyles.title}>
                 Manage roles — {rolesModalUser.fullName}
               </h3>
@@ -529,7 +529,7 @@ export default function UsersPage() {
               </button>
             </div>
 
-            <div style={styles.modalBody}>
+            <div data-admin-body="" style={styles.modalBody}>
               {rolesMsg && (
                 <Alert tone={msgTone(rolesMsg.type)}>
                   {rolesMsg.text}

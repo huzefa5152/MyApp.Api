@@ -83,7 +83,7 @@ export default function SalesOrderDetailModal({ order: initialOrder, onChanged, 
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: 760 }} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div style={{ ...formStyles.header, alignItems: "flex-start", gap: "1rem" }}>
+        <div data-admin-header="" style={{ ...formStyles.header, alignItems: "flex-start", gap: "1rem" }}>
           <div style={{ minWidth: 0 }}>
             <div style={st.hTitleRow}>
               <h5 style={formStyles.title}>Sales Order #{order.salesOrderNumber}</h5>
@@ -98,7 +98,7 @@ export default function SalesOrderDetailModal({ order: initialOrder, onChanged, 
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} title="Close" aria-label="Close"><MdClose size={22} /></button>
         </div>
 
-        <div style={{ ...formStyles.body, maxHeight: "none" }}>
+        <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "none" }}>
           {/* Meta */}
           <Facts
             facts={[
@@ -226,7 +226,7 @@ export default function SalesOrderDetailModal({ order: initialOrder, onChanged, 
         </div>
 
         {/* Footer actions */}
-        <div style={{ ...formStyles.footer, justifyContent: "space-between", alignItems: "center" }}>
+        <div data-admin-footer="" style={{ ...formStyles.footer, justifyContent: "space-between", alignItems: "center" }}>
           <button data-admin-close="" style={st.btnGhost} onClick={onClose}>Close</button>
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
             {onEdit && order.isEditable && <button data-admin-close="" style={st.btnGhost} onClick={() => { onClose(); onEdit(order); }}><MdEdit size={15} /> Edit</button>}

@@ -244,12 +244,12 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
   return (
     <div data-admin-backdrop="" style={backdrop}>
       <div data-admin-dialog="" style={modal}>
-        <div style={header}>
+        <div data-admin-header="" style={header}>
           <h5 style={title}>{client ? "Edit Client" : "New Client"}</h5>
           <button data-admin-close="" style={closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit} noValidate>
-          <div style={body}>
+          <div data-admin-body="" style={body}>
             {/* Multi-company picker — CREATE mode only, when the parent
                 has supplied the companies list and the operator has
                 more than one to pick from. Default-checked is the
@@ -289,23 +289,23 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
               </div>
             )}
 
-            <div style={formGroup}>
+            <div data-admin-field="" style={formGroup}>
               <label style={label}>Name *</label>
               <input type="text" name="name" value={formData.name} onChange={handleChange} style={{ ...input, ...fieldError("name") }} />
               {errorMsg("name")}
             </div>
 
-            <div style={formGroup}>
+            <div data-admin-field="" style={formGroup}>
               <label style={label}>Address</label>
               <input type="text" name="address" value={formData.address} onChange={handleChange} style={input} />
             </div>
 
             <div className="form-grid-2col">
-              <div style={formGroup}>
+              <div data-admin-field="" style={formGroup}>
                 <label style={label}>Email</label>
                 <input type="email" name="email" value={formData.email} onChange={handleChange} style={input} />
               </div>
-              <div style={formGroup}>
+              <div data-admin-field="" style={formGroup}>
                 <label style={label}>Phone</label>
                 <input type="text" name="phone" value={formData.phone} onChange={handleChange} style={input} />
               </div>
@@ -318,7 +318,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
             <div style={{ marginTop: "0.5rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #0d47a130", backgroundColor: "#e3f2fd" }}>
               <p style={{ margin: "0 0 0.5rem", fontWeight: 700, fontSize: "0.85rem", color: "#0d47a1" }}>FBR Details</p>
               <div className="form-grid-2col">
-                <div style={formGroup}>
+                <div data-admin-field="" style={formGroup}>
                   <label style={label}>Registration Type *</label>
                   <select name="registrationType" value={formData.registrationType} onChange={handleChange} style={{ ...input, ...fieldError("registrationType") }}>
                     <option value="">Select...</option>
@@ -344,7 +344,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
                     </div>
                   )}
                 </div>
-                <div style={formGroup}>
+                <div data-admin-field="" style={formGroup}>
                   <label style={label}>Province *</label>
                   <select name="fbrProvinceCode" value={formData.fbrProvinceCode} onChange={handleChange} style={{ ...input, ...fieldError("fbrProvinceCode") }}>
                     <option value="">Select...</option>
@@ -366,7 +366,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
               {(showNtn || showStrn) && (
                 <div className="form-grid-2col" style={{ marginTop: "0.5rem" }}>
                   {showNtn && (
-                    <div style={formGroup}>
+                    <div data-admin-field="" style={formGroup}>
                       <label style={label}>{ntnLabel}</label>
                       <input
                         type="text"
@@ -380,7 +380,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
                     </div>
                   )}
                   {showStrn && (
-                    <div style={formGroup}>
+                    <div data-admin-field="" style={formGroup}>
                       <label style={label}>STRN <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional — not sent to FBR)</span></label>
                       <input
                         type="text"
@@ -416,13 +416,13 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
               )}
             </div>
 
-            <div style={formGroup}>
+            <div data-admin-field="" style={formGroup}>
               <label style={label}>Sites</label>
               <input type="text" name="site" value={formData.site} onChange={handleChange} style={input} placeholder="e.g. Site-A ; Site-B ; Site-C" />
               <span style={{ fontSize: "0.75rem", color: "#5f6d7e", marginTop: "0.25rem", display: "block" }}>Separate multiple sites with semicolons (;). These will appear as dropdown options when creating a delivery challan.</span>
             </div>
 
-            <div style={formGroup}>
+            <div data-admin-field="" style={formGroup}>
               <label style={label}>Contact Persons</label>
               <input type="text" name="contactPerson" value={formData.contactPerson} onChange={handleChange} style={input} placeholder="e.g. Ali ; Bilal ; Sara" />
               <span style={{ fontSize: "0.75rem", color: "#5f6d7e", marginTop: "0.25rem", display: "block" }}>Separate multiple contacts with semicolons (;). These appear as a dropdown when creating a Sales Quote.</span>
@@ -430,7 +430,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
 
           </div>
 
-          <div style={footer}>
+          <div data-admin-footer="" style={footer}>
             <button data-admin-close="" type="button" style={{ ...button, ...cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...button, ...submit }}>{client ? "Update" : "Create"}</button>
           </div>

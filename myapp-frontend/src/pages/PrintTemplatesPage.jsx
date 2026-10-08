@@ -723,13 +723,13 @@ export default function PrintTemplatesPage() {
       {copyTarget && (
         <div data-admin-backdrop="" style={st.overlay} onClick={() => setCopyTarget(null)}>
           <div style={{ ...formStyles.modal, maxWidth: 520 }} role="dialog" aria-modal="true" aria-label={`Copy ${copyTarget.name}`} onClick={(e) => e.stopPropagation()}>
-            <div style={formStyles.header}>
+            <div data-admin-header="" style={formStyles.header}>
               <h3 style={{ ...formStyles.title, display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                 Copy “{copyTarget.name}” <span style={st.typeChip}>{TEMPLATE_TYPE_LABEL[copyTarget.templateType]}</span>
               </h3>
               <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={() => setCopyTarget(null)} aria-label="Close"><MdClose size={20} /></button>
             </div>
-            <div style={formStyles.body}>
+            <div data-admin-body="" style={formStyles.body}>
               <p style={st.copyHint}>
                 Pick the document type for the new template. Choose the <strong>same type</strong> to duplicate it, or a <strong>different type</strong> to reuse this design there (open it afterward to adjust the merge fields — they differ per document type).
               </p>
@@ -765,7 +765,7 @@ export default function PrintTemplatesPage() {
       {previewTarget && (
         <div data-admin-backdrop="" style={st.overlay} onClick={() => setPreviewTarget(null)}>
           <div style={st.previewModal} role="dialog" aria-modal="true" aria-label={`Preview of ${previewTarget.name}`} onClick={(e) => e.stopPropagation()}>
-            <div style={formStyles.header}>
+            <div data-admin-header="" style={formStyles.header}>
               <h3 style={{ ...formStyles.title, display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                 {previewTarget.name} <span style={st.typeChip}>{TEMPLATE_TYPE_LABEL[previewTarget.templateType]}</span>
               </h3>
@@ -825,14 +825,14 @@ function StampUploadModal({ onClose, onUpload, uploading }) {
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={uploading ? undefined : onClose}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.sm}px` }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="stamp-upload-title">
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <div>
             <h3 id="stamp-upload-title" style={formStyles.title}>Upload Stamp</h3>
             <p style={{ margin: "0.15rem 0 0", fontSize: "0.78rem", color: "var(--ui-modal-title-color, #ffffff)", opacity: 0.85 }}>PNG, JPG or WebP. A transparent PNG works best for signatures.</p>
           </div>
           <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} disabled={uploading} aria-label="Close"><MdClose size={20} /></button>
         </div>
-        <div style={{ ...formStyles.body, display: "flex", flexDirection: "column", gap: "0.8rem" }}>
+        <div data-admin-body="" style={{ ...formStyles.body, display: "flex", flexDirection: "column", gap: "0.8rem" }}>
           <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" style={{ display: "none" }} onChange={onPick} />
           <button
             type="button"
@@ -854,7 +854,7 @@ function StampUploadModal({ onClose, onUpload, uploading }) {
             />
           </Field>
         </div>
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose} disabled={uploading}>Cancel</button>
           <button
             type="button"

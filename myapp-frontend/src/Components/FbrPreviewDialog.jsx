@@ -106,7 +106,7 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
         style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>FBR Submission Preview</h5>
           <button data-admin-close=""
             type="button"
@@ -119,7 +119,7 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
           </button>
         </div>
 
-        <div style={formStyles.body}>
+        <div data-admin-body="" style={formStyles.body}>
           {loading ? (
             <Loading>Loading FBR preview…</Loading>
           ) : error ? (
@@ -274,7 +274,7 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
           )}
         </div>
 
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           <button data-admin-close=""
             type="button"
             style={{ ...formStyles.button, ...formStyles.cancel }}

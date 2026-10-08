@@ -160,12 +160,12 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? "Edit PO Format" : "Add PO Format"}</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
 
-        <div style={{ ...formStyles.body, maxHeight: "72vh", overflowY: "auto" }}>
+        <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "72vh", overflowY: "auto" }}>
           {error && (
             <div ref={errRef}>
               <Alert tone="error" icon={MdWarning}>{error}</Alert>
@@ -179,7 +179,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
           )}
 
           <p style={styles.hint}>Company: <strong>{companyName}</strong>. This format is private to this company.</p>
-          <div className="k-form-grid" style={styles.grid}>
+          <div data-admin-form-row="" className="k-form-grid" style={styles.grid}>
             <Field label="Client *" htmlFor="po-format-client">
               <select id="po-format-client" className="k-select" disabled={clientsLoading || metadataOnly}
                 value={selectedClientId ?? ""}
@@ -248,7 +248,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
             Enter the exact text that appears on the PDF. Only the Description and Quantity column headers are required — the parser reads each item's description and quantity by column, so Unit and the PO labels are optional.
           </p>
 
-          <div className="k-form-grid" style={styles.grid}>
+          <div data-admin-form-row="" className="k-form-grid" style={styles.grid}>
             <Field label="PO Number label">
               <input
                 className="k-input"
@@ -267,7 +267,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
             </Field>
           </div>
 
-          <div className="k-form-grid" style={styles.grid}>
+          <div data-admin-form-row="" className="k-form-grid" style={styles.grid}>
             <Field label="Description column header *">
               <input
                 className="k-input"
@@ -317,7 +317,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
           )}
         </div>
 
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
           <button
             type="button"

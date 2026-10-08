@@ -37,8 +37,8 @@ export default function DocumentCopyPicker({ companyId, destination, allowDetail
     finally {if(request===generation.current)setBusy(false);}
   };
   if(disabled || !types.length)return null;
-  return <section style={{border:"1px solid #d0d7e2",borderRadius:10,padding:12,marginBottom:16}}>
-    <button type="button" style={button} onClick={() => {if(!open&&!types.some(([k])=>k===type))setType(types[0][0]);setOpen(!open);}}>Copy from a document</button>
+  return <section className="admin-document-copy" data-open={open} style={{border:"1px solid #d0d7e2",borderRadius:10,padding:12,marginBottom:16}}>
+    <button type="button" aria-expanded={open} style={button} onClick={() => {if(!open&&!types.some(([k])=>k===type))setType(types[0][0]);setOpen(!open);}}>Copy from a document</button>
     {open && <div style={{display:"grid",gap:10,marginTop:10}}>
       <select aria-label="Copy source type" style={formStyles.input} value={type} onChange={e=>{setType(e.target.value);setPage(1);setDetails(false);}}>
         {types.map(([key,t])=><option key={key} value={key}>{t.label}</option>)}

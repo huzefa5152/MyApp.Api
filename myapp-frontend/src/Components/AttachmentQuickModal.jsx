@@ -11,13 +11,13 @@ export default function AttachmentQuickModal({ companyId, entityType, entityId, 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px` }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={{ ...formStyles.title, display: "inline-flex", alignItems: "center", gap: 8 }}>
             <MdAttachFile size={18} /> {title || "Attachments"}
           </h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}><MdClose size={18} /></button>
         </div>
-        <div style={formStyles.body}>
+        <div data-admin-body="" style={formStyles.body}>
           <AttachmentManager
             companyId={companyId}
             entityType={entityType}
@@ -26,7 +26,7 @@ export default function AttachmentQuickModal({ companyId, entityType, entityId, 
             title="Attachments"
           />
         </div>
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
         </div>
       </div>

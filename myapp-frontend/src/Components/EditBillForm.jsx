@@ -1571,14 +1571,14 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>
             {readOnly ? (billsMode ? "View Bill" : "View Invoice") : (billsMode ? "Edit Bill" : "Edit Invoice")} {invoice?.fbrInvoiceNumber || `#${invoice?.invoiceNumber || ""}`}
           </h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSave}>
-          <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
+          <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
             {loading ? (
               <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>Loading...</div>
             ) : !invoice ? (
@@ -1698,7 +1698,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                     paymentTerms, so the [SNxxx] tag only updates on the
                     full-edit save path. */}
                 {scenarios.length > 0 && (
-                  <div style={styles.row}>
+                  <div data-admin-form-row="" style={styles.row}>
                     <div style={{ flex: 1, minWidth: 280 }}>
                       <label style={styles.label}>
                         FBR Scenario <span style={{ fontWeight: 400, color: colors.textSecondary, fontSize: "0.7rem" }}>filters items below</span>
@@ -1735,7 +1735,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                 )}
 
                 {/* Bill-level fields */}
-                <div style={styles.row}>
+                <div data-admin-form-row="" style={styles.row}>
                   <div style={{ flex: 1, minWidth: 180 }}>
                     <BillNumberField
                       companyId={invoice?.companyId}
@@ -2611,7 +2611,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
               </>
             )}
           </div>
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
               {readOnly ? "Close" : "Cancel"}
             </button>

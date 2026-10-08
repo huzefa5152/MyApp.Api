@@ -321,7 +321,7 @@ export default function OnboardingImportPage() {
 
             {activeSheet && (
               <>
-                <div style={st.filters}>
+                <div data-admin-toolbar="" style={st.filters}>
                   {["all", "error", "warning", "import", "exists"].map((f) => {
                     const n = f === "all" ? activeSheet.rows.length : activeSheet.rows.filter((r) => r.status === f).length;
                     if (f !== "all" && n === 0) return null;

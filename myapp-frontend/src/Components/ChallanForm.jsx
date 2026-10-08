@@ -220,13 +220,13 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>Create Delivery Challan</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div style={formStyles.body}>
+          <div data-admin-body="" style={formStyles.body}>
             <DocumentCopyPicker companyId={companyId} destination="Challan" allowDetails={true} disabled={!!salesOrderId}
               onCopy={(source,lines,details) => {
                 setItems(prev => appendCopiedLines(details ? [] : prev, lines, () => ({description:"",quantity:1,unit:""})));
@@ -256,7 +256,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                 Edit Challan so operators see identical shape on both flows.
                 Site is dropdown when the picked client has presets, free-text
                 otherwise so one-offs still work. */}
-            <div className="k-form-grid" style={styles.grid}>
+            <div data-admin-form-row="" className="k-form-grid" style={styles.grid}>
               <Field label="Client">
                 <SearchableClientSelect
                   clients={clients}
@@ -313,7 +313,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
 
             {/* PO row: Number + Date + Indent No — same grid as
                 ChallanEditForm's PO row so Add and Edit look identical. */}
-            <div className="k-form-grid" style={styles.grid}>
+            <div data-admin-form-row="" className="k-form-grid" style={styles.grid}>
               <Field label={<>PO Number{salesOrderId && <span style={styles.opt}> (from the order)</span>}</>}>
                 <input type="text" className="k-input" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Enter PO number" disabled={!!salesOrderId} />
               </Field>
@@ -357,7 +357,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
             </div>
           </div>
 
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: isDisabled ? 0.6 : 1 }} disabled={isDisabled}>{saving ? "Saving..." : "Save Challan"}</button>
           </div>

@@ -635,7 +635,7 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
               </div>
             )}
 
-            <div className="k-form-grid" style={styles.fieldsGrid}>
+            <div data-admin-form-row="" className="k-form-grid" style={styles.fieldsGrid}>
               <Field label="Challan #">
                 <input
                   type="number"

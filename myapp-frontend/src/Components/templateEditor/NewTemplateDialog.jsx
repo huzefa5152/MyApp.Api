@@ -114,12 +114,12 @@ export default function NewTemplateDialog({
     <>
       <div data-admin-backdrop="" style={formStyles.backdrop} onClick={busy ? undefined : onClose}>
         <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px` }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="new-tpl-title">
-          <div style={formStyles.header}>
+          <div data-admin-header="" style={formStyles.header}>
             <h3 id="new-tpl-title" style={formStyles.title}>New Template</h3>
             <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} disabled={busy} aria-label="Close"><MdClose size={20} /></button>
           </div>
 
-          <div style={formStyles.body}>
+          <div data-admin-body="" style={formStyles.body}>
             <div style={s.grid}>
               <label style={s.field}>
                 <span style={s.label}>Document type</span>
@@ -180,7 +180,7 @@ export default function NewTemplateDialog({
             {error && <div style={formStyles.error} role="alert">{error}</div>}
           </div>
 
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose} disabled={busy}>Cancel</button>
             <button type="button" style={{ ...formStyles.button, ...formStyles.submit, ...s.btnInline, ...(canCreate ? {} : s.btnDisabled) }} onClick={create} disabled={!canCreate}>
               {busy ? <><span style={s.spin} /> Creating…</> : <><MdCheckCircle size={17} /> Create &amp; open</>}

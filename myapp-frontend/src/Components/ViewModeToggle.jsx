@@ -7,7 +7,7 @@ import "../ui/shared-components.css";
 // Look: .sc-seg / .sc-seg__btn in ui/shared-components.css (theme tokens).
 export default function ViewModeToggle({ mode, onChange, ariaLabel = "View mode" }) {
   return (
-    <div role="tablist" aria-label={ariaLabel} className="sc-seg">
+    <div role="tablist" aria-label={ariaLabel} className="sc-seg admin-view-mode">
       <button
         type="button"
         role="tab"

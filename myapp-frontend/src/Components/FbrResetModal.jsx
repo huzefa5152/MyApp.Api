@@ -69,14 +69,14 @@ export default function FbrResetModal({ invoice, onClose, onDone }) {
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onMouseDown={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h3 style={formStyles.title}>Reset FBR state · Bill #{invoice.invoiceNumber}</h3>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} disabled={busy} aria-label="Close">
             <MdClose size={18} />
           </button>
         </div>
 
-        <div style={formStyles.body}>
+        <div data-admin-body="" style={formStyles.body}>
           <Alert tone="warn" icon={MdWarningAmber}>
             This bill is <b>{invoice.fbrStatus}</b>. A submission may already have reached FBR.
             <b> Verify on the FBR / IRIS portal first.</b> Only choose “clear for resubmission” once
@@ -110,7 +110,7 @@ export default function FbrResetModal({ invoice, onClose, onDone }) {
           {error && <Alert tone="error">{error}</Alert>}
         </div>
 
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           <button data-admin-close="" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose} disabled={busy}>
             Cancel
           </button>

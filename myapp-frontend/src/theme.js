@@ -57,7 +57,7 @@ export const cardStyles = {
     flexDirection: "column",
     justifyContent: "space-between",
     height: "100%",
-    padding: "var(--ui-card-pad, 1.25rem 1.35rem)",
+    padding: "var(--ui-card-pad, var(--admin-card-padding, 1.25rem 1.35rem))",
   },
   title: {
     fontSize: "var(--ui-card-title, 1.12rem)",
@@ -197,7 +197,7 @@ export const formStyles = {
     borderBottom: "var(--ui-modal-head-border, none)",
     // clamp keeps the header tidy on phones (~0.9rem horizontal) while
     // restoring the comfortable 1.5rem on tablet/desktop.
-    padding: "var(--ui-modal-head-pad, 1.1rem clamp(0.9rem, 2vw, 1.5rem))",
+    padding: "var(--ui-modal-head-pad, var(--admin-dialog-header-padding, 1.1rem clamp(0.9rem, 2vw, 1.5rem)))",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
@@ -242,7 +242,7 @@ export const formStyles = {
     // Padding shrinks on phones via a clamp() — 1rem at narrow widths,
     // 1.5rem on tablet+. Keeps long forms from feeling claustrophobic
     // on a 360px viewport without cramping the desktop look.
-    padding: "var(--ui-modal-body-pad, clamp(1rem, 2vw, 1.5rem))",
+    padding: "var(--ui-modal-body-pad, var(--admin-dialog-body-padding, clamp(1rem, 2vw, 1.5rem)))",
     // Body takes remaining space and scrolls internally when content exceeds it —
     // this is the key fix for tall modals on high-resolution screens.
     overflowY: "auto",
@@ -252,7 +252,7 @@ export const formStyles = {
     // other non-flex container — without this, flex:1 gets ignored and the
     // body balloons to its natural height, pushing the footer off-screen.
     // Math: 96vh modal cap − ~75px header − ~65px footer ≈ 140px safety room.
-    maxHeight: "calc(96vh - 140px)",
+    maxHeight: "var(--admin-dialog-body-max, calc(96vh - 140px))",
   },
   error: {
     backgroundColor: colors.dangerLight,
@@ -265,7 +265,7 @@ export const formStyles = {
     fontSize: "0.88rem",
   },
   formGroup: {
-    marginBottom: "var(--ui-group-gap, 1.1rem)",
+    marginBottom: "var(--ui-group-gap, var(--admin-field-gap, 1.1rem))",
   },
   label: {
     display: "block",
@@ -292,7 +292,7 @@ export const formStyles = {
     // flexWrap lets long button rows (e.g. Save / Cancel / Delete) wrap
     // to a second line on narrow phones instead of overflowing.
     flexWrap: "wrap",
-    padding: "var(--ui-foot-pad, 1rem clamp(0.9rem, 2vw, 1.5rem))",
+    padding: "var(--ui-foot-pad, var(--admin-dialog-footer-padding, 1rem clamp(0.9rem, 2vw, 1.5rem)))",
     gap: "0.6rem",
     backgroundColor: "var(--ui-foot-bg, #f5f7fa)",
     borderTop: `1px solid ${colors.cardBorder}`,

@@ -1,3 +1,4 @@
+import useIsNarrow from "../hooks/useIsNarrow";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -41,6 +42,7 @@ const pickForType = (list, type) => {
 };
 
 export default function TemplateEditorPage() {
+  const isMobile = useIsNarrow(768);
   const confirm = useConfirm();
   const navigate = useNavigate();
   const { has } = usePermissions();
@@ -618,7 +620,7 @@ export default function TemplateEditorPage() {
     return <EmptyState icon={MdBusiness} boxed={false}>No companies available. Add a company first.</EmptyState>;
   }
 
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+
 
   // Toolbar pieces shared by the phone and desktop layouts.
   const typeSelect = (style) => (

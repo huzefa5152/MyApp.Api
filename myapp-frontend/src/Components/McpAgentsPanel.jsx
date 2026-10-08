@@ -96,11 +96,11 @@ function NewTokenDialog({ onClose, onCreated }) {
   const userOptions = useMemo(() => users.map(u => ({ id: u.id, label: `${u.fullName} (@${u.username})`, username: u.username })), [users]);
   return <div data-admin-backdrop="" style={formStyles.backdrop}>
     <form data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onSubmit={submit}>
-      <div style={formStyles.header}>
+      <div data-admin-header="" style={formStyles.header}>
         <h3 style={formStyles.title}>New agent token</h3>
         <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose /></button>
       </div>
-      <div style={formStyles.body}>
+      <div data-admin-body="" style={formStyles.body}>
         <p style={s.sub}>The token acts as one user, only in the companies you tick, and never beyond what that user may do. Every write is shown to a person to approve first.</p>
         <div style={formStyles.formGroup}>
           <label style={formStyles.label}>Agent name</label>
@@ -143,7 +143,7 @@ function NewTokenDialog({ onClose, onCreated }) {
         </div>
         {error && <Alert tone="error">{error}</Alert>}
       </div>
-      <div style={formStyles.footer}>
+      <div data-admin-footer="" style={formStyles.footer}>
         <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
         <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: valid && !busy ? 1 : 0.55 }} disabled={!valid || busy}>Create token</button>
       </div>
@@ -157,8 +157,8 @@ export function SecretDialog({ created, onClose }) {
   const copy = async (text, what) => { try { await navigator.clipboard.writeText(text); notify(`${what} copied.`, "success"); } catch { notify("Copy failed. Select the text and copy it by hand.", "error"); } };
   return <div data-admin-backdrop="" style={formStyles.backdrop}>
     <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.md }} role="dialog" aria-label="Agent token created">
-      <div style={formStyles.header}><h3 style={formStyles.title}>Copy your token now</h3></div>
-      <div style={formStyles.body}>
+      <div data-admin-header="" style={formStyles.header}><h3 style={formStyles.title}>Copy your token now</h3></div>
+      <div data-admin-body="" style={formStyles.body}>
         <Alert tone="warn">This is the only time the token is shown. It is stored as a hash and cannot be recovered. If you lose it, revoke it and create another.</Alert>
         <label style={formStyles.label}>Token for “{created.name}”</label>
         <div style={s.secretRow}><code style={s.code}>{created.secret}</code>
@@ -168,7 +168,7 @@ export function SecretDialog({ created, onClose }) {
           <IconButton label="Copy config" icon={MdContentCopy} style={s.copyBtn} onClick={() => copy(toml, "Config")} /></div>
         <p style={s.hint}>Set <code>TRADER_MCP_TOKEN</code> to the token above in your user environment. Expires {absolute(created.expiresAt)}.</p>
       </div>
-      <div style={formStyles.footer}><button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.submit }} onClick={onClose}>I have copied it</button></div>
+      <div data-admin-footer="" style={formStyles.footer}><button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.submit }} onClick={onClose}>I have copied it</button></div>
     </div>
   </div>;
 }

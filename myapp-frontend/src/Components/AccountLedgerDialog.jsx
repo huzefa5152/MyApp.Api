@@ -120,7 +120,7 @@ export default function AccountLedgerDialog({ account, onClose }) {
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={{ ...formStyles.title, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
             <span style={{ overflowWrap: "anywhere" }}>Ledger — {account.name}</span>
             {account.code && <span style={st.codeChip}>{account.code}</span>}
@@ -130,7 +130,7 @@ export default function AccountLedgerDialog({ account, onClose }) {
           </button>
         </div>
 
-        <div style={formStyles.body}>
+        <div data-admin-body="" style={formStyles.body}>
           <form onSubmit={applyFilter} style={st.filterRow}>
             <div style={st.filterCell}>
               <Field label="From">

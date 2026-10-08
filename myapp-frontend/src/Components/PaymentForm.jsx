@@ -232,15 +232,15 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? `Edit ${editPayment.reference || (isReceipt ? "Receipt" : "Payment")}` : (isReceipt ? "Record Receipt" : "Record Payment")}</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
         </div>
         <form onSubmit={handleSubmit}>
-          <div style={formStyles.body}>
+          <div data-admin-body="" style={formStyles.body}>
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
-            <div style={formStyles.formGroup}>
+            <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>{isReceipt ? "Who paid you?" : "Who are you paying?"}</label>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {["Client", "Supplier", "Other"].map(type => <button key={type} type="button"
@@ -252,7 +252,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                 : <SearchableClientSelect clients={contacts} noun={contactType === "Client" ? "clients" : "suppliers"} ariaLabel={contactType} value={contactId}
                   onChange={v => { setContactId(v); setAlloc({}); }} placeholder={`Select ${contactType.toLowerCase()}`} />}
             </div>
-            <div style={formStyles.formGroup}>
+            <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>What is this for?</label>
               <select aria-label="Payment purpose" style={formStyles.input} value={purpose} onChange={e => setPurpose(e.target.value)}>
                 {canSettle && <option value="settle">Settle invoices / bills</option>}
@@ -260,13 +260,13 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                 <option value="account">{isReceipt ? "Other income" : "An expense"}</option>
               </select>
             </div>
-            {purpose === "advance" && <div style={formStyles.formGroup}>
+            {purpose === "advance" && <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>Advance / refund amount</label>
               <input aria-label="Advance amount" type="number" min="0" step="0.01" style={formStyles.input}
                 value={advanceAmount} onChange={e => setAdvanceAmount(e.target.value)} />
               <p style={hintBox}>Recorded against the selected party’s balance. No invoice or bill is marked paid.</p>
             </div>}
-            {purpose === "account" && <div style={formStyles.formGroup}>
+            {purpose === "account" && <div data-admin-field="" style={formStyles.formGroup}>
               {directLines.map((line,idx) => <div key={idx} style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:8 }}>
                 <select aria-label={`Account ${idx+1}`} value={line.accountId} style={{ ...formStyles.input, flex:"1 1 180px" }}
                   onChange={e => setDirectLines(prev => prev.map((a,i) => i===idx ? {...a,accountId:e.target.value} : a))}>
@@ -283,17 +283,17 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
             </div>}
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
-              <div style={formStyles.formGroup}>
+              <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Date</label>
                 <input type="date" style={formStyles.input} value={date} onChange={(e) => setDate(e.target.value)} max={today} />
               </div>
-              <div style={formStyles.formGroup}>
+              <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Method</label>
                 <select className="k-select" value={method} onChange={(e) => setMethod(e.target.value)}>
                   {METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
-              <div style={formStyles.formGroup}>
+              <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>{isReceipt ? "Received in (bank/cash)" : "Paid from (bank/cash)"}</label>
                 <select aria-label="Bank cash account" style={formStyles.input} value={bankAccountId}
                   onChange={e => { setBankAccountId(e.target.value); if(e.target.value) setBankAccountName(bankAccounts.find(a => String(a.id)===e.target.value)?.name || ""); }}>
@@ -311,25 +311,25 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
 
             {method === "Cheque" && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
-                <div style={formStyles.formGroup}>
+                <div data-admin-field="" style={formStyles.formGroup}>
                   <label style={formStyles.label}>Cheque #</label>
                   <input style={formStyles.input} value={chequeNumber} onChange={(e) => setChequeNumber(e.target.value)} />
                 </div>
-                <div style={formStyles.formGroup}>
+                <div data-admin-field="" style={formStyles.formGroup}>
                   <label style={formStyles.label}>Cheque date <span style={{ color: colors.textSecondary, fontWeight: 400 }}>(future = post-dated)</span></label>
                   <input type="date" style={formStyles.input} value={chequeDate} onChange={(e) => setChequeDate(e.target.value)} />
                 </div>
               </div>
             )}
 
-            <div style={formStyles.formGroup}>
+            <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>Description (optional)</label>
               <input style={formStyles.input} value={description} onChange={(e) => setDescription(e.target.value)} />
             </div>
             <DocumentNotesEditor value={notes} onChange={setNotes} />
 
             {/* Allocation against open documents */}
-            {purpose === "settle" && <div style={formStyles.formGroup}>
+            {purpose === "settle" && <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>Apply to open {docLabel.toLowerCase()}s</label>
               {!contactId ? (
                 <div style={hintBox}>Select a {contactLabel.toLowerCase()} to see their unpaid {docLabel.toLowerCase()}s.</div>
@@ -409,7 +409,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
             </div>
           </div>
 
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             {(() => {
               const blocked = saving || total <= 0;

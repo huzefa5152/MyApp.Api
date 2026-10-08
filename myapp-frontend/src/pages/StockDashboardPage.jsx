@@ -751,15 +751,15 @@ function SmallModal({ title, children, onClose, onSubmit }) {
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: 480 }}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h3 style={formStyles.title}>{title}</h3>
           <button data-admin-close="" type="button" onClick={onClose} style={formStyles.closeButton} aria-label="Close">×</button>
         </div>
         <form onSubmit={onSubmit} style={{ display: "contents" }}>
-          <div style={formStyles.body}>
+          <div data-admin-body="" style={formStyles.body}>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>{children}</div>
           </div>
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             <button type="button" onClick={onClose} style={{ ...formStyles.button, ...formStyles.cancel }}>Cancel</button>
             <button type="submit" style={{ ...formStyles.button, ...formStyles.submit }}>Save</button>
           </div>
