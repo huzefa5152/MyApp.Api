@@ -86,3 +86,15 @@ Latest verification supersedes the earlier Sales-section mapping and automatic e
 - Tenant-scope static verification: 162 guarded actions; security audit: 67/67 passed. The existing unmapped Withholding Tax permission-section issue remains unrelated to the newly mapped Email Workspace section.
 
 The supported-runtime and real Google OAuth acceptance requirements above remain pending. No production database, commit, push, merge or deployment was performed.
+
+## Local Trader integration verification (2026-10-08)
+
+The maintainer approved local integration into Trader and a separate Customize port, without pushing. Supported-runtime acceptance is now complete using .NET SDK 9.0.318 and ASP.NET Core 9.0.20; this supersedes the earlier runtime limitation.
+
+- Backend SQL/unit tests: 20 passed, 0 failed; frontend workflow/navigation tests: 9 passed.
+- JWT HTTP regression: edition roles 114/114, basic flows 87/87, administrator scope 127/127, tenant leak sweep 111/111; tenant isolation all passed, including Email Workspace 17/17. One sequential run hit the login limiter before setup; a fresh isolated host passed the unchanged tenant suite.
+- Stock item-type reflow: 183/183.
+- Approved local-copy audit rerun on .NET 9: all 88 company/user pairs, 1,306 service boundaries, 46 module delegation checks and 4,554 endpoint authorization-filter checks passed; rollback verified.
+- Release backend/frontend builds passed. EF reports no model changes since the feature migration. Static security 67/67, route permissions 155/155, company-scoped actions 162 guarded, permission sections 33/33 mapped, identifier scan clean. The existing withholding module mapping was repaired in its own commit.
+
+Google OAuth, real email/attachment acceptance and retention-policy decisions remain pending before tenant rollout. Nothing was pushed or deployed.
