@@ -8,6 +8,8 @@ namespace MyApp.Api.DTOs
 
     public class InvoiceDto
     {
+        public bool CanCreateSalesOrder { get; set; }
+        public List<BillSalesOrderLinkDto> SalesOrders { get; set; } = new();
         public bool GroupTaxInvoiceByItemType { get; set; }
         public string? Notes { get; set; }
         public int Id { get; set; }
@@ -136,6 +138,10 @@ namespace MyApp.Api.DTOs
         /// until the consultant re-adjusts in Invoice mode. FbrReady is forced
         /// false while this is true.
         /// </summary>
+        public bool FbrReviewRequired { get; set; }
+        public DateTime? FbrReviewRequiredAt { get; set; }
+        public DateTime? FbrReviewedAt { get; set; }
+        public string FbrReviewVersion { get; set; } = "";
         public bool FbrAdjustmentStale { get; set; }
         /// <summary>
         /// The effective (overlay-applied) subtotal that would be filed to FBR.
@@ -679,6 +685,8 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class UpdateInvoiceItemTypesDto
     {
+        public bool CompleteConsultantReview { get; set; }
+        public string? ReviewVersion { get; set; }
         public bool? GroupTaxInvoiceByItemType { get; set; }
         public List<UpdateInvoiceItemTypeRow> Items { get; set; } = new();
 
@@ -809,4 +817,10 @@ namespace MyApp.Api.DTOs
         /// </summary>
         public string? MatchedBy { get; set; }
     }
+    public class BillSalesOrderLinkDto
+    {
+        public int Id { get; set; }
+        public int Number { get; set; }
+    }
+
 }

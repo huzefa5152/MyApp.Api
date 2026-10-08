@@ -168,3 +168,12 @@ function splitPlain(total, weights, { allowDecimal = false } = {}) {
 
   return { shares, infeasible: shares.some((q) => q <= 0), minimum: n };
 }
+
+// Tax-group shares are bookkeeping allocations, not commercial unit counts.
+// Allocate in four-decimal ticks so every source line remains positive and
+// the group sum survives the SQL decimal round trip exactly.
+export function splitConsultantQuantity(total, weights) {
+  const ticks = Math.round(Number(total) * 10000);
+  const result = splitGroupQuantity(ticks, weights);
+  return { ...result, shares: result.shares.map(q => q / 10000), minimum: weights.length / 10000 };
+}

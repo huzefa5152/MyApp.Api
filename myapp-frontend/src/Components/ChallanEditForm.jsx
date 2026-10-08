@@ -186,6 +186,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
     setSaving(true);
     try {
       await updateChallan(challan.id, {
+        version: challan.version,
         companyId: challan.companyId,
         customNumber: isDuplicate ? null : billNumberPayload("custom", customNumber),
         clientId: parseInt(clientId),
@@ -249,6 +250,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
+            {challan.invoiceId && <p role="status" style={{ background: "#eff6ff", padding: 12, borderRadius: 8 }}>Saving changes updates bill #{challan.invoiceNumber || challan.invoiceId}, its totals and linked order delivery figures. Consultant review will be required before FBR validation. New items start without a rate: open the bill to price them. To cancel or remove a whole challan, use its order management actions or Bills → Manage challans.</p>}
             <DocumentCopyPicker companyId={challan.companyId} destination="Challan" allowDetails={false} disabled={!!challan.salesOrderId || !!challan.invoiceId}
               onCopy={(source,lines,details) => {
                 setItems(prev => appendCopiedLines(details ? [] : prev, lines, () => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""})));

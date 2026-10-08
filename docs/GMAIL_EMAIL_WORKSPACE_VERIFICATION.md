@@ -98,3 +98,19 @@ The maintainer approved local integration into Trader and a separate Customize p
 - Release backend/frontend builds passed. EF reports no model changes since the feature migration. Static security 67/67, route permissions 155/155, company-scoped actions 162 guarded, permission sections 33/33 mapped, identifier scan clean. The existing withholding module mapping was repaired in its own commit.
 
 Google OAuth, real email/attachment acceptance and retention-policy decisions remain pending before tenant rollout. Nothing was pushed or deployed.
+
+## Trader remote reconciliation (2026-10-08)
+
+Combined the local email workspace with remote Trader commits through `6b350731`. README changelog entries from both sides were preserved; EF's combined snapshot retains the email, consultant review and manual order closure fields. No product branches were merged into each other.
+
+- Supported .NET 9 SQL/unit tests: 20 passed, zero failed or skipped. Frontend Vitest: 28 passed across five test files; the standalone stamp-render script ran separately and passed 21/21. The unrestricted Vitest discovery command initially treated that standalone script as an empty suite; the correct invocation excludes it and runs it with Node. The template engine import now includes its `.js` extension so the documented standalone Node check also resolves successfully.
+- Fresh disposable local SQL migrations applied through manual sales-order closure; EF reports no pending model changes. Backend and frontend builds passed.
+- HTTP regressions: basic flows 151/151, stock reflow 250/250, administrator scope 127/127, edition roles 114/114, tenant leak sweep 123/123. Tenant isolation passed every suite, including Email Workspace 17/17.
+- Sales document workflow 40/40, consultant review lifecycle 12/12, tax invoice UOM 15/15, exact line total 73/73, HS code prints 21/21; FBR lock checks reported zero failures. The print suite's fixtures now supply the existing required company business activity, sector, dummy token and buyer province. No assertion or production readiness rule changed.
+- Offline tax grouping 12/12, consultant quantity allocation 15 checks, commercial quantity splitting 27/27, arithmetic 23/23. Static security, tenant scope, permission sections, route permissions and production identifier checks passed.
+- Browser checks passed at 375, 768 and 1280 pixels for both email review/connections and the newly pushed consultant quantity flow. No horizontal page overflow was observed. Email screenshots use synthetic fixtures.
+- Approved local-copy audit: all 88 user/company combinations, 1,306 service checks, 46 optional-module assignment/delegation checks and 4,554 authorization-filter checks passed. All temporary schema, grants and fixtures rolled back; original assignments and migration history were verified.
+
+The first overlapping HTTP run encountered a SQL deadlock in the sales workflow while unrelated suites wrote the same disposable database; the isolated unchanged workflow rerun passed 40/40. Tenant isolation initially hit the existing login rate limiter after other suites; the later unchanged run passed. Neither retry behavior nor rate-limit policy was altered.
+
+Google OAuth consent, real message/attachment retrieval and retention-policy acceptance remain pending. No Google request, push or deployment was performed. The separate Customize email port is unaffected by these unrelated Trader workflow commits.

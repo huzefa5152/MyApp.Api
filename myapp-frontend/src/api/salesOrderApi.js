@@ -67,3 +67,5 @@ export const attachChallanToOrder = (id, payload) =>
 
 export const getSalesOrdersCount = (companyId) =>
   httpClient.get("/salesorders/count", { params: companyId ? { companyId } : {} });
+
+export const createSalesOrderFromBill = (billId) => httpClient.post(`/salesorders/from-bill/${billId}`);

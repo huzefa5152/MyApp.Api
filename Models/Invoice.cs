@@ -66,6 +66,8 @@ namespace MyApp.Api.Models
         public string? PaymentMode { get; set; }
         public string? FbrInvoiceNumber { get; set; }
         public string? FbrIRN { get; set; }
+        public DateTime? FbrReviewRequiredAt { get; set; }
+        public DateTime? FbrReviewedAt { get; set; }
         public string? FbrStatus { get; set; }
         public DateTime? FbrSubmittedAt { get; set; }
         public string? FbrErrorMessage { get; set; }

@@ -1,3 +1,5 @@
+import { getSalesOrderChallans } from "../api/salesOrderApi";
+import { useConfirm } from "./ConfirmDialog";
 import DocumentCopyPicker from "./DocumentCopyPicker";
 import { appendCopiedLines } from "../utils/documentCopy";
 import { useState, useEffect, useRef, useMemo } from "react";
@@ -27,6 +29,11 @@ const blankItem = () => ({ id: 0, itemTypeId: null, description: "", quantity: 1
 // Create + edit a Sales Order (quantity-only). Pass `order` to edit.
 export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
   const { has } = usePermissions();
+  const confirm = useConfirm();
+  const [applyRates, setApplyRates] = useState(false);
+  const [applyDetails, setApplyDetails] = useState(false);
+  const [linkedChallans, setLinkedChallans] = useState([]);
+  useEffect(() => { if (order?.id) getSalesOrderChallans(order.id).then(({data}) => setLinkedChallans(data || [])).catch(() => setLinkedChallans([])); }, [order?.id]);
   const canCreateItemType = has("itemtypes.manage.create");
   const canCreateClient = has("clients.manage.create");
   const [showAddClient, setShowAddClient] = useState(false);
@@ -111,10 +118,13 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
     if (!client) { setError("Please select a client."); return; }
     if (valid.length === 0) { setError("Add at least one item."); return; }
 
+    if (isEdit && (applyRates || applyDetails) && !await confirm({ title: "Apply order changes to existing documents?",
+      message: `Linked challans: ${linkedChallans.filter(c => c.status !== "Cancelled").map(c => `#${c.challanNumber}${c.invoiceId ? ` (bill #${c.invoiceNumber}, ${c.fbrStatus || "not submitted"})` : " (unbilled)"}`).join(", ") || "none"}. Only affected lines will change. Bill totals, stock and accounting will recalculate; adjusted bills require consultant review again. Locked bills cause the entire change to be refused. Ordered quantity changes do not change delivered quantities.`, confirmText: "Apply changes", variant: "warning" })) return;
     setSaving(true);
     try {
       const saved = await onSaved({
         clientId: client.id,
+        version: order?.version, applyRatesToBills: applyRates, applyDetailsToDeliveries: applyDetails,
         salesQuoteId: salesQuoteId ? parseInt(salesQuoteId) : null,
         orderDate: orderDate ? new Date(orderDate).toISOString() : null,
         requiredDate: requiredDate ? new Date(requiredDate).toISOString() : null,
@@ -161,6 +171,12 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
                 if(details) { setClient({id:source.clientId,label:source.clientName});setNotes(source.notes||"");setPoNumber(source.customerPoNumber||"");setPoDate(source.customerPoDate?.slice(0,10)||"");setSite(source.site||"");setSalesQuoteId(""); }
               }} />
             {error && <div ref={errRef} style={s.err}>{error}</div>}
+            {isEdit && <div style={{ background: "#eff6ff", padding: 12, borderRadius: 8, marginBottom: 12 }}>
+              <p>Changing ordered quantities changes the remaining commitment; it does not rewrite actual deliveries. Rates and descriptions apply to future deliveries unless you choose below. PO changes update unbilled challans.</p>
+              {has("bills.manage.update") && <label style={{ display: "flex", gap: 8, minHeight: 44, alignItems: "center" }}><input type="checkbox" checked={applyRates} onChange={e => setApplyRates(e.target.checked)} />Apply changed rates to existing editable bills</label>}
+              {has("bills.manage.update") && has("challans.manage.update") && <label style={{ display: "flex", gap: 8, minHeight: 44, alignItems: "center" }}><input type="checkbox" checked={applyDetails} onChange={e => setApplyDetails(e.target.checked)} />Apply changed descriptions, units and item types to existing deliveries and editable bills</label>}
+              <div>{linkedChallans.filter(c => c.status !== "Cancelled").map(c => <div key={c.id}>Challan #{c.challanNumber}{c.invoiceId ? ` → Bill #${c.invoiceNumber} · ${c.fbrStatus || "Not submitted"}` : " · Unbilled"}</div>)}</div>
+            </div>}
             <div style={s.row}>
               <div style={{ flex: "1 1 100%", minWidth: 220 }}>
                 <label style={s.label}>Sales Quote <span style={s.opt}>(optional — picking one pre-fills the order)</span></label>

@@ -25,7 +25,7 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(i => i.Company)
                 .Include(i => i.Client)
                 .Include(i => i.Items)
-                .Include(i => i.DeliveryChallans)
+                .Include(i => i.DeliveryChallans).ThenInclude(c => c.SalesOrder)
                 .Include(i => i.OriginalInvoice)
                 .Include(i => i.SupplementsInvoice)
                 .Include(i => i.HandoverBy)
@@ -55,7 +55,7 @@ namespace MyApp.Api.Repositories.Implementations
                     // (a bill reclassified to an HS type in Invoice mode shows
                     // "ready" even though its base line is a non-HS declaration).
                     .ThenInclude(ii => ii.Adjustment)
-                .Include(i => i.DeliveryChallans)
+                .Include(i => i.DeliveryChallans).ThenInclude(c => c.SalesOrder)
                 .Include(i => i.OriginalInvoice)
                 .Include(i => i.SupplementsInvoice)
                 .Include(i => i.HandoverBy)
@@ -127,7 +127,7 @@ namespace MyApp.Api.Repositories.Implementations
                     case "ready":
                         query = query.Where(i =>
                             i.FbrStatus != "Submitted" && !i.IsCancelled && !i.IsFbrExcluded &&
-                            i.Items.Any() &&
+                            i.FbrReviewRequiredAt == null && i.Items.Any() &&
                             !i.Items.Any(it =>
                                 (it.Adjustment.AdjustedHSCode ?? it.HSCode) == null || (it.Adjustment.AdjustedHSCode ?? it.HSCode) == "" ||
                                 (it.Adjustment.AdjustedSaleType ?? it.SaleType) == null || (it.Adjustment.AdjustedSaleType ?? it.SaleType) == "" ||
@@ -137,7 +137,7 @@ namespace MyApp.Api.Repositories.Implementations
                     case "notadjusted":
                         query = query.Where(i =>
                             i.FbrStatus != "Submitted" && !i.IsCancelled && !i.IsFbrExcluded &&
-                            (!i.Items.Any() ||
+                            (i.FbrReviewRequiredAt != null || !i.Items.Any() ||
                              i.Items.Any(it =>
                                 (it.Adjustment.AdjustedHSCode ?? it.HSCode) == null || (it.Adjustment.AdjustedHSCode ?? it.HSCode) == "" ||
                                 (it.Adjustment.AdjustedSaleType ?? it.SaleType) == null || (it.Adjustment.AdjustedSaleType ?? it.SaleType) == "" ||
@@ -199,7 +199,7 @@ namespace MyApp.Api.Repositories.Implementations
                 // the InvoiceItem row above as "original".
                 .Include(i => i.Items)
                     .ThenInclude(ii => ii.Adjustment)
-                .Include(i => i.DeliveryChallans)
+                .Include(i => i.DeliveryChallans).ThenInclude(c => c.SalesOrder)
                     .ThenInclude(dc => dc.Items)
                 .Include(i => i.OriginalInvoice)
                 .Include(i => i.SupplementsInvoice)

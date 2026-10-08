@@ -301,6 +301,15 @@ Publish output optimized from 79 MB to 37 MB via:
 ### 2026-10-08
 
 - Add the optional Email Workspace module with company-scoped Gmail connections, enquiry review and quotation conversion; keep existing navigation unchanged for users without access.
+- Expose `{{site}}` on commercial Bill and Sales Tax Invoice prints and in the template editor. Combine distinct linked-challan sites; preserve the existing Bill `{{concernDepartment}}` field.
+
+- Group consultant editing by effective item type and initialize tax units from its catalog UOM. FBR uses the adjusted classification independently of print settings. Companies printing individual tax invoice lines retain commercial descriptions, quantities, prices and units; grouped tax prints use the consultant view. Commercial bills and challans keep their original units.
+
+- Keep sales orders, challans and bills linked through edits. Order screens manage editable challans; confirmed order rate/detail changes can update existing editable documents. Delivery and billing status closes or reopens orders automatically, while explicit manual closure remains visible. Bills with unlinked challans can create a delivered, billed order for record keeping, including filed bills without changing their filed values. Submitted, submitting and uncertain bills remain locked.
+
+- Require explicit consultant review after challan changes or edits to a previously adjusted bill. Preserve existing adjustments for review, show the next action, allow saving progress, and block FBR validation/submission until the latest complete bill is reviewed and totals reconcile.
+
+- Add **Manage challans** to bill editing before FBR submission: search the customer's available challans, enter rates for added items, and remove or replace linked challans without deleting their source documents. Preserve retained lines and filing adjustments, recalculate taxes and balances, and reflow stock and journal entries atomically. Reject stale selections, unavailable or foreign challans, empty bills, locked periods, active notes, reductions below allocated receipts, and edits while FBR submission is in progress or uncertain.
 
 - Allow ten failed sign-in attempts, show remaining attempts and lock expiry, exempt the seed administrator, and let only the seed administrator see blocked accounts and unlock users.
 

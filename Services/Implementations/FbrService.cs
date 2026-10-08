@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Encodings.Web;
@@ -240,7 +240,6 @@ namespace MyApp.Api.Services.Implementations
         /// </summary>
         private static InvoiceItem ApplyAdjustmentOverlay(InvoiceItem ii)
         {
-            if (ii.Adjustment == null) return ii;
             var a = ii.Adjustment;
             // Dual-book overlay (2026-07-15 — re-widened to carry the FBR
             // classification). The bill/delivery document keeps the operator's
@@ -256,16 +255,16 @@ namespace MyApp.Api.Services.Implementations
                 Id              = ii.Id,
                 InvoiceId       = ii.InvoiceId,
                 DeliveryItemId  = ii.DeliveryItemId,
-                ItemTypeId      = a.AdjustedItemTypeId   ?? ii.ItemTypeId,
-                ItemTypeName    = a.AdjustedItemTypeName ?? ii.ItemTypeName,
+                ItemTypeId      = a?.AdjustedItemTypeId   ?? ii.ItemTypeId,
+                ItemTypeName    = a?.AdjustedItemTypeName ?? ii.ItemTypeName,
                 Description     = ii.Description,
-                Quantity        = a.AdjustedQuantity   ?? ii.Quantity,
-                UOM             = a.AdjustedUOM         ?? ii.UOM,
-                UnitPrice       = a.AdjustedUnitPrice  ?? ii.UnitPrice,
-                LineTotal       = a.AdjustedLineTotal  ?? ii.LineTotal,
-                HSCode          = a.AdjustedHSCode      ?? ii.HSCode,
-                FbrUOMId        = a.AdjustedFbrUOMId    ?? ii.FbrUOMId,
-                SaleType        = a.AdjustedSaleType    ?? ii.SaleType,
+                Quantity        = a?.AdjustedQuantity   ?? ii.Quantity,
+                UOM             = TaxInvoiceGrouping.Uom(ii),
+                UnitPrice       = a?.AdjustedUnitPrice  ?? ii.UnitPrice,
+                LineTotal       = a?.AdjustedLineTotal  ?? ii.LineTotal,
+                HSCode          = a?.AdjustedHSCode      ?? ii.HSCode,
+                FbrUOMId        = TaxInvoiceGrouping.FbrUomId(ii),
+                SaleType        = a?.AdjustedSaleType    ?? ii.SaleType,
                 RateId          = ii.RateId,
                 FixedNotifiedValueOrRetailPrice = ii.FixedNotifiedValueOrRetailPrice,
                 SroScheduleNo   = ii.SroScheduleNo,
@@ -690,6 +689,9 @@ namespace MyApp.Api.Services.Implementations
                 }
             }
 
+            if (invoice.FbrReviewRequiredAt != null)
+                errors.Add("Needs consultant review: challans changed. Open Invoices, review all current items and complete review before validating or submitting to FBR.");
+
             // ── Dual-book "adjustment out of date" gate (2026-07-15) ──
             // If the delivery bill was edited AFTER the tax consultant
             // reconciled the FBR overlay (e.g. the operator added qty to a
@@ -765,6 +767,9 @@ namespace MyApp.Api.Services.Implementations
             var invoice = await _invoiceRepo.GetByIdAsync(invoiceId);
             if (invoice == null)
                 return Fail("Invoice not found.");
+
+            if (invoice.FbrReviewRequiredAt != null)
+                return Fail("Needs consultant review: open Invoices and complete review of the changed bill before FBR validation, preview or submission.");
 
             // A voided bill is a non-document — never validate, submit, or
             // even preview it against FBR.
@@ -923,7 +928,7 @@ namespace MyApp.Api.Services.Implementations
                             if (!liveTypes.TryGetValue(line.ItemTypeId.Value, out var t)) continue;
 
                             if (line.HSCode       != t.HSCode)        { line.HSCode = t.HSCode;        anyChanged = true; }
-                            if ((line.UOM ?? "")  != (t.UOM ?? ""))   { line.UOM = t.UOM ?? "";        anyChanged = true; }
+                            // Commercial UOM remains on the bill; the tax view resolves the catalog UOM.
                             if (line.FbrUOMId     != t.FbrUOMId)      { line.FbrUOMId = t.FbrUOMId;    anyChanged = true; }
                             if (line.SaleType     != t.SaleType)      { line.SaleType = t.SaleType;    anyChanged = true; }
                             if (line.ItemTypeName != t.Name)          { line.ItemTypeName = t.Name;    anyChanged = true; }
@@ -1043,28 +1048,11 @@ namespace MyApp.Api.Services.Implementations
             // is NEVER touched; only this in-memory view is.
             var effectiveItems = invoice.Items.Select(ApplyAdjustmentOverlay).ToList();
 
-            // ── Item-Type grouping (mirrors the Tax Invoice print) ───────────
-            //
-            // The Tax Invoice we hand to clients groups bill lines by ItemType
-            // (sum of quantities + sum of line totals, one row per type),
-            // because that's how the buyer sees their purchase: 5 batteries,
-            // 2 rolls of adhesive tape — not 5 separate battery line items.
-            //
-            // Mirror that grouping in the FBR payload so the digital invoice
-            // matches what FBR would expect to see on the printed tax
-            // invoice. Same rule as PrintTaxInvoiceDto: only group when EVERY
-            // line has an ItemTypeName; if any line is unclassified, fall
-            // back to per-line emission (same fallback the print uses).
-            //
-            // The grouping is safe because each line's HSCode / UOM / SaleType
-            // / SROs are derived from the catalog ItemType, so all lines in
-            // a group share those fields. Sum-of-LineTotals × rate gives the
-            // same FBR-tax answer as summing per-line tax (linear in value).
-            // 3rd Schedule items also work correctly: summed retail price
-            // × rate is the same as sum of per-line retail × rate.
-            var fbrItems = effectiveItems.All(ii => !string.IsNullOrWhiteSpace(ii.ItemTypeName))
-                ? effectiveItems
-                    .GroupBy(ii => ii.ItemTypeName)
+            // FBR groups by effective classification independently of the company's
+            // print preference. Individual prints retain commercial lines and units.
+            // Tax treatments stay separate; unclassified rows remain singletons.
+            var fbrItems = effectiveItems
+                    .GroupBy(TaxInvoiceGrouping.Key)
                     .Select(g =>
                     {
                         var first = g.First();
@@ -1074,7 +1062,7 @@ namespace MyApp.Api.Services.Implementations
                             // group share these because they came from the
                             // same catalog row).
                             ItemTypeId = first.ItemTypeId,
-                            ItemTypeName = g.Key,
+                            ItemTypeName = first.ItemTypeName,
                             UOM = first.UOM,
                             FbrUOMId = first.FbrUOMId,
                             HSCode = first.HSCode,
@@ -1083,15 +1071,14 @@ namespace MyApp.Api.Services.Implementations
                             SroItemSerialNo = first.SroItemSerialNo,
                             // ProductDescription = the ItemTypeName so the
                             // FBR row matches the Tax Invoice print row.
-                            Description = g.Key,
+                            Description = string.IsNullOrWhiteSpace(first.ItemTypeName) ? first.Description : first.ItemTypeName,
                             // Sum the value-bearing columns.
                             Quantity = g.Sum(ii => ii.Quantity),
                             LineTotal = g.Sum(ii => ii.LineTotal),
                             FixedNotifiedValueOrRetailPrice = g.Sum(ii => ii.FixedNotifiedValueOrRetailPrice ?? 0m),
                         };
                     })
-                    .ToList()
-                : effectiveItems.ToList();
+                    .ToList();
 
             // Allocate the saved document tax across the effective print/payload rows.
             // This also preserves explicit exemptions and manual rate overrides.
@@ -1234,9 +1221,12 @@ namespace MyApp.Api.Services.Implementations
                     // WHERE mirrors FbrSubmissionStatus.IsSubmittable — kept as
                     // inline constant comparisons because EF cannot translate a
                     // method call to SQL. If you change one, change the other.
+                    var payloadItemIds = invoice.Items.Select(i => i.Id).ToList();
                     var claimed = await _db.Invoices
                         .Where(i => i.Id == invoice.Id
-                                 && i.FbrIRN == null
+                                 && i.FbrIRN == null && !i.IsCancelled && i.FbrReviewRequiredAt == null
+                                 && i.Items.Count == payloadItemIds.Count
+                                 && !i.Items.Any(line => !payloadItemIds.Contains(line.Id))
                                  && (i.FbrStatus == null
                                      || i.FbrStatus == FbrSubmissionStatus.Failed
                                      || i.FbrStatus == FbrSubmissionStatus.Validated))
@@ -1251,8 +1241,8 @@ namespace MyApp.Api.Services.Implementations
                         {
                             Success = false,
                             AlreadyInProgress = true,
-                            ErrorMessage = "A submission for this invoice is already in progress. " +
-                                           "Please wait a moment and refresh — do not submit again.",
+                            ErrorMessage = "This bill changed or a submission is already in progress. " +
+                                           "Refresh and review the bill before submitting again.",
                         };
                     }
                     // Keep the tracked entity in step with the claim so the final

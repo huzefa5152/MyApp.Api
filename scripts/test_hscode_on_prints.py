@@ -129,6 +129,8 @@ def main() -> int:
             "startingChallanNumber": 1, "startingInvoiceNumber": 1,
             "startingPurchaseBillNumber": 1, "startingGoodsReceiptNumber": 1,
             "fbrEnvironment": "sandbox", "fbrProvinceCode": 8,
+            "fbrBusinessActivity": "Manufacturer", "fbrSector": "All Other Sectors",
+            "fbrToken": "test-token-not-used-for-real-pral-calls",
         })
         if not check("0", "company created", s in (200, 201), f"{s} {err(company)}"):
             return 1
@@ -136,7 +138,7 @@ def main() -> int:
 
         s, client = http("POST", "/api/clients", base, token=token, body={
             "name": "_hscode_buyer", "companyId": cid, "address": "Karachi",
-            "ntn": "7654321", "registrationType": "Registered"})
+            "ntn": "7654321", "registrationType": "Registered", "fbrProvinceCode": 8})
         if not check("0", "buyer created", s in (200, 201), f"{s} {err(client)}"):
             return 1
 

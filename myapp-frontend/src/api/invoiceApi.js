@@ -1,5 +1,10 @@
 import httpClient from "./httpClient";
 
+export const getBillChallans = (id, search = "") =>
+  httpClient.get(`/invoices/${id}/challans`, { params: { search } });
+export const updateBillChallans = (id, payload) =>
+  httpClient.put(`/invoices/${id}/challans`, payload);
+
 export const getInvoicesByCompany = (companyId) =>
   httpClient.get(`/invoices/company/${companyId}`);
 
@@ -43,8 +48,8 @@ export const updateInvoiceItemTypes = (id, items, groupTaxInvoiceByItemType) =>
 // leaving the underlying bill row untouched. Use "adjustment" from
 // Invoice-mode saves so the printed bill stays at real qty/price while
 // the FBR-side claim math reads the optimized decomposition.
-export const updateInvoiceItemTypesAndQty = (id, items, writeMode = "bill", groupTaxInvoiceByItemType) =>
-  httpClient.patch(`/invoices/${id}/itemtypes-and-qty`, { items, writeMode, groupTaxInvoiceByItemType });
+export const updateInvoiceItemTypesAndQty = (id, items, writeMode = "bill", groupTaxInvoiceByItemType, review = {}) =>
+  httpClient.patch(`/invoices/${id}/itemtypes-and-qty`, { items, writeMode, groupTaxInvoiceByItemType, ...review });
 
 export const deleteInvoice = (id) =>
   httpClient.delete(`/invoices/${id}`);

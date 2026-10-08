@@ -1,4 +1,4 @@
-﻿using MyApp.Api.DTOs;
+using MyApp.Api.DTOs;
 
 namespace MyApp.Api.Services.Interfaces
 {
@@ -37,6 +37,11 @@ namespace MyApp.Api.Services.Interfaces
         /// </summary>
         Task<NextInvoiceNumberDto> GetNextInvoiceNumberAsync(int companyId, int? check);
         Task<InvoiceDto?> UpdateAsync(int id, UpdateInvoiceDto dto);
+        Task AssertCommercialBillMutationAsync(int id);
+        Task ReconcileChallanBillAsync(int id);
+        Task RemoveBilledChallanAsync(int challanId, bool delete);
+        Task<BillChallanOptionsDto?> GetBillChallanOptionsAsync(int id, string? search);
+        Task<InvoiceDto?> UpdateBillChallansAsync(int id, UpdateBillChallansDto dto, string? actorUserName = null);
         /// <summary>
         /// Narrow update path: re-derives FBR fields (HS / UOM / SaleType)
         /// from a new ItemType per line. Refuses to change price, description,

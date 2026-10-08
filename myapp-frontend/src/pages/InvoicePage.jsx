@@ -1,3 +1,4 @@
+import { createSalesOrderFromBill } from "../api/salesOrderApi";
 import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -63,6 +64,7 @@ function renderFbrPill(inv, isBillsMode) {
   if (inv.fbrStatus === "Submitted") return statusPill("green", MdCheckCircle, "Submitted", inv.fbrIRN ? `Submitted to FBR — IRN ${inv.fbrIRN} (locked from edits)` : "Submitted to FBR (locked from edits)");
   if (inv.fbrStatus === "Submitting") return statusPill("blue", MdHourglassEmpty, "Submitting…", "A submission is in progress. Please wait and refresh — do not submit again.");
   if (inv.fbrStatus === "Uncertain") return statusPill("amber", MdError, "Uncertain", "A previous submission timed out and its FBR outcome is unconfirmed. An administrator must verify it at FBR and reset it before it can be submitted again.");
+  if (inv.fbrReviewRequired) return statusPill("amber", MdError, "Needs consultant review", "Challans changed. Next: a tax consultant opens Invoices, checks all current items and chooses Complete review. FBR submission is blocked.");
   if (isBillsMode) return statusPill("amber", MdHourglassEmpty, "Pending", "Pending FBR submission — open the Invoices tab to validate & submit.");
   if (inv.fbrStatus === "Failed") return statusPill("red", MdError, "Failed", inv.fbrErrorMessage || "FBR rejected this submission. Open View FBR for details.");
   if (inv.fbrAdjustmentStale) return statusPill("amber", MdError, "Re-adjust", `Bill changed after FBR adjust — Bill Rs. ${Number(inv.subtotal).toLocaleString()} vs FBR Rs. ${Number(inv.fbrAdjustedSubtotal ?? inv.subtotal).toLocaleString()}. Reopen, re-adjust qty/price, then save.`);
@@ -140,6 +142,17 @@ export default function InvoicePage({ mode = "invoices" }) {
   const tplPicker = usePrintTemplates(printTemplateType);
   const { has } = usePermissions();
   const confirm = useConfirm();
+  const canCreateOrderFromBill = has("salesorders.manage.create") && has("challans.manage.update");
+  const [creatingOrderFor, setCreatingOrderFor] = useState(null);
+  const handleCreateOrderFromBill = async inv => {
+    if (creatingOrderFor) return;
+    if (!await confirm({ title: `Create sales order from bill #${inv.invoiceNumber}?`,
+      message: "Record an order from this bill's existing delivery challans. All challans will be attached; no duplicate delivery, bill or stock movement will be created. The order will show fully delivered, billed and closed. Filed bill details remain unchanged.", confirmText: "Create sales order" })) return;
+    setCreatingOrderFor(inv.id);
+    try { const { data } = await createSalesOrderFromBill(inv.id); notify(`Sales order #${data.salesOrderNumber} created · Fully delivered · Billed · Closed.`, "success"); await fetchInvoices(selectedCompany.id, page); }
+    catch (e) { notify(e.response?.data?.error || "Could not create sales order.", "error"); }
+    finally { setCreatingOrderFor(null); }
+  };
   const canCreate = has("bills.manage.create");
   // Gates the payment-status badge (AR receipts). No key → no badge, either mode.
   const canViewPaymentStatus = has("accounting.paymentstatus.view");
@@ -233,6 +246,7 @@ export default function InvoicePage({ mode = "invoices" }) {
   const [showStandaloneForm, setShowStandaloneForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [viewingId, setViewingId] = useState(null);
+  useEffect(() => { const id = Number(new URLSearchParams(window.location.search).get("viewBill")); if (id > 0) setViewingId(id); }, []);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
 
   const navigate = useNavigate();
@@ -1063,7 +1077,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                   title="Filter by FBR status"
                 >
                   <option value="">All FBR statuses</option>
-                  <option value="notadjusted">Not adjusted (needs HS/qty/price)</option>
+                  <option value="notadjusted">Needs review / setup</option>
                   <option value="ready">Ready to validate</option>
                   <option value="submitted">Submitted to FBR</option>
                   <option value="fbrcancelled">Cancelled at FBR</option>
@@ -1141,6 +1155,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                 canFbrValidate,
                 canFbrSubmit,
                 canOpenEdit: canEditInThisMode,
+                canCreateOrderFromBill, canViewOrders: has("salesorders.list.view"),
                 canFbrExclude,
                 canFbrReset,
                 canDelete,
@@ -1168,6 +1183,8 @@ export default function InvoicePage({ mode = "invoices" }) {
               onFbrValidate={handleFbrValidate}
               onFbrSubmit={handleFbrSubmit}
               onFbrReset={handleFbrReset}
+              onCreateOrderFromBill={handleCreateOrderFromBill}
+              creatingOrderFor={creatingOrderFor}
               onEdit={(inv) => setEditingId(inv.id)}
               onToggleFbrExcluded={handleToggleFbrExcluded}
               onDelete={handleDeleteInvoice}
@@ -1385,7 +1402,9 @@ export default function InvoicePage({ mode = "invoices" }) {
                         column is hidden so classification only happens on
                         the Invoices tab. Hidden once FBR-submitted (locks
                         edits permanently). */}
-                    {isBillsMode && canEditInThisMode && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
+                    {isBillsMode && canCreateOrderFromBill && inv.canCreateSalesOrder && <button style={styles.printBtn} disabled={!!creatingOrderFor} onClick={() => handleCreateOrderFromBill(inv)}>Create sales order</button>}
+                    {isBillsMode && has("salesorders.list.view") && inv.salesOrders?.map(o => <button key={o.id} style={styles.printBtn} onClick={() => navigate(`/sales-orders?viewOrder=${o.id}`)}>Open sales order #{o.number || o.id}</button>)}
+                    {isBillsMode && canEditInThisMode && inv.isEditable && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
                         onClick={() => setEditingId(inv.id)}
@@ -1400,13 +1419,13 @@ export default function InvoicePage({ mode = "invoices" }) {
                         Type for each line. Everything else (items, prices,
                         qty, dates) is read-only and reflects whatever was
                         last saved on the Bills tab. Hidden once submitted. */}
-                    {!isBillsMode && canEditInThisMode && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
+                    {!isBillsMode && canEditInThisMode && inv.isEditable && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
                         onClick={() => setEditingId(inv.id)}
-                        title="Classify line items by Item Type (other fields read-only — edit on the Bills tab)"
+                        title="Review and adjust the current bill for FBR; commercial bill edits are on Bills"
                       >
-                        <MdEdit size={14} /> Edit
+                        <MdEdit size={14} /> {inv.fbrReviewRequired ? "Review changes" : "Adjust invoice"}
                       </button>
                     )}
                     {!isBillsMode && canFbrExclude && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
@@ -1598,9 +1617,9 @@ export default function InvoicePage({ mode = "invoices" }) {
           // the Invoice card's Edit button only.
           forceItemTypeAndQty={!isBillsMode}
           onClose={() => { setEditingId(null); refreshAttachCounts(); }}
-          onSaved={() => {
+          onSaved={(result) => {
             setEditingId(null);
-            notify("Bill updated.", "success");
+            notify(result?.reviewCompleted ? "Review completed. Next: validate the invoice before FBR submission." : result?.reviewPending ? "Progress saved. Consultant review is still required before FBR validation." : "Bill updated. Check its review status before FBR validation.", "success");
             fetchInvoices(selectedCompany.id, page);
             refreshAttachCounts();
             // clear any stale validation state for this bill

@@ -78,6 +78,33 @@ namespace MyApp.Api.Controllers
             }
         }
 
+        [HttpGet("{id}/challans")]
+        [HasPermission("bills.manage.update")]
+        public async Task<IActionResult> GetBillChallans(int id, [FromQuery] string? search = null)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            var options = await _service.GetBillChallanOptionsAsync(id, search);
+            if (options == null) return NotFound();
+            await ScrubPaymentIfDenied(new[] { options.Bill });
+            return Ok(options);
+        }
+
+        [HttpPut("{id}/challans")]
+        [HasPermission("bills.manage.update")]
+        public async Task<IActionResult> UpdateBillChallans(int id, [FromBody] UpdateBillChallansDto dto)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            if (dto.AttachAddedChallansToOrder && !await _permissions.HasPermissionAsync(CurrentUserId, "challans.manage.update")) return Forbid();
+                var updated = await _service.UpdateBillChallansAsync(id, dto, User.Identity?.Name);
+            if (updated == null) return NotFound();
+            await ScrubPaymentIfDenied(new[] { updated });
+            return Ok(updated);
+        }
+
         [HttpGet("count")]
         [HasAnyPermission("bills.list.view", "invoices.list.view")]
         public async Task<ActionResult<int>> GetTotalCount([FromQuery] int? companyId)

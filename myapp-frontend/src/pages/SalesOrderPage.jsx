@@ -16,7 +16,7 @@ import AttachmentBadge from "../Components/AttachmentBadge";
 import AttachmentQuickModal from "../Components/AttachmentQuickModal";
 import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import {
-  getPagedSalesOrdersByCompany, createSalesOrder, updateSalesOrder,
+  getSalesOrderById, getPagedSalesOrdersByCompany, createSalesOrder, updateSalesOrder,
   deleteSalesOrder, setSalesOrderStatus, getSalesOrderPrintData,
 } from "../api/salesOrderApi";
 import { mergeTemplate } from "../utils/templateEngine";
@@ -70,6 +70,7 @@ export default function SalesOrderPage() {
   const [billOrder, setBillOrder] = useState(null);
   const [attachOrder, setAttachOrder] = useState(null);
   const [viewOrder, setViewOrder] = useState(null);
+  useEffect(() => { const id = Number(new URLSearchParams(window.location.search).get("viewOrder")); if (id > 0) getSalesOrderById(id).then(({data}) => setViewOrder(data)).catch(() => notify("Could not open sales order.", "error")); }, []);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = usePageSize("salesOrders");
   const [observedSize, setObservedSize] = useState(null);
@@ -264,7 +265,7 @@ export default function SalesOrderPage() {
                   <div style={st.statusLine}>
                     <span style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
                       <span style={{ ...st.statusPill, color: o.status === "Cancelled" ? "#dc3545" : o.status === "Closed" ? "#5f6d7e" : colors.teal }}>{o.status}</span>
-                      <span style={{ ...st.invPill, color: INVOICE_COLORS[o.invoiceStatus] || "#5f6d7e", background: `${INVOICE_COLORS[o.invoiceStatus] || "#5f6d7e"}18` }}>{o.invoiceStatus}</span>
+                      <span style={{ ...st.invPill, color: INVOICE_COLORS[o.invoiceStatus] || "#5f6d7e", background: `${INVOICE_COLORS[o.invoiceStatus] || "#5f6d7e"}18` }}>{({ Invoiced: "Billed", "Partially Invoiced": "Partially billed", Uninvoiced: "Unbilled" })[o.invoiceStatus] || o.invoiceStatus}</span>
                     </span>
                     {o.challanCount > 0 && (
                       <button style={st.challanCountBtn} onClick={() => viewChallans(o)} title="View this order's challans">
@@ -343,7 +344,7 @@ export default function SalesOrderPage() {
         />
       )}
       {viewOrder && (
-        <SalesOrderDetailModal
+        <SalesOrderDetailModal onChanged={updated => { setViewOrder(updated); reload(); }}
           order={viewOrder}
           companyId={selectedCompany?.id}
           canDeliver={canMakeChallan && viewOrder.status === "Open" && viewOrder.fulfillmentStatus !== "Fully Delivered" && viewOrder.fulfillmentStatus !== "Over Delivered"}

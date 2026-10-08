@@ -1,9 +1,15 @@
+import { useNavigate } from "react-router-dom";
+import { usePermissions } from "../contexts/PermissionsContext";
+import { useConfirm } from "./ConfirmDialog";
+import { notify } from "../utils/notify";
+import { getDeliveryChallanById, cancelChallan, deleteChallan } from "../api/challanApi";
+import ChallanEditForm from "./ChallanEditForm";
 import { useState, useEffect } from "react";
 import RichText from "./RichText";
 import {
   MdClose, MdPrint, MdLocalShipping, MdEdit, MdInventory2, MdReceiptLong, MdLink,
 } from "react-icons/md";
-import { getSalesOrderChallans } from "../api/salesOrderApi";
+import { getSalesOrderChallans, getSalesOrderById } from "../api/salesOrderApi";
 import AttachmentManager from "./AttachmentManager";
 
 const colors = {
@@ -24,7 +30,32 @@ const LINE_COLORS = { Pending: "#5f6d7e", Partial: "#f57c00", Complete: "#28a745
  * raised against the order (with the lines it delivered). Optional action
  * callbacks (print / edit / deliver) let the parent launch those flows.
  */
-export default function SalesOrderDetailModal({ order, companyId, onClose, onPrint, onEdit, onDeliver, canDeliver, canBill, canAttach, onGenerateBill, onAttach, onViewChallans }) {
+export default function SalesOrderDetailModal({ order: initialOrder, onChanged, companyId, onClose, onPrint, onEdit, onDeliver, canDeliver, canBill, canAttach, onGenerateBill, onAttach, onViewChallans }) {
+  const [order, setOrder] = useState(initialOrder);
+  const [editingChallan, setEditingChallan] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const { has } = usePermissions();
+  const confirm = useConfirm();
+  const navigate = useNavigate();
+  const [narrow, setNarrow] = useState(window.innerWidth < 760);
+  useEffect(() => { const resize = () => setNarrow(window.innerWidth < 760); window.addEventListener("resize", resize); return () => window.removeEventListener("resize", resize); }, []);
+  const refresh = async () => {
+    const [nextOrder, nextChallans] = await Promise.all([getSalesOrderById(order.id), getSalesOrderChallans(order.id)]);
+    setOrder(nextOrder.data); setChallans(nextChallans.data || []); onChanged?.(nextOrder.data);
+  };
+  const editChallan = async c => {
+    try { const { data } = await getDeliveryChallanById(c.id); setEditingChallan(data); }
+    catch (e) { notify(e.response?.data?.error || "Could not open challan.", "error"); }
+  };
+  const removeChallan = async (c, action) => {
+    if (!await confirm({ title: `${action === "delete" ? "Delete" : "Cancel"} challan #${c.challanNumber}?`,
+      message: `Delivered quantities and order status will update.${c.invoiceId ? ` Bill #${c.invoiceNumber} will lose this challan's items, its totals will recalculate, and consultant review will be required. An empty bill is refused: replace its challan or cancel the bill first.` : ""}`,
+      confirmText: action === "delete" ? "Delete challan" : "Cancel challan", variant: "danger" })) return;
+    setBusy(true);
+    try { await (action === "delete" ? deleteChallan(c.id) : cancelChallan(c.id)); await refresh(); notify("Challan, bill and order updated. Check the bill's consultant review status.", "success"); }
+    catch (e) { notify(e.response?.data?.error || "Could not change challan.", "error"); }
+    finally { setBusy(false); }
+  };
   const [challans, setChallans] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -40,6 +71,7 @@ export default function SalesOrderDetailModal({ order, companyId, onClose, onPri
   }, [order?.id]);
 
   if (!order) return null;
+  if (editingChallan) return <ChallanEditForm challan={editingChallan} onClose={() => setEditingChallan(null)} onSaved={async () => { setEditingChallan(null); await refresh(); notify("Delivery and bill updated. Review the bill before FBR submission.", "success"); }} />;
 
   const items = order.items || [];
   const totalOrdered = items.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
@@ -62,7 +94,7 @@ export default function SalesOrderDetailModal({ order, companyId, onClose, onPri
                 {order.fulfillmentStatus}
               </span>
               <span style={{ ...st.badge, background: "#ffffff33", color: "#fff", border: "1px solid #ffffff55" }}>{order.status}</span>
-              <span style={{ ...st.badge, background: "#ffffffee", color: INVOICE_COLORS[order.invoiceStatus] || "#5f6d7e" }}>{order.invoiceStatus}</span>
+              <span style={{ ...st.badge, background: "#ffffffee", color: INVOICE_COLORS[order.invoiceStatus] || "#5f6d7e" }}>{({ Invoiced: "Billed", "Partially Invoiced": "Partially billed", Uninvoiced: "Unbilled" })[order.invoiceStatus] || order.invoiceStatus}</span>
             </div>
             <div style={st.hClient}>{order.clientName}</div>
           </div>
@@ -80,9 +112,14 @@ export default function SalesOrderDetailModal({ order, companyId, onClose, onPri
             {order.isImported && <Meta label="Origin" value="Imported (PO)" />}
           </div>
 
+          {order.needsAttention && <p role="status" style={{ color: "#b45309" }}>This order was manually closed but delivery or billing is incomplete. Reopen it to continue fulfillment.</p>}
+          <p style={{ color: colors.textSecondary }}>Ordered quantities record the customer's commitment. Delivery and billing changes update delivered, remaining and billed status automatically.</p>
           {/* Line items */}
           <div style={st.sectionTitle}><MdInventory2 size={16} color={colors.blue} /> Items ({items.length})</div>
-          <div style={st.tableWrap}>
+          {narrow ? <div>{items.map(i => <div key={i.id} style={{ ...st.challanCard, padding: 12, marginBottom: 8 }}>
+            <RichText text={i.description} /><div>Ordered: {fmtQty(i.quantity)} {i.unit}</div>
+            <div>Delivered: {fmtQty(i.deliveredQuantity)} · Remaining: {fmtQty(i.remainingQuantity)}</div><strong>{i.lineStatus}</strong>
+          </div>)}</div> : <div style={st.tableWrap}>
             <table style={st.table}>
               <thead>
                 <tr>
@@ -126,6 +163,8 @@ export default function SalesOrderDetailModal({ order, companyId, onClose, onPri
             </table>
           </div>
 
+          }
+
           {/* Attached challans */}
           <div style={st.sectionTitle}>
             <MdLocalShipping size={16} color={colors.blue} /> Delivery Challans ({activeChallans.length})
@@ -158,6 +197,16 @@ export default function SalesOrderDetailModal({ order, companyId, onClose, onPri
                         ? <span style={st.billedPill}>Billed{c.invoiceNumber ? ` · #${c.invoiceNumber}` : ""}</span>
                         : (!cancelled && <span style={st.unbilledPill}>Unbilled</span>)}
                       <span style={st.challanQty}>{fmtQty(c.totalQuantity)} delivered</span>
+                    </div>
+                    <div style={{ padding: "8px 12px", display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {c.invoiceId && <span>FBR: {c.fbrStatus || "Not submitted"}{c.needsConsultantReview ? " · Needs consultant review" : ""}</span>}
+                      {c.invoiceId && has("bills.list.view") && <button style={st.btnGhost} onClick={() => navigate(`/bills?viewBill=${c.invoiceId}`)}>Open bill #{c.invoiceNumber}</button>}
+                      {c.isEditable && (!c.invoiceId || has("bills.manage.update")) && <>
+                        {has("challans.manage.update") && <button disabled={busy} style={st.btnGhost} onClick={() => editChallan(c)}>Edit challan</button>}
+                        {has("challans.manage.update") && <button disabled={busy} style={st.btnGhost} onClick={() => removeChallan(c, "cancel")}>Cancel challan</button>}
+                        {c.canDelete && has("challans.manage.delete") && <button disabled={busy} style={st.btnGhost} onClick={() => removeChallan(c, "delete")}>Delete challan</button>}
+                      </>}
+                      {!cancelled && !c.isEditable && <span>Delivery locked: the linked bill is cancelled or FBR submission has started.</span>}
                     </div>
                     <div style={st.challanLines}>
                       {(c.lines || []).map((l, li) => (
@@ -241,13 +290,13 @@ const st = {
   challanQty: { marginLeft: "auto", fontSize: "0.82rem", fontWeight: 800, color: colors.teal },
   challanLines: { padding: "0.4rem 0.75rem", display: "flex", flexDirection: "column", gap: "0.25rem" },
   challanLine: { display: "flex", justifyContent: "space-between", gap: "0.75rem", fontSize: "0.8rem" },
-  clDesc: { color: colors.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 },
+  clDesc: { color: colors.textSecondary, overflowWrap: "anywhere", minWidth: 0, flex: 1 },
   clQty: { fontWeight: 700, color: colors.textPrimary, flexShrink: 0, whiteSpace: "nowrap" },
   dim: { color: colors.textSecondary, fontSize: "0.85rem", padding: "0.5rem 0" },
   empty: { color: colors.textSecondary, fontSize: "0.85rem", fontStyle: "italic", padding: "0.75rem", border: `1px dashed ${colors.inputBorder}`, borderRadius: 10, background: colors.bg },
   footer: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", padding: "0.85rem 1.25rem", borderTop: `1px solid ${colors.cardBorder}`, flexWrap: "wrap" },
-  btnGhost: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 1rem", borderRadius: 9, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.textSecondary, fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" },
-  btnTeal: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 1rem", borderRadius: 9, border: "none", background: colors.teal, color: "#fff", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" },
-  btnBlue: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 1rem", borderRadius: 9, border: "none", background: colors.blue, color: "#fff", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" },
+  btnGhost: { display: "inline-flex", alignItems: "center", gap: "0.35rem", minHeight: 44, padding: "0.5rem 1rem", borderRadius: 9, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.textSecondary, fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" },
+  btnTeal: { display: "inline-flex", alignItems: "center", gap: "0.35rem", minHeight: 44, padding: "0.5rem 1rem", borderRadius: 9, border: "none", background: colors.teal, color: "#fff", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" },
+  btnBlue: { display: "inline-flex", alignItems: "center", gap: "0.35rem", minHeight: 44, padding: "0.5rem 1rem", borderRadius: 9, border: "none", background: colors.blue, color: "#fff", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" },
   billSummary: { display: "flex", justifyContent: "space-between", gap: "0.75rem", flexWrap: "wrap", fontSize: "0.8rem", color: colors.textSecondary, background: colors.bg, border: `1px solid ${colors.cardBorder}`, borderRadius: 8, padding: "0.5rem 0.75rem", marginBottom: "0.6rem" },
 };
