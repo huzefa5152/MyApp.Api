@@ -117,6 +117,7 @@ export const SAMPLE_DATA = {
     ],
   },
   Bill: {
+    site: "Main Warehouse, Sample Branch",
     printTemplateType: "Bill",
     fbrStatus: null,
     fbrIRN: null,
@@ -150,6 +151,7 @@ export const SAMPLE_DATA = {
     ],
   },
   TaxInvoice: {
+    site: "Main Warehouse, Sample Branch",
     supplierName: "SAMPLE COMPANY",
     supplierAddress: "123 Business Street, City",
     supplierPhone: "0300-1234567",
