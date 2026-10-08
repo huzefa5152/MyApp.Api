@@ -315,14 +315,16 @@ namespace MyApp.Api.Controllers
 
             var lines = new List<StockExportGdLineDto>();
             // Pools a restatement replaced describe stock no longer held; the
-            // restated lines (and anything since) are the item's GDs now.
-            foreach (var g in res.Pools.Where(p => p.GdNumber != null && p.InQuantity > 0m && p.RestatedAwayQuantity == 0m)
+            // restated lines (and anything since) are the item's GDs now. A
+            // pool the restatement KEPT part of (stock dated before it but
+            // entered after it) is still held, so it still shows.
+            foreach (var g in res.Pools.Where(p => p.GdNumber != null && p.InQuantity > 0m && (p.RestatedAwayQuantity == 0m || p.Quantity > 0m))
                          .GroupBy(p => p.GdNumber!, StringComparer.OrdinalIgnoreCase)
                          .OrderBy(g => g.Min(p => p.OrderDate) ?? DateTime.MaxValue).ThenBy(g => g.Key))
                 lines.Add(Line(g.Key, g, null));
-            var untraced = res.Pools.Where(p => p.Kind == GdFifoValuation.PoolKind.OpeningUntraced && p.RestatedAwayQuantity == 0m).ToList();
+            var untraced = res.Pools.Where(p => p.Kind == GdFifoValuation.PoolKind.OpeningUntraced && (p.RestatedAwayQuantity == 0m || p.Quantity > 0m)).ToList();
             if (untraced.Count > 0) lines.Add(Line("-", untraced, "Opening — not traced to a GD"));
-            var inward = res.Pools.Where(p => p.Kind == GdFifoValuation.PoolKind.Inward && p.InQuantity > 0m && p.RestatedAwayQuantity == 0m).ToList();
+            var inward = res.Pools.Where(p => p.Kind == GdFifoValuation.PoolKind.Inward && p.InQuantity > 0m && (p.RestatedAwayQuantity == 0m || p.Quantity > 0m)).ToList();
             if (inward.Count > 0) lines.Add(Line("-", inward, "Other stock in (purchase / receipt / adjustment)"));
             if (res.ShortfallQuantity > 0m)
                 lines.Add(new StockExportGdLineDto

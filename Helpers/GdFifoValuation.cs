@@ -251,32 +251,58 @@ namespace MyApp.Api.Helpers
                 // Whatever the pools held is replaced (not consumed -- nothing
                 // was sold), an unsettled shortfall is cleared, and the value
                 // difference is booked in or out so value = opening + in - out
-                // still holds. Quantity does not move; lines that no longer add
-                // up to it (an earlier movement edited since) are scaled to it.
+                // still holds. Quantity does not move; lines holding more than
+                // it (a sale dated earlier, entered since) give up the
+                // difference in FIFO order, lines holding less are scaled up.
                 if (book.Restatements.TryGetValue(m.Id, out var restated))
                 {
                     var before = RunValue();
-                    foreach (var p in pools)
-                    {
-                        p.RestatedAwayQuantity += p.Quantity;
-                        p.Quantity = 0m; p.Value = 0m; p.ActualValue = 0m;
-                    }
-                    shortQty = 0m; shortValue = 0m; shortActual = 0m;
                     var lines = restated.Where(l => l.Quantity > 0m).ToList();
                     var lineQty = lines.Sum(l => l.Quantity);
                     var target = Math.Max(0m, exactQty);
-                    var f = lineQty > 0m ? target / lineQty : 0m;
+                    // Lines holding LESS than is on hand: stock dated before the
+                    // restatement was entered after it (a GD arrival, a purchase,
+                    // a return). The sheet never saw it, so the NEWEST pools keep
+                    // that surplus at their own cost and GD rather than having it
+                    // smeared pro rata over the sheet's lines.
+                    var surplus = shortQty > 0m ? 0m : target - lineQty;
+                    foreach (var p in pools.Where(p => p.Quantity > 0m)
+                                 .OrderByDescending(p => p.OrderDate ?? DateTime.MinValue)
+                                 .ThenByDescending(p => p.Tiebreak))
+                    {
+                        var keep = surplus > 0.0001m ? Math.Min(surplus, p.Quantity) : 0m;
+                        surplus -= keep;
+                        var away = p.Quantity - keep;
+                        if (away <= 0m) continue;
+                        var av = keep <= 0m ? p.Value : Round(away * p.Value / p.Quantity);
+                        var aa = keep <= 0m ? p.ActualValue : Round(away * p.ActualValue / p.Quantity);
+                        p.RestatedAwayQuantity += away;
+                        p.Quantity = keep; p.Value -= av; p.ActualValue -= aa;
+                        if (p.Quantity <= 0m) { p.Quantity = 0m; p.Value = 0m; p.ActualValue = 0m; }
+                    }
+                    shortQty = 0m; shortValue = 0m; shortActual = 0m;
+                    var kept = pools.Sum(p => p.Quantity);
+                    // Lines holding MORE than is on hand: a sale dated before
+                    // the restatement was entered after it. Those units leave
+                    // the lines in FIFO order, below -- never pro rata, which
+                    // costed them at the sheet's average (Alpha, 2026-10-08:
+                    // 2,937 KG of 7018.1000 left at 496.74 against a first
+                    // GD of 473.36, 68,479 short). A surplus no pool could
+                    // keep (nothing held before) still scales the lines up.
+                    target -= kept;
+                    var scaleUp = lineQty > 0m && target - lineQty > 0.0001m;
+                    var f = scaleUp ? target / lineQty : 1m;
+                    var restatedPools = new List<Pool>();
                     decimal given = 0m;
                     for (var i = 0; i < lines.Count; i++)
                     {
                         var l = lines[i];
-                        var exact = Math.Abs(lineQty - target) <= 0.0001m;
-                        var q = exact ? l.Quantity
+                        var q = !scaleUp ? l.Quantity
                             : i == lines.Count - 1 ? target - given : l.Quantity * f;
                         given += q;
-                        var v = exact ? l.Value : Round(l.Value * f);
-                        var a = exact ? l.ActualValue : Round(l.ActualValue * f);
-                        pools.Add(new Pool
+                        var v = !scaleUp ? l.Value : Round(l.Value * f);
+                        var a = !scaleUp ? l.ActualValue : Round(l.ActualValue * f);
+                        var pool = new Pool
                         {
                             Key = l.Key, Kind = PoolKind.Restated, GdNumber = l.GdNumber,
                             OrderDate = l.OrderDate, ClaimMonth = l.ClaimMonth, Tiebreak = l.Tiebreak,
@@ -284,7 +310,28 @@ namespace MyApp.Api.Helpers
                             Rate = l.Rate > 0m ? l.Rate : displayRate,
                             InQuantity = q, InValue = v, InActualValue = a,
                             Quantity = q, Value = v, ActualValue = a,
-                        });
+                        };
+                        pools.Add(pool);
+                        restatedPools.Add(pool);
+                    }
+                    var excess = lineQty - target;
+                    if (excess > 0.0001m)
+                    {
+                        var restMonth = new DateTime(m.Date.Year, m.Date.Month, 1);
+                        foreach (var p in Ranked(restatedPools, restMonth))
+                        {
+                            if (excess <= 0m) break;
+                            var take = Math.Min(excess, p.Quantity);
+                            var tv = take >= p.Quantity ? p.Value : Round(take * p.Value / p.Quantity);
+                            var ta = take >= p.Quantity ? p.ActualValue : Round(take * p.ActualValue / p.Quantity);
+                            p.Quantity -= take; p.Value -= tv; p.ActualValue -= ta;
+                            if (p.Quantity <= 0m) { p.Quantity = 0m; p.Value = 0m; p.ActualValue = 0m; }
+                            // The earlier-dated sale took these units, so the GD
+                            // panel shows them consumed from this line (and keeps
+                            // the line: RestatedAwayQuantity hides a pool there).
+                            p.ConsumedQuantity += take; p.ConsumedValue += tv; p.ConsumedActualValue += ta;
+                            excess -= take;
+                        }
                     }
                     var delta = RunValue() - before;
                     if (delta > 0m) valueIn += delta; else valueOut += -delta;

@@ -354,6 +354,62 @@ List<string> Order(Result r, int movementId) => r.Takes[movementId].Select(t => 
         s.ShortfallQuantity == 0m && s.Position.Quantity == -2m && s.Pools.All(p => p.Quantity == 0m));
 }
 
+// 23. A sale dated BEFORE a restatement but entered after it (Alpha, GLASS
+// CHATTON 7018.1000, 2026-10-08): the restatement's lines hold more than is on
+// hand, and the difference leaves them FIFO -- the claimed, oldest GD first --
+// never pro rata. Pro rata costed the 2,937 KG at the sheet's average (496.74)
+// against the first GD's 473.36, and took 68,479 too much out of stock.
+{
+    var book = new Book
+    {
+        Restatements = { [5] = new List<OpeningLot> {
+            new("r-11115", "KAPE-HC-11115", D(2026, 9, 8), D(2026, 9), 11450, 5420021.00m, 5164639.40m, 18, 47, null, "glass"),
+            new("r-11568", "KAPE-HC-11568", D(2026, 9, 10), D(2026, 9), 4831, 2667479.50m, 2541792.69m, 18, 61, null, "glass") } },
+    };
+    var moves = new[] {
+        Out(1, D(2026, 8, 1), 2100),                       // bill 51
+        Out(2, D(2026, 9, 4), 2937),                       // bill 101, typed on 8 Oct
+        In(3, D(2026, 9, 8), 11450, 473.3643m, type: "ImportConsignment"),
+        In(4, D(2026, 9, 10), 4831, 552.1589m, type: "ImportConsignment"),
+        Reval(5, D(2026, 9, 30), -0.39m) };
+    var r = Run("restate-backdated", 2100, 1162456.17m, book, moves, oa: 996391m);
+    Check("restate-backdated: on hand 13,344", r.Position.Quantity == 13344m, $"{r.Position.Quantity}");
+    Check("restate-backdated: the 2,937 left the claimed, oldest GD",
+        P(r, "r-11115").Quantity == 8513m && P(r, "r-11568").Quantity == 4831m,
+        $"{P(r, "r-11115").Quantity} / {P(r, "r-11568").Quantity}");
+    Check("restate-backdated: valued FIFO, not at the sheet's average",
+        r.Position.ValueExcludingTax == 6697229.61m, $"{r.Position.ValueExcludingTax}");
+    Check("restate-backdated: the later GD keeps its whole value", P(r, "r-11568").Value == 2667479.50m);
+    Check("restate-backdated: the drained units read as consumed, not replaced",
+        P(r, "r-11115").ConsumedQuantity == 2937m && P(r, "r-11115").RestatedAwayQuantity == 0m);
+    var next = GdFifoValuation.NextConsumption(r, D(2026, 10, 8));
+    Check("restate-backdated: the next sale still starts on GD 11115 at 473.36",
+        next[0].Key == "r-11115" && Math.Abs(next[0].Value / next[0].Quantity - 473.3643m) < 0.0001m,
+        $"{next[0].Key} {next[0].Value / next[0].Quantity}");
+}
+
+// 24. The mirror: stock dated BEFORE a restatement but entered after it (a GD
+// arrival the sheet never saw). It keeps its own GD and cost beside the
+// sheet's lines instead of being smeared over them pro rata.
+{
+    var book = new Book
+    {
+        Lots = { Lot("A", "GD-A", D(2026, 1), null, 10, 1000) },
+        Restatements = { [2] = new List<OpeningLot> {
+            new("r-X", "GD-X", D(2026, 2), null, 10, 1200, 0, 18, 1, null, null) } },
+    };
+    var r = Run("restate-late-arrival", 10, 1000, book, new[] {
+        Reval(2, D(2026, 9, 30), 0m),
+        In(3, D(2026, 9, 15), 5, 200m) });
+    Check("restate-late-arrival: the sheet line stays exactly as stated",
+        P(r, "r-X").Quantity == 10m && P(r, "r-X").Value == 1200m, $"{P(r, "r-X").Quantity} {P(r, "r-X").Value}");
+    Check("restate-late-arrival: the arrival keeps its own 5 at 200",
+        P(r, "move-3").Quantity == 5m && P(r, "move-3").Value == 1000m, $"{P(r, "move-3").Quantity} {P(r, "move-3").Value}");
+    Check("restate-late-arrival: the opening the sheet replaced is gone",
+        P(r, "A").Quantity == 0m && P(r, "A").RestatedAwayQuantity == 10m);
+    Check("restate-late-arrival: value 2,200", r.Position.ValueExcludingTax == 2200m, $"{r.Position.ValueExcludingTax}");
+}
+
 // 20. A value-only revaluation on an empty item holds nothing.
 {
     var r = Run("reval-empty", 0, 0, new Book(), new[] { Reval(1, D(2026, 1), 50m) });
