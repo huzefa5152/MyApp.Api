@@ -177,7 +177,14 @@ def pick_classified_item_type(base: str, token: str) -> dict | None:
         # rows mark a challan/bill as "ready for FBR submission".
         if it.get("hsCode") and it.get("uom") and it.get("saleType"):
             return it
-    return None
+    # Fresh databases can contain only the unclassified starter row. Create
+    # the classified fixture the challan/bill and rate-history checks require.
+    status, item = http("POST", "/api/itemtypes", base, token=token, body={
+        "name": "_test Fully Classified Goods", "hsCode": "8481.1000", "uom": "Pcs",
+        "saleType": "Goods at Standard Rate (default)"})
+    assert status in (200, 201), f"prepare classified fixture: {status} {item}"
+    assert item.get("hsCode") and item.get("uom") and item.get("saleType"), item
+    return item
 
 
 # ── Suite 1: Challan creation ──────────────────────────────────────

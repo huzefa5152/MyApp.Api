@@ -300,7 +300,7 @@ Optional company Gmail inbox: authorize an account once and link it only to assi
 
 ### 2026-10-08
 
-- Port the optional Email Workspace from Trader with company-scoped Gmail, human quotation review, division access checks and Customize quotation numbering.
+- Port the optional Email Workspace from Trader with company-scoped Gmail, human quotation review, division access checks and Customize quotation numbering. Verify module grants with `scripts/test_email_module_access.py`.
 
 - Preserve company colors in accounting reports when printing with browser background graphics disabled.
 

@@ -692,7 +692,7 @@ for u in (_ulist or []):
         request("DELETE", f"/api/users/{u['id']}", token=admin)
 status, _rlist = request("GET", "/api/roles", token=admin)
 for r in (_rlist or []):
-    if r["name"] in ("IsoTest Doc Creator", "IsoTest User Admin"):
+    if r["name"] in ("IsoTest Doc Creator", "IsoTest User Admin", "IsoTest Sales Operator"):
         request("DELETE", f"/api/roles/{r['id']}", token=admin)
 
 # A narrow role: can CREATE sales/purchase docs but holds NONE of the
@@ -708,8 +708,17 @@ status, doc_role = request("POST", "/api/roles", token=admin, body={
 })
 assert status in (200, 201), f"create doc role: {status} {doc_role}"
 
+# Private roles belong to a tenant root. Provision these children under Alice
+# using tenant-local copies, so their first login really exercises the grants.
+def tenant_role(source, name=None):
+    status, copies = request("POST", f"/api/roles/{source['id']}/copy", token=admin,
+                             body={"tenantAdminUserIds": [alice["id"]], "name": name or source["name"]})
+    assert status == 200 and copies, f"copy role into fixture tenant: {status} {copies}"
+    return copies[0]
+
+doc_role = tenant_role(doc_role)
 # dave: the narrow role + tenant access to Alpha only (via one-step create).
-status, dave = request("POST", "/api/users", token=admin, body={
+status, dave = request("POST", "/api/users", token=tokens["alice"], body={
     "username": "dave_iso", "password": "test1234", "fullName": "Dave Iso",
     "role": "IsoTest Doc Creator", "roleIds": [doc_role["id"]], "companyIds": [alpha["id"]],
 })
@@ -767,7 +776,8 @@ for name in ["Sales Operator", "FBR Officer", "Bookkeeper", "Inventory Manager",
 # call, then works on first login (non-empty perms + non-empty company list).
 so_role = role_by_name.get("Sales Operator")
 if so_role:
-    status, erin = request("POST", "/api/users", token=admin, body={
+    so_role = tenant_role(so_role, "IsoTest Sales Operator")
+    status, erin = request("POST", "/api/users", token=tokens["alice"], body={
         "username": "erin_iso", "password": "test1234", "fullName": "Erin Iso",
         "role": "Sales Operator", "roleIds": [so_role["id"]], "companyIds": [alpha["id"]],
     })
@@ -789,7 +799,8 @@ status, ua_role = request("POST", "/api/roles", token=admin, body={
     "permissionKeys": ["users.manage.create", "users.manage.view"],
 })
 assert status in (200, 201), f"create ua role: {status} {ua_role}"
-status, frank = request("POST", "/api/users", token=admin, body={
+ua_role = tenant_role(ua_role)
+status, frank = request("POST", "/api/users", token=tokens["alice"], body={
     "username": "frank_iso", "password": "test1234", "fullName": "Frank Iso",
     "role": "IsoTest User Admin", "roleIds": [ua_role["id"]], "companyIds": [alpha["id"]],
 })
@@ -819,10 +830,9 @@ for uname in ("dave_iso", "erin_iso", "frank_iso", "frank_plain_iso", "frank_esc
     uu = next((u for u in (_u or []) if u["username"] == uname), None)
     if uu:
         request("DELETE", f"/api/users/{uu['id']}", token=admin)
-for rname in ("IsoTest Doc Creator", "IsoTest User Admin"):
+for rname in ("IsoTest Doc Creator", "IsoTest User Admin", "IsoTest Sales Operator"):
     s__, _r = request("GET", "/api/roles", token=admin)
-    rr = next((r for r in (_r or []) if r["name"] == rname), None)
-    if rr:
+    for rr in (r for r in (_r or []) if r["name"] == rname):
         request("DELETE", f"/api/roles/{rr['id']}", token=admin)
 
 
@@ -900,6 +910,28 @@ if isinstance(good_quote, dict) and good_quote.get("items"):
     status_check(suite11, "alice GET /salesquotes/{betaId}/print", s, 403)
     request("DELETE", f"/api/salesquotes/{good_quote['id']}", token=admin)
 
+
+# Gmail routes must reject a foreign company before looking up mailbox IDs.
+for suffix in ("connections", "messages", "customers"):
+    status, _ = request("GET", f"/api/email-workspace/company/{alpha['id']}/{suffix}", token=admin)
+    status_check("Email workspace", f"admin resolves {suffix}", status, 200)
+    status, _ = request("GET", f"/api/email-workspace/company/{alpha['id']}/{suffix}", token=tokens["bob"])
+    status_check("Email workspace", f"foreign company rejects {suffix}", status, 403)
+for method, suffix, body in (
+    ("POST", "oauth/start", {}),
+    ("POST", "connections", {"connectionId": 0}),
+    ("PUT", "connections/0", {"rules": [], "shareMatchingEmails": False}),
+    ("DELETE", "connections/0", None),
+    ("POST", "sync/0", {}),
+    ("GET", "messages/0", None),
+    ("PUT", "messages/0/decision", {"decision": "Kept"}),
+    ("POST", "messages/0/prepare", {"decision": "Kept"}),
+    ("PUT", "messages/0/draft", {"items": []}),
+    ("POST", "messages/0/convert", {"items": []}),
+    ("GET", "messages/0/attachment?attachmentId=sample", None),
+):
+    status, _ = request(method, f"/api/email-workspace/company/{alpha['id']}/{suffix}", token=tokens["bob"], body=body)
+    status_check("Email workspace", f"foreign company rejects {method} {suffix}", status, 403)
 
 # ── Cleanup (test fails → keep rows for inspection) ──────────
 print("\n=== Results ===")
