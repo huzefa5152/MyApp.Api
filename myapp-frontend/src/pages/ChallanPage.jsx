@@ -229,7 +229,8 @@ export default function ChallanPage() {
       const { data } = await createDeliveryChallan(selectedCompany.id, payload);
       created = data;
     }
-    fetchChallans(selectedCompany.id, page);
+    setPage(1);
+    fetchChallans(selectedCompany.id, 1);
     // Return the created challan so the form can flush staged attachments
     // against the new id, then the form closes itself via onClose.
     return created;
@@ -327,7 +328,8 @@ export default function ChallanPage() {
     try {
       const { data } = await duplicateChallan(challan.id, count);
       const clones = Array.isArray(data) ? data : [data];
-      await fetchChallans(selectedCompany.id, page);
+      setPage(1);
+      await fetchChallans(selectedCompany.id, 1);
       // For count === 1, jump straight into the edit form so the operator
       // can tweak PO/items — same UX as before. For bulk count, just refresh
       // the list and toast; the operator typically wants to leave the dialog
@@ -603,7 +605,7 @@ export default function ChallanPage() {
         <POImportForm
           companyId={selectedCompany.id}
           onClose={() => setShowImport(false)}
-          onSaved={() => { setShowImport(false); fetchChallans(selectedCompany.id, page); }}
+          onSaved={() => { setShowImport(false); setPage(1); fetchChallans(selectedCompany.id, 1); }}
         />
       )}
 

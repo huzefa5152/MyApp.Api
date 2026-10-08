@@ -31,7 +31,8 @@ namespace MyApp.Api.Repositories.Implementations
                                      .ThenInclude(inv => inv!.Items)
                                  .Include(dc => dc.DuplicatedFrom)
                                  .Where(dc => dc.CompanyId == companyId && !dc.IsDemo)
-                                 .OrderBy(dc => dc.ChallanNumber)
+                                 .OrderByDescending(dc => dc.CreatedAt)
+                                 .ThenByDescending(dc => dc.Id)
                                  .ToListAsync();
         }
 
@@ -82,7 +83,7 @@ namespace MyApp.Api.Repositories.Implementations
 
             var totalCount = await query.CountAsync();
             var items = await query
-                .OrderByDescending(dc => dc.ChallanNumber)
+                .OrderByDescending(dc => dc.CreatedAt)
                 .ThenByDescending(dc => dc.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)

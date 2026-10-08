@@ -177,6 +177,9 @@ namespace MyApp.Api.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             ConfigureEmailWorkspace(modelBuilder);
+            modelBuilder.Entity<DeliveryChallan>().Property(dc => dc.CreatedAt)
+                .HasDefaultValueSql("SYSUTCDATETIME()");
+
             modelBuilder.Entity<McpUserAccessPolicy>(e =>
             {
                 e.HasKey(p => p.UserId);

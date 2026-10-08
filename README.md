@@ -310,6 +310,7 @@ Publish output optimized from 79 MB to 37 MB via:
 - Require explicit consultant review after challan changes or edits to a previously adjusted bill. Preserve existing adjustments for review, show the next action, allow saving progress, and block FBR validation/submission until the latest complete bill is reviewed and totals reconcile.
 
 - Add **Manage challans** to bill editing before FBR submission: search the customer's available challans, enter rates for added items, and remove or replace linked challans without deleting their source documents. Preserve retained lines and filing adjustments, recalculate taxes and balances, and reflow stock and journal entries atomically. Reject stale selections, unavailable or foreign challans, empty bills, locked periods, active notes, reductions below allocated receipts, and edits while FBR submission is in progress or uncertain.
+- List delivery challans and bills/invoices newest-created first, independently of custom document numbers. Record UTC creation time for new challans and retain insertion order for historical challans. Return to the first page after creating, importing or duplicating challans.
 
 - Allow ten failed sign-in attempts, show remaining attempts and lock expiry, exempt the seed administrator, and let only the seed administrator see blocked accounts and unlock users.
 

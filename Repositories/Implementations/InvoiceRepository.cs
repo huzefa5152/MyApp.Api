@@ -31,7 +31,7 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(i => i.HandoverBy)
                 .Where(i => i.CompanyId == companyId && !i.IsDemo
                          && i.DocumentType != 9 && i.DocumentType != 10)
-                .OrderByDescending(i => i.InvoiceNumber)
+                .OrderByDescending(i => i.CreatedAt)
                 .ThenByDescending(i => i.Id)
                 .ToListAsync();
         }
@@ -172,7 +172,7 @@ namespace MyApp.Api.Repositories.Implementations
 
             var totalCount = await query.CountAsync();
             var items = await query
-                .OrderByDescending(i => i.InvoiceNumber)
+                .OrderByDescending(i => i.CreatedAt)
                 .ThenByDescending(i => i.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
