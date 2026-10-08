@@ -134,6 +134,9 @@ try {
    await Deny(()=>service.SyncForUserAsync(user,company,f.connection,default));
    await Deny(async()=>{await service.DecideAsync(user,company,f.shared,new("Kept",null),default);});
    await Deny(async()=>{await service.PrepareAsync(user,company,f.shared,null,default);});
+   await Deny(async()=>{await service.PreviewAttachmentAsync(user,company,f.shared,new(){AttachmentId="sample"},default);});
+   await Deny(async()=>{await service.ApplyAttachmentAsync(user,company,f.shared,new(){AttachmentId="sample",Mode="Append"},default);});
+   await Deny(async()=>{await service.AssistItemsAsync(user,company,f.shared,new(){Items=[]},default);});
    await Deny(async()=>{await service.SaveDraftAsync(user,company,f.shared,new(),default);});
    await Deny(async()=>{await service.ConvertAsync(user,company,f.shared,new(),default);});
    await Deny(async()=>{await service.AttachmentAsync(user,company,f.shared,"forged",default);});
@@ -146,6 +149,9 @@ try {
    await Deny(async()=>{await service.ReadAsync(user,company,other.shared,default);},404);
    await Deny(async()=>{await service.DecideAsync(user,company,other.shared,new("Kept",null),default);},404);
    await Deny(async()=>{await service.PrepareAsync(user,company,other.shared,null,default);},404);
+   await Deny(async()=>{await service.PreviewAttachmentAsync(user,company,other.shared,new(){AttachmentId="sample"},default);},404);
+   await Deny(async()=>{await service.ApplyAttachmentAsync(user,company,other.shared,new(){AttachmentId="sample",Mode="Append"},default);},404);
+   await Deny(async()=>{await service.AssistItemsAsync(user,company,other.shared,new(){Items=[]},default);},404);
    await Deny(async()=>{await service.SaveDraftAsync(user,company,other.shared,new(),default);},404);
    await Deny(async()=>{await service.ConvertAsync(user,company,other.shared,new(),default);},404);
    await Deny(async()=>{await service.AttachmentAsync(user,company,other.shared,"forged",default);},404);

@@ -300,6 +300,10 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-10-08
 
+- Add company-scoped MCP email enquiry tools: review mail, approve Keep/Ignore, supply explicit item prices and approve one quotation through existing OAuth and per-user tool grants.
+
+- Add reviewed attachment item extraction and local browser OCR to Email Workspace, with explicit append/replace, company catalogue suggestions, customer quotation prices and permission-gated purchase costs. Keep quotation creation under user approval.
+
 - Add the optional Email Workspace module with company-scoped Gmail connections, enquiry review and quotation conversion; keep existing navigation unchanged for users without access.
 - Expose `{{site}}` on commercial Bill and Sales Tax Invoice prints and in the template editor. Combine distinct linked-challan sites; preserve the existing Bill `{{concernDepartment}}` field.
 

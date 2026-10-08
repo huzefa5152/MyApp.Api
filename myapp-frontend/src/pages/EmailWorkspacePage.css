@@ -11,4 +11,8 @@
 .ew-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr)); gap:12px; margin:16px 0; }.ew label.ew-check { display:flex; flex-direction:row; align-items:center; line-height:1.5; margin:16px 0; }.ew .ew-check input { width:22px; min-height:22px; height:22px; flex-shrink:0; }
 .ew-body { white-space:pre-wrap; overflow-wrap:anywhere; font:14px/1.6 inherit; max-height:420px; overflow-y:auto; border-block:1px solid #e4eaf0; padding:16px 0; }.ew summary { cursor:pointer; min-height:44px; padding:10px 0; }.ew-error,.ew-notice { padding:12px; border-radius:8px; overflow-wrap:anywhere; }.ew-error { background:#fff1f0; color:#922b26; }.ew-notice { background:#eaf6f2; color:#205c4c; }.ew-warnings { background:#fff8e8; padding:16px 16px 16px 30px; line-height:1.6; }.ew-connection { border-top:1px solid #dce5ee; margin-top:20px; padding-top:10px; }.ew-rule { background:#f5f8fb; padding:12px; border-radius:8px; }.ew-empty { padding:32px 0; }.ew-draft { border-top:1px solid #dce5ee; margin-top:16px; }
 @media(max-width:1000px) { .ew-columns { grid-template-columns:1fr; } }
+.ew-assistance { border-block:1px solid #dce5ee; padding-block:12px; margin-block:16px; min-width:0; }
+.ew-attachment-preview,.ew-suggestion { border:1px solid #dce5ee; border-radius:8px; padding:12px; margin-block:12px; overflow-wrap:anywhere; }
+.ew-candidate { background:#f5f8fb; padding:12px; border-radius:6px; margin-top:10px; min-width:0; }
+.ew-assistance h4 { margin:8px 0; overflow-wrap:anywhere; }.ew-assistance ol { padding-left:22px; }
 @media(max-width:600px) { .ew { padding:0; }.ew-panel { padding:12px; }.ew h1 { font-size:24px; }.ew-toolbar>label { width:100%; }.ew-actions { width:100%; }.ew-actions select { width:100%; }.ew-columns { gap:12px; } }

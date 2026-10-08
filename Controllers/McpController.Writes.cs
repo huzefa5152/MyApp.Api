@@ -22,13 +22,15 @@ namespace MyApp.Api.Controllers
         private string _resultRef = "";
         private string _resultSummary = "";
 
-        private static readonly string[] WriteToolNameList = { "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "commit_action", "cancel_action" };
+        private static readonly string[] WriteToolNameList = { "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "prepare_email_decision", "prepare_email_quotation", "commit_action", "cancel_action" };
         private static bool IsWriteTool(string name) => WriteToolNameList.Contains(name, StringComparer.Ordinal);
 
         private static string PrepareToolFor(string kind) => kind switch
         {
             "client.create" or "client.update" => "prepare_client",
             "quote.create" => "prepare_quote",
+            "email.decision" => "prepare_email_decision",
+            "email.quote" => "prepare_email_quotation",
             "challan.create" => "prepare_challan",
             "bill.create" or "bill.standalone" => "prepare_bill",
             _ => throw new ToolError("Unknown action kind.")
@@ -362,6 +364,8 @@ namespace MyApp.Api.Controllers
             "challan.create" => McpScopes.Challans,
             "bill.create" or "bill.standalone" => McpScopes.Bills,
             "quote.create" => McpScopes.Quotes,
+            "email.quote" => McpScopes.Quotes,
+            "email.decision" => McpScopes.Email,
             _ => throw new ToolError("Unknown plan type.")
         };
 
@@ -373,6 +377,8 @@ namespace MyApp.Api.Controllers
             "bill.create" => "bills.manage.create",
             "bill.standalone" => "bills.manage.create.standalone",
             "quote.create" => "salesquotes.manage.create",
+            "email.quote" => "salesquotes.manage.create",
+            "email.decision" => "email.inbox.manage",
             _ => throw new ToolError("Unknown plan type.")
         };
 
@@ -409,6 +415,8 @@ namespace MyApp.Api.Controllers
             if (plan.ExpiresAt <= DateTime.UtcNow) throw new ToolError("That plan has expired. Prepare it again.");
             await PinCompanyAsync(plan.CompanyId);
             await Need(PermissionFor(plan.Kind));
+            if (plan.Kind is "email.quote" or "email.decision")
+                await ValidateEmailPlanAsync(plan);
             await EnforceHourlyCapAsync(agent, plan.Kind);
 
             // Claim it atomically: of two simultaneous commits only one proceeds, so a double
@@ -424,6 +432,12 @@ namespace MyApp.Api.Controllers
                 var p = JsonSerializer.Deserialize<JsonElement>(plan.Payload);
                 switch (plan.Kind)
                 {
+                    case "email.decision":
+                    case "email.quote":
+                    {
+                        (resultRef, resultSummary) = await CommitEmailPlanAsync(plan, p);
+                        break;
+                    }
                     case "client.create":
                     {
                         var created = await _clients.CreateAsync(ClientFromPlan(p));
@@ -467,7 +481,7 @@ namespace MyApp.Api.Controllers
                     default: throw new ToolError("Unknown plan type.");
                 }
             }
-            catch (Exception ex) when (ex is InvalidOperationException or KeyNotFoundException)
+            catch (Exception ex) when (ex is InvalidOperationException or KeyNotFoundException || (plan.Kind.StartsWith("email.") && ex is ToolError))
             {
                 // Service rules are operator-facing messages (name clash, unknown client...).
                 await _context.McpPendingActions.Where(a => a.Id == plan.Id).ExecuteUpdateAsync(s => s.SetProperty(a => a.ResultRef, "FAILED").SetProperty(a => a.ResultSummary, "The action was refused or may be incomplete. Check the affected records."));

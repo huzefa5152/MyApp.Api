@@ -114,3 +114,50 @@ Combined the local email workspace with remote Trader commits through `6b350731`
 The first overlapping HTTP run encountered a SQL deadlock in the sales workflow while unrelated suites wrote the same disposable database; the isolated unchanged workflow rerun passed 40/40. Tenant isolation initially hit the existing login rate limiter after other suites; the later unchanged run passed. Neither retry behavior nor rate-limit policy was altered.
 
 Google OAuth consent, real message/attachment retrieval and retention-policy acceptance remain pending. No Google request, push or deployment was performed. The separate Customize email port is unaffected by these unrelated Trader workflow commits.
+
+## Attachment and pricing assistance (2026-10-08)
+
+Implemented on the separate `codex/trader-email-assistance` branch. No schema migration or new dependency is required. This increment adds attachment previews, explicit append/replace, local browser OCR, catalogue suggestions, customer-specific quotation prices and permission-gated purchase cost evidence. Every application of a suggestion clears review; conversion still requires explicit review.
+
+- Supported .NET 9 backend tests: 29 passed, zero failed or skipped. Frontend tests: 33 passed across six files. Backend and frontend builds passed.
+- Disposable SQL HTTP tests: all tenant-isolation suites passed, including Email Workspace 20/20; basic flows 151/151 passed.
+- Approved local-copy audit: all 88 user/company pairs passed, with 1,570 service boundary checks, 46 module delegation checks and 5,445 authorization-filter checks across 18 endpoints. Temporary changes rolled back and original assignments were verified.
+- Browser verification with synthetic messages passed at 375, 768 and 1280 pixels: preview leaves items unchanged, explicit append retains existing items, price acceptance requires renewed review, and no browser errors occurred. Actual locally served browser OCR recognized a synthetic item and quantity.
+- Tests cover PDF/Excel/CSV parsing, formula skipping, OCR layout and malformed input, stale revisions, company/customer/unit price isolation, revoked module/company access and explicit acceptance of suggestions.
+
+Real Google consent and the intended tenant's mailbox remain untested. Follow the Saturday 2026-10-10 acceptance checklist in the setup guide before tenant rollout. This increment is uncommitted and has not been merged, pushed, ported or deployed.
+
+## MCP email quotation workflow (2026-10-08)
+
+The same feature branch now extends the existing hosted MCP endpoint and OAuth connection with
+email search/read, approved Keep/Ignore/Restore plans and revision-bound quotation plans with
+explicit prices by item number. It reuses the application's source visibility and locked
+conversion service. Email decisions have a separate opt-in scope; conversion also needs
+quotation-write access and all email/business permissions. No migration or new dependency.
+
+- Backend suite: 31 passed, zero failed or skipped, including SQL-backed MCP dispatch through
+  prepare/commit and actual quotation creation. Cases cover missing/negative/over-precision prices,
+  duplicate or unknown item numbers, forged item fields, required brands/specifications, foreign
+  customers, narrowed token companies, revoked grants, stale/expired plans, token ownership,
+  repeated commits, correct totals and linked-source creation.
+- Actual HTTP authorization suite: 17/17 passed with synthetic users and companies, covering
+  module and named-tool grants, owner company revocation, token company restrictions, ordinary
+  login read-only behavior and token revocation. No Gmail calls.
+- Existing OAuth suite: 69/69 passed, including PKCE, refresh rotation, replay/expiry and
+  revocation. Its first run could not execute expiry fixtures because PATH selected the ODBC 17
+  SQL client without its driver; the unchanged rerun used the installed ODBC 18 client and passed.
+- Frontend: 33/33 tests and production build passed. Browser consent checks passed at 375, 768
+  and 1280 pixels; the new email-selection scope defaults off and can be selected explicitly.
+- Static security 67/67, all 165 company-scoped actions guarded, all 33 permission modules mapped,
+  and production-identifier scan clean, including the new source/test files.
+
+The unchanged legacy `test_mcp_writes.py` stops in setup while a tenant administrator tries to
+create a role granting MCP premium access/write permissions. The existing profile-catalog policy
+refuses this with "A role cannot grant more than you hold yourself." The failure occurs before
+write-tool assertions or new email tools execute. No business permission policy or test assertion
+was changed to bypass it; this legacy fixture requires maintainer review. Other legacy MCP suites
+were not rerun for this increment.
+
+The focused tests use synthetic SQL data and a local host. A live ChatGPT connector and real
+tenant Gmail consent/mail remain pending. The setup guide now includes the MCP grant and
+conversation workflow for that acceptance session. No commit, merge, push or deployment.

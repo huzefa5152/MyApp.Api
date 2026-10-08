@@ -15,7 +15,7 @@ public sealed class EmailWorkspaceException(int status, string message) : Except
 {
     public int Status { get; } = status;
 }
-public sealed class EmailWorkspaceService(AppDbContext db, ICompanyAccessGuard access, IPermissionService permissions,
+public sealed partial class EmailWorkspaceService(AppDbContext db, ICompanyAccessGuard access, IPermissionService permissions,
     IGmailProvider gmail, IDataProtectionProvider protection, ISalesQuoteService quotes)
 {
     private readonly IDataProtector protector = protection.CreateProtector("MyApp.EmailWorkspace.v1");
@@ -303,15 +303,42 @@ public sealed class EmailWorkspaceService(AppDbContext db, ICompanyAccessGuard a
         {
             var existing = Unprotect<EmailDraftDto>(enquiry.ProtectedDraft); existing.Revision = enquiry.Revision; return existing;
         }
+        var draft = await ExtractDraftAsync(company, m, ct);
+        enquiry.Revision = Guid.NewGuid(); draft.Revision = enquiry.Revision; enquiry.ProtectedDraft = Protect(draft);
+        Event(user, company, "EnquiryPrepared", enquiry.Id); await db.SaveChangesAsync(ct);
+        return draft;
+    }
+    private async Task<EmailDraftDto> ExtractDraftAsync(int company, GmailMessage m, CancellationToken ct)
+    {
         var draft = EmailEnquiryExtractor.Extract(m.Subject, Unprotect<EmailContent>(m.ProtectedContent));
         draft.Date = DateTime.UtcNow.AddHours(5).Date;
         var link = await db.GmailCompanyLinks.AsNoTracking().SingleAsync(l => l.CompanyId == company && l.ConnectionId == m.ConnectionId, ct);
         var candidates = EmailWorkspaceRules.Read(link.RulesJson).Where(r => r.ClientId != null && EmailWorkspaceRules.Matches(r, m.Sender, m.Subject)).Select(r => r.ClientId).Distinct().ToList();
         if (candidates.Count == 1 && await db.Clients.AnyAsync(c => c.Id == candidates[0] && c.CompanyId == company, ct)) draft.ClientId = candidates[0];
         else draft.Warnings.Add("Confirm the customer. The sender may be a forwarder.");
-        enquiry.Revision = Guid.NewGuid(); draft.Revision = enquiry.Revision; enquiry.ProtectedDraft = Protect(draft);
-        Event(user, company, "EnquiryPrepared", enquiry.Id); await db.SaveChangesAsync(ct);
         return draft;
+    }
+    // Read-only preview for MCP: preparation must not change the enquiry before approval.
+    public async Task<EmailDraftDto> PreviewQuotationDraftAsync(int user, int company, int id, Guid? revision, CancellationToken ct)
+    {
+        var message = await MessageAsync(user, company, id, ct);
+        var enquiry = await db.EmailEnquiries.AsNoTracking().SingleOrDefaultAsync(e => e.CompanyId == company && e.MessageId == id, ct) ?? throw Missing();
+        AssertRevision(enquiry, revision);
+        if (enquiry.Decision != "Kept" || enquiry.SalesQuoteId != null) throw Invalid("Keep an unconverted enquiry before preparing its quotation.");
+        var draft = enquiry.ProtectedDraft.Length > 0 ? Unprotect<EmailDraftDto>(enquiry.ProtectedDraft) : await ExtractDraftAsync(company, message, ct);
+        draft.Revision = enquiry.Revision;
+        return draft;
+    }
+    public async Task<object> ConvertMcpAsync(int user, int company, int id, EmailDraftDto approved, CancellationToken ct)
+    {
+        if (!await permissions.HasPermissionAsync(user, "email.inbox.view") || !await permissions.HasPermissionAsync(user, "email.enquiries.manage"))
+            throw new UnauthorizedAccessException();
+        await PreviewQuotationDraftAsync(user, company, id, approved.Revision, ct);
+        // Only an approved commit may persist extraction. ConvertAsync then locks the enquiry and
+        // creates the quotation through the same idempotent transaction as the web workflow.
+        var prepared = await PrepareAsync(user, company, id, approved.Revision, ct);
+        approved.Revision = prepared.Revision;
+        return await ConvertAsync(user, company, id, approved, ct);
     }
     public async Task<object> SaveDraftAsync(int user, int company, int id, EmailDraftDto draft, CancellationToken ct)
     {
