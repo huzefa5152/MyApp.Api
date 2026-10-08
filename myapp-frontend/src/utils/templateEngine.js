@@ -1,5 +1,5 @@
 import Handlebars from "handlebars";
-import { withBillFbrSection } from "./billFbrSection";
+import { withBillFbrSection } from "./billFbrSection.js";
 import { materializeStamp } from "./stampSlot.js";
 
 // Register custom helpers

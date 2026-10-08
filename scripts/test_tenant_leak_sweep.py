@@ -209,8 +209,17 @@ def main() -> int:
             if not check("0", f"{username} created", s in (200, 201), f"{s} {err(u)}"):
                 return None
             made_users.append(u)
-            http("PUT", f"/api/users/{u['id']}/roles", base, token=seed,
-                 body={"roleIds": [role["id"]]})
+            if not role.get("isSystemRole"):
+                sc, copies = http("POST", f"/api/roles/{role['id']}/copy", base, token=seed,
+                                  body={"tenantAdminUserIds": [u["id"]]})
+                if not check("0", f"{username} receives a tenant-scoped role copy", sc == 200 and bool(copies), str(copies)[:150]):
+                    return None
+                role = copies[0]
+                made_roles.append(role)
+            sr, assigned = http("PUT", f"/api/users/{u['id']}/roles", base, token=seed,
+                                body={"roleIds": [role["id"]]})
+            if not check("0", f"{username} role assignment succeeds", sr == 200, str(assigned)[:150]):
+                return None
             # Company A ONLY. That is the whole point.
             http("PUT", f"/api/usercompanies/user/{u['id']}", base, token=seed,
                  body={"companyIds": [a_id]})

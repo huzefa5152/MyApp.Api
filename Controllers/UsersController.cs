@@ -279,6 +279,10 @@ namespace MyApp.Api.Controllers
                     await _context.SaveChangesAsync();
 
                 _context.Users.Remove(user);
+                await _context.GmailOAuthRequests.Where(r => r.UserId == id).ExecuteDeleteAsync();
+                await _context.GmailConnections.Where(c => c.OwnerUserId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(c => c.ProtectedRefreshToken, "").SetProperty(c => c.Status, "Disconnected")
+                        .SetProperty(c => c.GoogleSubject, c => "deleted:" + c.Id.ToString()).SetProperty(c => c.OwnerUserId, 0));
                 await _context.SaveChangesAsync();
                 await tx.CommitAsync();
             }

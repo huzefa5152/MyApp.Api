@@ -169,7 +169,8 @@ namespace MyApp.Api.Services.Implementations
 
             var createdId = await NumberAllocationRetry.ExecuteAsync(async _ =>
             {
-                await using var numberTx = await _context.Database.BeginTransactionAsync();
+                await using var numberTx = _context.Database.CurrentTransaction == null
+                    ? await _context.Database.BeginTransactionAsync() : null;
                 // Company-scoped numbering. The unique index (CompanyId,
                 // QuoteNumber) guards the concurrent-create race — the loser
                 // recomputes and retries.
@@ -203,7 +204,7 @@ namespace MyApp.Api.Services.Implementations
                 try
                 {
                     await _context.SaveChangesAsync();
-                    await numberTx.CommitAsync();
+                    if (numberTx != null) await numberTx.CommitAsync();
                 }
                 catch (DbUpdateException)
                 {

@@ -176,6 +176,7 @@ namespace MyApp.Api.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            ConfigureEmailWorkspace(modelBuilder);
             modelBuilder.Entity<McpUserAccessPolicy>(e =>
             {
                 e.HasKey(p => p.UserId);

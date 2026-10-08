@@ -361,6 +361,13 @@ namespace MyApp.Api.Services.Implementations
                 //    with a raw constraint error. Deleting the company is the
                 //    operator saying its links go too.
                 await _context.CustomerPortals.Where(p => p.CompanyId == id).ExecuteDeleteAsync();
+                var emailConnectionIds = await _context.GmailCompanyLinks.Where(e => e.CompanyId == id).Select(e => e.ConnectionId).ToListAsync();
+                await _context.EmailEnquiries.Where(e => e.CompanyId == id).ExecuteDeleteAsync();
+                await _context.EmailWorkspaceEvents.Where(e => e.CompanyId == id).ExecuteDeleteAsync();
+                await _context.GmailOAuthRequests.Where(e => e.CompanyId == id).ExecuteDeleteAsync();
+                await _context.GmailCompanyLinks.Where(e => e.CompanyId == id).ExecuteDeleteAsync();
+                await _context.GmailConnections.Where(c => emailConnectionIds.Contains(c.Id) && !_context.GmailCompanyLinks.Any(l => l.ConnectionId == c.Id && l.IsEnabled))
+                    .ExecuteUpdateAsync(s => s.SetProperty(c => c.ProtectedRefreshToken, "").SetProperty(c => c.Status, "Disconnected"));
 
                 // 1. Unlink challans from invoices
                 await _context.DeliveryChallans

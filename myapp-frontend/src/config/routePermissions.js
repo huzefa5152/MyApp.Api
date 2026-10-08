@@ -37,6 +37,7 @@ export const ROUTE_PERMISSIONS = {
 
   // Sales
   "/sales-quotes": "salesquotes.list.view",
+  "/email-workspace": "email.workspace.use",
   "/sales-orders": "salesorders.list.view",
   "/challans": "challans.list.view",
   "/challans/import": "challans.import.create",

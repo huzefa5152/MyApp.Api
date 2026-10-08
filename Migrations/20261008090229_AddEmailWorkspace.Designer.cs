@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyApp.Api.Data;
 
@@ -11,9 +12,11 @@ using MyApp.Api.Data;
 namespace MyApp.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261008090229_AddEmailWorkspace")]
+    partial class AddEmailWorkspace
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1959,12 +1962,6 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("FbrInvoiceNumber")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<DateTime?>("FbrReviewRequiredAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("FbrReviewedAt")
-                        .HasColumnType("datetime2");
-
                     b.Property<string>("FbrStatus")
                         .HasColumnType("nvarchar(max)");
 
@@ -3755,9 +3752,7 @@ namespace MyApp.Api.Migrations
 
                     b.HasIndex("SignatureHash");
 
-                    b.HasIndex("CompanyId", "ClientId");
-
-                    b.HasIndex("CompanyId", "ClientId", "Name")
+                    b.HasIndex("CompanyId", "ClientId")
                         .IsUnique()
                         .HasFilter("[CompanyId] IS NOT NULL AND [ClientId] IS NOT NULL");
 
@@ -3944,8 +3939,6 @@ namespace MyApp.Api.Migrations
 
             modelBuilder.Entity("MyApp.Api.Models.PoImportArchive", b =>
                 {
-                    b.Property<string>("DocumentKind").HasMaxLength(32).HasColumnType("nvarchar(32)");
-                    b.Property<int?>("DocumentId").HasColumnType("int");
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
@@ -4374,9 +4367,6 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsImported")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("ManuallyClosed")
                         .HasColumnType("bit");
 
                     b.Property<string>("Notes")

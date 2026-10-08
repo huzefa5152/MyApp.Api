@@ -22,6 +22,13 @@ A full-stack ERP system for Pakistani businesses to manage the complete **Purcha
 - **Item Types & Lookups** - Autocomplete item descriptions and units, auto-create on first use
 - **Import Data (onboarding)** - One Excel workbook brings a new company's customers, items, suppliers and opening stock in: download a sample that marks every column required or optional, upload, review each row, import
 
+### Optional Email Workspace
+
+- Assign Email Workspace separately to existing users and administrators.
+- Connect each user's Gmail only to assigned companies; private mail stays private unless explicitly shared.
+- Keep or ignore enquiries, review extracted items and enter prices before creating a quotation.
+- Google OAuth setup and live-mail acceptance are required before rollout; see [setup instructions](docs/GMAIL_EMAIL_WORKSPACE.md).
+
 ### FBR Digital Invoicing
 
 - **Full V1.12 API Integration** - Submit invoices to FBR and receive Invoice Reference Numbers (IRN)
@@ -293,6 +300,7 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-10-08
 
+- Add the optional Email Workspace module with company-scoped Gmail connections, enquiry review and quotation conversion; keep existing navigation unchanged for users without access.
 - Expose `{{site}}` on commercial Bill and Sales Tax Invoice prints and in the template editor. Combine distinct linked-challan sites; preserve the existing Bill `{{concernDepartment}}` field.
 
 - Group consultant editing by effective item type and initialize tax units from its catalog UOM. FBR uses the adjusted classification independently of print settings. Companies printing individual tax invoice lines retain commercial descriptions, quantities, prices and units; grouped tax prints use the consultant view. Commercial bills and challans keep their original units.

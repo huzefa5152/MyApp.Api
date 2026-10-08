@@ -790,6 +790,28 @@ for cid in (alpha_shared, beta_shared):
 request("DELETE", f"/api/clients/{beta_client['id']}", token=admin)
 
 
+# Gmail routes must reject a foreign company before looking up mailbox IDs.
+for suffix in ("connections", "messages", "customers"):
+    status, _ = request("GET", f"/api/email-workspace/company/{alpha['id']}/{suffix}", token=admin)
+    status_check("Email workspace", f"admin resolves {suffix}", status, 200)
+    status, _ = request("GET", f"/api/email-workspace/company/{alpha['id']}/{suffix}", token=tokens["bob"])
+    status_check("Email workspace", f"foreign company rejects {suffix}", status, 403)
+for method, suffix, body in (
+    ("POST", "oauth/start", {}),
+    ("POST", "connections", {"connectionId": 0}),
+    ("PUT", "connections/0", {"rules": [], "shareMatchingEmails": False}),
+    ("DELETE", "connections/0", None),
+    ("POST", "sync/0", {}),
+    ("GET", "messages/0", None),
+    ("PUT", "messages/0/decision", {"decision": "Kept"}),
+    ("POST", "messages/0/prepare", {"decision": "Kept"}),
+    ("PUT", "messages/0/draft", {"items": []}),
+    ("POST", "messages/0/convert", {"items": []}),
+    ("GET", "messages/0/attachment?attachmentId=sample", None),
+):
+    status, _ = request(method, f"/api/email-workspace/company/{alpha['id']}/{suffix}", token=tokens["bob"], body=body)
+    status_check("Email workspace", f"foreign company rejects {method} {suffix}", status, 403)
+
 # ── Cleanup (test fails → keep rows for inspection) ──────────
 print("\n=== Results ===")
 fails = [r for r in results if not r[2].startswith(PASS)]
