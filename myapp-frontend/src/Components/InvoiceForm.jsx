@@ -1074,12 +1074,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>Create Bill</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
-          <div style={{ ...formStyles.body, maxHeight: "70vh", overflowY: "auto" }}>
+          <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "70vh", overflowY: "auto" }}>
             {error && <div ref={errorRef} style={styles.errorAlert}>{error}</div>}
 
             {loading ? (
@@ -1934,7 +1934,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
               </>
             )}
           </div>
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             {billNumberMode === "custom" && !billNumberOk ? (
               <span style={{ fontSize: "0.8rem", color: colors.danger, marginRight: "auto" }}>
                 Enter a bill number that isn&apos;t already in use, or switch back to Auto.

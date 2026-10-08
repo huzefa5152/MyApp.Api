@@ -223,14 +223,14 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>
             {isDuplicate ? "Edit Duplicate Challan" : "Edit Challan"} #{challan.challanNumber}
           </h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
-          <div style={formStyles.body}>
+          <div data-admin-body="" style={formStyles.body}>
             <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={challan.companyId} divisionId={challan.divisionId} documentType="challan" variant="edit" currentNumber={challan.challanNumber} editRecordId={challan.id} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} lockedReason={isDuplicate ? "Duplicate challan numbers are inherited and cannot be changed." : undefined} disabled={saving} /></div>
             {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
@@ -417,7 +417,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
               mode="edit"
             />
           </div>
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
               Cancel
             </button>

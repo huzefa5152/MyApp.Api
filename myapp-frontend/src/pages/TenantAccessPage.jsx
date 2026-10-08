@@ -189,7 +189,7 @@ export default function TenantAccessPage() {
 
   return (
     <div className="tenant-page" style={pageStyles.shell}>
-      <div style={pageStyles.header}>
+      <div data-admin-page-header="" style={pageStyles.header}>
         <div style={pageStyles.headerInner}>
           <MdAdminPanelSettings size={28} color={colors.blue} />
           <div>
@@ -203,7 +203,7 @@ export default function TenantAccessPage() {
         </div>
       </div>
 
-      <div style={pageStyles.toolbar}>
+      <div data-admin-toolbar="" style={pageStyles.toolbar}>
         <div style={pageStyles.searchBox}>
           <MdSearch color={colors.textSecondary} />
           <input
@@ -409,7 +409,7 @@ function EditModal({ user, selected, onToggle, onSubmit, onClose, saving, canAss
         style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <span style={formStyles.title}>
             Edit Access — {user.fullName} ({user.username})
           </span>
@@ -417,7 +417,7 @@ function EditModal({ user, selected, onToggle, onSubmit, onClose, saving, canAss
             <MdClose />
           </button>
         </div>
-        <div style={formStyles.body}>
+        <div data-admin-body="" style={formStyles.body}>
           <p style={pageStyles.helpText}>
             Tick a company to grant explicit access. Companies marked{" "}
             <span style={pageStyles.badgeIsolated}>
@@ -474,7 +474,7 @@ function EditModal({ user, selected, onToggle, onSubmit, onClose, saving, canAss
             )}
           </div>
         </div>
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           <button data-admin-close=""
             type="button"
             style={{ ...formStyles.button, ...formStyles.cancel }}

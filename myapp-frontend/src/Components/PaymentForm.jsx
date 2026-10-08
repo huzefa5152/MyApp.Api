@@ -567,17 +567,17 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? `Edit ${editPayment.reference || (isReceipt ? "Receipt" : "Payment")}` : (isReceipt ? "Record Receipt" : "Record Payment")}</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
         </div>
         <form onSubmit={handleSubmit}>
-          <div style={formStyles.body}>
+          <div data-admin-body="" style={formStyles.body}>
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
             {/* Question 1: who. Plain language on purpose — the operator should
                 never have to think about contact "types" or subledgers. */}
-            <div style={formStyles.formGroup}>
+            <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>{isReceipt ? "Who paid you?" : "Who are you paying?"}</label>
               <div style={payeeTabs}>
                 {[
@@ -621,7 +621,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
 
             {/* Question 2: what for. Decides which account the other side of the
                 entry lands on; the operator picks a purpose, not a debit. */}
-            <div style={formStyles.formGroup}>
+            <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>What is this {isReceipt ? "money" : "payment"} for?</label>
               <div style={payeeTabs}>
                 {[
@@ -655,11 +655,11 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
-              <div style={formStyles.formGroup}>
+              <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Date</label>
                 <input type="date" style={formStyles.input} value={date} onChange={(e) => setDate(e.target.value)} max={today} />
               </div>
-              <div style={formStyles.formGroup}>
+              <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Method</label>
                 <select style={{ ...dropdownStyles.base, width: "100%" }} value={method} onChange={(e) => setMethod(e.target.value)}>
                   {METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
@@ -675,7 +675,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                 autoSelectSingle={!isEdit}
                 label={isReceipt ? "Received in (bank/cash)" : "Paid from (bank/cash)"}
               />
-              <div style={formStyles.formGroup}>
+              <div data-admin-field="" style={formStyles.formGroup}>
                 <DivisionSelect
                   companyId={companyId}
                   value={divisionId}
@@ -690,18 +690,18 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
 
             {method === "Cheque" && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
-                <div style={formStyles.formGroup}>
+                <div data-admin-field="" style={formStyles.formGroup}>
                   <label style={formStyles.label}>Cheque #</label>
                   <input style={formStyles.input} value={chequeNumber} onChange={(e) => setChequeNumber(e.target.value)} />
                 </div>
-                <div style={formStyles.formGroup}>
+                <div data-admin-field="" style={formStyles.formGroup}>
                   <label style={formStyles.label}>Cheque date <span style={{ color: colors.textSecondary, fontWeight: 400 }}>(future = post-dated)</span></label>
                   <input type="date" style={formStyles.input} value={chequeDate} onChange={(e) => setChequeDate(e.target.value)} />
                 </div>
               </div>
             )}
 
-            <div style={formStyles.formGroup}>
+            <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>Description (optional)</label>
               <input style={formStyles.input} value={description} onChange={(e) => setDescription(e.target.value)} />
             </div>
@@ -711,7 +711,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                 Amount is what left the bank; the tax rate carves the recoverable
                 slice out of it, so the operator types the figure on the bill. */}
             {purpose === "expense" && (
-              <div style={formStyles.formGroup}>
+              <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>
                   What was it for? {glOn && <span style={{ fontWeight: 400, color: colors.textSecondary }}>(from your Chart of Accounts)</span>}
                 </label>
@@ -781,7 +781,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
 
             {/* Advance / on account — one figure, no document. */}
             {purpose === "advance" && (
-              <div style={formStyles.formGroup}>
+              <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Advance amount</label>
                 <input
                   type="number" min="0" step="0.01"
@@ -802,7 +802,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
 
             {/* Allocation against open documents */}
             {purpose === "settle" && (
-            <div style={formStyles.formGroup}>
+            <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>Apply to open {docLabel.toLowerCase()}s</label>
               {!contactId ? (
                 <div style={hintBox}>Select a {contactLabel.toLowerCase()} to see their unpaid {docLabel.toLowerCase()}s.</div>
@@ -925,7 +925,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
             </div>
           </div>
 
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             {(() => {
               const bankMissing = hasBankAccounts && !bankAccountId && cashTotal > 0;

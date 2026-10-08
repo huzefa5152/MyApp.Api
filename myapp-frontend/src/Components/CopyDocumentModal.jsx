@@ -84,7 +84,7 @@ export default function CopyDocumentModal({ sourceType, sourceId, sourceLabel, o
         style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>
             <MdCopyAll size={17} style={{ verticalAlign: "-3px", marginRight: 6 }} />
             Copy Document
@@ -92,7 +92,7 @@ export default function CopyDocumentModal({ sourceType, sourceId, sourceLabel, o
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
 
-        <div style={formStyles.body}>
+        <div data-admin-body="" style={formStyles.body}>
           {error && <div style={s.err}>{error}</div>}
 
           {loading ? (
@@ -184,7 +184,7 @@ export default function CopyDocumentModal({ sourceType, sourceId, sourceLabel, o
           )}
         </div>
 
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
           <button
             type="button"

@@ -64,7 +64,7 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
   return (
     <div data-admin-backdrop="" style={styles.backdrop}>
       <div data-admin-dialog="" style={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <div style={styles.header}>
+        <div data-admin-header="" style={styles.header}>
           <h3 style={styles.title}>{title}</h3>
           <button data-admin-close="" style={styles.closeBtn} onClick={onClose} aria-label="Close">
             <MdClose size={20} />
@@ -148,7 +148,7 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
           </table>
         </div>
 
-        <div style={styles.footer}>
+        <div data-admin-footer="" style={styles.footer}>
           <button data-admin-close="" style={styles.closeFooterBtn} onClick={onClose}>Close</button>
         </div>
       </div>

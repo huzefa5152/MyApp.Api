@@ -40,14 +40,14 @@ export default function AttachmentPreviewModal({ title, ext, loadBlob, onDownloa
   return createPortal(
     <div data-admin-backdrop="" style={{ ...formStyles.backdrop, zIndex: 1103 }} onClick={onClose}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, height: "90vh" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={{ ...formStyles.title, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</h5>
           <div style={{ display: "flex", gap: 8 }}>
             {onDownload && <button style={formStyles.closeButton} title="Download" onClick={onDownload}><MdDownload size={18} /></button>}
             <button data-admin-close="" style={formStyles.closeButton} title="Close" onClick={onClose}><MdClose size={18} /></button>
           </div>
         </div>
-        <div style={{ ...formStyles.body, maxHeight: "none", display: "flex", alignItems: "center", justifyContent: "center", background: "#f1f3f6" }}>
+        <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "none", display: "flex", alignItems: "center", justifyContent: "center", background: "#f1f3f6" }}>
           {loading ? (
             <span style={{ color: "#5f6d7e" }}>Loading preview…</span>
           ) : err ? (

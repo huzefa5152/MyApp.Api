@@ -114,7 +114,7 @@ export default function CompanyPage() {
 
   return (
     <div>
-      <div style={styles.header}>
+      <div data-admin-page-header="" style={styles.header}>
         <div style={styles.titleWrap}>
           <div style={styles.titleIcon}><MdBusiness /></div>
           <div>

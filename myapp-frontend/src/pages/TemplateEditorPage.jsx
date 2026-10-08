@@ -1,3 +1,4 @@
+import useIsNarrow from "../hooks/useIsNarrow";
 ﻿import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -46,6 +47,7 @@ const colors = {
 };
 
 export default function TemplateEditorPage() {
+  const isMobile = useIsNarrow(768);
   const confirm = useConfirm();
   const navigate = useNavigate();
   const { has } = usePermissions();
@@ -787,7 +789,7 @@ export default function TemplateEditorPage() {
     );
   }
 
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+
 
   // Templates in the current (type, scope) — drives the Saved-Templates manager.
   const scopeTemplates = allTemplates.filter(

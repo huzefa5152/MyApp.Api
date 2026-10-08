@@ -70,7 +70,7 @@ export default function SavedTemplatesManager({
   return (
     <div data-admin-backdrop="" style={s.overlay}>
       <div data-admin-dialog="" style={s.modal} onClick={(e) => e.stopPropagation()}>
-        <div style={s.header}>
+        <div data-admin-header="" style={s.header}>
           <h3 style={s.title}>Saved Templates</h3>
           <button data-admin-close="" style={s.closeBtn} onClick={onClose} aria-label="Close"><MdClose size={20} /></button>
         </div>

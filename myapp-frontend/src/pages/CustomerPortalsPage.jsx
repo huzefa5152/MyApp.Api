@@ -232,7 +232,7 @@ export default function CustomerPortalsPage() {
 
   return (
     <div>
-      <div style={st.header}>
+      <div data-admin-page-header="" style={st.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <div style={st.icon}><MdPublic size={26} color="#fff" /></div>
           <div>
@@ -272,7 +272,7 @@ export default function CustomerPortalsPage() {
           the shared dropdown/form tokens so it matches every other filter bar
           in the app. */}
       {portals.length > 0 && (
-        <div style={st.filterBar}>
+        <div data-admin-toolbar="" style={st.filterBar}>
           <label style={st.filterField}>
             <span style={st.filterLabel}>Company</span>
             <select style={{ ...dropdownStyles.base, ...st.filterInput }} value={companyFilter}
@@ -480,11 +480,11 @@ function CreatePortalModal({ companies, defaultCompanyId, loadingCompanies, onCl
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }}
            onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>Create Customer Portal</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
-        <div style={formStyles.body}>
+        <div data-admin-body="" style={formStyles.body}>
           {error && <div style={st.err}>{error}</div>}
 
           <label style={st.label}>Company</label>
@@ -559,7 +559,7 @@ function CreatePortalModal({ companies, defaultCompanyId, loadingCompanies, onCl
             be disabled or revoked at any time.
           </p>
         </div>
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
             Cancel
           </button>
@@ -583,11 +583,11 @@ function CreatedModal({ portal, onCopy, copied, onClose }) {
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }}
            onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>Customer Portal Created</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
-        <div style={formStyles.body}>
+        <div data-admin-body="" style={formStyles.body}>
           <p style={{ ...cardStyles.text, marginBottom: "0.25rem" }}><strong>Client</strong></p>
           <p style={{ fontWeight: 700, marginBottom: "1rem" }}>{portal.clientName}</p>
 
@@ -602,7 +602,7 @@ function CreatedModal({ portal, onCopy, copied, onClose }) {
             </span>
           </div>
         </div>
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }}
                   onClick={() => window.open(portal.publicUrl, "_blank", "noopener")}>
             <MdOpenInNew size={15} /> Open Portal

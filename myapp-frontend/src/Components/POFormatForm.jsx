@@ -244,12 +244,12 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? "Edit PO Format" : "Add PO Format"}</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
 
-        <div style={{ ...formStyles.body, maxHeight: "72vh", overflowY: "auto" }}>
+        <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "72vh", overflowY: "auto" }}>
           {error && (
             <div ref={errRef} style={styles.errorAlert}>
               <MdWarning size={16} /> {error}
@@ -276,7 +276,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
               the format to (company, client). Clients that ALREADY have a
               PO format in this company are hidden (one format per client
               per company is the rule). */}
-          <div style={styles.row}>
+          <div data-admin-form-row="" style={styles.row}>
             <div style={{ minWidth: 0 }}>
               <label style={styles.label}>Client *</label>
               <SearchableSelect
@@ -366,7 +366,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
             Enter the exact text that appears on the PDF. Only the Description and Quantity column headers are required — the parser reads each item's description and quantity by column, so Unit and the PO labels are optional.
           </p>
 
-          <div style={styles.row}>
+          <div data-admin-form-row="" style={styles.row}>
             <div style={{ flex: 1 }}>
               <label style={styles.label}>PO Number label</label>
               <input
@@ -387,7 +387,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
             </div>
           </div>
 
-          <div style={styles.row}>
+          <div data-admin-form-row="" style={styles.row}>
             <div style={{ flex: 1 }}>
               <label style={styles.label}>Description column header *</label>
               <input
@@ -447,7 +447,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
           )}
         </div>
 
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
           <button
             type="button"

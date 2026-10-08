@@ -87,9 +87,9 @@ export default function NonInventoryItemsPage() {
 
   return (
     <div>
-      <div style={styles.header}>
+      <div data-admin-page-header="" style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={styles.headerIcon}><MdRequestQuote size={26} color="#fff" /></div>
+          <div data-admin-page-icon="" style={styles.headerIcon}><MdRequestQuote size={26} color="#fff" /></div>
           <div>
             <h2 style={styles.pageTitle}>Non-Inventory Items</h2>
             <p style={styles.pageSubtitle}>
@@ -107,7 +107,7 @@ export default function NonInventoryItemsPage() {
       {loadingCompanies ? (
         <div style={styles.loading}><div style={styles.spinner} /></div>
       ) : companies.length > 0 ? (
-        <div style={styles.filters}>
+        <div data-admin-toolbar="" style={styles.filters}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
             <MdBusiness size={20} color={colors.blue} />
             <select

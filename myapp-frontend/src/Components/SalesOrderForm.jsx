@@ -152,15 +152,15 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? `Edit Sales Order #${order.salesOrderNumber}` : "Create Sales Order"}</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
-          <div style={formStyles.body}>
+          <div data-admin-body="" style={formStyles.body}>
             <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} divisionId={isEdit ? order?.divisionId : divisionId} documentType="order" variant={isEdit ? "edit" : "create"} currentNumber={order?.salesOrderNumber} editRecordId={order?.id} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
             {error && <div ref={errRef} style={s.err}>{error}</div>}
-            <div style={s.row}>
+            <section className="admin-details-panel" aria-label="Customer & delivery"><h6 className="admin-section-heading">Customer & delivery</h6><div data-admin-form-row="" className="admin-order-party-row" style={s.row}>
               <div style={{ flex: "1 1 100%", minWidth: 220 }}>
                 <label style={s.label}>Sales Quote <span style={s.opt}>(optional — picking one pre-fills the order)</span></label>
                 <SearchableSelect
@@ -191,7 +191,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
               </div>
               <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={s.opt}>(optional)</span></>} labelStyle={s.label} style={s.input} wrapStyle={{ flex: 1, minWidth: 150 }} />
             </div>
-            <div style={s.row}>
+            <div data-admin-form-row="" style={s.row}>
               <div style={{ flex: 1, minWidth: 140 }}>
                 <label style={s.label}>Order Date</label>
                 <input type="date" style={s.input} value={orderDate} onChange={(e) => setOrderDate(e.target.value)} />
@@ -208,7 +208,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
                 <label style={s.label}>Customer PO Date</label>
                 <input type="date" style={s.input} value={poDate} onChange={(e) => setPoDate(e.target.value)} />
               </div>
-            </div>
+            </div></section>
 
             <LineItemsEditor
               items={items}
@@ -239,7 +239,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
               mode="edit"
             />
           </div>
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.6 : 1 }} disabled={disabled}>{saving ? "Saving..." : isEdit ? "Update Order" : "Save Order"}</button>
           </div>

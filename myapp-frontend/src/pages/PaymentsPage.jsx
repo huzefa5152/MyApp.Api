@@ -191,7 +191,7 @@ export default function PaymentsPage({ mode = "receipts" }) {
         <div style={st.empty}>Select a company to view {title.toLowerCase()}.</div>
       ) : (
         <>
-          <div style={st.toolbar}>
+          <div data-admin-toolbar="" style={st.toolbar}>
             <div style={{ position: "relative", flex: "1 1 240px", minWidth: 0, maxWidth: 360 }}>
               <MdSearch size={18} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: colors.textSecondary }} />
               <input
@@ -422,11 +422,11 @@ function PaymentViewDialog({ p, companyId, accent, docNoun, onClose }) {
   return (
     <div data-admin-backdrop="" style={vd.backdrop} onClick={onClose}>
       <div data-admin-dialog="" style={vd.modal} onClick={(e) => e.stopPropagation()}>
-        <div style={vd.header}>
+        <div data-admin-header="" style={vd.header}>
           <span style={{ ...vd.ref, color: accent }}>{p.reference}</span>
           <button data-admin-close="" style={vd.close} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
         </div>
-        <div style={vd.body}>
+        <div data-admin-body="" style={vd.body}>
           <div style={{ ...vd.amount, color: accent }}>Rs {fmtMoney(p.amount)}</div>
           <Row label="Date" value={fmtDate(p.date)} />
           <Row label="Contact" value={p.contactName} />
@@ -456,7 +456,7 @@ function PaymentViewDialog({ p, companyId, accent, docNoun, onClose }) {
             </div>
           )}
         </div>
-        <div style={vd.footer}>
+        <div data-admin-footer="" style={vd.footer}>
           <button data-admin-close="" style={vd.closeBtn} onClick={onClose}>Close</button>
         </div>
       </div>

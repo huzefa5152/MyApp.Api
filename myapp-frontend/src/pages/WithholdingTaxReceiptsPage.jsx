@@ -143,9 +143,9 @@ export default function WithholdingTaxReceiptsPage() {
 
   return (
     <div>
-      <div style={styles.header}>
+      <div data-admin-page-header="" style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={styles.headerIcon}><MdFactCheck size={26} color="#fff" /></div>
+          <div data-admin-page-icon="" style={styles.headerIcon}><MdFactCheck size={26} color="#fff" /></div>
           <div>
             <h2 style={styles.pageTitle}>Withholding Tax Receipts</h2>
             <p style={styles.pageSubtitle}>
@@ -163,7 +163,7 @@ export default function WithholdingTaxReceiptsPage() {
       {loadingCompanies ? (
         <div style={styles.loading}><div style={styles.spinner} /></div>
       ) : companies.length > 0 ? (
-        <div style={styles.filters}>
+        <div data-admin-toolbar="" style={styles.filters}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
             <MdBusiness size={20} color={colors.blue} />
             <select
@@ -320,11 +320,11 @@ export default function WithholdingTaxReceiptsPage() {
       {viewReceipt && (
         <div data-admin-backdrop="" style={formStyles.backdrop} onClick={() => setViewReceipt(null)}>
           <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px` }} onClick={(e) => e.stopPropagation()}>
-            <div style={formStyles.header}>
+            <div data-admin-header="" style={formStyles.header}>
               <h5 style={formStyles.title}>Withholding Tax Receipt #{viewReceipt.receiptNumber}</h5>
               <button data-admin-close="" style={formStyles.closeButton} onClick={() => setViewReceipt(null)}>&times;</button>
             </div>
-            <div style={formStyles.body}>
+            <div data-admin-body="" style={formStyles.body}>
               <div style={styles.vRow}><span style={styles.vLbl}>Customer</span><span style={styles.vVal}>{viewReceipt.clientName}</span></div>
               <div style={styles.vRow}><span style={styles.vLbl}>Date</span><span style={styles.vVal}>{fmtDate(viewReceipt.date)}</span></div>
               {viewReceipt.divisionName && <div style={styles.vRow}><span style={styles.vLbl}>Division</span><span style={styles.vVal}>{viewReceipt.divisionName}</span></div>}
@@ -336,7 +336,7 @@ export default function WithholdingTaxReceiptsPage() {
                 <AttachmentManager companyId={selectedCompany.id} entityType="WithholdingTaxReceipt" entityId={viewReceipt.id} mode="view" title="Certificate" />
               </div>
             </div>
-            <div style={formStyles.footer}>
+            <div data-admin-footer="" style={formStyles.footer}>
               <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setViewReceipt(null)}>Close</button>
               {canPrint && (
                 <button

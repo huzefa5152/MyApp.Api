@@ -390,9 +390,9 @@ export default function ChallanPage() {
   return (
     <DocumentLinesNavigation type="challan">
     <div>
-      <div style={styles.pageHeader}>
+      <div data-admin-page-header="" style={styles.pageHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={styles.headerIcon}>
+          <div data-admin-page-icon="" style={styles.headerIcon}>
             <MdDescription size={28} color="#fff" />
           </div>
           <div>

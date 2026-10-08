@@ -140,7 +140,7 @@ export default function PurchaseDebitNotesPage() {
         )}
       </div>
 
-      <div style={styles.filters}>
+      <div data-admin-toolbar="" style={styles.filters}>
         <select
           style={styles.select}
           value={selectedCompany?.id || ""}
@@ -276,11 +276,11 @@ export default function PurchaseDebitNotesPage() {
       {viewNote && (
         <div data-admin-backdrop="" style={formStyles.backdrop} onClick={() => setViewNote(null)}>
           <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }} onClick={(e) => e.stopPropagation()}>
-            <div style={formStyles.header}>
+            <div data-admin-header="" style={formStyles.header}>
               <h5 style={formStyles.title}>Purchase Debit Note #{viewNote.debitNoteNumber}</h5>
               <button data-admin-close="" style={formStyles.closeButton} onClick={() => setViewNote(null)}>&times;</button>
             </div>
-            <div style={formStyles.body}>
+            <div data-admin-body="" style={formStyles.body}>
               <div style={styles.vRow}><span style={styles.vLbl}>Supplier</span><span style={styles.vVal}>{viewNote.supplierName}</span></div>
               <div style={styles.vRow}><span style={styles.vLbl}>Date</span><span style={styles.vVal}>{fmtDate(viewNote.date)}</span></div>
               {viewNote.divisionName && <div style={styles.vRow}><span style={styles.vLbl}>Division</span><span style={styles.vVal}>{viewNote.divisionName}</span></div>}
@@ -305,7 +305,7 @@ export default function PurchaseDebitNotesPage() {
                 <span style={styles.vLbl}>Total</span><span style={{ ...styles.vVal, fontSize: "1.15rem", fontWeight: 700, color: colors.blue }}>{money(viewNote.grandTotal)}</span>
               </div>
             </div>
-            <div style={formStyles.footer}>
+            <div data-admin-footer="" style={formStyles.footer}>
               <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setViewNote(null)}>Close</button>
             </div>
           </div>

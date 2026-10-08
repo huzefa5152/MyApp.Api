@@ -191,7 +191,7 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>
             <MdLink size={18} style={{ verticalAlign: "-3px", marginRight: 6 }} />
             {fromOrder ? `Attach a challan to SO #${order.salesOrderNumber}` : `Link Challan #${challan.challanNumber} to a Sales Order`}
@@ -199,7 +199,7 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
 
-        <div style={formStyles.body}>
+        <div data-admin-body="" style={formStyles.body}>
           {error && <div style={s.err}>{error}</div>}
           <p style={s.sub}>
             The delivered quantity was already recorded when the challan was created — attaching links its lines to the order (adding any items not on the order as new lines) and adopts the order's PO. No stock changes.
@@ -305,7 +305,7 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
           )}
         </div>
 
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
           <button type="button" style={{ ...formStyles.button, ...formStyles.submit, opacity: ready && !saving ? 1 : 0.6 }} disabled={!ready || saving} onClick={submit}>
             {saving ? "Attaching…" : "Attach challan"}

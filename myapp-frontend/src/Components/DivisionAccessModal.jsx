@@ -123,7 +123,7 @@ export default function DivisionAccessModal({
         style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px` }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <span style={formStyles.title}>
             Division Access — {user.fullName} ({user.username})
           </span>
@@ -136,7 +136,7 @@ export default function DivisionAccessModal({
             <MdClose />
           </button>
         </div>
-        <div style={formStyles.body}>
+        <div data-admin-body="" style={formStyles.body}>
           <p style={styles.helpText}>
             Unrestricted users see every division. Restricted users see only
             the ticked divisions plus company-level records that carry no
@@ -282,7 +282,7 @@ export default function DivisionAccessModal({
             );
           })}
         </div>
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           <button data-admin-close=""
             type="button"
             style={{ ...formStyles.button, ...formStyles.cancel }}

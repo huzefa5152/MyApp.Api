@@ -298,13 +298,13 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>Create Delivery Challan</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div style={formStyles.body}>
+          <div data-admin-body="" style={formStyles.body}>
             <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} divisionId={fromOrder ? order?.divisionId : divisionId} documentType="challan" mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
             {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
@@ -340,7 +340,7 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
                 Edit Challan so operators see identical shape on both flows.
                 Site is dropdown when the picked client has presets, free-text
                 otherwise so one-offs still work. */}
-            <div style={styles.row}>
+            <section className="admin-details-panel" aria-label="Delivery details"><h6 className="admin-section-heading">Delivery details</h6><div data-admin-form-row="" style={styles.row}>
               <div style={{ flex: 2, minWidth: 220 }}>
                 {fromOrder ? (
                   <>
@@ -397,13 +397,13 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
               {!fromOrder && (
                 <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ color: "#5f6d7e", fontWeight: 400 }}>(optional)</span></>} labelStyle={styles.label} style={styles.input} wrapStyle={{ flex: 1, minWidth: 150 }} />
               )}
-            </div>
+            </div></section>
 
             {/* PO row: Number + Date + Indent No — flex weights match
                 ChallanEditForm's PO row so Add and Edit look identical.
                 Hidden in deliver-from-order mode (inherited from the order). */}
             {!fromOrder && (
-            <div style={styles.row}>
+            <div data-admin-form-row="" style={styles.row}>
               <div style={{ flex: 1, minWidth: 180 }}>
                 <label style={styles.label}>PO Number</label>
                 <input type="text" style={styles.input} value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Enter PO number" />
@@ -545,7 +545,7 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
             />
           </div>
 
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: isDisabled ? 0.6 : 1 }} disabled={isDisabled}>{saving ? "Saving..." : "Save Challan"}</button>
           </div>

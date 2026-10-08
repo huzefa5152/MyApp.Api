@@ -54,7 +54,7 @@ export default function SalesOrderDetailModal({ order, onClose, onViewChallans, 
     <div data-admin-backdrop="" style={st.backdrop} onClick={onClose}>
       <div data-admin-dialog="" style={st.modal} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div style={st.header}>
+        <div data-admin-header="" style={st.header}>
           <div>
             <div style={st.hTitleRow}>
               <span style={st.hTitle}>Sales Order #{order.salesOrderNumber}</span>
@@ -69,7 +69,7 @@ export default function SalesOrderDetailModal({ order, onClose, onViewChallans, 
           <button data-admin-close="" style={st.close} onClick={onClose} title="Close"><MdClose size={22} /></button>
         </div>
 
-        <div style={st.body}>
+        <div data-admin-body="" style={st.body}>
           {/* Meta */}
           <div style={st.metaGrid}>
             <Meta label="Order Date" value={fmtDate(order.orderDate)} />
@@ -168,7 +168,7 @@ export default function SalesOrderDetailModal({ order, onClose, onViewChallans, 
         </div>
 
         {/* Footer actions */}
-        <div style={st.footer}>
+        <div data-admin-footer="" style={st.footer}>
           <button data-admin-close="" style={st.btnGhost} onClick={onClose}>Close</button>
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
             {onEdit && order.isEditable && <button data-admin-close="" style={st.btnGhost} onClick={() => { onClose(); onEdit(order); }}><MdEdit size={15} /> Edit</button>}

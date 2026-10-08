@@ -229,17 +229,17 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: 1100, width: "96vw" }}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{readOnly ? "View Purchase Debit Note" : (isEdit ? "Edit Purchase Debit Note" : "New Purchase Debit Note")}</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
-          <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
+          <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
             <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
               {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
-                <div style={{ ...formStyles.formGroup, gridColumn: "1 / -1" }}>
+                <div data-admin-field="" style={{ ...formStyles.formGroup, gridColumn: "1 / -1" }}>
                   <label style={formStyles.label}>Supplier *</label>
                   <SearchableSelect
                     items={suppliers}
@@ -248,7 +248,7 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
                     placeholder="Select supplier…"
                   />
                 </div>
-                <div style={{ ...formStyles.formGroup, gridColumn: "1 / -1" }}>
+                <div data-admin-field="" style={{ ...formStyles.formGroup, gridColumn: "1 / -1" }}>
                   <label style={formStyles.label}>Purchase Invoice <span style={{ fontWeight: 400 }}>(optional — prefills lines &amp; GST)</span></label>
                   <select
                     style={{ ...formStyles.input, opacity: prefilling ? 0.6 : 1 }}
@@ -268,25 +268,25 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
                     ))}
                   </select>
                 </div>
-                <div style={formStyles.formGroup}>
+                <div data-admin-field="" style={formStyles.formGroup}>
                   <label style={formStyles.label}>Date *</label>
                   <input type="date" style={formStyles.input} value={date} onChange={(e) => setDate(e.target.value)} />
                 </div>
-                <div style={formStyles.formGroup}>
+                <div data-admin-field="" style={formStyles.formGroup}>
                   <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={formStyles.label} style={formStyles.input} />
                 </div>
-                <div style={formStyles.formGroup}>
+                <div data-admin-field="" style={formStyles.formGroup}>
                   <label style={formStyles.label}>GST Rate (%)</label>
                   <input type="number" min={0} step={0.01} style={formStyles.input} value={gstRate} onChange={(e) => setGstRate(e.target.value)} />
                 </div>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
-                <div style={formStyles.formGroup}>
+                <div data-admin-field="" style={formStyles.formGroup}>
                   <label style={formStyles.label}>Supplier Reference</label>
                   <input type="text" style={formStyles.input} value={supplierRef} onChange={(e) => setSupplierRef(e.target.value)} placeholder="Their document reference (optional)" />
                 </div>
-                <div style={formStyles.formGroup}>
+                <div data-admin-field="" style={formStyles.formGroup}>
                   <label style={formStyles.label}>Notes</label>
                   <input type="text" style={formStyles.input} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" />
                 </div>
@@ -388,7 +388,7 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
               </div>
             </fieldset>
           </div>
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>{readOnly ? "Close" : "Cancel"}</button>
             {!readOnly && (
               <button type="submit" disabled={saving} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}>

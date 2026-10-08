@@ -38,7 +38,7 @@ export default function SupplierStatementDialog({ supplier, onClose }) {
         style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <div>
             <h5 style={formStyles.title}>{supplier.name}</h5>
             <div style={st.sub}>Supplier ledger — bills, payments and advances</div>
@@ -46,7 +46,7 @@ export default function SupplierStatementDialog({ supplier, onClose }) {
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
         </div>
 
-        <div style={formStyles.body}>
+        <div data-admin-body="" style={formStyles.body}>
           {error && <div style={formStyles.error}>{error}</div>}
           {!data && !error && <div style={st.hint}>Loading…</div>}
 

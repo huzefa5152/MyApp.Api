@@ -164,7 +164,7 @@ export default function BankCashAccountsPage() {
     <div>
       <div style={st.headerRow}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <div style={st.headerIcon}><MdAccountBalance size={26} color="#fff" /></div>
+          <div data-admin-page-icon="" style={st.headerIcon}><MdAccountBalance size={26} color="#fff" /></div>
           <div>
             <h2 style={st.h2}>Bank &amp; Cash Accounts</h2>
             <p style={st.subtitle}>Each account's live balance — click a row to see the transactions behind it.</p>
@@ -190,7 +190,7 @@ export default function BankCashAccountsPage() {
         </div>
       )}
 
-      <div style={st.toolbar}>
+      <div data-admin-toolbar="" style={st.toolbar}>
         <div style={st.searchWrap}>
           <MdSearch size={18} color={colors.textSecondary} />
           <input
@@ -479,12 +479,12 @@ function CreateBankCashModal({ companyId, canViewDivisions, assetGroups, default
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h3 style={formStyles.title}>New Bank / Cash Account</h3>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} title="Close"><MdClose size={18} /></button>
         </div>
 
-        <div style={formStyles.body}>
+        <div data-admin-body="" style={formStyles.body}>
           <form onSubmit={(e) => { e.preventDefault(); doCreate(false); }} style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
             <div style={st.fieldRow}>
               <div style={{ flex: 2, minWidth: 180 }}>
@@ -540,7 +540,7 @@ function CreateBankCashModal({ companyId, canViewDivisions, assetGroups, default
           </form>
         </div>
 
-        <div style={st.footer}>
+        <div data-admin-footer="" style={st.footer}>
           <button data-admin-close="" type="button" style={st.secondaryBtn} onClick={onClose} disabled={saving}>Cancel</button>
           <button type="button" style={{ ...st.secondaryBtn, opacity: saving ? 0.6 : 1 }} onClick={() => doCreate(true)} disabled={saving}>Create &amp; add another</button>
           <button type="button" style={{ ...st.primaryBtn, opacity: saving ? 0.6 : 1 }} onClick={() => doCreate(false)} disabled={saving}>{saving ? "Creating…" : "Create"}</button>
@@ -595,12 +595,12 @@ function EditBankCashModal({ companyId, canViewDivisions, assetGroups, account, 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h3 style={formStyles.title}>Edit Bank / Cash Account</h3>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} title="Close"><MdClose size={18} /></button>
         </div>
 
-        <div style={formStyles.body}>
+        <div data-admin-body="" style={formStyles.body}>
           <form onSubmit={(e) => { e.preventDefault(); doSave(); }} style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
             <div style={st.fieldRow}>
               <div style={{ flex: 2, minWidth: 180 }}>
@@ -665,7 +665,7 @@ function EditBankCashModal({ companyId, canViewDivisions, assetGroups, account, 
           </form>
         </div>
 
-        <div style={st.footer}>
+        <div data-admin-footer="" style={st.footer}>
           <button data-admin-close="" type="button" style={st.secondaryBtn} onClick={onClose} disabled={saving}>Cancel</button>
           <button type="button" style={{ ...st.primaryBtn, opacity: saving ? 0.6 : 1 }} onClick={doSave} disabled={saving}>{saving ? "Saving…" : "Save changes"}</button>
         </div>

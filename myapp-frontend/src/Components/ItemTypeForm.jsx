@@ -416,7 +416,7 @@ export default function ItemTypeForm({
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>
             <MdInventory2 style={{ verticalAlign: "-3px", marginRight: 4 }} size={16} />
             {mode === "edit" ? "Edit Item Type" : "New Item Type"}
@@ -426,7 +426,7 @@ export default function ItemTypeForm({
         </div>
 
         <form onSubmit={submit}>
-          <div style={formStyles.body}>
+          <div data-admin-body="" style={formStyles.body}>
             {error && <div style={styles.errorAlert}>{error}</div>}
 
             <p style={styles.intro}>
@@ -438,7 +438,7 @@ export default function ItemTypeForm({
                   : ""}
             </p>
 
-            <div style={formStyles.formGroup}>
+            <div data-admin-field="" style={formStyles.formGroup}>
               <label style={styles.label}>Name *</label>
               <input
                 style={styles.input}
@@ -450,7 +450,7 @@ export default function ItemTypeForm({
             </div>
 
             {fbrOn && (
-            <div style={formStyles.formGroup}>
+            <div data-admin-field="" style={formStyles.formGroup}>
               <label style={styles.label}>
                 HS Code{" "}
                 {hintLoading && <span style={styles.lockedTag}>looking up UOM…</span>}
@@ -531,7 +531,7 @@ export default function ItemTypeForm({
             </div>
             )}
 
-            <div style={styles.row}>
+            <div data-admin-form-row="" style={styles.row}>
               <div style={{ flex: 1 }}>
                 <label style={styles.label}>
                   UOM *
@@ -718,7 +718,7 @@ export default function ItemTypeForm({
             )}
           </div>
 
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close=""
               type="button"
               style={{ ...formStyles.button, ...formStyles.cancel }}

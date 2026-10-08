@@ -365,9 +365,9 @@ export default function PurchaseBillsPage() {
   return (
     <DocumentLinesNavigation type="purchase">
     <div>
-      <div style={styles.pageHeader}>
+      <div data-admin-page-header="" style={styles.pageHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={styles.headerIcon}><MdShoppingCart size={28} color="#fff" /></div>
+          <div data-admin-page-icon="" style={styles.headerIcon}><MdShoppingCart size={28} color="#fff" /></div>
           <div>
             <h2 style={styles.pageTitle}>Purchase Bills</h2>
             <p style={styles.pageSubtitle}>
@@ -628,7 +628,7 @@ export default function PurchaseBillsPage() {
       {showSalePicker && (
         <div data-admin-backdrop="" style={pickerStyles.backdrop} onClick={() => setShowSalePicker(false)}>
           <div data-admin-dialog="" style={pickerStyles.modal} onClick={(e) => e.stopPropagation()}>
-            <div style={pickerStyles.header}>
+            <div data-admin-header="" style={pickerStyles.header}>
               <h3 style={pickerStyles.title}>Pick a sale bill awaiting procurement</h3>
               <button style={pickerStyles.closeBtn} onClick={() => setShowSalePicker(false)}>
                 <MdClose size={20} />
@@ -728,7 +728,7 @@ export default function PurchaseBillsPage() {
       {showOrderPicker && (
         <div data-admin-backdrop="" style={pickerStyles.backdrop} onClick={() => setShowOrderPicker(false)}>
           <div data-admin-dialog="" style={pickerStyles.modal} onClick={(e) => e.stopPropagation()}>
-            <div style={pickerStyles.header}>
+            <div data-admin-header="" style={pickerStyles.header}>
               <h3 style={pickerStyles.title}>Select sales order(s) to purchase for</h3>
               <button style={pickerStyles.closeBtn} onClick={() => setShowOrderPicker(false)}>
                 <MdClose size={20} />
@@ -834,7 +834,7 @@ export default function PurchaseBillsPage() {
       {showChallanPicker && (
         <div data-admin-backdrop="" style={pickerStyles.backdrop} onClick={() => setShowChallanPicker(false)}>
           <div data-admin-dialog="" style={pickerStyles.modal} onClick={(e) => e.stopPropagation()}>
-            <div style={pickerStyles.header}>
+            <div data-admin-header="" style={pickerStyles.header}>
               <h3 style={pickerStyles.title}>Select delivery challan(s) to purchase for</h3>
               <button style={pickerStyles.closeBtn} onClick={() => setShowChallanPicker(false)}>
                 <MdClose size={20} />

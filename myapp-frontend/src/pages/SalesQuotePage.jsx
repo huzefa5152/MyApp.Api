@@ -208,7 +208,7 @@ export default function SalesQuotePage() {
   return (
     <DocumentLinesNavigation type="quote">
     <div>
-      <div style={st.header}>
+      <div data-admin-page-header="" style={st.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <div style={st.icon}><MdRequestQuote size={28} color="#fff" /></div>
           <div>

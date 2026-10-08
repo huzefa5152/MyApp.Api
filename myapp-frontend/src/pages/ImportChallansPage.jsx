@@ -211,7 +211,7 @@ export default function ImportChallansPage() {
 
   return (
     <div className="imp-page" style={styles.wrap}>
-      <div style={styles.header}>
+      <div data-admin-page-header="" style={styles.header}>
         <div>
           <h2 style={styles.title}>Import Historical Challans</h2>
           <p style={styles.subtitle}>
@@ -230,9 +230,11 @@ export default function ImportChallansPage() {
 
       {templateReady === false && step === 1 && targetCompany && (
         <div style={styles.warnBanner}>
-          <MdError /> No Challan Excel template is configured for{" "}
-          <b>{targetCompany.name}</b>. Please upload one in{" "}
-          <i>Configuration → Print Templates</i> before importing.
+          <MdError style={{ flexShrink: 0 }} />
+          <span>No Challan Excel template is configured for{" "}
+            <b>{targetCompany.name}</b>. Please upload one in{" "}
+            <i>Configuration → Print Templates</i> before importing.
+          </span>
         </div>
       )}
 

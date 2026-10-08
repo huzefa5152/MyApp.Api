@@ -203,12 +203,12 @@ export default function SupplierForm({ supplier, companyId, companies = [], fbrE
   return (
     <div data-admin-backdrop="" style={backdrop}>
       <div data-admin-dialog="" style={modal}>
-        <div style={header}>
+        <div data-admin-header="" style={header}>
           <h5 style={title}>{supplier ? "Edit Supplier" : "New Supplier"}</h5>
           <button data-admin-close="" style={closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit} noValidate>
-          <div style={body}>
+          <div data-admin-body="" style={body}>
             {/* Multi-company picker — CREATE mode + parent supplied
                 companies. Default-checked is the currently-active
                 company so single-company creates stay one click;
@@ -246,23 +246,23 @@ export default function SupplierForm({ supplier, companyId, companies = [], fbrE
               </div>
             )}
 
-            <div style={formGroup}>
+            <div data-admin-field="" style={formGroup}>
               <label style={label}>Name *</label>
               <input type="text" name="name" value={formData.name} onChange={handleChange} style={{ ...input, ...fieldError("name") }} />
               {errorMsg("name")}
             </div>
 
-            <div style={formGroup}>
+            <div data-admin-field="" style={formGroup}>
               <label style={label}>Address</label>
               <input type="text" name="address" value={formData.address} onChange={handleChange} style={input} />
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
-              <div style={formGroup}>
+              <div data-admin-field="" style={formGroup}>
                 <label style={label}>Email</label>
                 <input type="email" name="email" value={formData.email} onChange={handleChange} style={input} />
               </div>
-              <div style={formGroup}>
+              <div data-admin-field="" style={formGroup}>
                 <label style={label}>Phone</label>
                 <input type="text" name="phone" value={formData.phone} onChange={handleChange} style={input} />
               </div>
@@ -274,7 +274,7 @@ export default function SupplierForm({ supplier, companyId, companies = [], fbrE
             <div style={{ marginTop: "0.5rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #00695c30", backgroundColor: "#e0f2f1" }}>
               <p style={{ margin: "0 0 0.5rem", fontWeight: 700, fontSize: "0.85rem", color: "#00695c" }}>FBR Details</p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
-                <div style={formGroup}>
+                <div data-admin-field="" style={formGroup}>
                   <label style={label}>Registration Type</label>
                   <select name="registrationType" value={formData.registrationType} onChange={handleChange} style={input}>
                     <option value="">Select...</option>
@@ -283,7 +283,7 @@ export default function SupplierForm({ supplier, companyId, companies = [], fbrE
                     ))}
                   </select>
                 </div>
-                <div style={formGroup}>
+                <div data-admin-field="" style={formGroup}>
                   <label style={label}>Province</label>
                   <select name="fbrProvinceCode" value={formData.fbrProvinceCode} onChange={handleChange} style={input}>
                     <option value="">Select...</option>
@@ -303,7 +303,7 @@ export default function SupplierForm({ supplier, companyId, companies = [], fbrE
               {(showNtn || showStrn) && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem", marginTop: "0.5rem" }}>
                   {showNtn && (
-                    <div style={formGroup}>
+                    <div data-admin-field="" style={formGroup}>
                       <label style={label}>{ntnLabel}</label>
                       <input
                         type="text"
@@ -317,7 +317,7 @@ export default function SupplierForm({ supplier, companyId, companies = [], fbrE
                     </div>
                   )}
                   {showStrn && (
-                    <div style={formGroup}>
+                    <div data-admin-field="" style={formGroup}>
                       <label style={label}>STRN *</label>
                       <input
                         type="text"
@@ -347,7 +347,7 @@ export default function SupplierForm({ supplier, companyId, companies = [], fbrE
             )}
           </div>
 
-          <div style={footer}>
+          <div data-admin-footer="" style={footer}>
             <button data-admin-close="" type="button" style={{ ...button, ...cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...button, ...submit }}>{supplier ? "Update" : "Create"}</button>
           </div>

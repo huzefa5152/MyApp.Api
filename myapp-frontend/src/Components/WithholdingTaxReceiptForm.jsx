@@ -64,16 +64,16 @@ export default function WithholdingTaxReceiptForm({ onClose, onSaved, companyId,
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>
             {isEdit ? `Edit Withholding Tax Receipt #${receipt.receiptNumber}` : "New Withholding Tax Receipt"}
           </h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
-          <div style={formStyles.body}>
+          <div data-admin-body="" style={formStyles.body}>
             {error && <div ref={errRef} style={s.err}>{error}</div>}
-            <div style={s.row}>
+            <section className="admin-details-panel" aria-label="Receipt details"><h6 className="admin-section-heading">Receipt details</h6><div data-admin-form-row="" style={s.row}>
               <div style={{ flex: "1 1 100%", minWidth: 220 }}>
                 <SelectDropdown
                   label="Customer"
@@ -84,7 +84,7 @@ export default function WithholdingTaxReceiptForm({ onClose, onSaved, companyId,
                 />
               </div>
             </div>
-            <div style={s.row}>
+            <div data-admin-form-row="" style={s.row}>
               <div style={{ flex: 1, minWidth: 150 }}>
                 <label style={s.label}>Date</label>
                 <input type="date" style={s.input} value={date} onChange={(e) => setDate(e.target.value)} />
@@ -106,7 +106,7 @@ export default function WithholdingTaxReceiptForm({ onClose, onSaved, companyId,
                   labelStyle={s.label} style={s.input} wrapStyle={{ flex: 1, minWidth: 150 }}
                 />
               )}
-            </div>
+            </div></section>
             <div style={{ marginBottom: "1rem" }}>
               <label style={s.label}>Description <span style={s.opt}>(optional — certificate ref, section, period…)</span></label>
               <textarea
@@ -126,7 +126,7 @@ export default function WithholdingTaxReceiptForm({ onClose, onSaved, companyId,
               title="Certificate"
             />
           </div>
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.6 : 1 }} disabled={disabled}>
               {saving ? "Saving..." : isEdit ? "Update Receipt" : "Save Receipt"}

@@ -72,7 +72,7 @@ export default function ClientDetailModal({ clientId, clientName, initialSection
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{clientName}</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
         </div>
@@ -83,7 +83,7 @@ export default function ClientDetailModal({ clientId, clientName, initialSection
           <button style={{ ...s.tab, ...(tab === "documents" ? s.tabOn : {}) }} onClick={() => setTab("documents")}>Documents</button>
         </div>
 
-        <div style={{ ...formStyles.body, padding: "0.75rem 1rem 1rem" }}>
+        <div data-admin-body="" style={{ ...formStyles.body, padding: "0.75rem 1rem 1rem" }}>
           {error && <div style={s.error}>{error}</div>}
 
           {tab === "statement" ? (
@@ -151,7 +151,7 @@ export default function ClientDetailModal({ clientId, clientName, initialSection
             })
           )}
         </div>
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
         </div>
       </div>

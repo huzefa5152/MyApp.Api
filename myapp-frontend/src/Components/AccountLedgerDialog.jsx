@@ -51,7 +51,7 @@ export default function AccountLedgerDialog({ account, onClose }) {
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={{ ...formStyles.title, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             Ledger — {account.name}
             {account.code && <span style={codeChip}>{account.code}</span>}
@@ -59,7 +59,7 @@ export default function AccountLedgerDialog({ account, onClose }) {
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
         </div>
 
-        <div style={formStyles.body}>
+        <div data-admin-body="" style={formStyles.body}>
           {/* From / To period filter (optional) */}
           <form onSubmit={applyFilter} style={filterRow}>
             <label style={filterLabel}>
@@ -147,7 +147,7 @@ export default function AccountLedgerDialog({ account, onClose }) {
           </div>
         </div>
 
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
         </div>
       </div>

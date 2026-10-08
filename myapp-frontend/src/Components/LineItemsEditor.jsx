@@ -298,7 +298,7 @@ export default function LineItemsEditor({
   );
 
   return (
-    <div>
+    <div className="admin-items-panel">
       <div style={s.itemsHeaderBar}>
         <label style={{ ...s.label, margin: 0 }}>
           {itemsLabel}

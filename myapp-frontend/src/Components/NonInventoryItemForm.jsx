@@ -65,28 +65,28 @@ export default function NonInventoryItemForm({ companyId, item, onClose, onSaved
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
       <form data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px` }} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? "Edit Non-Inventory Item" : "New Non-Inventory Item"}</h5>
           <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
-        <div style={formStyles.body}>
-          <div style={formStyles.formGroup}>
+        <div data-admin-body="" style={formStyles.body}>
+          <div data-admin-field="" style={formStyles.formGroup}>
             <label style={formStyles.label}>Name *</label>
             <input style={formStyles.input} value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Freight Charges" autoFocus />
           </div>
 
           <div style={row2}>
-            <div style={formStyles.formGroup}>
+            <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>Code</label>
               <input style={formStyles.input} value={form.code} onChange={(e) => set("code", e.target.value)} placeholder="Optional" />
             </div>
-            <div style={formStyles.formGroup}>
+            <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>Unit</label>
               <input style={formStyles.input} value={form.unitName} onChange={(e) => set("unitName", e.target.value)} placeholder="e.g. Trip, Each" />
             </div>
           </div>
 
-          <div style={formStyles.formGroup}>
+          <div data-admin-field="" style={formStyles.formGroup}>
             <label style={formStyles.label}>When sold → account</label>
             <AccountSelect
               accounts={accounts}
@@ -98,7 +98,7 @@ export default function NonInventoryItemForm({ companyId, item, onClose, onSaved
             />
           </div>
 
-          <div style={formStyles.formGroup}>
+          <div data-admin-field="" style={formStyles.formGroup}>
             <label style={formStyles.label}>When purchased → account</label>
             <AccountSelect
               accounts={accounts}
@@ -110,17 +110,17 @@ export default function NonInventoryItemForm({ companyId, item, onClose, onSaved
             />
           </div>
 
-          <div style={formStyles.formGroup}>
+          <div data-admin-field="" style={formStyles.formGroup}>
             <label style={formStyles.label}>Default line description</label>
             <input style={formStyles.input} value={form.defaultLineDescription} onChange={(e) => set("defaultLineDescription", e.target.value)} placeholder="Optional narration prefilled on the line" />
           </div>
 
           <div style={row2}>
-            <div style={formStyles.formGroup}>
+            <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>Default sale price</label>
               <input type="number" step="any" style={formStyles.input} value={form.defaultSalePrice} onChange={(e) => set("defaultSalePrice", e.target.value)} placeholder="Optional" />
             </div>
-            <div style={formStyles.formGroup}>
+            <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>Default purchase price</label>
               <input type="number" step="any" style={formStyles.input} value={form.defaultPurchasePrice} onChange={(e) => set("defaultPurchasePrice", e.target.value)} placeholder="Optional" />
             </div>
@@ -135,7 +135,7 @@ export default function NonInventoryItemForm({ companyId, item, onClose, onSaved
             <span>Active (uncheck to hide from new documents)</span>
           </label>
         </div>
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
           <button type="submit" disabled={saving} style={{ ...formStyles.button, ...formStyles.submit, ...(saving ? { opacity: 0.6 } : {}) }}>
             {saving ? "Saving…" : isEdit ? "Save Changes" : "Create"}

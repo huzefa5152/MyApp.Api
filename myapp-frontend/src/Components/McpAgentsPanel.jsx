@@ -92,11 +92,11 @@ function NewTokenDialog({ onClose, onCreated }) {
   const valid = userId && name.trim() && (all || picked.length > 0);
   return <div data-admin-backdrop="" style={formStyles.backdrop}>
     <form data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onSubmit={submit}>
-      <div style={formStyles.header}>
+      <div data-admin-header="" style={formStyles.header}>
         <h3 style={formStyles.title}>New agent token</h3>
         <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose /></button>
       </div>
-      <div style={formStyles.body}>
+      <div data-admin-body="" style={formStyles.body}>
         <p style={s.sub}>The token acts as one user, only in the companies you tick, and never beyond what that user may do. Every write is shown to a person to approve first.</p>
         <label style={s.label}>Agent name</label>
         <input style={s.input} value={name} maxLength={100} placeholder="e.g. Codex on my laptop" onChange={e => setName(e.target.value)} />
@@ -138,8 +138,8 @@ export function SecretDialog({ created, onClose }) {
   const copy = async (text, what) => { try { await navigator.clipboard.writeText(text); notify(`${what} copied.`, "success"); } catch { notify("Copy failed. Select the text and copy it by hand.", "error"); } };
   return <div data-admin-backdrop="" style={formStyles.backdrop}>
     <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.md }} role="dialog" aria-label="Agent token created">
-      <div style={formStyles.header}><h3 style={formStyles.title}>Copy your token now</h3></div>
-      <div style={formStyles.body}>
+      <div data-admin-header="" style={formStyles.header}><h3 style={formStyles.title}>Copy your token now</h3></div>
+      <div data-admin-body="" style={formStyles.body}>
         <div style={s.warn}>This is the only time the token is shown. It is stored as a hash and cannot be recovered. If you lose it, revoke it and create another.</div>
         <label style={s.label}>Token for “{created.name}”</label>
         <div style={s.secretRow}><code style={s.code}>{created.secret}</code>

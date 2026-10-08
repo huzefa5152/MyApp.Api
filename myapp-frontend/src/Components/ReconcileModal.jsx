@@ -111,14 +111,14 @@ export default function ReconcileModal({ companyId, account, onClose, onLocked }
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.lg }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h3 style={{ ...formStyles.title, display: "flex", alignItems: "center", gap: 8 }}>
             <MdFactCheck size={20} /> Reconcile — {account.name}
           </h3>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} title="Close"><MdClose size={18} /></button>
         </div>
 
-        <div style={formStyles.body}>
+        <div data-admin-body="" style={formStyles.body}>
           {/* (1) Statement inputs */}
           <div style={st.inputRow}>
             <div style={st.field}>
@@ -231,7 +231,7 @@ export default function ReconcileModal({ companyId, account, onClose, onLocked }
           )}
         </div>
 
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
           <button
             type="button"

@@ -301,12 +301,12 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{isAccount ? (isEdit ? "Edit Account" : "New Account") : "New Group"}</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={submit}>
-          <div style={formStyles.body}>
+          <div data-admin-body="" style={formStyles.body}>
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
             <div style={formStyles.formGroup}>
               <label style={formStyles.label}>Name</label>
@@ -388,7 +388,7 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
               </>
             )}
           </div>
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }} disabled={saving}>
               {saving ? "Saving…" : "Save"}

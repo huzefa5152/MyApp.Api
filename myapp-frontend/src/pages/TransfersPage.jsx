@@ -180,7 +180,7 @@ export default function TransfersPage() {
         <div style={st.empty}>Select a company to view transfers.</div>
       ) : (
         <>
-          <div style={st.toolbar}>
+          <div data-admin-toolbar="" style={st.toolbar}>
             <div style={{ position: "relative", flex: "1 1 240px", minWidth: 0, maxWidth: 360 }}>
               <MdSearch size={18} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: colors.textSecondary }} />
               <input
@@ -361,11 +361,11 @@ function ViewTransferModal({ t, canEdit, onEdit, onClose }) {
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h3 style={formStyles.title}>Transfer {t.reference}</h3>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} title="Close"><MdClose size={18} /></button>
         </div>
-        <div style={formStyles.body}>
+        <div data-admin-body="" style={formStyles.body}>
           <div style={{ ...st.amount, color: accent, marginBottom: "1rem" }}>
             <span style={st.rs}>Rs</span> {fmtMoney(t.amount)}
           </div>
@@ -475,12 +475,12 @@ function TransferForm({ companyId, editTransfer = null, onClose, onSaved }) {
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? `Edit ${editTransfer.reference || "Transfer"}` : "New Transfer"}</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
         </div>
         <form onSubmit={handleSubmit}>
-          <div style={formStyles.body}>
+          <div data-admin-body="" style={formStyles.body}>
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
@@ -548,7 +548,7 @@ function TransferForm({ companyId, editTransfer = null, onClose, onSaved }) {
             </div>
           </div>
 
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: blocked ? 0.6 : 1 }} disabled={blocked}>
               {saving ? "Saving…" : isEdit ? "Save Changes" : "Save Transfer"}

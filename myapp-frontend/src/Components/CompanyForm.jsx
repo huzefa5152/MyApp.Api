@@ -290,7 +290,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
     return (
         <div data-admin-backdrop="" style={backdrop}>
             <div data-admin-dialog="" style={{ ...modal, maxWidth: `${modalSizes.md}px` }}>
-                <div style={header}>
+                <div data-admin-header="" style={header}>
                     <h5 style={title}>{company ? "Edit Company" : "New Company"}</h5>
                     <button data-admin-close="" style={closeButton} onClick={onClose}>&times;</button>
                 </div>
@@ -309,39 +309,39 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 </div>
 
                 <form onSubmit={handleSubmit}>
-                    <div style={{ ...body, maxHeight: "58vh", overflowY: "auto" }}>
+                    <div data-admin-body="" style={{ ...body, maxHeight: "58vh", overflowY: "auto" }}>
                         {error && <div style={errorStyle}>{error}</div>}
 
                         {/* ── GENERAL ─────────────────────────────────────── */}
                         {activeTab === "general" && (
                             <>
-                                <div style={formGroup}>
+                                <div data-admin-field="" style={formGroup}>
                                     <label style={label}>Company Name *</label>
                                     <input type="text" name="name" value={form.name} onChange={handleChange} style={input} />
                                 </div>
-                                <div style={formGroup}>
+                                <div data-admin-field="" style={formGroup}>
                                     <label style={label}>Brand Name (for print header)</label>
                                     <input type="text" name="brandName" value={form.brandName} onChange={handleChange} style={input} placeholder="e.g. HAKIMI TRADERS" />
                                 </div>
-                                <div style={formGroup}>
+                                <div data-admin-field="" style={formGroup}>
                                     <label style={label}>Full Address</label>
                                     <input type="text" name="fullAddress" value={form.fullAddress} onChange={handleChange} style={input} />
                                 </div>
                                 <div className="form-grid-2col">
-                                    <div style={formGroup}>
+                                    <div data-admin-field="" style={formGroup}>
                                         <label style={label}>Phone</label>
                                         <input type="text" name="phone" value={form.phone} onChange={handleChange} style={input} />
                                     </div>
-                                    <div style={formGroup}>
+                                    <div data-admin-field="" style={formGroup}>
                                         <label style={label}>NTN</label>
                                         <input type="text" name="ntn" value={form.ntn} onChange={handleChange} style={input} />
                                     </div>
                                 </div>
-                                <div style={formGroup}>
+                                <div data-admin-field="" style={formGroup}>
                                     <label style={label}>STRN</label>
                                     <input type="text" name="strn" value={form.strn} onChange={handleChange} style={input} />
                                 </div>
-                                <div style={formGroup}>
+                                <div data-admin-field="" style={formGroup}>
                                     <label style={label}>
                                         Default Withholding Tax Rate (%)
                                         <span style={{ fontWeight: 400, color: "#5f6d7e", fontSize: "0.72rem", marginLeft: "0.4rem" }}>
@@ -359,7 +359,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                         placeholder="e.g. 0.5"
                                     />
                                 </div>
-                                <div style={formGroup}>
+                                <div data-admin-field="" style={formGroup}>
                                     <label style={label}>Logo</label>
                                     <input type="file" accept="image/*" onChange={(e) => setLogoFile(e.target.files[0])} style={{ ...input, padding: "0.4rem" }} />
                                     {company?.logoPath && !logoFile && (
@@ -374,7 +374,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                             <>
                                 <p style={sectionHint}>Starting numbers seed each document sequence. Each one locks once a document of that type exists, to keep numbering gap-free.</p>
                                 {numberField("startingChallanNumber", "Starting Challan Number", freshCompany?.hasChallans, "challans exist", company?.currentChallanNumber)}
-                                <div style={formGroup}>
+                                <div data-admin-field="" style={formGroup}>
                                     <label style={label}>Invoice Number Prefix</label>
                                     <input type="text" name="invoiceNumberPrefix" value={form.invoiceNumberPrefix} onChange={handleChange} style={input} placeholder="e.g. INV-" />
                                 </div>
@@ -415,19 +415,19 @@ export default function CompanyForm({ company, onClose, onSaved }) {
 
                                 {form.fbrEnabled ? (
                                     <div style={{ marginTop: "0.9rem", padding: "0.85rem", borderRadius: 10, border: "1px solid #0d47a130", backgroundColor: "#f5f9ff" }}>
-                                        <div style={formGroup}>
+                                        <div data-admin-field="" style={formGroup}>
                                             <label style={label}>CNIC * <span style={{ fontWeight: 400, color: "#5f6d7e", fontSize: "0.72rem" }}>(required for FBR — used as SellerNTNCNIC on submissions)</span></label>
                                             <input type="text" name="cnic" value={form.cnic} onChange={handleChange} style={input} maxLength={15} placeholder="13-digit CNIC" />
                                         </div>
                                         <div className="form-grid-2col">
-                                            <div style={formGroup}>
+                                            <div data-admin-field="" style={formGroup}>
                                                 <label style={label}>Province</label>
                                                 <select name="fbrProvinceCode" value={form.fbrProvinceCode} onChange={handleChange} style={input}>
                                                     <option value="">Select...</option>
                                                     {provinces.map((p) => (<option key={p.id} value={p.code}>{p.label}</option>))}
                                                 </select>
                                             </div>
-                                            <div style={formGroup}>
+                                            <div data-admin-field="" style={formGroup}>
                                                 <label style={label}>Environment</label>
                                                 <select name="fbrEnvironment" value={form.fbrEnvironment} onChange={handleChange} style={input}>
                                                     {environments.length > 0 ? environments.map((e) => (<option key={e.id} value={e.code}>{e.label}</option>)) : (<><option value="sandbox">Sandbox</option><option value="production">Production</option></>)}
@@ -435,16 +435,16 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                             </div>
                                         </div>
                                         <div className="form-grid-2col">
-                                            <div style={formGroup}>
+                                            <div data-admin-field="" style={formGroup}>
                                                 <label style={label}>Business Activity <span style={{ fontWeight: 400, color: "#5f6d7e", fontSize: "0.72rem" }}>(multiple — drives applicable FBR scenarios)</span></label>
                                                 <MultiSelectChips name="fbrBusinessActivity" valueCsv={form.fbrBusinessActivity} options={activities} onChange={handleCsvChange} />
                                             </div>
-                                            <div style={formGroup}>
+                                            <div data-admin-field="" style={formGroup}>
                                                 <label style={label}>Sector <span style={{ fontWeight: 400, color: "#5f6d7e", fontSize: "0.72rem" }}>(multiple)</span></label>
                                                 <MultiSelectChips name="fbrSector" valueCsv={form.fbrSector} options={sectors} onChange={handleCsvChange} />
                                             </div>
                                         </div>
-                                        <div style={formGroup}>
+                                        <div data-admin-field="" style={formGroup}>
                                             <label style={label}>FBR Bearer Token {company?.hasFbrToken && <span style={{ color: "#28a745", fontSize: "0.75rem" }}>(set)</span>}</label>
                                             <input type="password" name="fbrToken" value={form.fbrToken} onChange={handleChange} style={input} placeholder={company?.hasFbrToken ? "Leave blank to keep current" : "Paste token from IRIS portal"} />
                                         </div>
@@ -453,7 +453,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                             <h6 style={{ margin: "0 0 0.5rem", fontSize: "0.82rem", fontWeight: 700, color: "#455a64", letterSpacing: "0.03em", textTransform: "uppercase" }}>Default values for new bills</h6>
                                             <p style={{ margin: "0 0 0.75rem", fontSize: "0.76rem", color: "#5f6d7e" }}>Used when creating a bill if the line/header didn't specify. Leave blank to use the built-in fallback.</p>
                                             <div className="form-grid-2col">
-                                                <div style={formGroup}>
+                                                <div data-admin-field="" style={formGroup}>
                                                     <label style={label}>Default Sale Type</label>
                                                     {saleTypeOptions.length > 0 ? (
                                                         <select name="fbrDefaultSaleType" value={form.fbrDefaultSaleType} onChange={handleChange} style={input}>
@@ -462,7 +462,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                                         </select>
                                                     ) : (<input type="text" name="fbrDefaultSaleType" value={form.fbrDefaultSaleType} onChange={handleChange} style={input} placeholder="e.g. Goods at Standard Rate (default)" />)}
                                                 </div>
-                                                <div style={formGroup}>
+                                                <div data-admin-field="" style={formGroup}>
                                                     <label style={label}>Default UOM</label>
                                                     {uomOptions.length > 0 ? (
                                                         <select name="fbrDefaultUOM" value={form.fbrDefaultUOM} onChange={handleChange} style={input}>
@@ -473,7 +473,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                                 </div>
                                             </div>
                                             <div className="form-grid-2col">
-                                                <div style={formGroup}>
+                                                <div data-admin-field="" style={formGroup}>
                                                     <label style={label}>Default Payment Mode — Registered buyers</label>
                                                     {paymentModeOptions.length > 0 ? (
                                                         <select name="fbrDefaultPaymentModeRegistered" value={form.fbrDefaultPaymentModeRegistered} onChange={handleChange} style={input}>
@@ -482,7 +482,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                                         </select>
                                                     ) : (<input type="text" name="fbrDefaultPaymentModeRegistered" value={form.fbrDefaultPaymentModeRegistered} onChange={handleChange} style={input} placeholder="Credit / Bank Transfer / …" />)}
                                                 </div>
-                                                <div style={formGroup}>
+                                                <div data-admin-field="" style={formGroup}>
                                                     <label style={label}>Default Payment Mode — Unregistered buyers</label>
                                                     {paymentModeOptions.length > 0 ? (
                                                         <select name="fbrDefaultPaymentModeUnregistered" value={form.fbrDefaultPaymentModeUnregistered} onChange={handleChange} style={input}>
@@ -564,7 +564,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                         )}
                     </div>
 
-                    <div style={footer}>
+                    <div data-admin-footer="" style={footer}>
                         <button data-admin-close="" type="button" style={{ ...button, ...cancel }} onClick={onClose}>Cancel</button>
                         <button type="submit" style={{ ...button, ...submit }}>{company ? "Update" : "Create"}</button>
                     </div>

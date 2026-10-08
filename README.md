@@ -298,6 +298,9 @@ Optional company Gmail inbox: authorize an account once and link it only to assi
 
 ## Changelog
 
+### 2026-10-09
+- Refine admin screens and create/edit dialogs with compact desktop controls, responsive mobile layouts, consistent spacing, and clearer scrolling and actions.
+
 ### 2026-10-08
 
 - Refine the admin interface with compact controls, mobile tap targets, contained tables, viewport-fitting dialogs and keyboard focus support while preserving existing workflows and permissions.

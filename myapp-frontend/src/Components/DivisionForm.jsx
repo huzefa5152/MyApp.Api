@@ -109,7 +109,7 @@ export default function DivisionForm({ companyId, division, onClose, onSaved }) 
   return (
     <div data-admin-backdrop="" style={backdrop} onClick={onClose}>
       <div data-admin-dialog="" style={{ ...modal, maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
-        <div style={header}>
+        <div data-admin-header="" style={header}>
           <h3 style={title}>{isEdit ? `Edit Division — ${division.name}` : "New Division"}</h3>
           <button data-admin-close="" type="button" style={closeButton} onClick={onClose}>×</button>
         </div>
@@ -128,47 +128,47 @@ export default function DivisionForm({ companyId, division, onClose, onSaved }) 
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div style={{ ...body, maxHeight: "58vh", overflowY: "auto" }}>
+          <div data-admin-body="" style={{ ...body, maxHeight: "58vh", overflowY: "auto" }}>
             {error && <div style={errorStyle}>{error}</div>}
 
             {activeTab === "general" && (
               <>
-                <div style={formGroup}>
+                <div data-admin-field="" style={formGroup}>
                   <label style={label}>Division Name *</label>
                   <input style={input} value={form.name} onChange={(e) => set("name", e.target.value)} autoFocus />
                 </div>
-                <div style={formGroup}>
+                <div data-admin-field="" style={formGroup}>
                   <label style={label}>Brand Name (for print header)</label>
                   <input style={input} value={form.brandName} onChange={(e) => set("brandName", e.target.value)} />
                 </div>
-                <div style={formGroup}>
+                <div data-admin-field="" style={formGroup}>
                   <label style={label}>Logo</label>
                   <input type="file" accept="image/*" onChange={(e) => setLogoFile(e.target.files[0])} style={{ ...input, padding: "0.4rem" }} />
                   {division?.logoPath && !logoFile && (
                     <img src={division.logoPath} alt="logo" style={{ marginTop: "0.5rem", height: 40 }} />
                   )}
                 </div>
-                <div style={formGroup}>
+                <div data-admin-field="" style={formGroup}>
                   <label style={label}>Full Address</label>
                   <textarea style={{ ...input, minHeight: 60, resize: "vertical" }} value={form.fullAddress} onChange={(e) => set("fullAddress", e.target.value)} />
                 </div>
-                <div style={formGroup}>
+                <div data-admin-field="" style={formGroup}>
                   <label style={label}>Phone</label>
                   <input style={input} value={form.phone} onChange={(e) => set("phone", e.target.value)} />
                 </div>
-                <div style={formGroup}>
+                <div data-admin-field="" style={formGroup}>
                   <label style={label}>NTN</label>
                   <input style={input} value={form.ntn} onChange={(e) => set("ntn", e.target.value)} />
                 </div>
-                <div style={formGroup}>
+                <div data-admin-field="" style={formGroup}>
                   <label style={label}>CNIC</label>
                   <input style={input} value={form.cnic} onChange={(e) => set("cnic", e.target.value)} />
                 </div>
-                <div style={formGroup}>
+                <div data-admin-field="" style={formGroup}>
                   <label style={label}>STRN</label>
                   <input style={input} value={form.strn} onChange={(e) => set("strn", e.target.value)} />
                 </div>
-                <div style={formGroup}>
+                <div data-admin-field="" style={formGroup}>
                   <label style={label}>Email</label>
                   <input type="email" style={input} value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="e.g. sales@division.com" />
                 </div>
@@ -184,12 +184,12 @@ export default function DivisionForm({ companyId, division, onClose, onSaved }) 
                 </p>
                 {DOC_NUMBERS.map(([sKey, cKey, lbl]) => (
                   <div key={sKey} className="form-grid-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-                    <div style={formGroup}>
+                    <div data-admin-field="" style={formGroup}>
                       <label style={label}>{lbl} — Starting</label>
                       <input type="number" min="0" max={INT32_MAX} style={input}
                         value={form[sKey]} onChange={(e) => set(sKey, e.target.value)} />
                     </div>
-                    <div style={formGroup}>
+                    <div data-admin-field="" style={formGroup}>
                       <label style={label}>Current (issued)</label>
                       <input type="number" style={{ ...input, background: "#f3f5f8", color: "#5f6d7e" }}
                         value={division?.[cKey] ?? 0} readOnly disabled />
@@ -199,7 +199,7 @@ export default function DivisionForm({ companyId, division, onClose, onSaved }) 
               </>
             )}
           </div>
-          <div style={footer}>
+          <div data-admin-footer="" style={footer}>
             <button data-admin-close="" type="button" style={cancel} onClick={onClose}>Cancel</button>
             <button type="submit" style={submit} disabled={busy}>
               {busy ? "Saving…" : isEdit ? "Save" : "Create"}

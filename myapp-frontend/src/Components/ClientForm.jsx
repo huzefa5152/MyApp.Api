@@ -295,12 +295,12 @@ export default function ClientForm({ client, companyId, companies = [], prototyp
   return (
     <div data-admin-backdrop="" className={prototype ? "ui-client-backdrop" : undefined} style={backdrop}>
       <div data-admin-dialog="" ref={dialogRef} className={prototype ? "ui-client-modal" : undefined} style={modal} role={prototype ? "dialog" : undefined} aria-modal={prototype ? true : undefined} aria-labelledby={prototype ? dialogId : undefined}>
-        <div style={header}>
+        <div data-admin-header="" style={header}>
           <h5 id={dialogId} style={title}>{client ? "Edit Client" : "New Client"}</h5>
           <button data-admin-close="" type="button" aria-label="Close client form" style={closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit} noValidate>
-          <div style={body}>
+          <div data-admin-body="" style={body}>
             {/* Multi-company picker — CREATE mode only, when the parent
                 has supplied the companies list and the operator has
                 more than one to pick from. Default-checked is the
@@ -340,23 +340,23 @@ export default function ClientForm({ client, companyId, companies = [], prototyp
               </div>
             )}
 
-            <div style={formGroup}>
+            <div data-admin-field="" style={formGroup}>
               <label style={label} htmlFor={`${dialogId}-name`}>Name *</label>
               <input id={`${dialogId}-name`} type="text" name="name" value={formData.name} onChange={handleChange} style={{ ...input, ...fieldError("name") }} />
               {errorMsg("name")}
             </div>
 
-            <div style={formGroup}>
+            <div data-admin-field="" style={formGroup}>
               <label style={label} htmlFor={`${dialogId}-address`}>Address</label>
               <input id={`${dialogId}-address`} type="text" name="address" value={formData.address} onChange={handleChange} style={input} />
             </div>
 
             <div className="form-grid-2col">
-              <div style={formGroup}>
+              <div data-admin-field="" style={formGroup}>
                 <label style={label} htmlFor={`${dialogId}-email`}>Email</label>
                 <input id={`${dialogId}-email`} type="email" name="email" value={formData.email} onChange={handleChange} style={input} />
               </div>
-              <div style={formGroup}>
+              <div data-admin-field="" style={formGroup}>
                 <label style={label} htmlFor={`${dialogId}-phone`}>Phone</label>
                 <input id={`${dialogId}-phone`} type="text" name="phone" value={formData.phone} onChange={handleChange} style={input} />
               </div>
@@ -370,7 +370,7 @@ export default function ClientForm({ client, companyId, companies = [], prototyp
             <div style={{ marginTop: "0.5rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #0d47a130", backgroundColor: "#e3f2fd" }}>
               <p style={{ margin: "0 0 0.5rem", fontWeight: 700, fontSize: "0.85rem", color: "#0d47a1" }}>FBR Details</p>
               <div className="form-grid-2col">
-                <div style={formGroup}>
+                <div data-admin-field="" style={formGroup}>
                   <label style={label} htmlFor={`${dialogId}-registrationType`}>Registration Type{star}</label>
                   <select id={`${dialogId}-registrationType`} name="registrationType" value={formData.registrationType} onChange={handleChange} style={{ ...input, ...fieldError("registrationType") }}>
                     <option value="">Select...</option>
@@ -396,7 +396,7 @@ export default function ClientForm({ client, companyId, companies = [], prototyp
                     </div>
                   )}
                 </div>
-                <div style={formGroup}>
+                <div data-admin-field="" style={formGroup}>
                   <label style={label} htmlFor={`${dialogId}-fbrProvinceCode`}>Province{star}</label>
                   <select id={`${dialogId}-fbrProvinceCode`} name="fbrProvinceCode" value={formData.fbrProvinceCode} onChange={handleChange} style={{ ...input, ...fieldError("fbrProvinceCode") }}>
                     <option value="">Select...</option>
@@ -418,7 +418,7 @@ export default function ClientForm({ client, companyId, companies = [], prototyp
               {(showNtn || showStrn) && (
                 <div className="form-grid-2col" style={{ marginTop: "0.5rem" }}>
                   {showNtn && (
-                    <div style={formGroup}>
+                    <div data-admin-field="" style={formGroup}>
                       <label style={label} htmlFor={`${dialogId}-ntn`}>{ntnLabel}</label>
                       <input id={`${dialogId}-ntn`}
                         type="text"
@@ -432,7 +432,7 @@ export default function ClientForm({ client, companyId, companies = [], prototyp
                     </div>
                   )}
                   {showStrn && (
-                    <div style={formGroup}>
+                    <div data-admin-field="" style={formGroup}>
                       <label style={label}>STRN <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional — not sent to FBR)</span></label>
                       <input
                         type="text"
@@ -477,11 +477,11 @@ export default function ClientForm({ client, companyId, companies = [], prototyp
               <div style={{ marginTop: "0.5rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #cfd8e3", backgroundColor: "#f7f9fc" }}>
                 <p style={{ margin: "0 0 0.5rem", fontWeight: 700, fontSize: "0.85rem", color: "#37474f" }}>Tax IDs (optional)</p>
                 <div className="form-grid-2col">
-                  <div style={formGroup}>
+                  <div data-admin-field="" style={formGroup}>
                     <label style={label} htmlFor={`${dialogId}-ntn`}>NTN</label>
                     <input id={`${dialogId}-ntn`} type="text" name="ntn" value={formData.ntn} onChange={handleChange} style={input} placeholder="NTN (optional)" />
                   </div>
-                  <div style={formGroup}>
+                  <div data-admin-field="" style={formGroup}>
                     <label style={label} htmlFor={`${dialogId}-strn`}>STRN</label>
                     <input id={`${dialogId}-strn`} type="text" name="strn" value={formData.strn} onChange={handleChange} style={input} placeholder="STRN (optional)" />
                   </div>
@@ -489,7 +489,7 @@ export default function ClientForm({ client, companyId, companies = [], prototyp
               </div>
             )}
 
-            <div style={formGroup}>
+            <div data-admin-field="" style={formGroup}>
               <label style={label} htmlFor={`${dialogId}-site`}>Sites</label>
               <input id={`${dialogId}-site`} type="text" name="site" value={formData.site} onChange={handleChange} style={input} placeholder="e.g. Site-A ; Site-B ; Site-C" />
               <span style={{ fontSize: "0.75rem", color: "#5f6d7e", marginTop: "0.25rem", display: "block" }}>Separate multiple sites with semicolons (;). These will appear as dropdown options when creating a delivery challan.</span>
@@ -497,7 +497,7 @@ export default function ClientForm({ client, companyId, companies = [], prototyp
 
           </div>
 
-          <div style={footer}>
+          <div data-admin-footer="" style={footer}>
             <button data-admin-close="" type="button" style={{ ...button, ...cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...button, ...submit }}>{client ? "Update" : "Create"}</button>
           </div>

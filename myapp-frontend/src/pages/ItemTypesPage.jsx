@@ -154,9 +154,9 @@ export default function ItemTypesPage() {
 
   return (
     <div>
-      <div style={styles.header}>
+      <div data-admin-page-header="" style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.7rem" }}>
-          <div style={styles.headerIcon}><MdCategory size={24} color="#fff" /></div>
+          <div data-admin-page-icon="" style={styles.headerIcon}><MdCategory size={24} color="#fff" /></div>
           <div>
             <h2 style={styles.title}>Item Catalog</h2>
             <p style={styles.subtitle}>

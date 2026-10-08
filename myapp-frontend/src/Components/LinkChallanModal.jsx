@@ -194,14 +194,14 @@ export default function LinkChallanModal({ invoice, onClose, onDone, canCreateCh
         style={{ ...formStyles.modal, maxWidth: modalSizes.lg }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h3 style={formStyles.title}>Delivery challan for Bill #{invoice.invoiceNumber}</h3>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} title="Close" aria-label="Close">
             &times;
           </button>
         </div>
 
-        <div style={formStyles.body}>
+        <div data-admin-body="" style={formStyles.body}>
           {error && <div style={{ ...formStyles.error, marginBottom: "0.9rem" }}>{error}</div>}
 
           {attachedChallans.length > 0 && (

@@ -143,7 +143,7 @@ export default function BulkInvoiceDialog({
           </button>
         </div>
 
-        <div style={s.row}>
+        <div data-admin-form-row="" style={s.row}>
           <label style={s.lbl}>
             Period
             <select style={s.input} value={preset} disabled={running}
@@ -171,7 +171,7 @@ export default function BulkInvoiceDialog({
             company — a template row carries its company's letterhead. The
             server refuses one that is not this company's. */}
         {templates && templates.length > 0 && (
-          <div style={s.row}>
+          <div data-admin-form-row="" style={s.row}>
             <label style={{ ...s.lbl, flex: "1 1 100%" }}>
               Template
               <select style={s.input} value={templateId} disabled={running}

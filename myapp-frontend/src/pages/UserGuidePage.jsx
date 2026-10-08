@@ -83,7 +83,7 @@ export default function UserGuidePage() {
 
   return (
     <div style={st.page}>
-      <div style={st.header}>
+      <div data-admin-page-header="" style={st.header}>
         <div>
           <h2 style={st.h2}><MdMenuBook size={22} style={{ verticalAlign: "-4px", marginRight: 8 }} />Accounting Guide</h2>
           <div style={st.subtitle}>

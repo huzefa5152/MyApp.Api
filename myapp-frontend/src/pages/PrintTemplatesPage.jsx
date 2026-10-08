@@ -533,7 +533,7 @@ export default function PrintTemplatesPage() {
           </div>
         </div>
       )}
-      <div style={st.header}>
+      <div data-admin-page-header="" style={st.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <div style={st.icon}><MdDescription size={26} color="#fff" /></div>
           <div>

@@ -265,7 +265,7 @@ function Summary({ summary, windowHours }) {
 
 function FilterBar({ statusFilter, onStatus, actionFilter, onAction, count }) {
   return (
-    <section className="fbr-mon-filter-bar" style={S.filterBar}>
+    <section data-admin-toolbar="" className="fbr-mon-filter-bar" style={S.filterBar}>
       <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", color: "#5f6d7e", fontWeight: 600, fontSize: "0.82rem" }}>
         <MdFilterList size={14} /> Filter:
       </span>

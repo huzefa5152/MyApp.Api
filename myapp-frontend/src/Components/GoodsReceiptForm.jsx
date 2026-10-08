@@ -161,16 +161,16 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: 1000, width: "94vw" }}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? "Edit Goods Receipt" : "New Goods Receipt"}</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
-          <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
+          <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
             <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} divisionId={isEdit ? storedNumberDivision : divisionId} documentType="goods-receipt" variant={isEdit ? "edit" : "create"} currentNumber={currentNumber} editRecordId={receiptId} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
-              <div style={{ ...formStyles.formGroup, gridColumn: "1 / -1" }}>
+              <div data-admin-field="" style={{ ...formStyles.formGroup, gridColumn: "1 / -1" }}>
                 <label style={formStyles.label}>Supplier *</label>
                 <SearchableSelect
                   items={suppliers}
@@ -179,14 +179,14 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                   placeholder="Select supplier…"
                 />
               </div>
-              <div style={formStyles.formGroup}>
+              <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Receipt Date *</label>
                 <input type="date" style={formStyles.input} value={receiptDate} onChange={e => setReceiptDate(e.target.value)} />
               </div>
-              <div style={formStyles.formGroup}>
+              <div data-admin-field="" style={formStyles.formGroup}>
                 <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={formStyles.label} style={formStyles.input} />
               </div>
-              <div style={formStyles.formGroup}>
+              <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Linked Purchase Bill</label>
                 <select style={formStyles.input} value={purchaseBillId} onChange={e => setPurchaseBillId(e.target.value)}>
                   <option value="">— optional —</option>
@@ -195,11 +195,11 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
               </div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
-              <div style={formStyles.formGroup}>
+              <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Supplier Challan #</label>
                 <input type="text" style={formStyles.input} value={supplierChallanNumber} onChange={e => setSupplierChallanNumber(e.target.value)} />
               </div>
-              <div style={formStyles.formGroup}>
+              <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Receiving Site</label>
                 <input type="text" style={formStyles.input} value={site} onChange={e => setSite(e.target.value)} />
               </div>
@@ -274,7 +274,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
               mode="edit"
             />
           </div>
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" disabled={saving || !numberValid} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}>
               {saving ? "Saving..." : (isEdit ? "Update" : "Create")}
