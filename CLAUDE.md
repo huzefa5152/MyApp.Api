@@ -1395,6 +1395,22 @@ GD panel and Excel export all say which GDs it took.
   September's own monthly sheet, Annex-H1 and tie-out never saw it. A GD whose
   GD date is before an earlier restatement is still replaced by it -- restate
   again after importing a back-dated GD.
+- **A document dated BEFORE a restatement but entered AFTER it is never
+  absorbed pro rata** (2026-10-08). The walk orders by date, so such a bill
+  runs before the restatement, and the sheet's lines then hold more than is on
+  hand. The difference leaves the lines in FIFO order (claimed, oldest GD
+  first) and reads as CONSUMED there. Scaling the lines down instead took
+  Alpha's bill 101 (2,937 KG of 7018.1000, dated 4 Sep, typed 8 Oct) out at the
+  sheet's average 496.74 against the first GD's 473.36 -- 68,479 too much --
+  and seven back-dated bills across two companies the same way. The mirror
+  case (stock dated before, entered after: a late GD arrival) is KEPT in its
+  own newest pools at its own cost beside the sheet's lines, not smeared over
+  them; only a surplus no pool can hold still scales the lines up. Do not
+  reintroduce pro-rata scaling. Harness cases 23 and 24.
+- **A bill's stock movement carries the BILL's date**, never the day it was
+  typed. 18 movements saved before the re-dating guard did not;
+  `FIFO_RESTATE_BACKDATED_BACKFILL_V1` (Program.cs) re-dated them once and
+  re-posted the relief.
 - **The Inventory tab's ledger is in MONEY** (2026-09-28). Each GD line in
   and each document out shows Excluding / Sales Tax / Including / Actual Cost /
   Margin and a running value balance; quantity columns sit in the ledger's
@@ -2038,7 +2054,7 @@ them can be resolved from FBR.
 | Bill screens' shared checklist + totals rows (offline) | `node scripts/test_bill_entry.mjs` | `17/17 checks passed` |
 | GD costing import: line rules on both paths, leave-out, choose item, file identity | `python scripts/test_gd_import_costing.py`; `node scripts/test_gd_costing_entry.mjs`; `cd scripts/gd_costing_harness && dotnet run -c Release` | `476 passed, 0 failed`; `54/54 checks passed`; `145 checks, 0 failed` |
 | Invoice Sales Detail: periods, filters, Excel = screen, Excel format pinned, access | `python scripts/test_invoice_sales_detail.py` (add `--db "<conn>"` for the FBR-submitted cases); `node scripts/test_invoice_sales_detail.mjs` | `64/64 checks passed` (with `--db`; 61 + 3 skipped without); `45/45 checks passed` |
-| FIFO by GD (claimed first, never blocks, WA unchanged) | `cd scripts/stock_fifo_harness && dotnet run -c Release`; `python scripts/test_stock_fifo.py`; `node scripts/test_fifo_pricing.mjs` | `143 checks, 0 failed`; `61/61 checks passed`; `11/11 checks passed` |
+| FIFO by GD (claimed first, never blocks, WA unchanged) | `cd scripts/stock_fifo_harness && dotnet run -c Release`; `python scripts/test_stock_fifo.py`; `node scripts/test_fifo_pricing.mjs` | `159 checks, 0 failed`; `61/61 checks passed`; `11/11 checks passed` |
 | Import Tax Desk (register, input-tax worksheet, tie-out) | `python scripts/test_import_tax_desk.py` | `27/27 checks passed` |
 | GD charges, customs units, letters of credit | `python scripts/test_import_charges_units_lcs.py` | `24/24 checks passed` |
 | Inventory Overlay (two books, one total; normal mode unchanged) | `python scripts/test_inventory_overlay.py` (add `--db <branch db>` for the submitted-lock case) | `71/71 checks passed` (1 skipped without `--db`) |

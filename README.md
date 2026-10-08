@@ -298,6 +298,12 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-10-08 — Back-dated bills after a stock-sheet reconcile are costed FIFO
+
+- **Fix**: a bill dated before a "Reconcile to stock sheet" date but entered afterwards used to take its quantity off every GD line of the sheet in proportion, which costed it at the sheet's average instead of the claimed, oldest GD. On one item that took 68,479 more out of stock than the bill was worth. The quantity now leaves the GD lines in FIFO order, so what leaves stock matches the price the bill form showed. Every affected bill corrects itself, with no re-entry needed.
+- **Fix**: stock dated before a reconcile but entered afterwards (for example a late GD arrival) now keeps its own GD and cost beside the sheet's lines instead of being spread over them.
+- **Fix**: a few bills' stock movements carried the date the bill was typed rather than the bill's own date, which put those sales in the wrong month. They are re-dated once on deploy and the monthly cost-of-goods entries are re-posted.
+
 ### 2026-10-06 — FBR filings no longer carry the product description
 
 - **Validate and Submit send each line's product description to FBR blank**, and **View FBR** shows it blank, because that is the payload being sent. The bill screen, the Bill print and the Tax Invoice print/PDF keep every line's description exactly as typed. Verified on the FBR sandbox, which accepts a blank description on every scenario we file.
