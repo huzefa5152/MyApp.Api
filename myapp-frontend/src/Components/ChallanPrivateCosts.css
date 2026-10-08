@@ -7,7 +7,7 @@
 .challan-private-bulk > div { flex: 1 1 160px; min-width: 0; }
 .challan-private-bulk > button { min-height: 44px; padding: 6px 9px; font-size: 12px; border: 1px solid #d0d7e2; border-radius: 7px; background: white; color: #00695c; cursor: pointer; }
 .challan-private-bulk > button:disabled { opacity: .45; cursor: not-allowed; }
-.challan-private-columns, .challan-private-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.2fr) minmax(100px, .65fr); align-items: center; gap: 10px; padding: 6px 12px; }
+.challan-private-columns, .challan-private-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.2fr) minmax(100px, .65fr) minmax(110px, .7fr); align-items: center; gap: 10px; padding: 6px 12px; }
 .challan-private-columns { color: #5f6d7e; font-size: 11px; font-weight: 600; border-top: 1px solid #e8edf3; }
 .challan-private-row { border-top: 1px solid #edf1f5; min-height: 44px; }
 .challan-private-item { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
@@ -16,6 +16,7 @@
 .challan-private-item p { margin: 0; }
 .challan-private-cost { margin: 0; min-width: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .challan-private-cost input { text-align: right; }
+.challan-private-total { min-width: 0; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .challan-private-mobile-label { display: none; }
 @media (max-width: 600px) {
   .challan-private-heading { padding: 9px 10px; }
@@ -24,6 +25,7 @@
   .challan-private-columns { display: none; }
   .challan-private-row { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 6px 8px; padding: 9px 10px; }
   .challan-private-item { grid-column: 1 / -1; }
+  .challan-private-total { grid-column: 2; }
   .challan-private-mobile-label { display: block; font-size: 11px; font-weight: 600; color: #5f6d7e; margin-bottom: 3px; text-align: left; }
 }
 @media print { .challan-private-costs { display: none !important; } }
