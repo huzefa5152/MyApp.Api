@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Helpers;
 using MyApp.Api.Models;
 
@@ -208,6 +208,9 @@ namespace MyApp.Api.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             ConfigureEmailWorkspace(modelBuilder);
+            modelBuilder.Entity<DeliveryChallan>().Property(dc => dc.CreatedAt)
+                .HasDefaultValueSql("SYSUTCDATETIME()");
+
             modelBuilder.Entity<User>().HasOne<User>().WithMany().HasForeignKey(u => u.CreatedByUserId).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<User>().HasIndex(u => u.CreatedByUserId);
             modelBuilder.Entity<Company>().HasOne<User>().WithMany().HasForeignKey(c => c.CreatedByUserId).OnDelete(DeleteBehavior.NoAction);

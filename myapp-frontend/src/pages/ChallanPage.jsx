@@ -73,7 +73,7 @@ export default function ChallanPage() {
   // AND see an empty dropdown — skip both the fetch and the UI, same as the
   // client filter above.
   const canViewSalesOrders = has("salesorders.list.view");
-  const copy = useDocumentCopy({ sourceType: DOC_COPY_TYPES.challan, onRefresh: () => selectedCompany && fetchChallans(selectedCompany.id, page) });
+  const copy = useDocumentCopy({ sourceType: DOC_COPY_TYPES.challan, onRefresh: () => { if (selectedCompany) { setPage(1); fetchChallans(selectedCompany.id, 1); } } });
   const [viewMode, setViewMode, isBigScreen] = useListViewMode("challans");
   const [clients, setClients] = useState([]);
   const [salesOrders, setSalesOrders] = useState([]);
@@ -235,7 +235,8 @@ export default function ChallanPage() {
           lines: payload.lines,
         })
       : await createDeliveryChallan(selectedCompany.id, payload);
-    fetchChallans(selectedCompany.id, page);
+    setPage(1);
+    fetchChallans(selectedCompany.id, 1);
     return res.data;
   };
 
@@ -318,7 +319,8 @@ export default function ChallanPage() {
     try {
       const { data } = await duplicateChallan(challan.id, count);
       const clones = Array.isArray(data) ? data : [data];
-      await fetchChallans(selectedCompany.id, page);
+      setPage(1);
+      await fetchChallans(selectedCompany.id, 1);
       // For count === 1, jump straight into the edit form so the operator
       // can tweak PO/items — same UX as before. For bulk count, just refresh
       // the list and toast; the operator typically wants to leave the dialog
@@ -608,7 +610,7 @@ export default function ChallanPage() {
           companyId={selectedCompany.id}
           target="challan"
           onClose={() => setShowImport(false)}
-          onSaved={() => { setShowImport(false); fetchChallans(selectedCompany.id, page); notify("Delivery Challan created from PO.", "success"); }}
+          onSaved={() => { setShowImport(false); setPage(1); fetchChallans(selectedCompany.id, 1); notify("Delivery Challan created from PO.", "success"); }}
         />
       )}
 

@@ -31,7 +31,8 @@ namespace MyApp.Api.Repositories.Implementations
             if (allowedDivisionIds != null)
                 query = query.Where(i => i.DivisionId == null || allowedDivisionIds.Contains(i.DivisionId.Value));
             return await query
-                .OrderByDescending(i => i.InvoiceNumber)
+                .OrderByDescending(i => i.CreatedAt)
+                .ThenByDescending(i => i.Id)
                 .ToListAsync();
         }
 
@@ -88,7 +89,8 @@ namespace MyApp.Api.Repositories.Implementations
 
             var totalCount = await query.CountAsync();
             var items = await query
-                .OrderByDescending(i => i.InvoiceNumber)
+                .OrderByDescending(i => i.CreatedAt)
+                .ThenByDescending(i => i.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
