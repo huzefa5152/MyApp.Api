@@ -483,7 +483,7 @@ function TrialBalanceReport({ companyId }) {
               ))}
             </div>
           ) : (
-            <div style={st.tableWrap}>
+            <div data-admin-table-region="" style={st.tableWrap}>
               <table style={st.table}>
                 <thead>
                   <tr>
@@ -594,7 +594,7 @@ function AgingReport({ companyId, kind }) {
           ))}
         </div>
       ) : (
-        <div style={st.tableWrap}>
+        <div data-admin-table-region="" style={st.tableWrap}>
           <table style={st.table}>
             <thead>
               <tr>

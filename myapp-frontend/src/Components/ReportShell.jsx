@@ -282,7 +282,7 @@ export default function ReportShell({
           ))}
         </div>
       ) : (
-        <div className="report-table-wrap" style={st.tableWrap}>
+        <div data-admin-table-region="" className="report-table-wrap" style={st.tableWrap}>
           <table style={st.table}>
             <thead>
               <tr>
@@ -565,7 +565,7 @@ function StatementTable({ report, rows, onDrill }) {
   const hasComparative = (report.columns || []).some((c) => c.key === "comparative");
 
   return (
-    <div style={st.tableWrap}>
+    <div data-admin-table-region="" style={st.tableWrap}>
       <table style={{ ...st.table, minWidth: hasComparative ? 620 : 380 }}>
         <thead>
           <tr>

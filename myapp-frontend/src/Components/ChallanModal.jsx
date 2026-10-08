@@ -20,8 +20,8 @@ export default function ChallanModal({ challan, onClose }) {
   // Backdrop click is a no-op for consistency with the rest of the app —
   // every popup dismisses via the X / Close button only.
   return (
-    <div style={formStyles.backdrop}>
-      <div
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog=""
         style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -31,7 +31,7 @@ export default function ChallanModal({ challan, onClose }) {
             <MdReceipt size={18} style={{ marginRight: 6, verticalAlign: "middle" }} />
             Challan #{challan.challanNumber} Details
           </h5>
-          <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
 
         {/* Body */}
@@ -115,7 +115,7 @@ export default function ChallanModal({ challan, onClose }) {
             <h6 style={{ fontWeight: 700, fontSize: "0.92rem", color: colors.textPrimary, marginBottom: "0.6rem" }}>
               Items ({challan.items.length})
             </h6>
-            <div style={styles.tableWrapper}>
+            <div data-admin-table-region="" style={styles.tableWrapper}>
               <table style={styles.table}>
                 <thead>
                   <tr>
@@ -154,7 +154,7 @@ export default function ChallanModal({ challan, onClose }) {
 
         {/* Footer */}
         <div style={formStyles.footer}>
-          <button
+          <button data-admin-close=""
             type="button"
             style={{ ...formStyles.button, ...formStyles.cancel }}
             onClick={onClose}

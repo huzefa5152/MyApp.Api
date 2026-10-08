@@ -783,8 +783,8 @@ export default function PrintTemplatesPage() {
 
       {/* Scope chooser for a new template created from a starter */}
       {starterToCreate && (
-        <div style={st.scopeOverlay} onClick={() => setStarterToCreate(null)}>
-          <div style={st.scopeModal} onClick={(e) => e.stopPropagation()}>
+        <div data-admin-backdrop="" style={st.scopeOverlay} onClick={() => setStarterToCreate(null)}>
+          <div data-admin-dialog="" style={st.scopeModal} onClick={(e) => e.stopPropagation()}>
             <div style={st.scopeHead}>
               <div>
                 <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800, color: colors.textPrimary }}>Create “{starterToCreate.name}”</h3>
@@ -792,7 +792,7 @@ export default function PrintTemplatesPage() {
                   Where should this {TEMPLATE_TYPE_LABEL[starterToCreate.type] || starterToCreate.type} template live?
                 </p>
               </div>
-              <button style={st.closeBtn} onClick={() => setStarterToCreate(null)} aria-label="Close"><MdClose size={20} /></button>
+              <button data-admin-close="" style={st.closeBtn} onClick={() => setStarterToCreate(null)} aria-label="Close"><MdClose size={20} /></button>
             </div>
             <div style={st.scopeList}>
               <button style={st.scopeBtn} disabled={busy} onClick={() => createFromStarter(starterToCreate, null)}>
@@ -812,11 +812,11 @@ export default function PrintTemplatesPage() {
 
       {/* Full preview */}
       {previewTarget && (
-        <div style={st.previewOverlay} onClick={() => setPreviewTarget(null)}>
-          <div style={st.previewModal} onClick={(e) => e.stopPropagation()}>
+        <div data-admin-backdrop="" style={st.previewOverlay} onClick={() => setPreviewTarget(null)}>
+          <div data-admin-dialog="" aria-label="Template preview" style={st.previewModal} onClick={(e) => e.stopPropagation()}>
             <div style={st.previewHead}>
               <div><strong>{previewTarget.name}</strong> <span style={st.typeChip}>{TEMPLATE_TYPE_LABEL[previewTarget.templateType]}</span> <span style={st.scopeChip}>{scopeLabel(previewTarget)}</span></div>
-              <button style={st.closeBtn} onClick={() => setPreviewTarget(null)} aria-label="Close"><MdClose size={20} /></button>
+              <button data-admin-close="" style={st.closeBtn} onClick={() => setPreviewTarget(null)} aria-label="Close"><MdClose size={20} /></button>
             </div>
             <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
               {previewLoading && previewTarget.htmlContent == null ? (
@@ -874,14 +874,14 @@ function StampUploadModal({ onClose, onUpload, uploading }) {
   };
 
   return (
-    <div style={st.scopeOverlay} onClick={onClose}>
-      <div style={st.scopeModal} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={st.scopeOverlay} onClick={onClose}>
+      <div data-admin-dialog="" style={st.scopeModal} onClick={(e) => e.stopPropagation()}>
         <div style={st.scopeHead}>
           <div>
             <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800, color: colors.textPrimary }}>Upload Stamp</h3>
             <p style={{ margin: "0.2rem 0 0", fontSize: "0.82rem", color: colors.textSecondary }}>PNG, JPG or WebP. A transparent PNG works best for signatures.</p>
           </div>
-          <button style={st.closeBtn} onClick={onClose} aria-label="Close"><MdClose size={20} /></button>
+          <button data-admin-close="" style={st.closeBtn} onClick={onClose} aria-label="Close"><MdClose size={20} /></button>
         </div>
         <div style={{ padding: "1rem 1.1rem", display: "flex", flexDirection: "column", gap: "0.8rem" }}>
           <input ref={inputRef} type="file" accept=".png,.jpg,.jpeg,.webp,.gif" style={{ display: "none" }} onChange={onPick} />
@@ -905,7 +905,7 @@ function StampUploadModal({ onClose, onUpload, uploading }) {
             />
           </label>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "0.2rem" }}>
-            <button style={{ ...st.btn, ...st.btnOutline }} onClick={onClose} disabled={uploading}>Cancel</button>
+            <button data-admin-close="" style={{ ...st.btn, ...st.btnOutline }} onClick={onClose} disabled={uploading}>Cancel</button>
             <button
               style={{ ...st.btn, ...st.btnPrimary, opacity: (!file || uploading) ? 0.6 : 1, cursor: (!file || uploading) ? "default" : "pointer" }}
               disabled={!file || uploading}

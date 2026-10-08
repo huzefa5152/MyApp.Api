@@ -118,8 +118,8 @@ export default function DivisionAccessModal({
   };
 
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog=""
         style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px` }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -127,7 +127,7 @@ export default function DivisionAccessModal({
           <span style={formStyles.title}>
             Division Access — {user.fullName} ({user.username})
           </span>
-          <button
+          <button data-admin-close=""
             type="button"
             style={formStyles.closeButton}
             onClick={onClose}
@@ -283,7 +283,7 @@ export default function DivisionAccessModal({
           })}
         </div>
         <div style={formStyles.footer}>
-          <button
+          <button data-admin-close=""
             type="button"
             style={{ ...formStyles.button, ...formStyles.cancel }}
             onClick={onClose}

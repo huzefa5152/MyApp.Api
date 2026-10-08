@@ -420,11 +420,11 @@ function PaymentViewDialog({ p, companyId, accent, docNoun, onClose }) {
     <div style={vd.row}><span style={vd.k}>{label}</span><span style={vd.v}>{value}</span></div>
   );
   return (
-    <div style={vd.backdrop} onClick={onClose}>
-      <div style={vd.modal} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={vd.backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={vd.modal} onClick={(e) => e.stopPropagation()}>
         <div style={vd.header}>
           <span style={{ ...vd.ref, color: accent }}>{p.reference}</span>
-          <button style={vd.close} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
+          <button data-admin-close="" style={vd.close} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
         </div>
         <div style={vd.body}>
           <div style={{ ...vd.amount, color: accent }}>Rs {fmtMoney(p.amount)}</div>
@@ -457,7 +457,7 @@ function PaymentViewDialog({ p, companyId, accent, docNoun, onClose }) {
           )}
         </div>
         <div style={vd.footer}>
-          <button style={vd.closeBtn} onClick={onClose}>Close</button>
+          <button data-admin-close="" style={vd.closeBtn} onClick={onClose}>Close</button>
         </div>
       </div>
     </div>

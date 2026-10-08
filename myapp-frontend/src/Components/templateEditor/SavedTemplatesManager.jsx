@@ -68,11 +68,11 @@ export default function SavedTemplatesManager({
   const creating = busy && busyId == null;
 
   return (
-    <div style={s.overlay}>
-      <div style={s.modal} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={s.overlay}>
+      <div data-admin-dialog="" style={s.modal} onClick={(e) => e.stopPropagation()}>
         <div style={s.header}>
           <h3 style={s.title}>Saved Templates</h3>
-          <button style={s.closeBtn} onClick={onClose} aria-label="Close"><MdClose size={20} /></button>
+          <button data-admin-close="" style={s.closeBtn} onClick={onClose} aria-label="Close"><MdClose size={20} /></button>
         </div>
         <p style={s.subtitle}>
           {templateTypeLabel} &middot; <strong>{scopeLabel}</strong> &mdash; the default (★) is used for printing.

@@ -181,19 +181,25 @@ export default function LookupAutocomplete({ label, endpoint, value, onChange, i
                 // viewport coords every time.
                 const rect = wrapperRef.current?.getBoundingClientRect();
                 if (!rect) return null;
+                const below = window.innerHeight - rect.bottom;
+                const above = rect.top;
+                const flipAbove = below < 180 && above > below;
+                const width = Math.min(rect.width, window.innerWidth - 16);
+                const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
                 return createPortal(
-                    <ul
+                    <ul data-admin-popup=""
                         className="list-group shadow-sm"
                         style={{
                             position: "fixed",
                             zIndex: 9999,
-                            maxHeight: "300px",
+                            maxHeight: Math.max(60, Math.min(300, (flipAbove ? above : below) - 8)),
                             overflowY: "auto",
                             borderRadius: "0.375rem",
                             background: "#fff",
-                            top: rect.bottom,
-                            left: rect.left,
-                            width: rect.width
+                            top: flipAbove ? undefined : rect.bottom,
+                            bottom: flipAbove ? window.innerHeight - rect.top : undefined,
+                            left,
+                            width
                         }}
                     >
 

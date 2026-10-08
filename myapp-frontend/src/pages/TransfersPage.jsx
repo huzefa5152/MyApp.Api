@@ -359,11 +359,11 @@ function ViewTransferModal({ t, canEdit, onEdit, onClose }) {
     </div>
   );
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h3 style={formStyles.title}>Transfer {t.reference}</h3>
-          <button style={formStyles.closeButton} onClick={onClose} title="Close"><MdClose size={18} /></button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} title="Close"><MdClose size={18} /></button>
         </div>
         <div style={formStyles.body}>
           <div style={{ ...st.amount, color: accent, marginBottom: "1rem" }}>
@@ -386,7 +386,7 @@ function ViewTransferModal({ t, canEdit, onEdit, onClose }) {
           </div>
         </div>
         <div style={st.viewFooter}>
-          <button type="button" style={st.editBtn} onClick={onClose}>Close</button>
+          <button data-admin-close="" type="button" style={st.editBtn} onClick={onClose}>Close</button>
           {canEdit && <button type="button" style={st.viewBtn} onClick={onEdit}><MdEdit size={16} /> Edit</button>}
         </div>
       </div>
@@ -473,11 +473,11 @@ function TransferForm({ companyId, editTransfer = null, onClose, onSaved }) {
   const blocked = saving || amtNum <= 0 || !fromAccountId || !toAccountId || sameAccount;
 
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? `Edit ${editTransfer.reference || "Transfer"}` : "New Transfer"}</h5>
-          <button style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
@@ -549,7 +549,7 @@ function TransferForm({ companyId, editTransfer = null, onClose, onSaved }) {
           </div>
 
           <div style={formStyles.footer}>
-            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: blocked ? 0.6 : 1 }} disabled={blocked}>
               {saving ? "Saving…" : isEdit ? "Save Changes" : "Save Transfer"}
             </button>

@@ -253,7 +253,7 @@ export default function FbrSandboxPage() {
       ) : (
         <>
           {/* Desktop / tablet — table */}
-          <div className="fbr-table" style={styles.tableWrap}>
+          <div data-admin-table-region="" className="fbr-table" style={styles.tableWrap}>
             <table style={styles.table}>
               <thead>
                 <tr style={styles.thead}>

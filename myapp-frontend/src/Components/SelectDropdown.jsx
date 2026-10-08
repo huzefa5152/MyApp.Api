@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useId } from "react";
 import httpClient from "../api/httpClient";
 import SearchableSelect from "./SearchableSelect";
 
@@ -25,6 +25,7 @@ export default function SelectDropdown({
   returnId = false,
   disabled = false,
 }) {
+  const fieldId = useId();
   const [fetched, setFetched] = useState([]);
   const [loading, setLoading] = useState(!!endpoint && !providedOptions);
   const [error, setError] = useState("");
@@ -55,11 +56,13 @@ export default function SelectDropdown({
   return (
     <div>
       {label && (
-        <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: "#5f6d7e" }}>
+        <label htmlFor={fieldId} style={{ display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: "#5f6d7e" }}>
           {label}
         </label>
       )}
       <SearchableSelect
+        id={fieldId}
+        ariaLabel={label || placeholder}
         items={items}
         value={selectedId ?? ""}
         valueKey={optionValueKey}

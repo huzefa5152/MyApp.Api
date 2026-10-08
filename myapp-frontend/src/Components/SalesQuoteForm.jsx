@@ -142,11 +142,11 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
   const disabled = !numberValid || !client || items.every((i) => !i.description.trim()) || saving;
 
   return (
-    <div style={formStyles.backdrop}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? `Edit Quote #${quote.quoteNumber}` : "Create Sales Quote"}</h5>
-          <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
@@ -216,7 +216,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
             />
           </div>
           <div style={formStyles.footer}>
-            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.6 : 1 }} disabled={disabled}>{saving ? "Saving..." : isEdit ? "Update Quote" : "Save Quote"}</button>
           </div>
         </form>

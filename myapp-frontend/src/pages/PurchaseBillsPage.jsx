@@ -626,8 +626,8 @@ export default function PurchaseBillsPage() {
       )}
 
       {showSalePicker && (
-        <div style={pickerStyles.backdrop} onClick={() => setShowSalePicker(false)}>
-          <div style={pickerStyles.modal} onClick={(e) => e.stopPropagation()}>
+        <div data-admin-backdrop="" style={pickerStyles.backdrop} onClick={() => setShowSalePicker(false)}>
+          <div data-admin-dialog="" style={pickerStyles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={pickerStyles.header}>
               <h3 style={pickerStyles.title}>Pick a sale bill awaiting procurement</h3>
               <button style={pickerStyles.closeBtn} onClick={() => setShowSalePicker(false)}>
@@ -690,7 +690,7 @@ export default function PurchaseBillsPage() {
                     ))}
                   </div>
                 ) : (
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" }}>
+                <div data-admin-table-region=""><table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" }}>
                   <thead>
                     <tr>
                       <th style={pickerStyles.th}>Bill #</th>
@@ -717,7 +717,7 @@ export default function PurchaseBillsPage() {
                         </tr>
                       ))}
                   </tbody>
-                </table>
+                </table></div>
                 );
               })()}
             </div>
@@ -726,8 +726,8 @@ export default function PurchaseBillsPage() {
       )}
 
       {showOrderPicker && (
-        <div style={pickerStyles.backdrop} onClick={() => setShowOrderPicker(false)}>
-          <div style={pickerStyles.modal} onClick={(e) => e.stopPropagation()}>
+        <div data-admin-backdrop="" style={pickerStyles.backdrop} onClick={() => setShowOrderPicker(false)}>
+          <div data-admin-dialog="" style={pickerStyles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={pickerStyles.header}>
               <h3 style={pickerStyles.title}>Select sales order(s) to purchase for</h3>
               <button style={pickerStyles.closeBtn} onClick={() => setShowOrderPicker(false)}>
@@ -786,7 +786,7 @@ export default function PurchaseBillsPage() {
                     })}
                   </div>
                 ) : (
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" }}>
+                <div data-admin-table-region=""><table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" }}>
                   <thead>
                     <tr>
                       <th style={{ ...pickerStyles.th, width: 40 }}></th>
@@ -811,7 +811,7 @@ export default function PurchaseBillsPage() {
                         </tr>
                       ))}
                   </tbody>
-                </table>
+                </table></div>
                 );
               })()}
             </div>
@@ -832,8 +832,8 @@ export default function PurchaseBillsPage() {
       )}
 
       {showChallanPicker && (
-        <div style={pickerStyles.backdrop} onClick={() => setShowChallanPicker(false)}>
-          <div style={pickerStyles.modal} onClick={(e) => e.stopPropagation()}>
+        <div data-admin-backdrop="" style={pickerStyles.backdrop} onClick={() => setShowChallanPicker(false)}>
+          <div data-admin-dialog="" style={pickerStyles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={pickerStyles.header}>
               <h3 style={pickerStyles.title}>Select delivery challan(s) to purchase for</h3>
               <button style={pickerStyles.closeBtn} onClick={() => setShowChallanPicker(false)}>
@@ -892,7 +892,7 @@ export default function PurchaseBillsPage() {
                     })}
                   </div>
                 ) : (
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" }}>
+                <div data-admin-table-region=""><table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" }}>
                   <thead>
                     <tr>
                       <th style={{ ...pickerStyles.th, width: 40 }}></th>
@@ -917,7 +917,7 @@ export default function PurchaseBillsPage() {
                         </tr>
                       ))}
                   </tbody>
-                </table>
+                </table></div>
                 );
               })()}
             </div>

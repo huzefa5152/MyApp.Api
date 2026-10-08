@@ -201,11 +201,11 @@ export default function SupplierForm({ supplier, companyId, companies = [], fbrE
     errors[name] ? <span style={{ color: "#dc3545", fontSize: "0.78rem", marginTop: "0.2rem", display: "block" }}>{errors[name]}</span> : null;
 
   return (
-    <div style={backdrop}>
-      <div style={modal}>
+    <div data-admin-backdrop="" style={backdrop}>
+      <div data-admin-dialog="" style={modal}>
         <div style={header}>
           <h5 style={title}>{supplier ? "Edit Supplier" : "New Supplier"}</h5>
-          <button style={closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit} noValidate>
           <div style={body}>
@@ -348,7 +348,7 @@ export default function SupplierForm({ supplier, companyId, companies = [], fbrE
           </div>
 
           <div style={footer}>
-            <button type="button" style={{ ...button, ...cancel }} onClick={onClose}>Cancel</button>
+            <button data-admin-close="" type="button" style={{ ...button, ...cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...button, ...submit }}>{supplier ? "Update" : "Create"}</button>
           </div>
         </form>

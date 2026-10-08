@@ -46,11 +46,11 @@ export default function CreateChallanFromOrderModal({ order, onClose, onCreated 
   };
 
   return (
-    <div style={formStyles.backdrop}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>Deliver Sales Order #{order.salesOrderNumber}</h5>
-          <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <div style={formStyles.body}>
           {error && <div style={s.err}>{error}</div>}
@@ -89,7 +89,7 @@ export default function CreateChallanFromOrderModal({ order, onClose, onCreated 
           ))}
         </div>
         <div style={formStyles.footer}>
-          <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
           <button type="button" style={{ ...formStyles.button, ...formStyles.submit, opacity: anyToDeliver && !saving ? 1 : 0.6 }} disabled={!anyToDeliver || saving} onClick={submit}>{saving ? "Creating..." : "Create Challan"}</button>
         </div>
       </div>

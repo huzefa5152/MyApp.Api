@@ -109,13 +109,13 @@ export default function ReconcileModal({ companyId, account, onClose, onLocked }
   };
 
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: modalSizes.lg }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.lg }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h3 style={{ ...formStyles.title, display: "flex", alignItems: "center", gap: 8 }}>
             <MdFactCheck size={20} /> Reconcile — {account.name}
           </h3>
-          <button style={formStyles.closeButton} onClick={onClose} title="Close"><MdClose size={18} /></button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} title="Close"><MdClose size={18} /></button>
         </div>
 
         <div style={formStyles.body}>
@@ -169,7 +169,7 @@ export default function ReconcileModal({ companyId, account, onClose, onLocked }
           ) : txns.length === 0 ? (
             <div style={st.empty}>No transactions to reconcile for this account.</div>
           ) : (
-            <div style={st.tableWrap}>
+            <div data-admin-table-region="" style={st.tableWrap}>
               <table style={st.table}>
                 <thead>
                   <tr>
@@ -232,7 +232,7 @@ export default function ReconcileModal({ companyId, account, onClose, onLocked }
         </div>
 
         <div style={formStyles.footer}>
-          <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
+          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
           <button
             type="button"
             style={{ ...formStyles.button, ...formStyles.submit, ...st.lockBtn, opacity: canLock ? 1 : 0.55, cursor: canLock ? "pointer" : "not-allowed" }}

@@ -204,11 +204,11 @@ export default function FbrSettingsPage() {
       {showForm && (
         // Backdrop click is a no-op so a stray click can't drop the FBR
         // lookup form before the operator finishes typing.
-        <div style={formStyles.backdrop}>
-          <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.sm}px`, cursor: "default" }}>
+        <div data-admin-backdrop="" style={formStyles.backdrop}>
+          <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.sm}px`, cursor: "default" }}>
             <div style={formStyles.header}>
               <h5 style={formStyles.title}>{editItem ? "Edit Lookup Value" : "New Lookup Value"}</h5>
-              <button style={formStyles.closeButton} onClick={() => setShowForm(false)}>&times;</button>
+              <button data-admin-close="" style={formStyles.closeButton} onClick={() => setShowForm(false)}>&times;</button>
             </div>
             <form onSubmit={handleSubmit}>
               <div style={formStyles.body}>
@@ -246,7 +246,7 @@ export default function FbrSettingsPage() {
                 </div>
               </div>
               <div style={formStyles.footer}>
-                <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setShowForm(false)}>Cancel</button>
+                <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setShowForm(false)}>Cancel</button>
                 <button type="submit" style={{ ...formStyles.button, ...formStyles.submit }}>{editItem ? "Update" : "Create"}</button>
               </div>
             </form>

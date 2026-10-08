@@ -158,14 +158,14 @@ export default function ManagerImportPage() {
             <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 700, color: colors.textPrimary }}>
               <MdBalance size={16} color={colors.blue} /> Reconciliation
             </div>
-            <table style={st.table}>
+            <div data-admin-table-region=""><table style={st.table}>
               <thead><tr><th style={st.th}></th><th style={st.thNum}>Manager</th><th style={st.thNum}>MyApp</th><th style={st.th}></th></tr></thead>
               <tbody>
                 <tr><td style={st.td}>Sales invoiced</td><td style={st.tdNum}>—</td><td style={st.tdNum}>{money(report.salesTotal)}</td><td style={st.td}></td></tr>
                 <tr><td style={st.td}>AR outstanding</td><td style={st.tdNum}>{money(report.arManager)}</td><td style={st.tdNum}>{money(report.arMyApp)}</td><td style={st.td}>{arMatch ? <span style={st.ok}>✓ match</span> : <span style={st.warn}>≠</span>}</td></tr>
                 <tr><td style={st.td}>AP outstanding</td><td style={st.tdNum}>{money(report.apManager)}</td><td style={st.tdNum}>{money(report.apMyApp)}</td><td style={st.td}>{apMatch ? <span style={st.ok}>✓ match</span> : <span style={st.warn}>≠</span>}</td></tr>
               </tbody>
-            </table>
+            </table></div>
           </div>
 
           {report.notes?.length > 0 && <ul style={st.notes}>{report.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}

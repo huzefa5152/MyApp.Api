@@ -107,11 +107,11 @@ export default function DivisionForm({ companyId, division, onClose, onSaved }) 
   };
 
   return (
-    <div style={backdrop} onClick={onClose}>
-      <div style={{ ...modal, maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={{ ...modal, maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
         <div style={header}>
           <h3 style={title}>{isEdit ? `Edit Division — ${division.name}` : "New Division"}</h3>
-          <button type="button" style={closeButton} onClick={onClose}>×</button>
+          <button data-admin-close="" type="button" style={closeButton} onClick={onClose}>×</button>
         </div>
 
         <div style={tabBar}>
@@ -200,7 +200,7 @@ export default function DivisionForm({ companyId, division, onClose, onSaved }) 
             )}
           </div>
           <div style={footer}>
-            <button type="button" style={cancel} onClick={onClose}>Cancel</button>
+            <button data-admin-close="" type="button" style={cancel} onClick={onClose}>Cancel</button>
             <button type="submit" style={submit} disabled={busy}>
               {busy ? "Saving…" : isEdit ? "Save" : "Create"}
             </button>

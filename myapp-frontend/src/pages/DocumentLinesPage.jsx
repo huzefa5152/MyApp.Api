@@ -131,7 +131,7 @@ export default function DocumentLinesPage() {
         <button type="button" style={action} disabled={!shown.length || busy || exporting} onClick={download}>{exporting ? "Exporting…" : "Download Excel"}</button>
       </div>
     {!loaded ? <div className="document-lines-empty">{busy ? "Loading matching line items…" : error ? "Update the filters to try again." : "Select a company to view its lines."}</div> : !shown.length ? <div className="document-lines-empty">No lines match these filters. Try another period or search.</div> : <>
-      <div className="document-lines-table">
+      <div data-admin-table-region="" className="document-lines-table">
         <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 650 }}>
           <thead><tr>{visibleColumns.map(([key, label]) => <th key={key} style={{ textAlign: "left", padding: 10, background: "#e0f2f1", borderBottom: "1px solid #cbd5e1" }}>{label}</th>)}</tr></thead>
           <tbody>{shown.slice(0, 200).map((row, index) => <tr key={`${row.documentId}-${row.line}-${index}`}>

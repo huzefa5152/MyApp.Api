@@ -327,7 +327,7 @@ export default function SalesReportPage() {
               </div>
             </div>
           ) : (
-            <div style={{ overflowX: "auto" }}>
+            <div data-admin-table-region="" style={{ overflowX: "auto" }}>
               <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 820, fontSize: "0.82rem" }}>
                 <thead>
                   <tr style={{ background: colors.rowAlt }}>
@@ -367,7 +367,7 @@ export default function SalesReportPage() {
                         {open && (
                           <tr>
                             <td colSpan={11} style={{ padding: 0, background: colors.rowAlt }}>
-                              <div style={{ overflowX: "auto", padding: "4px 8px 10px 38px" }}>
+                              <div data-admin-table-region="" style={{ overflowX: "auto", padding: "4px 8px 10px 38px" }}>
                                 <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 720, fontSize: "0.8rem" }}>
                                   <thead>
                                     <tr>

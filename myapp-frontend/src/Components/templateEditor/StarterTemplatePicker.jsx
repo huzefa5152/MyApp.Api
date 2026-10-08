@@ -39,11 +39,11 @@ export default function StarterTemplatePicker({ templateType, onSelect, onClose 
   // Backdrop click is a no-op so a stray click can't drop the picker
   // before the operator commits to a starter template.
   return (
-    <div style={s.overlay}>
-      <div style={s.modal} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={s.overlay}>
+      <div data-admin-dialog="" style={s.modal} onClick={(e) => e.stopPropagation()}>
         <div style={s.header}>
           <h3 style={s.title}>Start from Template</h3>
-          <button style={s.closeBtn} onClick={onClose}><MdClose size={20} /></button>
+          <button data-admin-close="" style={s.closeBtn} onClick={onClose}><MdClose size={20} /></button>
         </div>
         <p style={s.subtitle}>Choose a starter template to begin customizing</p>
 

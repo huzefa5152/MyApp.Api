@@ -200,7 +200,7 @@ export default function ChallanTable({
           </button>
         )}
         {perms.permUpdate && flags.canCancel && (
-          <button style={btnStyles.cancel} onClick={() => onCancel?.(c)} title="Cancel challan">
+          <button data-admin-close="" style={btnStyles.cancel} onClick={() => onCancel?.(c)} title="Cancel challan">
             <MdCancel size={14} />
           </button>
         )}

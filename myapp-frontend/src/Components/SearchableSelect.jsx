@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useId } from "react";
 import { createPortal } from "react-dom";
 import { MdArrowDropDown, MdSearch } from "react-icons/md";
 
@@ -32,7 +32,10 @@ export default function SearchableSelect({
   disabled = false,
   loading = false,
   allowClear = true,
+  id,
+  ariaLabel,
 }) {
+  const listId = useId();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlightIdx, setHighlightIdx] = useState(-1);
@@ -94,12 +97,17 @@ export default function SearchableSelect({
     if (e.key === "ArrowDown") { e.preventDefault(); setHighlightIdx((i) => Math.min(filtered.length - 1, i + 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setHighlightIdx((i) => Math.max(0, i - 1)); }
     else if (e.key === "Enter") { e.preventDefault(); if (highlightIdx >= 0 && highlightIdx < filtered.length) pick(filtered[highlightIdx]); }
-    else if (e.key === "Escape") { setOpen(false); }
+    else if (e.key === "Escape") { e.stopPropagation(); setOpen(false); triggerRef.current?.focus(); }
   };
 
   return (
     <div style={{ position: "relative", width: "100%" }}>
       <button
+        id={id}
+        aria-label={ariaLabel || placeholder}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-controls={open ? listId : undefined}
         type="button"
         ref={triggerRef}
         disabled={disabled || loading}
@@ -118,7 +126,7 @@ export default function SearchableSelect({
       </button>
 
       {open && triggerRect && createPortal(
-        <div ref={wrapperRef} style={styles.dropdown(triggerRect)} onKeyDown={onKeyDown}>
+        <div data-admin-popup="" ref={wrapperRef} style={styles.dropdown(triggerRect)} onKeyDown={onKeyDown}>
           <div style={styles.searchRow}>
             <MdSearch size={16} style={styles.searchIcon} />
             <input
@@ -131,13 +139,15 @@ export default function SearchableSelect({
               style={styles.searchInput}
             />
           </div>
-          <div style={styles.list}>
+          <div id={listId} role="listbox" aria-label={ariaLabel || placeholder} style={styles.list}>
             {filtered.length === 0 && (
               <div style={styles.empty}>{(items || []).length === 0 ? "No options." : `No match for "${query}".`}</div>
             )}
             {filtered.map((it, idx) => (
               <div
                 key={it[valueKey]}
+                role="option"
+                aria-selected={String(it[valueKey]) === String(value)}
                 onMouseDown={() => pick(it)}
                 onMouseEnter={() => setHighlightIdx(idx)}
                 style={{ ...styles.row, backgroundColor: idx === highlightIdx ? "#e3f2fd" : "transparent" }}

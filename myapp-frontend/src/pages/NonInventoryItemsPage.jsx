@@ -172,7 +172,7 @@ export default function NonInventoryItemsPage() {
           ))}
         </div>
       ) : selectedCompany ? (
-        <div style={styles.scroll}>
+        <div data-admin-table-region="" style={styles.scroll}>
           <table style={styles.table}>
             <thead>
               <tr>

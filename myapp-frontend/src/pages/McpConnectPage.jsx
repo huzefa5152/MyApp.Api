@@ -82,7 +82,7 @@ export default function McpConnectPage() {
         {error && <div role="alert" style={s.alert}>{error}</div>}
         <p style={s.hint}>Only approve if you just started this from {info.clientName}. Signed in as you; not you? <Link to="/profile">Switch account from your profile</Link>.</p>
         <div style={s.foot}>
-          <button style={s.ghost} disabled={busy} onClick={() => send(false)}>Cancel</button>
+          <button data-admin-close="" style={s.ghost} disabled={busy} onClick={() => send(false)}>Cancel</button>
           <button style={{ ...s.primary, opacity: (all || picked.length) && !busy ? 1 : 0.55 }} disabled={!(all || picked.length) || busy} onClick={() => send(true)}>Approve and connect</button>
         </div>
       </>}

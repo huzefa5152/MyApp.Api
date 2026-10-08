@@ -41,11 +41,11 @@ export default function FolderFormModal({ companyId, folder, onClose, onSaved })
   // OUTER quote form, saving + closing it. The portal also keeps the z-index
   // stack clean above the parent modal (1100) / ConfirmDialog (1101).
   return createPortal(
-    <div style={{ ...formStyles.backdrop, zIndex: 1102 }} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px` }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={{ ...formStyles.backdrop, zIndex: 1102 }} onClick={onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px` }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? "Rename Folder" : "New Folder"}</h5>
-          <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={submit}>
           <div style={formStyles.body}>
@@ -62,7 +62,7 @@ export default function FolderFormModal({ companyId, folder, onClose, onSaved })
             </div>
           </div>
           <div style={formStyles.footer}>
-            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }} disabled={saving}>
               {saving ? "Saving..." : isEdit ? "Rename" : "Create Folder"}
             </button>

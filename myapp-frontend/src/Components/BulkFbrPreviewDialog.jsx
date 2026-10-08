@@ -107,8 +107,8 @@ export default function BulkFbrPreviewDialog({ invoices, onClose }) {
   const fmtQty = (n) => parseFloat(Number(n || 0).toFixed(12)).toString();
 
   return (
-    <div style={formStyles.backdrop}>
-      <div
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog=""
         style={{
           ...formStyles.modal,
           maxWidth: `${modalSizes.xl}px`,
@@ -122,7 +122,7 @@ export default function BulkFbrPreviewDialog({ invoices, onClose }) {
       >
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>FBR Submission Preview · {stats.total} bill{stats.total === 1 ? "" : "s"}</h5>
-          <button type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close" title="Close">
+          <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close" title="Close">
             <MdClose size={20} color="#fff" />
           </button>
         </div>
@@ -169,7 +169,7 @@ export default function BulkFbrPreviewDialog({ invoices, onClose }) {
         </div>
 
         <div style={formStyles.footer}>
-          <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
+          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
             Close
           </button>
         </div>
@@ -308,7 +308,7 @@ function PayloadPanel({ payload, itemCount, originalLineCount, fmtNum, fmtQty })
           </span>
         )}
       </div>
-      <div className="responsive-table-wrap" style={s.tableWrap}>
+      <div data-admin-table-region="" className="responsive-table-wrap" style={s.tableWrap}>
         <table style={s.table}>
           <thead>
             <tr>

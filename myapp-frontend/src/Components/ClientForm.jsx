@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useId } from "react";
 import { createClient, createClientBatch, updateClient } from "../api/clientApi";
 import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
 import { getFbrRegistrationType } from "../api/fbrApi";
@@ -40,7 +40,33 @@ const {
  *                 Optional — when omitted, multi-company picker is
  *                 hidden.
  */
-export default function ClientForm({ client, companyId, companies = [], fbrEnabled, onClose, onSaved }) {
+export default function ClientForm({ client, companyId, companies = [], prototype = false, fbrEnabled, onClose, onSaved }) {
+  const dialogRef = useRef(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  const dialogId = useId();
+  useEffect(() => {
+    if (!prototype) return;
+    const previous = document.activeElement;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const root = dialogRef.current;
+    root?.querySelector('input[name="name"]')?.focus();
+    const keyboard = (event) => {
+      if (event.key === "Escape") { event.preventDefault(); closeRef.current(); }
+      if (event.key !== "Tab") return;
+      const targets = [...root.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]')].filter(el => el.getClientRects().length);
+      const first = targets[0], last = targets[targets.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    root?.addEventListener("keydown", keyboard);
+    return () => {
+      root?.removeEventListener("keydown", keyboard);
+      document.body.style.overflow = overflow;
+      if (previous?.isConnected) previous.focus();
+    };
+  }, [prototype]);
   const [formData, setFormData] = useState(
     client
       ? { ...client, ntn: client.ntn || "", strn: client.strn || "", site: client.site || "", registrationType: client.registrationType || "", cnic: client.cnic || "", fbrProvinceCode: client.fbrProvinceCode ?? "" }
@@ -267,11 +293,11 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
     errors[name] ? <span style={{ color: "#dc3545", fontSize: "0.78rem", marginTop: "0.2rem", display: "block" }}>{errors[name]}</span> : null;
 
   return (
-    <div style={backdrop}>
-      <div style={modal}>
+    <div data-admin-backdrop="" className={prototype ? "ui-client-backdrop" : undefined} style={backdrop}>
+      <div data-admin-dialog="" ref={dialogRef} className={prototype ? "ui-client-modal" : undefined} style={modal} role={prototype ? "dialog" : undefined} aria-modal={prototype ? true : undefined} aria-labelledby={prototype ? dialogId : undefined}>
         <div style={header}>
-          <h5 style={title}>{client ? "Edit Client" : "New Client"}</h5>
-          <button style={closeButton} onClick={onClose}>&times;</button>
+          <h5 id={dialogId} style={title}>{client ? "Edit Client" : "New Client"}</h5>
+          <button data-admin-close="" type="button" aria-label="Close client form" style={closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit} noValidate>
           <div style={body}>
@@ -315,24 +341,24 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
             )}
 
             <div style={formGroup}>
-              <label style={label}>Name *</label>
-              <input type="text" name="name" value={formData.name} onChange={handleChange} style={{ ...input, ...fieldError("name") }} />
+              <label style={label} htmlFor={`${dialogId}-name`}>Name *</label>
+              <input id={`${dialogId}-name`} type="text" name="name" value={formData.name} onChange={handleChange} style={{ ...input, ...fieldError("name") }} />
               {errorMsg("name")}
             </div>
 
             <div style={formGroup}>
-              <label style={label}>Address</label>
-              <input type="text" name="address" value={formData.address} onChange={handleChange} style={input} />
+              <label style={label} htmlFor={`${dialogId}-address`}>Address</label>
+              <input id={`${dialogId}-address`} type="text" name="address" value={formData.address} onChange={handleChange} style={input} />
             </div>
 
             <div className="form-grid-2col">
               <div style={formGroup}>
-                <label style={label}>Email</label>
-                <input type="email" name="email" value={formData.email} onChange={handleChange} style={input} />
+                <label style={label} htmlFor={`${dialogId}-email`}>Email</label>
+                <input id={`${dialogId}-email`} type="email" name="email" value={formData.email} onChange={handleChange} style={input} />
               </div>
               <div style={formGroup}>
-                <label style={label}>Phone</label>
-                <input type="text" name="phone" value={formData.phone} onChange={handleChange} style={input} />
+                <label style={label} htmlFor={`${dialogId}-phone`}>Phone</label>
+                <input id={`${dialogId}-phone`} type="text" name="phone" value={formData.phone} onChange={handleChange} style={input} />
               </div>
             </div>
 
@@ -345,8 +371,8 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
               <p style={{ margin: "0 0 0.5rem", fontWeight: 700, fontSize: "0.85rem", color: "#0d47a1" }}>FBR Details</p>
               <div className="form-grid-2col">
                 <div style={formGroup}>
-                  <label style={label}>Registration Type{star}</label>
-                  <select name="registrationType" value={formData.registrationType} onChange={handleChange} style={{ ...input, ...fieldError("registrationType") }}>
+                  <label style={label} htmlFor={`${dialogId}-registrationType`}>Registration Type{star}</label>
+                  <select id={`${dialogId}-registrationType`} name="registrationType" value={formData.registrationType} onChange={handleChange} style={{ ...input, ...fieldError("registrationType") }}>
                     <option value="">Select...</option>
                     {regTypes.map((rt) => (
                       <option key={rt.id} value={rt.code}>{rt.label}</option>
@@ -371,8 +397,8 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
                   )}
                 </div>
                 <div style={formGroup}>
-                  <label style={label}>Province{star}</label>
-                  <select name="fbrProvinceCode" value={formData.fbrProvinceCode} onChange={handleChange} style={{ ...input, ...fieldError("fbrProvinceCode") }}>
+                  <label style={label} htmlFor={`${dialogId}-fbrProvinceCode`}>Province{star}</label>
+                  <select id={`${dialogId}-fbrProvinceCode`} name="fbrProvinceCode" value={formData.fbrProvinceCode} onChange={handleChange} style={{ ...input, ...fieldError("fbrProvinceCode") }}>
                     <option value="">Select...</option>
                     {provinces.map((p) => (
                       <option key={p.id} value={p.code}>{p.label}</option>
@@ -393,8 +419,8 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
                 <div className="form-grid-2col" style={{ marginTop: "0.5rem" }}>
                   {showNtn && (
                     <div style={formGroup}>
-                      <label style={label}>{ntnLabel}</label>
-                      <input
+                      <label style={label} htmlFor={`${dialogId}-ntn`}>{ntnLabel}</label>
+                      <input id={`${dialogId}-ntn`}
                         type="text"
                         name="ntn"
                         value={formData.ntn}
@@ -452,27 +478,27 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
                 <p style={{ margin: "0 0 0.5rem", fontWeight: 700, fontSize: "0.85rem", color: "#37474f" }}>Tax IDs (optional)</p>
                 <div className="form-grid-2col">
                   <div style={formGroup}>
-                    <label style={label}>NTN</label>
-                    <input type="text" name="ntn" value={formData.ntn} onChange={handleChange} style={input} placeholder="NTN (optional)" />
+                    <label style={label} htmlFor={`${dialogId}-ntn`}>NTN</label>
+                    <input id={`${dialogId}-ntn`} type="text" name="ntn" value={formData.ntn} onChange={handleChange} style={input} placeholder="NTN (optional)" />
                   </div>
                   <div style={formGroup}>
-                    <label style={label}>STRN</label>
-                    <input type="text" name="strn" value={formData.strn} onChange={handleChange} style={input} placeholder="STRN (optional)" />
+                    <label style={label} htmlFor={`${dialogId}-strn`}>STRN</label>
+                    <input id={`${dialogId}-strn`} type="text" name="strn" value={formData.strn} onChange={handleChange} style={input} placeholder="STRN (optional)" />
                   </div>
                 </div>
               </div>
             )}
 
             <div style={formGroup}>
-              <label style={label}>Sites</label>
-              <input type="text" name="site" value={formData.site} onChange={handleChange} style={input} placeholder="e.g. Site-A ; Site-B ; Site-C" />
+              <label style={label} htmlFor={`${dialogId}-site`}>Sites</label>
+              <input id={`${dialogId}-site`} type="text" name="site" value={formData.site} onChange={handleChange} style={input} placeholder="e.g. Site-A ; Site-B ; Site-C" />
               <span style={{ fontSize: "0.75rem", color: "#5f6d7e", marginTop: "0.25rem", display: "block" }}>Separate multiple sites with semicolons (;). These will appear as dropdown options when creating a delivery challan.</span>
             </div>
 
           </div>
 
           <div style={footer}>
-            <button type="button" style={{ ...button, ...cancel }} onClick={onClose}>Cancel</button>
+            <button data-admin-close="" type="button" style={{ ...button, ...cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...button, ...submit }}>{client ? "Update" : "Create"}</button>
           </div>
         </form>

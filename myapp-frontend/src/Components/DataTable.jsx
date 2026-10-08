@@ -184,7 +184,7 @@ export default function DataTable({
         </div>
       )}
 
-      <div style={styles.tableWrap}>
+      <div data-admin-table-region="" style={styles.tableWrap}>
         <table style={styles.table}>
           <thead>
             <tr>

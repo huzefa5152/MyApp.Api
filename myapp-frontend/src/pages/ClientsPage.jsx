@@ -1,3 +1,4 @@
+import "./ClientsPrototype.css";
 import { useState, useEffect } from "react";
 import { MdPeople, MdAdd, MdSearch, MdBusiness } from "react-icons/md";
 import ClientList from "../Components/ClientList";
@@ -149,7 +150,7 @@ export default function ClientsPage() {
   );
 
   return (
-    <div>
+    <div className="trader-ui-prototype">
       {/* Page Header */}
       <div style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
@@ -211,7 +212,7 @@ export default function ClientsPage() {
           <MdSearch style={styles.searchIcon} />
           <input
             type="text"
-            placeholder="Search clients..."
+            aria-label="Search clients" placeholder="Search clients..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={styles.searchInput}
@@ -264,6 +265,7 @@ export default function ClientsPage() {
         </div>
       ) : (
         <ClientList
+          prototype
           clients={filtered}
           summaryById={summaryById}
           isCommon={isCommon}
@@ -317,6 +319,7 @@ export default function ClientsPage() {
           via the Common Client form). */}
       {showModal && selectedCompany && (
         <ClientForm
+          prototype
           client={selectedClient}
           companyId={selectedCompany.id}
           companies={companies}

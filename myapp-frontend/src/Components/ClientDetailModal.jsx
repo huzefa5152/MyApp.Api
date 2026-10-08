@@ -70,11 +70,11 @@ export default function ClientDetailModal({ clientId, clientName, initialSection
     setOpen((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>{clientName}</h5>
-          <button style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
         </div>
 
         {/* Tab bar */}
@@ -113,7 +113,7 @@ export default function ClientDetailModal({ clientId, clientName, initialSection
                         <div style={s.empty}>No {sec.label.toLowerCase()} for this customer.</div>
                       ) : (
                         <>
-                          <div style={{ overflowX: "auto" }}>
+                          <div data-admin-table-region="" style={{ overflowX: "auto" }}>
                             <table style={s.table}>
                               <thead>
                                 <tr>
@@ -152,7 +152,7 @@ export default function ClientDetailModal({ clientId, clientName, initialSection
           )}
         </div>
         <div style={formStyles.footer}>
-          <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
+          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
         </div>
       </div>
     </div>
@@ -179,7 +179,7 @@ function StatementView({ stmt }) {
         <div style={s.empty}>No invoices or receipts for this customer yet.</div>
       ) : (
         <>
-          <div style={{ overflowX: "auto" }}>
+          <div data-admin-table-region="" style={{ overflowX: "auto" }}>
             <table style={s.table}>
               <thead>
                 <tr>

@@ -157,7 +157,7 @@ function Block({ block: b }) {
 
   if (b.table) {
     return (
-      <div style={st.tableScroll}>
+      <div data-admin-table-region="" style={st.tableScroll}>
         <table style={st.table}>
           <thead>
             <tr>{b.table.head.map((h, i) => <th key={i} style={st.th}>{h}</th>)}</tr>
@@ -176,7 +176,7 @@ function Block({ block: b }) {
     return (
       <div style={st.entry}>
         <div style={st.entryTitle}>{b.entry.title}</div>
-        <div style={st.tableScroll}>
+        <div data-admin-table-region="" style={st.tableScroll}>
           <table style={st.table}>
             <thead>
               <tr>

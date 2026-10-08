@@ -51,8 +51,8 @@ export default function SalesOrderDetailModal({ order, onClose, onViewChallans, 
   const billableChallans = activeChallans.filter((c) => c.status === "Pending" || c.status === "Imported");
 
   return (
-    <div style={st.backdrop} onClick={onClose}>
-      <div style={st.modal} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={st.backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={st.modal} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div style={st.header}>
           <div>
@@ -66,7 +66,7 @@ export default function SalesOrderDetailModal({ order, onClose, onViewChallans, 
             </div>
             <div style={st.hClient}>{order.clientName}</div>
           </div>
-          <button style={st.close} onClick={onClose} title="Close"><MdClose size={22} /></button>
+          <button data-admin-close="" style={st.close} onClick={onClose} title="Close"><MdClose size={22} /></button>
         </div>
 
         <div style={st.body}>
@@ -83,7 +83,7 @@ export default function SalesOrderDetailModal({ order, onClose, onViewChallans, 
 
           {/* Line items */}
           <div style={st.sectionTitle}><MdInventory2 size={16} color={colors.blue} /> Items ({items.length})</div>
-          <div style={st.tableWrap}>
+          <div data-admin-table-region="" style={st.tableWrap}>
             <table style={st.table}>
               <thead>
                 <tr>
@@ -169,14 +169,14 @@ export default function SalesOrderDetailModal({ order, onClose, onViewChallans, 
 
         {/* Footer actions */}
         <div style={st.footer}>
-          <button style={st.btnGhost} onClick={onClose}>Close</button>
+          <button data-admin-close="" style={st.btnGhost} onClick={onClose}>Close</button>
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            {onEdit && order.isEditable && <button style={st.btnGhost} onClick={() => { onClose(); onEdit(order); }}><MdEdit size={15} /> Edit</button>}
+            {onEdit && order.isEditable && <button data-admin-close="" style={st.btnGhost} onClick={() => { onClose(); onEdit(order); }}><MdEdit size={15} /> Edit</button>}
             {onPrint && <button style={st.btnGhost} onClick={() => onPrint(order)}><MdPrint size={15} /> Print</button>}
-            {onViewChallans && order.challanCount > 0 && <button style={st.btnGhost} onClick={() => { onClose(); onViewChallans(order); }}><MdLocalShipping size={15} /> View Challans</button>}
-            {onDeliver && canDeliver && <button style={st.btnTeal} onClick={() => { onClose(); onDeliver(order); }}><MdLocalShipping size={15} /> Create Challan</button>}
-            {onAttach && canDeliver && <button style={st.btnTealOutline} onClick={() => { onClose(); onAttach(order); }}><MdLink size={15} /> Attach Challan</button>}
-            {onGenerateBill && billableChallans.length > 0 && <button style={st.btnBlue} onClick={() => { onClose(); onGenerateBill(order); }}><MdReceiptLong size={15} /> Generate Bill</button>}
+            {onViewChallans && order.challanCount > 0 && <button data-admin-close="" style={st.btnGhost} onClick={() => { onClose(); onViewChallans(order); }}><MdLocalShipping size={15} /> View Challans</button>}
+            {onDeliver && canDeliver && <button data-admin-close="" style={st.btnTeal} onClick={() => { onClose(); onDeliver(order); }}><MdLocalShipping size={15} /> Create Challan</button>}
+            {onAttach && canDeliver && <button data-admin-close="" style={st.btnTealOutline} onClick={() => { onClose(); onAttach(order); }}><MdLink size={15} /> Attach Challan</button>}
+            {onGenerateBill && billableChallans.length > 0 && <button data-admin-close="" style={st.btnBlue} onClick={() => { onClose(); onGenerateBill(order); }}><MdReceiptLong size={15} /> Generate Bill</button>}
           </div>
         </div>
       </div>

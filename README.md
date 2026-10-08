@@ -300,6 +300,8 @@ Optional company Gmail inbox: authorize an account once and link it only to assi
 
 ### 2026-10-08
 
+- Refine the admin interface with compact controls, mobile tap targets, contained tables, viewport-fitting dialogs and keyboard focus support while preserving existing workflows and permissions.
+
 - Harden sign-in privacy, account identity and token revocation while preserving existing credentials and company permissions. Handle duplicate usernames without server errors.
 
 - Port the optional Email Workspace from Trader with company-scoped Gmail, human quotation review, division access checks and Customize quotation numbering. Verify module grants with `scripts/test_email_module_access.py`.

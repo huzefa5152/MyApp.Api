@@ -403,12 +403,12 @@ export default function ItemTypeForm({
     // Backdrop stops click / mousedown from reaching an ancestor modal's
     // outside-click close handler (this form is React-nested inside document
     // line editors even though it's portaled to <body>).
-    <div
+    <div data-admin-backdrop=""
       style={{ ...formStyles.backdrop, zIndex: 1100 }}
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
     >
-      <div
+      <div data-admin-dialog=""
         style={{
           ...formStyles.modal,
           maxWidth: `${showRichHints ? modalSizes.md : modalSizes.sm}px`,
@@ -422,7 +422,7 @@ export default function ItemTypeForm({
             {mode === "edit" ? "Edit Item Type" : "New Item Type"}
             {scenarioCode && <span style={styles.scenarioPill}>{scenarioCode}</span>}
           </h5>
-          <button type="button" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
 
         <form onSubmit={submit}>
@@ -719,7 +719,7 @@ export default function ItemTypeForm({
           </div>
 
           <div style={formStyles.footer}>
-            <button
+            <button data-admin-close=""
               type="button"
               style={{ ...formStyles.button, ...formStyles.cancel }}
               onClick={onClose}

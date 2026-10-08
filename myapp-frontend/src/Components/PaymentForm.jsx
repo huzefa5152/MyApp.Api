@@ -405,7 +405,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
             value={row.adj}
             onChange={(e) => setAdjAmount(d.id, e.target.value)}
           />
-          <button
+          <button data-admin-close=""
             type="button"
             style={{ ...clearX, ...(isNarrow ? clearXNarrow : null) }}
             title="Remove adjustment"
@@ -565,11 +565,11 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   };
 
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? `Edit ${editPayment.reference || (isReceipt ? "Receipt" : "Payment")}` : (isReceipt ? "Record Receipt" : "Record Payment")}</h5>
-          <button style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
@@ -753,7 +753,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                               placeholder="Tax %"
                             />
                           </div>
-                          <button
+                          <button data-admin-close=""
                             type="button"
                             style={expRemove}
                             title="Remove this line"
@@ -844,7 +844,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                   })}
                 </div>
               ) : (
-                <div style={{ overflowX: "auto" }}>
+                <div data-admin-table-region="" style={{ overflowX: "auto" }}>
                   <table style={tbl}>
                     <thead>
                       <tr>
@@ -926,7 +926,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
           </div>
 
           <div style={formStyles.footer}>
-            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             {(() => {
               const bankMissing = hasBankAccounts && !bankAccountId && cashTotal > 0;
               // Allow submit when there's any settlement — cash and/or a pure

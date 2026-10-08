@@ -1306,13 +1306,13 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   // Backdrop click is a no-op — protects in-progress edits. Dismiss
   // via the X in the header or the Cancel button.
   return (
-    <div style={formStyles.backdrop}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>
             {readOnly ? "View Bill" : "Edit Bill"} {invoice?.fbrInvoiceNumber || `#${invoice?.invoiceNumber || ""}`}
           </h5>
-          <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSave}>
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
@@ -1726,7 +1726,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                     controls how the <b>Tax Invoice</b> prints.
                   </p>
                 )}
-                <div style={styles.tableWrap}>
+                <div data-admin-table-region="" style={styles.tableWrap}>
                   <table style={styles.table}>
                     <thead>
                       <tr style={styles.thead}>
@@ -2034,7 +2034,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
             )}
           </div>
           <div style={formStyles.footer}>
-            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
+            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
               {readOnly ? "Close" : "Cancel"}
             </button>
             {!readOnly && invoice?.isEditable && (canFullEdit || canEditItemTypeAndQty || canEditItemType) && (() => {

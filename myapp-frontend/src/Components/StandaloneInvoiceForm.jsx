@@ -784,11 +784,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const buyerKind = chosenScenario?.meta.buyerKind || null;
 
   return (
-    <div style={formStyles.backdrop}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>Create Bill (No Challan)</h5>
-          <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
@@ -1204,7 +1204,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                         anyTagged={rows.some((r) => r.itemTypeId)}
                       />
 
-                      <div style={styles.unifiedTableWrap}>
+                      <div data-admin-table-region="" style={styles.unifiedTableWrap}>
                         <table style={styles.unifiedTable}>
                           <thead>
                             <tr style={styles.unifiedThead}>
@@ -1486,7 +1486,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                 Some required fields are missing.
               </span>
             ) : null}
-            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button
               type="submit"
               style={{

@@ -387,11 +387,11 @@ function JournalViewDialog({ entry: e, companyId, onClose }) {
   const src = sourceMeta(e.sourceDocType);
   const lines = e.lines || [];
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(ev) => ev.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(ev) => ev.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>{e.reference}</h5>
-          <button style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
         </div>
         <div style={formStyles.body}>
           <div style={st.viewMetaGrid}>
@@ -406,7 +406,7 @@ function JournalViewDialog({ entry: e, companyId, onClose }) {
               <div style={{ fontSize: "0.88rem", color: colors.textPrimary, lineHeight: 1.45 }}>{e.narration}</div>
             </div>
           )}
-          <div style={{ overflowX: "auto" }}>
+          <div data-admin-table-region="" style={{ overflowX: "auto" }}>
             <table style={st.tbl}>
               <thead>
                 <tr>
@@ -447,7 +447,7 @@ function JournalViewDialog({ entry: e, companyId, onClose }) {
           )}
         </div>
         <div style={formStyles.footer}>
-          <button style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
+          <button data-admin-close="" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
         </div>
       </div>
     </div>
@@ -546,11 +546,11 @@ function JournalEntryForm({ companyId, entry, onClose, onSaved }) {
   };
 
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? `Edit ${entry.reference}` : "New Journal Entry"}</h5>
-          <button style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
         </div>
         <form onSubmit={submit}>
           <div style={formStyles.body}>
@@ -652,7 +652,7 @@ function JournalEntryForm({ companyId, entry, onClose, onSaved }) {
             </div>
           </div>
           <div style={formStyles.footer}>
-            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: canSave ? 1 : 0.55, cursor: canSave ? "pointer" : "not-allowed" }} disabled={!canSave}>
               {saving ? "Saving…" : "Save"}
             </button>

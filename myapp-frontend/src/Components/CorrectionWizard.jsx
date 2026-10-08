@@ -134,14 +134,14 @@ export default function CorrectionWizard({ invoice, onClose, onCreated }) {
   const M = mode ? MODES[mode] : null;
 
   return (
-    <div style={s.overlay} onClick={onClose}>
-      <div style={s.card} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+    <div data-admin-backdrop="" style={s.overlay} onClick={onClose}>
+      <div data-admin-dialog="" style={s.card} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
         <div style={s.head}>
           <div>
             <div style={s.eyebrow}>Correct bill · #{invoice?.invoiceNumber}</div>
             <h2 style={s.title}>{step === "diagnose" ? "What needs correcting?" : M?.label}</h2>
           </div>
-          <button style={s.iconBtn} onClick={onClose} aria-label="Close"><MdClose size={20} /></button>
+          <button data-admin-close="" style={s.iconBtn} onClick={onClose} aria-label="Close"><MdClose size={20} /></button>
         </div>
 
         {loadErr && <div style={s.err}>{loadErr}</div>}
@@ -181,7 +181,7 @@ export default function CorrectionWizard({ invoice, onClose, onCreated }) {
               </span>
             </div>
 
-            <div style={s.tableWrap}>
+            <div data-admin-table-region="" style={s.tableWrap}>
               <table style={s.table}>
                 <thead>
                   <tr>

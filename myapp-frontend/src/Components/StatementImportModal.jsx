@@ -144,13 +144,13 @@ export default function StatementImportModal({ companyId, account, onClose, onDo
   const done = () => { onClose?.(); onDone?.(); };
 
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: modalSizes.lg }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.lg }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h3 style={{ ...formStyles.title, display: "flex", alignItems: "center", gap: 8 }}>
             <MdUploadFile size={20} /> Import Statement — {account.name}
           </h3>
-          <button style={formStyles.closeButton} onClick={onClose} title="Close"><MdClose size={18} /></button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} title="Close"><MdClose size={18} /></button>
         </div>
 
         <div style={formStyles.body}>
@@ -203,7 +203,7 @@ export default function StatementImportModal({ companyId, account, onClose, onDo
             ) : lines.length === 0 ? (
               <div style={st.empty}>Nothing to categorize — all lines matched.</div>
             ) : (
-              <div style={st.tableWrap}>
+              <div data-admin-table-region="" style={st.tableWrap}>
                 <table style={st.table}>
                   <thead>
                     <tr>

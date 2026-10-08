@@ -31,7 +31,7 @@ const EMPTY = {
   qtyToDeliver: 0, qtyToInvoice: 0, accountsReceivable: 0, withholdingTaxReceivable: 0, status: "Paid",
 };
 
-export default function ClientList({ clients, summaryById = {}, onEdit, onCopy, fetchClients, onOpenDetail, isCommon, sharedWith }) {
+export default function ClientList({ prototype = false, clients, summaryById = {}, onEdit, onCopy, fetchClients, onOpenDetail, isCommon, sharedWith }) {
   // A client shared with other companies (grouped by NTN / name) is badged so
   // the operator knows its pencil edits every company's copy at once, and the
   // row names the other companies (within the operator's access) that share it.
@@ -191,7 +191,7 @@ export default function ClientList({ clients, summaryById = {}, onEdit, onCopy, 
   return (
     // Wide table → own horizontal-scroll container so the page body never
     // scrolls sideways on phones (mobile-first rule).
-    <div style={styles.scroll}>
+    <div data-admin-table-region="" className="ui-client-table-scroll" style={styles.scroll} role={prototype ? "region" : undefined} aria-label={prototype ? "Clients table" : undefined} tabIndex={prototype ? 0 : undefined}>
       <table style={styles.table}>
         <thead>
           <tr>

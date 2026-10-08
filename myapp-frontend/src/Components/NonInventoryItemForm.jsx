@@ -63,11 +63,11 @@ export default function NonInventoryItemForm({ companyId, item, onClose, onSaved
   };
 
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <form style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px` }} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <form data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px` }} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? "Edit Non-Inventory Item" : "New Non-Inventory Item"}</h5>
-          <button type="button" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <div style={formStyles.body}>
           <div style={formStyles.formGroup}>
@@ -136,7 +136,7 @@ export default function NonInventoryItemForm({ companyId, item, onClose, onSaved
           </label>
         </div>
         <div style={formStyles.footer}>
-          <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
           <button type="submit" disabled={saving} style={{ ...formStyles.button, ...formStyles.submit, ...(saving ? { opacity: 0.6 } : {}) }}>
             {saving ? "Saving…" : isEdit ? "Save Changes" : "Create"}
           </button>

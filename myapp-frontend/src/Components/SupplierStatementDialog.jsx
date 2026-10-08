@@ -33,8 +33,8 @@ export default function SupplierStatementDialog({ supplier, onClose }) {
   const money = (n) => (n ? Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "");
 
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog=""
         style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -43,7 +43,7 @@ export default function SupplierStatementDialog({ supplier, onClose }) {
             <h5 style={formStyles.title}>{supplier.name}</h5>
             <div style={st.sub}>Supplier ledger — bills, payments and advances</div>
           </div>
-          <button style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
         </div>
 
         <div style={formStyles.body}>
@@ -87,7 +87,7 @@ export default function SupplierStatementDialog({ supplier, onClose }) {
                   ))}
                 </div>
               ) : (
-                <div style={{ overflowX: "auto" }}>
+                <div data-admin-table-region="" style={{ overflowX: "auto" }}>
                   <table style={st.table}>
                     <thead>
                       <tr>

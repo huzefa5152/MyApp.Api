@@ -426,8 +426,8 @@ export default function UsersPage() {
       {showModal && (
         // Backdrop click is a no-op — explicit Cancel / X only, so a stray
         // click can't drop the half-typed user form.
-        <div style={styles.overlay}>
-          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <div data-admin-backdrop="" style={styles.overlay}>
+          <div data-admin-dialog="" style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <h3 style={formStyles.title}>
                 {editUser ? "Edit User" : "Add New User"}
@@ -559,7 +559,7 @@ export default function UsersPage() {
             </div>
 
             <div style={styles.modalFooter}>
-              <button style={styles.cancelBtn} onClick={closeModal}>
+              <button data-admin-close="" style={styles.cancelBtn} onClick={closeModal}>
                 Cancel
               </button>
               <button
@@ -578,8 +578,8 @@ export default function UsersPage() {
       {/* ---- Role Assignment Modal ---- */}
       {rolesModalUser && (
         // Backdrop click is a no-op — explicit Cancel / X only.
-        <div style={styles.overlay}>
-          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <div data-admin-backdrop="" style={styles.overlay}>
+          <div data-admin-dialog="" style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <h3 style={formStyles.title}>
                 Manage roles — {rolesModalUser.fullName}
@@ -675,7 +675,7 @@ export default function UsersPage() {
             </div>
 
             <div style={styles.modalFooter}>
-              <button style={styles.cancelBtn} onClick={closeRolesModal} disabled={rolesSaving}>
+              <button data-admin-close="" style={styles.cancelBtn} onClick={closeRolesModal} disabled={rolesSaving}>
                 Cancel
               </button>
               <button style={styles.saveBtn} onClick={handleSaveRoles} disabled={rolesSaving || rolesLoading}>
@@ -691,8 +691,8 @@ export default function UsersPage() {
       {deleteConfirm && (
         // Backdrop click is a no-op — destructive action requires explicit
         // Cancel or Delete click.
-        <div style={styles.overlay}>
-          <div style={styles.deleteModal} onClick={(e) => e.stopPropagation()}>
+        <div data-admin-backdrop="" style={styles.overlay}>
+          <div data-admin-dialog="" style={styles.deleteModal} onClick={(e) => e.stopPropagation()}>
             <MdDelete style={{ fontSize: "2.5rem", color: colors.danger }} />
             <h3 style={{ margin: "0.75rem 0 0.5rem", color: colors.textPrimary }}>
               Delete User?
@@ -702,7 +702,7 @@ export default function UsersPage() {
               This action cannot be undone.
             </p>
             <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.5rem" }}>
-              <button
+              <button data-admin-close=""
                 style={styles.cancelBtn}
                 onClick={() => setDeleteConfirm(null)}
               >

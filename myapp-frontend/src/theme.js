@@ -36,7 +36,7 @@ export const cardStyles = {
     // a title + 3-line meta block + buttons, so anything narrower
     // cramps the layout). Was hardcoded `repeat(3, 1fr)` which forced
     // a 3-up grid on phones.
-    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(var(--admin-card-min, 280px), 1fr))",
     gap: "var(--admin-card-gap, 1.25rem)",
   },
   card: {

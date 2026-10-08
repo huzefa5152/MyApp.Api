@@ -214,7 +214,7 @@ export default function PurchaseDebitNotesPage() {
           </div>
         </div>
       ) : (
-        <div style={styles.scroll}>
+        <div data-admin-table-region="" style={styles.scroll}>
           <table style={styles.table}>
             <thead>
               <tr>
@@ -274,18 +274,18 @@ export default function PurchaseDebitNotesPage() {
       )}
 
       {viewNote && (
-        <div style={formStyles.backdrop} onClick={() => setViewNote(null)}>
-          <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }} onClick={(e) => e.stopPropagation()}>
+        <div data-admin-backdrop="" style={formStyles.backdrop} onClick={() => setViewNote(null)}>
+          <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }} onClick={(e) => e.stopPropagation()}>
             <div style={formStyles.header}>
               <h5 style={formStyles.title}>Purchase Debit Note #{viewNote.debitNoteNumber}</h5>
-              <button style={formStyles.closeButton} onClick={() => setViewNote(null)}>&times;</button>
+              <button data-admin-close="" style={formStyles.closeButton} onClick={() => setViewNote(null)}>&times;</button>
             </div>
             <div style={formStyles.body}>
               <div style={styles.vRow}><span style={styles.vLbl}>Supplier</span><span style={styles.vVal}>{viewNote.supplierName}</span></div>
               <div style={styles.vRow}><span style={styles.vLbl}>Date</span><span style={styles.vVal}>{fmtDate(viewNote.date)}</span></div>
               {viewNote.divisionName && <div style={styles.vRow}><span style={styles.vLbl}>Division</span><span style={styles.vVal}>{viewNote.divisionName}</span></div>}
               {viewNote.supplierRef && <div style={styles.vRow}><span style={styles.vLbl}>Reference</span><span style={styles.vVal}>{viewNote.supplierRef}</span></div>}
-              <div style={styles.scroll}>
+              <div data-admin-table-region="" style={styles.scroll}>
                 <table style={styles.table}>
                   <thead><tr><th style={styles.th}>Description</th><th style={styles.thMoney}>Qty</th><th style={styles.th}>UOM</th><th style={styles.thMoney}>Unit Price</th><th style={styles.thMoney}>Line Total</th></tr></thead>
                   <tbody>
@@ -306,7 +306,7 @@ export default function PurchaseDebitNotesPage() {
               </div>
             </div>
             <div style={formStyles.footer}>
-              <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setViewNote(null)}>Close</button>
+              <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setViewNote(null)}>Close</button>
             </div>
           </div>
         </div>

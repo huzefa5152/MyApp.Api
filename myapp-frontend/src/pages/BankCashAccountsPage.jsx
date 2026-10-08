@@ -299,7 +299,7 @@ export default function BankCashAccountsPage() {
           </div>
         </div>
       ) : (
-        <div style={st.tableWrap}>
+        <div data-admin-table-region="" style={st.tableWrap}>
           <table style={st.table}>
             <thead>
               <tr>
@@ -477,11 +477,11 @@ function CreateBankCashModal({ companyId, canViewDivisions, assetGroups, default
   };
 
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h3 style={formStyles.title}>New Bank / Cash Account</h3>
-          <button style={formStyles.closeButton} onClick={onClose} title="Close"><MdClose size={18} /></button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} title="Close"><MdClose size={18} /></button>
         </div>
 
         <div style={formStyles.body}>
@@ -541,7 +541,7 @@ function CreateBankCashModal({ companyId, canViewDivisions, assetGroups, default
         </div>
 
         <div style={st.footer}>
-          <button type="button" style={st.secondaryBtn} onClick={onClose} disabled={saving}>Cancel</button>
+          <button data-admin-close="" type="button" style={st.secondaryBtn} onClick={onClose} disabled={saving}>Cancel</button>
           <button type="button" style={{ ...st.secondaryBtn, opacity: saving ? 0.6 : 1 }} onClick={() => doCreate(true)} disabled={saving}>Create &amp; add another</button>
           <button type="button" style={{ ...st.primaryBtn, opacity: saving ? 0.6 : 1 }} onClick={() => doCreate(false)} disabled={saving}>{saving ? "Creating…" : "Create"}</button>
         </div>
@@ -593,11 +593,11 @@ function EditBankCashModal({ companyId, canViewDivisions, assetGroups, account, 
   };
 
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h3 style={formStyles.title}>Edit Bank / Cash Account</h3>
-          <button style={formStyles.closeButton} onClick={onClose} title="Close"><MdClose size={18} /></button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} title="Close"><MdClose size={18} /></button>
         </div>
 
         <div style={formStyles.body}>
@@ -666,7 +666,7 @@ function EditBankCashModal({ companyId, canViewDivisions, assetGroups, account, 
         </div>
 
         <div style={st.footer}>
-          <button type="button" style={st.secondaryBtn} onClick={onClose} disabled={saving}>Cancel</button>
+          <button data-admin-close="" type="button" style={st.secondaryBtn} onClick={onClose} disabled={saving}>Cancel</button>
           <button type="button" style={{ ...st.primaryBtn, opacity: saving ? 0.6 : 1 }} onClick={doSave} disabled={saving}>{saving ? "Saving…" : "Save changes"}</button>
         </div>
       </div>

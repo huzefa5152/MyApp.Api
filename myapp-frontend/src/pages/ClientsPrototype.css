@@ -1,0 +1,35 @@
+.trader-ui-prototype { min-width: 0; font-size: 13px; }
+.trader-ui-prototype > div:first-child { margin-bottom: 18px !important; gap: 12px !important; flex-wrap: wrap; }
+.trader-ui-prototype h2 { font-size: 22px !important; line-height: 1.25; }
+.trader-ui-prototype p { line-height: 1.5; }
+.trader-ui-prototype button, .trader-ui-prototype input, .trader-ui-prototype select { font-size: 13px !important; }
+.trader-ui-prototype button { min-height: 36px; transition: box-shadow .15s, filter .15s; }
+.trader-ui-prototype button:hover:not(:disabled) { filter: brightness(.97); }
+.trader-ui-prototype :is(button,input,select,textarea,[tabindex]):focus-visible { outline: 2px solid #0d47a1 !important; outline-offset: 3px; }
+.trader-ui-prototype > div { max-width: 100%; min-width: 0; }
+.trader-ui-prototype input:not([type=checkbox]), .trader-ui-prototype select { min-height: 36px; max-width: 100%; box-sizing: border-box; padding: 7px 10px !important; }
+.trader-ui-prototype .ui-client-table-scroll { max-width: 100%; max-height: 65vh; overscroll-behavior: contain; }
+.trader-ui-prototype table th { position: sticky; top: 0; z-index: 2;  }
+.trader-ui-prototype table :is(th,td) { padding: 9px 10px !important; }
+.trader-ui-prototype table button { padding: 4px !important; margin: 0; box-shadow: none; }
+.trader-ui-prototype .ui-client-backdrop { padding: 12px !important; box-sizing: border-box; }
+.trader-ui-prototype .ui-client-modal { width: 680px !important; max-width: 100% !important; max-height: calc(100dvh - 24px) !important; display: flex; flex-direction: column; overflow: hidden; }
+.ui-client-modal > div:first-child { flex-shrink: 0; padding: 14px 18px !important; }
+.ui-client-modal h5 { font-size: 18px !important; }
+.ui-client-modal form { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.ui-client-modal form > div:first-child { overflow-y: auto; min-height: 0; padding: 18px !important; }
+.ui-client-modal form > div:last-child { flex-shrink: 0; padding: 12px 18px !important; }
+.ui-client-modal label { font-size: 12px !important; }
+.ui-client-modal button[aria-label="Close client form"] { min-width: 36px; padding: 0 !important; }
+@media (max-width: 767px) {
+ .trader-ui-prototype button, .trader-ui-prototype input:not([type=checkbox]), .trader-ui-prototype select { min-height: 44px; }
+ .trader-ui-prototype h2 { font-size: 20px !important; }
+ .trader-ui-prototype > div { flex-wrap: wrap; }
+ .trader-ui-prototype button { overflow-wrap: anywhere; }
+ .ui-client-modal .form-grid-2col { grid-template-columns: minmax(0,1fr); }
+ .ui-client-modal > div:first-child, .ui-client-modal form > div { padding: 12px !important; }
+}
+@media (prefers-reduced-motion: reduce) { .trader-ui-prototype * { transition: none !important; animation: none !important; } }
+
+.trader-ui-prototype input[aria-label="Search clients"] { padding-left: 36px !important; }
+

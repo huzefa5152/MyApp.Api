@@ -49,14 +49,14 @@ export default function AccountLedgerDialog({ account, onClose }) {
   };
 
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={{ ...formStyles.title, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             Ledger — {account.name}
             {account.code && <span style={codeChip}>{account.code}</span>}
           </h5>
-          <button style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
         </div>
 
         <div style={formStyles.body}>
@@ -85,7 +85,7 @@ export default function AccountLedgerDialog({ account, onClose }) {
               No ledger entries for this account{applied.from || applied.to ? " in the selected period" : ""}.
             </div>
           ) : (
-            <div style={{ overflowX: "auto" }}>
+            <div data-admin-table-region="" style={{ overflowX: "auto" }}>
               <table style={tbl}>
                 <thead>
                   <tr>
@@ -148,7 +148,7 @@ export default function AccountLedgerDialog({ account, onClose }) {
         </div>
 
         <div style={formStyles.footer}>
-          <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
+          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
         </div>
       </div>
     </div>

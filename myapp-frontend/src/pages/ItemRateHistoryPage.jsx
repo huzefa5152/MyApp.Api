@@ -296,7 +296,7 @@ export default function ItemRateHistoryPage() {
           ) : selectedCompany ? (
             <>
               {/* Desktop / tablet — table */}
-              <div className="irh-table" style={styles.tableWrap}>
+              <div data-admin-table-region="" className="irh-table" style={styles.tableWrap}>
                 <table style={styles.table}>
                   <thead>
                     <tr>

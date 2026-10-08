@@ -159,11 +159,11 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
   };
 
   return (
-    <div style={formStyles.backdrop}>
-      <div style={{ ...formStyles.modal, maxWidth: 1000, width: "94vw" }}>
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: 1000, width: "94vw" }}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? "Edit Goods Receipt" : "New Goods Receipt"}</h5>
-          <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
@@ -214,7 +214,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                 </button>
               </div>
               <BulkItemTypeBar items={items} setItems={setItems} itemTypes={itemTypes} nonInventoryItems={nonInvItems} divisionId={divisionId} />
-              <div style={{ overflowX: "auto" }}>
+              <div data-admin-table-region="" style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
                 <thead>
                   <tr style={{ backgroundColor: "#f5f8fc" }}>
@@ -275,7 +275,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
             />
           </div>
           <div style={formStyles.footer}>
-            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" disabled={saving || !numberValid} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}>
               {saving ? "Saving..." : (isEdit ? "Update" : "Create")}
             </button>

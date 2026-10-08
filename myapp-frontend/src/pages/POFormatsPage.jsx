@@ -168,7 +168,7 @@ export default function POFormatsPage() {
       ) : (
         <>
           {/* Desktop / tablet — table */}
-          <div className="pof-table" style={styles.card}>
+          <div data-admin-table-region="" className="pof-table" style={styles.card}>
             <table style={styles.table}>
               <thead>
                 <tr>

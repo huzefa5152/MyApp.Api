@@ -477,12 +477,12 @@ function CreatePortalModal({ companies, defaultCompanyId, loadingCompanies, onCl
   };
 
   return (
-    <div style={formStyles.backdrop}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }}
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }}
            onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>Create Customer Portal</h5>
-          <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <div style={formStyles.body}>
           {error && <div style={st.err}>{error}</div>}
@@ -560,7 +560,7 @@ function CreatePortalModal({ companies, defaultCompanyId, loadingCompanies, onCl
           </p>
         </div>
         <div style={formStyles.footer}>
-          <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
+          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
             Cancel
           </button>
           <button
@@ -580,12 +580,12 @@ function CreatePortalModal({ companies, defaultCompanyId, loadingCompanies, onCl
 
 function CreatedModal({ portal, onCopy, copied, onClose }) {
   return (
-    <div style={formStyles.backdrop}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }}
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }}
            onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>Customer Portal Created</h5>
-          <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <div style={formStyles.body}>
           <p style={{ ...cardStyles.text, marginBottom: "0.25rem" }}><strong>Client</strong></p>

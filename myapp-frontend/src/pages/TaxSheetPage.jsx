@@ -248,7 +248,7 @@ export default function TaxSheetPage() {
               </div>
             </div>
           ) : (
-            <div style={{ overflowX: "auto" }}>
+            <div data-admin-table-region="" style={{ overflowX: "auto" }}>
               <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 860, fontSize: "0.82rem" }}>
                 <thead>
                   <tr style={{ background: colors.rowAlt }}>

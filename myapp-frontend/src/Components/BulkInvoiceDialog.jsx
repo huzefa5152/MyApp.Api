@@ -134,11 +134,11 @@ export default function BulkInvoiceDialog({
   const skipped = batch?.skipped || [];
 
   return (
-    <div style={s.backdrop} role="dialog" aria-modal="true" aria-label={title}>
+    <div data-admin-backdrop="" data-admin-dialog="" style={s.backdrop} role="dialog" aria-modal="true" aria-label={title}>
       <div style={{ ...s.panel, ...(t.panel || {}) }}>
         <div style={s.head}>
           <h5 style={s.title}>{title}</h5>
-          <button type="button" style={s.close} onClick={onClose} disabled={running} aria-label="Close">
+          <button data-admin-close="" type="button" style={s.close} onClick={onClose} disabled={running} aria-label="Close">
             <MdClose size={18} />
           </button>
         </div>
@@ -259,7 +259,7 @@ export default function BulkInvoiceDialog({
               <div style={{ ...s.barInner, width: `${Math.round((progress.done / Math.max(progress.total, 1)) * 100)}%` }} />
             </div>
             <div style={s.actions}>
-              <button type="button" style={s.secondary} onClick={() => { cancelRef.current = true; }}>
+              <button data-admin-close="" type="button" style={s.secondary} onClick={() => { cancelRef.current = true; }}>
                 Cancel
               </button>
             </div>
