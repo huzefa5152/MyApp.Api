@@ -4,6 +4,7 @@ namespace MyApp.Api.Services.Interfaces
 {
     public interface ISalesOrderService
     {
+        Task<SalesOrderDto> CreateFromBillAsync(int billId);
         Task<List<SalesOrderDto>> GetByCompanyAsync(int companyId);
         /// <summary>Open orders that still have undelivered quantity — powers the challan picker.</summary>
         Task<List<SalesOrderDto>> GetOpenByCompanyAsync(int companyId);

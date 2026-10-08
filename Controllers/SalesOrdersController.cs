@@ -16,13 +16,17 @@ namespace MyApp.Api.Controllers
     {
         private readonly ISalesOrderService _service;
         private readonly ICompanyAccessGuard _access;
+        private readonly IInvoiceService _invoices;
+        private readonly IPermissionService _permissions;
         private readonly int _defaultPageSize;
         private readonly ILogger<SalesOrdersController> _logger;
 
-        public SalesOrdersController(ISalesOrderService service, ICompanyAccessGuard access,
+        public SalesOrdersController(ISalesOrderService service, ICompanyAccessGuard access, IInvoiceService invoices, IPermissionService permissions,
             IConfiguration configuration, ILogger<SalesOrdersController> logger)
         {
             _service = service;
+            _invoices = invoices;
+            _permissions = permissions;
             _access = access;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
             _logger = logger;
@@ -32,6 +36,18 @@ namespace MyApp.Api.Controllers
             int.TryParse(
                 User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
                 out var id) ? id : 0;
+
+        [HttpPost("from-bill/{billId}")]
+        [HasPermission("salesorders.manage.create")]
+        public async Task<ActionResult<SalesOrderDto>> CreateFromBill(int billId)
+        {
+            var bill = await _invoices.GetByIdAsync(billId);
+            if (bill == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, bill.CompanyId);
+            if (!await _permissions.HasPermissionAsync(CurrentUserId, "challans.manage.update")) return Forbid();
+            try { return Ok(await _service.CreateFromBillAsync(billId)); }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+        }
 
         [HttpGet("count")]
         [HasPermission("salesorders.list.view")]
@@ -119,6 +135,9 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            if (dto.ApplyRatesToBills && !await _permissions.HasPermissionAsync(CurrentUserId, "bills.manage.update")) return Forbid();
+            if (dto.ApplyDetailsToDeliveries && (!await _permissions.HasPermissionAsync(CurrentUserId, "challans.manage.update")
+                || !await _permissions.HasPermissionAsync(CurrentUserId, "bills.manage.update"))) return Forbid();
             try
             {
                 var updated = await _service.UpdateAsync(id, dto);

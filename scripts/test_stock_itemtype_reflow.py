@@ -1503,6 +1503,14 @@ def main() -> int:
         suite_challan_overlay(args.base, token, cid, client, supplier, suffix)
         suite_oversell_guard(args.base, token, cid, client, supplier, suffix)
         suite_gl_inventory_relief(args.base, token, cid, client, supplier, suffix)
+        from bill_challan_checks import run as check_challan_selection
+        selection_type = make_item_type(args.base, token, f"SELECT_{suffix}", hs=next_hs())
+        if selection_type:
+            prestock(args.base, token, cid, supplier["id"], [(selection_type, 100)])
+            check_challan_selection(http, check, args.base, token, cid, client["id"], selection_type["id"],
+                                    stock=lambda: onhand(args.base, token, cid, selection_type["id"]))
+        else:
+            check("Bill challan selection", "stock fixture created", False)
     finally:
         teardown(args.base, token, company, args.keep)
 

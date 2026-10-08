@@ -782,6 +782,8 @@ def main() -> int:
                                         classified, second_classified)
         test_private_challan_costs(args.base, token, company, client)
         test_freight_charges(args.base, token, company, client)
+        from bill_challan_checks import run as check_challan_selection
+        check_challan_selection(http, check, args.base, token, company["id"], client["id"])
     finally:
         teardown(args.base, token, company, args.keep)
 

@@ -44,6 +44,7 @@ namespace MyApp.Api.Models
         /// line. "Closed"/"Cancelled" are terminal operator-set states.
         /// </summary>
         public string Status { get; set; } = "Open";
+        public bool ManuallyClosed { get; set; }
 
         /// <summary>Set when this order was created by converting a Sales Quote.</summary>
         public int? SalesQuoteId { get; set; }

@@ -1,4 +1,6 @@
+import { withTaxUom, taxGroupKey } from "../utils/taxInvoiceGrouping";
 import FreightChargesField from "./FreightChargesField";
+import BillChallansEditor from "./BillChallansEditor";
 import { defaultFurtherTaxRate } from "../utils/furtherTax";
 import { Fragment, useState, useEffect, useMemo, useRef } from "react";
 import { toLocalYmd, todayYmd } from "../utils/dateInput";
@@ -107,6 +109,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
   const effectiveReadOnly = readOnly || (!canFullEdit && !canEditItemTypeAndQty && !canEditItemType);
 
   const [invoice, setInvoice] = useState(null);
+  const [showChallanEditor, setShowChallanEditor] = useState(false);
+  const [reloadVersion, setReloadVersion] = useState(0);
   // True when the loaded invoice carries an Invoice-mode FBR overlay
   // (InvoiceItemAdjustment) on any line — gates the "Send back for
   // re-adjustment" action, which reverts that overlay. confirmingSendBack
@@ -231,7 +235,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
           getAllUnits(data.companyId),
         ]);
         setInvoice(data);
-        setGroupedView(!!data.groupTaxInvoiceByItemType);
+        setGroupedView(forceItemTypeAndQty || !!data.groupTaxInvoiceByItemType);
         setAnyOverlay((data.items || []).some((it) => it.adjustment));
         // Bill-mode source-of-truth: every InvoiceItem field as the
         // bill carries it. Used to seed both `items[]` (when no
@@ -294,7 +298,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
           // else: item-type-only — leave bi.quantity / unitPrice / lineTotal.
           return next;
         });
-        setItems(editableItems);
+        setItems(forceItemTypeAndQty
+          ? editableItems.map((row) => withTaxUom(row, typesRes.data || [], !!data.fbrIRN || !!data.fbrSubmittedAt))
+          : editableItems);
         // originalItemsRef ALWAYS holds the raw bill values — the
         // overlay is never the source of truth.
         originalItemsRef.current = billItems.map((it) => ({ ...it }));
@@ -346,7 +352,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
       }
     };
     load();
-  }, [invoiceId]);
+  }, [invoiceId, reloadVersion]);
 
   // Bug fix: bills with NO [SNxxx] tag (created before scenario tagging, or
   // seeded data) used to leave the picker on "auto-detect", which the
@@ -558,7 +564,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
   // 2026-05-11: added. Triggered by the Tax Claim panel's "Reset to
   // original bill values" button (panel header).
   const resetItemsToOriginal = () => {
-    setItems(originalItemsRef.current.map((it) => ({ ...it })));
+    setItems(originalItemsRef.current.map((it) => forceItemTypeAndQty ? withTaxUom(it, itemTypes) : ({ ...it })));
   };
 
   // Apply a tax-claim optimization suggestion to the bill row(s) for a
@@ -1033,7 +1039,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
   const itemGroups = useMemo(() => {
     const map = new Map();
     items.forEach((it, idx) => {
-      const key = it.itemTypeId ? JSON.stringify([it.itemTypeId, it.uom || "", it.hsCode || "", it.saleType || "", it.rateId ?? null]) : `u${idx}`;
+      const key = taxGroupKey(it, idx);
       const g = map.get(key) || {
         key,
         itemTypeId: it.itemTypeId || null,
@@ -1397,7 +1403,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
     );
   };
 
-  const handleSave = async (e) => {
+  const handleSave = async (e, completeReview = !!(invoice?.fbrReviewRequired && forceItemTypeAndQty && !billsMode)) => {
     e.preventDefault();
     setError("");
     if (items.length === 0) return setError("No items to save.");
@@ -1405,7 +1411,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
     // Item Type is required on every line so the invoice can always group
     // by it (Bills + Invoices tabs alike). Guard every save path.
     const unclassified = items.filter((i) => !i.itemTypeId).length;
-    if (unclassified > 0) {
+    if (unclassified > 0 && !billsMode && !(itemTypeAndQtyMode && forceItemTypeAndQty && !billsMode && !completeReview)) {
       return setError(
         `Select an Item Type for every line — ${unclassified} line${unclassified === 1 ? "" : "s"} still missing one. ` +
         `Use "Apply same Item Type to all" to classify in bulk.`
@@ -1438,7 +1444,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
         await updateInvoiceItemTypes(
           invoiceId,
           items.map((i) => ({ id: i.id || 0, itemTypeId: i.itemTypeId || null })),
-          billsMode ? invoice.groupTaxInvoiceByItemType : groupedView,
+          invoice.groupTaxInvoiceByItemType,
         );
       } else if (itemTypeAndQtyMode) {
         // Narrow path — Item Type + Qty + UnitPrice. Same back-end
@@ -1481,7 +1487,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
             exactLineTotal: i.exactLineTotal != null ? Number(i.exactLineTotal) : null,
           })),
           writeMode,
-          billsMode ? invoice.groupTaxInvoiceByItemType : groupedView,
+          invoice.groupTaxInvoiceByItemType,
+          { completeConsultantReview: completeReview, reviewVersion: invoice.fbrReviewVersion },
         );
       } else {
         // Full edit path — same validation as before.
@@ -1506,7 +1513,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
           furtherTaxRate: furtherTaxRate === null || furtherTaxRate === "" ? null : parseFloat(furtherTaxRate),
           withholdingTaxRate: withholdingTaxRate === null || withholdingTaxRate === "" ? null : parseFloat(withholdingTaxRate),
           withholdingTaxAmount: withholdingTaxAmount === null || withholdingTaxAmount === "" ? null : parseFloat(withholdingTaxAmount),
-          groupTaxInvoiceByItemType: billsMode ? invoice.groupTaxInvoiceByItemType : groupedView,
+          groupTaxInvoiceByItemType: invoice.groupTaxInvoiceByItemType,
           paymentTerms: ptToSave,
           notes: notes.trim() || null,
           ...(billsMode ? { freightCharges: Number(freightCharges || 0) } : {}),
@@ -1545,7 +1552,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
       // Uploads on this edit form attach immediately (the bill already has an
       // id), so flush is a harmless no-op — kept for pattern consistency.
       if (invoiceId) { try { await attachmentRef.current?.flush(invoiceId); } catch { /* attachments best-effort */ } }
-      onSaved();
+      onSaved({ reviewCompleted: completeReview, reviewPending: invoice.fbrReviewRequired && !completeReview });
     } catch (err) {
       setError(err.response?.data?.error || "Failed to save bill.");
     } finally {
@@ -1572,11 +1579,32 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
               <div style={styles.errorAlert}>Bill not found.</div>
             ) : !invoice.isEditable && !readOnly ? (
               <div style={styles.errorAlert}>
-                This bill has been submitted to FBR and cannot be edited.
+                This bill is cancelled or locked for FBR submission and cannot be edited.
               </div>
             ) : (
               <>
                 {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
+
+                {!effectiveReadOnly && billsMode && canFullEdit && !itemTypeOnlyMode && !itemTypeAndQtyMode
+                  && invoice.isEditable && invoice.documentType === 4 && !invoice.isDemo && !invoice.supplementsInvoiceId && (
+                  <div style={{ ...styles.infoBox, flexWrap: "wrap", alignItems: "center" }}>
+                    <span>Add or remove whole challans on this bill. Save other bill edits first.</span>
+                    <button type="button" disabled={saving} style={{ minHeight: 44, padding: "0.5rem 0.8rem", marginLeft: "auto" }}
+                      onClick={async () => {
+                        if (await confirm({ title: "Manage bill challans", message: "This works from the saved bill. Any unsaved edits in this form will be discarded after you save challans. Continue?", variant: "info", confirmText: "Manage challans" })) {
+                          setShowChallanEditor(true);
+                        }
+                      }}>Manage challans</button>
+                  </div>
+                )}
+
+                {invoice.fbrReviewRequired && <div role="status" style={{ ...styles.infoBox, display: "block", overflowWrap: "anywhere" }}>
+                  <strong>Needs consultant review — bill changed</strong>
+                  <p>The commercial bill is saved. Existing adjustments are preserved, but FBR validation and submission are blocked.</p>
+                  <p>{forceItemTypeAndQty && !billsMode
+                    ? "Review every current item, classify new items and reconcile the adjusted total to the bill. Save progress to continue later, or Complete review when all items are checked."
+                    : "Next: a tax consultant must open this bill in Invoices, check all current items and choose Complete review. Saving bill changes does not complete the review."}</p>
+                </div>}
 
                 {/* Dual-book "adjustment out of date" banner (2026-07-15).
                     Shows on the Invoices tab when the delivery bill was edited
@@ -1599,21 +1627,17 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                         <strong>Rs. {Number(invoice.subtotal).toLocaleString("en-PK", { maximumFractionDigits: 2 })}</strong>.
                       </div>
                       <div style={{ marginTop: 4 }}>
-                        The rows below show <strong>your last adjusted</strong> quantities &amp; unit prices; each <span style={{ color: "#e65100" }}>“bill: …”</span> note shows what the bill now says. Re-adjust the grouped Qty / Unit Price so the total matches the bill total (<strong>Rs. {Number(invoice.subtotal).toLocaleString("en-PK", { maximumFractionDigits: 2 })}</strong> — see the guard below), then <strong>Save Adjustments</strong>. FBR <strong>Validate</strong> &amp; <strong>Submit</strong> stay blocked until you do.
+                        The rows below show <strong>your last adjusted</strong> quantities &amp; unit prices; each <span style={{ color: "#e65100" }}>“bill: …”</span> note shows what the bill now says. Re-adjust the grouped Qty / Unit Price so the total matches the bill total (<strong>Rs. {Number(invoice.subtotal).toLocaleString("en-PK", { maximumFractionDigits: 2 })}</strong> — see the guard below), then <strong>{invoice.fbrReviewRequired ? "Complete review" : "Save Adjustments"}</strong>. FBR <strong>Validate</strong> &amp; <strong>Submit</strong> stay blocked until you do.
                       </div>
                     </div>
                   </div>
                 )}
 
-                {!readOnly && (
+                {!readOnly && !billsMode && (
                   <div style={styles.infoBox}>
                     <MdInfo size={16} style={{ color: colors.blue, flexShrink: 0, marginTop: 2 }} />
                     <div>
-                      To <b>add or remove items</b>, edit the linked delivery challan
-                      {invoice.challanNumbers?.length > 0 && (
-                        <> (<b>DC#{invoice.challanNumbers.join(", DC#")}</b>)</>
-                      )}.
-                      The bill will sync automatically.
+                      To add, remove or replace challans, ask an administrator to open Bills → Edit → Manage challans. Review the resulting bill here before FBR submission.
                     </div>
                   </div>
                 )}
@@ -1646,7 +1670,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                     <div>
                       <b>Item Type only</b> — your role lets you re-classify lines by picking
                       a different Item Type. Quantities, prices, dates, and other fields are
-                      read-only here. Ask an administrator to grant <code>invoices.manage.update</code> for full edit access.
+                      read-only here. Ask an administrator to make commercial bill changes on the Bills page.
                     </div>
                   </div>
                 )}
@@ -1654,9 +1678,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                   <div style={styles.narrowPermissionBanner}>
                     <MdInfo size={16} style={{ color: colors.warn, flexShrink: 0, marginTop: 2 }} />
                     <div>
-                      <b>Item Type + Quantity only</b> — your role lets you re-classify lines and
-                      adjust quantity. Prices, dates, payment terms, and other fields are read-only.
-                      Ask an administrator to grant <code>invoices.manage.update</code> for full edit access.
+                      <b>Consultant adjustment</b> — classify items and adjust quantities and unit prices while keeping the total equal to the commercial bill. Dates, payment terms and commercial bill details are edited by an administrator on Bills.
                     </div>
                   </div>
                 )}
@@ -1818,6 +1840,14 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                   </div>
                 </div>
 
+                {!billsMode && <div style={{ fontSize: "0.82rem", color: "#526174", marginBottom: 12 }}>
+                  Consultant groups use the item type’s tax unit. Bill and challan units stay unchanged.
+                  {invoice.groupTaxInvoiceByItemType
+                    ? " Tax invoice printing uses grouped, adjusted items."
+                    : " Tax invoice printing uses individual commercial lines and units."}
+                  {" Saving adjustments keeps this print preference."}
+                </div>}
+
                 {/* Items table — no add/remove; only field edits */}
                 <div style={styles.sectionHeadingRow}>
                   <h6 style={{ ...styles.sectionHeading, margin: 0 }}>
@@ -1835,7 +1865,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                         onClick={() => setGroupedView(true)}
                         style={{ ...styles.viewToggleBtn, ...(groupedView ? styles.viewToggleBtnActive : {}) }}
                         aria-pressed={groupedView}
-                        title="Group compatible lines by Item Type for Invoice View, print, PDF and Excel"
+                        title="Group the consultant editor by Item Type; saving adjustments preserves the print layout"
                       >
                         Grouped by Item Type
                       </button>
@@ -2610,6 +2640,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
               const blockedByTotals = showTotalsGuard && !totalsMatch;
               const disabled = saving || blockedByTotals || !billNumberOk;
               return (
+                <>
+                {invoice.fbrReviewRequired && forceItemTypeAndQty && !billsMode && <button type="button"
+                  disabled={saving || blockedByTotals} style={{ ...formStyles.button, ...formStyles.cancel }}
+                  onClick={e => handleSave(e, false)}>Save progress</button>}
                 <button
                   type="submit"
                   style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.5 : 1, cursor: disabled ? "not-allowed" : "pointer" }}
@@ -2625,9 +2659,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                     : itemTypeOnlyMode
                       ? "Save Item Types"
                       : itemTypeAndQtyMode
-                        ? "Save Adjustments"
+                        ? (invoice.fbrReviewRequired && !billsMode ? "Complete review" : "Save Adjustments")
                         : "Save Changes"}
                 </button>
+                </>
               );
             })()}
           </div>
@@ -2648,6 +2683,15 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
           onSaved={(created) => onItemTypeCreated(created)}
         />
       )}
+      {showChallanEditor && <BillChallansEditor canAttachToOrder={has("challans.manage.update")} invoice={invoice} onClose={() => setShowChallanEditor(false)}
+        onSaved={(updated) => {
+          setShowChallanEditor(false);
+          setLoading(true);
+          setExactTotals({});
+          clearedExactKeys.current.clear();
+          setReloadVersion(v => v + 1);
+          onLayoutSaved?.(updated);
+        }} />}
     </div>
   );
 }

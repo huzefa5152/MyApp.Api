@@ -43,6 +43,11 @@ namespace MyApp.Api.DTOs
 
         /// <summary>Editable while Open and not yet (partially) delivered.</summary>
         public bool IsEditable { get; set; }
+        public bool ManuallyClosed { get; set; }
+        public bool NeedsAttention { get; set; }
+        public bool ApplyRatesToBills { get; set; }
+        public bool ApplyDetailsToDeliveries { get; set; }
+        public string? Version { get; set; }
         /// <summary>True when this is the highest-numbered order for its company (gates Delete).</summary>
         public bool IsLatest { get; set; }
         /// <summary>How many delivery challans have been raised against this order.</summary>
@@ -171,6 +176,10 @@ namespace MyApp.Api.DTOs
         public int? InvoiceId { get; set; }
         /// <summary>The bill's human-facing number, when billed. Null otherwise.</summary>
         public int? InvoiceNumber { get; set; }
+        public string? FbrStatus { get; set; }
+        public bool IsEditable { get; set; }
+        public bool CanDelete { get; set; }
+        public bool NeedsConsultantReview { get; set; }
         /// <summary>How many of this challan's lines fulfil this order.</summary>
         public int ItemCount { get; set; }
         /// <summary>Sum of delivered quantity on this challan for this order.</summary>
