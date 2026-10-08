@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
+using MyApp.Api.Helpers;
 using MyApp.Api.Models;
 using MyApp.Api.Models.Accounting;
 using MyApp.Api.Services.Interfaces;
@@ -45,7 +46,7 @@ namespace MyApp.Api.Services.Implementations
             // A demo bill is excluded from every KPI, a cancelled one has been
             // withdrawn, and a zero-total one moves nothing. None of the three
             // is a transaction, so none of them leaves an entry behind.
-            if (invoice.IsDemo || invoice.IsCancelled || invoice.GrandTotal == 0m)
+            if (invoice.IsDemo || invoice.IsCancelled || invoice.GrandTotal + invoice.FreightCharges == 0m)
             {
                 await RemoveForSourceAsync(invoice.CompanyId, SourceDocType.Invoice, invoice.Id);
                 return;
@@ -78,7 +79,8 @@ namespace MyApp.Api.Services.Implementations
             // collectible, and the withheld slice becomes a receivable from FBR
             // rather than money we have lost.
             var wht = invoice.WithholdingTaxAmount;
-            var collectible = invoice.GrandTotal - wht;
+            var collectible = CommercialTotalCalculator.Collectible(
+                invoice.GrandTotal, wht, invoice.FreightCharges);
 
             var lines = new List<JournalLine>
             {
@@ -95,6 +97,11 @@ namespace MyApp.Api.Services.Implementations
             };
 
             AddLine(lines, sales.Id, debit: isCreditNote ? net : 0m, credit: isCreditNote ? 0m : net, label);
+
+            AddLine(lines, sales.Id,
+                debit: isCreditNote ? invoice.FreightCharges : 0m,
+                credit: isCreditNote ? 0m : invoice.FreightCharges,
+                $"{label} — Freight / cartage charges");
 
             if (invoice.GSTAmount != 0m)
             {
@@ -413,16 +420,18 @@ namespace MyApp.Api.Services.Implementations
                 }
                 else if (a.AccountId.HasValue)
                 {
-                    // A direct income or expense line with no document behind it.
+                    // Direct income/expense does not change a party control balance.
+                    // The payment header retains the payer/payee for activity and vouchers.
                     var target = accounts.FirstOrDefault(x => x.Id == a.AccountId.Value)
+                              ?? await _context.Accounts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == a.AccountId.Value && x.CompanyId == payment.CompanyId)
                               ?? await SuspenseAsync(payment.CompanyId, accounts);
                     lines.Add(new JournalLine
                     {
                         AccountId = target.Id,
                         Debit = isReceipt ? 0m : a.Amount,
                         Credit = isReceipt ? a.Amount : 0m,
-                        PartyType = partyType,
-                        PartyId = partyType == null ? null : payment.ContactId,
+                        PartyType = null,
+                        PartyId = null,
                         Description = label,
                     });
                 }
@@ -445,12 +454,8 @@ namespace MyApp.Api.Services.Implementations
                 // refunds. With no party named there is nothing to attribute it
                 // to, so it goes to Suspense where it is visible.
                 //
-                // NOT REACHABLE THROUGH THE PAYMENTS API TODAY: PaymentService
-                // sets Payment.Amount to the sum of its allocations, so the
-                // remainder is always zero. This stays because Amount is a
-                // stored column an import or a back-post could set on its own,
-                // and a posting engine that cannot balance what it is handed is
-                // worse than one that carries an unused branch.
+                // Explicit OnAccount lines have no document/account target;
+                // their amount reaches this party-control posting.
                 var target = partyType switch
                 {
                     "Client" => await ResolveAsync(payment.CompanyId, accounts, ControlType.AccountsReceivable, "accounts receivable"),
@@ -521,7 +526,7 @@ namespace MyApp.Api.Services.Implementations
                 foreach (var i in invoices.Where(i => IsOpen(i.Date)))
                 {
                     await PostInvoiceAsync(i);
-                    if (!i.IsDemo && !i.IsCancelled && i.GrandTotal != 0m) result.PostedInvoices++;
+                    if (!i.IsDemo && !i.IsCancelled && i.GrandTotal + i.FreightCharges != 0m) result.PostedInvoices++;
                 }
 
                 var bills = await _context.PurchaseBills

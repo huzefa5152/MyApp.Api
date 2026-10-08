@@ -1,3 +1,5 @@
+import DocumentCopyPicker from "./DocumentCopyPicker";
+import { appendCopiedLines, copyLine } from "../utils/documentCopy";
 import { useState, useEffect, useRef } from "react";
 import { MdAdd, MdDelete } from "react-icons/md";
 import { createGoodsReceipt, updateGoodsReceipt, getGoodsReceiptById } from "../api/goodsReceiptApi";
@@ -133,14 +135,19 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
   };
 
   return (
-    <div style={formStyles.backdrop}>
-      <div style={{ ...formStyles.modal, maxWidth: 1000, width: "94vw" }}>
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: 1000, width: "94vw" }}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? "Edit Goods Receipt" : "New Goods Receipt"}</h5>
-          <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
+            <DocumentCopyPicker companyId={companyId} destination="GoodsReceipt" allowDetails={!isEdit} disabled={!!purchaseBillId}
+              onCopy={(source,lines,details) => {
+                setItems(prev => appendCopiedLines(details ? [] : prev, lines, () => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""})));
+                if(details) { setSupplierId(String(source.supplierId));setNotes(source.notes||"");setSite(source.site||"");setSupplierChallanNumber("");setPurchaseBillId(""); }
+              }} />
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
             {<div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="goods-receipt" variant={isEdit ? "edit" : "create"} currentNumber={currentNumber} editRecordId={receiptId} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.75rem" }}>
@@ -208,7 +215,8 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                             style={{ padding: "0.4rem 0.55rem", fontSize: "0.82rem" }}
                           />
                         </div>
-                        {items.length > 1 && (
+                        <button type="button" title="Copy line" style={{minHeight:44,minWidth:44,border:"1px solid #d0d7e2",borderRadius:8}} onClick={() => setItems(prev => [...prev,copyLine(it,() => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""}))])}>Copy</button>
+                          {items.length > 1 && (
                           <IconButton label="Remove line" icon={MdDelete} danger onClick={() => setItems(items.filter((_, i) => i !== idx))} />
                         )}
                       </div>
@@ -230,7 +238,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                   ))}
                 </div>
               ) : (
-              <TableWrap>
+              <TableWrap data-admin-table-region="">
               <table className="k-table k-table--compact">
                 <thead>
                   <tr>
@@ -263,7 +271,8 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                       <td style={td}><input type="number" min={1} style={{ ...cellInput, textAlign: "right" }} value={it.quantity} onChange={e => updateItem(idx, "quantity", e.target.value)} /></td>
                       <td style={td}><input type="text" style={cellInput} value={it.unit} onChange={e => updateItem(idx, "unit", e.target.value)} /></td>
                       <td style={td}>
-                        {items.length > 1 && (
+                        <button type="button" title="Copy line" style={{minHeight:44,minWidth:44,border:"1px solid #d0d7e2",borderRadius:8}} onClick={() => setItems(prev => [...prev,copyLine(it,() => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""}))])}>Copy</button>
+                          {items.length > 1 && (
                           <IconButton label="Remove line" icon={MdDelete} size={16} danger onClick={() => setItems(items.filter((_, i) => i !== idx))} />
                         )}
                       </td>
@@ -280,7 +289,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
             </div>
           </div>
           <div style={formStyles.footer}>
-            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" disabled={saving || !numberValid} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}>
               {saving ? "Saving..." : (isEdit ? "Update" : "Create")}
             </button>

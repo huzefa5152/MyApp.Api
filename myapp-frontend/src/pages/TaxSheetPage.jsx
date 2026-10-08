@@ -298,7 +298,7 @@ export default function TaxSheetPage() {
               </div>
             </div>
           ) : (
-            <TableWrap>
+            <TableWrap data-admin-table-region="">
               <table className="k-table" style={{ minWidth: 860 }}>
                 <thead>
                   <tr>
@@ -343,7 +343,7 @@ export default function TaxSheetPage() {
       {loading && <Loading>Loading tax sheet…</Loading>}
 
       {transferOpen && (
-        <div style={formStyles.backdrop} onClick={() => !transferring && setTransferOpen(false)}>
+        <div data-admin-backdrop="" style={formStyles.backdrop} onClick={() => !transferring && setTransferOpen(false)}>
           <div
             style={{ ...formStyles.modal, maxWidth: 460 }}
             role="dialog"
@@ -353,7 +353,7 @@ export default function TaxSheetPage() {
           >
             <div style={formStyles.header}>
               <h3 style={formStyles.title}>Transfer remaining invoices</h3>
-              <button type="button" onClick={() => setTransferOpen(false)} style={formStyles.closeButton} aria-label="Close">
+              <button data-admin-close="" type="button" onClick={() => setTransferOpen(false)} style={formStyles.closeButton} aria-label="Close">
                 <MdClose size={20} />
               </button>
             </div>

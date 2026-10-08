@@ -27,11 +27,11 @@ export default function StarterTemplatePicker({ templateType, onSelect, onClose 
   // Backdrop click is a no-op so a stray click can't drop the picker
   // before the operator commits to a starter template.
   return (
-    <div style={s.overlay}>
+    <div data-admin-backdrop="" style={s.overlay}>
       <div style={s.modal} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="starter-picker-title">
         <div style={formStyles.header}>
           <h3 id="starter-picker-title" style={formStyles.title}>Start from Template</h3>
-          <button type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={20} /></button>
+          <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={20} /></button>
         </div>
         <div style={formStyles.body}>
         <p style={s.subtitle}>Choose a starter template to begin customizing</p>

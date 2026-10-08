@@ -31,12 +31,18 @@ namespace MyApp.Api.Controllers
         private static readonly string _dummyBcryptHash =
             BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString("N"));
 
-        // Account lockout policy: 5 consecutive failures → 2-hour lock.
+        // Account lockout policy: 10 consecutive failures → 2-hour lock.
         // State is persisted on the Users row (never cached) so a manual
         // SQL unlock (FailedLoginAttempts = 0, LockoutUntil = NULL) takes
         // effect on the very next attempt.
-        private const int MaxFailedLoginAttempts = 5;
+        private const int MaxFailedLoginAttempts = 10;
         private static readonly TimeSpan LockoutDuration = TimeSpan.FromHours(2);
+
+        private UnauthorizedObjectResult LoginFailure() =>
+            Unauthorized(new
+            {
+                message = "Unable to sign in. Check your username and password, try again later, or contact your administrator."
+            });
 
         public AuthController(AppDbContext context, IConfiguration configuration, IMemoryCache cache, ILogger<AuthController> logger) : base(logger)
         {
@@ -99,7 +105,7 @@ namespace MyApp.Api.Controllers
                 _ = BCrypt.Net.BCrypt.Verify(dto.Password ?? string.Empty, _dummyBcryptHash);
                 _logger.LogWarning("Failed login attempt for username={Username} from {Ip}",
                     dto.Username, HttpContext.Connection.RemoteIpAddress);
-                return Unauthorized(new { message = "Invalid username or password" });
+                return LoginFailure();
             }
 
             var now = DateTime.UtcNow;
@@ -107,40 +113,51 @@ namespace MyApp.Api.Controllers
             // Locked account — reject before verifying the password. The
             // check reads LockoutUntil straight off the row, so an expired
             // lock (or a manual SQL unlock) is honoured immediately.
-            if (user.LockoutUntil.HasValue && user.LockoutUntil.Value > now)
+            var isSeedAdmin = user.Id == _seedAdminUserId;
+            if (isSeedAdmin && (user.FailedLoginAttempts != 0 || user.LockoutUntil.HasValue))
+            {
+                user.FailedLoginAttempts = 0;
+                user.LockoutUntil = null;
+                user.LastFailedLogin = null;
+                await _context.SaveChangesAsync();
+            }
+            if (!isSeedAdmin && user.LockoutUntil.HasValue && user.LockoutUntil.Value > now)
             {
                 // Burn the same CPU as a real verify (M-12) so the locked
                 // path doesn't stand out by timing.
                 _ = BCrypt.Net.BCrypt.Verify(dto.Password ?? string.Empty, _dummyBcryptHash);
                 _logger.LogWarning("Login attempt for locked account UserId={UserId} from {Ip} (locked until {LockoutUntil:u})",
                     user.Id, HttpContext.Connection.RemoteIpAddress, user.LockoutUntil.Value);
-                return Unauthorized(new { message = "Account temporarily locked due to multiple failed sign-in attempts. Please try again later." });
+                return LoginFailure();
             }
 
             if (!BCrypt.Net.BCrypt.Verify(dto.Password ?? string.Empty, user.PasswordHash))
             {
-                // Count failures atomically: concurrent devices must not overwrite one another's increment.
-                await _context.Users.Where(u => u.Id == user.Id &&
-                    (!u.LockoutUntil.HasValue || u.LockoutUntil <= now))
-                    .ExecuteUpdateAsync(update => update
-                        .SetProperty(u => u.FailedLoginAttempts, u => u.LockoutUntil.HasValue ? 1 : u.FailedLoginAttempts + 1)
-                        .SetProperty(u => u.LastFailedLogin, now)
-                        .SetProperty(u => u.LockoutUntil, u =>
-                            (u.LockoutUntil.HasValue ? 1 : u.FailedLoginAttempts + 1) >= MaxFailedLoginAttempts
-                                ? (DateTime?)now.Add(LockoutDuration) : null));
-
-                _logger.LogWarning("Failed login attempt for username={Username} from {Ip}",
-                    dto.Username, HttpContext.Connection.RemoteIpAddress);
-                return Unauthorized(new { message = "Invalid username or password" });
+                if (!isSeedAdmin)
+                {
+                    // Increment in SQL so concurrent failures cannot lose an attempt.
+                    await _context.Users.Where(u => u.Id == user.Id
+                        && (!u.LockoutUntil.HasValue || u.LockoutUntil <= now))
+                        .ExecuteUpdateAsync(set => set
+                            .SetProperty(u => u.FailedLoginAttempts, u => u.LockoutUntil.HasValue ? 1 : u.FailedLoginAttempts + 1)
+                            .SetProperty(u => u.LastFailedLogin, now)
+                            .SetProperty(u => u.LockoutUntil, u =>
+                                (u.LockoutUntil.HasValue ? 1 : u.FailedLoginAttempts + 1) >= MaxFailedLoginAttempts
+                                    ? (DateTime?)now.Add(LockoutDuration) : null));
+                    await _context.Entry(user).ReloadAsync();
+                }
+                _logger.LogWarning("Failed login attempt for UserId={UserId} from {Ip}",
+                    user.Id, HttpContext.Connection.RemoteIpAddress);
+                return LoginFailure();
             }
 
             // Clear failures only while the verified credentials and lock state still match.
             // A concurrent password reset or newly activated lock cannot issue a fresh session.
             var cleared = await _context.Users.Where(u => u.Id == user.Id && u.SecurityStamp == user.SecurityStamp
-                && u.PasswordHash == user.PasswordHash && (!u.LockoutUntil.HasValue || u.LockoutUntil <= now))
+                && u.PasswordHash == user.PasswordHash && (isSeedAdmin || !u.LockoutUntil.HasValue || u.LockoutUntil <= now))
                 .ExecuteUpdateAsync(update => update.SetProperty(u => u.FailedLoginAttempts, 0)
                     .SetProperty(u => u.LockoutUntil, (DateTime?)null).SetProperty(u => u.LastFailedLogin, (DateTime?)null));
-            if (cleared == 0) return Unauthorized(new { message = "Sign-in could not be completed. Please try again." });
+            if (cleared == 0) return LoginFailure();
 
             var session = new Models.UserSession
             {
@@ -215,10 +232,13 @@ namespace MyApp.Api.Controllers
             // Check if new username is taken by another user
             if (!string.IsNullOrWhiteSpace(dto.Username) && dto.Username.Trim() != user.Username)
             {
-                var exists = await _context.Users.AnyAsync(u => u.Id != user.Id && u.Username == dto.Username.Trim());
+                var requestedUsername = dto.Username.Trim();
+                var usernameError = MyApp.Api.Helpers.UsernamePolicy.Validate(requestedUsername);
+                if (usernameError != null) return BadRequest(new { message = usernameError });
+                var exists = await _context.Users.AnyAsync(u => u.Id != user.Id && u.Username == requestedUsername);
                 if (exists)
-                    return BadRequest(new { message = "Username is already taken" });
-                user.Username = dto.Username.Trim();
+                    return BadRequest(new { message = "This username is unavailable. Choose another username." });
+                user.Username = requestedUsername;
             }
 
             if (!string.IsNullOrWhiteSpace(dto.FullName))

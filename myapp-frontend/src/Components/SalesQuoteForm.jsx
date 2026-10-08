@@ -1,3 +1,5 @@
+import DocumentCopyPicker from "./DocumentCopyPicker";
+import { appendCopiedLines } from "../utils/documentCopy";
 import { useState, useRef, useEffect, useMemo } from "react";
 import SearchableClientSelect from "./SearchableClientSelect";
 import ItemTypeForm from "./ItemTypeForm";
@@ -144,14 +146,19 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
   }, [clients, client]);
 
   return (
-    <div style={formStyles.backdrop}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? `Edit Quote #${quote.quoteNumber}` : "Create Sales Quote"}</h5>
-          <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
+            <DocumentCopyPicker companyId={companyId} destination="Quote" allowDetails={!isEdit} disabled={false}
+              onCopy={(source,lines,details) => {
+                setItems(prev => appendCopiedLines(details ? [] : prev, lines, blankItem));
+                if(details) { setClient({id:source.clientId,label:source.clientName});setNotes(source.notes||"");setGstRate(source.gstRate??18);setContactPerson(source.contactPerson||"");setEnquiryRef(source.customerEnquiryRef||"");setEnquiryDate(source.enquiryDate?.slice(0,10)||"");setValidForDays(source.validUntil && source.date ? String(Math.max(0, Math.round((new Date(source.validUntil)-new Date(source.date))/86400000))) : ""); }
+              }} />
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
             {<div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="quote" variant={quote ? "edit" : "create"} currentNumber={quote?.quoteNumber} editRecordId={quote?.id} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>}
             <div className="k-form-grid" style={s.grid}>
@@ -237,7 +244,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
             </div>
           </div>
           <div style={formStyles.footer}>
-            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.6 : 1 }} disabled={disabled}>{saving ? "Saving..." : isEdit ? "Update Quote" : "Save Quote"}</button>
           </div>
         </form>

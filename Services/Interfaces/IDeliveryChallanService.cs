@@ -32,6 +32,7 @@ namespace MyApp.Api.Services.Interfaces
         /// gate per-item endpoints with ICompanyAccessGuard (audit H-2,
         /// 2026-05-13).
         /// </summary>
+        Task<int?> GetInvoiceForItemAsync(int itemId);
         Task<int?> GetCompanyForItemAsync(int itemId);
         Task<List<DeliveryChallanDto>> GetPendingChallansByCompanyAsync(int companyId);
         Task<PrintChallanDto?> GetPrintDataAsync(int challanId);

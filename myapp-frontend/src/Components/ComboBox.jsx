@@ -148,7 +148,7 @@ export default function ComboBox({
       </button>
 
       {open && rect && createPortal(
-        <div ref={popRef} className="k-combo__pop" style={popStyle} onKeyDown={onKeyDown}>
+        <div data-admin-popup="" ref={popRef} className="k-combo__pop" style={popStyle} onKeyDown={onKeyDown}>
           <div className="k-combo__search">
             <MdSearch size={16} aria-hidden="true" />
             <input ref={searchRef} type="text" placeholder={searchPlaceholder} aria-label={searchPlaceholder} value={query}

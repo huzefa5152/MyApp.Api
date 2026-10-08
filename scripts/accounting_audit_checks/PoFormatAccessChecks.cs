@@ -98,7 +98,9 @@ static class PoFormatAccessChecks
         var update=new POFormatSimpleUpdateDto{Name="Changed",ClientId=cb.Id,DescriptionHeader="Description",QuantityHeader="Quantity"};
         await Denied(async()=>{await Controller(restricted.Id).UpdateSimple(createdB.Id,update);},"foreign PO update denied");
         await Denied(async()=>{await Controller(admin.Id).UpdateSimple(createdA.Id,update);},"admin cannot reassign PO to foreign client");
-        await Denied(async()=>{await Controller(restricted.Id).CreateSimple(Payload(a.Id,ca.Id,"Duplicate"));},"duplicate client rejected at API");
+        var alternateResult = await Controller(restricted.Id).CreateSimple(Payload(a.Id,ca.Id,"Alternate layout"));
+        check(alternateResult.Result is CreatedAtActionResult, "same customer accepts a differently named layout");
+        await Denied(async()=>{await Controller(restricted.Id).CreateSimple(Payload(a.Id,ca.Id,"Alternate layout"));},"duplicate layout name rejected at API");
         var missing=Payload(a.Id,ca2.Id,"Missing");missing.CompanyId=null;
         await Denied(async()=>{await Controller(restricted.Id).CreateSimple(missing);},"missing company create denied");
         missing.CompanyId=a.Id;missing.ClientId=null;

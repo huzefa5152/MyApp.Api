@@ -1,5 +1,8 @@
+import DocumentCopyPicker from "./DocumentCopyPicker";
+import { copyLine } from "../utils/documentCopy";
 import { defaultFurtherTaxRate } from "../utils/furtherTax";
 import DocumentTaxFields from "./DocumentTaxFields";
+import FreightChargesField from "./FreightChargesField";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { MdAdd, MdDelete, MdCheck, MdInfo, MdLock, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
 import { createStandaloneInvoice } from "../api/invoiceApi";
@@ -140,6 +143,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [furtherTaxRate, setFurtherTaxRate] = useState(null);
   const [withholdingTaxRate, setWithholdingTaxRate] = useState(() => company?.defaultWithholdingTaxRate ?? null);
   const [withholdingTaxAmount, setWithholdingTaxAmount] = useState(null);
+  const [freightCharges, setFreightCharges] = useState(0);
   const [groupTaxInvoiceByItemType, setGroupTaxInvoiceByItemType] = useState(() => !!company?.defaultGroupTaxInvoiceByItemType);
   useEffect(() => { setGroupTaxInvoiceByItemType(!!company?.defaultGroupTaxInvoiceByItemType); }, [companyId, company?.defaultGroupTaxInvoiceByItemType]);
   // Document Type is locked to Sale Invoice (4) on the no-challan flow.
@@ -480,6 +484,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const gstAmount = Math.round(subtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
   const furtherTaxAmount = Math.round(subtotal * (Number(furtherTaxRate) || 0)) / 100;
   const grandTotal = subtotal + gstAmount + furtherTaxAmount;
+  const commercialTotal = grandTotal + (billsMode ? Number(freightCharges || 0) : 0);
 
   const rowErrors = (r) => {
     const errs = [];
@@ -532,6 +537,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         furtherTaxRate: furtherTaxRate === null || furtherTaxRate === "" ? null : Number(furtherTaxRate),
         withholdingTaxRate: withholdingTaxRate === null || withholdingTaxRate === "" ? null : Number(withholdingTaxRate),
         withholdingTaxAmount: withholdingTaxAmount === null || withholdingTaxAmount === "" ? null : Number(withholdingTaxAmount),
+        freightCharges: billsMode ? Number(freightCharges || 0) : 0,
         paymentTerms: paymentTerms || null,
         notes: notes.trim() || null,
         scenarioId: scenarioCode || null,
@@ -604,14 +610,27 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const buyerKind = chosenScenario?.meta.buyerKind || null;
 
   return (
-    <div style={formStyles.backdrop}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>Create Bill (No Challan)</h5>
-          <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
+            {billsMode && <DocumentCopyPicker companyId={companyId} destination="Bill" disabled={!!salesOrderId}
+              onCopy={(source,lines,details) => {
+                const mapped = lines.map(line => ({ ...copyLine(line,blankRow),
+                  itemTypeId: line.itemTypeId ? String(line.itemTypeId) : "",
+                  uom: line.uom || line.unit || "", quantity: String(line.quantity), unitPrice: String(line.unitPrice || 0),
+                  lineTotal: String(lineTotalFrom(line.quantity,line.unitPrice || 0)) }));
+                setRows(prev => [...(details || prev.length===1 && !prev[0].description ? [] : prev), ...mapped]);
+                if(details) {
+                  setSelectedClientId(String(source.clientId));setPoNumber(source.poNumber || "");setPoDate(source.poDate?.slice(0,10)||"");
+                  setGstRate(source.gstRate??18);setFreightCharges(source.freightCharges||0);setPaymentTerms(source.paymentTerms||"");setNotes(source.notes||"");
+                  setFurtherTaxRate(source.furtherTaxRate??null);setWithholdingTaxRate(source.withholdingTaxRate??null);setWithholdingTaxAmount(null);
+                }
+              }} />}
             {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
             {loading ? (
@@ -1031,6 +1050,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       <div style={{ marginTop: 2, fontSize: "0.62rem", color: colors.warn, fontWeight: 700 }}>Required</div>
                                     )}
                                   </div>
+                                  <button type="button" style={{...styles.removeRowBtn,minWidth:44,minHeight:44}} title="Copy line" onClick={() => setRows(prev => [...prev,{...r,localId:crypto.randomUUID()}])}>Copy</button>
                                   <button
                                     type="button"
                                     style={{ ...styles.removeRowBtn, minWidth: 44, minHeight: 44, flexShrink: 0 }}
@@ -1121,7 +1141,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                           })}
                         </div>
                       ) : (
-                      <div style={styles.unifiedTableWrap}>
+                      <div data-admin-table-region="" style={styles.unifiedTableWrap}>
                         <table style={styles.unifiedTable}>
                           <thead>
                             <tr style={styles.unifiedThead}>
@@ -1307,6 +1327,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                     </td>
                                   )}
                                   <td style={{ ...styles.unifiedTd, textAlign: "center" }}>
+                                    <button type="button" style={{...styles.removeRowBtn,minWidth:44,minHeight:44}} title="Copy line" onClick={() => setRows(prev => [...prev,{...r,localId:crypto.randomUUID()}])}>Copy</button>
                                     <button
                                       type="button"
                                       style={styles.removeRowBtn}
@@ -1335,9 +1356,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       <div style={styles.totalsBox}>
                         <div style={styles.totalRow}><span>Subtotal:</span><span>Rs. {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
                         <div style={styles.totalRow}><span>GST ({gstRate}%):</span><span>Rs. {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+                        {billsMode && Number(freightCharges) > 0 && (
+                          <div style={styles.totalRow}><span>Freight / cartage:</span><span>Rs. {Number(freightCharges).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                        )}
                         {furtherTaxAmount > 0 && <div style={styles.totalRow}><span>Further tax ({furtherTaxRate}%):</span><span>Rs. {furtherTaxAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>}
                         <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
-                          <span>Grand Total:</span><span>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          <span>Grand Total:</span><span>Rs. {commercialTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
                       </div>
                     </div>
@@ -1346,7 +1370,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
               </>
             )}
 
-            <DocumentTaxFields subtotal={subtotal} gstAmount={gstAmount}
+            {billsMode && <FreightChargesField value={freightCharges} onChange={setFreightCharges} />}
+            <DocumentTaxFields freightCharges={billsMode ? Number(freightCharges || 0) : 0} subtotal={subtotal} gstAmount={gstAmount}
               furtherTaxRate={furtherTaxRate} onFurtherTaxRateChange={setFurtherTaxRate}
               withholdingTaxRate={withholdingTaxRate} withholdingTaxAmount={withholdingTaxAmount}
               onWithholdingChange={({ rate, amount }) => { setWithholdingTaxRate(rate); setWithholdingTaxAmount(amount); }} />
@@ -1366,7 +1391,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                 Some required fields are missing.
               </span>
             ) : null}
-            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button
               type="submit"
               style={{

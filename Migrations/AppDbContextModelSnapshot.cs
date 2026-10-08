@@ -279,6 +279,10 @@ namespace MyApp.Api.Migrations
                     b.Property<int?>("ContactId")
                         .HasColumnType("int");
 
+                    b.Property<string>("ContactName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<string>("ContactType")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -896,6 +900,11 @@ namespace MyApp.Api.Migrations
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
                     b.Property<DateTime?>("DeliveryDate")
                         .HasColumnType("datetime2");
 
@@ -1002,6 +1011,91 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("SupplierId");
 
                     b.ToTable("DeliveryItems");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.EmailEnquiry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DecidedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Decision")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<int>("MessageId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ProtectedDraft")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("SalesQuoteId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SalesQuoteNumber")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MessageId");
+
+                    b.HasIndex("CompanyId", "MessageId")
+                        .IsUnique();
+
+                    b.ToTable("EmailEnquiries");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.EmailWorkspaceEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("EnquiryId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId", "Timestamp");
+
+                    b.ToTable("EmailWorkspaceEvents");
 
                     b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
@@ -1532,6 +1626,192 @@ namespace MyApp.Api.Migrations
                     b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
+            modelBuilder.Entity("MyApp.Api.Models.GmailCompanyLink", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ConnectionId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("RulesJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("ShareMatchingEmails")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConnectionId", "CompanyId")
+                        .IsUnique();
+
+                    b.ToTable("GmailCompanyLinks");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.GmailConnection", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("BackfillComplete")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("BackfillSince")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("EmailAddress")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
+                    b.Property<string>("GoogleSubject")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("HistoryId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("LastSyncedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("NextSyncAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("OwnerUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PageToken")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ProtectedRefreshToken")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
+                    b.Property<Guid?>("SyncLeaseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("SyncLeaseUntil")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId", "GoogleSubject")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "NextSyncAt");
+
+                    b.ToTable("GmailConnections");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.GmailMessage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ConnectionId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ProtectedContent")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ProviderMessageId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTime>("ReceivedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Sender")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("ThreadId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConnectionId", "ProviderMessageId")
+                        .IsUnique();
+
+                    b.HasIndex("ConnectionId", "ReceivedAt");
+
+                    b.ToTable("GmailMessages");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.GmailOAuthRequest", b =>
+                {
+                    b.Property<string>("StateHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ProtectedVerifier")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("Used")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("StateHash");
+
+                    b.ToTable("GmailOAuthRequests");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
             modelBuilder.Entity("MyApp.Api.Models.GoodsReceipt", b =>
                 {
                     b.Property<int>("Id")
@@ -1684,11 +1964,23 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("FbrInvoiceNumber")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("FbrReviewRequiredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("FbrReviewedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("FbrStatus")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("FbrSubmittedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<decimal>("FreightCharges")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasDefaultValue(0m);
 
                     b.Property<decimal>("FurtherTaxAmount")
                         .HasPrecision(18, 2)
@@ -3468,7 +3760,9 @@ namespace MyApp.Api.Migrations
 
                     b.HasIndex("SignatureHash");
 
-                    b.HasIndex("CompanyId", "ClientId")
+                    b.HasIndex("CompanyId", "ClientId");
+
+                    b.HasIndex("CompanyId", "ClientId", "Name")
                         .IsUnique()
                         .HasFilter("[CompanyId] IS NOT NULL AND [ClientId] IS NOT NULL");
 
@@ -3655,6 +3949,8 @@ namespace MyApp.Api.Migrations
 
             modelBuilder.Entity("MyApp.Api.Models.PoImportArchive", b =>
                 {
+                    b.Property<string>("DocumentKind").HasMaxLength(32).HasColumnType("nvarchar(32)");
+                    b.Property<int?>("DocumentId").HasColumnType("int");
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
@@ -4083,6 +4379,9 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsImported")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("ManuallyClosed")
                         .HasColumnType("bit");
 
                     b.Property<string>("Notes")
@@ -4948,6 +5247,17 @@ namespace MyApp.Api.Migrations
                     b.Navigation("Supplier");
                 });
 
+            modelBuilder.Entity("MyApp.Api.Models.EmailEnquiry", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.GmailMessage", "Message")
+                        .WithMany()
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Message");
+                });
+
             modelBuilder.Entity("MyApp.Api.Models.Folder", b =>
                 {
                     b.HasOne("MyApp.Api.Models.Company", "Company")
@@ -4964,6 +5274,28 @@ namespace MyApp.Api.Migrations
                     b.Navigation("Company");
 
                     b.Navigation("CreatedByUser");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.GmailCompanyLink", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.GmailConnection", "Connection")
+                        .WithMany()
+                        .HasForeignKey("ConnectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Connection");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.GmailMessage", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.GmailConnection", "Connection")
+                        .WithMany()
+                        .HasForeignKey("ConnectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Connection");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.GoodsReceipt", b =>

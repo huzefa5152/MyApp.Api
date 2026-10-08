@@ -506,7 +506,7 @@ export default function SalesReportPage() {
               </div>
             </div>
           ) : (
-            <TableWrap>
+            <TableWrap data-admin-table-region="">
               <table className="k-table" style={{ minWidth: 820 }}>
                 <thead>
                   <tr>
@@ -616,8 +616,8 @@ export default function SalesReportPage() {
       {loading && <Loading>Loading report…</Loading>}
 
       {bulk && (
-        <div style={formStyles.backdrop} role="dialog" aria-modal="true" aria-label="Building Tax Invoice PDFs">
-          <div style={{ ...formStyles.modal, maxWidth: modalSizes.sm }}>
+        <div data-admin-backdrop="" style={formStyles.backdrop} role="dialog" aria-modal="true" aria-label="Building Tax Invoice PDFs">
+          <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.sm }}>
             <div style={formStyles.header}>
               <h3 style={{ ...formStyles.title, display: "flex", alignItems: "center", gap: 8 }}>
                 {bulk.mode === "zip" ? <MdFolderZip size={20} aria-hidden="true" /> : <MdPictureAsPdf size={20} aria-hidden="true" />}
@@ -644,7 +644,7 @@ export default function SalesReportPage() {
               )}
             </div>
             <div style={formStyles.footer}>
-              <button
+              <button data-admin-close=""
                 type="button"
                 onClick={() => { cancelRef.current = true; }}
                 style={{ ...formStyles.button, ...formStyles.cancel, display: "inline-flex", alignItems: "center", gap: 4 }}

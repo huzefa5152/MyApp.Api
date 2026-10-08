@@ -1,5 +1,5 @@
 import Handlebars from "handlebars";
-import { withBillFbrSection } from "./billFbrSection";
+import { withBillFbrSection } from "./billFbrSection.js";
 import { materializeStamp } from "./stampSlot.js";
 
 // Register custom helpers
@@ -255,6 +255,7 @@ export const MERGE_FIELDS = {
     { field: "{{join challanNumbers}}", label: "Challan Numbers" },
     { field: "{{joinDates challanDates}}", label: "Challan Dates" },
     { field: "{{poNumber}}", label: "PO Number" },
+    { field: "{{site}}", label: "Challan Site(s)" },
     { field: "{{fmtDate poDate}}", label: "PO Date" },
     { field: "{{clientName}}", label: "Client Name" },
     { field: "{{clientAddress}}", label: "Client Address" },
@@ -267,6 +268,9 @@ export const MERGE_FIELDS = {
     { field: "{{furtherTaxRate}}", label: "Further Tax Rate (%)" },
     { field: "{{fmtDec furtherTaxAmount}}", label: "Further Tax Amount" },
     { field: "{{fmt grandTotal}}", label: "Grand Total" },
+    { field: "{{fmtDec freightCharges}}", label: "Freight / cartage charges" },
+    { field: "{{fmtDec totalBeforeFreight}}", label: "Total before freight" },
+    { field: "{{fmtDec commercialTotal}}", label: "Commercial invoice total" },
     { field: "{{amountInWords}}", label: "Amount In Words" },
     { field: "{{#each items}}", label: "Loop: Items Start" },
     { field: "{{/each}}", label: "Loop: End" },
@@ -304,6 +308,7 @@ export const MERGE_FIELDS = {
     { field: "{{fmtDate date}}", label: "Invoice Date" },
     { field: "{{join challanNumbers}}", label: "Challan Numbers" },
     { field: "{{poNumber}}", label: "PO Number" },
+    { field: "{{site}}", label: "Challan Site(s)" },
     { field: "{{gstRate}}", label: "GST Rate %" },
     { field: "{{fmtDec subtotal}}", label: "Subtotal" },
     { field: "{{fmtDec gstAmount}}", label: "GST Amount" },

@@ -51,6 +51,7 @@ namespace MyApp.Api.DTOs
         public List<int> ChallanNumbers { get; set; } = new();
         public List<DateTime?> ChallanDates { get; set; } = new();
         public string PoNumber { get; set; } = "";
+        public string Site { get; set; } = "";
         public DateTime? PoDate { get; set; }
         public string ClientName { get; set; } = "";
         public string? ClientAddress { get; set; }
@@ -61,6 +62,9 @@ namespace MyApp.Api.DTOs
         public decimal Subtotal { get; set; }
         public decimal GSTRate { get; set; }
         public decimal GSTAmount { get; set; }
+        public decimal FreightCharges { get; set; }
+        public decimal TotalBeforeFreight { get; set; }
+        public decimal CommercialTotal { get; set; }
         public decimal GrandTotal { get; set; }
         public string AmountInWords { get; set; } = "";
         public string? PaymentTerms { get; set; }
@@ -151,6 +155,7 @@ namespace MyApp.Api.DTOs
         public DateTime Date { get; set; }
         public List<int> ChallanNumbers { get; set; } = new();
         public string PoNumber { get; set; } = "";
+        public string Site { get; set; } = "";
         public decimal Subtotal { get; set; }
         public decimal GSTRate { get; set; }
         public decimal GSTAmount { get; set; }

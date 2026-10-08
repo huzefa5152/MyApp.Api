@@ -1,8 +1,10 @@
-﻿namespace MyApp.Api.Models
+namespace MyApp.Api.Models
 {
     public class DeliveryChallan
     {
         public int Id { get; set; }
+        // Null on historical rows; SQL records UTC creation time for new challans.
+        public DateTime? CreatedAt { get; private set; }
         public int CompanyId { get; set; }
         public int ChallanNumber { get; set; }
 

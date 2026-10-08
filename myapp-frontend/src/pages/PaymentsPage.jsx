@@ -412,11 +412,11 @@ function PaymentViewDialog({ p, companyId, accent, docNoun, onClose }) {
     <div style={vd.row}><span style={vd.k}>{label}</span><span style={vd.v}>{value}</span></div>
   );
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: 460, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: 460, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>{p.reference}</h5>
-          <button type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
+          <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
         </div>
         <div style={formStyles.body}>
           <div style={{ ...vd.amount, color: accent }}>Rs {fmtMoney(p.amount)}</div>
@@ -430,7 +430,7 @@ function PaymentViewDialog({ p, companyId, accent, docNoun, onClose }) {
           {p.notes && <div style={{ marginTop: 12 }}><div style={vd.k}>Notes</div><div style={{ marginTop: 5, padding: 10, border: "1px solid var(--k-line)", borderRadius: 8 }}><RichText text={p.notes} /></div></div>}
           {allocs.length > 0 && (
             <div style={{ marginTop: "0.6rem" }}>
-              <div style={vd.k}>{docNoun}s settled</div>
+              <div style={vd.k}>Allocation details</div>
               <div style={{ marginTop: 4 }}>
                 {allocs.map((a) => (
                   <div key={a.id} style={vd.allocRow}>
@@ -448,7 +448,7 @@ function PaymentViewDialog({ p, companyId, accent, docNoun, onClose }) {
           )}
         </div>
         <div style={formStyles.footer}>
-          <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
+          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
         </div>
       </div>
     </div>

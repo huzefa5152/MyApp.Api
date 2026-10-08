@@ -16,12 +16,14 @@ namespace MyApp.Api.Controllers
     {
         private readonly IDeliveryChallanService _service;
         private readonly ICompanyAccessGuard _access;
+        private readonly IPermissionService _permissions;
         private readonly int _defaultPageSize;
         private readonly ILogger<DeliveryChallansController> _logger;
 
-        public DeliveryChallansController(IDeliveryChallanService service, ICompanyAccessGuard access, IConfiguration configuration, ILogger<DeliveryChallansController> logger)
+        public DeliveryChallansController(IDeliveryChallanService service, ICompanyAccessGuard access, IPermissionService permissions, IConfiguration configuration, ILogger<DeliveryChallansController> logger)
         {
             _service = service;
+            _permissions = permissions;
             _access = access;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
             _logger = logger;
@@ -146,6 +148,7 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            if (existing.InvoiceId != null && !await _permissions.HasPermissionAsync(CurrentUserId, "bills.manage.update")) return Forbid();
             try
             {
                 var updated = await _service.UpdateItemsAsync(id, items);
@@ -165,6 +168,7 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            if (existing.InvoiceId != null && !await _permissions.HasPermissionAsync(CurrentUserId, "bills.manage.update")) return Forbid();
             try
             {
                 if (string.IsNullOrWhiteSpace(dto.PoNumber))
@@ -192,6 +196,7 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            if (existing.InvoiceId != null && !await _permissions.HasPermissionAsync(CurrentUserId, "bills.manage.update")) return Forbid();
             try
             {
                 // Items must still contain at least one row and have valid data.
@@ -259,6 +264,7 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            if (existing.InvoiceId != null && !await _permissions.HasPermissionAsync(CurrentUserId, "bills.manage.update")) return Forbid();
             try
             {
                 var result = await _service.CancelAsync(id);
@@ -278,6 +284,7 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            if (existing.InvoiceId != null && !await _permissions.HasPermissionAsync(CurrentUserId, "bills.manage.update")) return Forbid();
             try
             {
                 var result = await _service.DeleteAsync(id);
@@ -301,6 +308,7 @@ namespace MyApp.Api.Controllers
             var parent = await _service.GetCompanyForItemAsync(itemId);
             if (parent == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, parent.Value);
+            if (await _service.GetInvoiceForItemAsync(itemId) != null && !await _permissions.HasPermissionAsync(CurrentUserId, "bills.manage.update")) return Forbid();
 
             try
             {

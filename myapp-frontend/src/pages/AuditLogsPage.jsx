@@ -142,7 +142,7 @@ export default function AuditLogsPage() {
 
       {/* Table (desktop) */}
       <Card flush>
-        <TableWrap className="audit-table-wrap">
+        <TableWrap data-admin-table-region="" className="audit-table-wrap">
           <table className="k-table">
             <thead>
               <tr>
@@ -264,12 +264,12 @@ export default function AuditLogsPage() {
 
       {/* Detail Modal */}
       {selectedLog && (
-        <div
+        <div data-admin-backdrop=""
           // Backdrop click is a no-op for consistency with the rest of the
           // app — dismiss via the X button in the modal header.
           style={formStyles.backdrop}
         >
-          <div
+          <div data-admin-dialog=""
             style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }}
             onClick={(e) => e.stopPropagation()}
           >

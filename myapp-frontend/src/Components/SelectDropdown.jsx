@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useId } from "react";
 import httpClient from "../api/httpClient";
 import SearchableSelect from "./SearchableSelect";
 
@@ -19,6 +19,7 @@ export default function SelectDropdown({
   // eslint-disable-next-line no-unused-vars
   className,
 }) {
+  const fieldId = useId();
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");

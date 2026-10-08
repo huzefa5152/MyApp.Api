@@ -10,7 +10,7 @@ using MyApp.Api.Services.Tax;
 
 namespace MyApp.Api.Services.Implementations
 {
-    public class InvoiceService : IInvoiceService
+    public partial class InvoiceService : IInvoiceService
     {
         public async Task<bool> SetTaxInvoiceGroupingAsync(int id, bool grouped)
         {
@@ -174,7 +174,7 @@ namespace MyApp.Api.Services.Implementations
         /// A cancelled (voided) bill is locked too — it is kept only as a
         /// numbered record and must never be re-opened for editing.
         /// </summary>
-        private static bool IsInvoiceEditable(Invoice inv) => inv.FbrStatus != "Submitted" && !inv.IsCancelled;
+        private static bool IsInvoiceEditable(Invoice inv) => SalesDocumentRules.BillEditable(inv);
 
         /// <summary>
         /// Computes which per-item FBR fields are missing so the UI can show a
@@ -183,6 +183,8 @@ namespace MyApp.Api.Services.Implementations
         private static List<string> ComputeFbrMissing(Invoice inv)
         {
             var missing = new List<string>();
+            if (inv.Company == null || inv.Client == null || !FbrSetupRules.IsReady(inv.Company, inv.Client))
+                missing.Add("Seller or buyer FBR setup");
             if (inv.Items == null || !inv.Items.Any()) return missing;
             var items = inv.Items.ToList();
             for (int i = 0; i < items.Count; i++)
@@ -237,7 +239,7 @@ namespace MyApp.Api.Services.Implementations
         /// Equal to the grand total on every invoice that withholds nothing,
         /// which is all of them until an operator says otherwise.</summary>
         private static decimal Collectible(Invoice inv) =>
-            WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount);
+            CommercialTotalCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount, inv.FreightCharges);
 
         /// <summary>Allocate tax pennies so grouped and individual layouts retain the same total.</summary>
         private static void ReconcilePrintTaxes(List<PrintTaxItemDto> rows, decimal rate)
@@ -301,6 +303,7 @@ namespace MyApp.Api.Services.Implementations
             GSTRate = inv.GSTRate,
             GSTAmount = inv.GSTAmount,
             GrandTotal = inv.GrandTotal,
+            FreightCharges = inv.FreightCharges,
             AmountInWords = inv.AmountInWords,
             GroupTaxInvoiceByItemType = inv.GroupTaxInvoiceByItemType,
             PaymentTerms = inv.PaymentTerms,
@@ -314,6 +317,11 @@ namespace MyApp.Api.Services.Implementations
             FbrErrorMessage = inv.FbrErrorMessage,
             CreatedAt = inv.CreatedAt,
             IsEditable = IsInvoiceEditable(inv),
+            CanCreateSalesOrder = !inv.IsCancelled && !inv.IsDemo && inv.DocumentType == 4
+                && inv.OriginalInvoiceId == null && inv.SupplementsInvoiceId == null
+                && inv.DeliveryChallans.Any() && inv.DeliveryChallans.All(c => c.SalesOrderId == null),
+            SalesOrders = inv.DeliveryChallans.Where(c => c.SalesOrderId != null).GroupBy(c => c.SalesOrderId!.Value)
+                .Select(g => new BillSalesOrderLinkDto { Id=g.Key, Number=g.First().SalesOrder?.SalesOrderNumber ?? 0 }).ToList(),
             IsFbrExcluded = inv.IsFbrExcluded,
             IsCancelled = inv.IsCancelled,
             CancelledAt = inv.CancelledAt,
@@ -330,7 +338,11 @@ namespace MyApp.Api.Services.Implementations
             NoteReason = inv.NoteReason,
             NoteReasonRemarks = inv.NoteReasonRemarks,
             NoteAffectsStock = inv.NoteAffectsStock,
-            FbrReady = missing.Count == 0 && !adjustmentStale,
+            FbrReady = missing.Count == 0 && !adjustmentStale && inv.FbrReviewRequiredAt == null,
+            FbrReviewRequired = inv.FbrReviewRequiredAt != null,
+            FbrReviewRequiredAt = inv.FbrReviewRequiredAt,
+            FbrReviewedAt = inv.FbrReviewedAt,
+            FbrReviewVersion = BillChallanVersion(inv),
             FbrMissing = missing,
             FbrAdjustmentStale = adjustmentStale,
             FbrAdjustedSubtotal = fbrAdjustedSubtotal,
@@ -638,6 +650,7 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<InvoiceDto> CreateAsync(CreateInvoiceDto dto)
         {
+            var freightCharges = CommercialTotalCalculator.Validate(dto.FreightCharges);
             var company = await _companyRepo.GetByIdAsync(dto.CompanyId);
             if (company == null) throw new KeyNotFoundException("Company not found.");
 
@@ -666,12 +679,12 @@ namespace MyApp.Api.Services.Implementations
             {
                 challanMap.TryGetValue(challanId, out var dc);
                 if (dc == null) throw new KeyNotFoundException($"Challan {challanId} not found.");
-                // Both "Pending" (natively-created) and "Imported" (back-filled)
-                // are billable. Anything else (Invoiced, Cancelled, Setup Required, No PO)
-                // blocks bill creation.
-                if (dc.Status != "Pending" && dc.Status != "Imported")
+                // Commercial billing permits an optional PO. Billed and cancelled
+                // challans stay outside the pool.
+                if (!ChallanBillingRules.IsBillable(dc.Status, dc.InvoiceId))
                     throw new InvalidOperationException($"Challan {dc.ChallanNumber} is not in a billable status (got '{dc.Status}').");
                 if (dc.CompanyId != dto.CompanyId) throw new InvalidOperationException($"Challan {dc.ChallanNumber} does not belong to this company.");
+                if (dc.ClientId != dto.ClientId) throw new InvalidOperationException($"Challan {dc.ChallanNumber} belongs to a different client than this bill.");
                 challans.Add(dc);
             }
 
@@ -925,9 +938,9 @@ namespace MyApp.Api.Services.Implementations
                         var freshStatuses = await _context.DeliveryChallans
                             .AsNoTracking()
                             .Where(dc => dto.ChallanIds.Contains(dc.Id))
-                            .Select(dc => new { dc.Status, dc.ChallanNumber })
+                            .Select(dc => new { dc.Status, dc.ChallanNumber, dc.InvoiceId, dc.CompanyId, dc.ClientId })
                             .ToListAsync();
-                        var conflict = freshStatuses.FirstOrDefault(dc => dc.Status != "Pending" && dc.Status != "Imported");
+                        var conflict = freshStatuses.FirstOrDefault(dc => !ChallanBillingRules.IsBillable(dc.Status, dc.InvoiceId) || dc.CompanyId != dto.CompanyId || dc.ClientId != dto.ClientId);
                         if (conflict != null)
                             throw new InvalidOperationException(
                                 $"Challan {conflict.ChallanNumber} was just billed by another request — refresh and try again.");
@@ -979,6 +992,7 @@ namespace MyApp.Api.Services.Implementations
                         WithholdingTaxRate = withholdingTaxRate,
                         WithholdingTaxAmount = withholdingTaxAmount,
                         GrandTotal = grandTotal,
+                    FreightCharges = freightCharges,
                         AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                         GroupTaxInvoiceByItemType = dto.GroupTaxInvoiceByItemType ?? company.DefaultGroupTaxInvoiceByItemType,
                         PaymentTerms = dto.PaymentTerms,
@@ -1015,7 +1029,11 @@ namespace MyApp.Api.Services.Implementations
                     {
                         if (_context.Entry(dc).State == EntityState.Detached)
                             _context.Attach(dc);   // only after a rolled-back retry cleared the tracker
-                        if (dto.PoDateUpdates.TryGetValue(dc.Id, out var poDate))
+                        if (!string.IsNullOrWhiteSpace(dto.PoNumber))
+                            dc.PoNumber = dto.PoNumber.Trim();
+                        if (dto.PoDate.HasValue)
+                            dc.PoDate = dto.PoDate.Value;
+                        else if (dto.PoDateUpdates.TryGetValue(dc.Id, out var poDate))
                             dc.PoDate = poDate;
                         dc.Status = "Invoiced";
                         dc.Invoice = invoice;      // nav link → EF fills InvoiceId with the new key in THIS save
@@ -1062,6 +1080,7 @@ namespace MyApp.Api.Services.Implementations
                 // exactly the points where the bill changed. A no-op while the
                 // company's ledger is not live, and replace-on-edit otherwise.
                 await _posting.PostInvoiceAsync(created);
+                await SalesDocumentRules.RefreshOrdersAsync(_context, created.CompanyId);
                     await transaction.CommitAsync();
 
                     // Reload with includes
@@ -1127,6 +1146,7 @@ namespace MyApp.Api.Services.Implementations
         //     against the picked UOMs.
         public async Task<InvoiceDto> CreateStandaloneAsync(CreateStandaloneInvoiceDto dto)
         {
+            var freightCharges = CommercialTotalCalculator.Validate(dto.FreightCharges);
             var company = await _companyRepo.GetByIdAsync(dto.CompanyId);
             if (company == null) throw new KeyNotFoundException("Company not found.");
 
@@ -1368,6 +1388,7 @@ namespace MyApp.Api.Services.Implementations
                         WithholdingTaxRate = withholdingTaxRate,
                         WithholdingTaxAmount = withholdingTaxAmount,
                         GrandTotal = grandTotal,
+                    FreightCharges = freightCharges,
                         AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                         GroupTaxInvoiceByItemType = dto.GroupTaxInvoiceByItemType ?? company.DefaultGroupTaxInvoiceByItemType,
                         PaymentTerms = finalPaymentTerms,
@@ -1422,6 +1443,7 @@ namespace MyApp.Api.Services.Implementations
                 // exactly the points where the bill changed. A no-op while the
                 // company's ledger is not live, and replace-on-edit otherwise.
                 await _posting.PostInvoiceAsync(created);
+                await SalesDocumentRules.RefreshOrdersAsync(_context, created.CompanyId);
                     await transaction.CommitAsync();
 
                     var loaded = await _invoiceRepo.GetByIdAsync(created.Id);
@@ -1538,6 +1560,8 @@ namespace MyApp.Api.Services.Implementations
         {
             var invoice = await _invoiceRepo.GetByIdAsync(id);
             if (invoice == null) return null;
+            var freightCharges = dto.FreightCharges.HasValue
+                ? CommercialTotalCalculator.Validate(dto.FreightCharges.Value) : invoice.FreightCharges;
 
             if (!IsInvoiceEditable(invoice))
                 throw new InvalidOperationException(invoice.IsCancelled
@@ -1590,9 +1614,13 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException(
                     $"Bill item id(s) [{string.Join(", ", extrasInPayload)}] do not belong to this bill.");
 
-            await using var transaction = await _context.Database.BeginTransactionAsync();
+            await using var transaction = _context.Database.CurrentTransaction == null
+                ? await _context.Database.BeginTransactionAsync() : null;
             try
             {
+                await AssertBillSnapshotCurrentAsync(invoice);
+                var commercialSnapshot = BillChallanVersion(invoice);
+                var previouslyAdjusted = invoice.FbrReviewedAt != null || invoice.Items.Any(i => i.Adjustment != null);
                 // Update invoice-level fields
                 if (dto.Date.HasValue)
                 {
@@ -1654,13 +1682,14 @@ namespace MyApp.Api.Services.Implementations
                 // is never trusted, only the fixed-amount withholding figure,
                 // and even that is clamped.
                 invoice.FurtherTaxRate = dto.FurtherTaxRate is > 0m ? dto.FurtherTaxRate : null;
+                invoice.FreightCharges = freightCharges;
                 invoice.WithholdingTaxRate = dto.WithholdingTaxRate;
                 invoice.WithholdingTaxAmount = dto.WithholdingTaxAmount ?? 0m;
                 if (dto.GroupTaxInvoiceByItemType.HasValue)
                     invoice.GroupTaxInvoiceByItemType = dto.GroupTaxInvoiceByItemType.Value;
                 invoice.PaymentTerms = dto.PaymentTerms;
                 invoice.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
-                invoice.DocumentType = dto.DocumentType;
+                invoice.DocumentType = dto.DocumentType ?? invoice.DocumentType;
                 invoice.PaymentMode = dto.PaymentMode;
 
                 // Allow buyer reassignment ONLY on standalone bills (no
@@ -1777,7 +1806,14 @@ namespace MyApp.Api.Services.Implementations
                     invoice.Subtotal, invoice.GSTAmount, invoice.FurtherTaxAmount);
                 invoice.WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(
                     invoice.WithholdingTaxRate, invoice.GrandTotal, invoice.WithholdingTaxAmount);
+                if (dto.FreightCharges.HasValue && invoice.AmountPaid > CommercialTotalCalculator.Collectible(invoice.GrandTotal, invoice.WithholdingTaxAmount, invoice.FreightCharges))
+                    throw new InvalidOperationException("The commercial bill total cannot be less than receipts already allocated to this bill.");
                 invoice.AmountInWords = NumberToWordsConverter.Convert(invoice.GrandTotal);
+
+                if (previouslyAdjusted && commercialSnapshot != BillChallanVersion(invoice))
+                    invoice.FbrReviewRequiredAt = DateTime.UtcNow;
+
+                RecalculateBillTotals(invoice);
 
                 // Any edit invalidates a previous validation
                 if (invoice.FbrStatus != "Submitted")
@@ -1798,10 +1834,11 @@ namespace MyApp.Api.Services.Implementations
                 // exactly the points where the bill changed. A no-op while the
                 // company's ledger is not live, and replace-on-edit otherwise.
                 await _posting.PostInvoiceAsync(invoice);
+                await SalesDocumentRules.RefreshOrdersAsync(_context, invoice.CompanyId);
                 // Stock guard (2026-09-11): hard-block rolls back here,
                 // soft mode rides back on the DTO as warnings.
                 var stockWarnings = await EnforceStockGuardAfterSyncAsync(invoice);
-                await transaction.CommitAsync();
+                if (transaction != null) await transaction.CommitAsync();
 
                 var reloaded = await _invoiceRepo.GetByIdAsync(id);
                 if (reloaded == null) return null;
@@ -1812,7 +1849,7 @@ namespace MyApp.Api.Services.Implementations
             catch (Exception ex)
             {
                 _logger.LogError(ex, "InvoiceService: transaction rolled back");
-                await transaction.RollbackAsync();
+                if (transaction != null) await transaction.RollbackAsync();
                 throw;
             }
         }
@@ -1858,6 +1895,9 @@ namespace MyApp.Api.Services.Implementations
             if (dto.Items == null || dto.Items.Count == 0)
                 throw new InvalidOperationException("At least one item is required.");
 
+            var asAdjustment = allowQuantityEdit
+                && string.Equals(dto.WriteMode, "adjustment", StringComparison.OrdinalIgnoreCase);
+
             // Restriction F: zero unit price not allowed when the .qty
             // path is active (operator is editing prices, not just
             // classifying). Negative is also blocked. Zero unit price on
@@ -1881,6 +1921,9 @@ namespace MyApp.Api.Services.Implementations
                         $"Quantity must be greater than zero. Bill item id(s) [{string.Join(", ", badQtyRows)}] " +
                         $"have zero or negative quantity.");
             }
+
+            if (dto.Items.Select(r => r.Id).Distinct().Count() != dto.Items.Count)
+                throw new InvalidOperationException("Each bill item may appear only once in an adjustment.");
 
             // Capture before-state for the audit log. Snapshot the
             // current values BEFORE we mutate them, so the log can show
@@ -1987,7 +2030,7 @@ namespace MyApp.Api.Services.Implementations
                     // the derived rate divides back into the target at the stored
                     // precision. A fraction only has to be refused when the UNIT
                     // itself does not carry one.
-                    if (qty != decimal.Truncate(qty) && !UnitAllowsDecimal(RowUom(row)))
+                    if (!asAdjustment && qty != decimal.Truncate(qty) && !UnitAllowsDecimal(RowUom(row)))
                         throw new InvalidOperationException(
                             $"Exact line total for bill item id {row.Id} needs a whole-number quantity (got {qty}). " +
                             $"Enable decimal quantity for unit '{RowUom(row)}' on the Units admin page if fractions are allowed.");
@@ -2007,11 +2050,12 @@ namespace MyApp.Api.Services.Implementations
                 }
             }
 
-            var referencedTypeIds = dto.Items
-                .Where(i => i.ItemTypeId.HasValue)
+            var referencedTypeIds = dto.Items.Where(i => i.ItemTypeId.HasValue)
                 .Select(i => i.ItemTypeId!.Value)
-                .Distinct()
-                .ToList();
+                .Concat(invoice.Items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value))
+                .Concat(invoice.Items.Where(i => i.Adjustment?.AdjustedItemTypeId != null)
+                    .Select(i => i.Adjustment!.AdjustedItemTypeId!.Value))
+                .Distinct().ToList();
             var typeMap = referencedTypeIds.Count == 0
                 ? new Dictionary<int, ItemType>()
                 : await _context.ItemTypes
@@ -2024,17 +2068,38 @@ namespace MyApp.Api.Services.Implementations
             // unit name, not the stale one.
             if (allowQuantityEdit)
             {
-                var rowsToValidate = dto.Items
-                    .Where(r => r.Quantity.HasValue)
-                    .Select(r =>
+                // Overlay shares are internal allocations; validate the whole
+                // effective FBR group, including lines omitted by partial requests.
+                var requested = dto.Items.ToDictionary(r => r.Id);
+                var projected = invoice.Items.Select(existing =>
+                {
+                    requested.TryGetValue(existing.Id, out var row);
+                    var typeId = row != null ? row.ItemTypeId ?? existing.ItemTypeId : existing.Adjustment?.AdjustedItemTypeId ?? existing.ItemTypeId;
+                    typeMap.TryGetValue(typeId ?? 0, out var picked);
+                    var reclassified = row != null && picked != null && picked.Id != existing.ItemTypeId;
+                    var overlay = row == null ? existing.Adjustment : null;
+                    return new InvoiceItem
                     {
-                        var existing = invoice.Items.FirstOrDefault(ii => ii.Id == r.Id);
-                        var unit = (r.ItemTypeId.HasValue && typeMap.TryGetValue(r.ItemTypeId.Value, out var t))
-                            ? (t.UOM ?? "")
-                            : (existing?.UOM ?? "");
-                        return new { Qty = r.Quantity!.Value, Unit = unit };
-                    })
-                    .ToList();
+                        Id = existing.Id,
+                        ItemTypeId = reclassified ? picked!.Id : overlay?.AdjustedItemTypeId ?? existing.ItemTypeId,
+                        ItemTypeName = reclassified ? picked!.Name : overlay?.AdjustedItemTypeName ?? existing.ItemTypeName,
+                        UOM = reclassified ? picked!.UOM ?? "" : overlay?.AdjustedUOM ?? (existing.ItemType?.UOM ?? existing.UOM),
+                        HSCode = reclassified ? picked!.HSCode : overlay?.AdjustedHSCode ?? existing.HSCode,
+                        SaleType = reclassified ? picked!.SaleType : overlay?.AdjustedSaleType ?? existing.SaleType,
+                        RateId = existing.RateId,
+                        SroScheduleNo = existing.SroScheduleNo,
+                        SroItemSerialNo = existing.SroItemSerialNo,
+                        Quantity = row?.Quantity ?? overlay?.AdjustedQuantity ?? existing.Quantity
+                    };
+                }).ToList();
+                var rowsToValidate = asAdjustment
+                    ? projected.GroupBy(TaxInvoiceGrouping.Key)
+                        .Select(g => new { Qty = g.Sum(i => i.Quantity), Unit = g.First().UOM }).ToList()
+                    : dto.Items.Where(r => r.Quantity.HasValue).Select(r => new {
+                        Qty = r.Quantity!.Value,
+                        Unit = r.ItemTypeId.HasValue && typeMap.TryGetValue(r.ItemTypeId.Value, out var t)
+                            ? t.UOM ?? "" : invoice.Items.First(i => i.Id == r.Id).UOM
+                    }).ToList();
                 if (rowsToValidate.Count > 0)
                 {
                     var unitNames = rowsToValidate.Select(r => r.Unit)
@@ -2074,12 +2139,20 @@ namespace MyApp.Api.Services.Implementations
             // because dto.WriteMode is ignored when allowQuantityEdit is
             // false — Item Type re-classification belongs on the bill
             // proper, not in a tax-filing overlay.
-            var asAdjustment = allowQuantityEdit
-                && string.Equals(dto.WriteMode, "adjustment", StringComparison.OrdinalIgnoreCase);
-
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                await AssertBillSnapshotCurrentAsync(invoice);
+                var commercialSnapshot = BillChallanVersion(invoice);
+                var previouslyAdjusted = invoice.FbrReviewedAt != null || invoice.Items.Any(i => i.Adjustment != null);
+                if (dto.CompleteConsultantReview && !asAdjustment)
+                    throw new InvalidOperationException("Complete review from the Invoices screen with consultant adjustment permission.");
+                if (asAdjustment && (dto.CompleteConsultantReview || !string.IsNullOrEmpty(dto.ReviewVersion))
+                    && dto.ReviewVersion != BillChallanVersion(invoice))
+                    throw new InvalidOperationException("This bill changed after you opened it. Reload and review the latest items before saving.");
+                if (dto.CompleteConsultantReview && (dto.Items.Select(i => i.Id).Distinct().Count() != dto.Items.Count
+                    || !dto.Items.Select(i => i.Id).ToHashSet().SetEquals(invoice.Items.Select(i => i.Id))))
+                    throw new InvalidOperationException("Review every current bill item before completing consultant review.");
                 // Pre-load existing overlays for these items so we upsert
                 // in one shot (no per-row roundtrip).
                 Dictionary<int, InvoiceItemAdjustment> existingOverlays =
@@ -2304,6 +2377,32 @@ namespace MyApp.Api.Services.Implementations
                     }
                 }
 
+                if (!asAdjustment && previouslyAdjusted && commercialSnapshot != BillChallanVersion(invoice))
+                    invoice.FbrReviewRequiredAt = DateTime.UtcNow;
+                if (dto.CompleteConsultantReview)
+                {
+                    var reviewItems = invoice.Items.Select(ii =>
+                    {
+                        existingOverlays.TryGetValue(ii.Id, out var ov);
+                        return new InvoiceItem
+                        {
+                            HSCode = ov?.AdjustedHSCode ?? ii.HSCode,
+                            SaleType = ov?.AdjustedSaleType ?? ii.SaleType,
+                            UOM = ov?.AdjustedUOM ?? ii.UOM,
+                            FbrUOMId = ov?.AdjustedFbrUOMId ?? ii.FbrUOMId,
+                            UnitPrice = ov?.AdjustedUnitPrice ?? ii.UnitPrice,
+                            LineTotal = ov?.AdjustedLineTotal ?? ii.LineTotal
+                        };
+                    }).ToList();
+                    var missing = ComputeFbrMissing(new Invoice { Company = invoice.Company, Client = invoice.Client, Items = reviewItems });
+                    if (missing.Count > 0)
+                        throw new InvalidOperationException("Complete the FBR details before finishing review: " + string.Join("; ", missing));
+                    if (Math.Abs(reviewItems.Sum(i => i.LineTotal) - invoice.Subtotal) > _totalTolerancePkr)
+                        throw new InvalidOperationException("Reconcile the adjusted total to the commercial bill before completing review.");
+                    invoice.FbrReviewRequiredAt = null;
+                    invoice.FbrReviewedAt = DateTime.UtcNow;
+                }
+
                 if (dto.GroupTaxInvoiceByItemType.HasValue)
                     invoice.GroupTaxInvoiceByItemType = dto.GroupTaxInvoiceByItemType.Value;
 
@@ -2329,6 +2428,7 @@ namespace MyApp.Api.Services.Implementations
                 // exactly the points where the bill changed. A no-op while the
                 // company's ledger is not live, and replace-on-edit otherwise.
                 await _posting.PostInvoiceAsync(invoice);
+                await SalesDocumentRules.RefreshOrdersAsync(_context, invoice.CompanyId);
                 // Stock guard (2026-09-11): the consultant's classification is
                 // what actually takes HS stock out, so this is where an
                 // oversell is caught. Hard-block → exception → rollback →
@@ -2336,6 +2436,15 @@ namespace MyApp.Api.Services.Implementations
                 // the client has already asked the operator to confirm.
                 var stockWarnings = await EnforceStockGuardAfterSyncAsync(invoice);
                 await transaction.CommitAsync();
+                await transaction.DisposeAsync();
+                if (dto.CompleteConsultantReview)
+                    await _auditLog.LogAsync(new AuditLog
+                    {
+                        CompanyId = invoice.CompanyId, UserName = actorUserName,
+                        ExceptionType = "BILL_FBR_REVIEW_COMPLETED", Level = "Information",
+                        Message = $"Bill #{invoice.InvoiceNumber}: all current items reviewed.",
+                        Timestamp = DateTime.UtcNow, OccurrenceCount = 1
+                    });
 
                 // ── Audit log (after commit so we don't log a rolled-back op) ──
                 // Per-row before/after snapshot for the narrow-edit path.
@@ -2563,6 +2672,7 @@ namespace MyApp.Api.Services.Implementations
                 invoice.FbrCancelledBy = actorUserName;
 
                 await _context.SaveChangesAsync();
+                await SalesDocumentRules.RefreshOrdersAsync(_context, invoice.CompanyId);
                 await transaction.CommitAsync();
             }
             catch
@@ -2627,6 +2737,7 @@ namespace MyApp.Api.Services.Implementations
                 // exactly the points where the bill changed. A no-op while the
                 // company's ledger is not live, and replace-on-edit otherwise.
                 await _posting.PostInvoiceAsync(invoice);
+                await SalesDocumentRules.RefreshOrdersAsync(_context, invoice.CompanyId);
                 await transaction.CommitAsync();
             }
             catch (Exception ex)
@@ -2958,6 +3069,7 @@ namespace MyApp.Api.Services.Implementations
                     }
                 }
 
+                await SalesDocumentRules.RefreshOrdersAsync(_context, invoice.CompanyId);
                 await transaction.CommitAsync();
                 return true;
             }
@@ -3025,6 +3137,7 @@ namespace MyApp.Api.Services.Implementations
                 // reversing entry, because the bill itself carries the void and
                 // a reversal would double the paper trail.
                 await _posting.PostInvoiceAsync(invoice);
+                await SalesDocumentRules.RefreshOrdersAsync(_context, invoice.CompanyId);
                 await transaction.CommitAsync();
             }
             catch (Exception ex)
@@ -3303,6 +3416,7 @@ namespace MyApp.Api.Services.Implementations
                         FurtherTaxRate   = original.FurtherTaxRate,
                         FurtherTaxAmount = FurtherTaxCalculator.Resolve(original.FurtherTaxRate, subtotal),
                         GrandTotal    = grandTotal,
+                    FreightCharges = !partial && docType == 10 ? original.FreightCharges : 0m,
                         AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                         PaymentTerms  = original.PaymentTerms,   // carries [SNxxx] scenario tag
                         DocumentType  = docType,
@@ -3331,6 +3445,7 @@ namespace MyApp.Api.Services.Implementations
                 // exactly the points where the bill changed. A no-op while the
                 // company's ledger is not live, and replace-on-edit otherwise.
                 await _posting.PostInvoiceAsync(created);
+                await SalesDocumentRules.RefreshOrdersAsync(_context, created.CompanyId);
 
                     // A CREDIT note that reverses the bill IN FULL puts the goods
                     // back, so the delivery challans behind it are undelivered
@@ -3572,6 +3687,7 @@ namespace MyApp.Api.Services.Implementations
                 // exactly the points where the bill changed. A no-op while the
                 // company's ledger is not live, and replace-on-edit otherwise.
                 await _posting.PostInvoiceAsync(created);
+                await SalesDocumentRules.RefreshOrdersAsync(_context, created.CompanyId);
                     await transaction.CommitAsync();
 
                     try
@@ -3653,6 +3769,8 @@ namespace MyApp.Api.Services.Implementations
                 ChallanNumbers = inv.DeliveryChallans.Select(dc => dc.ChallanNumber).ToList(),
                 ChallanDates = inv.DeliveryChallans.Select(dc => dc.DeliveryDate).ToList(),
                 PoNumber = string.Join(", ", poNumbers),
+                Site = string.Join(", ", inv.DeliveryChallans.OrderBy(c => c.ChallanNumber).ThenBy(c => c.Id)
+                    .Select(c => c.Site?.Trim()).Where(site => !string.IsNullOrWhiteSpace(site)).Distinct(StringComparer.OrdinalIgnoreCase)),
                 // Same fallback as the number above: a standalone bill's PO
                 // date lives on the invoice.
                 PoDate = inv.PoDate ?? inv.DeliveryChallans.Select(dc => dc.PoDate).FirstOrDefault(),
@@ -3673,11 +3791,14 @@ namespace MyApp.Api.Services.Implementations
                 // Round to whole rupees for the printed bill so the displayed
                 // grand total matches AmountInWords. Stored DB value keeps
                 // 2-dp precision; this is purely a print transformation.
-                GrandTotal = NumberToWordsConverter.RoundForDisplay(inv.GrandTotal),
+                FreightCharges = inv.FreightCharges,
+                TotalBeforeFreight = inv.GrandTotal,
+                CommercialTotal = CommercialTotalCalculator.Total(inv.GrandTotal, inv.FreightCharges),
+                GrandTotal = NumberToWordsConverter.RoundForDisplay(CommercialTotalCalculator.Total(inv.GrandTotal, inv.FreightCharges)),
                 // Recompute words at print time so old bills (whose stored
                 // AmountInWords was written under the prior ceil rule) stay in
                 // sync with the rounded total without needing a re-save.
-                AmountInWords = NumberToWordsConverter.Convert(inv.GrandTotal),
+                AmountInWords = NumberToWordsConverter.Convert(CommercialTotalCalculator.Total(inv.GrandTotal, inv.FreightCharges)),
                 PaymentTerms = inv.PaymentTerms,
                 Notes = inv.Notes,
                 Items = inv.Items.Select((ii, idx) => new PrintBillItemDto
@@ -3751,6 +3872,8 @@ namespace MyApp.Api.Services.Implementations
                 Date = inv.Date,
                 ChallanNumbers = inv.DeliveryChallans.Select(dc => dc.ChallanNumber).ToList(),
                 PoNumber = string.Join(", ", poNumbers),
+                Site = string.Join(", ", inv.DeliveryChallans.OrderBy(c => c.ChallanNumber).ThenBy(c => c.Id)
+                    .Select(c => c.Site?.Trim()).Where(site => !string.IsNullOrWhiteSpace(site)).Distinct(StringComparer.OrdinalIgnoreCase)),
                 Subtotal = inv.Subtotal,
                 GSTRate = inv.GSTRate,
                 GSTAmount = inv.GSTAmount,
@@ -3817,7 +3940,7 @@ namespace MyApp.Api.Services.Implementations
                         .GroupBy(ii => new {
                             ItemTypeName = ii.Adjustment?.AdjustedItemTypeName ?? ii.ItemTypeName,
                             ItemTypeId = ii.Adjustment?.AdjustedItemTypeId ?? ii.ItemTypeId,
-                            UOM = ii.Adjustment?.AdjustedUOM ?? ii.UOM,
+                            ii.SroScheduleNo, ii.SroItemSerialNo,
                             HSCode = ii.Adjustment?.AdjustedHSCode ?? ii.HSCode,
                             SaleType = ii.Adjustment?.AdjustedSaleType ?? ii.SaleType,
                             ii.RateId,
@@ -3834,8 +3957,7 @@ namespace MyApp.Api.Services.Implementations
                                 ItemTypeName = g.Key.ItemTypeName,
                                 Quantity = totalQty,
                                 UnitPrice = totalQty != 0 ? Math.Round(totalValue / totalQty, 2) : 0m,
-                                UOM = g.Select(x => x.Adjustment?.AdjustedUOM ?? x.UOM)
-                                       .FirstOrDefault(u => !string.IsNullOrWhiteSpace(u)) ?? "",
+                                UOM = TaxInvoiceGrouping.Uom(g.First(), string.IsNullOrWhiteSpace(inv.FbrIRN) && inv.FbrSubmittedAt == null),
                                 Description = g.Key.ItemTypeName,
                                 ValueExclTax = totalValue,
                                 GSTRate = inv.GSTRate,
@@ -3852,15 +3974,15 @@ namespace MyApp.Api.Services.Implementations
                         }).ToList()
                     : inv.Items.Select(ii =>
                         {
-                            var lineTotal = EffectivePrintLineTotal(ii);
-                            var qty       = ii.Adjustment?.AdjustedQuantity  ?? ii.Quantity;
+                            var lineTotal = ii.LineTotal;
+                            var qty       = ii.Quantity;
                             var gstAmt = Math.Round(lineTotal * inv.GSTRate / 100, 2);
                             return AddPrintChoices(new PrintTaxItemDto
                             {
                                 ItemTypeName = ii.Adjustment?.AdjustedItemTypeName ?? ii.ItemTypeName,
                                 Quantity = qty,
                                 UnitPrice = qty != 0 ? Math.Round(lineTotal / qty, 2) : 0m,
-                                UOM = ii.Adjustment?.AdjustedUOM ?? ii.UOM,
+                                UOM = ii.UOM,
                                 Description = ii.Description,
                                 ValueExclTax = lineTotal,
                                 GSTRate = inv.GSTRate,

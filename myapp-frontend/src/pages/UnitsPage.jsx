@@ -141,7 +141,7 @@ export default function UnitsPage() {
           {search ? "No units match your search" : "No units yet"}
         </EmptyState>
       ) : (
-        <TableWrap>
+        <TableWrap data-admin-table-region="">
           <table className="k-table">
             <thead>
               <tr>

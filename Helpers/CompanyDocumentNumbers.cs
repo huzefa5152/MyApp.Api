@@ -24,10 +24,10 @@ public static class CompanyDocumentNumbers
         _ => throw new InvalidOperationException("Unknown document type.")
     };
 
-    private static IQueryable<int> Numbers(AppDbContext db, int companyId, string kind, int? excludeId = null) => kind switch
+    private static IQueryable<int> Numbers(AppDbContext db, int companyId, string kind, int? excludeId = null, int? clientId = null) => kind switch
     {
         "quote" => db.SalesQuotes.Where(d => (excludeId == null || d.Id != excludeId) && d.CompanyId == companyId).Select(d => d.QuoteNumber),
-        "challan" => db.DeliveryChallans.Where(d => (excludeId == null || d.Id != excludeId) && d.CompanyId == companyId && !d.IsDemo).Select(d => d.ChallanNumber),
+        "challan" => db.DeliveryChallans.Where(d => (excludeId == null || d.Id != excludeId) && d.CompanyId == companyId && !d.IsDemo && (clientId == null || d.ClientId == clientId)).Select(d => d.ChallanNumber),
         "purchase-bill" => db.PurchaseBills.Where(d => (excludeId == null || d.Id != excludeId) && d.CompanyId == companyId).Select(d => d.PurchaseBillNumber),
         "goods-receipt" => db.GoodsReceipts.Where(d => (excludeId == null || d.Id != excludeId) && d.CompanyId == companyId).Select(d => d.GoodsReceiptNumber),
         _ => throw new InvalidOperationException("Unknown document type.")
@@ -59,23 +59,23 @@ public static class CompanyDocumentNumbers
         return NextAvailableAsync(Numbers(db, company.Id, kind), settings.Start, settings.Current, Maximum(kind));
     }
 
-    private static async Task<string?> ErrorAsync(AppDbContext db, int companyId, string kind, int number, int? excludeId = null)
+    private static async Task<string?> ErrorAsync(AppDbContext db, int companyId, string kind, int number, int? excludeId = null, int? clientId = null)
     {
         if (number <= 0 || number > Maximum(kind)) return $"Enter a whole number from 1 to {Maximum(kind)}.";
-        return await Numbers(db, companyId, kind, excludeId).AnyAsync(n => n == number)
-            ? "That document number already exists for this company." : null;
+        return await Numbers(db, companyId, kind, excludeId, kind == "challan" ? clientId : null).AnyAsync(n => n == number)
+            ? (kind == "challan" && clientId.HasValue ? "That challan number already exists for this client." : "That document number already exists for this company.") : null;
     }
 
     // The caller owns the transaction: both the counter and document roll back
     // together. The company lock serializes Auto/Custom across app processes.
-    public static async Task<int> AllocateAsync(AppDbContext db, int companyId, string kind, int? customNumber = null)
+    public static async Task<int> AllocateAsync(AppDbContext db, int companyId, string kind, int? customNumber = null, int? clientId = null)
     {
         if (db.Database.CurrentTransaction == null) throw new InvalidOperationException("Number allocation requires a transaction.");
         var company = await db.Companies.FromSqlInterpolated(
             $"SELECT * FROM Companies WITH (UPDLOCK, ROWLOCK) WHERE Id = {companyId}")
             .AsNoTracking().SingleOrDefaultAsync() ?? throw new KeyNotFoundException("Company not found.");
         var number = customNumber ?? await NextAsync(db, company, kind);
-        var error = await ErrorAsync(db, companyId, kind, number);
+        var error = await ErrorAsync(db, companyId, kind, number, clientId: customNumber.HasValue ? clientId : null);
         if (error != null) throw new InvalidOperationException(error);
         // Custom reserves its number without moving the Auto cursor.
         if (customNumber.HasValue) return number;
@@ -91,7 +91,7 @@ public static class CompanyDocumentNumbers
         return number;
     }
 
-    public static async Task RenumberAsync(AppDbContext db, int companyId, string kind, int id, int currentNumber, int? requested)
+    public static async Task RenumberAsync(AppDbContext db, int companyId, string kind, int id, int currentNumber, int? requested, int? clientId = null)
     {
         if (db.Database.CurrentTransaction == null) throw new InvalidOperationException("Renumbering requires a transaction.");
         _ = await db.Companies.FromSqlInterpolated(
@@ -107,11 +107,21 @@ public static class CompanyDocumentNumbers
         };
         if (storedNumber != currentNumber)
             throw new InvalidOperationException("The document number changed during this save. Reload the document and retry.");
-        if (!requested.HasValue || requested.Value == currentNumber) return;
+        var clientChanged = kind == "challan" && clientId.HasValue
+            && await db.DeliveryChallans.AnyAsync(d => d.Id == id && d.CompanyId == companyId && d.ClientId != clientId);
+        if (!requested.HasValue || requested.Value == currentNumber)
+        {
+            if (clientChanged)
+            {
+                var clientError = await ErrorAsync(db, companyId, kind, currentNumber, id, clientId);
+                if (clientError != null) throw new InvalidOperationException(clientError);
+            }
+            return;
+        }
         if (kind == "challan" && await db.DeliveryChallans.AnyAsync(d => d.CompanyId == companyId
             && (d.Id == id && (d.IsDemo || d.DuplicatedFromId != null) || d.DuplicatedFromId == id)))
             throw new InvalidOperationException("Demo or duplicated challan numbers cannot be changed.");
-        var error = await ErrorAsync(db, companyId, kind, requested.Value, id);
+        var error = await ErrorAsync(db, companyId, kind, requested.Value, id, clientId);
         if (error != null) throw new InvalidOperationException(error);
         // Renumbering is custom: it never advances or rewinds the Auto cursor.
     }
@@ -125,12 +135,12 @@ public static class CompanyDocumentNumbers
         _ => throw new InvalidOperationException("Unknown document type.")
     };
 
-    public static async Task<object> PreviewAsync(AppDbContext db, int companyId, string kind, int? check, int? excludeId = null)
+    public static async Task<object> PreviewAsync(AppDbContext db, int companyId, string kind, int? check, int? excludeId = null, int? clientId = null)
     {
         var company = await db.Companies.AsNoTracking().SingleOrDefaultAsync(c => c.Id == companyId)
             ?? throw new KeyNotFoundException("Company not found.");
         var next = await NextAsync(db, company, kind);
-        var error = check.HasValue ? await ErrorAsync(db, companyId, kind, check.Value, excludeId) : null;
+        var error = check.HasValue ? await ErrorAsync(db, companyId, kind, check.Value, excludeId, clientId) : null;
         return new { nextNumber = next, maxAllowed = Maximum(kind), startingNumberSet = true,
             checkedAvailable = check.HasValue ? error == null : (bool?)null, checkedError = error };
     }

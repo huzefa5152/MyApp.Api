@@ -190,7 +190,7 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
       {open && triggerRect && createPortal(
         <div
           ref={wrapperRef}
-          className="k-combo__pop"
+          data-admin-popup="" className="k-combo__pop"
           style={styles.dropdown(triggerRect)}
           onKeyDown={handleKeyDown}
         >

@@ -253,7 +253,7 @@ export default function CreditDebitNotePage() {
           </Card>
 
           {/* Lines */}
-          <TableWrap>
+          <TableWrap data-admin-table-region="">
             <table className="k-table">
               <thead>
                 <tr>

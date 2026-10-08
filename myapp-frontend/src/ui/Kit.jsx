@@ -125,7 +125,7 @@ export function Card({ title, icon: Icon, tone, actions, children, flush, classN
 
 /** Scrollable table frame. Use <table className="k-table"> inside. */
 export function TableWrap({ children, className, style }) {
-  return <div className={cx("k-table-wrap", className)} style={style}>{children}</div>;
+  return <div data-admin-table-region="" className={cx("k-table-wrap", className)} style={style}>{children}</div>;
 }
 
 /** tabs: [{ key, label, icon?, count? }] */

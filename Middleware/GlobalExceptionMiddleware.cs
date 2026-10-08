@@ -68,7 +68,7 @@ namespace MyApp.Api.Middleware
             string? requestBody = null;
             try
             {
-                if (context.Request.Body.CanSeek)
+                if (context.Request.Body.CanSeek && !context.Request.Path.StartsWithSegments("/api/email-workspace"))
                 {
                     requestBody = await AuditRequestBody.ReadPrefixAsync(context.Request.Body);
                     if (string.IsNullOrWhiteSpace(requestBody)) requestBody = null;
@@ -88,7 +88,7 @@ namespace MyApp.Api.Middleware
                 UserName = context.User.Identity?.Name,
                 HttpMethod = context.Request.Method,
                 RequestPath = PortalTokenLogMasker.Mask(context.Request.Path.ToString()),
-                QueryString = context.Request.QueryString.ToString(),
+                QueryString = redactor.ScrubFormEncoded(context.Request.QueryString.ToString().TrimStart('?')),
                 StatusCode = statusCode,
                 ExceptionType = "",
                 Message = $"HTTP {statusCode} response",
@@ -146,6 +146,7 @@ namespace MyApp.Api.Middleware
             // returns directly).
             var statusCode = ex switch
             {
+                _ when UsernamePolicy.IsConflict(ex) => (int)HttpStatusCode.Conflict,
                 KeyNotFoundException => (int)HttpStatusCode.NotFound,
                 InvalidOperationException => (int)HttpStatusCode.BadRequest,
                 UnauthorizedAccessException => (int)HttpStatusCode.Forbidden,
@@ -158,7 +159,7 @@ namespace MyApp.Api.Middleware
             string? requestBody = null;
             try
             {
-                if (context.Request.Body.CanSeek)
+                if (context.Request.Body.CanSeek && !context.Request.Path.StartsWithSegments("/api/email-workspace"))
                 {
                     requestBody = await AuditRequestBody.ReadPrefixAsync(context.Request.Body);
                     // Audit C-10 / H-7 (2026-05-13): dispatch by content
@@ -213,7 +214,7 @@ namespace MyApp.Api.Middleware
                 UserName = context.User.Identity?.Name,
                 HttpMethod = context.Request.Method,
                 RequestPath = PortalTokenLogMasker.Mask(context.Request.Path.ToString()),
-                QueryString = context.Request.QueryString.ToString(),
+                QueryString = redactor.ScrubFormEncoded(context.Request.QueryString.ToString().TrimStart('?')),
                 StatusCode = statusCode,
                 ExceptionType = ex.GetType().Name,
                 Message = messageChain,
@@ -254,7 +255,7 @@ namespace MyApp.Api.Middleware
             context.Response.ContentType = "application/json";
             context.Response.StatusCode = statusCode;
 
-            var userMessage = statusCode >= 500
+            var userMessage = UsernamePolicy.IsConflict(ex) ? UsernamePolicy.UnavailableMessage : statusCode >= 500
                 ? "An unexpected error occurred. Please try again later."
                 : ex.Message;
 

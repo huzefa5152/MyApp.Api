@@ -330,11 +330,11 @@ export default function AdministratorsPage() {
 
       {/* ── Create administrator modal ── */}
       {showCreate && (
-        <div style={formStyles.backdrop} onClick={() => !saving && setShowCreate(false)}>
-          <div style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onClick={(e) => e.stopPropagation()}>
+        <div data-admin-backdrop="" style={formStyles.backdrop} onClick={() => !saving && setShowCreate(false)}>
+          <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onClick={(e) => e.stopPropagation()}>
             <div style={formStyles.header}>
               <h3 style={formStyles.title}>New Administrator</h3>
-              <button type="button" style={formStyles.closeButton} onClick={() => setShowCreate(false)} aria-label="Close"><MdClose /></button>
+              <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={() => setShowCreate(false)} aria-label="Close"><MdClose /></button>
             </div>
             <div style={formStyles.body}>
               <p style={{ ...styles.mutedInline, marginBottom: "1rem" }}>
@@ -356,7 +356,7 @@ export default function AdministratorsPage() {
               </div>
             </div>
             <div style={formStyles.footer}>
-              <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setShowCreate(false)} disabled={saving}>Cancel</button>
+              <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setShowCreate(false)} disabled={saving}>Cancel</button>
               <button type="button" style={{ ...formStyles.button, ...formStyles.submit, ...styles.iconLabel }} onClick={submitCreate} disabled={saving}>
                 <MdSave size={18} /> {saving ? "Creating..." : "Create"}
               </button>
@@ -367,11 +367,11 @@ export default function AdministratorsPage() {
 
       {/* ── Company access modal ── */}
       {accessTarget && (
-        <div style={formStyles.backdrop} onClick={() => !saving && setAccessTarget(null)}>
-          <div style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onClick={(e) => e.stopPropagation()}>
+        <div data-admin-backdrop="" style={formStyles.backdrop} onClick={() => !saving && setAccessTarget(null)}>
+          <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onClick={(e) => e.stopPropagation()}>
             <div style={formStyles.header}>
               <h3 style={formStyles.title}>Company access — {accessTarget.fullName}</h3>
-              <button type="button" style={formStyles.closeButton} onClick={() => setAccessTarget(null)} aria-label="Close"><MdClose /></button>
+              <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={() => setAccessTarget(null)} aria-label="Close"><MdClose /></button>
             </div>
             <div style={formStyles.body}>
               {allCompanies.length === 0 ? (
@@ -395,7 +395,7 @@ export default function AdministratorsPage() {
               </p>
             </div>
             <div style={formStyles.footer}>
-              <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setAccessTarget(null)} disabled={saving}>Cancel</button>
+              <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setAccessTarget(null)} disabled={saving}>Cancel</button>
               <button type="button" style={{ ...formStyles.button, ...formStyles.submit, ...styles.iconLabel }} onClick={submitAccess} disabled={saving}>
                 <MdSave size={18} /> {saving ? "Saving..." : "Save access"}
               </button>

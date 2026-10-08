@@ -4,8 +4,8 @@ import { getNextInvoiceNumber } from "../api/invoiceApi";
 import httpClient from "../api/httpClient";
 
 const labels = { quote: "Sales Quote", challan: "Delivery Challan", "purchase-bill": "Purchase Bill", "goods-receipt": "Goods Receipt" };
-const readNumber = (companyId, kind, check, excludeId) => kind
-  ? httpClient.get(`/companies/${companyId}/document-numbers/${kind}`, { params: { check, excludeId } })
+const readNumber = (companyId, kind, check, excludeId, clientId) => kind
+  ? httpClient.get(`/companies/${companyId}/document-numbers/${kind}`, { params: { check, excludeId, clientId } })
   : getNextInvoiceNumber(companyId, check);
 
 // The "Bill / Invoice No." control, shared by BOTH bill-create forms
@@ -62,6 +62,8 @@ const colors = {
 export default function BillNumberField({
   companyId,
   documentType,
+  clientId,
+  currentClientId,
   editRecordId,
   variant = "create",
   mode = "auto",
@@ -94,7 +96,7 @@ export default function BillNumberField({
     setLoading(true);
     setLoadError("");
     try {
-      const res = await readNumber(companyId, documentType, undefined, isEdit ? editRecordId : undefined);
+      const res = await readNumber(companyId, documentType, undefined, isEdit ? editRecordId : undefined, documentType === "challan" ? clientId : undefined);
       setInfo(res.data);
     } catch {
       setLoadError(documentType ? "Could not read the next document number." : "Could not read the next bill number.");
@@ -118,7 +120,7 @@ export default function BillNumberField({
     // Leaving an existing bill on its own number is not a clash with itself.
     // The server excludes the row being renumbered for the same reason; this
     // just keeps the form from flashing a false error before it answers.
-    if (isEdit && currentNumber != null && parsed === Number(currentNumber)) {
+    if ((documentType !== "challan" || String(clientId) === String(currentClientId)) && isEdit && currentNumber != null && parsed === Number(currentNumber)) {
       setProbe({ available: true, error: "", unchanged: true });
       setProbing(false);
       return;
@@ -131,7 +133,7 @@ export default function BillNumberField({
     setProbing(true);
     const t = setTimeout(async () => {
       try {
-        const res = await readNumber(companyId, documentType, parsed, isEdit ? editRecordId : undefined);
+        const res = await readNumber(companyId, documentType, parsed, isEdit ? editRecordId : undefined, documentType === "challan" ? clientId : undefined);
         if (seq !== probeSeq.current) return;      // a newer keystroke won
         setProbe({
           available: res.data?.checkedAvailable === true,
@@ -149,7 +151,7 @@ export default function BillNumberField({
     }, 400);
 
     return () => clearTimeout(t);
-  }, [effectiveMode, isEdit, currentNumber, lockedReason, number, companyId, documentType, editRecordId]);
+  }, [effectiveMode, isEdit, currentNumber, lockedReason, number, companyId, documentType, editRecordId, clientId, currentClientId]);
 
   // Report usability upward so the parent can block Save.
   const customUsable =

@@ -7,8 +7,8 @@ import { formStyles, modalSizes } from "../../theme";
 export default function SyncWarningModal({ onConfirm, onCancel }) {
   // Backdrop click is a no-op — explicit Cancel / Continue only.
   return (
-    <div style={formStyles.backdrop}>
-      <div
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog=""
         style={{ ...formStyles.modal, maxWidth: `${modalSizes.sm}px` }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
@@ -30,7 +30,7 @@ export default function SyncWarningModal({ onConfirm, onCancel }) {
           </p>
         </div>
         <div style={formStyles.footer}>
-          <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onCancel}>
+          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onCancel}>
             Cancel
           </button>
           <button type="button" style={{ ...formStyles.button, ...formStyles.submit }} onClick={onConfirm}>

@@ -1,9 +1,15 @@
+import { useNavigate } from "react-router-dom";
+import { usePermissions } from "../contexts/PermissionsContext";
+import { useConfirm } from "./ConfirmDialog";
+import { notify } from "../utils/notify";
+import { getDeliveryChallanById, cancelChallan, deleteChallan } from "../api/challanApi";
+import ChallanEditForm from "./ChallanEditForm";
 import { useState, useEffect } from "react";
 import RichText from "./RichText";
 import {
   MdClose, MdPrint, MdLocalShipping, MdEdit, MdInventory2, MdReceiptLong, MdLink,
 } from "react-icons/md";
-import { getSalesOrderChallans } from "../api/salesOrderApi";
+import { getSalesOrderChallans, getSalesOrderById } from "../api/salesOrderApi";
 import AttachmentManager from "./AttachmentManager";
 import { formStyles } from "../theme";
 import { Facts, TableWrap, Loading } from "../ui/Kit";
@@ -21,7 +27,32 @@ const LINE_COLORS = { Pending: "#5f6d7e", Partial: "#f57c00", Complete: "#28a745
  * raised against the order (with the lines it delivered). Optional action
  * callbacks (print / edit / deliver) let the parent launch those flows.
  */
-export default function SalesOrderDetailModal({ order, companyId, onClose, onPrint, onEdit, onDeliver, canDeliver, canBill, canAttach, onGenerateBill, onAttach, onViewChallans }) {
+export default function SalesOrderDetailModal({ order: initialOrder, onChanged, companyId, onClose, onPrint, onEdit, onDeliver, canDeliver, canBill, canAttach, onGenerateBill, onAttach, onViewChallans }) {
+  const [order, setOrder] = useState(initialOrder);
+  const [editingChallan, setEditingChallan] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const { has } = usePermissions();
+  const confirm = useConfirm();
+  const navigate = useNavigate();
+  const [narrow, setNarrow] = useState(window.innerWidth < 760);
+  useEffect(() => { const resize = () => setNarrow(window.innerWidth < 760); window.addEventListener("resize", resize); return () => window.removeEventListener("resize", resize); }, []);
+  const refresh = async () => {
+    const [nextOrder, nextChallans] = await Promise.all([getSalesOrderById(order.id), getSalesOrderChallans(order.id)]);
+    setOrder(nextOrder.data); setChallans(nextChallans.data || []); onChanged?.(nextOrder.data);
+  };
+  const editChallan = async c => {
+    try { const { data } = await getDeliveryChallanById(c.id); setEditingChallan(data); }
+    catch (e) { notify(e.response?.data?.error || "Could not open challan.", "error"); }
+  };
+  const removeChallan = async (c, action) => {
+    if (!await confirm({ title: `${action === "delete" ? "Delete" : "Cancel"} challan #${c.challanNumber}?`,
+      message: `Delivered quantities and order status will update.${c.invoiceId ? ` Bill #${c.invoiceNumber} will lose this challan's items, its totals will recalculate, and consultant review will be required. An empty bill is refused: replace its challan or cancel the bill first.` : ""}`,
+      confirmText: action === "delete" ? "Delete challan" : "Cancel challan", variant: "danger" })) return;
+    setBusy(true);
+    try { await (action === "delete" ? deleteChallan(c.id) : cancelChallan(c.id)); await refresh(); notify("Challan, bill and order updated. Check the bill's consultant review status.", "success"); }
+    catch (e) { notify(e.response?.data?.error || "Could not change challan.", "error"); }
+    finally { setBusy(false); }
+  };
   const [challans, setChallans] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -37,6 +68,7 @@ export default function SalesOrderDetailModal({ order, companyId, onClose, onPri
   }, [order?.id]);
 
   if (!order) return null;
+  if (editingChallan) return <ChallanEditForm challan={editingChallan} onClose={() => setEditingChallan(null)} onSaved={async () => { setEditingChallan(null); await refresh(); notify("Delivery and bill updated. Review the bill before FBR submission.", "success"); }} />;
 
   const items = order.items || [];
   const totalOrdered = items.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
@@ -48,8 +80,8 @@ export default function SalesOrderDetailModal({ order, companyId, onClose, onPri
   const distinctBills = new Set(billedChallans.map((c) => c.invoiceId)).size;
 
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: 760 }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: 760 }} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div style={{ ...formStyles.header, alignItems: "flex-start", gap: "1rem" }}>
           <div style={{ minWidth: 0 }}>
@@ -59,11 +91,11 @@ export default function SalesOrderDetailModal({ order, companyId, onClose, onPri
                 {order.fulfillmentStatus}
               </span>
               <span style={{ ...st.badge, ...st.statusBadge }}>{order.status}</span>
-              <span style={{ ...st.badge, background: "#ffffffee", color: INVOICE_COLORS[order.invoiceStatus] || "#5f6d7e" }}>{order.invoiceStatus}</span>
+              <span style={{ ...st.badge, background: "#ffffffee", color: INVOICE_COLORS[order.invoiceStatus] || "#5f6d7e" }}>{({ Invoiced: "Billed", "Partially Invoiced": "Partially billed", Uninvoiced: "Unbilled" })[order.invoiceStatus] || order.invoiceStatus}</span>
             </div>
             <div style={st.hClient}>{order.clientName}</div>
           </div>
-          <button style={formStyles.closeButton} onClick={onClose} title="Close" aria-label="Close"><MdClose size={22} /></button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} title="Close" aria-label="Close"><MdClose size={22} /></button>
         </div>
 
         <div style={{ ...formStyles.body, maxHeight: "none" }}>
@@ -79,9 +111,11 @@ export default function SalesOrderDetailModal({ order, companyId, onClose, onPri
             ]}
           />
 
+          {order.needsAttention && <p role="status" style={{ color: "#b45309" }}>This order was manually closed but delivery or billing is incomplete. Reopen it to continue fulfillment.</p>}
+          <p style={{ color: colors.textSecondary }}>Ordered quantities record the customer's commitment. Delivery and billing changes update delivered, remaining and billed status automatically.</p>
           {/* Line items */}
           <div style={st.sectionTitle}><MdInventory2 size={16} color="var(--k-blue)" /> Items ({items.length})</div>
-          <TableWrap style={st.tableWrap}>
+          {narrow ? <div>{items.map(i => <div key={i.id} style={{ ...st.challanCard, padding: 12, marginBottom: 8 }}><RichText text={i.description} /><div>Ordered: {fmtQty(i.quantity)} {i.unit}</div><div>Delivered: {fmtQty(i.deliveredQuantity)} · Remaining: {fmtQty(i.remainingQuantity)}</div><strong>{i.lineStatus}</strong></div>)}</div> : <TableWrap data-admin-table-region="" style={st.tableWrap}>
             <table className="k-table k-table--compact">
               <thead>
                 <tr>
@@ -125,6 +159,8 @@ export default function SalesOrderDetailModal({ order, companyId, onClose, onPri
             </table>
           </TableWrap>
 
+          }
+
           {/* Attached challans */}
           <div style={st.sectionTitle}>
             <MdLocalShipping size={16} color="var(--k-blue)" /> Delivery Challans ({activeChallans.length})
@@ -158,6 +194,16 @@ export default function SalesOrderDetailModal({ order, companyId, onClose, onPri
                         : (!cancelled && <span style={st.unbilledPill}>Unbilled</span>)}
                       <span style={st.challanQty}>{fmtQty(c.totalQuantity)} delivered</span>
                     </div>
+                    <div style={{ padding: "8px 12px", display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {c.invoiceId && <span>FBR: {c.fbrStatus || "Not submitted"}{c.needsConsultantReview ? " · Needs consultant review" : ""}</span>}
+                      {c.invoiceId && has("bills.list.view") && <button style={st.btnGhost} onClick={() => navigate(`/bills?viewBill=${c.invoiceId}`)}>Open bill #{c.invoiceNumber}</button>}
+                      {c.isEditable && (!c.invoiceId || has("bills.manage.update")) && <>
+                        {has("challans.manage.update") && <button disabled={busy} style={st.btnGhost} onClick={() => editChallan(c)}>Edit challan</button>}
+                        {has("challans.manage.update") && <button disabled={busy} style={st.btnGhost} onClick={() => removeChallan(c, "cancel")}>Cancel challan</button>}
+                        {c.canDelete && has("challans.manage.delete") && <button disabled={busy} style={st.btnGhost} onClick={() => removeChallan(c, "delete")}>Delete challan</button>}
+                      </>}
+                      {!cancelled && !c.isEditable && <span>Delivery locked: the linked bill is cancelled or FBR submission has started.</span>}
+                    </div>
                     <div style={st.challanLines}>
                       {(c.lines || []).map((l, li) => (
                         <div key={li} style={st.challanLine}>
@@ -181,13 +227,13 @@ export default function SalesOrderDetailModal({ order, companyId, onClose, onPri
 
         {/* Footer actions */}
         <div style={{ ...formStyles.footer, justifyContent: "space-between", alignItems: "center" }}>
-          <button style={st.btnGhost} onClick={onClose}>Close</button>
+          <button data-admin-close="" style={st.btnGhost} onClick={onClose}>Close</button>
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            {onEdit && order.isEditable && <button style={st.btnGhost} onClick={() => { onClose(); onEdit(order); }}><MdEdit size={15} /> Edit</button>}
+            {onEdit && order.isEditable && <button data-admin-close="" style={st.btnGhost} onClick={() => { onClose(); onEdit(order); }}><MdEdit size={15} /> Edit</button>}
             {onViewChallans && activeChallans.length > 0 && <button style={st.btnGhost} onClick={() => onViewChallans(order)}><MdLocalShipping size={15} /> View Challans</button>}
             {onAttach && canAttach && <button style={st.btnGhost} onClick={() => onAttach(order)}><MdLink size={15} /> Attach Challan</button>}
             {onPrint && <button style={st.btnGhost} onClick={() => onPrint(order)}><MdPrint size={15} /> Print</button>}
-            {onDeliver && canDeliver && <button style={st.btnTeal} onClick={() => { onClose(); onDeliver(order); }}><MdLocalShipping size={15} /> Create Challan</button>}
+            {onDeliver && canDeliver && <button data-admin-close="" style={st.btnTeal} onClick={() => { onClose(); onDeliver(order); }}><MdLocalShipping size={15} /> Create Challan</button>}
             {onGenerateBill && canBill && <button style={st.btnBlue} onClick={() => onGenerateBill(order)}><MdReceiptLong size={15} /> Generate Bill</button>}
           </div>
         </div>

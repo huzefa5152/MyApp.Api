@@ -312,6 +312,25 @@ def main() -> int:
               D(rows["WithholdingReceivable"]["perDocuments"]) == D(inv_wh["withholdingTaxAmount"]),
               f"{rows['WithholdingReceivable']['perDocuments']} vs {inv_wh['withholdingTaxAmount']}")
 
+        # Freight is commercial revenue and a customer receivable, with no tax change.
+        status, inv_freight = make_bill({"freightCharges": 325.50}, qty=1, price=1000)
+        check("Freight", "commercial freight invoice created", status in (200, 201), f"{status} {err_text(inv_freight)}")
+        if status in (200, 201):
+            check("Freight", "freight leaves supply tax unchanged",
+                  D(inv_freight["grandTotal"]) == Decimal("1180") and D(inv_freight["gstAmount"]) == Decimal("180"))
+            fs, far = rpt("aged-receivables", asOf=d_to)
+            check("Freight", "aging increases by commercial amount",
+                  fs == 200 and D(far["total"]) - D(ar["total"]) == Decimal("1505.50"))
+            fs, fpl = rpt("profit-and-loss", **{"from": d_from, "to": d_to})
+            check("Freight", "revenue includes untaxed freight",
+                  fs == 200 and D(fpl["totalIncome"]) - D(pl["totalIncome"]) == Decimal("1325.50"))
+            fs, ftb = http("GET", f"/api/accounting/reports/company/{company_id}/trial-balance", base, token=token)
+            check("Freight", "freight journal balances", fs == 200 and
+                  sum(D(r["debit"]) for r in ftb["rows"]) == sum(D(r["credit"]) for r in ftb["rows"]))
+            # Remove this isolated fixture before the existing snapshot cross-checks continue.
+            ds, _ = http("DELETE", f"/api/invoices/{inv_freight['id']}", base, token=token)
+            check("Freight", "isolated freight fixture removed", ds in (200, 204), f"got {ds}")
+
         # ── 7. the dashboard is the reports ──────────────────────────────────
         print("\n=== 7. The dashboard is the reports, not a fourth opinion ===")
         check("7", "income matches the P&L", D(dash["income"]) == D(pl["totalIncome"]),

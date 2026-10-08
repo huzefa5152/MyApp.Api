@@ -203,7 +203,7 @@ export default function UserSessionsPanel() {
           <details><summary style={s.muted}>Browser details</summary><p style={{ ...s.muted, overflowWrap: "anywhere" }}>{session.userAgent || "Not recorded"}</p></details>
           {actions(session)}
         </article>)}</div>
-      : <TableWrap><table className="k-table">
+      : <TableWrap data-admin-table-region=""><table className="k-table">
           <thead><tr>{["User", "Device", "Status", "Signed in", "Last activity", "Session ends", ""].map(h => <th key={h}>{h}</th>)}</tr></thead>
           <tbody>{data.items.map(session => <tr key={session.id}>
             <td>

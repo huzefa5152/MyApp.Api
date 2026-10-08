@@ -698,7 +698,7 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
               </div>
 
               {/* Desktop / tablet — table */}
-              <TableWrap className="imp-items-table">
+              <TableWrap data-admin-table-region="" className="imp-items-table">
                 <table className="k-table k-table--compact">
                   <thead>
                     <tr>
@@ -828,7 +828,7 @@ function ResultsStep({ results, onRestart }) {
         <StatCard tone="green" icon={MdCheckCircle} label="Imported" value={success.length} />
         <StatCard tone="red" icon={MdError} label="Failed" value={failed.length} />
       </StatGrid>
-      <TableWrap>
+      <TableWrap data-admin-table-region="">
         <table className="k-table">
           <thead>
             <tr>

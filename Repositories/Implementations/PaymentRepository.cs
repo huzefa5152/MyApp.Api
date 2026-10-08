@@ -39,6 +39,7 @@ namespace MyApp.Api.Repositories.Implementations
                 query = query.Where(p =>
                     p.Number.ToString().Contains(term) ||
                     (p.Description != null && p.Description.ToLower().Contains(term)) ||
+                    (p.ContactName != null && p.ContactName.ToLower().Contains(term)) ||
                     (p.ChequeNumber != null && p.ChequeNumber.ToLower().Contains(term)) ||
                     (p.BankAccountName != null && p.BankAccountName.ToLower().Contains(term)));
             }

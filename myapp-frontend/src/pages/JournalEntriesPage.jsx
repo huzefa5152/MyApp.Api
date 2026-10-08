@@ -143,7 +143,7 @@ export default function JournalEntriesPage() {
 
       {e.narration && <div style={st.narration}>{e.narration}</div>}
 
-      <TableWrap>
+      <TableWrap data-admin-table-region="">
         <table className="k-table k-table--compact" style={{ minWidth: 320 }}>
           <tbody>
             {e.lines.map((l) => (
@@ -383,11 +383,11 @@ function JournalForm({ entry, companyId, accounts, isNarrow, onClose, onSaved })
   };
 
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? `Edit ${entry.reference}` : "New Journal Entry"}</h5>
-          <button type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close">&times;</button>
+          <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close">&times;</button>
         </div>
 
         <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
@@ -468,7 +468,7 @@ function JournalForm({ entry, companyId, accounts, isNarrow, onClose, onSaved })
           </div>
 
           <div style={formStyles.footer}>
-            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button
               type="submit"
               style={{ ...formStyles.button, ...formStyles.submit, opacity: saving || !totals.balanced ? 0.6 : 1 }}

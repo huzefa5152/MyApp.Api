@@ -552,7 +552,7 @@ export default function FbrPurchaseImportPage() {
                 </div>
 
                 {/* Lines table — desktop */}
-                <TableWrap className="fbr-imp-table-wrap">
+                <TableWrap data-admin-table-region="" className="fbr-imp-table-wrap">
                   <table className="k-table k-table--compact">
                     <thead>
                       <tr>

@@ -21,15 +21,18 @@ namespace MyApp.Api.Repositories.Implementations
             // Notes (DocumentType 9/10), which live on the Return Invoices
             // tab with their own numbering sequence.
             return await _context.Invoices
+                .AsSplitQuery()
+                .Include(i => i.Company)
                 .Include(i => i.Client)
                 .Include(i => i.Items)
-                .Include(i => i.DeliveryChallans)
+                .Include(i => i.DeliveryChallans).ThenInclude(c => c.SalesOrder)
                 .Include(i => i.OriginalInvoice)
                 .Include(i => i.SupplementsInvoice)
                 .Include(i => i.HandoverBy)
                 .Where(i => i.CompanyId == companyId && !i.IsDemo
                          && i.DocumentType != 9 && i.DocumentType != 10)
-                .OrderByDescending(i => i.InvoiceNumber)
+                .OrderByDescending(i => i.CreatedAt)
+                .ThenByDescending(i => i.Id)
                 .ToListAsync();
         }
 
@@ -43,6 +46,8 @@ namespace MyApp.Api.Repositories.Implementations
             // sequence: sale bills (noteType null, default), Debit Notes
             // (9) and Credit Notes (10). A row is never in two lists.
             var query = _context.Invoices
+                .AsSplitQuery()
+                .Include(i => i.Company)
                 .Include(i => i.Client)
                 .Include(i => i.Items)
                     // Dual-book overlay pulled on the list too, so the DTO's
@@ -50,7 +55,7 @@ namespace MyApp.Api.Repositories.Implementations
                     // (a bill reclassified to an HS type in Invoice mode shows
                     // "ready" even though its base line is a non-HS declaration).
                     .ThenInclude(ii => ii.Adjustment)
-                .Include(i => i.DeliveryChallans)
+                .Include(i => i.DeliveryChallans).ThenInclude(c => c.SalesOrder)
                 .Include(i => i.OriginalInvoice)
                 .Include(i => i.SupplementsInvoice)
                 .Include(i => i.HandoverBy)
@@ -122,7 +127,7 @@ namespace MyApp.Api.Repositories.Implementations
                     case "ready":
                         query = query.Where(i =>
                             i.FbrStatus != "Submitted" && !i.IsCancelled && !i.IsFbrExcluded &&
-                            i.Items.Any() &&
+                            i.FbrReviewRequiredAt == null && i.Items.Any() &&
                             !i.Items.Any(it =>
                                 (it.Adjustment.AdjustedHSCode ?? it.HSCode) == null || (it.Adjustment.AdjustedHSCode ?? it.HSCode) == "" ||
                                 (it.Adjustment.AdjustedSaleType ?? it.SaleType) == null || (it.Adjustment.AdjustedSaleType ?? it.SaleType) == "" ||
@@ -132,7 +137,7 @@ namespace MyApp.Api.Repositories.Implementations
                     case "notadjusted":
                         query = query.Where(i =>
                             i.FbrStatus != "Submitted" && !i.IsCancelled && !i.IsFbrExcluded &&
-                            (!i.Items.Any() ||
+                            (i.FbrReviewRequiredAt != null || !i.Items.Any() ||
                              i.Items.Any(it =>
                                 (it.Adjustment.AdjustedHSCode ?? it.HSCode) == null || (it.Adjustment.AdjustedHSCode ?? it.HSCode) == "" ||
                                 (it.Adjustment.AdjustedSaleType ?? it.SaleType) == null || (it.Adjustment.AdjustedSaleType ?? it.SaleType) == "" ||
@@ -167,7 +172,8 @@ namespace MyApp.Api.Repositories.Implementations
 
             var totalCount = await query.CountAsync();
             var items = await query
-                .OrderByDescending(i => i.InvoiceNumber)
+                .OrderByDescending(i => i.CreatedAt)
+                .ThenByDescending(i => i.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
@@ -177,7 +183,10 @@ namespace MyApp.Api.Repositories.Implementations
 
         public async Task<Invoice?> GetByIdAsync(int id)
         {
+            // Port the importer invoice-read fix: separate collection queries
+            // avoid sorting repeated wide rows while retaining update tracking.
             return await _context.Invoices
+                .AsSplitQuery()
                 .Include(i => i.Company)
                 .Include(i => i.Client)
                 .Include(i => i.Items)
@@ -190,7 +199,7 @@ namespace MyApp.Api.Repositories.Implementations
                 // the InvoiceItem row above as "original".
                 .Include(i => i.Items)
                     .ThenInclude(ii => ii.Adjustment)
-                .Include(i => i.DeliveryChallans)
+                .Include(i => i.DeliveryChallans).ThenInclude(c => c.SalesOrder)
                     .ThenInclude(dc => dc.Items)
                 .Include(i => i.OriginalInvoice)
                 .Include(i => i.SupplementsInvoice)

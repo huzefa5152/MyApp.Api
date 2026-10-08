@@ -339,8 +339,8 @@ export default function PurchaseBillsPage() {
       )}
 
       {showSalePicker && (
-        <div style={formStyles.backdrop} onClick={() => setShowSalePicker(false)}>
-          <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }} onClick={(e) => e.stopPropagation()}>
+        <div data-admin-backdrop="" style={formStyles.backdrop} onClick={() => setShowSalePicker(false)}>
+          <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }} onClick={(e) => e.stopPropagation()}>
             <div style={formStyles.header}>
               <h3 style={formStyles.title}>Pick a sale bill awaiting procurement</h3>
               <button type="button" style={formStyles.closeButton} onClick={() => setShowSalePicker(false)} aria-label="Close">

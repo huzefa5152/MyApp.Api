@@ -391,13 +391,13 @@ export default function RolesPage() {
       {modalOpen && (
         // Backdrop click is a no-op — explicit Cancel / X only, protects
         // mid-edit permission selections from a stray click.
-        <div style={styles.overlay}>
-          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <div data-admin-backdrop="" style={styles.overlay}>
+          <div data-admin-dialog="" style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <h3 style={formStyles.title}>
                 {copySource ? "Copy role to tenants" : editRole ? `Edit role — ${editRole.name}` : "Create new role"}
               </h3>
-              <button
+              <button data-admin-close=""
                 type="button"
                 style={styles.modalClose}
                 onClick={closeModal}
@@ -630,7 +630,7 @@ export default function RolesPage() {
             </div>
 
             <div style={styles.modalFooter}>
-              <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={closeModal} disabled={saving}>
+              <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={closeModal} disabled={saving}>
                 Cancel
               </button>
               <button type="button" style={{ ...formStyles.button, ...formStyles.submit, ...styles.iconLabel }} onClick={handleSave} disabled={saving || (!editRole && !copySource && isSeedAdmin && !tenantId) || (copySource && copyTargets.size === 0)}>
@@ -646,8 +646,8 @@ export default function RolesPage() {
       {deleteConfirm && (
         // Backdrop click is a no-op — destructive action requires explicit
         // Cancel or Delete click.
-        <div style={styles.overlay}>
-          <div style={styles.deleteModal} onClick={(e) => e.stopPropagation()}>
+        <div data-admin-backdrop="" style={styles.overlay}>
+          <div data-admin-dialog="" style={styles.deleteModal} onClick={(e) => e.stopPropagation()}>
             <MdDelete style={{ fontSize: "2.5rem", color: colors.danger }} />
             <h3 style={{ margin: "0.75rem 0 0.5rem", color: "var(--k-ink)" }}>Delete role?</h3>
             <p style={{ margin: 0, color: "var(--k-muted)", fontSize: "var(--k-font)" }}>
@@ -662,7 +662,7 @@ export default function RolesPage() {
               )}
             </p>
             <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.5rem", justifyContent: "center", flexWrap: "wrap" }}>
-              <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setDeleteConfirm(null)}>
+              <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setDeleteConfirm(null)}>
                 Cancel
               </button>
               <button

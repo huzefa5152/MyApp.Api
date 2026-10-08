@@ -284,7 +284,8 @@ export const defaultBillTemplate = `<!DOCTYPE html><html><head><title>Bill #{{in
     <table class="totals-table">
       <tr><td class="lbl">SUB TOTAL</td><td class="val">Rs{{fmt subtotal}}</td></tr>
       <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs{{fmt gstAmount}}</td></tr>
-      <tr class="grand"><td class="lbl">GRAND TOTAL</td><td class="val">Rs{{fmt grandTotal}}</td></tr>
+      {{#if freightCharges}}<tr><td class="lbl">Freight / cartage</td><td class="val">Rs{{fmtDec freightCharges}}</td></tr>{{/if}}
+<tr class="grand"><td class="lbl">GRAND TOTAL</td><td class="val">Rs{{fmt grandTotal}}</td></tr>
     </table>
   </div>
 </div>

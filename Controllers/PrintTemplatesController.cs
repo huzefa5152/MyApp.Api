@@ -121,6 +121,23 @@ namespace MyApp.Api.Controllers
             return Ok(templates.Select(ToDto));
         }
 
+        [HttpGet("company/{companyId}/accounting-report-invoice-layout")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> GetAccountingReportInvoiceLayout(int companyId)
+        {
+            var templates = await _repo.GetByCompanyAsync(companyId);
+            foreach (var type in new[] { "Bill", "TaxInvoice" })
+            {
+                var template = templates.Where(t => t.CompanyId == companyId && t.TemplateType == type
+                    && !string.IsNullOrWhiteSpace(t.HtmlContent))
+                    .OrderByDescending(t => t.IsDefault).ThenBy(t => t.Id).FirstOrDefault();
+                if (template != null)
+                    return Ok(new { template.CompanyId, template.TemplateType, template.HtmlContent });
+            }
+            return NoContent();
+        }
+
         [HttpGet("company/{companyId}/{templateType}")]
         [HasPermission("printtemplates.manage.view")]
         [AuthorizeCompany]

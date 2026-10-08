@@ -25,6 +25,15 @@ export default function PaymentHistoryDialog({ mode, companyId, doc, onClose }) 
   const isReceipt = mode === "receipts";
   const noun = isReceipt ? "Receipt" : "Payment";
   const docLabel = isReceipt ? "Invoice" : "Bill";
+  const total = isReceipt
+    ? (doc.commercialTotal ?? ((Number(doc.grandTotal) || 0) + (Number(doc.freightCharges) || 0)))
+    : doc.grandTotal;
+  const collectible = isReceipt
+    ? (doc.collectible ?? Math.max(0, total - (Number(doc.withholdingTaxAmount) || 0)))
+    : doc.grandTotal;
+  const balanceDue = isReceipt
+    ? (doc.balanceDue ?? Math.max(0, collectible - (doc.amountPaid || 0)))
+    : doc.balanceDue;
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -49,11 +58,11 @@ export default function PaymentHistoryDialog({ mode, companyId, doc, onClose }) 
       .reduce((s, a) => s + (a.amount || 0), 0);
 
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>{noun}s for {docLabel} #{doc.number}</h5>
-          <button style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
         </div>
 
         <div style={formStyles.body}>
@@ -72,7 +81,7 @@ export default function PaymentHistoryDialog({ mode, companyId, doc, onClose }) 
           ) : rows.length === 0 ? (
             <EmptyState icon={MdReceiptLong}>No {noun.toLowerCase()}s recorded against this {docLabel.toLowerCase()} yet.</EmptyState>
           ) : (
-            <TableWrap>
+            <TableWrap data-admin-table-region="">
               <table className="k-table">
                 <thead>
                   <tr>
@@ -104,7 +113,7 @@ export default function PaymentHistoryDialog({ mode, companyId, doc, onClose }) 
         </div>
 
         <div style={formStyles.footer}>
-          <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
+          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
         </div>
       </div>
     </div>

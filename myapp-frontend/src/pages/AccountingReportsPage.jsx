@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   MdAssessment, MdBusiness, MdDownload, MdWarning, MdCheckCircle, MdRefresh,
+  MdPrint, MdPictureAsPdf,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -10,6 +11,11 @@ import {
   PageHeader, CompanyPicker, Button, Toolbar, Field, Card, TableWrap, Tabs, Alert, EmptyState, Loading,
 } from "../ui/Kit";
 import { downloadCsv } from "../utils/csvExport";
+import { getAccountingReportInvoiceLayout } from "../api/printTemplateApi";
+import { selectReportInvoiceTemplate } from "../utils/invoiceReportBranding";
+import { buildTraderAccountingReport } from "../utils/traderAccountingReportPrint";
+import { downloadAccountingReportPdf } from "../utils/accountingReportPdf";
+import { writeAndPrint } from "../utils/printDocument";
 import {
   getBalanceSheet, getProfitAndLoss, getAgedReceivables, getAgedPayables,
   getCashBook, getExpenseReport, getTaxControl,
@@ -57,11 +63,18 @@ export default function AccountingReportsPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [printBusy, setPrintBusy] = useState("");
+  const [printError, setPrintError] = useState("");
+  const [dataScope, setDataScope] = useState("");
+  const requestSequence = useRef(0);
 
   const companyId = selectedCompany?.id;
   const current = TABS.find((t) => t.key === tab);
+  const scope = `${companyId}|${tab}|${from}|${to}`;
+  const ready = !!data && dataScope === scope && !loading && !error;
 
   const load = useCallback(async () => {
+    const sequence = ++requestSequence.current;
     if (!companyId) { setData(null); return; }
     setLoading(true); setError("");
     try {
@@ -75,14 +88,37 @@ export default function AccountingReportsPage() {
         "tax-control": () => getTaxControl(companyId, from, to),
       };
       const { data: d } = await fetchers[tab]();
+      if (sequence !== requestSequence.current) return;
       setData(d);
+      setDataScope(`${companyId}|${tab}|${from}|${to}`);
     } catch (err) {
+      if (sequence !== requestSequence.current) return;
       setData(null);
       setError(err.response?.data?.error || "Could not load this report.");
-    } finally { setLoading(false); }
+    } finally { if (sequence === requestSequence.current) setLoading(false); }
   }, [companyId, tab, from, to]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); return () => { requestSequence.current++; }; }, [load]);
+
+  const exportReport = async (mode) => {
+    const popup = mode === "print" ? window.open("", "_blank") : null;
+    setPrintBusy(mode); setPrintError("");
+    try {
+      if (!ready) throw new Error("Report scope changed");
+      if (mode === "print" && !popup) throw new Error("Popup blocked");
+      const company = { ...selectedCompany };
+      const { data: layout } = await getAccountingReportInvoiceLayout(company.id);
+      const template = selectReportInvoiceTemplate(layout ? [layout] : [], company.id);
+      const period = current.period === "asOf" ? `As at ${fmtDate(to)}` : `${fmtDate(from)} – ${fmtDate(to)}`;
+      const html = await buildTraderAccountingReport(tab, data, company, template, current.label, period);
+      if (mode === "print") writeAndPrint(popup, html);
+      else await downloadAccountingReportPdf(html, `${tab}-${to}`,
+        ["balance-sheet", "profit-and-loss", "expenses"].includes(tab) ? "portrait" : "landscape");
+    } catch {
+      popup?.close();
+      setPrintError("Could not prepare the report. Check your connection and allow print popups, then try again.");
+    } finally { setPrintBusy(""); }
+  };
 
   const exportCsv = () => {
     if (!data) return;
@@ -127,7 +163,7 @@ export default function AccountingReportsPage() {
   // First column is the label; every other column is a figure, right-aligned
   // in tabular numerals (k-num) so the amounts line up digit for digit.
   const Table = ({ head, rows, foot }) => (
-    <TableWrap>
+    <TableWrap data-admin-table-region="">
       <table className="k-table k-table--compact" style={{ minWidth: 320 }}>
         <thead>
           <tr>{head.map((h, i) => (
@@ -171,7 +207,7 @@ export default function AccountingReportsPage() {
 
   const body = () => {
     if (!companyId) return <EmptyState icon={MdBusiness}>Select a company to run a report.</EmptyState>;
-    if (loading) return <Loading>Loading…</Loading>;
+    if (loading || (data && dataScope !== scope)) return <Loading>Loading…</Loading>;
     if (error) return <Alert tone="error">{error}</Alert>;
     if (!data) return <EmptyState icon={MdAssessment}>Nothing to show.</EmptyState>;
 
@@ -313,7 +349,9 @@ export default function AccountingReportsPage() {
         actions={(
           <>
             <Button icon={MdRefresh} onClick={load} disabled={!companyId}>Refresh</Button>
-            <Button variant="primary" icon={MdDownload} onClick={exportCsv} disabled={!data}>Export CSV</Button>
+            <Button variant="primary" icon={MdDownload} onClick={exportCsv} disabled={!ready}>Export CSV</Button>
+            <Button icon={MdPrint} onClick={() => exportReport("print")} disabled={!ready || !!printBusy}>{printBusy === "print" ? "Preparing…" : "Print"}</Button>
+            <Button icon={MdPictureAsPdf} onClick={() => exportReport("pdf")} disabled={!ready || !!printBusy}>{printBusy === "pdf" ? "Building…" : "PDF"}</Button>
           </>
         )}
       />
@@ -343,6 +381,7 @@ export default function AccountingReportsPage() {
         onChange={setTab}
       />
 
+      {printError && <Alert tone="error">{printError}</Alert>}
       <div role="tabpanel" id={`acct-report-panel-${tab}`} aria-labelledby={`acct-report-${tab}`}>
         {body()}
       </div>

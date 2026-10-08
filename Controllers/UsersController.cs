@@ -58,11 +58,29 @@ namespace MyApp.Api.Controllers
                     u.FullName,
                     u.Role,
                     u.AvatarPath,
-                    u.CreatedAt
+                    u.CreatedAt,
+                    FailedLoginAttempts = CurrentUserId == _seedAdminUserId ? (int?)u.FailedLoginAttempts : null,
+                    LockoutUntil = CurrentUserId == _seedAdminUserId && u.Id != _seedAdminUserId
+                        ? u.LockoutUntil : null
                 })
                 .ToListAsync();
 
             return Ok(users);
+        }
+
+        [HttpPost("{id:int}/unlock")]
+        [HasPermission("users.manage.update")]
+        public async Task<ActionResult> UnlockUser(int id)
+        {
+            if (CurrentUserId != _seedAdminUserId) return NotFound();
+            var affected = await _context.Users.Where(u => u.Id == id).ExecuteUpdateAsync(set => set
+                .SetProperty(u => u.FailedLoginAttempts, 0)
+                .SetProperty(u => u.LockoutUntil, (DateTime?)null)
+                .SetProperty(u => u.LastFailedLogin, (DateTime?)null));
+            if (affected == 0) return NotFound(new { message = "User not found" });
+            HttpContext.RequestServices.GetRequiredService<ILogger<UsersController>>()
+                .LogInformation("Seed administrator {ActorId} unlocked user {UserId}", CurrentUserId, id);
+            return Ok(new { message = "Account unlocked. The user can sign in with their existing password." });
         }
 
         // GET /api/users/{id}
@@ -118,9 +136,12 @@ namespace MyApp.Api.Controllers
                 return Forbid();
             }
 
-            var exists = await _context.Users.AnyAsync(u => u.Username == dto.Username);
+            var requestedUsername = dto.Username.Trim();
+            var usernameError = MyApp.Api.Helpers.UsernamePolicy.Validate(requestedUsername);
+            if (usernameError != null) return BadRequest(new { message = usernameError });
+            var exists = await _context.Users.AnyAsync(u => u.Username == requestedUsername);
             if (exists)
-                return Conflict(new { message = "Username already exists" });
+                return Conflict(new { message = "This username is unavailable. Choose another username." });
 
             // Permissions are driven by the RBAC role-assignment system, but
             // the legacy "Role" text column is still surfaced as the pill on
@@ -130,7 +151,7 @@ namespace MyApp.Api.Controllers
             // role the operator chose at create time.
             var user = new Models.User
             {
-                Username = dto.Username,
+                Username = requestedUsername,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
                 FullName = dto.FullName,
                 Role = desiredRole,
@@ -176,9 +197,12 @@ namespace MyApp.Api.Controllers
 
             if (!string.IsNullOrWhiteSpace(dto.Username) && dto.Username != user.Username)
             {
-                var exists = await _context.Users.AnyAsync(u => u.Username == dto.Username && u.Id != id);
-                if (exists) return Conflict(new { message = "Username already exists" });
-                user.Username = dto.Username;
+                var requestedUsername = dto.Username.Trim();
+                var usernameError = MyApp.Api.Helpers.UsernamePolicy.Validate(requestedUsername);
+                if (usernameError != null) return BadRequest(new { message = usernameError });
+                var exists = await _context.Users.AnyAsync(u => u.Username == requestedUsername && u.Id != id);
+                if (exists) return Conflict(new { message = "This username is unavailable. Choose another username." });
+                user.Username = requestedUsername;
             }
 
             if (!string.IsNullOrWhiteSpace(dto.FullName))
@@ -261,6 +285,10 @@ namespace MyApp.Api.Controllers
                     await _context.SaveChangesAsync();
 
                 _context.Users.Remove(user);
+                await _context.GmailOAuthRequests.Where(r => r.UserId == id).ExecuteDeleteAsync();
+                await _context.GmailConnections.Where(c => c.OwnerUserId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(c => c.ProtectedRefreshToken, "").SetProperty(c => c.Status, "Disconnected")
+                        .SetProperty(c => c.GoogleSubject, c => "deleted:" + c.Id.ToString()).SetProperty(c => c.OwnerUserId, 0));
                 await _context.SaveChangesAsync();
                 await tx.CommitAsync();
             }

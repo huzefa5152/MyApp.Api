@@ -319,8 +319,8 @@ function RowsList({ rows, loading, onClickRow }) {
 function Drawer({ row, onClose }) {
   const cfg = statusCfg(row.status);
   return (
-    <div style={S.drawerOverlay} onClick={onClose}>
-      <div className="fbr-mon-drawer-inner" style={S.drawerInner} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={S.drawerOverlay} onClick={onClose}>
+      <div data-admin-dialog="" className="fbr-mon-drawer-inner" style={S.drawerInner} onClick={(e) => e.stopPropagation()}>
         <header className="fbr-mon-drawer-header" style={S.drawerHeader}>
           <div>
             <h2 style={{ margin: 0, fontSize: "1.1rem", color: "var(--k-ink)" }}>FBR call detail</h2>

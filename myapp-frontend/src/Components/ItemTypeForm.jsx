@@ -318,8 +318,8 @@ export default function ItemTypeForm({
       : mode === "edit" ? "Update" : "Create";
 
   return (
-    <div style={{ ...formStyles.backdrop, zIndex: 1100 }}>
-      <div
+    <div data-admin-backdrop="" style={{ ...formStyles.backdrop, zIndex: 1100 }}>
+      <div data-admin-dialog=""
         style={{
           ...formStyles.modal,
           maxWidth: `${showRichHints ? modalSizes.md : modalSizes.sm}px`,
@@ -333,7 +333,7 @@ export default function ItemTypeForm({
             {mode === "edit" ? "Edit Item Type" : "New Item Type"}
             {scenarioCode && <span style={styles.scenarioPill}>{scenarioCode}</span>}
           </h5>
-          <button type="button" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
 
         <form onSubmit={submit}>
@@ -549,7 +549,7 @@ export default function ItemTypeForm({
           </div>
 
           <div style={formStyles.footer}>
-            <button
+            <button data-admin-close=""
               type="button"
               style={{ ...formStyles.button, ...formStyles.cancel }}
               onClick={onClose}

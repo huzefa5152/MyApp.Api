@@ -351,6 +351,7 @@ export default function PublicPortalPage() {
               <div style={st.totals}>
                 <div style={st.totalRow}><span>Subtotal</span><span>Rs. {money(detail.subtotal)}</span></div>
                 <div style={st.totalRow}><span>Sales tax ({detail.gstRate}%)</span><span>Rs. {money(detail.gstAmount)}</span></div>
+                {Number(detail.freightCharges) > 0 && <div style={st.totalRow}><span>Freight / cartage</span><span>Rs. {money(detail.freightCharges)}</span></div>}
                 {detail.furtherTaxAmount > 0 && (
                   <div style={st.totalRow}><span>Further tax</span><span>Rs. {money(detail.furtherTaxAmount)}</span></div>
                 )}

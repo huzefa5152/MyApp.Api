@@ -34,6 +34,10 @@ export const PERMISSION_SECTIONS = [
     modules: [{ key: "Dashboard" }],
   },
   {
+    section: "Email Workspace",
+    modules: [{ key: "EmailWorkspace", label: "Email Workspace" }],
+  },
+  {
     section: "Sales",
     modules: [
       { key: "SalesQuotes", label: "Sales Quotes" },
@@ -70,6 +74,7 @@ export const PERMISSION_SECTIONS = [
     section: "Accounting",
     modules: [
       { key: "Receipts & Payments" },
+      { key: "Withholding Tax" },
       { key: "Accounting", label: "Ledger & Reports" },
     ],
   },
@@ -91,7 +96,7 @@ export const PERMISSION_SECTIONS = [
       { key: "ItemTypes", label: "Item Types" },
       { key: "Onboarding Import", label: "Import Data" },
       { key: "Configuration", label: "Lookups" },
-      { key: "POFormats", label: "PO Formats" },
+      { key: "POFormats", label: "Customer Document Formats" },
       { key: "ImportFeedback", label: "Import Feedback" },
       { key: "PrintTemplates", label: "Print Templates" },
       // The Configuration → Navigation Menu document library: folders plus

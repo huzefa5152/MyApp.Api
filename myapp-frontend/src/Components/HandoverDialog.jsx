@@ -36,15 +36,15 @@ export default function HandoverDialog({ mode = "single", invoiceNumber, count =
   };
 
   return (
-    <div style={formStyles.backdrop} onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
-      <div style={{ ...formStyles.modal, maxWidth: modalSizes.sm }} onMouseDown={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.sm }} onMouseDown={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h3 style={formStyles.title}>
             {isBulk
               ? `Mark ${count} invoice${count === 1 ? "" : "s"} delivered`
               : `Mark documents delivered · #${invoiceNumber}`}
           </h3>
-          <button style={formStyles.closeButton} onClick={onClose} disabled={busy} aria-label="Close">
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} disabled={busy} aria-label="Close">
             <MdClose size={18} />
           </button>
         </div>
@@ -72,7 +72,7 @@ export default function HandoverDialog({ mode = "single", invoiceNumber, count =
         </div>
 
         <div style={formStyles.footer}>
-          <button style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose} disabled={busy}>
+          <button data-admin-close="" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose} disabled={busy}>
             Cancel
           </button>
           <button

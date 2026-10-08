@@ -27,8 +27,12 @@ public sealed class McpUserAccessService(AppDbContext db, IPermissionService per
         if (tool.SeedOnly && !permissions.IsSeedAdmin(uid)) return false;
         if (tool.Permissions.Length == 0) return true;
         foreach (var key in tool.Permissions)
-            if (await permissions.HasPermissionAsync(uid, key)) return true;
-        return false;
+        {
+            var granted = await permissions.HasPermissionAsync(uid, key);
+            if (tool.RequireAll && !granted) return false;
+            if (granted && !tool.RequireAll) return true;
+        }
+        return tool.RequireAll;
     }
 
     public async Task<bool> AllowedAsync(int uid, string name)

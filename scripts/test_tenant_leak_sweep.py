@@ -34,6 +34,7 @@ Local only. Creates two throwaway companies and two users, and deletes them.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import argparse
 import json
 import sys
@@ -208,8 +209,17 @@ def main() -> int:
             if not check("0", f"{username} created", s in (200, 201), f"{s} {err(u)}"):
                 return None
             made_users.append(u)
-            http("PUT", f"/api/users/{u['id']}/roles", base, token=seed,
-                 body={"roleIds": [role["id"]]})
+            if not role.get("isSystemRole"):
+                sc, copies = http("POST", f"/api/roles/{role['id']}/copy", base, token=seed,
+                                  body={"tenantAdminUserIds": [u["id"]]})
+                if not check("0", f"{username} receives a tenant-scoped role copy", sc == 200 and bool(copies), str(copies)[:150]):
+                    return None
+                role = copies[0]
+                made_roles.append(role)
+            sr, assigned = http("PUT", f"/api/users/{u['id']}/roles", base, token=seed,
+                                body={"roleIds": [role["id"]]})
+            if not check("0", f"{username} role assignment succeeds", sr == 200, str(assigned)[:150]):
+                return None
             # Company A ONLY. That is the whole point.
             http("PUT", f"/api/usercompanies/user/{u['id']}", base, token=seed,
                  body={"companyIds": [a_id]})
@@ -286,6 +296,39 @@ def main() -> int:
         s, b_formats = http("GET", f"/api/poformats?companyId={b_id}", base, token=seed)
         if s == 200 and isinstance(b_formats, list) and b_formats:
             probes.append(("PO format by id", f"/api/poformats/{b_formats[0]['id']}"))
+
+        st, foreign_bill = http("POST", "/api/invoices/standalone", base, token=seed, body={
+            "companyId": b_id, "clientId": b_client["id"], "date": datetime.now(timezone.utc).isoformat(),
+            "gstRate": 18, "items": [{"description": "Scope probe service", "quantity": 1,
+                                      "uom": "Pcs", "unitPrice": 100}]})
+        if check("3", "foreign bill fixture created", st == 201, f"{st} {err(foreign_bill)}"):
+            selection_path = f"/api/invoices/{foreign_bill['id']}/challans"
+            st, selection = http("GET", selection_path, base, token=seed)
+            if check("3", "challan selector answers for seed admin", st == 200, f"{st} {err(selection)}"):
+                probes.append(("bill challan selection", selection_path))
+                selection_body = {"version": selection["version"], "challanIds": [],
+                                  "addedChallanVersions": {}, "unitPrices": {}}
+                st, body = http("PUT", selection_path, base, token=seed, body=selection_body)
+                check("3", "challan save answers for seed admin", st == 200, f"{st} {err(body)}")
+                for who, tok in editions:
+                    st, body = http("PUT", selection_path, base, token=tok, body=selection_body)
+                    check("3", f"{who}: foreign bill challan save refused", st in (403, 404), f"{st} {err(body)}")
+
+        st, foreign_challan = http("POST", f"/api/deliverychallans/company/{b_id}", base, token=seed, body={
+            "clientId": b_client["id"], "poNumber": "TENANT-PROBE", "deliveryDate": "2026-10-08",
+            "items": [{"description": "Order linkage probe", "quantity": 1, "unit": "Pcs"}]})
+        if check("3", "foreign order source created", st == 201, f"{st} {err(foreign_challan)}"):
+            st, linked_bill = http("POST", "/api/invoices", base, token=seed, body={
+                "companyId": b_id, "clientId": b_client["id"], "date": "2026-10-08", "gstRate": 18,
+                "challanIds": [foreign_challan["id"]],
+                "items": [{"deliveryItemId": foreign_challan["items"][0]["id"], "unitPrice": 100}]})
+            if check("3", "foreign linked bill created", st == 201, f"{st} {err(linked_bill)}"):
+                path = f"/api/salesorders/from-bill/{linked_bill['id']}"
+                for who, tok in editions:
+                    st, body = http("POST", path, base, token=tok)
+                    check("3", f"{who}: foreign create-order refused", st in (403, 404), f"{st} {err(body)}")
+                st, body = http("POST", path, base, token=seed)
+                check("3", "create-order route works for seed admin", st == 200, f"{st} {err(body)}")
 
         check("3", "there is something of B's to try for", len(probes) > 0,
               "no probe rows could be created")

@@ -224,3 +224,7 @@ These are C# property names from `DTOs/PrintDtos.cs`, retained exactly to avoid 
 ### PrintGoodsReceiptItemDto
 
 `SNo` (int), `ItemTypeName` (string), `Description` (string), `Quantity` (int), `Unit` (string)
+
+## Challan sites on bills and tax invoices
+
+Bill and TaxInvoice print data expose `{{site}}`: trimmed, distinct sites from linked challans, in challan-number order. Empty when no linked challan has a site. Bill retains `{{concernDepartment}}` for existing layouts.

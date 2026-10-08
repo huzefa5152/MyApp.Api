@@ -179,7 +179,7 @@ export default function StarterGallery({
   );
 
   const largePreview = previewStarter && (
-    <div style={s.previewOverlay} onClick={() => setPreviewStarter(null)}>
+    <div data-admin-backdrop="" style={s.previewOverlay} onClick={() => setPreviewStarter(null)}>
       <div style={s.previewModal} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Preview of ${previewStarter.name}`}>
         <div style={{ ...formStyles.header, gap: "0.5rem", flexWrap: "wrap" }}>
           <h3 style={{ ...formStyles.title, display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.25rem" }}>
@@ -206,8 +206,8 @@ export default function StarterGallery({
     return <div style={s.embedded}>{body}{largePreview}</div>;
   }
   return (
-    <div style={s.overlay}>
-      <div style={s.modal} onClick={(e) => e.stopPropagation()}>{body}</div>
+    <div data-admin-backdrop="" style={s.overlay}>
+      <div data-admin-dialog="" style={s.modal} onClick={(e) => e.stopPropagation()}>{body}</div>
       {largePreview}
     </div>
   );

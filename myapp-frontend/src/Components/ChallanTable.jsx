@@ -1,3 +1,4 @@
+import { isBillableChallan } from "../utils/challanBilling";
 import { useState } from "react";
 import { MdVisibility, MdEdit, MdPrint, MdPictureAsPdf, MdGridOn, MdRequestQuote, MdContentCopy, MdCancel, MdDelete, MdWarning, MdLink } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -15,7 +16,7 @@ export function evalRowFlags(c, perms) {
   const canCancel = c.status !== "Invoiced" && isEditable;
   const isDuplicate = c.duplicatedFromId != null;
   const canDelete = canCancel && (isDuplicate || c.isLatest === true);
-  const canGenerateBill = perms.permCreateBill && (c.status === "Pending" || c.status === "Imported");
+  const canGenerateBill = perms.permCreateBill && isBillableChallan(c);
   const canDuplicate = perms.permDuplicate
     && !isDuplicate
     && (c.status === "Pending" || c.status === "Imported");
@@ -201,7 +202,7 @@ export default function ChallanTable({
           </button>
         )}
         {perms.permUpdate && flags.canCancel && (
-          <button style={btnStyles.cancel} onClick={() => onCancel?.(c)} title="Cancel challan">
+          <button data-admin-close="" style={btnStyles.cancel} onClick={() => onCancel?.(c)} title="Cancel challan">
             <MdCancel size={14} />
           </button>
         )}

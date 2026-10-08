@@ -15,20 +15,22 @@ namespace MyApp.Api.Services.Implementations
     /// <see cref="CreateChallanFromOrderAsync"/>, which links each challan line
     /// back to its ordered line. SalesOrderNumber is unique per company.
     /// </summary>
-    public class SalesOrderService : ISalesOrderService
+    public partial class SalesOrderService : ISalesOrderService
     {
         private readonly ISalesOrderRepository _repository;
+        private readonly IInvoiceService _invoices;
         private readonly IDeliveryChallanService _challanService;
         private readonly AppDbContext _context;
         private readonly ILogger<SalesOrderService> _logger;
 
         public SalesOrderService(
-            ISalesOrderRepository repository,
+            ISalesOrderRepository repository, IInvoiceService invoices,
             IDeliveryChallanService challanService,
             AppDbContext context,
             ILogger<SalesOrderService> logger)
         {
             _repository = repository;
+            _invoices = invoices;
             _challanService = challanService;
             _context = context;
             _logger = logger;
@@ -61,8 +63,7 @@ namespace MyApp.Api.Services.Implementations
                     .ToDictionaryAsync(x => x.Key, x => x.Qty);
 
             // Challan stats per order (excluding cancelled): total raised + how
-            // many are billable now. Only "Pending"/"Imported" challans can go
-            // on a bill (InvoiceService rejects "No PO"/"Setup Required"), so the
+            // many are billable now, including deliveries without a PO. The
             // billable count — not the raw unbilled count — gates "Generate Bill".
             var challanStatsList = await _context.DeliveryChallans
                 .Where(dc => dc.SalesOrderId != null
@@ -73,7 +74,7 @@ namespace MyApp.Api.Services.Implementations
                 {
                     Key = g.Key,
                     Count = g.Count(),
-                    Billable = g.Count(x => x.Status == "Pending" || x.Status == "Imported"),
+                    Billable = g.Count(x => x.InvoiceId == null && MyApp.Api.Helpers.ChallanBillingRules.Statuses.Contains(x.Status)),
                     Billed = g.Count(x => x.InvoiceId != null)
                 })
                 .ToListAsync();
@@ -139,6 +140,9 @@ namespace MyApp.Api.Services.Implementations
                 Site = o.Site,
                 Notes = o.Notes,
                 Status = o.Status,
+                ManuallyClosed = o.ManuallyClosed,
+                NeedsAttention = o.ManuallyClosed && ((FulfillmentStatusFor(items) != "Fully Delivered" && FulfillmentStatusFor(items) != "Over Delivered") || challanCount == 0 || billedChallanCount != challanCount),
+                Version = OrderVersion(o),
                 FulfillmentStatus = FulfillmentStatusFor(items),
                 InvoiceStatus = InvoiceStatusFor(challanCount, billedChallanCount),
                 SalesQuoteId = o.SalesQuoteId,
@@ -147,7 +151,7 @@ namespace MyApp.Api.Services.Implementations
                 // Editable until it's been billed. Delivered lines are still
                 // protected line-by-line in UpdateAsync (can't drop below
                 // delivered qty / can't remove a delivered line).
-                IsEditable = o.Status != "Cancelled" && billedChallanCount == 0,
+                IsEditable = o.Status != "Cancelled",
                 IsLatest = o.SalesOrderNumber == maxNumber,
                 ChallanCount = challanCount,
                 BillableChallanCount = billableChallanCount,
@@ -322,10 +326,15 @@ namespace MyApp.Api.Services.Implementations
             if (order == null) return null;
             if (order.Status == "Cancelled")
                 throw new InvalidOperationException("A cancelled order cannot be edited.");
-            // Locked once any challan has been billed — the bill already
-            // captured these lines, so the order can no longer change.
-            if (await _context.DeliveryChallans.AnyAsync(dc => dc.SalesOrderId == id && dc.InvoiceId != null))
-                throw new InvalidOperationException("This order has been billed and can no longer be edited.");
+            await using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            await LockCompanyAsync(order.CompanyId);
+            _context.ChangeTracker.Clear();
+            order = (await _repository.GetByIdAsync(id))!;
+            if (order.Status == "Cancelled") throw new InvalidOperationException("A cancelled order cannot be edited.");
+            if (!string.IsNullOrWhiteSpace(dto.Version) && dto.Version != OrderVersion(order))
+                throw new InvalidOperationException("This order changed after you opened it. Reload before saving.");
+            var beforeItems = order.Items.ToDictionary(i => i.Id, i => new SalesOrderItemDto
+            { Id = i.Id, Description = i.Description, Unit = i.Unit, ItemTypeId = i.ItemTypeId, UnitPrice = i.UnitPrice });
 
             if (dto.Items == null || dto.Items.Count == 0)
                 throw new InvalidOperationException("At least one item is required.");
@@ -396,6 +405,8 @@ namespace MyApp.Api.Services.Implementations
                     if (itemDto.Quantity < delivered)
                         throw new InvalidOperationException(
                             $"Cannot reduce \"{existing.Description}\" below the {delivered} already delivered.");
+                    if (delivered > 0 && existing.Unit != itemDto.Unit && !dto.ApplyDetailsToDeliveries)
+                        throw new InvalidOperationException("Changing the unit of a delivered line requires applying the change to its deliveries, or adding a separate order line for the new unit.");
                     existing.ItemTypeId = itemDto.ItemTypeId;
                     existing.Description = itemDto.Description.Trim();
                     existing.Quantity = itemDto.Quantity;
@@ -422,9 +433,12 @@ namespace MyApp.Api.Services.Implementations
             }
 
             await _repository.UpdateAsync(order);
+            await ApplyOrderChangesToDocumentsAsync(order, beforeItems, dto);
             // The order's PO number/date is authoritative for the whole chain:
             // push it down to every linked (unbilled) challan.
             await PropagatePoToChallansAsync(order.Id, order.CustomerPoNumber, order.CustomerPoDate);
+            await SalesDocumentRules.RefreshOrdersAsync(_context, order.CompanyId);
+            await transaction.CommitAsync();
             await RememberDescriptionsAsync(dto.Items.Select(i => i.Description));
             return await MapOneAsync(await _repository.GetByIdAsync(id));
         }
@@ -469,6 +483,7 @@ namespace MyApp.Api.Services.Implementations
             if (status == "Cancelled" && await _repository.HasChallansAsync(id))
                 throw new InvalidOperationException("Cannot cancel an order that already has delivery challans.");
             order.Status = status;
+            order.ManuallyClosed = status == "Closed";
             await _repository.UpdateAsync(order);
             return true;
         }
@@ -594,11 +609,12 @@ namespace MyApp.Api.Services.Implementations
                     .ToDictionaryAsync(x => x.Key, x => x.Qty);
                 if (order.Items.All(i => deliveredNow.GetValueOrDefault(i.Id, 0m) >= i.Quantity))
                 {
-                    order.Status = "Closed";
+                    order.Status = "Open";
                     await _context.SaveChangesAsync();
                 }
             }
 
+            await SalesDocumentRules.RefreshOrdersAsync(_context, order.CompanyId);
             return createdChallan;
         }
 
@@ -749,6 +765,8 @@ namespace MyApp.Api.Services.Implementations
                 .ThenBy(dc => dc.ChallanNumber)
                 .ToListAsync();
 
+            var companyId = challans.FirstOrDefault()?.CompanyId;
+            var latestNumber = companyId == null ? 0 : await _context.DeliveryChallans.Where(c => c.CompanyId == companyId).MaxAsync(c => c.ChallanNumber);
             return challans.Select(dc =>
             {
                 // Lines that fulfil THIS order. A challan created from an order
@@ -765,6 +783,10 @@ namespace MyApp.Api.Services.Implementations
                     IsImported = dc.IsImported,
                     InvoiceId = dc.InvoiceId,
                     InvoiceNumber = dc.Invoice?.InvoiceNumber,
+                    FbrStatus = dc.Invoice?.FbrStatus,
+                    IsEditable = dc.Status != "Cancelled" && (dc.Invoice == null || SalesDocumentRules.BillEditable(dc.Invoice)),
+                    CanDelete = dc.DuplicatedFromId != null || dc.ChallanNumber == latestNumber,
+                    NeedsConsultantReview = dc.Invoice?.FbrReviewRequiredAt != null,
                     ItemCount = lines.Count,
                     TotalQuantity = lines.Sum(i => i.Quantity),
                     Lines = lines.Select(i => new SalesOrderChallanLineDto
@@ -949,8 +971,7 @@ namespace MyApp.Api.Services.Implementations
 
                 await _context.SaveChangesAsync();
 
-                // Auto-close the order once every line is fully delivered
-                // (mirrors CreateChallanFromOrderAsync). Never re-opens.
+                // Final delivery and billing state is reconciled before committing.
                 if (order.Status == "Open")
                 {
                     var soItemIdList = order.Items.Select(i => i.Id).ToList();
@@ -963,11 +984,12 @@ namespace MyApp.Api.Services.Implementations
                         .ToDictionaryAsync(x => x.Key, x => x.Qty);
                     if (order.Items.All(i => deliveredNow.GetValueOrDefault(i.Id, 0m) >= i.Quantity))
                     {
-                        order.Status = "Closed";
+                        order.Status = "Open";
                         await _context.SaveChangesAsync();
                     }
                 }
 
+                await SalesDocumentRules.RefreshOrdersAsync(_context, order.CompanyId);
                 await tx.CommitAsync();
             }
             catch

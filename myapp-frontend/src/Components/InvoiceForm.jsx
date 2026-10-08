@@ -1,10 +1,12 @@
 import { defaultFurtherTaxRate } from "../utils/furtherTax";
 import { useState, useEffect, useMemo, useRef } from "react";
-import { MdSearch, MdCheck, MdInfo, MdLock, MdAdd, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
+import { MdCheck, MdInfo, MdLock, MdAdd, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
 import { getPendingChallansByCompany } from "../api/challanApi";
 import { getSalesOrdersForPicker, getSalesOrderChallans, getSalesOrderById } from "../api/salesOrderApi";
 import SearchableSelect from "./SearchableSelect";
 import SearchableClientSelect from "./SearchableClientSelect";
+import ChallanBillingPicker from "./ChallanBillingPicker";
+import { isBillableChallan } from "../utils/challanBilling";
 import { createInvoice, getLastRatesForChallan } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getItemTypes } from "../api/itemTypeApi";
@@ -21,6 +23,7 @@ import ItemTypeForm from "./ItemTypeForm";
 import PermissionLackedHint from "./PermissionLackedHint";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import DocumentTaxFields from "./DocumentTaxFields";
+import FreightChargesField from "./FreightChargesField";
 // 2026-05-08: Same UOM autocomplete the ChallanForm uses, hooked up
 // to /lookup/units. Replaces the plain text input on each row's UOM
 // cell so operators get the saved-units suggestions instead of having
@@ -119,13 +122,13 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // Optional bill-time PO number override (blank → the bill derives its PO from
   // the linked challans). PO date reuses commonPoDate below.
   const [poNumber, setPoNumber] = useState("");
-  const [dcSearch, setDcSearch] = useState("");
   const [gstRate, setGstRate] = useState(18);
   // Further tax follows the buyer/scenario; withholding uses the company preference.
   // The operator can override either value.
   const [furtherTaxRate, setFurtherTaxRate] = useState(null);
   const [withholdingTaxRate, setWithholdingTaxRate] = useState(() => company?.defaultWithholdingTaxRate ?? null);
   const [withholdingTaxAmount, setWithholdingTaxAmount] = useState(null);
+  const [freightCharges, setFreightCharges] = useState(0);
   const [paymentTerms, setPaymentTerms] = useState("");
   const [notes, setNotes] = useState("");
   const [groupTaxInvoiceByItemType, setGroupTaxInvoiceByItemType] = useState(() => !!company?.defaultGroupTaxInvoiceByItemType);
@@ -283,7 +286,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         }
 
         // "Generate Bill" launched from the Sales Order screen: pre-tick the
-        // order's billable (Pending/Imported, unbilled) challans that are in
+        // order's billable (unbilled, including optional PO and incomplete FBR setup) challans that are in
         // the pending list, and set the client. The operator can then un-tick
         // to bill a subset — the same SO can be billed again for the rest.
         // Mirrors selectFromOrder() without depending on the billableOrders
@@ -292,7 +295,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           try {
             const { data: soChallans } = await getSalesOrderChallans(prefillSalesOrderId);
             const billableIds = (soChallans || [])
-              .filter((c) => (c.status === "Pending" || c.status === "Imported") && !c.invoiceId)
+              .filter((c) => isBillableChallan(c))
               .map((c) => c.id)
               .filter((cid) => challanRes.data.some((ac) => ac.id === cid));
             if (billableIds.length > 0) {
@@ -453,17 +456,6 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         .sort((a, b) => b.challanNumber - a.challanNumber)
     : [];
 
-  // Further filter by DC search (challan number, PO, or item descriptions)
-  const filteredChallans = useMemo(() => {
-    if (!dcSearch.trim()) return clientChallans;
-    const term = dcSearch.toLowerCase();
-    return clientChallans.filter((c) =>
-      c.challanNumber.toString().includes(term) ||
-      (c.poNumber && c.poNumber.toLowerCase().includes(term)) ||
-      c.items?.some((item) => item.description?.toLowerCase().includes(term))
-    );
-  }, [clientChallans, dcSearch]);
-
   // Reset selections when client changes
   const handleClientChange = (e) => {
     setSelectedClientId(e.target.value);
@@ -471,7 +463,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     setItemPrices({});
     setItemDescriptions({});
     setCommonPoDate("");
-    setDcSearch("");
+    setPoNumber("");
     setError("");
     // Also clear any leftover rate-history state so the warning banner and
     // per-row hints don't persist across an unrelated client.
@@ -480,12 +472,6 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     setFetchedRateChallanIds(new Set());
   };
 
-
-  const toggleChallan = (id) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  };
 
   // Load sales orders that have ≥1 billable challan, for the "bill from a
   // Sales Order" picker (only when the user can see orders).
@@ -520,7 +506,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   };
 
   // Pick a Sales Order → set its client and pre-tick its billable
-  // (Pending/Imported, unbilled) challans that are in the pending list. The
+  // (unbilled, including optional PO and incomplete FBR setup) challans that are in the pending list. The
   // existing multi-challan bill flow (price prefill, PO roll-up) then applies.
   const selectFromOrder = async (id) => {
     setSalesOrderId(id || "");
@@ -532,7 +518,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     setItemPrices({});
     setItemDescriptions({});
     setCommonPoDate("");
-    setDcSearch("");
+    setPoNumber("");
     setError("");
     setLastRates({});
     setAutoFilledFromHistory(false);
@@ -540,22 +526,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     try {
       const { data } = await getSalesOrderChallans(id);
       const billable = (data || [])
-        .filter((c) => (c.status === "Pending" || c.status === "Imported") && !c.invoiceId)
+        .filter((c) => isBillableChallan(c))
         .map((c) => c.id)
         .filter((cid) => allChallans.some((ac) => ac.id === cid));
       setSelectedIds(billable);
       await seedPricesFromOrder(id, billable, allChallans);
     } catch { /* leave nothing pre-ticked on failure */ }
-  };
-
-  const selectAll = () => {
-    const visible = filteredChallans.map((c) => c.id);
-    const allSelected = visible.every((id) => selectedIds.includes(id));
-    if (allSelected) {
-      setSelectedIds((prev) => prev.filter((id) => !visible.includes(id)));
-    } else {
-      setSelectedIds((prev) => [...new Set([...prev, ...visible])]);
-    }
   };
 
   const selectedChallans = clientChallans.filter((c) => selectedIds.includes(c.id));
@@ -575,6 +551,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     ? 0
     : Math.round(subtotal * (Number(furtherTaxRate) || 0) / 100 * 100) / 100;
   const grandTotal = subtotal + gstAmount + furtherTaxAmount;
+  const commercialTotal = grandTotal + (billsMode ? Number(freightCharges || 0) : 0);
 
   const allPricesValid = allItems.length > 0 && allItems.every((i) => itemPrices[i.id] && parseFloat(itemPrices[i.id]) > 0);
   // Item Type is required on every line so the invoice can always group by
@@ -656,17 +633,6 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
 
     setSaving(true);
     try {
-      // Build PO date updates for selected challans that don't have a PO date
-      const poDateUpdates = {};
-      if (commonPoDate) {
-        const isoDate = new Date(commonPoDate).toISOString();
-        for (const dc of selectedChallans) {
-          if (!dc.poDate) {
-            poDateUpdates[dc.id] = isoDate;
-          }
-        }
-      }
-
       // Prepend the chosen scenario tag to paymentTerms so FbrService's
       // auto-detector routes the submission to the right scenarioId. The
       // tag pattern is "[SNxxx]" — see FbrService.PostInvoiceAsync.
@@ -686,6 +652,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         furtherTaxRate: furtherTaxRate === null || furtherTaxRate === "" ? null : parseFloat(furtherTaxRate),
         withholdingTaxRate: withholdingTaxRate === null || withholdingTaxRate === "" ? null : parseFloat(withholdingTaxRate),
         withholdingTaxAmount: withholdingTaxAmount === null || withholdingTaxAmount === "" ? null : parseFloat(withholdingTaxAmount),
+        freightCharges: billsMode ? Number(freightCharges || 0) : 0,
         groupTaxInvoiceByItemType,
         paymentTerms: paymentTermsToSave,
         notes: notes.trim() || null,
@@ -714,7 +681,6 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
             ? chosenScenario.saleType
             : (itemSaleTypes[item.id]?.trim() || null),
         })),
-        poDateUpdates,
         // Optional bill-time PO override (blank → the bill derives the PO from
         // its challans). PO date reuses commonPoDate.
         poNumber: poNumber.trim() || null,
@@ -818,11 +784,11 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // Backdrop click is a no-op — bills can hold a lot of typed data and
   // a stray click shouldn't wipe it. Dismiss via X or Cancel.
   return (
-    <div style={formStyles.backdrop}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>Create Bill</h5>
-          <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div style={{ ...formStyles.body, maxHeight: "70vh", overflowY: "auto" }}>
@@ -852,14 +818,15 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                     )}
                     <div style={{ flex: 1, minWidth: 160 }}>
                       <label style={styles.label}>PO Number <span style={{ fontWeight: 400 }}>(optional)</span></label>
-                      <input type="text" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Blank = from challan(s)" style={{ ...styles.input, backgroundColor: "var(--ui-input-bg, #fff)" }} />
+                      <input type="text" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Optional — blank keeps challan PO" style={{ ...styles.input, backgroundColor: "var(--ui-input-bg, #fff)" }} />
                     </div>
                     <div style={{ flex: 1, minWidth: 140 }}>
-                      <label style={styles.label}>PO Date</label>
+                      <label style={styles.label}>PO Date <span style={{ fontWeight: 400 }}>(optional)</span></label>
                       <input type="date" value={commonPoDate} onChange={(e) => setCommonPoDate(e.target.value)} style={{ ...styles.input, backgroundColor: "var(--ui-input-bg, #fff)" }} />
                     </div>
                   </div>
                 )}
+                {billsMode && <p style={{ fontSize: "0.82rem", color: colors.textSecondary, marginBottom: "1rem" }}>PO details are optional. Any number or date entered here will be saved on this bill and every selected challan. Blank fields keep existing challan details.</p>}
                 {/* Step 1 — Pick FBR scenario. Collapsed by default —
                     operator sees a one-line summary of the auto-defaulted
                     scenario and can expand to switch. Auto-collapses on
@@ -1140,86 +1107,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                       )}
                     </div>
 
-                    {/* Challan selection */}
-                    <div style={{ marginBottom: "1rem" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem", flexWrap: "wrap", gap: "0.35rem" }}>
-                        <label style={{ ...styles.label, marginBottom: 0 }}>
-                          Pending Challans ({dcSearch ? `${filteredChallans.length} / ${clientChallans.length}` : clientChallans.length})
-                        </label>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                          {clientChallans.length > 0 && (
-                            <div style={{ position: "relative" }}>
-                              <MdSearch size={14} style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", color: colors.textSecondary }} />
-                              <input
-                                type="text"
-                                placeholder="Search DC#, PO, items..."
-                                style={{ ...styles.input, padding: "0.25rem 0.5rem 0.25rem 1.5rem", fontSize: "0.78rem", width: 180 }}
-                                value={dcSearch}
-                                onChange={(e) => setDcSearch(e.target.value)}
-                              />
-                            </div>
-                          )}
-                          {filteredChallans.length > 1 && (
-                            <button
-                              type="button"
-                              style={styles.selectAllBtn}
-                              onClick={selectAll}
-                            >
-                              {filteredChallans.every((c) => selectedIds.includes(c.id)) ? "Deselect All" : "Select All"}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      {clientChallans.length === 0 ? (
-                        <p style={{ color: colors.textSecondary, fontSize: "0.85rem" }}>No pending challans for this client.</p>
-                      ) : filteredChallans.length === 0 ? (
-                        <p style={{ color: colors.textSecondary, fontSize: "0.85rem" }}>No challans match "{dcSearch}".</p>
-                      ) : (
-                        <>
-                          <div style={styles.challanGrid}>
-                            {filteredChallans.map((c) => (
-                              <label key={c.id} style={{
-                                ...styles.challanCard,
-                                borderColor: selectedIds.includes(c.id) ? colors.blue : colors.cardBorder,
-                                backgroundColor: selectedIds.includes(c.id) ? "#e3f2fd" : "#fff",
-                              }}>
-                                <input
-                                  type="checkbox"
-                                  checked={selectedIds.includes(c.id)}
-                                  onChange={() => toggleChallan(c.id)}
-                                  style={{ marginRight: "0.5rem", flexShrink: 0 }}
-                                />
-                                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                                  <strong>DC #{c.challanNumber}</strong>
-                                  <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>
-                                    {new Date(c.deliveryDate).toLocaleDateString()} | {c.items?.length} items
-                                    {c.poNumber ? ` | PO: ${c.poNumber}` : ""}
-                                    {c.poDate ? ` | PO Date: ${new Date(c.poDate).toLocaleDateString()}` : ""}
-                                  </span>
-                                </div>
-                              </label>
-                            ))}
-                          </div>
-                          {selectedIds.length > 0 && selectedChallans.find((c) => c.poDate) && (
-                            <div style={styles.poDateInfo}>
-                              <span style={{ fontSize: "0.82rem", fontWeight: 600, color: colors.textSecondary }}>PO Date:</span>
-                              <span style={{ fontSize: "0.82rem", color: colors.textPrimary }}>{new Date(selectedChallans.find((c) => c.poDate).poDate).toLocaleDateString()}</span>
-                            </div>
-                          )}
-                          {selectedIds.length > 0 && !selectedChallans.find((c) => c.poDate) && (
-                            <div style={styles.poDateInfo}>
-                              <span style={{ fontSize: "0.82rem", fontWeight: 600, color: colors.textSecondary }}>PO Date (for all selected DCs):</span>
-                              <input
-                                type="date"
-                                style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.82rem", width: "auto" }}
-                                value={commonPoDate}
-                                onChange={(e) => setCommonPoDate(e.target.value)}
-                              />
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
+                    <ChallanBillingPicker key={selectedClientId} challans={clientChallans} selectedIds={selectedIds} onChange={setSelectedIds} />
 
                     {/* Scenario-locked Sale Type banner — same affordance
                         as StandaloneInvoiceForm so the operator can see at
@@ -1468,7 +1356,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             })}
                           </div>
                         ) : (
-                        <div style={styles.unifiedTableWrap}>
+                        <div data-admin-table-region="" style={styles.unifiedTableWrap}>
                           <table style={styles.unifiedTable}>
                             <thead>
                               <tr style={styles.unifiedThead}>
@@ -1703,11 +1591,14 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                         <div style={styles.totalsBox}>
                           <div style={styles.totalRow}><span>Subtotal:</span><span>Rs. {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
                           <div style={styles.totalRow}><span>GST ({gstRate}%):</span><span>Rs. {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+                          {billsMode && Number(freightCharges) > 0 && (
+                            <div style={styles.totalRow}><span>Freight / cartage:</span><span>Rs. {Number(freightCharges).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                          )}
                           {furtherTaxAmount > 0 && (
                             <div style={styles.totalRow}><span>Further tax ({furtherTaxRate}%):</span><span>Rs. {furtherTaxAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
                           )}
                           <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
-                            <span>Grand Total:</span><span>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                            <span>Grand Total:</span><span>Rs. {commercialTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                           </div>
                         </div>
 
@@ -1719,7 +1610,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
               </>
             )}
 
+            {billsMode && <FreightChargesField value={freightCharges} onChange={setFreightCharges} />}
                         <DocumentTaxFields
+                          freightCharges={billsMode ? Number(freightCharges || 0) : 0}
                           subtotal={subtotal}
                           gstAmount={gstAmount}
                           furtherTaxRate={furtherTaxRate}
@@ -1748,7 +1641,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                 Select an Item Type for every item (required for FBR grouping).
               </span>
             )}
-            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             {billNumberMode === "custom" && !billNumberOk && (
               <span style={{ fontSize: "0.8rem", color: colors.danger, marginRight: "auto" }}>
                 Enter a bill number that isn&apos;t already in use, or switch back to Auto.

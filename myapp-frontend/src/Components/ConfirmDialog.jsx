@@ -54,7 +54,7 @@ export default function ConfirmProvider({ children }) {
     <ConfirmContext.Provider value={confirm}>
       {children}
       {state && (
-        <div
+        <div data-admin-backdrop=""
           // Sit slightly above the standard modal layer so a confirm-on-top-
           // of-a-modal stack still wins (e.g. "Discard unsaved changes?"
           // shown above an open Edit dialog). 1101 is just one above
@@ -64,7 +64,7 @@ export default function ConfirmProvider({ children }) {
           // confirmations should require explicit Cancel / Confirm.
           style={{ ...formStyles.backdrop, zIndex: 1101, animation: "fadeIn 0.2s ease" }}
         >
-          <div
+          <div data-admin-dialog=""
             // Smallest size tier — confirm dialogs are short by design.
             // Reuses formStyles.modal so width/border-radius/box-shadow/
             // non-movable behaviour all match the rest of the app.
@@ -114,7 +114,7 @@ export default function ConfirmProvider({ children }) {
 
             {/* Buttons */}
             <div style={{ display: "flex", gap: 10, padding: "16px var(--sc-dlg-pad-x, 28px) var(--sc-dlg-icon-top, 24px)", justifyContent: "center" }}>
-              <button
+              <button data-admin-close=""
                 className="k-btn k-btn--secondary sc-dlg-btn"
                 onClick={() => handleClose(false)}
               >

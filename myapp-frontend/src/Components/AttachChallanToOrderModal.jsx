@@ -190,14 +190,14 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
   const soLineLabel = (s) => `${richTextToPlain(s.description || "")}${s.unit ? ` (${s.unit})` : ""} — ${fmtQty(s.deliveredQuantity || 0)}/${fmtQty(s.quantity)} delivered`;
 
   return (
-    <div style={formStyles.backdrop}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>
             <MdLink size={18} style={{ verticalAlign: "-3px", marginRight: 6 }} />
             {fromOrder ? `Attach a challan to SO #${order.salesOrderNumber}` : `Link Challan #${challan.challanNumber} to a Sales Order`}
           </h5>
-          <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
 
         <div style={formStyles.body}>
@@ -325,7 +325,7 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
         </div>
 
         <div style={formStyles.footer}>
-          <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
           <button type="button" style={{ ...formStyles.button, ...formStyles.submit, opacity: ready && !saving ? 1 : 0.6 }} disabled={!ready || saving} onClick={submit}>
             {saving ? "Attaching…" : "Attach challan"}
           </button>

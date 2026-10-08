@@ -180,7 +180,7 @@ export default function SalesQuotePage() {
         actions={companies.length > 0 && (canCreate || canImportPo) ? (
           <>
             {canCreate && <Button variant="primary" icon={MdAdd} onClick={() => selectedCompany && (setEditQuote(null), setShowForm(true))}>New Quote</Button>}
-            {canImportPo && <Button variant="teal" icon={MdUploadFile} onClick={() => selectedCompany && setShowImport(true)}>Import PO</Button>}
+            {canImportPo && <Button variant="teal" icon={MdUploadFile} onClick={() => selectedCompany && setShowImport(true)}>Import Enquiry / Demand</Button>}
           </>
         ) : null}
       />
@@ -221,6 +221,7 @@ export default function SalesQuotePage() {
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <AttachmentBadge count={attachCounts[q.id]} onClick={() => setAttachTarget(q)} />
                     <span style={{ ...st.badge, background: `${STATUS_COLORS[q.status] || "#5f6d7e"}18`, color: STATUS_COLORS[q.status] || "#5f6d7e" }}>{q.status}</span>
+                    {Number(q.subtotal) === 0 && <span style={{ ...st.badge, color: "#9a5700", background: "#fff3e0" }}>Needs pricing</span>}
                   </div>
                 </div>
                 <div style={st.client}>{q.clientName}</div>

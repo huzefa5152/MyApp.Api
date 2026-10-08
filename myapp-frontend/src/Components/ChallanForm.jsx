@@ -1,3 +1,6 @@
+import { todayYmd } from "../utils/dateInput";
+import DocumentCopyPicker from "./DocumentCopyPicker";
+import { appendCopiedLines } from "../utils/documentCopy";
 import { useState, useRef, useEffect } from "react";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableSelect from "./SearchableSelect";
@@ -215,17 +218,22 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   // of typed data with one stray click otherwise. Use the X in the
   // header or the Cancel button to dismiss.
   return (
-    <div style={formStyles.backdrop}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>Create Delivery Challan</h5>
-          <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
 
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
-            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
-            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="challan" mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
+            <DocumentCopyPicker companyId={companyId} destination="Challan" allowDetails={true} disabled={!!salesOrderId}
+              onCopy={(source,lines,details) => {
+                setItems(prev => appendCopiedLines(details ? [] : prev, lines, () => ({description:"",quantity:1,unit:""})));
+                if(details) { setClient(clients.find(c=>c.id===source.clientId) || {id:source.clientId,label:source.clientName});setSite(source.site||"");setNotes(source.notes||"");setPoNumber(source.poNumber||"");setPoDate(source.poDate?.slice(0,10)||"");setIndentNo(source.indentNo||"");setSalesOrderId("");setDeliveryDate(todayYmd()); }
+              }} />
+            {error && <div ref={errRef} style={formStyleformStyles.erroror}>{error}</div>}
+            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="challan" clientId={client?.id} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
 
             {/* Optional: fulfil a Sales Order. Picking one autofills the client,
                 PO, site and the order's undelivered lines below, and links the
@@ -331,7 +339,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                 units={units}
                 itemsLabel="Items"
               />
-              <ChallanPrivateCosts items={items} onItemsChange={setItems} suppliers={suppliers} />
+              <ChallanPrivateCosts companyId={companyId} items={items} onItemsChange={setItems} suppliers={suppliers} />
             </div>
 
             {savedChallanId && <div role="alert" style={{ marginTop: 12, padding: 12, borderRadius: 8, background: "#fff3e0", color: "#92400e" }}>
@@ -350,7 +358,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
           </div>
 
           <div style={formStyles.footer}>
-            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: isDisabled ? 0.6 : 1 }} disabled={isDisabled}>{saving ? "Saving..." : "Save Challan"}</button>
           </div>
         </form>

@@ -138,6 +138,7 @@ namespace MyApp.Api.DTOs
         public decimal FurtherTaxAmount { get; set; }
         public decimal WithholdingTaxAmount { get; set; }
         public decimal GrandTotal { get; set; }
+        public decimal FreightCharges { get; set; }
         public decimal Amount { get; set; }
         public decimal AmountPaid { get; set; }
         public decimal BalanceDue { get; set; }

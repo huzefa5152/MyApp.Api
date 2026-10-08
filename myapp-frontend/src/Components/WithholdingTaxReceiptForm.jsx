@@ -54,13 +54,13 @@ export default function WithholdingTaxReceiptForm({ onClose, onSaved, companyId,
   const disabled = !client || !(parseFloat(amount) > 0) || saving;
 
   return (
-    <div style={formStyles.backdrop}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>
             {isEdit ? `Edit Withholding Tax Receipt #${receipt.receiptNumber}` : "New Withholding Tax Receipt"}
           </h5>
-          <button aria-label="Close" type="button" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" aria-label="Close" type="button" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
@@ -110,7 +110,7 @@ export default function WithholdingTaxReceiptForm({ onClose, onSaved, companyId,
             />
           </div>
           <div style={formStyles.footer}>
-            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.6 : 1 }} disabled={disabled}>
               {saving ? "Saving..." : isEdit ? "Update Receipt" : "Save Receipt"}
             </button>

@@ -670,6 +670,49 @@ def test_billform_itemtype_override(base: str, token: str, company: dict,
 
 
 # ── Reporter ───────────────────────────────────────────────────────
+def test_freight_charges(base: str, token: str, company: dict, client: dict) -> None:
+    suite = "Commercial freight charges"
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z")
+    header = {"companyId": company["id"], "clientId": client["id"],
+              "date": today, "gstRate": 18, "freightCharges": 125.50}
+    status, standalone = http("POST", "/api/invoices/standalone", base, token=token,
+                              body={**header, "items": [{"description": "Freight test goods",
+                                    "quantity": 1, "uom": "Pcs", "unitPrice": 1000}]})
+    check(suite, "standalone freight bill created", status in (200, 201), f"{status} {standalone}")
+    status, dc = http("POST", f"/api/deliverychallans/company/{company['id']}", base,
+                      token=token, body={"clientId": client["id"], "deliveryDate": today,
+                      "items": [{"description": "Freight test delivery", "quantity": 1, "unit": "Pcs"}]})
+    check(suite, "freight challan created", status in (200, 201), f"{status} {dc}")
+    linked = None
+    if status in (200, 201):
+        status, linked = http("POST", "/api/invoices", base, token=token,
+                              body={**header, "challanIds": [dc["id"]],
+                                    "items": [{"deliveryItemId": dc["items"][0]["id"], "unitPrice": 1000}]})
+        check(suite, "challan freight bill created", status in (200, 201), f"{status} {linked}")
+        if status not in (200, 201): linked = None
+    for label, bill in [("standalone", standalone), ("challan", linked)]:
+        if not isinstance(bill, dict) or "id" not in bill: continue
+        check(suite, f"{label}: tax total unchanged", bill.get("grandTotal") == 1180 and bill.get("gstAmount") == 180)
+        check(suite, f"{label}: commercial total and balance include freight",
+              bill.get("commercialTotal") == 1305.50 and bill.get("collectible") == 1305.50 and bill.get("balanceDue") == 1305.50)
+        for path, expected in [("bill", 1306), ("tax-invoice", 1180)]:
+            ps, printed = http("GET", f"/api/invoices/{bill['id']}/print/{path}", base, token=token)
+            check(suite, f"{label}: {path} print total", ps == 200 and printed.get("grandTotal") == expected, f"{ps} {printed}")
+    if not isinstance(standalone, dict) or "id" not in standalone: return
+    items = [{"id": i["id"], "description": i["description"], "quantity": i["quantity"],
+              "uom": i.get("uom") or "Pcs", "unitPrice": i["unitPrice"]} for i in standalone["items"]]
+    edit = {"gstRate": 18, "items": items}
+    path = f"/api/invoices/{standalone['id']}"
+    status, saved = http("PUT", path, base, token=token, body=edit)
+    check(suite, "ordinary edit preserves omitted freight", status == 200 and saved.get("freightCharges") == 125.50, f"{status} {saved}")
+    status, _ = http("PUT", path, base, token=token, body={**edit, "freightCharges": -1})
+    check(suite, "negative freight rejected", status == 400, f"got {status}")
+    status, saved = http("GET", path, base, token=token)
+    check(suite, "rejected edit leaves freight unchanged", status == 200 and saved.get("freightCharges") == 125.50)
+    status, saved = http("PUT", path, base, token=token, body={**edit, "freightCharges": 0})
+    check(suite, "explicit zero clears freight", status == 200 and saved.get("commercialTotal") == 1180 and saved.get("freightCharges") == 0, f"{status} {saved}")
+
+
 def print_report() -> int:
     by_suite: dict[str, list[tuple[str, str]]] = {}
     fail = 0
@@ -738,6 +781,9 @@ def main() -> int:
         test_billform_itemtype_override(args.base, token, company, client,
                                         classified, second_classified)
         test_private_challan_costs(args.base, token, company, client)
+        test_freight_charges(args.base, token, company, client)
+        from bill_challan_checks import run as check_challan_selection
+        check_challan_selection(http, check, args.base, token, company["id"], client["id"])
     finally:
         teardown(args.base, token, company, args.keep)
 

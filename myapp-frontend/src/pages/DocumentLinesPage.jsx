@@ -133,7 +133,7 @@ export default function DocumentLinesPage() {
     >
     {!loaded ? (busy ? <Loading>Loading matching line items…</Loading> : <EmptyState boxed={false}>{error ? "Update the filters to try again." : "Select a company to view its lines."}</EmptyState>)
       : !shown.length ? <EmptyState boxed={false}>No lines match these filters. Try another period or search.</EmptyState> : <>
-      <TableWrap style={{ overflow: "auto", maxHeight: "65vh" }}>
+      <TableWrap data-admin-table-region="" style={{ overflow: "auto", maxHeight: "65vh" }}>
         <table className="k-table" style={{ minWidth: 650 }}>
           <thead><tr>{visibleColumns.map(([key, label]) => <th key={key}>{label}</th>)}</tr></thead>
           <tbody>{shown.slice(0, 200).map((row, index) => <tr key={`${row.documentId}-${row.line}-${index}`}>

@@ -101,14 +101,14 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
   };
 
   return (
-    <div style={formStyles.backdrop}>
-      <div
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog=""
         style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>FBR Submission Preview</h5>
-          <button
+          <button data-admin-close=""
             type="button"
             style={formStyles.closeButton}
             onClick={onClose}
@@ -187,7 +187,7 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
                 <div style={s.itemsHeader}>
                   Items in FBR payload ({itemCount})
                 </div>
-                <TableWrap>
+                <TableWrap data-admin-table-region="">
                   <table className="k-table" style={s.table}>
                     <thead>
                       <tr>
@@ -275,7 +275,7 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
         </div>
 
         <div style={formStyles.footer}>
-          <button
+          <button data-admin-close=""
             type="button"
             style={{ ...formStyles.button, ...formStyles.cancel }}
             onClick={onClose}

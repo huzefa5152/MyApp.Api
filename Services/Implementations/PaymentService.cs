@@ -10,10 +10,8 @@ namespace MyApp.Api.Services.Implementations
 {
     /// <summary>
     /// AR/AP payment subledger — receipts (money in) and payments (money out).
-    /// GL-free port: master has no Chart of Accounts / posting engine, so this
-    /// keeps only the subledger (AmountPaid reflow on the settled documents,
-    /// over-allocation guard, per-direction numbering, cheque lifecycle) and
-    /// drops every posting / period-close / account-validation call.
+    /// Settlements, advances/refunds and direct income/expenses share the
+    /// existing posting engine and transactional document reflow.
     /// </summary>
     public class PaymentService : IPaymentService
     {
@@ -77,6 +75,7 @@ namespace MyApp.Api.Services.Implementations
         public async Task<PaymentDto> CreateAsync(int companyId, CreatePaymentDto dto)
         {
             var direction = ParseDirection(dto.Direction);
+            await ValidateContactAndAccountsAsync(companyId, dto, direction);
 
             if (dto.Allocations == null || dto.Allocations.Count == 0)
                 throw new InvalidOperationException("A payment needs at least one allocation line.");
@@ -89,7 +88,7 @@ namespace MyApp.Api.Services.Implementations
             {
                 var targets = new[] { a.InvoiceId.HasValue, a.PurchaseBillId.HasValue, a.AccountId.HasValue }
                     .Count(x => x);
-                if (targets != 1)
+                if (targets != 1 && !(targets == 0 && dto.ContactId.HasValue && a.Kind == "OnAccount"))
                     throw new InvalidOperationException("Each allocation line must target exactly one of: invoice, purchase bill, or account.");
                 if (a.Amount <= 0)
                     throw new InvalidOperationException("Allocation amounts must be greater than zero.");
@@ -137,9 +136,9 @@ namespace MyApp.Api.Services.Implementations
             {
                 var inv = invoices.First(i => i.Id == grp.Key);
                 var newTotal = inv.AmountPaid + grp.Sum(a => a.Amount);
-                if (newTotal > WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount))
+                if (newTotal > CommercialTotalCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount, inv.FreightCharges))
                     throw new InvalidOperationException(
-                        $"Receipt would over-pay Invoice #{inv.InvoiceNumber} (balance due is {WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount) - inv.AmountPaid:0.00}).");
+                        $"Receipt would over-pay Invoice #{inv.InvoiceNumber} (balance due is {CommercialTotalCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount, inv.FreightCharges) - inv.AmountPaid:0.00}).");
             }
             foreach (var grp in dto.Allocations.Where(a => a.PurchaseBillId.HasValue)
                          .GroupBy(a => a.PurchaseBillId!.Value))
@@ -162,6 +161,7 @@ namespace MyApp.Api.Services.Implementations
                 ReconciledDate = paymentDate,
                 ContactType = string.IsNullOrWhiteSpace(dto.ContactType) ? "Other" : dto.ContactType.Trim(),
                 ContactId = dto.ContactId,
+                ContactName = dto.ContactType == "Other" ? Trimmed(dto.ContactName) : null,
                 BankAccountId = dto.BankAccountId,
                 BankAccountName = bankAccountName,
                 Method = string.IsNullOrWhiteSpace(dto.Method) ? "Cash" : dto.Method.Trim(),
@@ -230,6 +230,7 @@ namespace MyApp.Api.Services.Implementations
             if (payment == null) return null;
             var companyId = payment.CompanyId;
             var direction = payment.Direction;            // direction is immutable on edit
+            await ValidateContactAndAccountsAsync(companyId, dto, direction, payment);
 
             if (dto.Allocations == null || dto.Allocations.Count == 0)
                 throw new InvalidOperationException("A payment needs at least one allocation line.");
@@ -239,7 +240,7 @@ namespace MyApp.Api.Services.Implementations
             foreach (var a in dto.Allocations)
             {
                 var targets = new[] { a.InvoiceId.HasValue, a.PurchaseBillId.HasValue, a.AccountId.HasValue }.Count(x => x);
-                if (targets != 1)
+                if (targets != 1 && !(targets == 0 && dto.ContactId.HasValue && a.Kind == "OnAccount"))
                     throw new InvalidOperationException("Each allocation line must target exactly one of: invoice, purchase bill, or account.");
                 if (a.Amount <= 0)
                     throw new InvalidOperationException("Allocation amounts must be greater than zero.");
@@ -278,9 +279,9 @@ namespace MyApp.Api.Services.Implementations
                 var paidByOthers = await _context.PaymentAllocations
                     .Where(pa => pa.InvoiceId == grp.Key && pa.PaymentId != id && !pa.Payment.IsCancelled && pa.Payment.ChequeStatus != ChequeStatus.Bounced)
                     .SumAsync(pa => (decimal?)pa.Amount) ?? 0m;
-                if (paidByOthers + grp.Sum(a => a.Amount) > WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount))
+                if (paidByOthers + grp.Sum(a => a.Amount) > CommercialTotalCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount, inv.FreightCharges))
                     throw new InvalidOperationException(
-                        $"Receipt would over-pay Invoice #{inv.InvoiceNumber} (available is {WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount) - paidByOthers:0.00}).");
+                        $"Receipt would over-pay Invoice #{inv.InvoiceNumber} (available is {CommercialTotalCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount, inv.FreightCharges) - paidByOthers:0.00}).");
             }
             foreach (var grp in dto.Allocations.Where(a => a.PurchaseBillId.HasValue).GroupBy(a => a.PurchaseBillId!.Value))
             {
@@ -304,6 +305,7 @@ namespace MyApp.Api.Services.Implementations
                 payment.Date = dto.Date == default ? payment.Date : dto.Date;
                 payment.ContactType = string.IsNullOrWhiteSpace(dto.ContactType) ? "Other" : dto.ContactType.Trim();
                 payment.ContactId = dto.ContactId;
+                payment.ContactName = dto.ContactType == "Other" ? Trimmed(dto.ContactName) : null;
                 payment.BankAccountId = dto.BankAccountId;
                 payment.BankAccountName = bankAccountName;
                 payment.Method = string.IsNullOrWhiteSpace(dto.Method) ? "Cash" : dto.Method.Trim();
@@ -445,7 +447,7 @@ namespace MyApp.Api.Services.Implementations
         private static PaymentDto ToDto(Payment p, IReadOnlyDictionary<(string, int), string> names)
         {
             var prefix = p.Direction == PaymentDirection.Receipt ? "RCP" : "PMT";
-            string? contactName = null;
+            string? contactName = p.ContactType == "Other" ? p.ContactName : null;
             if (p.ContactId.HasValue && names.TryGetValue((p.ContactType, p.ContactId.Value), out var n))
                 contactName = n;
 
@@ -475,6 +477,7 @@ namespace MyApp.Api.Services.Implementations
                 Allocations = p.Allocations.Select(a => new PaymentAllocationDto
                 {
                     Id = a.Id,
+                    Kind = a.InvoiceId.HasValue || a.PurchaseBillId.HasValue ? "Document" : a.AccountId.HasValue ? "Account" : "OnAccount",
                     InvoiceId = a.InvoiceId,
                     InvoiceNumber = a.Invoice?.InvoiceNumber,
                     PurchaseBillId = a.PurchaseBillId,
@@ -482,8 +485,8 @@ namespace MyApp.Api.Services.Implementations
                     AccountId = a.AccountId,
                     DocumentLabel = a.Invoice != null ? $"Invoice #{a.Invoice.InvoiceNumber}"
                                   : a.PurchaseBill != null ? $"Bill #{a.PurchaseBill.PurchaseBillNumber}"
-                                  : a.AccountId.HasValue ? "Direct"
-                                  : null,
+                                  : a.AccountId.HasValue ? names.GetValueOrDefault(("Account", a.AccountId.Value), "Income / expense")
+                                  : "Advance / on account",
                     Amount = a.Amount,
                 }).ToList(),
             };
@@ -511,7 +514,74 @@ namespace MyApp.Api.Services.Implementations
                     .Select(s => new { s.Id, s.Name }).AsNoTracking().ToListAsync();
                 foreach (var r in rows) result[("Supplier", r.Id)] = r.Name;
             }
+            var accountIds = payments.SelectMany(p => p.Allocations).Where(a => a.AccountId.HasValue)
+                .Select(a => a.AccountId!.Value).Distinct().ToList();
+            if (accountIds.Count > 0)
+            {
+                var rows = await _context.Accounts.AsNoTracking().Where(a => accountIds.Contains(a.Id))
+                    .Select(a => new { a.Id, a.Name }).ToListAsync();
+                foreach (var row in rows) result[("Account", row.Id)] = row.Name;
+            }
             return result;
+        }
+
+        private async Task ValidateContactAndAccountsAsync(int companyId, CreatePaymentDto dto,
+            PaymentDirection direction, Payment? existing = null)
+        {
+            dto.ContactType = dto.ContactType?.Trim().ToLowerInvariant() switch
+            {
+                "client" => "Client", "supplier" => "Supplier", "other" => "Other",
+                _ => throw new InvalidOperationException("Choose Client, Supplier or Someone else.")
+            };
+            if (dto.ContactType == "Other")
+            {
+                if (dto.ContactId.HasValue || string.IsNullOrWhiteSpace(dto.ContactName) || dto.ContactName.Length > 200)
+                    throw new InvalidOperationException("Enter a payee/payer name of up to 200 characters without a contact id.");
+            }
+            else
+            {
+                if (!dto.ContactId.HasValue) throw new InvalidOperationException("Choose the client or supplier.");
+                var valid = dto.ContactType == "Client"
+                    ? await _context.Clients.AnyAsync(c => c.Id == dto.ContactId && c.CompanyId == companyId)
+                    : await _context.Suppliers.AnyAsync(c => c.Id == dto.ContactId && c.CompanyId == companyId);
+                if (!valid) throw new InvalidOperationException("The contact does not belong to this company.");
+            }
+            if (dto.Allocations == null || dto.Allocations.Count == 0 || dto.Allocations.Count > 1000)
+                throw new InvalidOperationException("Add between 1 and 1000 allocation lines.");
+            foreach (var a in dto.Allocations)
+            {
+                if (a.Amount <= 0 || a.Amount > 9999999999999999.99m || decimal.Round(a.Amount, 2) != a.Amount)
+                    throw new InvalidOperationException("Enter positive amounts with at most two decimal places.");
+                if (a.Kind != null && a.Kind is not ("Document" or "Account" or "OnAccount"))
+                    throw new InvalidOperationException("Invalid allocation purpose.");
+                if (a.Kind == "OnAccount" && (a.InvoiceId.HasValue || a.PurchaseBillId.HasValue || a.AccountId.HasValue))
+                    throw new InvalidOperationException("An advance cannot reference a document or account.");
+                if (a.Kind == "Document" && !a.InvoiceId.HasValue && !a.PurchaseBillId.HasValue
+                    || a.Kind == "Account" && (!a.AccountId.HasValue || a.InvoiceId.HasValue || a.PurchaseBillId.HasValue))
+                    throw new InvalidOperationException("Allocation purpose does not match its target.");
+                if (a.InvoiceId.HasValue && (direction != PaymentDirection.Receipt || dto.ContactType != "Client"
+                    || !await _context.Invoices.AnyAsync(i => i.Id == a.InvoiceId && i.CompanyId == companyId
+                        && i.ClientId == dto.ContactId && !i.IsCancelled && i.NoteKind == 0 && !i.IsDemo)))
+                    throw new InvalidOperationException("Choose an active invoice belonging to the selected client.");
+                if (a.PurchaseBillId.HasValue && (direction != PaymentDirection.Payment || dto.ContactType != "Supplier"
+                    || !await _context.PurchaseBills.AnyAsync(i => i.Id == a.PurchaseBillId && i.CompanyId == companyId
+                        && i.SupplierId == dto.ContactId)))
+                    throw new InvalidOperationException("Choose an active bill belonging to the selected supplier.");
+                if (a.AccountId.HasValue)
+                {
+                    var account = await _context.Accounts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == a.AccountId && x.CompanyId == companyId);
+                    var preserved = existing?.Allocations.Any(x => x.AccountId == a.AccountId) == true;
+                    if (account == null || !account.IsActive && !preserved
+                        || account.AccountType != (direction == PaymentDirection.Receipt ? AccountType.Income : AccountType.Expense))
+                        throw new InvalidOperationException("Choose an income/expense account belonging to this company.");
+                }
+            }
+            if (dto.Allocations.Sum(a => a.Amount) > 9999999999999999.99m)
+                throw new InvalidOperationException("The payment total is too large.");
+            if (dto.BankAccountId.HasValue && !await _context.Accounts.AnyAsync(x => x.Id == dto.BankAccountId
+                && x.CompanyId == companyId && x.ControlType == ControlType.BankCash
+                && (x.IsActive || existing != null && existing.BankAccountId == x.Id)))
+                throw new InvalidOperationException("Choose a bank/cash account belonging to this company.");
         }
 
         private static string? Trimmed(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
@@ -540,7 +610,7 @@ namespace MyApp.Api.Services.Implementations
             if (p == null) return null;
 
             // Contact is a soft ref (ContactType + ContactId), resolve its name.
-            string contactName = "";
+            string contactName = p.ContactType == "Other" ? p.ContactName ?? "" : "";
             string? contactAddress = null, contactPhone = null;
             if (p.ContactId.HasValue && p.ContactType == "Client")
             {
@@ -560,13 +630,16 @@ namespace MyApp.Api.Services.Implementations
                 .Where(i => invIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, i => i.InvoiceNumber);
             var billMap = billIds.Count == 0 ? new() : await _context.PurchaseBills.AsNoTracking()
                 .Where(b => billIds.Contains(b.Id)).ToDictionaryAsync(b => b.Id, b => b.PurchaseBillNumber);
+            var accountIds = p.Allocations.Where(a => a.AccountId.HasValue).Select(a => a.AccountId!.Value).ToList();
+            var accountMap = await _context.Accounts.AsNoTracking().Where(a => a.CompanyId == p.CompanyId && accountIds.Contains(a.Id))
+                .ToDictionaryAsync(a => a.Id, a => a.Name);
             var sNo = 0;
             var allocs = p.Allocations.Select(a => new PrintPaymentAllocationDto
             {
                 SNo = ++sNo,
                 DocumentLabel = a.InvoiceId != null ? $"Invoice #{invMap.GetValueOrDefault(a.InvoiceId.Value)}"
                               : a.PurchaseBillId != null ? $"Bill #{billMap.GetValueOrDefault(a.PurchaseBillId.Value)}"
-                              : "Direct",
+                              : a.AccountId.HasValue ? accountMap.GetValueOrDefault(a.AccountId.Value, "Income / expense") : "Advance / on account",
                 Amount = a.Amount,
             }).ToList();
 

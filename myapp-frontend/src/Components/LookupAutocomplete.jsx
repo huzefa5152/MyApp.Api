@@ -206,15 +206,21 @@ export default function LookupAutocomplete({ companyId, label, endpoint, value, 
                 // (.sc-suggest + k-combo__opt, themed by the --k-* tokens).
                 const rect = wrapperRef.current?.getBoundingClientRect();
                 if (!rect) return null;
+                const below = window.innerHeight - rect.bottom;
+                const above = rect.top;
+                const flipAbove = below < 180 && above > below;
+                const width = Math.min(rect.width, window.innerWidth - 16);
+                const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
                 return createPortal(
-                    <ul
+                    <ul data-admin-popup=""
                         className="sc-suggest"
                         role="listbox"
                         style={{
-                            maxHeight: "300px",
-                            top: rect.bottom + 2,
-                            left: rect.left,
-                            width: rect.width
+                            maxHeight: Math.max(60, Math.min(300, (flipAbove ? above : below) - 8)),
+                            top: flipAbove ? undefined : rect.bottom,
+                            bottom: flipAbove ? window.innerHeight - rect.top : undefined,
+                            left,
+                            width
                         }}
                     >
 

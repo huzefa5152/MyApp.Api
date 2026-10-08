@@ -8,6 +8,8 @@ namespace MyApp.Api.DTOs
 
     public class InvoiceDto
     {
+        public bool CanCreateSalesOrder { get; set; }
+        public List<BillSalesOrderLinkDto> SalesOrders { get; set; } = new();
         public bool GroupTaxInvoiceByItemType { get; set; }
         public string? Notes { get; set; }
         public int Id { get; set; }
@@ -21,6 +23,9 @@ namespace MyApp.Api.DTOs
         public decimal GSTRate { get; set; }
         public decimal GSTAmount { get; set; }
         public decimal GrandTotal { get; set; }
+        public decimal FreightCharges { get; set; }
+        public decimal CommercialTotal => GrandTotal + FreightCharges;
+        public string CommercialAmountInWords => MyApp.Api.Helpers.NumberToWordsConverter.Convert(CommercialTotal);
         // ── Document taxes ──
         // Both default to NONE: a null rate means the operator did not select
         // the tax, which is how every existing document reads.
@@ -133,6 +138,10 @@ namespace MyApp.Api.DTOs
         /// until the consultant re-adjusts in Invoice mode. FbrReady is forced
         /// false while this is true.
         /// </summary>
+        public bool FbrReviewRequired { get; set; }
+        public DateTime? FbrReviewRequiredAt { get; set; }
+        public DateTime? FbrReviewedAt { get; set; }
+        public string FbrReviewVersion { get; set; } = "";
         public bool FbrAdjustmentStale { get; set; }
         /// <summary>
         /// The effective (overlay-applied) subtotal that would be filed to FBR.
@@ -279,6 +288,7 @@ namespace MyApp.Api.DTOs
 
     public class CreateInvoiceDto
     {
+        public decimal FreightCharges { get; set; }
         public bool? GroupTaxInvoiceByItemType { get; set; }
         public string? Notes { get; set; }
         public DateTime Date { get; set; }
@@ -294,8 +304,8 @@ namespace MyApp.Api.DTOs
         public List<CreateInvoiceItemDto> Items { get; set; } = new();
         public Dictionary<int, DateTime> PoDateUpdates { get; set; } = new();
         /// <summary>Optional PO number/date set at bill time. When provided it's
-        /// stored on the bill and overrides the value derived from the linked
-        /// challans; leave blank to keep deriving the PO from the challans.</summary>
+        /// stored on the bill and backfilled to every selected challan in the same
+        /// transaction. Blank fields preserve existing challan details.</summary>
         public string? PoNumber { get; set; }
         public DateTime? PoDate { get; set; }
         /// <summary>
@@ -357,6 +367,7 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class CreateStandaloneInvoiceDto
     {
+        public decimal FreightCharges { get; set; }
         public bool? GroupTaxInvoiceByItemType { get; set; }
         // ── Document taxes — both optional, both default to NONE ──
         /// <summary>Further tax (s.3(1A)) rate %. Null or 0 = not charged. The
@@ -582,6 +593,7 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class UpdateInvoiceDto
     {
+        public decimal? FreightCharges { get; set; }
         public bool? GroupTaxInvoiceByItemType { get; set; }
         // ── Document taxes — both optional, both default to NONE ──
         /// <summary>Further tax (s.3(1A)) rate %. Null or 0 = not charged. The
@@ -673,6 +685,8 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class UpdateInvoiceItemTypesDto
     {
+        public bool CompleteConsultantReview { get; set; }
+        public string? ReviewVersion { get; set; }
         public bool? GroupTaxInvoiceByItemType { get; set; }
         public List<UpdateInvoiceItemTypeRow> Items { get; set; } = new();
 
@@ -803,4 +817,10 @@ namespace MyApp.Api.DTOs
         /// </summary>
         public string? MatchedBy { get; set; }
     }
+    public class BillSalesOrderLinkDto
+    {
+        public int Id { get; set; }
+        public int Number { get; set; }
+    }
+
 }

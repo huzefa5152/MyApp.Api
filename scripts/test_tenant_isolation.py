@@ -119,6 +119,11 @@ for name in ["Test Alpha Co.", "Test Beta Co.", "Test Gamma Co."]:
     print(f"  + {data['id']:4d}  {data['name']}")
 alpha, beta, gamma = test_companies
 
+for company in (alpha, beta):
+    status, _ = request("PUT", f"/api/printtemplates/company/{company['id']}/Bill", token=admin,
+                        body={"htmlContent": "<div>{{companyName}}</div>", "editorMode": "code"})
+    assert status == 200, f"create report letterhead fixture: {status}"
+
 print(f"\n=== Marking Alpha + Beta as IsTenantIsolated=true ===")
 for c in (alpha, beta):
     update_dto = {
@@ -268,6 +273,7 @@ endpoints_to_test = [
     ("GET",  "/api/fbr/scenarios/applicable/{cid}"),
     ("GET",  "/api/fbr/uom/{cid}"),
     ("GET",  "/api/printtemplates/company/{cid}"),
+    ("GET",  "/api/printtemplates/company/{cid}/accounting-report-invoice-layout"),
     # Accounting — Receipts (money in) + Payments (money out). All four are
     # [AuthorizeCompany]-gated companyId routes; a forbidden company 403s
     # before the action runs (the by-invoice/by-bill dummy id is never read).
@@ -332,6 +338,10 @@ for username, allowed in allowed_for.items():
         status, _ = request("GET", path, token=tok)
         check(suite, f"[{username}] GET {path}", status == 200,
               f"expected 200, got {status}")
+        path = f"/api/printtemplates/company/{cid}/accounting-report-invoice-layout"
+        status, layout = request("GET", path, token=tok)
+        check(suite, f"[{username}] invoice layout belongs to report company", status == 200
+              and layout.get("companyId") == cid, f"expected owned template, got {status}")
 
 # Suite 4: write endpoints with body-side companyId — 403 if forbidden
 print("\n  Suite 4 — 403 on body-side companyId")
@@ -779,6 +789,31 @@ for cid in (alpha_shared, beta_shared):
 # Cleanup the seed Beta client
 request("DELETE", f"/api/clients/{beta_client['id']}", token=admin)
 
+
+# Gmail routes must reject a foreign company before looking up mailbox IDs.
+for suffix in ("connections", "messages", "customers"):
+    status, _ = request("GET", f"/api/email-workspace/company/{alpha['id']}/{suffix}", token=admin)
+    status_check("Email workspace", f"admin resolves {suffix}", status, 200)
+    status, _ = request("GET", f"/api/email-workspace/company/{alpha['id']}/{suffix}", token=tokens["bob"])
+    status_check("Email workspace", f"foreign company rejects {suffix}", status, 403)
+for method, suffix, body in (
+    ("POST", "oauth/start", {}),
+    ("POST", "connections", {"connectionId": 0}),
+    ("PUT", "connections/0", {"rules": [], "shareMatchingEmails": False}),
+    ("DELETE", "connections/0", None),
+    ("POST", "sync/0", {}),
+    ("GET", "messages/0", None),
+    ("PUT", "messages/0/decision", {"decision": "Kept"}),
+    ("POST", "messages/0/prepare", {"decision": "Kept"}),
+    ("POST", "messages/0/attachment-preview", {"attachmentId": "sample"}),
+    ("POST", "messages/0/attachment-items", {"attachmentId": "sample", "mode": "Append"}),
+    ("POST", "messages/0/item-assistance", {"items": []}),
+    ("PUT", "messages/0/draft", {"items": []}),
+    ("POST", "messages/0/convert", {"items": []}),
+    ("GET", "messages/0/attachment?attachmentId=sample", None),
+):
+    status, _ = request(method, f"/api/email-workspace/company/{alpha['id']}/{suffix}", token=tokens["bob"], body=body)
+    status_check("Email workspace", f"foreign company rejects {method} {suffix}", status, 403)
 
 # ── Cleanup (test fails → keep rows for inspection) ──────────
 print("\n=== Results ===")

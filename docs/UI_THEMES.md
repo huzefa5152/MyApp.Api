@@ -8,6 +8,8 @@ Status (2026-10-03): built on branch `feat/trader-ui-themes` (off
 (`deploy-trader.yml` only runs on pushes to `TraderFbrInvoicingSystem`), so
 pushing it is safe. It reaches production only when the maintainer merges it.
 
+Trader integration (2026-10-09): includes the current Trader security and business workflows. Admin density overrides apply to Classic; Workspace keeps its theme tokens. Dialog focus handling and popup accessibility apply to both layouts. This integration remains local until explicitly pushed.
+
 ## What a user sees
 
 - Two themes: **Classic** (default — the original look, tidied so every screen

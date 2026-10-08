@@ -27,6 +27,7 @@ import { colors, formStyles } from "../theme";
 export default function DocumentTaxFields({
   subtotal = 0,
   gstAmount = 0,
+  freightCharges = 0,
   furtherTaxRate = undefined,
   onFurtherTaxRateChange,
   withholdingTaxRate = null,
@@ -54,7 +55,7 @@ export default function DocumentTaxFields({
     : withholdingIsFixed
       ? Math.min(num(withholdingTaxAmount), grandTotal)
       : Math.min(round2(grandTotal * num(withholdingTaxRate) / 100), grandTotal);
-  const collectible = round2(grandTotal - withheld);
+  const collectible = round2(grandTotal + num(freightCharges) - withheld);
 
   const money = (n) => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -154,7 +155,7 @@ export default function DocumentTaxFields({
             </div>
           )}
           <div style={{ ...st.summaryRow, fontWeight: 800 }}>
-            <span>Bill total</span><span>Rs. {money(grandTotal)}</span>
+            <span>Bill total</span><span>Rs. {money(grandTotal + num(freightCharges))}</span>
           </div>
           {withholdingOn && (
             <>

@@ -233,7 +233,7 @@ export default function ItemRateHistoryPage() {
           ) : selectedCompany ? (
             <>
               {/* Desktop / tablet — table */}
-              <TableWrap className="irh-table">
+              <TableWrap data-admin-table-region="" className="irh-table">
                 <table className="k-table">
                   <thead>
                     <tr>

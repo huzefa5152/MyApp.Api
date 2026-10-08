@@ -182,6 +182,7 @@ namespace MyApp.Api.Controllers
             "bills.manage.update",
             "invoices.list.view", "invoices.note.create",
             "accounting.receipts.view", "accounting.receipts.create",
+            "accounting.payments.view", "accounting.payments.create",
             "withholdingtax.manage.create", "withholdingtax.manage.update",
             "itemratehistory.view", "reports.outstanding.view",
             "customerportals.manage.view", "customerportals.manage.create")]

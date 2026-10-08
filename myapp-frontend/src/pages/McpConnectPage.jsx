@@ -61,7 +61,7 @@ export default function McpConnectPage() {
       />
 
       {!info.enabled ? <Alert tone="warn" icon={MdInfo}>
-        MCP is not enabled for your account. Ask your administrator to give you the MCP Access role, then try again.</Alert>
+        Purchase this premium feature. Contact your administrator to purchase MCP access. The primary administrator must enable your account before you can connect ChatGPT, Claude or another compatible agent.</Alert>
       : <>
         <div style={s.points}>
           <div style={s.point}><MdShield aria-hidden style={s.pi} /><span>It can <strong>look things up</strong> in the companies you choose below, with the same limits as your own login.{scopes.length === 1 ? " It cannot change anything." : " It can also do the extra things you tick, and each change is shown to you to approve first."}</span></div>

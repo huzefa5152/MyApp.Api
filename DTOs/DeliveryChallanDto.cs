@@ -2,6 +2,7 @@ namespace MyApp.Api.DTOs
 {
     public class DeliveryChallanDto
     {
+        public string? Version { get; set; }
         public int Id { get; set; }
         public int ChallanNumber { get; set; }
         public int? CustomNumber { get; set; }

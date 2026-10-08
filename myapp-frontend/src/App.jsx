@@ -1,3 +1,4 @@
+import McpGuidePage from "./pages/public/McpGuidePage";
 // App.jsx
 import { lazy } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
@@ -9,6 +10,7 @@ const ChallansPage = lazy(() => import("./pages/ChallanPage"));
 const ImportChallansPage = lazy(() => import("./pages/ImportChallansPage"));
 const InvoicePage = lazy(() => import("./pages/InvoicePage"));
 const SalesQuotePage = lazy(() => import("./pages/SalesQuotePage"));
+const EmailWorkspacePage = lazy(() => import("./pages/EmailWorkspacePage"));
 const SalesOrderPage = lazy(() => import("./pages/SalesOrderPage"));
 const WithholdingTaxReceiptsPage = lazy(() => import("./pages/WithholdingTaxReceiptsPage"));
 const PaymentsPage = lazy(() => import("./pages/PaymentsPage"));
@@ -73,6 +75,7 @@ export default function App() {
 
       {/* Auth */}
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/mcp-guide" element={<McpGuidePage />} />
 
       {/* NOTE: the PUBLIC customer portal at /portal/<token> is NOT routed
           here. It renders in main.jsx, before and outside this router — the
@@ -99,6 +102,7 @@ export default function App() {
             <Route path="/challans" element={<ChallansPage />} />
             <Route path="/challans/import" element={<ImportChallansPage />} />
             <Route path="/sales-quotes" element={<SalesQuotePage />} />
+            <Route path="/email-workspace" element={<EmailWorkspacePage />} />
             <Route path="/withholding-tax-receipts" element={<WithholdingTaxReceiptsPage />} />
             <Route path="/sales-orders" element={<SalesOrderPage />} />
             {/* Receipts (money in) / Payments (money out) — one component,

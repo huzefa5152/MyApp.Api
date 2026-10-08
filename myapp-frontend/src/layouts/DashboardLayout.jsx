@@ -1,8 +1,10 @@
+import useAdminAccessibility from "../hooks/useAdminAccessibility";
 // src/layouts/DashboardLayout.jsx
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   MdDashboard,
+  MdEmail,
   MdSettings,
   MdBusiness,
   MdPeople,
@@ -54,6 +56,7 @@ import "./DashboardLayout.css";
 import useUi2 from "../ui2/useUi2";
 import { CompanySwitcher, QuickJump } from "../ui2/ShellParts";
 import ThemePicker from "../ui2/ThemePicker";
+import "./AdminDensity.css";
 
 /* ------------------------------------------------------------------ */
 /*  NavGroup — generic collapsible section header                       */
@@ -114,6 +117,7 @@ function NavGroup({ id, icon: Icon, title, defaultOpen, count, isChildActive, ch
       <div
         id={`dl-group-${id}`}
         className="dl-group__body"
+        inert={!open}
         role="region"
         aria-label={`${title} submenu`}
       >
@@ -146,6 +150,11 @@ function getDisplayName(user) {
 /*  DashboardLayout                                                     */
 /* ------------------------------------------------------------------ */
 export default function DashboardLayout() {
+  useAdminAccessibility();
+  useEffect(() => {
+    document.body.classList.add("admin-ui");
+    return () => document.body.classList.remove("admin-ui");
+  }, []);
   const { user, logout, avatarVersion } = useAuth();
   const ui2 = useUi2(); // the user's theme decides whether the redesigned structure is used
   const { hasAny, has } = usePermissions();
@@ -258,6 +267,7 @@ export default function DashboardLayout() {
   // recomputing on every render.
   const activeSection = useMemo(() => {
     const p = location.pathname.toLowerCase();
+    if (p === "/email-workspace") return "email-workspace";
     if (p.startsWith("/challans") || p === "/bills" || p === "/invoices" || p === "/credit-notes" || p === "/debit-notes" || p === "/credit-debit-notes" || p === "/item-rate-history" || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders")) return "sales";
     if (p.startsWith("/purchase-bills") || p.startsWith("/goods-receipts") || p.startsWith("/stock") || p.startsWith("/fbr-import/purchase")) return "purchases";
     if (p.startsWith("/withholding-tax-receipts") || p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/chart-of-accounts") || p.startsWith("/journal-entries") || p.startsWith("/accounting")) return "accounting";
@@ -296,6 +306,27 @@ export default function DashboardLayout() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  useEffect(() => {
+    if (!sidebarOpen || window.innerWidth >= 992) return;
+    const previous = document.activeElement;
+    const drawer = document.getElementById("admin-navigation");
+    drawer?.querySelector('button[aria-label="Close menu"]')?.focus();
+    const keyboard = event => {
+      if (window.innerWidth >= 992) return;
+      if (event.key === "Escape") { event.preventDefault(); setSidebarOpen(false); }
+      if (event.key !== "Tab") return;
+      const targets = [...drawer.querySelectorAll('button:not(:disabled),a[href]')].filter(el => el.getClientRects().length && !el.closest('[inert]'));
+      const first = targets[0], last = targets[targets.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !drawer.contains(document.activeElement))) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && (document.activeElement === last || !drawer.contains(document.activeElement))) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener("keydown", keyboard);
+    return () => {
+      document.removeEventListener("keydown", keyboard);
+      if (previous?.isConnected) previous.focus({ preventScroll: true });
+    };
+  }, [sidebarOpen]);
+
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
 
   const displayName = getDisplayName(user);
@@ -307,6 +338,7 @@ export default function DashboardLayout() {
 
   return (
     <div className={`dl-shell${ui2 ? " dl-shell--v2" : ""}`}>
+      <a className="admin-skip-link" href="#main-content">Skip to main content</a>
       {/* ---- Mobile Overlay ---- */}
       <div
         className={`dl-overlay${sidebarOpen ? " dl-overlay--visible" : ""}`}
@@ -317,7 +349,7 @@ export default function DashboardLayout() {
       {/* ================================================================ */}
       {/*  SIDEBAR                                                         */}
       {/* ================================================================ */}
-      <aside className={`dl-sidebar${sidebarOpen ? " dl-sidebar--open" : ""}`} aria-label="Main navigation">
+      <aside id="admin-navigation" className={`dl-sidebar${sidebarOpen ? " dl-sidebar--open" : ""}`} aria-label="Main navigation">
         {/* Brand row — clean, single-line on mobile, with a close button
             inside the drawer so users don't have to reach for the topbar. */}
         <div className="dl-brand">
@@ -347,6 +379,15 @@ export default function DashboardLayout() {
             <span className="dl-item__label">Dashboard</span>
           </NavLink>
           </>}
+
+          {has("email.workspace.use") && has("email.inbox.view") && (
+            <NavGroup id="email-workspace" icon={MdEmail} title="Email Workspace" count={1}
+              defaultOpen={activeSection === "email-workspace"} isChildActive={activeSection === "email-workspace"}>
+              <NavLink to="/email-workspace" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <MdEmail className="dl-subitem__icon" aria-hidden="true" /><span>Inbox &amp; Connections</span>
+              </NavLink>
+            </NavGroup>
+          )}
 
           {canSeeSales && (
             <NavGroup
@@ -598,7 +639,7 @@ export default function DashboardLayout() {
               <Can permission="poformats.manage.view">
                 <NavLink to="/po-formats" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdDescription className="dl-subitem__icon" aria-hidden="true" />
-                  <span>PO Formats</span>
+                  <span>Customer Document Formats</span>
                 </NavLink>
               </Can>
               <Can permission="printtemplates.manage.update">
@@ -724,6 +765,7 @@ export default function DashboardLayout() {
             onClick={() => setSidebarOpen((prev) => !prev)}
             aria-label={sidebarOpen ? "Close menu" : "Open menu"}
             aria-expanded={sidebarOpen}
+            aria-controls="admin-navigation"
           >
             {sidebarOpen ? <MdClose /> : <MdMenu />}
           </button>
@@ -739,7 +781,7 @@ export default function DashboardLayout() {
             </div>
           )}
 
-          <div className="dl-topbar__user-wrapper" ref={userMenuRef}>
+          <div className="dl-topbar__user-wrapper" ref={userMenuRef} onKeyDown={event => { if (event.key === "Escape") { setUserMenuOpen(false); userMenuRef.current?.querySelector("button")?.focus(); } }}>
             <button
               type="button"
               className="dl-topbar__user"
@@ -793,7 +835,7 @@ export default function DashboardLayout() {
         </header>
 
         {/* Page Content */}
-        <main className={`dl-main${ui2 ? " u2" : ""}`} id="main-content">
+        <main className={`dl-main${ui2 ? " u2" : ""}`} id="main-content" tabIndex={-1}>
           {showNoCompany ? <NoCompanyConfigured /> : <Outlet />}
         </main>
       </div>
@@ -823,6 +865,7 @@ function getBreadcrumb(pathname) {
     "/item-types": "Configuration / Item Types",
     "/import-data": "Configuration / Import Data",
     "/challans": "Sales / Delivery Challans",
+    "/email-workspace": "Email Workspace / Inbox",
     "/challans/import": "Sales / Import Challans",
     "/bills": "Sales / Bills",
     "/invoices": "Sales / Invoices",
@@ -834,7 +877,7 @@ function getBreadcrumb(pathname) {
     "/users": "User Management",
     "/roles": "Roles & Permissions",
     "/templates": "Configuration / Print Templates",
-    "/po-formats": "Configuration / PO Formats",
+    "/po-formats": "Configuration / Customer Document Formats",
     "/units": "Configuration / Units",
     "/fbr-settings": "Configuration / FBR Settings",
     "/fbr-sandbox": "Configuration / FBR Sandbox",

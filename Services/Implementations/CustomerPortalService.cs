@@ -240,9 +240,9 @@ namespace MyApp.Api.Services.Implementations
                          && !i.IsFbrExcluded);
 
         /// <summary>What the customer actually owes on a document: the grand
-        /// total less anything withheld at source, which never reaches us.</summary>
-        private static decimal Collectible(decimal grandTotal, decimal withholding) =>
-            WithholdingTaxCalculator.Collectible(grandTotal, withholding);
+        /// total including freight, less anything withheld at source.</summary>
+        private static decimal Collectible(decimal grandTotal, decimal withholding, decimal freight) =>
+            CommercialTotalCalculator.Collectible(grandTotal, withholding, freight);
 
         public async Task<PortalHeaderDto?> GetHeaderAsync(ResolvedPortal portal)
         {
@@ -268,15 +268,15 @@ namespace MyApp.Api.Services.Implementations
             // and runs through the canonical calculators in memory rather than a
             // SQL rewrite — these are the numbers the customer will argue about,
             // so they have to be the same ones the office sees. The projection is
-            // four columns wide and scoped to one client, so it stays cheap.
+            // scoped to one client, so it stays cheap.
             var rows = await VisibleInvoices(portal)
-                .Select(i => new { i.GrandTotal, i.WithholdingTaxAmount, i.AmountPaid, i.DueDate })
+                .Select(i => new { i.GrandTotal, i.FreightCharges, i.WithholdingTaxAmount, i.AmountPaid, i.DueDate })
                 .ToListAsync();
 
             var summary = new PortalSummaryDto { TotalInvoices = rows.Count };
             foreach (var r in rows)
             {
-                var total = Collectible(r.GrandTotal, r.WithholdingTaxAmount);
+                var total = Collectible(r.GrandTotal, r.WithholdingTaxAmount, r.FreightCharges);
                 var status = PaymentStatusCalculator.Status(total, r.AmountPaid, r.DueDate);
 
                 summary.TotalAmount += total;
@@ -328,7 +328,7 @@ namespace MyApp.Api.Services.Implementations
                 .Select(i => new
                 {
                     i.InvoiceNumber, i.Date, i.DueDate, i.PoNumber,
-                    i.GrandTotal, i.WithholdingTaxAmount, i.AmountPaid,
+                    i.GrandTotal, i.FreightCharges, i.WithholdingTaxAmount, i.AmountPaid,
                 })
                 .ToListAsync();
 
@@ -338,7 +338,7 @@ namespace MyApp.Api.Services.Implementations
             // invoices, so the cost is a list, not a table scan.
             var items = rows.Select(r =>
             {
-                var amount = Collectible(r.GrandTotal, r.WithholdingTaxAmount);
+                var amount = Collectible(r.GrandTotal, r.WithholdingTaxAmount, r.FreightCharges);
                 return new PortalInvoiceListItemDto
                 {
                     InvoiceNumber = r.InvoiceNumber,
@@ -381,7 +381,7 @@ namespace MyApp.Api.Services.Implementations
                 {
                     i.Id, i.InvoiceNumber, i.Date, i.DueDate, i.PoNumber,
                     i.Subtotal, i.GSTRate, i.GSTAmount, i.FurtherTaxAmount,
-                    i.WithholdingTaxAmount, i.GrandTotal, i.AmountPaid, i.AmountInWords,
+                    i.WithholdingTaxAmount, i.GrandTotal, i.FreightCharges, i.AmountPaid, i.AmountInWords,
                 })
                 .FirstOrDefaultAsync();
             if (inv == null) return null;
@@ -399,7 +399,7 @@ namespace MyApp.Api.Services.Implementations
                 })
                 .ToListAsync();
 
-            var amount = Collectible(inv.GrandTotal, inv.WithholdingTaxAmount);
+            var amount = Collectible(inv.GrandTotal, inv.WithholdingTaxAmount, inv.FreightCharges);
             return new PortalInvoiceDetailDto
             {
                 InvoiceNumber = inv.InvoiceNumber,
@@ -411,13 +411,14 @@ namespace MyApp.Api.Services.Implementations
                 GstAmount = inv.GSTAmount,
                 FurtherTaxAmount = inv.FurtherTaxAmount,
                 WithholdingTaxAmount = inv.WithholdingTaxAmount,
-                GrandTotal = inv.GrandTotal,
+                FreightCharges = inv.FreightCharges,
+                GrandTotal = CommercialTotalCalculator.Total(inv.GrandTotal, inv.FreightCharges),
                 Amount = amount,
                 AmountPaid = inv.AmountPaid,
                 BalanceDue = PaymentStatusCalculator.BalanceDue(amount, inv.AmountPaid),
                 PaymentStatus = PaymentStatusCalculator.Status(amount, inv.AmountPaid, inv.DueDate).ToString(),
                 DaysOverdue = PaymentStatusCalculator.DaysOverdue(amount, inv.AmountPaid, inv.DueDate),
-                AmountInWords = inv.AmountInWords,
+                AmountInWords = NumberToWordsConverter.Convert(CommercialTotalCalculator.Total(inv.GrandTotal, inv.FreightCharges)),
                 Lines = lines,
             };
         }

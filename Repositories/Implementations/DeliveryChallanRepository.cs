@@ -31,7 +31,8 @@ namespace MyApp.Api.Repositories.Implementations
                                      .ThenInclude(inv => inv!.Items)
                                  .Include(dc => dc.DuplicatedFrom)
                                  .Where(dc => dc.CompanyId == companyId && !dc.IsDemo)
-                                 .OrderBy(dc => dc.ChallanNumber)
+                                 .OrderByDescending(dc => dc.CreatedAt)
+                                 .ThenByDescending(dc => dc.Id)
                                  .ToListAsync();
         }
 
@@ -82,7 +83,7 @@ namespace MyApp.Api.Repositories.Implementations
 
             var totalCount = await query.CountAsync();
             var items = await query
-                .OrderByDescending(dc => dc.ChallanNumber)
+                .OrderByDescending(dc => dc.CreatedAt)
                 .ThenByDescending(dc => dc.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
@@ -156,7 +157,7 @@ namespace MyApp.Api.Repositories.Implementations
 
                 int nextNumber = isDemo
                     ? (maxExisting > 0 ? maxExisting + 1 : company.StartingChallanNumber)
-                    : await MyApp.Api.Helpers.CompanyDocumentNumbers.AllocateAsync(_context, deliveryChallan.CompanyId, "challan", customNumber);
+                    : await MyApp.Api.Helpers.CompanyDocumentNumbers.AllocateAsync(_context, deliveryChallan.CompanyId, "challan", customNumber, deliveryChallan.ClientId);
 
                 deliveryChallan.ChallanNumber = nextNumber;
                 // Don't touch the company's CurrentChallanNumber when seeding
@@ -207,14 +208,14 @@ namespace MyApp.Api.Repositories.Implementations
 
         public async Task<List<DeliveryChallan>> GetPendingChallansByCompanyAsync(int companyId)
         {
-            // Both "Pending" (natively-created) and "Imported" (historical back-fill)
-            // are billable — the bill-creation picker shows both populations.
+            // An optional PO never blocks an otherwise billable, unbilled challan.
             return await _context.DeliveryChallans
                                  .Include(dc => dc.Items)
                                      .ThenInclude(i => i.ItemType)
                                  .Include(dc => dc.Client)
                                  .Where(dc => dc.CompanyId == companyId
-                                           && (dc.Status == "Pending" || dc.Status == "Imported"))
+                                           && dc.InvoiceId == null
+                                           && MyApp.Api.Helpers.ChallanBillingRules.Statuses.Contains(dc.Status))
                                  .OrderBy(dc => dc.ChallanNumber)
                                  .ToListAsync();
         }

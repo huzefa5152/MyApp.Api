@@ -155,6 +155,16 @@ B = create_user(seed, "scopeAdminB", "Scope Admin B", "Administrator")
 tA = login("scopeAdminA", PW)
 tB = login("scopeAdminB", PW)
 
+
+print("\n=== Username conflicts do not expose another administrator's tree ===")
+for actor, credential in (("seed", seed), ("A", tA), ("B", tB)):
+    for occupied in (args.admin_user, A["username"], B["username"]):
+        status, duplicate = request("POST", "/api/users", token=credential,
+            body={"username": occupied, "fullName": "Duplicate Test", "password": PW, "role": "User"})
+        check("username", actor + " cannot duplicate an occupied username", status == 409)
+        check("username", actor + " gets no account-owner details", duplicate == {
+            "message": "This username is unavailable. Choose another username."})
+
 print("=== SETUP: A and B each create their companies and one user ===")
 coA1 = create_company(tA, "Scope Test Co A1")
 coA2 = create_company(tA, "Scope Test Co A2")
@@ -379,6 +389,31 @@ s, d = request("GET", "/api/auth/me", token=tUA1)
 check("revoke", "userA1 still authenticated (/auth/me 200)", s == 200, str(s))
 
 # ─────────────────────────────────────────────────────────────────────
+print("\n=== Premium MCP management is seed-only ===")
+s, catalog = request("GET", f"/api/mcp/catalog/{uA1['id']}", token=seed)
+check("mcp", "seed reads worker grants", s == 200 and catalog.get("canManageGrants") is True, str(s))
+if s == 200:
+    body = {key: catalog[key] for key in ("revision", "accessGranted", "writesGranted", "accessEnabled", "writesEnabled")}
+    body["grantedTools"] = [tool["name"] for tool in catalog["tools"] if tool["configurable"] and tool["granted"]]
+    body["selectedTools"] = [tool["name"] for tool in catalog["tools"] if tool["configurable"] and tool["selected"]]
+    for actor, credential in (("parent A", tA), ("sibling B", tB)):
+        status, _ = request("GET", f"/api/mcp/catalog/{uA1['id']}", token=credential)
+        check("mcp", actor + " cannot read another user's MCP grants", status == 404, str(status))
+        status, _ = request("PUT", f"/api/mcp/catalog/{uA1['id']}", token=credential, body=body)
+        check("mcp", actor + " cannot edit another user's MCP grants", status == 404, str(status))
+
+print("\n=== Account unlock is seed-only ===")
+for actor, credential in (("parent A", tA), ("sibling B", tB)):
+    status, _ = request("POST", f"/api/users/{uA1['id']}/unlock", token=credential)
+    check("unlock", actor + " cannot unlock a user", status == 404, str(status))
+    status, visible = request("GET", "/api/users", token=credential)
+    check("unlock", actor + " cannot read lockout details", status == 200 and all(row.get("lockoutUntil") is None and row.get("failedLoginAttempts") is None for row in visible))
+status, _ = request("POST", f"/api/users/{uA1['id']}/unlock", token=seed)
+check("unlock", "seed can unlock a user", status == 200, str(status))
+status, visible = request("GET", "/api/users", token=seed)
+unlocked = next(row for row in visible if row["id"] == uA1["id"])
+check("unlock", "seed sees cleared lockout state", unlocked.get("failedLoginAttempts") == 0 and unlocked.get("lockoutUntil") is None)
+
 print("\n=== DELETE: removing Administrator A re-parents its tree to seed ===")
 s, d = request("DELETE", f"/api/users/{A['id']}", token=seed)
 check("delete", "seed deletes A -> 200", s == 200, f"{s} {d}")

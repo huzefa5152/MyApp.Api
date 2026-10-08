@@ -48,28 +48,34 @@ function unwrapPrintMedia(css) {
 }
 
 /**
- * Create a styled container in the main document for PDF rendering.
+ * Render template CSS in its own document so it cannot resize the live app.
  */
 export function createStyledContainer(css, bodyHtml) {
-  const wrapper = document.createElement("div");
+  const wrapper = document.createElement("iframe");
+  wrapper.setAttribute("aria-hidden", "true");
   wrapper.style.cssText =
-    "position:fixed;left:-9999px;top:0;width:796px;z-index:-1;background:#fff;";
-
-  let scopedCss = unwrapPrintMedia(css).replace(/\bbody\b/g, ".pdf-content");
-  scopedCss = scopedCss.replace(/min-height\s*:\s*100vh\s*;?/g, "");
-  scopedCss += "\n.pdf-content{box-sizing:border-box;width:796px;}";
-
-  const style = document.createElement("style");
-  style.textContent = scopedCss;
-  wrapper.appendChild(style);
-
-  const content = document.createElement("div");
-  content.className = "pdf-content";
-  content.innerHTML = bodyHtml;
-  wrapper.appendChild(content);
-
+    "position:fixed;left:-9999px;top:0;width:796px;height:1123px;border:0;z-index:-1;background:#fff;";
   document.body.appendChild(wrapper);
-  return { wrapper, content };
+  try {
+    const renderDocument = wrapper.contentDocument;
+    renderDocument.open();
+    renderDocument.write('<!DOCTYPE html><html><head><meta charset="utf-8"></head><body></body></html>');
+    renderDocument.close();
+    let scopedCss = unwrapPrintMedia(css).replace(/\bbody\b/g, ".pdf-content");
+    scopedCss = scopedCss.replace(/min-height\s*:\s*100vh\s*;?/g, "");
+    const style = renderDocument.createElement("style");
+    style.textContent = "html,body{margin:0;padding:0;}\n" + scopedCss
+      + "\n.pdf-content{box-sizing:border-box;width:796px;}";
+    renderDocument.head.appendChild(style);
+    const content = renderDocument.createElement("div");
+    content.className = "pdf-content";
+    content.innerHTML = bodyHtml;
+    renderDocument.body.appendChild(content);
+    return { wrapper, content };
+  } catch (error) {
+    wrapper.remove();
+    throw error;
+  }
 }
 
 const PAGE_W_MM = 210;
@@ -111,7 +117,7 @@ export function collectAtomicBands(root, pxRatio, maxBandPx) {
     const rect = el.getBoundingClientRect();
     if (rect.height <= 0 || rect.height > maxBandPx) return;
 
-    const cs = window.getComputedStyle(el);
+    const cs = el.ownerDocument.defaultView.getComputedStyle(el);
     const tag = el.tagName;
     let atomic =
       cs.breakInside === "avoid" ||

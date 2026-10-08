@@ -422,6 +422,7 @@ namespace MyApp.Api.Controllers
             id = r.Id, companyId = r.CompanyId, clientId = r.ClientId, clientName = r.ClientName,
             invoiceNumber = r.InvoiceNumber, date = r.Date.ToString("yyyy-MM-dd"),
             subtotal = r.Subtotal, gstAmount = r.GSTAmount, grandTotal = r.GrandTotal,
+            freightCharges = r.FreightCharges, commercialTotal = r.CommercialTotal,
             withholdingTaxRate = r.WithholdingTaxRate, withholdingTaxAmount = r.WithholdingTaxAmount, collectible = r.Collectible,
             amountPaid = payment ? r.AmountPaid : null, balanceDue = payment ? r.BalanceDue : null,
             paymentStatus = payment ? r.PaymentStatus : null,

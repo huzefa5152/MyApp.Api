@@ -68,7 +68,7 @@ export default function ApplyStarterModal({ template, onClose, onApplied }) {
   };
 
   return (
-    <div style={s.overlay}>
+    <div data-admin-backdrop="" style={s.overlay}>
       <div style={s.modal} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="apply-starter-title">
         <div style={{ ...formStyles.header, alignItems: "flex-start", gap: "0.75rem" }}>
           <div style={{ minWidth: 0 }}>
@@ -77,7 +77,7 @@ export default function ApplyStarterModal({ template, onClose, onApplied }) {
               {TEMPLATE_TYPE_LABEL[template.templateType] || template.templateType} · Starter: <strong>{starter.name}</strong>
             </p>
           </div>
-          <button type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={22} /></button>
+          <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={22} /></button>
         </div>
 
         {/* Mode choice */}

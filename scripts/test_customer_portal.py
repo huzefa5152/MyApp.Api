@@ -392,8 +392,20 @@ def main() -> int:
             if s not in (200, 201):
                 return None
             made["users"].append(u["id"])
-            http("PUT", f"/api/users/{u['id']}/roles", base, token=seed, body={"roleIds": [role["id"]]})
-            http("PUT", f"/api/usercompanies/user/{u['id']}", base, token=seed, body={"companyIds": companies})
+            # A seed-created user roots its own tenant; private roles must be copied there.
+            copied_status, copied = http("POST", f"/api/roles/{role['id']}/copy", base, token=seed,
+                                          body={"tenantAdminUserIds": [u["id"]]})
+            if not check("6", f"{username}: role copied into its tenant", copied_status in (200, 201), str(copied)):
+                return None
+            made["roles"].append(copied[0]["id"])
+            role_status, assigned = http("PUT", f"/api/users/{u['id']}/roles", base, token=seed,
+                                         body={"roleIds": [copied[0]["id"]]})
+            if not check("6", f"{username}: own tenant role assigned", role_status in (200, 204), str(assigned)):
+                return None
+            company_status, assigned = http("PUT", f"/api/usercompanies/user/{u['id']}", base, token=seed,
+                                            body={"companyIds": companies})
+            if not check("6", f"{username}: company access assigned", company_status in (200, 204), str(assigned)):
+                return None
             s2, dd = http("POST", "/api/auth/login", base, body={"username": username, "password": PW})
             return dd["token"] if s2 == 200 else None
 
@@ -444,6 +456,46 @@ def main() -> int:
                   tokA not in json.dumps(rows), "the token reached the audit log")
         else:
             print(f"  [SKIP] audit log not readable here ({status})")
+
+        # Independent company keeps the existing isolation fixtures and assertions unchanged.
+        from test_basic_flows import setup as freight_setup, teardown as freight_teardown
+        ft_token, ft_company, ft_client = freight_setup(base, args.user, args.password)
+        try:
+            status, freight_bill = http("POST", "/api/invoices/standalone", base, token=ft_token, body={
+                "companyId": ft_company["id"], "clientId": ft_client["id"], "date": today,
+                "gstRate": 18, "freightCharges": 400, "withholdingTaxRate": 2,
+                "items": [{"description": "Portal freight goods", "quantity": 1, "uom": "Pcs", "unitPrice": 1000}]})
+            check("Freight", "commercial portal fixture created", status in (200, 201), str(freight_bill))
+            if status in (200, 201):
+                status, freight_portal = http("POST", "/api/customer-portals", base, token=ft_token, body={
+                    "companyId": ft_company["id"], "clientId": ft_client["id"]})
+                check("Freight", "commercial portal issued", status in (200, 201), str(freight_portal))
+                if status in (200, 201):
+                    freight_token = freight_portal["publicUrl"].rsplit("/", 1)[-1]
+                    prefix = f"/api/public/customer-portal/{freight_token}"
+                    status, freight_header = http("GET", prefix, base)
+                    check("Freight", "portal summary includes freight after tax-only withholding", status == 200
+                          and freight_header["summary"]["totalAmount"] == 1556.40
+                          and freight_header["summary"]["outstandingAmount"] == 1556.40, str(freight_header))
+                    status, freight_list = http("GET", prefix + "/invoices", base)
+                    check("Freight", "portal invoice list includes commercial receivable", status == 200
+                          and freight_list["items"][0]["amount"] == 1556.40
+                          and freight_list["items"][0]["balanceDue"] == 1556.40, str(freight_list))
+                    status, freight_detail = http("GET", prefix + f"/invoices/{freight_bill['invoiceNumber']}", base)
+                    check("Freight", "portal detail exposes freight and commercial total", status == 200
+                          and freight_detail.get("freightCharges") == 400 and freight_detail.get("grandTotal") == 1580
+                          and freight_detail.get("gstAmount") == 180 and freight_detail.get("withholdingTaxAmount") == 23.60
+                          and freight_detail.get("balanceDue") == 1556.40, str(freight_detail))
+                for doc, expected in [("bill", 1580), ("tax-invoice", 1180)]:
+                    status, printed = http("GET", f"/api/invoices/{freight_bill['id']}/print/{doc}", base, token=ft_token)
+                    check("Freight", f"{doc} print preserves its correct total", status == 200
+                          and printed.get("grandTotal") == expected, str(printed))
+                status, fields = http("GET", "/api/mergefields/Bill", base, token=ft_token)
+                expressions = [f.get("fieldExpression", "") for f in fields] if status == 200 else []
+                check("Freight", "bill merge catalogue exposes freight field", status == 200
+                      and any("freightCharges" in expression for expression in expressions), str(expressions))
+        finally:
+            freight_teardown(base, ft_token, ft_company, False)
 
     finally:
         print("\n=== Cleanup ===")

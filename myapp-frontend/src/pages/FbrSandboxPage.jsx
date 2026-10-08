@@ -250,7 +250,7 @@ export default function FbrSandboxPage() {
       ) : (
         <>
           {/* Desktop / tablet — table */}
-          <TableWrap className="fbr-table">
+          <TableWrap data-admin-table-region="" className="fbr-table">
             <table className="k-table">
               <thead>
                 <tr>

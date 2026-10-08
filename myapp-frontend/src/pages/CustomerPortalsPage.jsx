@@ -283,11 +283,11 @@ function PortalForm({ companies, defaultCompanyId, isNarrow, onClose, onSaved })
   const available = options.filter((o) => o.Available ?? o.available);
 
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>New Customer Portal</h5>
-          <button type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close">&times;</button>
+          <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close">&times;</button>
         </div>
         <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
           <div style={formStyles.body}>
@@ -338,7 +338,7 @@ function PortalForm({ companies, defaultCompanyId, isNarrow, onClose, onSaved })
             </div>
           </div>
           <div style={formStyles.footer}>
-            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }} disabled={saving}>
               {saving ? "Issuing…" : "Issue portal"}
             </button>

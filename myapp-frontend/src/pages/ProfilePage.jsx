@@ -20,7 +20,7 @@ import { getAvatarUrl } from "../utils/avatarUrl";
 import ThemePicker from "../ui2/ThemePicker";
 import McpMyAccessPanel from "../Components/McpMyAccessPanel";
 import { PageHeader, Tabs, Card, Button, Field, Alert } from "../ui/Kit";
-import McpCatalogAccessPanel from "../Components/McpCatalogAccessPanel";
+import McpAccessManagementPanel from "../Components/McpAccessManagementPanel";
 import McpAgentsPanel from "../Components/McpAgentsPanel";
 import { usePermissions } from "../contexts/PermissionsContext";
 
@@ -70,7 +70,8 @@ export default function ProfilePage() {
     ? parsedTargetUserId : undefined;
   const requestedTab = searchParams.get("tab");
   const tab = requestedTab === "mcp" ? "mcp-connections"
-    : ["mcp-catalog", "mcp-connections", "appearance"].includes(requestedTab) ? requestedTab
+    : requestedTab === "appearance" || requestedTab === "mcp-connections" ? requestedTab
+    : requestedTab === "mcp-catalog" && canAdministerMcp ? requestedTab
     : requestedTab === "mcp-admin" && canAdministerMcp ? "mcp-admin" : "profile";
   const setTab = (nextTab) => {
     const next = new URLSearchParams(searchParams);
@@ -78,7 +79,8 @@ export default function ProfilePage() {
     if (nextTab !== "mcp-catalog") next.delete("userId");
     setSearchParams(next);
   };
-  const tabs = [["profile", "Profile", MdAccountCircle], ["appearance", "Appearance", MdPalette], ["mcp-catalog", "MCP Catalog Access", MdSmartToy],
+  const tabs = [["profile", "Profile", MdAccountCircle], ["appearance", "Appearance", MdPalette],
+    ...(canAdministerMcp ? [["mcp-catalog", "Manage MCP Access", MdShield]] : []),
     ["mcp-connections", "MCP Connections", MdSmartToy],
     ...(canAdministerMcp ? [["mcp-admin", "MCP Administration", MdShield]] : [])];
   const fileRef = useRef(null);
@@ -319,8 +321,8 @@ export default function ProfilePage() {
         onChange={setTab}
         tabs={tabs.map(([key, label, icon]) => ({ key, label, icon }))}
       />
-      {tab === "mcp-catalog" ? (
-        <div role="tabpanel" id="profile-tab-panel-mcp-catalog" aria-labelledby="profile-tab-mcp-catalog"><McpCatalogAccessPanel targetUserId={targetUserId} /></div>
+      {tab === "mcp-catalog" && canAdministerMcp ? (
+        <div role="tabpanel" id="profile-tab-panel-mcp-catalog" aria-labelledby="profile-tab-mcp-catalog"><McpAccessManagementPanel key={targetUserId ?? "picker"} targetUserId={targetUserId} /></div>
       ) : tab === "mcp-connections" ? (
         <div role="tabpanel" id="profile-tab-panel-mcp-connections" aria-labelledby="profile-tab-mcp-connections"><McpMyAccessPanel /></div>
       ) : tab === "mcp-admin" && canAdministerMcp ? (

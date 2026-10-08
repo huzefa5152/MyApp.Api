@@ -4,6 +4,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { listPoFormats, getPoFormat, deletePoFormat } from "../api/poFormatApi";
 import { useCompany } from "../contexts/CompanyContext";
+import CustomerImportArchive from "../Components/CustomerImportArchive";
 import POFormatForm from "../Components/POFormatForm";
 import { PageHeader, CompanyPicker, Button, IconButton, TableWrap, EmptyState, Loading, Alert } from "../ui/Kit";
 
@@ -107,8 +108,8 @@ function CompanyPOFormats({ company }) {
       <PageHeader
         icon={MdDescription}
         tone="blue"
-        title="PO Formats"
-        subtitle={`One PO format per client in ${company.name}. Formats and PDF matching are private to this company.`}
+        title="Customer Document Formats"
+        subtitle={`Multiple named customer formats in ${company.name}. Formats and PDF matching are private to this company.`}
         actions={canCreate ? (
           <Button variant="primary" icon={MdAdd} onClick={handleAdd}>Add PO Format</Button>
         ) : null}
@@ -135,7 +136,7 @@ function CompanyPOFormats({ company }) {
       ) : (
         <>
           {/* Desktop / tablet — table */}
-          <TableWrap className="pof-table">
+          <TableWrap data-admin-table-region="" className="pof-table">
             <table className="k-table">
               <thead>
                 <tr>
@@ -240,6 +241,7 @@ function CompanyPOFormats({ company }) {
         </>
       )}
 
+      {has("poformats.import.viewArchive") && <CustomerImportArchive companyId={company.id} />}
       {showForm && (
         <POFormatForm
           format={editing}

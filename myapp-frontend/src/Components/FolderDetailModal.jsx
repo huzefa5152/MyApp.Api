@@ -7,13 +7,13 @@ import AttachmentManager from "./AttachmentManager";
 // "one component, many use cases" goal.
 export default function FolderDetailModal({ companyId, folder, onClose }) {
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={{ ...formStyles.title, display: "inline-flex", alignItems: "center", gap: 8 }}>
             <MdFolder size={20} /> {folder.name}
           </h5>
-          <button style={formStyles.closeButton} onClick={onClose}><MdClose size={18} /></button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}><MdClose size={18} /></button>
         </div>
         <div style={formStyles.body}>
           {folder.description && (
@@ -27,7 +27,7 @@ export default function FolderDetailModal({ companyId, folder, onClose }) {
           />
         </div>
         <div style={formStyles.footer}>
-          <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
+          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
         </div>
       </div>
     </div>

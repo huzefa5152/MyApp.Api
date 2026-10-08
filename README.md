@@ -22,6 +22,13 @@ A full-stack ERP system for Pakistani businesses to manage the complete **Purcha
 - **Item Types & Lookups** - Autocomplete item descriptions and units, auto-create on first use
 - **Import Data (onboarding)** - One Excel workbook brings a new company's customers, items, suppliers and opening stock in: download a sample that marks every column required or optional, upload, review each row, import
 
+### Optional Email Workspace
+
+- Assign Email Workspace separately to existing users and administrators.
+- Connect each user's Gmail only to assigned companies; private mail stays private unless explicitly shared.
+- Keep or ignore enquiries, review extracted items and enter prices before creating a quotation.
+- Google OAuth setup and live-mail acceptance are required before rollout; see [setup instructions](docs/GMAIL_EMAIL_WORKSPACE.md).
+
 ### FBR Digital Invoicing
 
 - **Full V1.12 API Integration** - Submit invoices to FBR and receive Invoice Reference Numbers (IRN)
@@ -290,6 +297,69 @@ Publish output optimized from 79 MB to 37 MB via:
 ---
 
 ## Changelog
+
+### 2026-10-09
+
+- Merge current Trader into the selectable-theme branch, preserving Classic and Workspace alongside current billing, OAuth, security and accessible admin workflows.
+
+
+### 2026-10-08
+
+- Refine the admin interface with compact controls, mobile tap targets, contained tables, viewport-fitting dialogs and keyboard focus support while preserving existing workflows and permissions.
+
+- Harden sign-in privacy, account identity and token revocation while preserving existing credentials and company permissions. Handle duplicate usernames without server errors.
+
+- Add company-scoped MCP email enquiry tools: review mail, approve Keep/Ignore, supply explicit item prices and approve one quotation through existing OAuth and per-user tool grants.
+
+- Add reviewed attachment item extraction and local browser OCR to Email Workspace, with explicit append/replace, company catalogue suggestions, customer quotation prices and permission-gated purchase costs. Keep quotation creation under user approval.
+
+- Add the optional Email Workspace module with company-scoped Gmail connections, enquiry review and quotation conversion; keep existing navigation unchanged for users without access.
+- Expose `{{site}}` on commercial Bill and Sales Tax Invoice prints and in the template editor. Combine distinct linked-challan sites; preserve the existing Bill `{{concernDepartment}}` field.
+
+- Group consultant editing by effective item type and initialize tax units from its catalog UOM. FBR uses the adjusted classification independently of print settings. Companies printing individual tax invoice lines retain commercial descriptions, quantities, prices and units; grouped tax prints use the consultant view. Commercial bills and challans keep their original units.
+
+- Keep sales orders, challans and bills linked through edits. Order screens manage editable challans; confirmed order rate/detail changes can update existing editable documents. Delivery and billing status closes or reopens orders automatically, while explicit manual closure remains visible. Bills with unlinked challans can create a delivered, billed order for record keeping, including filed bills without changing their filed values. Submitted, submitting and uncertain bills remain locked.
+
+- Require explicit consultant review after challan changes or edits to a previously adjusted bill. Preserve existing adjustments for review, show the next action, allow saving progress, and block FBR validation/submission until the latest complete bill is reviewed and totals reconcile.
+
+- Add **Manage challans** to bill editing before FBR submission: search the customer's available challans, enter rates for added items, and remove or replace linked challans without deleting their source documents. Preserve retained lines and filing adjustments, recalculate taxes and balances, and reflow stock and journal entries atomically. Reject stale selections, unavailable or foreign challans, empty bills, locked periods, active notes, reductions below allocated receipts, and edits while FBR submission is in progress or uncertain.
+- List delivery challans and bills/invoices newest-created first, independently of custom document numbers. Record UTC creation time for new challans and retain insertion order for historical challans. Return to the first page after creating, importing or duplicating challans.
+
+- Allow ten failed sign-in attempts, show remaining attempts and lock expiry, exempt the seed administrator, and let only the seed administrator see blocked accounts and unlock users.
+
+
+### 2026-10-05
+
+- Add suppliers directly while creating or editing delivery challans using the shared supplier form, automatically select the new supplier, and clarify actual cost as a per-unit price.
+
+- Restrict MCP catalog configuration to the seed administrator, with a searchable user picker, account identity and company context. Users connect AI applications through OAuth and can review or revoke their connections.
+
+- Reserve premium MCP grants for the primary admin, retain user self-service narrowing and company/role checks, and add a public OAuth setup guide linked from login.
+
+- Record receipts and payments for clients, suppliers or named other contacts, with document settlements, advances/refunds and split income/expense accounts. Validate company ownership and post advances to party balances without treating direct income/expenses as receivables or payables.
+
+- Copy editable document details or selected line items into new sales/purchase documents, and duplicate unlocked lines in place. Keep fresh numbers and dates without copying payment, FBR or order/delivery links.
+
+- Add company-specific Print and PDF exports to all seven accounting reports, using the bill/invoice letterhead, fonts and table colors with 12 mm margins and repeated column headings.
+- Show freight/cartage below GST in commercial bill creation and edit totals when a charge is entered.
+- Add optional freight/cartage charges to commercial bills, including creation, editing, printing, template fields, customer balances and accounting. Sales-tax and FBR totals exclude freight. Existing bills default to zero freight.
+
+
+### 2026-10-04 — Flexible billing from challans
+
+- Bill client challans with or without a PO, group deliveries by PO number/date, and save optional bill-time PO details back to every selected challan atomically. Normal billing also accepts incomplete FBR setup; FBR actions stay hidden until the bill is ready.
+
+- Verify required MCP read tools without restricting the catalog to an obsolete exact list; cover no-PO bill preparation.
+
+### 2026-10-03 — Invoice read reliability
+
+- Isolate PDF template styles from the live screen so downloading a challan from cards or tables cannot squeeze the application layout.
+
+- Keep application files in place during Trader deployments, show maintenance until the upload completes, and queue overlapping deployments.
+
+- Allow a custom challan number to be reused for different clients in the same company; check availability against the selected client on create and edit. Automatic numbering stays company-wide.
+
+- Port the invoice-read fix from Importer: load invoice lines and delivery challans in separate queries to reduce database memory pressure on lists, details and prints. Preserve the Trader FBR and handover filters, and make page ordering stable when document numbers tie.
 
 ### 2026-09-27 — Import Data knows a business by its NTN
 

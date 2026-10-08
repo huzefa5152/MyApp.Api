@@ -176,6 +176,10 @@ namespace MyApp.Api.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            ConfigureEmailWorkspace(modelBuilder);
+            modelBuilder.Entity<DeliveryChallan>().Property(dc => dc.CreatedAt)
+                .HasDefaultValueSql("SYSUTCDATETIME()");
+
             modelBuilder.Entity<McpUserAccessPolicy>(e =>
             {
                 e.HasKey(p => p.UserId);
@@ -372,9 +376,11 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<ClientGroup>()
                 .HasIndex(g => g.NormalizedName);
 
+            modelBuilder.Entity<PoImportArchive>().Property(a => a.DocumentKind).HasMaxLength(32);
+
             // ClientGroup is metadata only. Formats are private to each company/client.
             modelBuilder.Entity<POFormat>()
-                .HasIndex(f => new { f.CompanyId, f.ClientId })
+                .HasIndex(f => new { f.CompanyId, f.ClientId, f.Name })
                 .IsUnique().HasFilter("[CompanyId] IS NOT NULL AND [ClientId] IS NOT NULL");
             modelBuilder.Entity<POFormat>()
                 .HasOne(f => f.ClientGroup)
@@ -602,6 +608,7 @@ namespace MyApp.Api.Data
             });
             modelBuilder.Entity<Company>().Property(c => c.DefaultWithholdingTaxRate).HasPrecision(5, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.WithholdingTaxRate).HasPrecision(5, 2);
+            modelBuilder.Entity<Invoice>().Property(i => i.FreightCharges).HasPrecision(18, 2).HasDefaultValue(0m);
             modelBuilder.Entity<Invoice>().Property(i => i.WithholdingTaxAmount).HasPrecision(18, 2);
             modelBuilder.Entity<PurchaseBill>().Property(b => b.WithholdingTaxRate).HasPrecision(5, 2);
             modelBuilder.Entity<PurchaseBill>().Property(b => b.WithholdingTaxAmount).HasPrecision(18, 2);
@@ -1551,6 +1558,8 @@ namespace MyApp.Api.Data
                 .OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
                 .Property(p => p.Amount).HasPrecision(18, 2);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .Property(p => p.ContactName).HasMaxLength(200);
             modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
                 .Property(p => p.ContactType).HasMaxLength(20);
             modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()

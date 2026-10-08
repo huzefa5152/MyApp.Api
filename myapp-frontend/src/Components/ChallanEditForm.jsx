@@ -1,3 +1,5 @@
+import DocumentCopyPicker from "./DocumentCopyPicker";
+import { appendCopiedLines } from "../utils/documentCopy";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { MdInfo, MdContentCopy } from "react-icons/md";
@@ -172,6 +174,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
     setSaving(true);
     try {
       await updateChallan(challan.id, {
+        version: challan.version,
         companyId: challan.companyId,
         customNumber: isDuplicate ? null : billNumberPayload("custom", customNumber),
         clientId: parseInt(clientId),
@@ -225,19 +228,25 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   // Backdrop click is a no-op — protects in-progress edits from a stray
   // click. Dismiss via the X in the header or the Cancel button.
   return (
-    <div style={formStyles.backdrop}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>
             {isDuplicate ? "Edit Duplicate Challan" : "Edit Challan"} #{challan.challanNumber}
           </h5>
-          <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
-            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
+            {challan.invoiceId && <p role="status" style={{ background: "#eff6ff", padding: 12, borderRadius: 8 }}>Saving changes updates bill #{challan.invoiceNumber || challan.invoiceId}, its totals and linked order delivery figures. Consultant review will be required before FBR validation. New items start without a rate: open the bill to price them. To cancel or remove a whole challan, use its order management actions or Bills → Manage challans.</p>}
+            <DocumentCopyPicker companyId={challan.companyId} destination="Challan" allowDetails={false} disabled={!!challan.salesOrderId || !!challan.invoiceId}
+              onCopy={(source,lines,details) => {
+                setItems(prev => appendCopiedLines(details ? [] : prev, lines, () => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""})));
+                if(details) {  }
+              }} />
+            {error && <div ref={errRef} style={formStyleformStyles.erroror}>{error}</div>}
 
-            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={challan.companyId} documentType="challan" variant="edit" currentNumber={challan.challanNumber} editRecordId={challan.id} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} lockedReason={isDuplicate ? "Duplicate challan numbers are inherited and cannot be changed." : undefined} disabled={saving} /></div>
+            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={challan.companyId} documentType="challan" clientId={clientId} currentClientId={challan.clientId} variant="edit" currentNumber={challan.challanNumber} editRecordId={challan.id} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} lockedReason={isDuplicate ? "Duplicate challan numbers are inherited and cannot be changed." : undefined} disabled={saving} /></div>
 
             {/* Duplicate-mode banner — explains why so many fields are
                 read-only and what the operator IS allowed to change. */}
@@ -354,7 +363,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
               units={units}
               itemsLabel="Items *"
             />
-            <ChallanPrivateCosts items={items} onItemsChange={setItems} suppliers={suppliers} />
+            <ChallanPrivateCosts companyId={challan.companyId} items={items} onItemsChange={setItems} suppliers={suppliers} />
             {savedAwaitingPurchase && <div style={{ padding: 12, marginTop: 10, background: "#fff3e0", borderRadius: 8 }}>
               Your challan was saved. Purchase bills still need to be created.
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
@@ -374,7 +383,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
             </div>
           </div>
           <div style={formStyles.footer}>
-            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
+            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
               Cancel
             </button>
             <button

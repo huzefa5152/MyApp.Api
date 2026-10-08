@@ -69,14 +69,14 @@ export default function SavedTemplatesManager({
   };
 
   return (
-    <div style={formStyles.backdrop} onClick={busy ? undefined : onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="tpl-mgr-title">
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={busy ? undefined : onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="tpl-mgr-title">
         <div style={formStyles.header}>
           <div>
             <h3 id="tpl-mgr-title" style={formStyles.title}>{typeLabel} templates</h3>
             <p style={s.subtitle}>The default (★) is what this document type prints with unless a screen picks another.</p>
           </div>
-          <button type="button" style={formStyles.closeButton} onClick={onClose} disabled={busy} aria-label="Close"><MdClose size={20} /></button>
+          <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} disabled={busy} aria-label="Close"><MdClose size={20} /></button>
         </div>
 
         <div style={formStyles.body}>

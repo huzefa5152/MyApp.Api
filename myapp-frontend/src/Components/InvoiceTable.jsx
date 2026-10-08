@@ -32,6 +32,7 @@ function fbrStatusBadge(inv, isBillsMode) {
   if (inv.fbrStatus === "Uncertain") {
     return <StatusBadge tone="warning" title="A previous submission timed out — its FBR outcome is unconfirmed. An administrator must verify it at FBR and reset it.">Uncertain</StatusBadge>;
   }
+  if (inv.fbrReviewRequired) return <StatusBadge tone="warning" title="Next: consultant opens Invoices, reviews every current item and completes review. FBR validation and submission are blocked.">Needs consultant review</StatusBadge>;
   if (isBillsMode) {
     return <StatusBadge tone="warning">Pending FBR</StatusBadge>;
   }
@@ -97,6 +98,7 @@ export default function InvoiceTable({
   onFbrSubmit,
   onFbrReset,
   onEdit,
+  onCreateOrderFromBill, creatingOrderFor,
   onToggleFbrExcluded,
   onDelete,
   onVoid,
@@ -361,7 +363,7 @@ export default function InvoiceTable({
             <MdRestore size={14} />
           </IconButton>
         )}
-        {!isBillsMode && perms.canFbrAny && selectedCompanyHasFbrToken && !isSubmitted && !isFbrPending && !inv.isCancelled && (
+        {!isBillsMode && perms.canFbrAny && selectedCompanyHasFbrToken && inv.fbrReady && !isSubmitted && !isFbrPending && !inv.isCancelled && (
           <>
             {perms.canFbrValidate && (
               <IconButton
@@ -396,11 +398,13 @@ export default function InvoiceTable({
             )}
           </>
         )}
-        {perms.canOpenEdit && !isSubmitted && !inv.isCancelled && (
+        {isBillsMode && perms.canCreateOrderFromBill && inv.canCreateSalesOrder && <button style={btn.edit} disabled={!!creatingOrderFor} onClick={() => onCreateOrderFromBill?.(inv)}>Create sales order</button>}
+        {isBillsMode && perms.canViewOrders && inv.salesOrders?.map(o => <button key={o.id} style={btn.edit} onClick={() => navigate(`/sales-orders?viewOrder=${o.id}`)}>Order #{o.number || o.id}</button>)}
+        {perms.canOpenEdit && inv.isEditable && (
           <IconButton
             style={btn.edit}
             onClick={() => onEdit?.(inv)}
-            label={isBillsMode ? "Edit bill" : "Classify line items by Item Type"}
+            label={isBillsMode ? "Edit bill" : inv.fbrReviewRequired ? "Review changed bill and complete consultant review" : "Adjust invoice for FBR"}
           >
             <MdEdit size={14} />
           </IconButton>

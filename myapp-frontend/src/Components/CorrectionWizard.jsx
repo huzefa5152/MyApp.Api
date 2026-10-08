@@ -171,14 +171,14 @@ export default function CorrectionWizard({ invoice, onClose, onCreated }) {
     // Never-clip pattern: formStyles.backdrop scrolls (overflowY:auto) and the
     // modal caps at 96vh with its own scrolling body, so a tall wizard is always
     // reachable top to bottom. zIndex 1100 sits above the fixed sidebar (1040).
-    <div style={formStyles.backdrop} onClick={onClose}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
       <div style={{ ...formStyles.modal, maxWidth: 720 }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
         <div style={formStyles.header}>
           <div style={{ minWidth: 0 }}>
             <div style={s.eyebrow}>Correct a submitted bill · #{invoice?.invoiceNumber}</div>
             <h2 style={formStyles.title}>{step === "diagnose" ? "What needs correcting?" : M?.label}</h2>
           </div>
-          <button style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={20} /></button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={20} /></button>
         </div>
 
         <div style={formStyles.body}>
@@ -247,7 +247,7 @@ export default function CorrectionWizard({ invoice, onClose, onCreated }) {
                 )}
               </div>
             ) : (
-            <TableWrap>
+            <TableWrap data-admin-table-region="">
               <table className="k-table">
                 <thead>
                   <tr>

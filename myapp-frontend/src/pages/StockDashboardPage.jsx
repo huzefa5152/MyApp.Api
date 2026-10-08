@@ -323,7 +323,7 @@ export default function StockDashboardPage() {
               ) : (
                 <>
                   {/* Desktop / tablet — table */}
-                  <TableWrap className="stock-table">
+                  <TableWrap data-admin-table-region="" className="stock-table">
                     <table className="k-table">
                       <thead>
                         <tr>
@@ -463,7 +463,7 @@ export default function StockDashboardPage() {
               ) : (
                 <>
                   {/* Desktop — table */}
-                  <TableWrap className="stock-table">
+                  <TableWrap data-admin-table-region="" className="stock-table">
                     <table className="k-table">
                       <thead>
                         <tr>
@@ -527,7 +527,7 @@ export default function StockDashboardPage() {
               ) : (
                 <>
                   {/* Desktop — table */}
-                  <TableWrap className="stock-table">
+                  <TableWrap data-admin-table-region="" className="stock-table">
                     <table className="k-table">
                       <thead>
                         <tr>
@@ -749,11 +749,11 @@ function DrillPanel({ rows, loading, uom }) {
 // Small form dialog — built on the shared (themed) formStyles.
 function SmallModal({ title, children, onClose, onSubmit }) {
   return (
-    <div style={formStyles.backdrop}>
-      <div style={{ ...formStyles.modal, maxWidth: 480 }}>
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: 480 }}>
         <div style={formStyles.header}>
           <h3 style={formStyles.title}>{title}</h3>
-          <button type="button" onClick={onClose} style={formStyles.closeButton} aria-label="Close">×</button>
+          <button data-admin-close="" type="button" onClick={onClose} style={formStyles.closeButton} aria-label="Close">×</button>
         </div>
         <form onSubmit={onSubmit} style={{ display: "contents" }}>
           <div style={formStyles.body}>

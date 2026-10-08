@@ -311,14 +311,14 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
   const memberCompanyList = detail?.members?.map((m) => m.companyName).join(", ") || "";
 
   return (
-    <div style={formStyles.backdrop}>
-      <div
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog=""
         style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>Edit Common Client</h5>
-          <button
+          <button data-admin-close=""
             type="button"
             style={formStyles.closeButton}
             onClick={onClose}
@@ -582,7 +582,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
             ) : <span />}
 
             <div style={{ display: "flex", gap: "0.6rem" }}>
-              <button
+              <button data-admin-close=""
                 type="button"
                 style={{ ...formStyles.button, ...formStyles.cancel }}
                 onClick={onClose}

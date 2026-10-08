@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { getAccountsFlat, getBankCashAccounts } from "../api/accountApi";
+import { useState, useEffect, useRef } from "react";
 import { MdClose } from "react-icons/md";
 import { formStyles, modalSizes, colors } from "../theme";
 import SearchableClientSelect from "./SearchableClientSelect";
@@ -15,29 +16,39 @@ import DocumentNotesEditor from "./DocumentNotesEditor";
 import { todayYmd } from "../utils/dateInput";
 const METHODS = ["Cash", "Bank Transfer", "Cheque", "Online", "Other"];
 
-/**
- * Record a Receipt (money in) or Payment (money out). mode = "receipts" |
- * "payments" flips the contact (Client ↔ Supplier) and the documents settled
- * (sales invoices ↔ purchase bills). The operator picks a contact, the form
- * lists that contact's open documents (balance > 0) with an amount-to-apply
- * input each; the payment total is the sum of the applied amounts.
- *
- * Master is GL-free: there is no Chart of Accounts, so the bank/cash
- * destination is a free-text name (not a picked account) and there is no
- * Division tag. Attachments (entityType "Payment") ARE supported — staged on
- * create and flushed against the new id after save.
- */
+/** Money in/out: party selection, document settlement, advances/refunds and income/expense lines. */
 export default function PaymentForm({ mode, companyId, preset, editPayment = null, onClose, onSaved }) {
   const isReceipt = mode === "receipts";
   const isEdit = !!editPayment?.id;
-  const contactLabel = isReceipt ? "Client" : "Supplier";
+  const [contactType, setContactType] = useState(editPayment?.contactType || preset?.contactType || (isReceipt ? "Client" : "Supplier"));
+  const [contactName, setContactName] = useState(editPayment?.contactType === "Other" ? editPayment.contactName || "" : "");
+  const initialPurpose = editPayment?.allocations?.some(a => a.accountId) ? "account"
+    : editPayment?.allocations?.some(a => a.kind === "OnAccount") ? "advance" : "settle";
+  const [purpose, setPurpose] = useState(initialPurpose);
+  const [directLines, setDirectLines] = useState(() => { const lines = (editPayment?.allocations || []).filter(a => a.accountId).map(a => ({ accountId: String(a.accountId), amount: String(a.amount) })); return lines.length ? lines : [{ accountId: "", amount: "" }]; });
+  const [advanceAmount, setAdvanceAmount] = useState(String(editPayment?.allocations?.filter(a => a.kind === "OnAccount").reduce((sum,a) => sum + a.amount, 0) || ""));
+  const [accounts, setAccounts] = useState([]);
+  const [bankAccounts, setBankAccounts] = useState([]);
+  const [bankAccountId, setBankAccountId] = useState(String(editPayment?.bankAccountId || ""));
+  const contactLabel = contactType === "Other" ? "Payee / payer" : contactType;
+  const canSettle = isReceipt && contactType === "Client" || !isReceipt && contactType === "Supplier";
+  const changeContactType = next => {
+    setContactType(next); setContactId(""); setDocs([]); setAlloc({});
+    setPurpose(next === "Other" ? "account" : (isReceipt && next === "Client" || !isReceipt && next === "Supplier") ? "settle" : "advance");
+  };
+  useEffect(() => {
+    let active = true;
+    getAccountsFlat(companyId).then(({data}) => { if(active) setAccounts(data || []); }).catch(() => {});
+    getBankCashAccounts(companyId).then(({data}) => { if(active) setBankAccounts(data || []); }).catch(() => {});
+    return () => { active = false; };
+  }, [companyId]);
   const docLabel = isReceipt ? "Invoice" : "Bill";
   const dir = isReceipt ? "receipts" : "payments";
 
   const today = todayYmd();
   const [date, setDate] = useState(editPayment?.date ? editPayment.date.slice(0, 10) : today);
   const [method, setMethod] = useState(editPayment?.method || "Cash");
-  // Bank/cash destination — free text (no Chart of Accounts in master).
+  // Optional description complements the selected bank/cash account.
   const [bankAccountName, setBankAccountName] = useState(editPayment?.bankAccountName || "");
   const [description, setDescription] = useState(editPayment?.description || "");
   const [notes, setNotes] = useState(editPayment?.notes || "");
@@ -67,16 +78,17 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   // Load the contact list once.
   useEffect(() => {
     let cancelled = false;
-    const load = isReceipt ? getClientsByCompany : getSuppliersByCompany;
+    if (contactType === "Other") { setContacts([]); return; }
+    const load = contactType === "Client" ? getClientsByCompany : getSuppliersByCompany;
     load(companyId)
       .then(({ data }) => { if (!cancelled) setContacts(data || []); })
       .catch(() => { if (!cancelled) setContacts([]); });
     return () => { cancelled = true; };
-  }, [companyId, isReceipt]);
+  }, [companyId, contactType]);
 
   // When a contact is picked, fetch their open documents (balance due > 0).
   useEffect(() => {
-    if (!contactId) { setDocs([]); setAlloc({}); return; }
+    if (!contactId || !canSettle || purpose !== "settle") { setDocs([]); setAlloc({}); setLoadingDocs(false); return; }
     let cancelled = false;
     setLoadingDocs(true);
     const fetcher = isReceipt
@@ -98,13 +110,21 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
         const shown = (data.items || [])
           .filter((d) => !d.isCancelled)
           .map((d) => {
-            const balanceDue = d.balanceDue ?? (d.grandTotal - (d.amountPaid || 0));
+            const total = isReceipt
+              ? (d.commercialTotal ?? ((Number(d.grandTotal) || 0) + (Number(d.freightCharges) || 0)))
+              : d.grandTotal;
+            const collectible = isReceipt
+              ? (d.collectible ?? Math.max(0, total - (Number(d.withholdingTaxAmount) || 0)))
+              : d.grandTotal;
+            const balanceDue = d.balanceDue ?? (isReceipt
+              ? Math.max(0, collectible - (d.amountPaid || 0))
+              : d.grandTotal - (d.amountPaid || 0));
             const own = ownAlloc[d.id] || 0;
             return {
               id: d.id,
               number: isReceipt ? d.invoiceNumber : d.purchaseBillNumber,
               date: d.date,
-              grandTotal: d.grandTotal,
+              grandTotal: total,
               balanceDue,
               available: balanceDue + own,   // headroom this payment can apply
             };
@@ -124,37 +144,50 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
       .catch(() => { if (!cancelled) setDocs([]); })
       .finally(() => { if (!cancelled) setLoadingDocs(false); });
     return () => { cancelled = true; };
-  }, [contactId, companyId, isReceipt, preset?.documentId, editPayment?.id]);
+  }, [contactId, companyId, isReceipt, preset?.documentId, editPayment?.id, contactType, purpose]);
 
   const setAllocAmount = (docId, value) =>
     setAlloc((prev) => ({ ...prev, [docId]: value }));
 
   const fillBalance = (doc) => setAllocAmount(doc.id, String(doc.available));
 
-  const total = useMemo(
-    () => Object.values(alloc).reduce((s, v) => s + (parseFloat(v) || 0), 0),
-    [alloc]
-  );
+  const total = purpose === "advance" ? Number(advanceAmount) || 0
+    : purpose === "account" ? directLines.reduce((sum,a) => sum + (Number(a.amount) || 0), 0)
+    : Object.values(alloc).reduce((sum,a) => sum + (Number(a) || 0), 0);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (saving) return;
     setError("");
 
-    const allocations = docs
+    const documentAllocations = docs
       .map((d) => ({ doc: d, amount: parseFloat(alloc[d.id]) || 0 }))
       .filter((x) => x.amount > 0);
 
-    if (allocations.length === 0) {
+    if (purpose === "settle" && documentAllocations.length === 0) {
       setError(`Enter an amount against at least one ${docLabel.toLowerCase()}.`);
       return;
     }
     // Client-side over-allocation guard (server enforces too). Uses `available`
     // (= balance due + this payment's own current allocation when editing).
-    const over = allocations.find((x) => x.amount > x.doc.available + 0.001);
+    const over = documentAllocations.find((x) => x.amount > x.doc.available + 0.001);
     if (over) {
       setError(`${docLabel} #${over.doc.number}: amount exceeds the available balance (${over.doc.available.toLocaleString()}).`);
       return;
+    }
+    if (contactType === "Other" ? !contactName.trim() : !contactId) {
+      setError("Choose who paid or received this money."); return;
+    }
+    if (purpose === "settle" && !canSettle || purpose === "advance" && contactType === "Other") {
+      setError("Choose a valid purpose for this contact."); return;
+    }
+    const allocations = purpose === "settle" ? documentAllocations.map(x => ({
+      kind: "Document", invoiceId: isReceipt ? x.doc.id : null,
+      purchaseBillId: isReceipt ? null : x.doc.id, amount: x.amount
+    })) : purpose === "advance" ? [{ kind: "OnAccount", amount: Number(advanceAmount) }]
+      : directLines.map(a => ({ kind: "Account", accountId: Number(a.accountId), amount: Number(a.amount) }));
+    if (allocations.some(a => !Number.isFinite(a.amount) || a.amount <= 0 || purpose === "account" && !a.accountId)) {
+      setError("Enter a positive amount and choose an account for each income/expense line."); return;
     }
     if (method === "Cheque" && !chequeNumber.trim()) {
       setError("Enter the cheque number.");
@@ -166,7 +199,9 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
       const payload = {
         direction: isReceipt ? "Receipt" : "Payment",
         date: new Date(date).toISOString(),
-        contactType: contactLabel,
+        contactType,
+        contactName: contactType === "Other" ? contactName.trim() : null,
+        bankAccountId: bankAccountId ? Number(bankAccountId) : null,
         contactId: contactId ? Number(contactId) : null,
         bankAccountName: bankAccountName.trim() || null,
         method,
@@ -174,11 +209,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
         notes: notes.trim() || null,
         chequeNumber: method === "Cheque" ? chequeNumber.trim() : null,
         chequeDate: method === "Cheque" && chequeDate ? new Date(chequeDate).toISOString() : null,
-        allocations: allocations.map((x) => ({
-          invoiceId: isReceipt ? x.doc.id : null,
-          purchaseBillId: isReceipt ? null : x.doc.id,
-          amount: x.amount,
-        })),
+        allocations,
       };
       let savedId = editPayment?.id;
       if (isEdit) {
@@ -199,29 +230,57 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   };
 
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? `Edit ${editPayment.reference || (isReceipt ? "Receipt" : "Payment")}` : (isReceipt ? "Record Receipt" : "Record Payment")}</h5>
-          <button style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
-            {/* Contact picker spans the full row so long client/supplier names
-                aren't truncated inside a narrow grid column. */}
             <div style={formStyles.formGroup}>
-              <label style={formStyles.label}>{contactLabel}</label>
-              <SearchableClientSelect
-                clients={contacts}
-                value={contactId}
-                onChange={(id) => setContactId(id ? String(id) : "")}
-                placeholder={`— Select ${contactLabel} —`}
-                noun={isReceipt ? "clients" : "suppliers"}
-                ariaLabel={contactLabel}
-              />
+              <label style={formStyles.label}>{isReceipt ? "Who paid you?" : "Who are you paying?"}</label>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {["Client", "Supplier", "Other"].map(type => <button key={type} type="button"
+                  style={{ ...fillBtn, minHeight: 44, padding: "8px 14px", background: contactType === type ? "#d9f1ed" : "#fff" }}
+                  onClick={() => changeContactType(type)}>{type === "Other" ? "Someone else" : type}</button>)}
+              </div>
+              {contactType === "Other" ? <input aria-label="Payee or payer name" maxLength={200} style={formStyles.input}
+                value={contactName} onChange={e => setContactName(e.target.value)} placeholder="Name" />
+                : <SearchableClientSelect clients={contacts} noun={contactType === "Client" ? "clients" : "suppliers"} ariaLabel={contactType} value={contactId}
+                  onChange={v => { setContactId(v); setAlloc({}); }} placeholder={`Select ${contactType.toLowerCase()}`} />}
             </div>
+            <div style={formStyles.formGroup}>
+              <label style={formStyles.label}>What is this for?</label>
+              <select aria-label="Payment purpose" style={formStyles.input} value={purpose} onChange={e => setPurpose(e.target.value)}>
+                {canSettle && <option value="settle">Settle invoices / bills</option>}
+                {contactType !== "Other" && <option value="advance">Advance / on account / refund</option>}
+                <option value="account">{isReceipt ? "Other income" : "An expense"}</option>
+              </select>
+            </div>
+            {purpose === "advance" && <div style={formStyles.formGroup}>
+              <label style={formStyles.label}>Advance / refund amount</label>
+              <input aria-label="Advance amount" type="number" min="0" step="0.01" style={formStyles.input}
+                value={advanceAmount} onChange={e => setAdvanceAmount(e.target.value)} />
+              <p style={hintBox}>Recorded against the selected party’s balance. No invoice or bill is marked paid.</p>
+            </div>}
+            {purpose === "account" && <div style={formStyles.formGroup}>
+              {directLines.map((line,idx) => <div key={idx} style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:8 }}>
+                <select aria-label={`Account ${idx+1}`} value={line.accountId} style={{ ...formStyles.input, flex:"1 1 180px" }}
+                  onChange={e => setDirectLines(prev => prev.map((a,i) => i===idx ? {...a,accountId:e.target.value} : a))}>
+                  <option value="">Choose {isReceipt ? "income" : "expense"} account</option>
+                  {accounts.filter(a => (a.isActive || String(a.id) === line.accountId) && a.accountType === (isReceipt ? "Income" : "Expense"))
+                    .map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+                <input aria-label={`Amount ${idx+1}`} type="number" min="0" step="0.01" value={line.amount}
+                  style={{ ...formStyles.input, flex:"1 1 120px" }}
+                  onChange={e => setDirectLines(prev => prev.map((a,i) => i===idx ? {...a,amount:e.target.value} : a))} />
+                {directLines.length>1 && <button type="button" style={{...fillBtn,minHeight:44}} onClick={() => setDirectLines(prev => prev.filter((_,i) => i!==idx))}>Remove</button>}
+              </div>)}
+              <button type="button" style={{...fillBtn,minHeight:44}} onClick={() => setDirectLines(prev => [...prev,{accountId:"",amount:""}])}>Add account line</button>
+            </div>}
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
               <div style={formStyles.formGroup}>
@@ -236,6 +295,11 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
               </div>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>{isReceipt ? "Received in (bank/cash)" : "Paid from (bank/cash)"}</label>
+                <select aria-label="Bank cash account" style={formStyles.input} value={bankAccountId}
+                  onChange={e => { setBankAccountId(e.target.value); if(e.target.value) setBankAccountName(bankAccounts.find(a => String(a.id)===e.target.value)?.name || ""); }}>
+                  <option value="">Default bank/cash account</option>
+                  {bankAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
                 <input
                   style={formStyles.input}
                   value={bankAccountName}
@@ -265,7 +329,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
             <DocumentNotesEditor value={notes} onChange={setNotes} />
 
             {/* Allocation against open documents */}
-            <div style={formStyles.formGroup}>
+            {purpose === "settle" && <div style={formStyles.formGroup}>
               <label style={formStyles.label}>Apply to open {docLabel.toLowerCase()}s</label>
               {!contactId ? (
                 <div style={hintBox}>Select a {contactLabel.toLowerCase()} to see their unpaid {docLabel.toLowerCase()}s.</div>
@@ -297,7 +361,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                     ))}
                   </div>
                 ) : (
-                <TableWrap>
+                <TableWrap data-admin-table-region="">
                   <table className="k-table k-table--compact">
                     <thead>
                       <tr>
@@ -334,6 +398,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
               )}
             </div>
 
+            }
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", alignItems: "baseline", fontSize: "1.05rem", fontWeight: 700, color: colors.blue }}>
               <span style={{ color: colors.textSecondary, fontSize: "0.85rem", fontWeight: 600 }}>Total {isReceipt ? "received" : "paid"}:</span>
               <span>Rs {total.toLocaleString()}</span>
@@ -345,7 +410,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
           </div>
 
           <div style={formStyles.footer}>
-            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             {(() => {
               const blocked = saving || total <= 0;
               return (

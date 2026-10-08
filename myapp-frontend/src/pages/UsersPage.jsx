@@ -16,7 +16,7 @@ import {
   MdDevices,
   MdSmartToy,
 } from "react-icons/md";
-import { getUsers, createUser, updateUser, deleteUser } from "../api/usersApi";
+import { getUsers, createUser, updateUser, deleteUser, unlockUser } from "../api/usersApi";
 import { getRoles, getUserRoles, assignUserRoles } from "../api/rbacApi";
 import { useAuth } from "../contexts/AuthContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -245,7 +245,27 @@ export default function UsersPage() {
     }
   };
 
-  const filtered = users.filter(
+  const [unlocking, setUnlocking] = useState(null);
+  const [blockedOnly, setBlockedOnly] = useState(false);
+  const [lockClock, setLockClock] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setLockClock(Date.now()), 10000);
+    return () => clearInterval(timer);
+  }, []);
+  const isBlocked = u => u.id !== seedAdminUserId && u.lockoutUntil
+    && new Date(u.lockoutUntil.endsWith("Z") ? u.lockoutUntil : `${u.lockoutUntil}Z`).getTime() > lockClock;
+  const blockedCount = users.filter(isBlocked).length;
+  const handleUnlock = async u => {
+    setUnlocking(u.id);
+    try {
+      await unlockUser(u.id);
+      notify(`${u.fullName} (@${u.username}) is unlocked.`, "success");
+      await fetchUsers();
+    } catch (err) { notify(err.response?.data?.message || "Could not unlock this account.", "error"); }
+    finally { setUnlocking(null); }
+  };
+
+  const filtered = users.filter(u => !isSeedAdmin || !blockedOnly || isBlocked(u)).filter(
     (u) =>
       u.username.toLowerCase().includes(search.toLowerCase()) ||
       u.fullName.toLowerCase().includes(search.toLowerCase())
@@ -297,6 +317,12 @@ export default function UsersPage() {
       )}
 
       <div role="tabpanel" id="users-tab-panel-users" aria-labelledby={isSeedAdmin ? "users-tab-users" : undefined} hidden={isSeedAdmin && tab !== "users"}>
+      {isSeedAdmin && <div role="status" style={{ display:"flex", gap:12, alignItems:"center", flexWrap:"wrap", marginBottom:16 }}>
+        <strong>{blockedCount} blocked {blockedCount === 1 ? "user" : "users"}</strong>
+        <label style={{ display:"flex", gap:8, alignItems:"center", minHeight:44 }}><input type="checkbox" checked={blockedOnly} onChange={e => setBlockedOnly(e.target.checked)} />Show blocked users only</label>
+        <span>Seed admin is exempt from automatic lockout.</span>
+      </div>}
+
       <Toolbar>
         <SearchBox value={search} onChange={setSearch} placeholder="Search users..." />
       </Toolbar>
@@ -327,20 +353,26 @@ export default function UsersPage() {
                     </div>
                     <div style={{ color: "var(--k-muted)", fontSize: "var(--k-font-sm)", overflowWrap: "anywhere" }}>
                       @{u.username}
+                      {isSeedAdmin && isBlocked(u) && <div style={{ color:colors.danger, fontWeight:600 }}>Blocked</div>}
                     </div>
                   </div>
                   <span style={styles.roleBadge}>{u.role}</span>
+
                 </div>
                 <div style={styles.userCardMeta}>
                   <span style={{ color: "var(--k-muted)", fontSize: "var(--k-font-sm)" }}>
                     Joined {new Date(u.createdAt).toLocaleDateString()}
                   </span>
-                  {canUpdate && (
+                  {currentUser?.isSeedAdmin === true && (
                     <Button variant="secondary" size="sm" icon={MdSmartToy}
                       onClick={() => navigate(`/profile?tab=mcp-catalog&userId=${u.id}`)} title={`MCP access for ${u.fullName}`}>
                       MCP access
                     </Button>
                   )}
+                  {isSeedAdmin && isBlocked(u) && <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+                    <span>Unlocks {new Date(u.lockoutUntil.endsWith("Z") ? u.lockoutUntil : `${u.lockoutUntil}Z`).toLocaleString()}</span>
+                    {canUpdate && <button style={{...styles.editBtn, minHeight:44}} disabled={unlocking !== null} onClick={() => handleUnlock(u)}>Unlock @{u.username}</button>}
+                  </div>}
                   {u.id !== seedAdminUserId && (canAssignRoles || canUpdate || canDelete) && (
                     <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                       {canAssignRoles && (
@@ -377,8 +409,8 @@ export default function UsersPage() {
       {showModal && (
         // Backdrop click is a no-op — explicit Cancel / X only, so a stray
         // click can't drop the half-typed user form.
-        <div style={styles.overlay}>
-          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <div data-admin-backdrop="" style={styles.overlay}>
+          <div data-admin-dialog="" style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <h3 style={formStyles.title}>
                 {editUser ? "Edit User" : "Add New User"}
@@ -466,7 +498,7 @@ export default function UsersPage() {
             </div>
 
             <div style={styles.modalFooter}>
-              <button type="button" style={styles.cancelBtn} onClick={closeModal}>
+              <button data-admin-close="" type="button" style={styles.cancelBtn} onClick={closeModal}>
                 Cancel
               </button>
               <button
@@ -486,8 +518,8 @@ export default function UsersPage() {
       {/* ---- Role Assignment Modal ---- */}
       {rolesModalUser && (
         // Backdrop click is a no-op — explicit Cancel / X only.
-        <div style={styles.overlay}>
-          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <div data-admin-backdrop="" style={styles.overlay}>
+          <div data-admin-dialog="" style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <h3 style={formStyles.title}>
                 Manage roles — {rolesModalUser.fullName}
@@ -581,7 +613,7 @@ export default function UsersPage() {
             </div>
 
             <div style={styles.modalFooter}>
-              <button type="button" style={styles.cancelBtn} onClick={closeRolesModal} disabled={rolesSaving}>
+              <button data-admin-close="" type="button" style={styles.cancelBtn} onClick={closeRolesModal} disabled={rolesSaving}>
                 Cancel
               </button>
               <button type="button" style={styles.saveBtn} onClick={handleSaveRoles} disabled={rolesSaving || rolesLoading}>
@@ -597,8 +629,8 @@ export default function UsersPage() {
       {deleteConfirm && (
         // Backdrop click is a no-op — destructive action requires explicit
         // Cancel or Delete click.
-        <div style={styles.overlay}>
-          <div style={styles.deleteModal} onClick={(e) => e.stopPropagation()}>
+        <div data-admin-backdrop="" style={styles.overlay}>
+          <div data-admin-dialog="" style={styles.deleteModal} onClick={(e) => e.stopPropagation()}>
             <MdDelete style={{ fontSize: "2.5rem", color: colors.danger }} />
             <h3 style={{ margin: "0.75rem 0 0.5rem", color: colors.textPrimary }}>
               Delete User?
@@ -608,7 +640,7 @@ export default function UsersPage() {
               This action cannot be undone.
             </p>
             <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.5rem", justifyContent: "center", flexWrap: "wrap" }}>
-              <button
+              <button data-admin-close=""
                 type="button"
                 style={styles.cancelBtn}
                 onClick={() => setDeleteConfirm(null)}

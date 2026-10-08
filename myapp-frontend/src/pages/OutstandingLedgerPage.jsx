@@ -296,7 +296,7 @@ export default function OutstandingLedgerPage() {
             </div>
           ) : (
             /* ── Desktop/tablet: table (scrolls inside its own box) ── */
-            <TableWrap>
+            <TableWrap data-admin-table-region="">
               <table className="k-table k-table--compact" style={{ minWidth: 900 }}>
                 <thead>
                   <tr>

@@ -25,7 +25,8 @@ namespace MyApp.Api.Helpers
     ///    edition boundary. Keeping role administration out of the editions is
     ///    what makes the boundary mean anything.
     /// 2. <see cref="AccountingModulePrefixes"/> — the keys the accounting
-    ///    module added. Everything else is the Sales edition.
+    ///    module added. Other core permissions belong to the Sales edition.
+    /// 3. Optional modules, currently Email Workspace, require a separate role.
     ///
     /// Note what is NOT in that second rule: <c>accounting.receipts.*</c>,
     /// <c>accounting.payments.*</c> and <c>accounting.paymentstatus.*</c>. They
@@ -41,6 +42,7 @@ namespace MyApp.Api.Helpers
         public const string TenantAdminRoleName = "Tenant Administrator";
         public const string McpAccessRoleName = "MCP Access";
         public const string McpWriteRoleName = "MCP Write";
+        public const string EmailWorkspaceRoleName = "Email Workspace";
 
         public const string McpWriteDescription =
             "MCP Write — lets a user's connected AI agents create records (clients, quotations) " +
@@ -132,6 +134,9 @@ namespace MyApp.Api.Helpers
             "customerportals.",
         };
 
+        public static bool IsOptionalModule(PermissionCatalog.PermissionDef def) =>
+            def.Module == "EmailWorkspace";
+
         public static bool IsVendorOnly(PermissionCatalog.PermissionDef def) =>
             VendorOnlyModules.Contains(def.Module);
 
@@ -141,7 +146,7 @@ namespace MyApp.Api.Helpers
         /// <summary>Everything a tenant on the Sales edition may do.</summary>
         public static IReadOnlyList<string> SalesEditionKeys { get; } =
             PermissionCatalog.All
-                .Where(d => !IsVendorOnly(d) && !IsAccountingModule(d))
+                .Where(d => !IsVendorOnly(d) && !IsAccountingModule(d) && !IsOptionalModule(d))
                 .Select(d => d.Key)
                 .OrderBy(k => k, StringComparer.OrdinalIgnoreCase)
                 .ToList();
@@ -149,7 +154,7 @@ namespace MyApp.Api.Helpers
         /// <summary>Everything a tenant on the Complete edition may do.</summary>
         public static IReadOnlyList<string> CompleteEditionKeys { get; } =
             PermissionCatalog.All
-                .Where(d => !IsVendorOnly(d))
+                .Where(d => !IsVendorOnly(d) && !IsOptionalModule(d))
                 .Select(d => d.Key)
                 .OrderBy(k => k, StringComparer.OrdinalIgnoreCase)
                 .ToList();
@@ -177,6 +182,9 @@ namespace MyApp.Api.Helpers
                 .Select(d => d.Key)
                 .ToList();
 
+        public static IReadOnlyList<string> EmailWorkspaceKeys { get; } =
+            PermissionCatalog.All.Where(IsOptionalModule).Select(d => d.Key).ToList();
+
         /// <summary>The seeded roles, in the order they should be listed.</summary>
         public static IReadOnlyList<(string Name, string Description, IReadOnlyList<string> Keys)> All { get; } =
             new List<(string, string, IReadOnlyList<string>)>
@@ -186,6 +194,7 @@ namespace MyApp.Api.Helpers
                 (TenantAdminRoleName,     TenantAdminDescription,     TenantAdminEffectiveKeys),
                 (McpAccessRoleName,       McpAccessDescription,       McpAccessEffectiveKeys),
                 (McpWriteRoleName,        McpWriteDescription,        McpWriteEffectiveKeys),
+                (EmailWorkspaceRoleName, "Optional Email Workspace module: connect your own Gmail to assigned companies, review enquiries and prepare quotations. Assign alongside an edition; quotation creation also requires Sales Quote create permission.", EmailWorkspaceKeys),
             };
     }
 }
