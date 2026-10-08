@@ -65,3 +65,61 @@
 @media(max-width:1000px) { .ew-columns { grid-template-columns:1fr; }.ew-heading { flex-basis:100%; }.ew-empty { min-height:220px; } }
 @media(max-width:600px) { .ew { padding:0; }.ew-header { gap:12px; }.ew-heading { gap:10px; }.ew-heading-icon { width:38px; height:38px; font-size:18px; }.ew h1 { font-size:20px; }.ew-header p { font-size:12px; }.ew-panel { padding:12px; }.ew-toolbar { padding:10px; }.ew-search { flex-basis:100%; }.ew-actions { width:100%; }.ew-navigation { display:grid; grid-template-columns:1fr 1.35fr 1fr; }.ew-navigation button { padding-inline:8px; }.ew-filters { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); }.ew button,.ew input,.ew select { min-height:44px; }.ew input,.ew select,.ew textarea { font-size:16px; }.ew-actions select { width:100%; }.ew-columns { gap:12px; }.ew-empty { min-height:230px; padding-inline:0; }.ew-empty-steps { gap:5px; font-size:10px; }.ew-empty-steps>span { padding-inline:5px; } }
 @media(prefers-reduced-motion:reduce) { .ew button,.ew .ew-icon,.ew input,.ew select,.ew textarea { transition:none; }.ew button:hover:not(:disabled) .ew-icon { transform:none; } }
+
+.ew-shell { max-width:1600px; margin-inline:auto; min-width:0; }
+.ew-company-bar { display:flex; flex-wrap:wrap; align-items:center; gap:12px; padding:12px 16px; margin-bottom:16px; background:#fff; border:1px solid #dce5ee; border-radius:10px; }
+.ew-company-bar label { font-size:13px; font-weight:600; color:#213247; }
+.ew-company-bar select { width:min(100%,360px); min-width:0; min-height:36px; padding:7px 10px; border:1px solid #c7d5e3; border-radius:7px; background:#fff; color:#213247; font:inherit; font-size:13px; }
+.ew-company-bar span { color:#5b6b7d; font-size:12px; }
+.ew-company-bar select:focus-visible { outline:2px solid #337dc7; outline-offset:3px; }
+.ew .ew-header { padding-bottom:16px; border-bottom:1px solid var(--ew-border); }
+.ew-connections > p { max-width:85ch; }
+.ew-connect-actions { padding-block:12px; border-block:1px solid var(--ew-border); gap:12px; }
+.ew .ew-connect-actions > select { flex:1 1 240px; width:auto; max-width:420px; }
+.ew-connections > p:last-child { color:var(--ew-muted); padding-block:8px; }
+@media(max-width:600px) { .ew-company-bar { padding:12px; gap:8px; }.ew-company-bar select { width:100%; min-height:44px; font-size:16px; }.ew-company-bar span { flex-basis:100%; }.ew .ew-connect-actions > select { width:100%; max-width:none; }.ew-connect-actions > button { width:100%; } }
+
+/* Mail triage uses a stable message list beside the reading and quotation pane. */
+.ew { --ew-radius:12px; }
+.ew-panel { border-radius:var(--ew-radius); }
+.ew-header { padding:8px 0 18px; }
+.ew-heading-icon { background:linear-gradient(135deg,#e7f1ff,#eaf6f2); }
+.ew-toolbar { background:#fff; padding:14px 16px; }
+.ew-filters { gap:4px; }
+.ew-filters button { border-radius:6px; background:transparent; }
+.ew-filters button[aria-pressed=true] { box-shadow:inset 0 -2px 0 #3173c1; }
+.ew-columns { grid-template-columns:minmax(280px, .82fr) minmax(0,1.8fr); gap:16px; }
+.ew-inbox { padding:16px 12px 12px; }
+.ew-inbox > :is(h2,p) { margin-inline:4px; }
+.ew-message-list { max-height:620px; overflow-y:auto; overscroll-behavior:contain; padding:2px 4px; scrollbar-width:thin; }
+.ew button.ew-email { border:1px solid transparent; border-bottom-color:var(--ew-border); border-radius:8px; padding:12px; gap:8px; margin-bottom:4px; }
+.ew button.ew-email[aria-pressed=true] { border-color:#729bc8; background:var(--ew-soft); box-shadow:inset 3px 0 0 var(--ew-accent); }
+.ew-sender-row { display:flex; align-items:center; gap:8px; min-width:0; }
+.ew-sender-row > .ew-muted { overflow-wrap:anywhere; min-width:0; }
+.ew-avatar { display:grid; place-items:center; width:28px; height:28px; flex-shrink:0; border-radius:8px; background:#edf3fa; color:var(--ew-accent); font-weight:700; font-size:12px; }
+.ew-message-meta { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:6px; }
+.ew-status { display:inline-flex; align-items:center; border:1px solid var(--ew-border); border-radius:5px; padding:2px 6px; color:var(--ew-muted); background:#f5f8fb; font-size:11px; line-height:1.5; overflow-wrap:anywhere; }
+.ew-reader { min-height:410px; padding:20px; }
+.ew-reader > h2 { font-size:18px; line-height:1.45; }
+.ew-reader details { margin-block:16px; padding:0 12px 12px; border:1px solid var(--ew-border); border-radius:8px; background:#fafcfe; }
+.ew-reader summary { font-weight:600; padding-block:12px; }
+.ew-list-empty { padding:36px 16px; text-align:center; color:var(--ew-muted); }
+.ew-list-empty > svg { width:28px; height:28px; color:var(--ew-accent); margin-bottom:8px; }
+.ew-list-empty h3 { margin:0; color:var(--ew-text); }
+.ew-list-empty p { font-size:12px; }
+.ew-section-heading { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+.ew-section-heading h2 { margin:0 0 2px; }
+.ew-connection-guide { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr)); gap:12px; margin-block:16px; }
+.ew-connection-guide > div { display:grid; grid-template-columns:20px minmax(0,1fr); gap:4px 10px; padding:14px; border:1px solid var(--ew-border); border-radius:8px; background:#f7fafc; }
+.ew-connection-guide svg { color:var(--ew-accent); margin-top:3px; }
+.ew-connection-guide strong { font-size:13px; font-weight:600; }
+.ew-connection-guide span { grid-column:2; font-size:12px; color:var(--ew-muted); line-height:1.6; }
+.ew-mailbox-heading { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+.ew-mailbox-heading > svg { color:var(--ew-accent); flex-shrink:0; }
+.ew-mailbox-heading h3 { margin:0; min-width:0; }
+.ew-connection { padding:16px; border:1px solid var(--ew-border); border-radius:10px; background:#fff; }
+.ew-rule { border:1px solid var(--ew-border); align-items:end; }
+.ew-draft > h3 { padding-block:8px; }
+.ew-draft > .ew-actions:last-child { padding-top:12px; border-top:1px solid var(--ew-border); }
+@media(max-width:1000px) { .ew-columns { grid-template-columns:1fr; }.ew-message-list { max-height:360px; }.ew-reader { min-height:320px; } }
+@media(max-width:600px) { .ew-reader { padding:14px; }.ew-toolbar { padding:12px; }.ew-message-list { max-height:320px; }.ew-connection { padding:12px; }.ew-connection-guide > div { padding:12px; }.ew-section-heading { align-items:flex-start; }.ew-reader > h2 { font-size:16px; } }
