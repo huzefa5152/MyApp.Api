@@ -74,6 +74,7 @@ export const PERMISSION_SECTIONS = [
     section: "Accounting",
     modules: [
       { key: "Receipts & Payments" },
+      { key: "Withholding Tax" },
       { key: "Accounting", label: "Ledger & Reports" },
     ],
   },
