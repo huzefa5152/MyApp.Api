@@ -292,9 +292,15 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ---
 
+## Email Workspace
+
+Optional company Gmail inbox: authorize an account once and link it only to assigned companies. Administrators assign the Email Workspace role alongside an edition; existing users and navigation are unchanged until assigned. Users keep or ignore enquiries, review extracted items, choose an accessible division, add prices and explicitly create a quotation. See [Gmail setup](docs/GMAIL_EMAIL_WORKSPACE.md).
+
 ## Changelog
 
 ### 2026-10-08
+
+- Port the optional Email Workspace from Trader with company-scoped Gmail, human quotation review, division access checks and Customize quotation numbering.
 
 - Preserve company colors in accounting reports when printing with browser background graphics disabled.
 

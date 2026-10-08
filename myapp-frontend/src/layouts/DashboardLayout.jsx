@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   MdDashboard,
+  MdEmail,
   MdSettings,
   MdBusiness,
   MdPeople,
@@ -256,6 +257,7 @@ export default function DashboardLayout() {
   // recomputing on every render.
   const activeSection = useMemo(() => {
     const p = location.pathname.toLowerCase();
+    if (p === "/email-workspace") return "email-workspace";
     // The three unified dashboards. Checked first so /accounting/dashboard
     // opens Dashboards, not Accounting.
     if (p === "/dashboard" || p.startsWith("/stock") || p.startsWith("/accounting/dashboard")) return "dashboards";
@@ -371,6 +373,15 @@ export default function DashboardLayout() {
                   <span>Accounting</span>
                 </NavLink>
               </Can>
+            </NavGroup>
+          )}
+
+          {has("email.workspace.use") && has("email.inbox.view") && (
+            <NavGroup id="email-workspace" icon={MdEmail} title="Email Workspace" count={1}
+              defaultOpen={activeSection === "email-workspace"} isChildActive={activeSection === "email-workspace"}>
+              <NavLink to="/email-workspace" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <MdEmail className="dl-subitem__icon" aria-hidden="true" /><span>Inbox &amp; Connections</span>
+              </NavLink>
             </NavGroup>
           )}
 
@@ -865,6 +876,7 @@ function getBreadcrumb(pathname) {
     "/item-types": "Configuration / Item Types",
     "/non-inventory-items": "Configuration / Non-Inventory Items",
     "/challans": "Sales / Delivery Challans",
+    "/email-workspace": "Email Workspace / Inbox",
     "/challans/import": "Sales / Import Challans",
     "/bills": "Sales / Bills",
     "/invoices": "Sales / Invoices",

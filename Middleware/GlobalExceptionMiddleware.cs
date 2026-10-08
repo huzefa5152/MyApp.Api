@@ -68,7 +68,7 @@ namespace MyApp.Api.Middleware
             string? requestBody = null;
             try
             {
-                if (context.Request.Body.CanSeek)
+                if (context.Request.Body.CanSeek && !context.Request.Path.StartsWithSegments("/api/email-workspace"))
                 {
                     context.Request.Body.Position = 0;
                     using var reader = new StreamReader(context.Request.Body, leaveOpen: true);
@@ -93,7 +93,7 @@ namespace MyApp.Api.Middleware
                 // Masked: a Customer Portal token in the path is a bearer
                 // secret, and audit rows are read far more casually than logs.
                 RequestPath = PortalTokenLogMasker.Mask(context.Request.Path.ToString()),
-                QueryString = context.Request.QueryString.ToString(),
+                QueryString = redactor.ScrubFormEncoded(context.Request.QueryString.ToString().TrimStart('?')),
                 StatusCode = statusCode,
                 ExceptionType = "",
                 Message = $"HTTP {statusCode} response",
@@ -168,7 +168,7 @@ namespace MyApp.Api.Middleware
             string? requestBody = null;
             try
             {
-                if (context.Request.Body.CanSeek)
+                if (context.Request.Body.CanSeek && !context.Request.Path.StartsWithSegments("/api/email-workspace"))
                 {
                     context.Request.Body.Position = 0;
                     using var reader = new StreamReader(context.Request.Body, leaveOpen: true);
@@ -218,7 +218,7 @@ namespace MyApp.Api.Middleware
                 // Masked: a Customer Portal token in the path is a bearer
                 // secret, and audit rows are read far more casually than logs.
                 RequestPath = PortalTokenLogMasker.Mask(context.Request.Path.ToString()),
-                QueryString = context.Request.QueryString.ToString(),
+                QueryString = redactor.ScrubFormEncoded(context.Request.QueryString.ToString().TrimStart('?')),
                 StatusCode = statusCode,
                 ExceptionType = ex.GetType().Name,
                 Message = ex.Message,

@@ -4,7 +4,7 @@ using MyApp.Api.Models;
 
 namespace MyApp.Api.Data
 {
-    public class AppDbContext : DbContext
+    public partial class AppDbContext : DbContext
     {
         private readonly IFbrTokenProtector? _fbrTokenProtector;
 
@@ -207,6 +207,7 @@ namespace MyApp.Api.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            ConfigureEmailWorkspace(modelBuilder);
             modelBuilder.Entity<User>().HasOne<User>().WithMany().HasForeignKey(u => u.CreatedByUserId).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<User>().HasIndex(u => u.CreatedByUserId);
             modelBuilder.Entity<Company>().HasOne<User>().WithMany().HasForeignKey(c => c.CreatedByUserId).OnDelete(DeleteBehavior.NoAction);

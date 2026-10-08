@@ -36,6 +36,10 @@ export const PERMISSION_SECTIONS = [
   {
     // Module order inside each section mirrors the sidebar's item order so
     // the role editor reads exactly like the navbar.
+    section: "Email Workspace",
+    modules: [{ key: "EmailWorkspace", label: "Email Workspace" }],
+  },
+  {
     section: "Sales",
     modules: [
       { key: "SalesQuotes", label: "Sales Quotes" },

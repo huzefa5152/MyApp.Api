@@ -373,6 +373,10 @@ namespace MyApp.Api.Controllers
             var ownedCompanies = await _context.Companies.Where(c => c.CreatedByUserId == id).ToListAsync();
             foreach (var company in ownedCompanies) company.CreatedByUserId = user.CreatedByUserId;
             _scope.InvalidateAll();
+            await _context.GmailOAuthRequests.Where(r => r.UserId == id).ExecuteDeleteAsync();
+            await _context.GmailConnections.Where(c => c.OwnerUserId == id)
+                .ExecuteUpdateAsync(s => s.SetProperty(c => c.ProtectedRefreshToken, "").SetProperty(c => c.Status, "Disconnected")
+                    .SetProperty(c => c.GoogleSubject, c => "deleted:" + c.Id.ToString()).SetProperty(c => c.OwnerUserId, 0));
             _context.Users.Remove(user);
             await _context.SaveChangesAsync();
 

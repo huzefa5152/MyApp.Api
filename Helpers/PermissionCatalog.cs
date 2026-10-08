@@ -407,6 +407,11 @@ namespace MyApp.Api.Helpers
             // FBR reference-data endpoints (HS codes, UOMs, provinces).
             // Without this an idle tenant member could otherwise burn the
             // company's PRAL daily quota.
+            new("email.workspace.use", "EmailWorkspace", "Module", "Use", "Enable the Email Workspace module for assigned companies"),
+            new("email.inbox.view", "EmailWorkspace", "Inbox", "View", "Read the company email workspace"),
+            new("email.inbox.manage", "EmailWorkspace", "Inbox", "Manage", "Keep, ignore and restore enquiries"),
+            new("email.enquiries.manage", "EmailWorkspace", "Enquiries", "Manage", "Review email enquiries and prepare quotations"),
+            new("email.connections.manage", "EmailWorkspace", "Connections", "Manage", "Connect your Gmail accounts and configure company sender rules"),
             new("fbr.reference.read",         "FBR", "Reference", "Read",
                 "Read FBR reference catalogs (HS codes, UOMs, provinces, sale types)"),
             new("mcp.access.use",           "Tenant Access", "MCP", "Use", "Connect AI coding agents (read-only tools) to this system through the hosted MCP endpoint"),

@@ -210,7 +210,8 @@ namespace MyApp.Api.Services.Implementations
 
             var createdId = await NumberAllocationRetry.ExecuteAsync(async _ =>
             {
-                await using var numberTx = await _context.Database.BeginTransactionAsync();
+                await using var numberTx = _context.Database.CurrentTransaction == null
+                    ? await _context.Database.BeginTransactionAsync() : null;
                 var next = await CompanyDocumentNumbers.AllocateAsync(_context, companyId, "quote", dto.CustomNumber, dto.DivisionId);
 
                 var quote = new SalesQuote
@@ -249,7 +250,7 @@ namespace MyApp.Api.Services.Implementations
                     foreach (var it in quote.Items) _context.Entry(it).State = EntityState.Detached;
                     throw;
                 }
-                await numberTx.CommitAsync();
+                if (numberTx != null) await numberTx.CommitAsync();
                 return quote.Id;
             });
 

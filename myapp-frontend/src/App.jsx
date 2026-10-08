@@ -6,6 +6,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import DashboardLayout from "./layouts/DashboardLayout";
 import PublicLayout from "./layouts/PublicLayout";
 import DashboardPage from "./pages/DashboardPage";
+import EmailWorkspacePage from "./pages/EmailWorkspacePage";
 import CompanyPage from "./pages/CompanyPage";
 import DivisionsPage from "./pages/DivisionsPage";
 import ChallansPage from "./pages/ChallanPage";
@@ -87,6 +88,7 @@ export default function App() {
         <Route element={<DashboardLayout />}>
           <Route path="/connect" element={<McpConnectPage />} />
           <Route path="/administrators" element={<AdministratorsPage />} />
+          <Route path="/email-workspace" element={<RequirePermission permission="email.workspace.use"><EmailWorkspacePage /></RequirePermission>} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/companies/*" element={<RequirePermission anyPrefix="companies."><CompanyPage /></RequirePermission>} />
           <Route path="/configuration/divisions" element={<RequirePermission anyPrefix="divisions."><DivisionsPage /></RequirePermission>} />

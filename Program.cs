@@ -422,6 +422,11 @@ builder.Services.AddScoped<IDeliveryChallanService, DeliveryChallanService>();
 // depends on ISalesOrderService (quote→order conversion); SalesOrderService
 // depends on IDeliveryChallanService (create-challan-from-order). No cycle.
 builder.Services.AddScoped<ISalesQuoteService, SalesQuoteService>();
+builder.Services.AddScoped<EmailWorkspaceService>();
+builder.Services.AddHttpClient<IGmailProvider, GmailProvider>(client => client.Timeout = TimeSpan.FromSeconds(30))
+    .RemoveAllLoggers()
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddHostedService<MyApp.Api.Services.HostedServices.GmailSyncService>();
 builder.Services.AddScoped<ISalesOrderService, SalesOrderService>();
 builder.Services.AddScoped<IWithholdingTaxReceiptService, WithholdingTaxReceiptService>();
 // Unified attachments + document folders. AttachmentStorage is stateless

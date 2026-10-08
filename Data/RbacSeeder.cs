@@ -6,7 +6,7 @@ namespace MyApp.Api.Data
 {
     /// <summary>
     /// Syncs the code-defined <see cref="PermissionCatalog"/> into the database
-    /// and ensures the built-in "Administrator" system role (all permissions)
+    /// and ensures the built-in "Administrator" system role (core permissions)
     /// exists and is assigned to the seed-admin user.
     ///
     /// Runs on every app start. Idempotent — safe to re-run.
@@ -323,7 +323,8 @@ namespace MyApp.Api.Data
 
         private static async Task EnsureAdministratorRoleAsync(AppDbContext db, int seedAdminUserId)
         {
-            var allPermissionIds = await db.Permissions.Select(p => p.Id).ToListAsync();
+            var optionalKeys = EditionCatalog.EmailWorkspaceKeys;
+            var allPermissionIds = await db.Permissions.Where(p => !optionalKeys.Contains(p.Key)).Select(p => p.Id).ToListAsync();
 
             var adminRole = await db.Roles
                 .Include(r => r.RolePermissions)
@@ -334,7 +335,7 @@ namespace MyApp.Api.Data
                 adminRole = new Role
                 {
                     Name = AdministratorRoleName,
-                    Description = "Built-in system role with every permission. Cannot be deleted or edited.",
+                    Description = "Built-in system role with core permissions. Optional modules are assigned separately. Cannot be deleted or edited.",
                     IsSystemRole = true,
                     CreatedAt = DateTime.UtcNow,
                     CreatedByUserId = seedAdminUserId
@@ -342,13 +343,14 @@ namespace MyApp.Api.Data
                 db.Roles.Add(adminRole);
                 await db.SaveChangesAsync();
             }
-            else if (!adminRole.IsSystemRole)
+            else
             {
                 adminRole.IsSystemRole = true;
+                adminRole.Description = "Built-in system role with core permissions. Optional modules are assigned separately. Cannot be deleted or edited.";
                 await db.SaveChangesAsync();
             }
 
-            // Sync the Administrator role's permission set to "everything".
+            // Optional email access requires its own explicit role assignment.
             var currentPermIds = adminRole.RolePermissions.Select(rp => rp.PermissionId).ToHashSet();
             var targetPermIds = allPermissionIds.ToHashSet();
 
