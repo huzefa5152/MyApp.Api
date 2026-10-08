@@ -67,10 +67,7 @@ export default function LoginPage() {
       const completed = await login(username.trim(), password, returnTo);
       if (completed !== false) navigate(returnTo, { replace: true });
     } catch (err) {
-      const until = err?.response?.data?.lockoutUntil;
-      const msg = until
-        ? `Sign-in is temporarily locked until ${new Date(until).toLocaleString()}. Try again then, or ask your administrator to unlock your account.`
-        :
+      const msg =
         err?.response?.data?.message ||
         err?.response?.data?.title ||
         err?.message ||

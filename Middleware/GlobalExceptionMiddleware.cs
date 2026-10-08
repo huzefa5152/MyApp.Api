@@ -146,6 +146,7 @@ namespace MyApp.Api.Middleware
             // returns directly).
             var statusCode = ex switch
             {
+                _ when UsernamePolicy.IsConflict(ex) => (int)HttpStatusCode.Conflict,
                 KeyNotFoundException => (int)HttpStatusCode.NotFound,
                 InvalidOperationException => (int)HttpStatusCode.BadRequest,
                 UnauthorizedAccessException => (int)HttpStatusCode.Forbidden,
@@ -254,7 +255,7 @@ namespace MyApp.Api.Middleware
             context.Response.ContentType = "application/json";
             context.Response.StatusCode = statusCode;
 
-            var userMessage = statusCode >= 500
+            var userMessage = UsernamePolicy.IsConflict(ex) ? UsernamePolicy.UnavailableMessage : statusCode >= 500
                 ? "An unexpected error occurred. Please try again later."
                 : ex.Message;
 

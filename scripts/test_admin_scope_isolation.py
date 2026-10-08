@@ -155,6 +155,16 @@ B = create_user(seed, "scopeAdminB", "Scope Admin B", "Administrator")
 tA = login("scopeAdminA", PW)
 tB = login("scopeAdminB", PW)
 
+
+print("\n=== Username conflicts do not expose another administrator's tree ===")
+for actor, credential in (("seed", seed), ("A", tA), ("B", tB)):
+    for occupied in (args.admin_user, A["username"], B["username"]):
+        status, duplicate = request("POST", "/api/users", token=credential,
+            body={"username": occupied, "fullName": "Duplicate Test", "password": PW, "role": "User"})
+        check("username", actor + " cannot duplicate an occupied username", status == 409)
+        check("username", actor + " gets no account-owner details", duplicate == {
+            "message": "This username is unavailable. Choose another username."})
+
 print("=== SETUP: A and B each create their companies and one user ===")
 coA1 = create_company(tA, "Scope Test Co A1")
 coA2 = create_company(tA, "Scope Test Co A2")

@@ -136,9 +136,12 @@ namespace MyApp.Api.Controllers
                 return Forbid();
             }
 
-            var exists = await _context.Users.AnyAsync(u => u.Username == dto.Username);
+            var requestedUsername = dto.Username.Trim();
+            var usernameError = MyApp.Api.Helpers.UsernamePolicy.Validate(requestedUsername);
+            if (usernameError != null) return BadRequest(new { message = usernameError });
+            var exists = await _context.Users.AnyAsync(u => u.Username == requestedUsername);
             if (exists)
-                return Conflict(new { message = "Username already exists" });
+                return Conflict(new { message = "This username is unavailable. Choose another username." });
 
             // Permissions are driven by the RBAC role-assignment system, but
             // the legacy "Role" text column is still surfaced as the pill on
@@ -148,7 +151,7 @@ namespace MyApp.Api.Controllers
             // role the operator chose at create time.
             var user = new Models.User
             {
-                Username = dto.Username,
+                Username = requestedUsername,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
                 FullName = dto.FullName,
                 Role = desiredRole,
@@ -194,9 +197,12 @@ namespace MyApp.Api.Controllers
 
             if (!string.IsNullOrWhiteSpace(dto.Username) && dto.Username != user.Username)
             {
-                var exists = await _context.Users.AnyAsync(u => u.Username == dto.Username && u.Id != id);
-                if (exists) return Conflict(new { message = "Username already exists" });
-                user.Username = dto.Username;
+                var requestedUsername = dto.Username.Trim();
+                var usernameError = MyApp.Api.Helpers.UsernamePolicy.Validate(requestedUsername);
+                if (usernameError != null) return BadRequest(new { message = usernameError });
+                var exists = await _context.Users.AnyAsync(u => u.Username == requestedUsername && u.Id != id);
+                if (exists) return Conflict(new { message = "This username is unavailable. Choose another username." });
+                user.Username = requestedUsername;
             }
 
             if (!string.IsNullOrWhiteSpace(dto.FullName))

@@ -300,6 +300,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-10-08
 
+- Harden sign-in privacy, account identity and token revocation while preserving existing credentials and company permissions. Handle duplicate usernames without server errors.
+
 - Add company-scoped MCP email enquiry tools: review mail, approve Keep/Ignore, supply explicit item prices and approve one quotation through existing OAuth and per-user tool grants.
 
 - Add reviewed attachment item extraction and local browser OCR to Email Workspace, with explicit append/replace, company catalogue suggestions, customer quotation prices and permission-gated purchase costs. Keep quotation creation under user approval.
