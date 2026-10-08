@@ -13,7 +13,7 @@ import { getClaimSummary } from "../api/taxClaimApi";
 import QuantityInput from "./QuantityInput";
 import DocumentTaxFields from "./DocumentTaxFields";
 import { isDecimalUnit } from "../utils/formatQuantity";
-import { splitGroupQuantity } from "../utils/groupQuantitySplit";
+import { splitGroupQuantity, splitConsultantQuantity } from "../utils/groupQuantitySplit";
 
 // Tax Claim Snapshot temporarily HIDDEN (2026-07-11, user request). Everything
 // is left intact — flip this flag to true to bring the whole panel back
@@ -939,6 +939,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
   // Which of a group's lines may carry a fraction. One Item Type can cover a KG
   // line and a Nos line, and the answer belongs to the unit rather than to the
   // group, so it is asked per line and the split honours it (2026-09-23).
+  const consultantAdjustment = forceItemTypeAndQty && !billsMode;
+  const splitTaxQuantity = (total, weights, group) => consultantAdjustment
+    ? splitConsultantQuantity(total, weights)
+    : splitGroupQuantity(total, weights, { decimalOk: groupDecimalOk(group) });
   const groupDecimalOk = (group) =>
     group.lineIndices.map((i) => isDecimalUnit(items[i]?.uom || group.uom, units));
   const groupAllowsDecimal = (group) => groupDecimalOk(group).some(Boolean);
@@ -994,7 +998,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
       const weights = group.lineIndices.map(
         (i) => parseFloat(originalItemsRef.current[i]?.quantity) || 1,
       );
-      const { shares } = splitGroupQuantity(qty, weights, { decimalOk });
+      const { shares } = splitTaxQuantity(qty, weights, group);
       return writeExact(next, group, targetPaisa, shares);
     });
   };
@@ -1009,7 +1013,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
     setItems((prev) => {
       const next = [...prev];
       const idxs = group.lineIndices;
-      const qtys = idxs.map((i) => Math.round(parseFloat(next[i]?.quantity) || 0));
+      const qtys = idxs.map((i) => parseFloat(next[i]?.quantity) || 0);
       const qtyTotal = qtys.reduce((a, b) => a + b, 0);
       if (qtyTotal <= 0) return prev;
 
@@ -1060,7 +1064,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
         billValue: 0,
       };
       const qty = parseFloat(it.quantity) || 0;
-      const val = parseFloat(it.lineTotal) || qty * (parseFloat(it.unitPrice) || 0);
+      const val = it.lineTotal != null ? Number(it.lineTotal) : qty * (parseFloat(it.unitPrice) || 0);
       g.lineIndices.push(idx);
       g.totalQty += qty;
       g.totalValue += val;
@@ -1154,7 +1158,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
       const next = [...prev];
       const idxs = group.lineIndices;
       const weights = idxs.map((i) => parseFloat(originalItemsRef.current[i]?.quantity) || 0);
-      const { shares } = splitGroupQuantity(target, weights, { decimalOk: groupDecimalOk(group) });
+      const { shares } = splitTaxQuantity(target, weights, group);
 
       idxs.forEach((i, k) => {
         const price = parseFloat(next[i].unitPrice) || 0;
@@ -1176,7 +1180,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
     const g = bad[0];
     const n = g.lineIndices.length;
     const name = g.itemTypeName || g.description || "This item";
-    return n > 1
+    return consultantAdjustment ? `This tax group needs a positive quantity at the supported precision.` : n > 1
       ? `“${name}” is grouped from ${n} lines, so its quantity must be at least ${n} — one whole unit per line — ` +
         `and it is ${g.totalQty.toLocaleString("en-PK")}. Enter a larger quantity, or switch to Individual lines to change lines one by one.`
       : `“${name}” needs a quantity greater than 0.`;
@@ -1923,6 +1927,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                     (the same grouping sent to FBR). Editing <b>Qty</b> spreads the new total across the group's
                     lines; editing <b>Unit Price</b> sets one price for the whole group. Switch to
                     <b> Individual lines</b> to re-classify or fine-tune a single line.
+                    {consultantAdjustment && " The tax group quantity can be smaller than the number of commercial lines. Fractional shares allocate the group internally; the bill and challans keep their original quantities."}
                   </p>
                 )}
 
@@ -2216,8 +2221,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                                   caused it, rather than only at Save. */}
                               {!lockQty && multi && group.lineIndices.some((i) => (parseFloat(items[i]?.quantity) || 0) <= 0) && (
                                 <div style={{ ...styles.groupMeta, color: "#c62828", textAlign: "right" }}
-                                     title={`This row is ${group.lineIndices.length} bill lines; every line needs at least one whole unit.`}>
-                                  needs at least {group.lineIndices.length} — one per line
+                                     title={consultantAdjustment ? "Enter a positive tax group quantity." : `This row is ${group.lineIndices.length} bill lines; every line needs at least one whole unit.`}>
+                                  {consultantAdjustment ? "Enter a positive group quantity" : `needs at least ${group.lineIndices.length} — one per line`}
                                 </div>
                               )}
                             </td>

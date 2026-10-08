@@ -1895,6 +1895,9 @@ namespace MyApp.Api.Services.Implementations
             if (dto.Items == null || dto.Items.Count == 0)
                 throw new InvalidOperationException("At least one item is required.");
 
+            var asAdjustment = allowQuantityEdit
+                && string.Equals(dto.WriteMode, "adjustment", StringComparison.OrdinalIgnoreCase);
+
             // Restriction F: zero unit price not allowed when the .qty
             // path is active (operator is editing prices, not just
             // classifying). Negative is also blocked. Zero unit price on
@@ -1918,6 +1921,9 @@ namespace MyApp.Api.Services.Implementations
                         $"Quantity must be greater than zero. Bill item id(s) [{string.Join(", ", badQtyRows)}] " +
                         $"have zero or negative quantity.");
             }
+
+            if (dto.Items.Select(r => r.Id).Distinct().Count() != dto.Items.Count)
+                throw new InvalidOperationException("Each bill item may appear only once in an adjustment.");
 
             // Capture before-state for the audit log. Snapshot the
             // current values BEFORE we mutate them, so the log can show
@@ -2024,7 +2030,7 @@ namespace MyApp.Api.Services.Implementations
                     // the derived rate divides back into the target at the stored
                     // precision. A fraction only has to be refused when the UNIT
                     // itself does not carry one.
-                    if (qty != decimal.Truncate(qty) && !UnitAllowsDecimal(RowUom(row)))
+                    if (!asAdjustment && qty != decimal.Truncate(qty) && !UnitAllowsDecimal(RowUom(row)))
                         throw new InvalidOperationException(
                             $"Exact line total for bill item id {row.Id} needs a whole-number quantity (got {qty}). " +
                             $"Enable decimal quantity for unit '{RowUom(row)}' on the Units admin page if fractions are allowed.");
@@ -2044,11 +2050,12 @@ namespace MyApp.Api.Services.Implementations
                 }
             }
 
-            var referencedTypeIds = dto.Items
-                .Where(i => i.ItemTypeId.HasValue)
+            var referencedTypeIds = dto.Items.Where(i => i.ItemTypeId.HasValue)
                 .Select(i => i.ItemTypeId!.Value)
-                .Distinct()
-                .ToList();
+                .Concat(invoice.Items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value))
+                .Concat(invoice.Items.Where(i => i.Adjustment?.AdjustedItemTypeId != null)
+                    .Select(i => i.Adjustment!.AdjustedItemTypeId!.Value))
+                .Distinct().ToList();
             var typeMap = referencedTypeIds.Count == 0
                 ? new Dictionary<int, ItemType>()
                 : await _context.ItemTypes
@@ -2061,17 +2068,38 @@ namespace MyApp.Api.Services.Implementations
             // unit name, not the stale one.
             if (allowQuantityEdit)
             {
-                var rowsToValidate = dto.Items
-                    .Where(r => r.Quantity.HasValue)
-                    .Select(r =>
+                // Overlay shares are internal allocations; validate the whole
+                // effective FBR group, including lines omitted by partial requests.
+                var requested = dto.Items.ToDictionary(r => r.Id);
+                var projected = invoice.Items.Select(existing =>
+                {
+                    requested.TryGetValue(existing.Id, out var row);
+                    var typeId = row != null ? row.ItemTypeId ?? existing.ItemTypeId : existing.Adjustment?.AdjustedItemTypeId ?? existing.ItemTypeId;
+                    typeMap.TryGetValue(typeId ?? 0, out var picked);
+                    var reclassified = row != null && picked != null && picked.Id != existing.ItemTypeId;
+                    var overlay = row == null ? existing.Adjustment : null;
+                    return new InvoiceItem
                     {
-                        var existing = invoice.Items.FirstOrDefault(ii => ii.Id == r.Id);
-                        var unit = (r.ItemTypeId.HasValue && typeMap.TryGetValue(r.ItemTypeId.Value, out var t))
-                            ? (t.UOM ?? "")
-                            : (existing?.UOM ?? "");
-                        return new { Qty = r.Quantity!.Value, Unit = unit };
-                    })
-                    .ToList();
+                        Id = existing.Id,
+                        ItemTypeId = reclassified ? picked!.Id : overlay?.AdjustedItemTypeId ?? existing.ItemTypeId,
+                        ItemTypeName = reclassified ? picked!.Name : overlay?.AdjustedItemTypeName ?? existing.ItemTypeName,
+                        UOM = reclassified ? picked!.UOM ?? "" : overlay?.AdjustedUOM ?? (existing.ItemType?.UOM ?? existing.UOM),
+                        HSCode = reclassified ? picked!.HSCode : overlay?.AdjustedHSCode ?? existing.HSCode,
+                        SaleType = reclassified ? picked!.SaleType : overlay?.AdjustedSaleType ?? existing.SaleType,
+                        RateId = existing.RateId,
+                        SroScheduleNo = existing.SroScheduleNo,
+                        SroItemSerialNo = existing.SroItemSerialNo,
+                        Quantity = row?.Quantity ?? overlay?.AdjustedQuantity ?? existing.Quantity
+                    };
+                }).ToList();
+                var rowsToValidate = asAdjustment
+                    ? projected.GroupBy(TaxInvoiceGrouping.Key)
+                        .Select(g => new { Qty = g.Sum(i => i.Quantity), Unit = g.First().UOM }).ToList()
+                    : dto.Items.Where(r => r.Quantity.HasValue).Select(r => new {
+                        Qty = r.Quantity!.Value,
+                        Unit = r.ItemTypeId.HasValue && typeMap.TryGetValue(r.ItemTypeId.Value, out var t)
+                            ? t.UOM ?? "" : invoice.Items.First(i => i.Id == r.Id).UOM
+                    }).ToList();
                 if (rowsToValidate.Count > 0)
                 {
                     var unitNames = rowsToValidate.Select(r => r.Unit)
@@ -2111,9 +2139,6 @@ namespace MyApp.Api.Services.Implementations
             // because dto.WriteMode is ignored when allowQuantityEdit is
             // false — Item Type re-classification belongs on the bill
             // proper, not in a tax-filing overlay.
-            var asAdjustment = allowQuantityEdit
-                && string.Equals(dto.WriteMode, "adjustment", StringComparison.OrdinalIgnoreCase);
-
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {

@@ -19,4 +19,18 @@ Check(!TaxInvoiceGrouping.Key(adjusted).Equals(TaxInvoiceGrouping.Key(tax[1])), 
 tax[1].SroScheduleNo="Schedule";
 Check(tax.GroupBy(TaxInvoiceGrouping.Key).Count()==2, "different SRO treatment is never silently merged");
 Check(TaxInvoiceGrouping.Uom(source[1],false)=="Ft", "filed snapshot bypasses current catalog");
+var many = Enumerable.Range(0, 24).Select(i => new InvoiceItem {
+    Id = 100+i, ItemTypeId = 1, ItemTypeName = catalog.Name, ItemType = catalog,
+    UOM = i % 2 == 0 ? "Ft" : "Nos", Quantity = 2, UnitPrice = 100, LineTotal = 200,
+    Adjustment = new InvoiceItemAdjustment {
+        AdjustedQuantity = i == 23 ? 0.416m : 0.416m + (i < 16 ? 0.001m : 0m),
+        AdjustedLineTotal = 200
+    }
+}).ToList();
+// 24 positive internal shares sum to the consultant's ten whole Pcs.
+var manyEffective = many.Select(i => (InvoiceItem)apply.Invoke(null, new object[] { i })!).ToList();
+Check(manyEffective.GroupBy(TaxInvoiceGrouping.Key).Count() == 1, "24 allocation shares produce one FBR item");
+Check(manyEffective.Sum(i => i.Quantity) == 10m, "FBR grouped quantity is ten whole Pcs");
+Check(manyEffective.Sum(i => i.LineTotal) == 4800m, "FBR value survives fractional internal shares");
+Check(many.All(i => i.Quantity == 2m), "FBR projection preserves commercial quantities");
 Console.WriteLine($"{count}/{count} tax grouping checks passed");
