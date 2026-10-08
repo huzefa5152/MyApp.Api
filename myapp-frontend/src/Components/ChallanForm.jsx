@@ -230,11 +230,11 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   // of typed data with one stray click otherwise. Use the X in the
   // header or the Cancel button to dismiss.
   return (
-    <div style={formStyles.backdrop}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>Create Delivery Challan</h5>
-          <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -367,8 +367,8 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
             {savedChallanId && <div role="alert" style={{ marginTop: 12, padding: 12, borderRadius: 8, background: "#fff3e0", color: "#92400e" }}>
               Challan saved. {purchaseError}
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                <button type="button" style={{ minHeight: 44 }} disabled={saving} onClick={async () => { setSaving(true); try { await createPurchaseBillsFromChallan(savedChallanId); onClose(); } catch (err) { setPurchaseError(err.response?.data?.error || "Could not create purchase bills."); } finally { setSaving(false); } }}>Retry purchase bills</button>
-                <button type="button" style={{ minHeight: 44 }} onClick={onClose}>Close without purchase bills</button>
+                <button data-admin-close="" type="button" style={{ minHeight: 44 }} disabled={saving} onClick={async () => { setSaving(true); try { await createPurchaseBillsFromChallan(savedChallanId); onClose(); } catch (err) { setPurchaseError(err.response?.data?.error || "Could not create purchase bills."); } finally { setSaving(false); } }}>Retry purchase bills</button>
+                <button data-admin-close="" type="button" style={{ minHeight: 44 }} onClick={onClose}>Close without purchase bills</button>
               </div>
             </div>}
 
@@ -380,7 +380,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
           </div>
 
           <div style={formStyles.footer}>
-            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: isDisabled ? 0.6 : 1 }} disabled={isDisabled}>{saving ? "Saving..." : "Save Challan"}</button>
           </div>
         </form>

@@ -206,7 +206,7 @@ export default function UserSessionsPanel() {
           <details><summary style={s.muted}>Browser details</summary><p style={{ ...s.muted, overflowWrap: "anywhere" }}>{session.userAgent || "Not recorded"}</p></details>
           {actions(session)}
         </article>)}</div>
-      : <div style={s.tableWrap}><table style={s.table}>
+      : <div data-admin-table-region="" style={s.tableWrap}><table style={s.table}>
           <thead><tr>{["User", "Device", "Status", "Signed in", "Last activity", "Session ends", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
           <tbody>{data.items.map(session => <tr key={session.id} style={s.tr}>
             <td style={s.td}>

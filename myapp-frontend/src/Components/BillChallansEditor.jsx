@@ -90,11 +90,11 @@ export default function BillChallansEditor({ invoice, onClose, onSaved, canAttac
 
   const visible = [...(snapshot?.linked || []), ...[...selected.values()].filter(c => !linked.has(c.id)),
     ...options.filter(c => !selected.has(c.id) && !linked.has(c.id))];
-  return <div style={{ ...formStyles.backdrop, zIndex: 1500 }}>
-    <form onSubmit={save} aria-label="Manage bill challans" style={{ ...formStyles.modal, width: "96vw", maxWidth: 820 }}>
+  return <div data-admin-backdrop="" style={{ ...formStyles.backdrop, zIndex: 1500 }}>
+    <form data-admin-dialog="" onSubmit={save} aria-label="Manage bill challans" style={{ ...formStyles.modal, width: "96vw", maxWidth: 820 }}>
       <div style={formStyles.header}>
         <h5 style={formStyles.title}>Manage challans · Bill #{bill.invoiceNumber}</h5>
-        <button type="button" disabled={saving} style={{ ...formStyles.closeButton, minHeight: 44, minWidth: 44 }} onClick={onClose} aria-label="Close challan selection">×</button>
+        <button data-admin-close="" type="button" disabled={saving} style={{ ...formStyles.closeButton, minHeight: 44, minWidth: 44 }} onClick={onClose} aria-label="Close challan selection">×</button>
       </div>
       <div style={{ ...formStyles.body, minWidth: 0 }}>
         <p>Choose challans for <strong>{bill.clientName}</strong>. Retained items keep their rates and adjustments. Removed challans become available for billing again.</p>
@@ -146,7 +146,7 @@ export default function BillChallansEditor({ invoice, onClose, onSaved, canAttac
         </div>}
       </div>
       <div style={{ ...formStyles.footer, display: "flex", flexWrap: "wrap", gap: 8 }}>
-        <button type="button" style={button} disabled={saving} onClick={onClose}>Cancel</button>
+        <button data-admin-close="" type="button" style={button} disabled={saving} onClick={onClose}>Cancel</button>
         <button type="submit" style={{ ...button, background: "#0d47a1", color: "white" }} disabled={!snapshot || loading || saving || !changed || !validRates || !hasItems}>
           {saving ? "Saving…" : "Save challans"}
         </button>

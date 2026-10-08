@@ -183,7 +183,7 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
       {open && triggerRect && createPortal(
         <div
           ref={wrapperRef}
-          style={styles.dropdown(triggerRect)}
+          data-admin-popup="" style={styles.dropdown(triggerRect)}
           onKeyDown={handleKeyDown}
         >
           <div style={styles.searchRow}>

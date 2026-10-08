@@ -433,7 +433,7 @@ function Notice({ tone = "info", children, onClose }) {
       <Icon size={20} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
       <span style={{ flex: 1, minWidth: 0 }}>{children}</span>
       {onClose && (
-        <button type="button" onClick={onClose} aria-label="Dismiss"
+        <button data-admin-close="" type="button" onClick={onClose} aria-label="Dismiss"
           style={{ width: 44, height: 44, margin: "-0.6rem -0.6rem -0.6rem 0", display: "grid", placeItems: "center",
             border: "none", background: "transparent", color: t.color, cursor: "pointer", fontSize: "1.2rem" }}>×</button>
       )}

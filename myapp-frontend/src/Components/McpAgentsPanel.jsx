@@ -90,11 +90,11 @@ function NewTokenDialog({ onClose, onCreated }) {
     finally { setBusy(false); }
   };
   const valid = userId && name.trim() && (all || picked.length > 0);
-  return <div style={formStyles.backdrop}>
-    <form style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onSubmit={submit}>
+  return <div data-admin-backdrop="" style={formStyles.backdrop}>
+    <form data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onSubmit={submit}>
       <div style={formStyles.header}>
         <h3 style={formStyles.title}>New agent token</h3>
-        <button type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose /></button>
+        <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose /></button>
       </div>
       <div style={formStyles.body}>
         <p style={s.sub}>The token acts as one user, only in the companies you tick, and never beyond what that user may do. Every write is shown to a person to approve first.</p>
@@ -125,7 +125,7 @@ function NewTokenDialog({ onClose, onCreated }) {
         {error && <div role="alert" style={s.alert}>{error}</div>}
       </div>
       <div style={s.foot}>
-        <button type="button" style={s.ghost} onClick={onClose}>Cancel</button>
+        <button data-admin-close="" type="button" style={s.ghost} onClick={onClose}>Cancel</button>
         <button type="submit" style={{ ...s.primary, opacity: valid && !busy ? 1 : 0.55 }} disabled={!valid || busy}>Create token</button>
       </div>
     </form>
@@ -136,8 +136,8 @@ export function SecretDialog({ created, onClose }) {
   const origin = typeof window !== "undefined" ? window.location.origin : "https://<your-site>";
   const toml = `[mcp_servers.trader]\nurl = "${origin}/mcp"\nbearer_token_env_var = "TRADER_MCP_TOKEN"`;
   const copy = async (text, what) => { try { await navigator.clipboard.writeText(text); notify(`${what} copied.`, "success"); } catch { notify("Copy failed. Select the text and copy it by hand.", "error"); } };
-  return <div style={formStyles.backdrop}>
-    <div style={{ ...formStyles.modal, maxWidth: modalSizes.md }} role="dialog" aria-label="Agent token created">
+  return <div data-admin-backdrop="" style={formStyles.backdrop}>
+    <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.md }} role="dialog" aria-label="Agent token created">
       <div style={formStyles.header}><h3 style={formStyles.title}>Copy your token now</h3></div>
       <div style={formStyles.body}>
         <div style={s.warn}>This is the only time the token is shown. It is stored as a hash and cannot be recovered. If you lose it, revoke it and create another.</div>
@@ -149,7 +149,7 @@ export function SecretDialog({ created, onClose }) {
           <button type="button" style={s.iconBtn} onClick={() => copy(toml, "Config")} aria-label="Copy config"><MdContentCopy /></button></div>
         <p style={s.hint}>Set <code>TRADER_MCP_TOKEN</code> to the token above in your user environment. Expires {absolute(created.expiresAt)}.</p>
       </div>
-      <div style={s.foot}><button type="button" style={s.primary} onClick={onClose}>I have copied it</button></div>
+      <div style={s.foot}><button data-admin-close="" type="button" style={s.primary} onClick={onClose}>I have copied it</button></div>
     </div>
   </div>;
 }
@@ -237,7 +237,7 @@ export default function McpAgentsPanel() {
           </div>
           {revokeBtn(t)}
         </article>)}</div>
-      : <div style={s.tableWrap}><table style={s.table}>
+      : <div data-admin-table-region="" style={s.tableWrap}><table style={s.table}>
           <thead><tr>{["Agent", "Runs as", "Companies", "Status", "Last used", "Expires", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
           <tbody>{tokens.map(t => <tr key={t.id} style={s.tr}>
             <td style={s.td}><div style={s.strong}>{t.name}</div><div style={s.muted}><code>{t.hint}…</code></div></td>
@@ -277,7 +277,7 @@ export default function McpAgentsPanel() {
           </div>
           {a.arguments && <details><summary style={s.muted}>Arguments</summary><pre style={s.pre}>{a.arguments}</pre></details>}
         </article>)}</div>
-      : <div style={s.tableWrap}><table style={s.table}>
+      : <div data-admin-table-region="" style={s.tableWrap}><table style={s.table}>
           <thead><tr>{["When", "Agent", "Tool", "Company", "Result", "Details"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
           <tbody>{activity.items.map(a => <tr key={a.id} style={s.tr}>
             <td style={{ ...s.td, whiteSpace: "nowrap" }} title={absolute(a.at)}>{relative(a.at)}</td>

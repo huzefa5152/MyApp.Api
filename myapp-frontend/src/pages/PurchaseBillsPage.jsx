@@ -367,8 +367,8 @@ export default function PurchaseBillsPage() {
       )}
 
       {showSalePicker && (
-        <div style={pickerStyles.backdrop} onClick={() => setShowSalePicker(false)}>
-          <div style={pickerStyles.modal} onClick={(e) => e.stopPropagation()}>
+        <div data-admin-backdrop="" style={pickerStyles.backdrop} onClick={() => setShowSalePicker(false)}>
+          <div data-admin-dialog="" style={pickerStyles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={pickerStyles.header}>
               <h3 style={pickerStyles.title}>Pick a sale bill awaiting procurement</h3>
               <button style={pickerStyles.closeBtn} onClick={() => setShowSalePicker(false)}>
@@ -398,7 +398,7 @@ export default function PurchaseBillsPage() {
                   No sale bills awaiting procurement. Either every bill is FBR-ready, or some lines are missing Item Type — fix those on the Bills page first.
                 </div>
               ) : (
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" }}>
+                <div data-admin-table-region=""><table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" }}>
                   <thead>
                     <tr>
                       <th style={pickerStyles.th}>Bill #</th>
@@ -438,7 +438,7 @@ export default function PurchaseBillsPage() {
                         </tr>
                       ))}
                   </tbody>
-                </table>
+                </table></div>
               )}
             </div>
           </div>

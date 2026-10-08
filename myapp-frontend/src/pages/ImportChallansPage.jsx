@@ -719,7 +719,7 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
               </div>
 
               {/* Desktop / tablet — table */}
-              <div className="imp-items-table" style={{ overflowX: "auto" }}>
+              <div data-admin-table-region="" className="imp-items-table" style={{ overflowX: "auto" }}>
                 <table style={styles.itemTable}>
                   <thead>
                     <tr>
@@ -863,7 +863,7 @@ function ResultsStep({ results, onRestart }) {
           </div>
         </div>
       </div>
-      <div style={{ overflowX: "auto" }}>
+      <div data-admin-table-region="" style={{ overflowX: "auto" }}>
         <table style={styles.itemTable}>
           <thead>
             <tr>

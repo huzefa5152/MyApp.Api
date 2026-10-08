@@ -27,14 +27,14 @@ export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPr
   if (!quote) return null;
   const items = quote.items || [];
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={{ ...formStyles.title, display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <MdRequestQuote size={20} /> Quote #{quote.quoteNumber}
             <span style={{ ...st.badge, background: `${STATUS_COLORS[quote.status] || "#5f6d7e"}18`, color: STATUS_COLORS[quote.status] || "#5f6d7e" }}>{quote.status}</span>
           </h5>
-          <button style={formStyles.closeButton} onClick={onClose}><MdClose size={18} /></button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}><MdClose size={18} /></button>
         </div>
 
         <div style={formStyles.body}>
@@ -53,7 +53,7 @@ export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPr
           )}
 
           <div style={st.sectionTitle}>Items ({items.length})</div>
-          <div style={st.tableWrap}>
+          <div data-admin-table-region="" style={st.tableWrap}>
             <table style={st.table}>
               <thead>
                 <tr>
@@ -106,7 +106,7 @@ export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPr
               <MdPrint size={16} /> Print
             </button>
           )}
-          <button style={{ ...formStyles.button, ...formStyles.submit }} onClick={onClose}>Close</button>
+          <button data-admin-close="" style={{ ...formStyles.button, ...formStyles.submit }} onClick={onClose}>Close</button>
         </div>
       </div>
     </div>

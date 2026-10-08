@@ -62,11 +62,11 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
   // Backdrop click is a no-op — operators may want to scroll the
   // results table; clicking outside accidentally shouldn't dismiss it.
   return (
-    <div style={styles.backdrop}>
-      <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={styles.backdrop}>
+      <div data-admin-dialog="" style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div style={styles.header}>
           <h3 style={styles.title}>{title}</h3>
-          <button style={styles.closeBtn} onClick={onClose} aria-label="Close">
+          <button data-admin-close="" style={styles.closeBtn} onClick={onClose} aria-label="Close">
             <MdClose size={20} />
           </button>
         </div>
@@ -103,7 +103,7 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
           )}
         </div>
 
-        <div style={styles.tableWrap}>
+        <div data-admin-table-region="" style={styles.tableWrap}>
           <table style={styles.table}>
             <thead>
               <tr>
@@ -149,7 +149,7 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
         </div>
 
         <div style={styles.footer}>
-          <button style={styles.closeFooterBtn} onClick={onClose}>Close</button>
+          <button data-admin-close="" style={styles.closeFooterBtn} onClick={onClose}>Close</button>
         </div>
       </div>
     </div>

@@ -783,11 +783,11 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // Backdrop click is a no-op — bills can hold a lot of typed data and
   // a stray click shouldn't wipe it. Dismiss via X or Cancel.
   return (
-    <div style={formStyles.backdrop}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>Create Bill</h5>
-          <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div style={{ ...formStyles.body, maxHeight: "70vh", overflowY: "auto" }}>
@@ -1357,7 +1357,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             })}
                           </div>
                         ) : (
-                        <div style={styles.unifiedTableWrap}>
+                        <div data-admin-table-region="" style={styles.unifiedTableWrap}>
                           <table style={styles.unifiedTable}>
                             <thead>
                               <tr style={styles.unifiedThead}>
@@ -1642,7 +1642,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                 Select an Item Type for every item (required for FBR grouping).
               </span>
             )}
-            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             {billNumberMode === "custom" && !billNumberOk && (
               <span style={{ fontSize: "0.8rem", color: colors.danger, marginRight: "auto" }}>
                 Enter a bill number that isn&apos;t already in use, or switch back to Auto.

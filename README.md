@@ -300,6 +300,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-10-08
 
+- Refine the admin interface with compact controls, mobile tap targets, contained tables, viewport-fitting dialogs and keyboard focus support while preserving existing workflows and permissions.
+
 - Harden sign-in privacy, account identity and token revocation while preserving existing credentials and company permissions. Handle duplicate usernames without server errors.
 
 - Add company-scoped MCP email enquiry tools: review mail, approve Keep/Ignore, supply explicit item prices and approve one quotation through existing OAuth and per-user tool grants.

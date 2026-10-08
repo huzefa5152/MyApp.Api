@@ -321,7 +321,7 @@ export default function TaxSheetPage() {
               </div>
             </div>
           ) : (
-            <div style={{ overflowX: "auto" }}>
+            <div data-admin-table-region="" style={{ overflowX: "auto" }}>
               <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 860, fontSize: "0.82rem" }}>
                 <thead>
                   <tr style={{ background: colors.rowAlt }}>
@@ -364,7 +364,7 @@ export default function TaxSheetPage() {
       {loading && <div style={{ padding: 32, textAlign: "center", color: colors.textSecondary }}>Loading tax sheet…</div>}
 
       {transferOpen && (
-        <div style={overlay} onClick={() => !transferring && setTransferOpen(false)}>
+        <div data-admin-backdrop="" style={overlay} onClick={() => !transferring && setTransferOpen(false)}>
           <div style={modalBox} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <h3 style={{ margin: 0, fontSize: "1.05rem", color: colors.textPrimary }}>Transfer remaining invoices</h3>
@@ -384,7 +384,7 @@ export default function TaxSheetPage() {
               />
             </Field>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 18 }}>
-              <button onClick={() => setTransferOpen(false)} disabled={transferring}
+              <button data-admin-close="" onClick={() => setTransferOpen(false)} disabled={transferring}
                 style={{ ...btn("#eef1f6"), color: colors.textPrimary }}>
                 Cancel
               </button>

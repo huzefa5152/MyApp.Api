@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useId } from "react";
 import httpClient from "../api/httpClient";
 import { dropdownStyles } from "../theme";
 
@@ -12,6 +12,7 @@ export default function SelectDropdown({
   optionValueKey = "id",
   className,
 }) {
+  const fieldId = useId();
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -43,7 +44,7 @@ export default function SelectDropdown({
   return (
     <div>
       {label && (
-        <label
+        <label htmlFor={fieldId}
           style={{
             display: "block",
             marginBottom: "0.35rem",
@@ -55,7 +56,7 @@ export default function SelectDropdown({
           {label}
         </label>
       )}
-      <select
+      <select id={fieldId} aria-label={label || placeholder}
         className={useThemeStyle ? undefined : className}
         style={useThemeStyle ? { ...dropdownStyles.base, width: "100%" } : undefined}
         value={value?.[optionValueKey] || ""}

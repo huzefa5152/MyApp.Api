@@ -240,13 +240,13 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   // Backdrop click is a no-op — protects in-progress edits from a stray
   // click. Dismiss via the X in the header or the Cancel button.
   return (
-    <div style={formStyles.backdrop}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>
             {isDuplicate ? "Edit Duplicate Challan" : "Edit Challan"} #{challan.challanNumber}
           </h5>
-          <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
@@ -420,7 +420,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
             </div>
           </div>
           <div style={formStyles.footer}>
-            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
+            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
               Cancel
             </button>
             <button

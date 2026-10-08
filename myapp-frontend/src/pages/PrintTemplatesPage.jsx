@@ -729,11 +729,11 @@ export default function PrintTemplatesPage() {
 
       {/* Copy — same type (duplicate) or a different document type */}
       {copyTarget && (
-        <div style={st.previewOverlay} onClick={() => setCopyTarget(null)}>
+        <div data-admin-backdrop="" style={st.previewOverlay} onClick={() => setCopyTarget(null)}>
           <div style={st.copyModal} onClick={(e) => e.stopPropagation()}>
             <div style={st.previewHead}>
               <div><strong>Copy “{copyTarget.name}”</strong> <span style={st.typeChip}>{TEMPLATE_TYPE_LABEL[copyTarget.templateType]}</span></div>
-              <button style={st.closeBtn} onClick={() => setCopyTarget(null)} aria-label="Close"><MdClose size={20} /></button>
+              <button data-admin-close="" style={st.closeBtn} onClick={() => setCopyTarget(null)} aria-label="Close"><MdClose size={20} /></button>
             </div>
             <p style={st.copyHint}>
               Pick the document type for the new template. Choose the <strong>same type</strong> to duplicate it, or a <strong>different type</strong> to reuse this design there (open it afterward to adjust the merge fields — they differ per document type).
@@ -765,11 +765,11 @@ export default function PrintTemplatesPage() {
 
       {/* Full preview */}
       {previewTarget && (
-        <div style={st.previewOverlay} onClick={() => setPreviewTarget(null)}>
-          <div style={st.previewModal} onClick={(e) => e.stopPropagation()}>
+        <div data-admin-backdrop="" style={st.previewOverlay} onClick={() => setPreviewTarget(null)}>
+          <div data-admin-dialog="" aria-label="Template preview" style={st.previewModal} onClick={(e) => e.stopPropagation()}>
             <div style={st.previewHead}>
               <div><strong>{previewTarget.name}</strong> <span style={st.typeChip}>{TEMPLATE_TYPE_LABEL[previewTarget.templateType]}</span></div>
-              <button style={st.closeBtn} onClick={() => setPreviewTarget(null)} aria-label="Close"><MdClose size={20} /></button>
+              <button data-admin-close="" style={st.closeBtn} onClick={() => setPreviewTarget(null)} aria-label="Close"><MdClose size={20} /></button>
             </div>
             <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
               <A4PreviewFrame
@@ -823,14 +823,14 @@ function StampUploadModal({ onClose, onUpload, uploading }) {
   };
 
   return (
-    <div style={formStyles.backdrop} onClick={uploading ? undefined : onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.sm}px` }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="stamp-upload-title">
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={uploading ? undefined : onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.sm}px` }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="stamp-upload-title">
         <div style={formStyles.header}>
           <div>
             <h3 id="stamp-upload-title" style={formStyles.title}>Upload Stamp</h3>
             <p style={{ margin: "0.15rem 0 0", fontSize: "0.78rem", color: "rgba(255,255,255,0.85)" }}>PNG, JPG or WebP. A transparent PNG works best for signatures.</p>
           </div>
-          <button type="button" style={formStyles.closeButton} onClick={onClose} disabled={uploading} aria-label="Close"><MdClose size={20} /></button>
+          <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} disabled={uploading} aria-label="Close"><MdClose size={20} /></button>
         </div>
         <div style={{ ...formStyles.body, display: "flex", flexDirection: "column", gap: "0.8rem" }}>
           <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" style={{ display: "none" }} onChange={onPick} />
@@ -856,7 +856,7 @@ function StampUploadModal({ onClose, onUpload, uploading }) {
           </label>
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", padding: "0.75rem clamp(1rem, 2vw, 1.5rem)", borderTop: `1px solid ${colors.cardBorder}`, flexShrink: 0 }}>
-          <button style={{ ...st.btn, ...st.btnOutline, minHeight: 44 }} onClick={onClose} disabled={uploading}>Cancel</button>
+          <button data-admin-close="" style={{ ...st.btn, ...st.btnOutline, minHeight: 44 }} onClick={onClose} disabled={uploading}>Cancel</button>
           <button
             style={{ ...st.btn, ...st.btnPrimary, minHeight: 44, opacity: (!file || uploading) ? 0.6 : 1, cursor: (!file || uploading) ? "default" : "pointer" }}
             disabled={!file || uploading}

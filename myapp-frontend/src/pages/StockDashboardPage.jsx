@@ -353,7 +353,7 @@ export default function StockDashboardPage() {
               ) : (
                 <>
                   {/* Desktop / tablet — table */}
-                  <div className="stock-table" style={styles.tableWrap}>
+                  <div data-admin-table-region="" className="stock-table" style={styles.tableWrap}>
                     <table style={styles.table}>
                       <thead>
                         <tr>
@@ -497,7 +497,7 @@ export default function StockDashboardPage() {
               ) : (
                 <>
                   {/* Desktop — table */}
-                  <div className="stock-table" style={styles.tableWrap}>
+                  <div data-admin-table-region="" className="stock-table" style={styles.tableWrap}>
                     <table style={styles.table}>
                       <thead>
                         <tr>
@@ -567,7 +567,7 @@ export default function StockDashboardPage() {
               ) : (
                 <>
                   {/* Desktop — table */}
-                  <div className="stock-table" style={styles.tableWrap}>
+                  <div data-admin-table-region="" className="stock-table" style={styles.tableWrap}>
                     <table style={styles.table}>
                       <thead>
                         <tr>
@@ -797,16 +797,16 @@ function TabBtn({ active, children, onClick }) {
 
 function SmallModal({ title, children, onClose, onSubmit }) {
   return (
-    <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(15,20,30,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100, padding: "2vh 1rem", overflowY: "auto" }}>
-      <div style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 480, maxHeight: "94vh", overflowY: "auto", padding: "1.25rem", boxShadow: "0 20px 60px rgba(13,71,161,0.2)" }}>
+    <div data-admin-backdrop="" style={{ position: "fixed", inset: 0, backgroundColor: "rgba(15,20,30,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100, padding: "2vh 1rem", overflowY: "auto" }}>
+      <div data-admin-dialog="" style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 480, maxHeight: "94vh", overflowY: "auto", padding: "1.25rem", boxShadow: "0 20px 60px rgba(13,71,161,0.2)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
           <h3 style={{ margin: 0, fontSize: "1.05rem", color: "#1a2332" }}>{title}</h3>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "#5f6d7e", cursor: "pointer", padding: 0, fontSize: "1.5rem", lineHeight: 1 }}>×</button>
+          <button data-admin-close="" onClick={onClose} style={{ background: "none", border: "none", color: "#5f6d7e", cursor: "pointer", padding: 0, fontSize: "1.5rem", lineHeight: 1 }}>×</button>
         </div>
         <form onSubmit={onSubmit}>
           {children}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "1rem" }}>
-            <button type="button" onClick={onClose} style={{ padding: "0.45rem 1rem", borderRadius: 8, border: "1px solid #d0d7e2", background: "#fff", color: "#1a2332", cursor: "pointer", boxShadow: "none" }}>Cancel</button>
+            <button data-admin-close="" type="button" onClick={onClose} style={{ padding: "0.45rem 1rem", borderRadius: 8, border: "1px solid #d0d7e2", background: "#fff", color: "#1a2332", cursor: "pointer", boxShadow: "none" }}>Cancel</button>
             <button type="submit" style={{ padding: "0.45rem 1rem", borderRadius: 8, border: "none", background: "#0d47a1", color: "#fff", cursor: "pointer", fontWeight: 600, boxShadow: "none" }}>Save</button>
           </div>
         </form>

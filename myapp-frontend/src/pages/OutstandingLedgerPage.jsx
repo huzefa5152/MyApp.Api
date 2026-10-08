@@ -304,7 +304,7 @@ export default function OutstandingLedgerPage() {
             </div>
           ) : (
             /* ── Desktop/tablet: table (scrolls inside its own box) ── */
-            <div style={{ overflowX: "auto" }}>
+            <div data-admin-table-region="" style={{ overflowX: "auto" }}>
               <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 900, fontSize: "0.82rem" }}>
                 <thead>
                   <tr style={{ background: colors.rowAlt }}>

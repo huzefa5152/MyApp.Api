@@ -6,8 +6,8 @@ import { formStyles, modalSizes } from "../../theme";
 export default function SyncWarningModal({ onConfirm, onCancel }) {
   // Backdrop click is a no-op — explicit Cancel / Continue only.
   return (
-    <div style={styles.overlay}>
-      <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={styles.overlay}>
+      <div data-admin-dialog="" style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <h3 style={styles.title}>Switch to Visual Editor?</h3>
         <p style={styles.text}>
           This template was created in Code mode. Loading it into the Visual
@@ -19,7 +19,7 @@ export default function SyncWarningModal({ onConfirm, onCancel }) {
           Your code will not be modified until you save from Visual mode.
         </p>
         <div style={styles.actions}>
-          <button style={styles.cancelBtn} onClick={onCancel}>
+          <button data-admin-close="" style={styles.cancelBtn} onClick={onCancel}>
             Cancel
           </button>
           <button style={styles.confirmBtn} onClick={onConfirm}>

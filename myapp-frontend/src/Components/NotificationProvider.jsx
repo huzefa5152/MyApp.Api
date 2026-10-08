@@ -63,7 +63,7 @@ export default function NotificationProvider({ children }) {
         >
           <span style={{ fontWeight: 700, fontSize: "1.1rem", lineHeight: 1 }}>{s.icon}</span>
           <span style={{ flex: 1 }}>{toast.message}</span>
-          <button
+          <button data-admin-close=""
             onClick={dismiss}
             style={{
               background: "none",

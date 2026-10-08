@@ -182,7 +182,7 @@ export default function AccountSelect({
       </button>
 
       {open && triggerRect && createPortal(
-        <div ref={wrapperRef} style={styles.dropdown(triggerRect)} onKeyDown={handleKeyDown}>
+        <div data-admin-popup="" ref={wrapperRef} style={styles.dropdown(triggerRect)} onKeyDown={handleKeyDown}>
           <div style={styles.searchRow}>
             <MdSearch size={16} style={styles.searchIcon} />
             <input

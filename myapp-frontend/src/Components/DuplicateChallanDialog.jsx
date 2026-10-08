@@ -42,11 +42,11 @@ export default function DuplicateChallanDialog({ open, challanNumber, onConfirm,
   };
 
   return (
-    <div
+    <div data-admin-backdrop=""
       style={{ ...formStyles.backdrop, zIndex: 1102, animation: "fadeIn 0.2s ease" }}
       // No backdrop-close — keeps the operator's intent unambiguous.
     >
-      <div
+      <div data-admin-dialog=""
         style={{ ...formStyles.modal, maxWidth: `${modalSizes.sm}px`, animation: "fadeIn 0.25s ease" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -104,7 +104,7 @@ export default function DuplicateChallanDialog({ open, challanNumber, onConfirm,
           </div>
 
           <div style={{ display: "flex", gap: 10, padding: "16px 28px 24px", justifyContent: "center" }}>
-            <button
+            <button data-admin-close=""
               type="button"
               onClick={onCancel}
               style={S.cancelBtn}

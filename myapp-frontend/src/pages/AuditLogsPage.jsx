@@ -159,7 +159,7 @@ export default function AuditLogsPage() {
 
       {/* Table (desktop) */}
       <div style={{ background: colors.cardBg, borderRadius: 12, border: `1px solid ${colors.cardBorder}`, overflow: "hidden" }}>
-        <div className="audit-table-wrap" style={{ overflowX: "auto" }}>
+        <div data-admin-table-region="" className="audit-table-wrap" style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
             <thead>
               <tr style={{ background: "#f8f9fb", borderBottom: `2px solid ${colors.cardBorder}` }}>
@@ -283,12 +283,12 @@ export default function AuditLogsPage() {
 
       {/* Detail Modal */}
       {selectedLog && (
-        <div
+        <div data-admin-backdrop=""
           // Backdrop click is a no-op for consistency with the rest of the
           // app — dismiss via the X button in the modal header.
           style={formStyles.backdrop}
         >
-          <div
+          <div data-admin-dialog=""
             style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, overflow: "auto", padding: "24px" }}
             onClick={(e) => e.stopPropagation()}
           >

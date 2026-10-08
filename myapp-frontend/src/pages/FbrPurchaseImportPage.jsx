@@ -581,7 +581,7 @@ export default function FbrPurchaseImportPage() {
                 </div>
 
                 {/* Lines table — desktop */}
-                <div className="fbr-imp-table-wrap" style={{ overflowX: "auto" }}>
+                <div data-admin-table-region="" className="fbr-imp-table-wrap" style={{ overflowX: "auto" }}>
                   <table style={styles.table}>
                     <thead>
                       <tr>

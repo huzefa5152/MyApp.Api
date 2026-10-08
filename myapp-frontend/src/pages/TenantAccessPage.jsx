@@ -168,7 +168,7 @@ export default function TenantAccessPage() {
       ) : (
         <>
           {/* Desktop / tablet — table */}
-          <div className="tenant-table" style={pageStyles.tableWrap}>
+          <div data-admin-table-region="" className="tenant-table" style={pageStyles.tableWrap}>
             <table style={pageStyles.table}>
               <thead>
                 <tr>
@@ -279,8 +279,8 @@ export default function TenantAccessPage() {
 
 function EditModal({ user, selected, onToggle, onSubmit, onClose, saving, canAssign }) {
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog=""
         style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -288,7 +288,7 @@ function EditModal({ user, selected, onToggle, onSubmit, onClose, saving, canAss
           <span style={formStyles.title}>
             Edit Access — {user.fullName} ({user.username})
           </span>
-          <button type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close">
+          <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close">
             <MdClose />
           </button>
         </div>
@@ -336,7 +336,7 @@ function EditModal({ user, selected, onToggle, onSubmit, onClose, saving, canAss
           </div>
         </div>
         <div style={formStyles.footer}>
-          <button
+          <button data-admin-close=""
             type="button"
             style={{ ...formStyles.button, ...formStyles.cancel }}
             onClick={onClose}

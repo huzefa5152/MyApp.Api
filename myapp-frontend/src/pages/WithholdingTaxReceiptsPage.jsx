@@ -245,7 +245,7 @@ export default function WithholdingTaxReceiptsPage() {
           </div>
         </div>
       ) : selectedCompany ? (
-        <div style={styles.scroll}>
+        <div data-admin-table-region="" style={styles.scroll}>
           <table style={styles.table}>
             <thead>
               <tr>
@@ -313,11 +313,11 @@ export default function WithholdingTaxReceiptsPage() {
       )}
 
       {viewReceipt && (
-        <div style={formStyles.backdrop} onClick={() => setViewReceipt(null)}>
-          <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px` }} onClick={(e) => e.stopPropagation()}>
+        <div data-admin-backdrop="" style={formStyles.backdrop} onClick={() => setViewReceipt(null)}>
+          <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px` }} onClick={(e) => e.stopPropagation()}>
             <div style={formStyles.header}>
               <h5 style={formStyles.title}>Withholding Tax Receipt #{viewReceipt.receiptNumber}</h5>
-              <button style={formStyles.closeButton} onClick={() => setViewReceipt(null)}>&times;</button>
+              <button data-admin-close="" style={formStyles.closeButton} onClick={() => setViewReceipt(null)}>&times;</button>
             </div>
             <div style={formStyles.body}>
               <div style={styles.vRow}><span style={styles.vLbl}>Customer</span><span style={styles.vVal}>{viewReceipt.clientName}</span></div>
@@ -331,7 +331,7 @@ export default function WithholdingTaxReceiptsPage() {
               </div>
             </div>
             <div style={formStyles.footer}>
-              <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setViewReceipt(null)}>Close</button>
+              <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setViewReceipt(null)}>Close</button>
               {canPrint && (
                 <button
                   type="button"

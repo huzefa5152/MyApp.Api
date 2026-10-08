@@ -129,7 +129,7 @@ export default function StarterGallery({
               {` · ${list.length} shown`}
             </p>
           </div>
-          {!embedded && <button style={s.closeBtn} onClick={onClose} aria-label="Close"><MdClose size={22} /></button>}
+          {!embedded && <button data-admin-close="" style={s.closeBtn} onClick={onClose} aria-label="Close"><MdClose size={22} /></button>}
         </div>
 
         <div style={s.toolbar}>
@@ -181,8 +181,8 @@ export default function StarterGallery({
   );
 
   const largePreview = previewStarter && (
-    <div style={s.previewOverlay} onClick={() => setPreviewStarter(null)}>
-      <div style={s.previewModal} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={s.previewOverlay} onClick={() => setPreviewStarter(null)}>
+      <div data-admin-dialog="" aria-label="Template preview" style={s.previewModal} onClick={(e) => e.stopPropagation()}>
         <div style={s.previewHead}>
           <div>
             <strong style={{ fontSize: "1rem" }}>{previewStarter.name}</strong>
@@ -208,8 +208,8 @@ export default function StarterGallery({
     return <div style={s.embedded}>{body}{largePreview}</div>;
   }
   return (
-    <div style={s.overlay}>
-      <div style={s.modal} onClick={(e) => e.stopPropagation()}>{body}</div>
+    <div data-admin-backdrop="" style={s.overlay}>
+      <div data-admin-dialog="" style={s.modal} onClick={(e) => e.stopPropagation()}>{body}</div>
       {largePreview}
     </div>
   );

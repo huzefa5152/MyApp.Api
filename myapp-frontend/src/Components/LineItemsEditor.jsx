@@ -326,7 +326,7 @@ export default function LineItemsEditor({
             autoFocus
           />
           <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
-            <button type="button" style={s.pasteCancel} onClick={() => { setPasteOpen(false); setPasteText(""); }}>Cancel</button>
+            <button data-admin-close="" type="button" style={s.pasteCancel} onClick={() => { setPasteOpen(false); setPasteText(""); }}>Cancel</button>
             <button type="button" style={s.pasteApply} onClick={applyPaste} disabled={!pasteText.trim()}>Add lines</button>
           </div>
         </div>
@@ -411,7 +411,7 @@ export default function LineItemsEditor({
           })}
         </div>
       ) : (
-        <div style={s.tableWrap}>
+        <div data-admin-table-region="" style={s.tableWrap}>
           <table style={s.table}>
             <thead>
               <tr>

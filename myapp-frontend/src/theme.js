@@ -39,8 +39,8 @@ export const cardStyles = {
     // a title + 3-line meta block + buttons, so anything narrower
     // cramps the layout). Was hardcoded `repeat(3, 1fr)` which forced
     // a 3-up grid on phones.
-    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-    gap: "1.25rem",
+    gridTemplateColumns: "repeat(auto-fit, minmax(var(--admin-card-min, 280px), 1fr))",
+    gap: "var(--admin-card-gap, 1.25rem)",
   },
   card: {
     backgroundColor: colors.cardBg,
@@ -115,7 +115,7 @@ export const cardStyles = {
 
 export const dropdownStyles = {
   base: {
-    padding: "0.55rem 1rem",
+    padding: "var(--admin-input-padding, 0.55rem 1rem)",
     borderRadius: "8px",
     border: `1px solid ${colors.inputBorder}`,
     backgroundColor: colors.inputBg,
@@ -195,7 +195,7 @@ export const formStyles = {
     background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
     // clamp keeps the header tidy on phones (~0.9rem horizontal) while
     // restoring the comfortable 1.5rem on tablet/desktop.
-    padding: "1.1rem clamp(0.9rem, 2vw, 1.5rem)",
+    padding: "var(--admin-form-padding, 1.1rem clamp(0.9rem, 2vw, 1.5rem))",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
@@ -240,7 +240,7 @@ export const formStyles = {
     // Padding shrinks on phones via a clamp() — 1rem at narrow widths,
     // 1.5rem on tablet+. Keeps long forms from feeling claustrophobic
     // on a 360px viewport without cramping the desktop look.
-    padding: "clamp(1rem, 2vw, 1.5rem)",
+    padding: "var(--admin-form-padding, clamp(1rem, 2vw, 1.5rem))",
     // Body takes remaining space and scrolls internally when content exceeds it —
     // this is the key fix for tall modals on high-resolution screens.
     overflowY: "auto",
@@ -274,7 +274,7 @@ export const formStyles = {
   },
   input: {
     width: "100%",
-    padding: "0.6rem 0.85rem",
+    padding: "var(--admin-input-padding, 0.6rem 0.85rem)",
     borderRadius: "8px",
     border: `1px solid ${colors.inputBorder}`,
     fontSize: "0.95rem",
@@ -289,7 +289,7 @@ export const formStyles = {
     // flexWrap lets long button rows (e.g. Save / Cancel / Delete) wrap
     // to a second line on narrow phones instead of overflowing.
     flexWrap: "wrap",
-    padding: "1rem clamp(0.9rem, 2vw, 1.5rem)",
+    padding: "var(--admin-form-padding, 1rem clamp(0.9rem, 2vw, 1.5rem))",
     gap: "0.6rem",
     backgroundColor: "#f5f7fa",
     borderTop: `1px solid ${colors.cardBorder}`,
@@ -297,7 +297,7 @@ export const formStyles = {
   },
   button: {
     minHeight: 44,
-    padding: "0.5rem 1.25rem",
+    padding: "var(--admin-button-padding, 0.5rem 1.25rem)",
     fontSize: "0.9rem",
     fontWeight: "600",
     borderRadius: "8px",

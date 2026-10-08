@@ -531,7 +531,7 @@ export default function SalesReportPage() {
               </div>
             </div>
           ) : (
-            <div style={{ overflowX: "auto" }}>
+            <div data-admin-table-region="" style={{ overflowX: "auto" }}>
               <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 820, fontSize: "0.82rem" }}>
                 <thead>
                   <tr style={{ background: colors.rowAlt }}>
@@ -588,7 +588,7 @@ export default function SalesReportPage() {
                         {open && (
                           <tr>
                             <td colSpan={canPrintInvoice ? 12 : 11} style={{ padding: 0, background: colors.rowAlt }}>
-                              <div style={{ overflowX: "auto", padding: "4px 8px 10px 38px" }}>
+                              <div data-admin-table-region="" style={{ overflowX: "auto", padding: "4px 8px 10px 38px" }}>
                                 <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 720, fontSize: "0.8rem" }}>
                                   <thead>
                                     <tr>
@@ -641,8 +641,8 @@ export default function SalesReportPage() {
       {loading && <div style={{ padding: 32, textAlign: "center", color: colors.textSecondary }}>Loading report…</div>}
 
       {bulk && (
-        <div style={formStyles.backdrop} role="dialog" aria-modal="true" aria-label="Building Tax Invoice PDFs">
-          <div style={{ ...formStyles.modal, maxWidth: modalSizes.sm }}>
+        <div data-admin-backdrop="" style={formStyles.backdrop} role="dialog" aria-modal="true" aria-label="Building Tax Invoice PDFs">
+          <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.sm }}>
             <div style={{ padding: "1rem 1.25rem", borderBottom: `1px solid ${colors.cardBorder}`, display: "flex", alignItems: "center", gap: 8 }}>
               {bulk.mode === "zip" ? <MdFolderZip size={20} color={colors.blue} /> : <MdPictureAsPdf size={20} color={colors.blue} />}
               <strong style={{ color: colors.textPrimary }}>
@@ -669,7 +669,7 @@ export default function SalesReportPage() {
               )}
             </div>
             <div style={{ padding: "0.85rem 1.25rem", borderTop: `1px solid ${colors.cardBorder}`, display: "flex", justifyContent: "flex-end" }}>
-              <button type="button" onClick={() => { cancelRef.current = true; }} style={{ ...ghostBtn, minHeight: 40 }}>
+              <button data-admin-close="" type="button" onClick={() => { cancelRef.current = true; }} style={{ ...ghostBtn, minHeight: 40 }}>
                 <MdClose size={15} /> Cancel
               </button>
             </div>

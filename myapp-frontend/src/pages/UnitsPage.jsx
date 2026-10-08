@@ -178,7 +178,7 @@ export default function UnitsPage() {
           {search ? "No units match your search" : "No units yet"}
         </p>
       ) : (
-        <div style={styles.tableWrap}>
+        <div data-admin-table-region="" style={styles.tableWrap}>
           <table style={styles.table}>
             <thead>
               <tr>

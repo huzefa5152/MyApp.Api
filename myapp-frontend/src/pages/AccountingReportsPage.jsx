@@ -160,7 +160,7 @@ export default function AccountingReportsPage() {
   }
 
   const Table = ({ head, rows, foot }) => (
-    <div style={{ overflowX: "auto" }}>
+    <div data-admin-table-region="" style={{ overflowX: "auto" }}>
       <table style={st.table}>
         <thead>
           <tr>{head.map((h, i) => (

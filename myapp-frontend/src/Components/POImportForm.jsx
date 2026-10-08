@@ -440,13 +440,13 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
   // Backdrop click is a no-op — PO imports involve picking + reviewing
   // many lines, a stray click shouldn't drop the work. Use X / Cancel.
   return (
-    <div style={formStyles.backdrop}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>
             {step === 1 ? (target === "salesquote" ? "Import Enquiry / Demand" : "Import Customer PO") : `Review & ${cfg.verb}`}
           </h5>
-          <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
 
         <div style={{ ...formStyles.body, maxHeight: "72vh", overflowY: "auto" }}>
@@ -819,7 +819,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
             </button>
           )}
 
-          <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
 
           {savedChallanId && <button type="button" style={{ ...formStyles.button, ...formStyles.submit }} disabled={saving} onClick={async () => {
             setSaving(true);

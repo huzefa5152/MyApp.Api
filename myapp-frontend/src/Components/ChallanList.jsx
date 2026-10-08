@@ -290,7 +290,7 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                     </button>
                   )}
                   {permUpdate && canCancel && (
-                    <button
+                    <button data-admin-close=""
                       style={{ ...styles.actionBtn, ...styles.cancelBtn }}
                       onClick={() => onCancel?.(c)}
                     >

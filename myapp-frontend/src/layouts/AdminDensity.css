@@ -1,0 +1,107 @@
+/* Admin-only density tokens also reach dialogs rendered through a portal. */
+body.admin-ui {
+  --admin-card-padding: 1rem;
+  --admin-card-gap: 0.85rem;
+  --admin-form-padding: 0.85rem 1rem;
+  --admin-input-padding: 0.45rem 0.65rem;
+  --admin-button-padding: 0.4rem 0.85rem;
+  --admin-input-font: 0.85rem;
+}
+.dl-shell { --sidebar-width: 236px; --topbar-height: 50px; font-size: 14px; }
+.dl-brand { padding: 0.85rem 0.9rem; }
+.dl-brand__name { font-size: 0.95rem; }
+.dl-topbar { padding: 0 1rem; box-shadow: none; }
+.dl-main { padding: 1rem 1.25rem; }
+.dl-main > div { max-width: 100%; }
+.dl-main .accounting-reports-page { padding: 0 !important; }
+.dl-main h1, .dl-main h2 { font-size: clamp(1.1rem, 1.6vw, 1.3rem) !important; line-height: 1.3; }
+.dl-main h3 { font-size: 1rem; }
+.dl-group { margin-top: 0.2rem; }
+.dl-group__header, .dl-item { font-size: 0.82rem; gap: 0.5rem; padding: 0.4rem 0.65rem; }
+.dl-subitem { font-size: 0.79rem; padding: 0.35rem 0.65rem 0.35rem 1.65rem; }
+.dl-sidebar { box-shadow: 2px 0 12px rgba(13, 71, 161, 0.12); }
+body.admin-ui button { box-shadow: none; }
+body.admin-ui button:hover { transform: none; }
+body.admin-ui :is(input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]), select, textarea) {
+  font-size: var(--admin-input-font) !important;
+  max-width: 100%;
+}
+.dl-main :is(table th, table td) { font-size: 0.8rem; }
+.dl-main table th { padding-block: 0.5rem !important; }
+.dl-main table td { padding-block: 0.4rem !important; }
+.dl-main .card { padding: 1rem; box-shadow: 0 1px 4px rgba(30, 50, 80, 0.04); }
+.dl-main :is(.btn, .form-control, .form-select) { font-size: 0.85rem; border-radius: 7px; }
+.dl-main :is(.p-4, .p-5) { padding: 1rem !important; }
+.dl-main :is(.gap-4, .gap-5) { gap: 0.85rem !important; }
+.dl-main :is(.mb-4, .mb-5) { margin-bottom: 1rem !important; }
+@media (max-width: 991.98px) {
+  .dl-main { padding: 0.85rem; }
+  .dl-topbar { min-height: 52px; padding: 0 0.75rem; gap: 0.5rem; }
+  .dl-topbar__breadcrumb { min-width: 0; overflow-wrap: anywhere; font-size: 12px; }
+  .dl-group__header, .dl-item, .dl-subitem { min-height: 44px; }
+  .dl-topbar__hamburger, .dl-brand__close { min-width: 44px; min-height: 44px; }
+}
+@media (max-width: 599.98px) {
+  body.admin-ui { --admin-input-font: 16px; --admin-card-padding: 0.85rem; }
+  .dl-main { padding: 0.65rem; }
+  body.admin-ui :is(button, select, input:not([type=checkbox]):not([type=radio]):not([type=range])) { min-height: 44px !important; }
+  body.admin-ui button { min-width: 44px; }
+}
+
+/* Consistent control geometry, without replacing edition-specific colors. */
+body.admin-ui {
+  --admin-control-height: 36px;
+  --admin-card-min: min(280px, 100%);
+  --admin-input-font: 13px;
+  --admin-form-padding: 14px 18px;
+  --admin-input-padding: 7px 10px;
+  --admin-button-padding: 7px 14px;
+}
+body.admin-ui .dl-main, body.admin-ui .dl-content-wrapper { min-width: 0; }
+body.admin-ui .dl-main > div { min-width: 0; }
+body.admin-ui :is(.dl-main, [data-admin-dialog]) :is(button, input, select, textarea) { font-family: inherit; }
+body.admin-ui :is(.dl-main, [data-admin-dialog]) button { font-size: 13px !important; min-height: var(--admin-control-height); line-height: 1.35; }
+body.admin-ui :is(.dl-main, [data-admin-dialog]) :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]), select) { min-height: var(--admin-control-height); box-sizing: border-box; }
+body.admin-ui :is(.dl-main, [data-admin-dialog]) textarea { min-height: 72px; }
+body.admin-ui :is(button, a, input, select, textarea, [tabindex]):focus-visible { outline: 2px solid #0d47a1 !important; outline-offset: 3px; }
+body.admin-ui .dl-sidebar :is(button,a):focus-visible, body.admin-ui [data-admin-dialog] > div:first-child button:focus-visible { outline-color: currentColor !important; }
+body.admin-ui button:not(:disabled):hover { box-shadow: 0 2px 6px rgba(13,71,161,.12); }
+body.admin-ui button:disabled { cursor: not-allowed; }
+body.admin-ui button svg { flex-shrink: 0; }
+body.admin-ui [data-admin-table-region] { max-width: 100%; min-width: 0; overflow: auto; overscroll-behavior-inline: contain; }
+body.admin-ui [data-admin-backdrop] { padding: 12px !important; overflow-y: auto !important; }
+body.admin-ui [data-admin-dialog] { max-height: calc(100dvh - 24px) !important; min-height: 0; }
+body.admin-ui [data-admin-dialog] > form { min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
+body.admin-ui [data-admin-dialog] :is(h1,h2,h3,h4,h5,h6) { line-height: 1.35; overflow-wrap: anywhere; }
+body.admin-ui [data-admin-dialog] :is(h2,h3,h4,h5) { font-size: 18px !important; }
+body.admin-ui [data-admin-dialog] label { font-size: 12px !important; }
+body.admin-ui [data-admin-dialog] [data-admin-close]:has(svg), body.admin-ui [data-admin-dialog] [data-admin-close][aria-label] { min-width: 36px; min-height: 36px; max-height: none; max-width: none; padding: 0; }
+body.admin-ui [data-admin-popup] { max-width: calc(100vw - 16px); }
+body.admin-ui .dl-user-menu { max-width: calc(100vw - 24px); }
+body.admin-ui .dl-group__body[inert] { visibility: hidden; }
+body.admin-ui .dl-main [role=tablist] { flex-wrap: wrap; }
+body.admin-ui .dl-main :is(.form-grid-2col,.form-grid-3col,.responsive-grid-3col) > * { min-width: 0; }
+@media (max-width: 991.98px) {
+ body.admin-ui .dl-topbar { min-height: 56px; }
+ body.admin-ui .dl-sidebar:not(.dl-sidebar--open) { visibility: hidden; }
+ body.admin-ui .dl-sidebar--open { visibility: visible; }
+}
+@media (max-width: 767.98px) {
+ body.admin-ui { --admin-control-height: 44px; --admin-input-font: 16px; --admin-form-padding: 12px; }
+ body.admin-ui :is(.dl-main,[data-admin-dialog]) button { min-width: 44px; min-height: 44px !important; }
+ body.admin-ui :is(.dl-main,[data-admin-dialog]) :is(input:not([type=checkbox]):not([type=radio]):not([type=range]),select) { min-height: 44px !important; }
+ body.admin-ui [data-admin-dialog] [data-admin-close] { min-width: 44px; }
+ body.admin-ui .dl-main :is(.form-grid-2col,.form-grid-3col,.responsive-grid-3col) { grid-template-columns: minmax(0,1fr) !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+ body.admin-ui *, body.admin-ui *::before, body.admin-ui *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+@media print {
+ body.admin-ui [data-admin-table-region] { overflow: visible; max-height: none; }
+ body.admin-ui [data-admin-dialog] { max-height: none !important; }
+}
+
+body.admin-ui .admin-skip-link { position: fixed; top: 8px; left: 12px; z-index: 12000; transform: translateY(-160%); padding: 10px 14px; background: #fff; color: #0d47a1; border: 2px solid #0d47a1; border-radius: 8px; }
+body.admin-ui .admin-skip-link:focus { transform: translateY(0); }
+
+body.admin-ui [data-admin-dialog]:not([data-admin-backdrop]) { display: flex; flex-direction: column; overflow: hidden; }

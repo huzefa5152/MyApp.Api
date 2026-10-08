@@ -86,7 +86,7 @@ export default function AccountLedgerDialog({ account, onClose }) {
           </div>
         )
         : (
-          <div style={{ overflowX: "auto" }}>
+          <div data-admin-table-region="" style={{ overflowX: "auto" }}>
             <table style={st.table}>
               <thead>
                 <tr>
@@ -117,14 +117,14 @@ export default function AccountLedgerDialog({ account, onClose }) {
         );
 
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={{ ...formStyles.title, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
             <span style={{ overflowWrap: "anywhere" }}>Ledger — {account.name}</span>
             {account.code && <span style={st.codeChip}>{account.code}</span>}
           </h5>
-          <button type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close">
+          <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close">
             <MdClose size={18} />
           </button>
         </div>

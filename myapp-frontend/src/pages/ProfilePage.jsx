@@ -428,7 +428,7 @@ export default function ProfilePage() {
                 {avatarLoading ? <span className="btn-spinner" /> : <MdCloudUpload size={16} />}
                 {avatarLoading ? "Uploading..." : "Save Photo"}
               </button>
-              <button
+              <button data-admin-close=""
                 onClick={handleCancelPreview}
                 style={styles.cancelBtnSecondary}
                 disabled={avatarLoading}

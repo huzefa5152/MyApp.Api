@@ -247,7 +247,7 @@ export default function CreditDebitNotePage() {
           </div>
 
           {/* Lines */}
-          <div style={{ overflowX: "auto" }}>
+          <div data-admin-table-region="" style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
               <thead>
                 <tr style={{ textAlign: "left", color: colors.textSecondary, borderBottom: `1px solid ${colors.border}` }}>

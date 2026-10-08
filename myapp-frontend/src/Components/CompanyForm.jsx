@@ -324,11 +324,11 @@ export default function CompanyForm({ company, onClose, onSaved }) {
     };
 
     return (
-        <div style={backdrop}>
-            <div style={{ ...modal, maxWidth: `${modalSizes.md}px` }}>
+        <div data-admin-backdrop="" style={backdrop}>
+            <div data-admin-dialog="" style={{ ...modal, maxWidth: `${modalSizes.md}px` }}>
                 <div style={header}>
                     <h5 style={title}>{company ? "Edit Company" : "New Company"}</h5>
-                    <button style={closeButton} onClick={onClose}>&times;</button>
+                    <button data-admin-close="" style={closeButton} onClick={onClose}>&times;</button>
                 </div>
                 <form onSubmit={handleSubmit}>
                     <div style={{ ...body, maxHeight: "65vh", overflowY: "auto" }}>
@@ -728,7 +728,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                     </div>
 
                     <div style={footer}>
-                        <button type="button" style={{ ...button, ...cancel }} onClick={onClose}>Cancel</button>
+                        <button data-admin-close="" type="button" style={{ ...button, ...cancel }} onClick={onClose}>Cancel</button>
                         <button type="submit" style={{ ...button, ...submit }}>{company ? "Update" : "Create"}</button>
                     </div>
                 </form>
@@ -820,7 +820,7 @@ function MultiSelectChips({ name, valueCsv, options, onChange }) {
                 {selected.map((code) => (
                     <span key={code} style={chipStyles.chip}>
                         {labelFor(code)}
-                        <button
+                        <button data-admin-close=""
                             type="button"
                             onClick={() => remove(code)}
                             style={chipStyles.x}

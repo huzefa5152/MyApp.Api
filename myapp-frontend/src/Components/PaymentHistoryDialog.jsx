@@ -57,11 +57,11 @@ export default function PaymentHistoryDialog({ mode, companyId, doc, onClose }) 
       .reduce((s, a) => s + (a.amount || 0), 0);
 
   return (
-    <div style={formStyles.backdrop} onClick={onClose}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>{noun}s for {docLabel} #{doc.number}</h5>
-          <button style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
         </div>
 
         <div style={formStyles.body}>
@@ -90,7 +90,7 @@ export default function PaymentHistoryDialog({ mode, companyId, doc, onClose }) 
           ) : rows.length === 0 ? (
             <div style={hintBox}>No {noun.toLowerCase()}s recorded against this {docLabel.toLowerCase()} yet.</div>
           ) : (
-            <div style={{ overflowX: "auto", marginTop: "0.5rem" }}>
+            <div data-admin-table-region="" style={{ overflowX: "auto", marginTop: "0.5rem" }}>
               <table style={tbl}>
                 <thead>
                   <tr>
@@ -122,7 +122,7 @@ export default function PaymentHistoryDialog({ mode, companyId, doc, onClose }) 
         </div>
 
         <div style={formStyles.footer}>
-          <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
+          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
         </div>
       </div>
     </div>

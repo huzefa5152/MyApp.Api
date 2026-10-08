@@ -171,11 +171,11 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
   // Backdrop click is a no-op so a stray click can't drop the format
   // wizard mid-fingerprint. Dismiss via the X or the Cancel button.
   return (
-    <div style={formStyles.backdrop}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div data-admin-backdrop="" style={formStyles.backdrop}>
+      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? "Edit PO Format" : "Add PO Format"}</h5>
-          <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
 
         <div style={{ ...formStyles.body, maxHeight: "72vh", overflowY: "auto" }}>
@@ -336,7 +336,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
         </div>
 
         <div style={formStyles.footer}>
-          <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
           <button
             type="button"
             style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}
