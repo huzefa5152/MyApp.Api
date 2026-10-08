@@ -930,6 +930,65 @@ using (var scope = app.Services.CreateScope())
         await db.SaveChangesAsync();
     }
 
+    // FIFO restatement drains back-dated sales FIFO (2026-10-08). Two repairs:
+    //  1. A bill's stock movement must carry the BILL's date. Bills saved before
+    //     the sync re-dated unchanged movements kept the day they were typed
+    //     (Alpha bill 51: dated 1 Aug, stock out 5 Sep), so they left stock in
+    //     the wrong month and in the wrong FIFO order. Re-date them once.
+    //  2. A restatement no longer scales its lines pro rata when a sale dated
+    //     before it was entered after it -- the units leave the lines FIFO
+    //     (GdFifoValuation). Every FIFO company's relief is re-posted so the
+    //     ledger follows the corrected walk. Same idempotence as above.
+    if (!await db.AuditLogs.AnyAsync(a => a.ExceptionType == "FIFO_RESTATE_BACKDATED_BACKFILL_V1"))
+    {
+        var drifted = await (from m in db.StockMovements
+                             join i in db.Invoices on m.SourceId equals i.Id
+                             where m.SourceType == MyApp.Api.Models.StockMovementSourceType.Invoice
+                                   && m.CompanyId == i.CompanyId && m.MovementDate != i.Date
+                             select new { Movement = m, i.Date }).ToListAsync();
+        foreach (var d in drifted) d.Movement.MovementDate = d.Date;
+        if (drifted.Count > 0) await db.SaveChangesAsync();
+
+        var posting = scope.ServiceProvider.GetRequiredService<MyApp.Api.Services.Interfaces.IPostingService>();
+        var fifoIds = (await db.SystemSettings
+                .Where(s => s.Key.StartsWith("Stock.CostingMethod.") && s.Value == MyApp.Api.Helpers.StockCostingMethod.GdFifo)
+                .Select(s => s.Key).ToListAsync())
+            .Select(k => int.TryParse(k.Substring("Stock.CostingMethod.".Length), out var id) ? id : 0)
+            .Where(id => id > 0).ToList();
+        var redatedIds = drifted.Select(d => d.Movement.CompanyId).Distinct().ToList();
+        var repostCompanies = await db.Companies
+            .Where(c => (fifoIds.Contains(c.Id) || redatedIds.Contains(c.Id)) && c.GlPostingEnabled && c.InventoryTrackingEnabled)
+            .Select(c => new { c.Id, c.Name }).ToListAsync();
+        var reposted = 0;
+        foreach (var c in repostCompanies)
+        {
+            try
+            {
+                await posting.PostInventoryPeriodsAsync(c.Id, null);
+                reposted++;
+            }
+            catch (Exception ex)
+            {
+                app.Logger.LogError(ex,
+                    "Back-dated restatement relief re-post failed for company {CompanyId} ({Name}) — continuing.",
+                    c.Id, c.Name);
+            }
+        }
+        db.AuditLogs.Add(new MyApp.Api.Models.AuditLog
+        {
+            Timestamp = DateTime.UtcNow,
+            Level = "Info",
+            UserName = "system",
+            HttpMethod = "SEED",
+            RequestPath = "/migrations/fifo-restate-backdated-backfill",
+            StatusCode = 200,
+            ExceptionType = "FIFO_RESTATE_BACKDATED_BACKFILL_V1",
+            Message = $"One-time repair: {drifted.Count} bill stock movements re-dated to their bill; "
+                    + $"monthly stock relief re-posted for {reposted} of {repostCompanies.Count} companies."
+        });
+        await db.SaveChangesAsync();
+    }
+
     // Item types are NOT auto-seeded — operators curate their own catalog
     // (an FBR-off business has no use for the FBR-mapped starter categories).
     // The Demo environment still seeds them below so its demo data has stock.
