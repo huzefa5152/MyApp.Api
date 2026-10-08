@@ -22,6 +22,13 @@ A full-stack ERP system for Pakistani businesses to manage the complete **Purcha
 - **Item Types & Lookups** - Autocomplete item descriptions and units, auto-create on first use
 - **Import Data (onboarding)** - One Excel workbook brings a new company's customers, items, suppliers and opening stock in: download a sample that marks every column required or optional, upload, review each row, import
 
+### Optional Email Workspace
+
+- Assign Email Workspace separately to existing users and administrators.
+- Connect each user's Gmail only to assigned companies; private mail stays private unless explicitly shared.
+- Keep or ignore enquiries, review extracted items and enter prices before creating a quotation.
+- Google OAuth setup and live-mail acceptance are required before rollout; see [setup instructions](docs/GMAIL_EMAIL_WORKSPACE.md).
+
 ### FBR Digital Invoicing
 
 - **Full V1.12 API Integration** - Submit invoices to FBR and receive Invoice Reference Numbers (IRN)
@@ -292,6 +299,8 @@ Publish output optimized from 79 MB to 37 MB via:
 ## Changelog
 
 ### 2026-10-08
+
+- Add the optional Email Workspace module with company-scoped Gmail connections, enquiry review and quotation conversion; keep existing navigation unchanged for users without access.
 
 - Allow ten failed sign-in attempts, show remaining attempts and lock expiry, exempt the seed administrator, and let only the seed administrator see blocked accounts and unlock users.
 

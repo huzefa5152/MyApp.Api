@@ -164,8 +164,14 @@ def main() -> int:
         vendor_keys = {k for k in all_keys if module_of.get(k) in VENDOR_ONLY_MODULES}
         accounting_keys = {k for k in all_keys if is_accounting(k)}
 
-        expect_sales = all_keys - vendor_keys - accounting_keys
-        expect_complete = all_keys - vendor_keys
+        optional_keys = {k for k in all_keys if module_of.get(k) == "EmailWorkspace"}
+        expect_sales = all_keys - vendor_keys - accounting_keys - optional_keys
+        expect_complete = all_keys - vendor_keys - optional_keys
+        email_role = by_name.get("Email Workspace")
+        check("2", "Email Workspace is an explicit system role", bool(email_role) and email_role.get("isSystemRole") is True)
+        check("2", "optional email role carries exactly the email module keys", bool(optional_keys) and bool(email_role)
+              and set(email_role.get("permissionKeys") or []) == optional_keys)
+        check("2", "optional email role includes its module gate", "email.workspace.use" in optional_keys)
 
         got_sales = set(sales.get("permissionKeys") or [])
         got_complete = set(complete.get("permissionKeys") or [])
@@ -266,6 +272,25 @@ def main() -> int:
         complete_token = make_user("tempEditionComplete", complete)
         if not sales_token or not complete_token:
             return 1
+
+        for who, tok, edition in (("Sales", sales_token, sales), ("Complete", complete_token, complete)):
+            root = f"/api/email-workspace/company/{cid}"
+            for suffix in ("connections", "messages"):
+                s, d = http("GET", root + "/" + suffix, base, token=tok)
+                check("email", f"{who} edition alone cannot read email {suffix}", s == 403, str(d)[:150])
+            s, d = http("POST", root + "/oauth/start", base, token=tok, body={})
+            check("email", f"{who} edition alone cannot authorize Gmail", s == 403, str(d)[:150])
+            u = next(u for u in made_users if u["username"] == "tempEdition" + who)
+            s, d = http("PUT", f"/api/users/{u['id']}/roles", base, token=seed,
+                        body={"roleIds": [edition["id"], email_role["id"]]})
+            check("email", f"admin enables module for existing {who} user", s == 200, str(d)[:150])
+            s, d = http("GET", root + "/messages", base, token=tok)
+            check("email", f"enabled {who} user can open assigned-company inbox", s == 200, str(d)[:150])
+            s, d = http("PUT", f"/api/users/{u['id']}/roles", base, token=seed,
+                        body={"roleIds": [edition["id"]]})
+            check("email", f"admin removes optional module from {who} user", s == 200, str(d)[:150])
+            s, d = http("GET", root + "/messages", base, token=tok)
+            check("email", f"removed module immediately refuses {who} inbox", s == 403, str(d)[:150])
 
         # Picker access must not smuggle ledger balances across the edition
         # boundary. Seed real accounts so an empty list cannot pass vacuously.
