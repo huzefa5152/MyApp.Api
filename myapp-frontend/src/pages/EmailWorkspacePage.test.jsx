@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { MemoryRouter } from "react-router-dom";
 import EmailWorkspacePage from "./EmailWorkspacePage";
 import http from "../api/httpClient";
-const state = vi.hoisted(() => ({ selectedCompany: { id: 1, name: "Sample Company" }, allowed: new Set() }));
+const state = vi.hoisted(() => ({ selectedCompany: { id: 1, name: "Sample Company" }, companies: [], setSelectedCompany: vi.fn(), allowed: new Set() }));
 const has = vi.hoisted(() => key => state.allowed.has(key));
 vi.mock("../contexts/CompanyContext", () => ({ useCompany: () => state }));
 vi.mock("../contexts/PermissionsContext", () => ({ usePermissions: () => ({ has }) }));
@@ -16,6 +16,7 @@ const message = { id: 3, sender: "buyer@example.com", subject: "Sample RFQ", rec
 const setup = () => render(<MemoryRouter><EmailWorkspacePage /></MemoryRouter>);
 beforeEach(() => {
   vi.resetAllMocks(); state.selectedCompany = { id: 1, name: "Sample Company" };
+  state.companies = [state.selectedCompany, { id: 2, name: "Other Company" }];
   state.allowed = new Set(["email.workspace.use", "email.inbox.view", "email.inbox.manage", "email.enquiries.manage", "email.connections.manage", "salesquotes.manage.create"]);
   http.get.mockImplementation(url => Promise.resolve({ data: url.endsWith("/customers") ? [] : url.endsWith("/connections") ? { configured: true, links: [], ownConnections: [] } : url.endsWith("/messages") ? { items: [message], totalCount: 1 } : message }));
   http.put.mockResolvedValue({ data: { revision: "new-revision" } });
@@ -63,5 +64,19 @@ it("does not load mail or expose connections without the module grant", () => {
 it("module access alone does not grant inbox access", () => {
   state.allowed = new Set(["email.workspace.use"]); setup();
   expect(screen.getByRole("alert").textContent).toContain("inbox permission");
+  expect(http.get).not.toHaveBeenCalled();
+});
+
+it("keeps company selection available in Connections and selects only accessible companies", async () => {
+  setup();
+  fireEvent.change(screen.getByRole("combobox", { name: "Email workspace company" }), { target: { value: "2" } });
+  expect(state.setSelectedCompany).toHaveBeenCalledWith(state.companies[1]);
+  expect(screen.getAllByRole("option").map(o => o.value)).toEqual(["1", "2"]);
+  fireEvent.click(screen.getByRole("button", { name: "Connections" }));
+  expect(screen.getByRole("combobox", { name: "Email workspace company" })).toBeTruthy();
+});
+it("offers company selection without loading mail when no company is selected", () => {
+  state.selectedCompany = null; setup();
+  expect(screen.getByRole("combobox", { name: "Email workspace company" })).toBeTruthy();
   expect(http.get).not.toHaveBeenCalled();
 });
