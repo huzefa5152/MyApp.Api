@@ -4,6 +4,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { listPoFormats, getPoFormat, deletePoFormat } from "../api/poFormatApi";
 import { useCompany } from "../contexts/CompanyContext";
+import CustomerImportArchive from "../Components/CustomerImportArchive";
 import POFormatForm from "../Components/POFormatForm";
 
 const colors = {
@@ -115,9 +116,9 @@ function CompanyPOFormats({ company }) {
     <div className="pof-page" style={styles.page}>
       <div className="pof-header">
         <div className="pof-header__title-block">
-          <h1 className="pof-header__title">PO Formats</h1>
+          <h1 className="pof-header__title">Customer Document Formats</h1>
           <p className="pof-header__subtitle">
-            One PO format per client in {company.name}. Formats and PDF matching are private to this company.
+            Multiple named customer formats in {company.name}. Formats and PDF matching are private to this company.
           </p>
         </div>
         {canCreate && (
@@ -256,6 +257,7 @@ function CompanyPOFormats({ company }) {
         </>
       )}
 
+      {has("poformats.import.viewArchive") && <CustomerImportArchive companyId={company.id} />}
       {showForm && (
         <POFormatForm
           format={editing}

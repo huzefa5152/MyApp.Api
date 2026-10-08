@@ -2,6 +2,8 @@ namespace MyApp.Api.DTOs
 {
     public class ParsedPODto
     {
+        public int? ArchiveId { get; set; }
+        public string? SourceNotes { get; set; }
         public string? PONumber { get; set; }
         public DateTime? PODate { get; set; }
         public List<ParsedPOItemDto> Items { get; set; } = new();
@@ -26,6 +28,9 @@ namespace MyApp.Api.DTOs
     public class ParsedPOItemDto
     {
         public string Description { get; set; } = "";
+        public decimal? UnitPrice { get; set; }
+        public string? Remarks { get; set; }
+        public string? ItemCode { get; set; }
         // Decimal so PO parsers can carry "12.5 KG" through unchanged.
         public decimal Quantity { get; set; }
         public string Unit { get; set; } = "";

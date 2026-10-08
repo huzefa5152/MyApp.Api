@@ -3,10 +3,10 @@ import { MdUploadFile, MdCheckCircle, MdWarning, MdInfoOutline } from "react-ico
 
 import {
   fingerprintPdf,
+  updatePoFormatMetadata,
   getPoFormatClients,
   createPoFormatSimple,
   updatePoFormatSimple,
-  listPoFormats,
 } from "../api/poFormatApi";
 import { formStyles, modalSizes } from "../theme";
 import useScrollToError from "../hooks/useScrollToError";
@@ -30,10 +30,12 @@ const colors = {
 };
 
 // Each form is mounted for one company; changing company closes the form.
-export default function POFormatForm({ format, companyId, companyName, onClose, onSaved }) {
+export default function POFormatForm({ format, companyId, companyName, onClose, onSaved, initialRawText = "", initialClientId = null }) {
   const isEdit = !!format;
+  let metadataOnly = false;
+  try { metadataOnly = isEdit && JSON.parse(format.ruleSetJson || "{}").engine !== "simple-headers-v1"; } catch { metadataOnly = isEdit; }
   const [clients, setClients] = useState([]);
-  const [selectedClientId, setSelectedClientId] = useState(format?.clientId ?? null);
+  const [selectedClientId, setSelectedClientId] = useState(format?.clientId ?? initialClientId);
   const [clientsLoading, setClientsLoading] = useState(true);
   const [name, setName] = useState(format?.name || "");
   const [isActive, setIsActive] = useState(format?.isActive ?? true);
@@ -44,9 +46,9 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
   const [quantityHeader, setQuantityHeader] = useState("");
   const [unitHeader, setUnitHeader] = useState("");
 
-  const [rawText, setRawText] = useState("");
+  const [rawText, setRawText] = useState(initialRawText);
   const [uploading, setUploading] = useState(false);
-  const [uploaded, setUploaded] = useState(false);
+  const [uploaded, setUploaded] = useState(!!initialRawText);
   const [existingMatchName, setExistingMatchName] = useState(null);
   const [notes, setNotes] = useState(format?.notes || "");
 
@@ -55,21 +57,15 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
   const errRef = useScrollToError(error);
   const fileInputRef = useRef(null);
 
-  const [takenClientIds, setTakenClientIds] = useState(() => new Set());
   useEffect(() => {
     let cancelled = false;
     setClientsLoading(true);
-    Promise.all([getPoFormatClients(companyId), listPoFormats({ companyId })])
-      .then(([{ data: clientData }, { data: formatData }]) => {
-        if (cancelled) return;
-        setClients(clientData);
-        setTakenClientIds(new Set(formatData.filter(f => f.id !== format?.id).map(f => f.clientId)));
-      }).catch(() => {
-        if (!cancelled) setError("Unable to load this company's clients. Close the form and try again.");
-      }).finally(() => { if (!cancelled) setClientsLoading(false); });
+    getPoFormatClients(companyId).then(({ data }) => { if (!cancelled) setClients(data); })
+      .catch(() => { if (!cancelled) setError("Unable to load this company's clients. Close the form and try again."); })
+      .finally(() => { if (!cancelled) setClientsLoading(false); });
     return () => { cancelled = true; };
-  }, [companyId, format?.id]);
-  const availableClients = clients.filter(c => !takenClientIds.has(c.id));
+  }, [companyId]);
+  const availableClients = clients;
   const selectedClient = availableClients.find(c => c.id === selectedClientId);
 
   // Preload the 5 fields when editing — parse them out of RuleSetJson
@@ -122,7 +118,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
       return setError("This client has no per-company records yet — create one first via Clients.");
     }
     if (!name.trim()) return setError("Enter a name for this format.");
-    if (!descriptionHeader.trim() || !quantityHeader.trim()) {
+    if (!metadataOnly && (!descriptionHeader.trim() || !quantityHeader.trim())) {
       return setError("Fill the Description and Quantity column headers.");
     }
     if (!isEdit && !rawText) {
@@ -133,7 +129,9 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
 
     setSaving(true);
     try {
-      if (isEdit) {
+      if (metadataOnly) {
+        await updatePoFormatMetadata(format.id, { name: name.trim(), isActive, notes: notes.trim() || null });
+      } else if (isEdit) {
         await updatePoFormatSimple(format.id, {
           name: name.trim(),
           isActive,
@@ -198,7 +196,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
           <div style={styles.row}>
             <div style={{ flex: 1 }}>
               <label htmlFor="po-format-client" style={styles.label}>Client *</label>
-              <select id="po-format-client" style={styles.input} disabled={clientsLoading}
+              <select id="po-format-client" style={styles.input} disabled={clientsLoading || metadataOnly}
                 value={selectedClientId ?? ""}
                 onChange={e => setSelectedClientId(e.target.value ? Number(e.target.value) : null)}>
                 <option value="">{clientsLoading ? "Loading clients..." : "Select client"}</option>
@@ -217,6 +215,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
             </div>
           </div>
 
+          {metadataOnly ? <p>This saved layout keeps its existing extraction rules. You can rename or deactivate it here. Import a sample with a new layout to save different Excel columns.</p> : <>
           {/* Sample PDF upload — required on create, optional on edit
               (upload replaces the stored sample and recomputes the
               fingerprint hash — useful if the client's template changed). */}
@@ -314,6 +313,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
             </div>
           </div>
 
+          </>}
           <div style={{ marginBottom: "1rem" }}>
             <label style={styles.label}>Notes (optional)</label>
             <textarea

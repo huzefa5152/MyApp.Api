@@ -67,13 +67,12 @@ describe("company-private PO formats",()=>{
     state.selectedCompany=null;state.companies=[];render(<POFormatsPage/>);
     expect(api.listPoFormats).not.toHaveBeenCalled();expect(screen.getByText(/No company access/)).toBeTruthy();
   });
-  it("picker loads company clients and hides clients already bound there",async()=>{
+  it("picker keeps company clients available for multiple named layouts",async()=>{
     api.listPoFormats.mockResolvedValue({data:[row(1,"Existing",11)]});
     render(<POFormatForm companyId={1} companyName="Company A" onClose={()=>{}} onSaved={()=>{}}/>);
     await screen.findByRole("option",{name:"Other A"});
     expect(api.getPoFormatClients).toHaveBeenCalledWith(1);
-    expect(api.listPoFormats).toHaveBeenCalledWith({companyId:1});
-    expect(screen.queryByRole("option",{name:"A client"})).toBeNull();
+    expect(screen.getByRole("option",{name:"A client"})).toBeTruthy();
   });
   it("create upload and save both carry the selected company",async()=>{
     const saved=vi.fn();api.createPoFormatSimple.mockResolvedValue({});

@@ -196,7 +196,7 @@ export default function SalesOrderPage() {
         {companies.length > 0 && (canCreate || canImportPo) && (
           <div style={{ display: "flex", gap: "0.5rem" }}>
             {canCreate && <button style={st.addBtn} onClick={() => selectedCompany && (setEditOrder(null), setShowForm(true))}><MdAdd size={18} /> New Order</button>}
-            {canImportPo && <button style={{ ...st.addBtn, background: colors.blue, boxShadow: "0 4px 14px rgba(13,71,161,0.25)" }} onClick={() => selectedCompany && setShowImport(true)}><MdUploadFile size={18} /> Import PO</button>}
+            {canImportPo && <button style={{ ...st.addBtn, background: colors.blue, boxShadow: "0 4px 14px rgba(13,71,161,0.25)" }} onClick={() => selectedCompany && setShowImport(true)}><MdUploadFile size={18} /> Import Customer PO</button>}
           </div>
         )}
       </div>

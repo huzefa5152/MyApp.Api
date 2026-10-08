@@ -96,7 +96,7 @@ export const PERMISSION_SECTIONS = [
       { key: "ItemTypes", label: "Item Types" },
       { key: "Onboarding Import", label: "Import Data" },
       { key: "Configuration", label: "Lookups" },
-      { key: "POFormats", label: "PO Formats" },
+      { key: "POFormats", label: "Customer Document Formats" },
       { key: "ImportFeedback", label: "Import Feedback" },
       { key: "PrintTemplates", label: "Print Templates" },
       // The Configuration → Navigation Menu document library: folders plus

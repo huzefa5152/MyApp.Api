@@ -1,6 +1,7 @@
+import { emailClipboardText } from "../utils/emailClipboardText";
 import { useState, useEffect, useRef } from "react";
 import { MdUploadFile, MdTextSnippet, MdAdd, MdDelete, MdCheckCircle, MdArrowBack, MdArrowForward, MdVerified, MdErrorOutline } from "react-icons/md";
-import { parsePdf, parseText, parseImage, ensureLookups } from "../api/poImportApi";
+import { parsePdf, parseText, parseImage, readWorkbook, getWorkbookFormats, saveWorkbookFormat, linkImportSource, checkImportDuplicate, ensureLookups } from "../api/poImportApi";
 import { readPoFile, isImageFile, averageConfidence, OCR_ACCEPT } from "../utils/poOcr";
 import { getClientsByCompany, getClientById } from "../api/clientApi";
 import { createSalesOrder } from "../api/salesOrderApi";
@@ -11,6 +12,7 @@ import { submitParserFeedback } from "../api/parserFeedbackApi";
 import { formStyles, modalSizes } from "../theme";
 import { todayYmd } from "../utils/dateInput";
 import LookupAutocomplete from "./LookupAutocomplete";
+import POFormatForm from "./POFormatForm";
 import QuantityInput from "./QuantityInput";
 import ParserFeedback from "./ParserFeedback";
 import useScrollToError from "../hooks/useScrollToError";
@@ -45,51 +47,6 @@ const TARGET_CONFIG = {
   challan: { doc: "Delivery Challan", verb: "Create Challan", dateLabel: "Delivery Date *", showQuoteLink: false, showPrice: false, showIndent: true },
 };
 
-// ── Generic "paste a plain list" parser ─────────────────────────────────
-// Fallback for the Paste-Text flow when no saved PO Format matches: turn a
-// pasted list (numbered / bulleted / one-per-line) into review line items so
-// the operator doesn't retype. Conservative about quantity — descriptions
-// carry embedded numbers (sizes like 1/2", Length 3"), so a trailing token is
-// taken as the quantity only when a clear delimiter (dash/colon or 2+ spaces)
-// separates it AND it is numeric. A trailing placeholder word ("Qty", "Nos")
-// or no number → quantity defaults to 1 for the operator to fill in.
-export function parsePlainList(text) {
-  const out = [];
-  for (const raw of (text || "").split(/\r?\n/)) {
-    let line = raw.trim();
-    if (!line) continue;
-    // Skip PO metadata / salutation lines.
-    if (/^(p\.?\s*o\.?\s*(no|number|#|date)\b|po\b|date\b|ref\b|reference\b|to\s*[:-]|from\s*[:-]|subject\b|dear\b|vendor\b|supplier\b|customer\b|quotation\b|purchase\s*order\b)/i.test(line)) continue;
-    // Skip a column-header row (Description AND Qty/Unit/Rate words, no leading item number).
-    if (/\b(description|item|particulars|product)\b/i.test(line) && /\b(qty|quantity|unit|uom|rate|amount)\b/i.test(line) && !/^\(?\s*\d+\s*[.)-]/.test(line)) continue;
-    // Strip a leading list marker: "1." "1)" "(1)" "1-" "- " "• " "* ".
-    line = line.replace(/^\(?\s*\d+\s*\)?\s*[.):-]\s+/, "").replace(/^[-•*·]\s+/, "").trim();
-    if (!line) continue;
-    let description = line, quantity = 1, unit = "Pcs", m;
-    if ((m = line.match(/^(.*\S)\s*[-:]\s*(?:qty|quantity|nos?|pcs?|units?)\.?\s*$/i))) {
-      description = m[1].trim();                       // trailing placeholder word, no number
-    } else if ((m = line.match(/^(.*\S)\s*[-:]\s+(\d[\d,]*(?:\.\d+)?)\s*([A-Za-z][A-Za-z.]{0,7})?\s*$/))) {
-      description = m[1].trim(); quantity = parseFloat(m[2].replace(/,/g, "")) || 1; if (m[3]) unit = m[3];
-    } else if ((m = line.match(/^(.*\S)\s{2,}(\d[\d,]*(?:\.\d+)?)\s*([A-Za-z][A-Za-z.]{0,7})?\s*$/))) {
-      description = m[1].trim(); quantity = parseFloat(m[2].replace(/,/g, "")) || 1; if (m[3]) unit = m[3];
-    } else {
-      description = line.replace(/\s*[-:]\s*$/, "").trim();   // strip a lone trailing dash
-    }
-    if (description) out.push({ description, quantity, unit });
-  }
-  return out;
-}
-
-// Best-effort PO number + date pulled from the pasted header lines.
-export function extractPoMeta(text) {
-  const t = text || "";
-  const poNo = (t.match(/\bp\.?\s*o\.?\s*(?:no|number|#)\.?\s*[:-]?\s*([A-Za-z0-9][A-Za-z0-9\-/]*)/i) || [])[1] || "";
-  let poDate = "";
-  const d = t.match(/\bdate\s*[:-]?\s*(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})/i);
-  if (d) { let [, dd, mm, yy] = d; if (yy.length === 2) yy = "20" + yy; poDate = `${yy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`; }
-  return { poNo, poDate };
-}
-
 export default function POImportForm({ companyId, target = "challan", onClose, onSaved }) {
   const cfg = TARGET_CONFIG[target] || TARGET_CONFIG.challan;
   const suppliers = useChallanSuppliers(target === "challan" ? companyId : null);
@@ -100,6 +57,16 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
   const [importMode, setImportMode] = useState("pdf"); // "pdf" or "text"
   const [pastedText, setPastedText] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
+  const [workbookFormats, setWorkbookFormats] = useState([]);
+  const [workbookFormatName, setWorkbookFormatName] = useState("");
+  const [workbookFormatSaved, setWorkbookFormatSaved] = useState(false);
+  const [workbook, setWorkbook] = useState(null);
+  const [workbookMapping, setWorkbookMapping] = useState({ sheet: "", headerRow: 1, descriptionColumn: 0, quantityColumn: 0, unitColumn: 0, rateColumn: 0, remarksColumn: 0, itemCodeColumn: 0 });
+  const [showFormatSetup, setShowFormatSetup] = useState(false);
+  const [warningsReviewed, setWarningsReviewed] = useState(false);
+  const [archiveId, setArchiveId] = useState(null);
+  const [importWarnings, setImportWarnings] = useState([]);
+  const [gstRate, setGstRate] = useState(18);
   const [parsing, setParsing] = useState(false);
   // Set while a picture is being read (text recognition runs in the browser).
   const [ocrProgress, setOcrProgress] = useState(null);   // { pct, label } | null
@@ -114,6 +81,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
   const [indentNo, setIndentNo] = useState("");
   const [deliveryDate, setDeliveryDate] = useState(todayYmd());
   const [selectedClientId, setSelectedClientId] = useState("");
+  const [sourceNotes, setSourceNotes] = useState("");
   const [site, setSite] = useState("");
   const [salesQuoteId, setSalesQuoteId] = useState("");
   const [quotes, setQuotes] = useState([]);
@@ -148,6 +116,12 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
   const [saving, setSaving] = useState(false);
 
   const fileInputRef = useRef(null);
+  useEffect(() => {
+    let active = true;
+    setWorkbookFormats([]);
+    if (selectedClientId) getWorkbookFormats(companyId, selectedClientId).then(r => { if (active) setWorkbookFormats(r.data); }).catch(() => {});
+    return () => { active = false; };
+  }, [companyId, selectedClientId]);
 
   useEffect(() => {
     const load = async () => {
@@ -189,7 +163,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
     try {
       const pages = await readPoFile(file, (f, label) => setOcrProgress({ pct: Math.round(f * 100), label }));
       setOcrInfo({ confidence: averageConfidence(pages) });
-      return await parseImage(file, pages, companyId);
+      return await parseImage(file, pages, companyId, selectedClientId);
     } finally {
       setOcrProgress(null);
     }
@@ -203,13 +177,24 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
 
     try {
       let res;
-      if (importMode === "pdf") {
+      if (!selectedClientId) { setError("Choose the customer before importing."); return; }
+      if (importMode === "pdf" && /\.xlsx$/i.test(selectedFile?.name || "")) {
+        const headers = workbook?.sheets.find(s => s.name === workbookMapping.sheet)?.rows.find(r => r.number === workbookMapping.headerRow)?.cells.map(c => c.trim());
+        const mapping = { ...workbookMapping, headers: workbookMapping.headers || headers };
+        res = await readWorkbook(selectedFile, companyId, selectedClientId, workbook ? mapping : null);
+        if (workbook) setWorkbookMapping(mapping);
+        if (!workbook) {
+          setWorkbook(res.data);
+          setWorkbookMapping(m => ({ ...m, sheet: res.data.sheets[0]?.name || "" }));
+          return;
+        }
+      } else if (importMode === "pdf") {
         if (!selectedFile) { setError("Please choose a PDF or an image of the PO."); setParsing(false); return; }
         if (isImageFile(selectedFile)) {
           res = await readPicture(selectedFile);
         } else {
           try {
-            res = await parsePdf(selectedFile, companyId);
+            res = await parsePdf(selectedFile, companyId, selectedClientId);
           } catch (err) {
             // A PDF with no text layer is a scan: read it as a picture.
             if (err.response?.status === 422 && err.response.data?.reason === "unreadable")
@@ -219,21 +204,32 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
         }
       } else {
         if (!pastedText.trim()) { setError("Please paste some text."); setParsing(false); return; }
-        res = await parseText(pastedText, companyId);
+        res = await parseText(pastedText, companyId, selectedClientId);
       }
 
       const data = res.data;
+      setWarningsReviewed(false);
+      setImportWarnings(data.warnings || []);
+      setArchiveId(data.archiveId || null);
+      if (data.archiveId) {
+        try {
+          const duplicate = await checkImportDuplicate(data.archiveId, target);
+          if (duplicate.data.duplicate) setImportWarnings(w => [...w, `This file was already used to create a ${cfg.doc}. Check the existing documents before creating another.`]);
+        } catch { setImportWarnings(w => [...w, "Duplicate checking was unavailable. Check existing documents before creating another."]); }
+      }
       // A fresh parse is a fresh PO — drop any quote link chosen for a
       // previous preview.
       setSalesQuoteId("");
+      setSourceNotes([data.sourceNotes || "", (data.items || []).filter(i => i.remarks || i.itemCode).map(i => `${i.description}: ${[i.itemCode ? `Code ${i.itemCode}` : "", i.remarks].filter(Boolean).join(" / ")}`).join("\n")].filter(Boolean).join("\n"));
       setPoNumber(data.poNumber || "");
       setPoDate(data.poDate ? data.poDate.split("T")[0] : "");
       setItems(data.items?.map((item, idx) => ({
         id: idx,
         description: item.description || "",
-        quantity: item.quantity || 1,
+        quantity: item.quantity ?? 1,
         unit: item.unit || "Pcs",
-        unitPrice: 0,  // priced later (only surfaced for the quote target)
+        unitPrice: item.unitPrice ?? 0,
+        remarks: item.remarks || "",
       })) || []);
       setRawText(data.rawText || "");
       setMatchedFormatId(data.matchedFormatId ?? null);
@@ -251,30 +247,8 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
       // Flip into manual-entry mode with an explicit error message.
       if (err.response?.status === 422) {
         const miss = err.response.data || {};
-        // Paste-Text fallback: no saved PO format matched, but the operator
-        // pasted a plain list — parse it generically so they still get line
-        // items to review (quantities / prices are theirs to set).
-        const listItems = importMode === "text" ? parsePlainList(pastedText) : [];
-        if (listItems.length > 0) {
-          const meta = extractPoMeta(pastedText);
-          setPoNumber(meta.poNo);
-          setPoDate(meta.poDate);
-          setIndentNo("");
-          setItems(listItems.map((it, idx) => ({
-            id: idx,
-            description: it.description,
-            quantity: it.quantity,
-            unit: it.unit,
-            unitPrice: 0,
-          })));
-          setMatchedFormatId(null);
-          setMatchedFormatName("");
-          setMatchedFormatVersion(null);
-          setRawText(miss.rawText || pastedText);
-          setNoFormatMessage(`No saved PO format matched — parsed ${listItems.length} line item(s) from the pasted text. Review the descriptions and set ${cfg.showPrice ? "quantities and prices" : "quantities"} below.`);
-          setStep(2);
-          return;
-        }
+        setArchiveId(miss.archiveId || null);
+        setImportWarnings([]); setWarningsReviewed(false); setSourceNotes("");
         setPoNumber("");
         setPoDate("");
         setIndentNo("");
@@ -297,6 +271,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (file) {
+      setArchiveId(null); setWorkbookFormatSaved(false); setImportWarnings([]);
       setSelectedFile(file);
       setError("");
     }
@@ -336,8 +311,8 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
     setSite(""); // site belongs to the previous client
   };
 
-  const canSubmit = selectedClientId && deliveryDate && items.length > 0 &&
-    items.every((i) => i.description.trim() && i.quantity > 0);
+  const canSubmit = (importWarnings.length === 0 || warningsReviewed) && (!cfg.showPrice || (gstRate !== "" && Number(gstRate) >= 0 && Number(gstRate) <= 100)) && selectedClientId && deliveryDate && items.length > 0 &&
+    items.every((i) => i.description.trim() && Number.isFinite(Number(i.quantity)) && Number(i.quantity) > 0 && (!cfg.showPrice || (Number.isFinite(Number(i.unitPrice)) && Number(i.unitPrice) >= 0)));
 
   const handleSubmit = async () => {
     if (!canSubmit || savedChallanId) return;
@@ -366,8 +341,8 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
           validUntil: null,
           customerEnquiryRef: poNumber.trim() || null,
           enquiryDate: iso(poDate),
-          gstRate: 0,
-          notes: null,
+          gstRate: Number(gstRate),
+          notes: sourceNotes.trim() || null,
           items: items.map((i) => ({
             id: 0,
             itemTypeId: null,
@@ -383,6 +358,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
         created = await createDeliveryChallan(companyId, {
           clientId,
           clientName: selectedClient?.name || null,
+          notes: sourceNotes.trim() || null,
           site: site || null,
           poNumber: poNumber.trim(),
           poDate: iso(poDate),
@@ -409,6 +385,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
           orderDate: iso(deliveryDate),
           site: site || null,
           isImported: true,
+          notes: sourceNotes.trim() || null,
           items: items.map((i) => ({
             description: i.description.trim(),
             quantity: qty(i),
@@ -467,7 +444,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
       <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>
-            {step === 1 ? "Import Purchase Order" : `Review & ${cfg.verb}`}
+            {step === 1 ? (target === "salesquote" ? "Import Enquiry / Demand" : "Import Customer PO") : `Review & ${cfg.verb}`}
           </h5>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
@@ -477,6 +454,11 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
 
           {step === 1 && (
             <>
+              <label style={styles.label}>Customer *</label>
+              <select aria-label="Import customer" disabled={parsing} style={styles.input} value={selectedClientId} onChange={e => { setSelectedClientId(e.target.value); setWorkbook(null); }}>
+                <option value="">Choose customer</option>
+                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
               {/* Mode Tabs */}
               <div style={styles.modeTabs}>
                 <button
@@ -484,7 +466,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                   style={{ ...styles.modeTab, ...(importMode === "pdf" ? styles.modeTabActive : {}) }}
                   onClick={() => setImportMode("pdf")}
                 >
-                  <MdUploadFile size={18} /> Upload PDF or image
+                  <MdUploadFile size={18} /> Upload Excel, PDF or image
                 </button>
                 <button
                   type="button"
@@ -500,8 +482,8 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept={OCR_ACCEPT}
-                    onChange={handleFileChange}
+                    accept={`${OCR_ACCEPT},.xlsx`}
+                    onChange={e => { setWorkbook(null); handleFileChange(e); }}
                     style={{ display: "none" }}
                   />
                   <div
@@ -510,28 +492,62 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                   >
                     <MdUploadFile size={48} color={colors.textSecondary} />
                     <p style={{ margin: "0.5rem 0 0", color: colors.textSecondary, fontSize: "0.9rem" }}>
-                      {selectedFile ? selectedFile.name : "Click to choose the PO: a PDF, or a photo / screenshot"}
+                      {selectedFile ? selectedFile.name : "Choose the customer document"}
                     </p>
-                    <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>PDF, PNG, JPG or WEBP · max 10 MB</span>
+                    <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>XLSX, PDF, PNG, JPG or WEBP · max 10 MB</span>
                   </div>
                 </div>
               ) : (
                 <div>
-                  <label style={styles.label}>Paste PO content below</label>
+                  <label style={styles.label}>Paste email or document content below</label>
+                  <p>Copy the email table or item list, including its headings. Sizes stay in descriptions. Review extracted quantities and units before creating.</p>
                   <textarea
                     style={styles.textarea}
                     rows={12}
                     value={pastedText}
                     onChange={(e) => setPastedText(e.target.value)}
+                    onPaste={e => {
+                      const text = emailClipboardText(e.clipboardData.getData("text/html"), e.clipboardData.getData("text/plain"));
+                      if (text === null) return;
+                      e.preventDefault();
+                      setPastedText(text);
+                    }}
                     placeholder={"Paste your Purchase Order text here...\n\nExample:\nPO No: PO-2026-001\nDate: 13/04/2026\n\n1. Pneumatic Fitting 1/4\"  -  10 Pcs\n2. Air Cylinder 50mm      -   5 Nos\n3. FRL Unit 1/4\"           -   2 Set"}
                   />
                 </div>
               )}
+              {workbook && <div style={{ marginTop: 16 }}>
+                {workbookFormats.length > 0 && <label>Saved Excel layout<select style={styles.input} defaultValue="" onChange={e => { const f = workbookFormats.find(f => String(f.id) === e.target.value); if (f) setWorkbookMapping(JSON.parse(f.ruleSetJson).mapping); else setWorkbookMapping(m => ({ ...m, headers: null })); }}><option value="">Map this file</option>{workbookFormats.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>}
+                <p>Choose the worksheet and header row, then map its columns. Review every extracted line before saving.</p>
+                <label style={styles.label}>Worksheet</label>
+                <select aria-label="Worksheet" style={styles.input} value={workbookMapping.sheet} onChange={e => setWorkbookMapping(m => ({ ...m, sheet: e.target.value, headers: null }))}>
+                  {workbook.sheets.map(sheet => <option key={sheet.name}>{sheet.name}</option>)}
+                </select>
+                <label style={styles.label}>Header row</label>
+                <select aria-label="Header row" style={styles.input} value={workbookMapping.headerRow} onChange={e => setWorkbookMapping(m => ({ ...m, headerRow: Number(e.target.value), headers: null }))}>
+                  {(workbook.sheets.find(s => s.name === workbookMapping.sheet)?.rows || []).map(row => <option key={row.number} value={row.number}>{row.number}: {row.cells.join(" / ").slice(0, 180)}</option>)}
+                </select>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: 12 }}>
+                  {[["itemCodeColumn", "Item code"], ["descriptionColumn", "Description *"], ["quantityColumn", "Quantity *"], ["unitColumn", "Unit"], ["rateColumn", "Price"], ["remarksColumn", "Remarks"]].map(([key, label]) => <label key={key}>{label}
+                    <select style={styles.input} value={workbookMapping[key]} onChange={e => setWorkbookMapping(m => ({ ...m, [key]: Number(e.target.value) }))}>
+                      <option value={0}>Not mapped</option>
+                      {(workbook.sheets.find(s => s.name === workbookMapping.sheet)?.rows.find(r => r.number === workbookMapping.headerRow)?.cells || []).map((cell, i) => <option key={i} value={i + 1}>{i + 1}: {cell || "(blank)"}</option>)}
+                    </select>
+                  </label>)}
+                </div>
+              </div>}
             </>
           )}
 
           {step === 2 && (
             <>
+              {workbook && has("poformats.manage.create") && <div style={{ marginBottom: 16 }}>
+                <label style={styles.label}>Remember this Excel layout for this customer</label>
+                <input style={styles.input} placeholder="Format name" value={workbookFormatName} onChange={e => setWorkbookFormatName(e.target.value)} />
+                <button type="button" disabled={!workbookFormatName.trim() || workbookFormatSaved || saving} onClick={async () => { setSaving(true); try { await saveWorkbookFormat(companyId, selectedClientId, workbookFormatName, workbookMapping); setWorkbookFormatSaved(true); } catch (e) { setError(e.response?.data?.error || "Could not save the layout."); } finally { setSaving(false); } }}>{workbookFormatSaved ? "Layout saved" : "Save layout"}</button>
+              </div>}
+              {importWarnings.length > 0 && <div role="alert" style={styles.noFormatAlert}><div>{importWarnings.map((w, i) => <p key={i}>{w}</p>)}<label><input type="checkbox" checked={warningsReviewed} onChange={e => setWarningsReviewed(e.target.checked)} /> I reviewed these warnings and checked the original document.</label></div></div>}
+              {cfg.showPrice && <div><label style={styles.label}>GST %</label><input type="number" min="0" max="100" aria-label="GST percent" style={styles.input} value={gstRate} onChange={e => setGstRate(e.target.value)} /><p>Lines with a zero price are saved for pricing. Enter prices before sending the quotation.</p></div>}
               {/* Read from a picture: every line deserves a second look. */}
               {ocrInfo && (
                 <div style={styles.ocrBanner} role="status">
@@ -564,6 +580,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                     </div>
                     <div style={{ fontSize: "0.82rem", opacity: 0.9 }}>
                       {noFormatMessage}
+                      {has("poformats.manage.create") && rawText && <button type="button" onClick={() => setShowFormatSetup(true)}>Save a format for this customer</button>}
                     </div>
                   </div>
                 </div>
@@ -598,7 +615,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                     ))}
                   </select>
                 </div>
-                <div style={{ flex: 1.5, minWidth: 180 }}>
+                {target !== "salesquote" && <div style={{ flex: 1.5, minWidth: 180 }}>
                   <label style={styles.label}>Site / Department</label>
                   {clientSites.length > 0 ? (
                     <select style={styles.select} value={site} onChange={(e) => setSite(e.target.value)}>
@@ -617,7 +634,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                       disabled={!selectedClientId}
                     />
                   )}
-                </div>
+                </div>}
                 <div style={{ flex: 1, minWidth: 150 }}>
                   <label style={styles.label}>{cfg.dateLabel}</label>
                   <input type="date" style={styles.input} value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
@@ -627,11 +644,11 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
               {/* PO row: Number + Date (+ Indent No for challan target) */}
               <div style={styles.row}>
                 <div style={{ flex: 1, minWidth: 180 }}>
-                  <label style={styles.label}>PO Number</label>
+                  <label style={styles.label}>{target === "salesquote" ? "Enquiry Reference" : "PO Number"}</label>
                   <input style={styles.input} value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="e.g. PO-2026-001" />
                 </div>
                 <div style={{ flex: 1, minWidth: 140 }}>
-                  <label style={styles.label}>PO Date</label>
+                  <label style={styles.label}>{target === "salesquote" ? "Enquiry Date" : "PO Date"}</label>
                   <input type="date" style={styles.input} value={poDate} onChange={(e) => setPoDate(e.target.value)} />
                 </div>
                 {cfg.showIndent && (
@@ -642,6 +659,8 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                 )}
               </div>
 
+              <label style={styles.label}>Document notes / source remarks</label>
+              <textarea style={styles.textarea} value={sourceNotes} onChange={e => setSourceNotes(e.target.value)} rows={3} />
               {/* Items Table */}
               <div style={{ marginTop: "0.5rem" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
@@ -832,6 +851,8 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
           )}
         </div>
       </div>
+      {showFormatSetup && <POFormatForm companyId={companyId} initialClientId={Number(selectedClientId)} initialRawText={rawText}
+        onClose={() => setShowFormatSetup(false)} onSaved={() => { setShowFormatSetup(false); handleParse(); }} />}
     </div>
   );
 }
@@ -849,7 +870,7 @@ const styles = {
   select: { width: "100%", padding: "0.6rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", cursor: "pointer" },
   textarea: { width: "100%", padding: "0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.85rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", boxSizing: "border-box", fontFamily: "monospace", resize: "vertical" },
   errorAlert: { backgroundColor: colors.dangerLight, color: colors.danger, padding: "0.65rem 1rem", borderRadius: 8, marginBottom: "1rem", fontWeight: 500, border: `1px solid ${colors.danger}30`, fontSize: "0.85rem" },
-  modeTabs: { display: "flex", gap: "0.5rem", marginBottom: "1.25rem" },
+  modeTabs: { display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1.25rem" },
   modeTab: { display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.6rem 1.25rem", borderRadius: 8, border: `2px solid ${colors.cardBorder}`, backgroundColor: "#fff", fontSize: "0.88rem", fontWeight: 600, color: colors.textSecondary, cursor: "pointer", transition: "all 0.2s" },
   modeTabActive: { borderColor: colors.blue, color: colors.blue, backgroundColor: "#e3f2fd" },
   uploadArea: { marginBottom: "1rem" },

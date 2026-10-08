@@ -3760,7 +3760,9 @@ namespace MyApp.Api.Migrations
 
                     b.HasIndex("SignatureHash");
 
-                    b.HasIndex("CompanyId", "ClientId")
+                    b.HasIndex("CompanyId", "ClientId");
+
+                    b.HasIndex("CompanyId", "ClientId", "Name")
                         .IsUnique()
                         .HasFilter("[CompanyId] IS NOT NULL AND [ClientId] IS NOT NULL");
 
@@ -3947,6 +3949,8 @@ namespace MyApp.Api.Migrations
 
             modelBuilder.Entity("MyApp.Api.Models.PoImportArchive", b =>
                 {
+                    b.Property<string>("DocumentKind").HasMaxLength(32).HasColumnType("nvarchar(32)");
+                    b.Property<int?>("DocumentId").HasColumnType("int");
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");

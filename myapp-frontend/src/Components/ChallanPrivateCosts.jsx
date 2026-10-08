@@ -63,7 +63,7 @@ export default function ChallanPrivateCosts({ items = [], onItemsChange, supplie
         <button type="button" disabled={!items.some((item) => item.supplierId)} onClick={() => applySupplier("")}>Clear all</button>
       </div>}
     </div>
-    <div className="challan-private-columns" aria-hidden="true"><span>Item</span><span>Supplier</span><span>Actual unit price (PKR)</span></div>
+    <div className="challan-private-columns" aria-hidden="true"><span>Item</span><span>Supplier</span><span>Actual unit price (PKR)</span><span>Actual line total (PKR)</span></div>
     {items.map((item, index) => <div key={item.id || index} className="challan-private-row">
       <div className="challan-private-item"><span>{index + 1}</span><div><RichText text={item.description || "New line"} /></div></div>
       <div className="challan-private-supplier">
@@ -75,6 +75,14 @@ export default function ChallanPrivateCosts({ items = [], onItemsChange, supplie
         <span className="challan-private-mobile-label">Actual unit price (PKR)</span>
         {readOnly ? <span>{item.actualUnitCost == null ? "—" : Number(item.actualUnitCost).toLocaleString(undefined, { maximumFractionDigits: 12 })}</span> : <input aria-label={`Actual cost per unit for line ${index + 1}`} style={field} type="number" inputMode="decimal" min="0" step="any" placeholder="Optional" value={item.actualUnitCost ?? ""} onChange={(e) => updateLine(index, { actualUnitCost: e.target.value === "" ? null : e.target.value })} />}
       </label>
+      <div className="challan-private-total">
+        <span className="challan-private-mobile-label">Actual line total (PKR)</span>
+        <output aria-label={`Actual line total for line ${index + 1}`}>
+          {item.actualUnitCost == null || item.actualUnitCost === "" || item.quantity == null || item.quantity === "" ||
+            !Number.isFinite(Number(item.quantity) * Number(item.actualUnitCost)) || Number(item.quantity) < 0 || Number(item.actualUnitCost) < 0
+            ? "—" : (Number(item.quantity) * Number(item.actualUnitCost)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </output>
+      </div>
     </div>)}
     {supplierTarget && Number(supplierTarget.companyId) === Number(companyId) && createPortal(
       <div className="challan-private-supplier-modal" onSubmit={event => event.stopPropagation()} onClick={event => event.stopPropagation()}>

@@ -22,6 +22,11 @@ namespace MyApp.Api.Services.Interfaces
         // Text read from an IMAGE: FindMatchAsync first, then an OCR-tolerant
         // word-coverage match. Never used for PDF text.
         Task<POFormatMatchResult?> FindMatchForOcrAsync(string rawText, int? companyId);
+        async Task<POFormatMatchResult?> FindCustomerMatchAsync(string rawText, int? companyId, int? clientId, bool ocr = false)
+        {
+            var match = ocr ? await FindMatchForOcrAsync(rawText, companyId) : await FindMatchAsync(rawText, companyId);
+            return clientId == null || match?.Format.ClientId == clientId ? match : null;
+        }
         Task<List<POFormat>> ListAsync(int? companyId);
         Task<POFormat?> GetAsync(int id);
         Task<List<POFormatVersion>> GetVersionsAsync(int formatId);
