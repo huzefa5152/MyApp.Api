@@ -129,9 +129,12 @@ namespace MyApp.Api.Controllers
                 return Forbid();
             }
 
-            var exists = await _context.Users.AnyAsync(u => u.Username == dto.Username);
+            var requestedUsername = dto.Username.Trim();
+            var usernameError = MyApp.Api.Helpers.UsernamePolicy.Validate(requestedUsername);
+            if (usernameError != null) return BadRequest(new { message = usernameError });
+            var exists = await _context.Users.AnyAsync(u => u.Username == requestedUsername);
             if (exists)
-                return Conflict(new { message = "Username already exists" });
+                return Conflict(new { message = "This username is unavailable. Choose another username." });
 
             // ── One-step provisioning (optional) ────────────────────────────
             // Validate EVERYTHING before creating the user so a bad request can
@@ -212,7 +215,7 @@ namespace MyApp.Api.Controllers
             // role the operator chose at create time.
             var user = new Models.User
             {
-                Username = dto.Username,
+                Username = requestedUsername,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
                 FullName = dto.FullName,
                 Role = desiredRole,
@@ -292,9 +295,12 @@ namespace MyApp.Api.Controllers
 
             if (!string.IsNullOrWhiteSpace(dto.Username) && dto.Username != user.Username)
             {
-                var exists = await _context.Users.AnyAsync(u => u.Username == dto.Username && u.Id != id);
-                if (exists) return Conflict(new { message = "Username already exists" });
-                user.Username = dto.Username;
+                var requestedUsername = dto.Username.Trim();
+                var usernameError = MyApp.Api.Helpers.UsernamePolicy.Validate(requestedUsername);
+                if (usernameError != null) return BadRequest(new { message = usernameError });
+                var exists = await _context.Users.AnyAsync(u => u.Username == requestedUsername && u.Id != id);
+                if (exists) return Conflict(new { message = "This username is unavailable. Choose another username." });
+                user.Username = requestedUsername;
             }
 
             if (!string.IsNullOrWhiteSpace(dto.FullName))
@@ -353,11 +359,10 @@ namespace MyApp.Api.Controllers
             if (!await _scope.CanManageUserAsync(CurrentUserId, id)) return NotFound(new { message = "User not found" });
 
             // Prevent self-deletion
-            var currentUsername = User.FindFirstValue(ClaimTypes.Name);
             var user = await _context.Users.FindAsync(id);
             if (user == null) return NotFound(new { message = "User not found" });
 
-            if (user.Username == currentUsername)
+            if (user.Id == CurrentUserId)
                 return BadRequest(new { message = "You cannot delete your own account" });
 
             await using var transaction = await _context.Database.BeginTransactionAsync();

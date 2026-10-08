@@ -228,38 +228,17 @@ builder.Services.AddAuthentication(options =>
             var sub = principal.FindFirstValue(JwtRegisteredClaimNames.Sub)
                      ?? principal.FindFirstValue(ClaimTypes.NameIdentifier);
             var stamp = principal.FindFirstValue("stamp");
-            if (string.IsNullOrEmpty(sub) || string.IsNullOrEmpty(stamp))
+            if (string.IsNullOrEmpty(sub) || string.IsNullOrEmpty(stamp)
+                || !int.TryParse(sub, out var userId) || userId <= 0)
             {
-                // Tokens minted before C-6 (no stamp claim) are
-                // tolerated for one rotation cycle — they still
-                // authenticate but cannot be revoked. Treat absent
-                // stamp as "stamp-less legacy token".
+                context.Fail("Missing authentication context");
                 return;
             }
 
-            if (!int.TryParse(sub, out var userId))
-            {
-                context.Fail("Invalid subject claim");
-                return;
-            }
-
-            var cache = context.HttpContext.RequestServices
-                .GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
-            var cacheKey = $"user-stamp:{userId}";
-            if (!cache.TryGetValue<string>(cacheKey, out var currentStamp))
-            {
-                var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
-                currentStamp = await db.Users
-                    .Where(u => u.Id == userId)
-                    .Select(u => u.SecurityStamp)
-                    .FirstOrDefaultAsync();
-                if (currentStamp != null)
-                {
-                    cache.Set(cacheKey, currentStamp, TimeSpan.FromSeconds(60));
-                }
-            }
-
-            if (currentStamp != null && !string.Equals(currentStamp, stamp, StringComparison.Ordinal))
+            var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+            var currentStamp = await db.Users.AsNoTracking()
+                .Where(u => u.Id == userId).Select(u => u.SecurityStamp).FirstOrDefaultAsync();
+            if (currentStamp == null || !string.Equals(currentStamp, stamp, StringComparison.Ordinal))
             {
                 context.Fail("Token has been revoked");
             }

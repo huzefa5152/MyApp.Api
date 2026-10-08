@@ -37,42 +37,11 @@ namespace MyApp.Api.Controllers
         private const int MaxFailedLoginAttempts = 10;
         private static readonly TimeSpan LockoutDuration = TimeSpan.FromHours(2);
 
-        private sealed class UnknownLoginState
-        {
-            public int Failures { get; set; }
-            public DateTime? LockoutUntil { get; set; }
-        }
-        private static readonly object UnknownLoginGate = new();
-
-        private UnauthorizedObjectResult LoginFailure(int? remaining, DateTime? until = null) =>
+        private UnauthorizedObjectResult LoginFailure() =>
             Unauthorized(new
             {
-                message = until.HasValue
-                    ? $"Sign-in temporarily locked. Try again after {until.Value:yyyy-MM-dd HH:mm} UTC, or ask your administrator to unlock your account."
-                    : remaining.HasValue
-                        ? $"Invalid username or password. {remaining.Value} {(remaining.Value == 1 ? "attempt" : "attempts")} remaining before a temporary lock."
-                        : "Invalid username or password. This account is exempt from automatic lockout.",
-                attemptsRemaining = remaining,
-                lockoutUntil = until.HasValue ? DateTime.SpecifyKind(until.Value, DateTimeKind.Utc) : (DateTime?)null
+                message = "Unable to sign in. Check your username and password, try again later, or contact your administrator."
             });
-
-        private UnauthorizedObjectResult UnknownLoginFailure(string username)
-        {
-            // Count an unknown login name per caller, without creating a user record.
-            var key = "unknown-login:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
-                Encoding.UTF8.GetBytes((HttpContext.Connection.RemoteIpAddress?.ToString() ?? "") + "|" + username.ToUpperInvariant())));
-            lock (UnknownLoginGate)
-            {
-                var now = DateTime.UtcNow;
-                var state = _cache.Get<UnknownLoginState>(key) ?? new UnknownLoginState();
-                if (state.LockoutUntil > now) return LoginFailure(0, state.LockoutUntil);
-                if (state.LockoutUntil.HasValue) state = new UnknownLoginState();
-                state.Failures++;
-                if (state.Failures >= MaxFailedLoginAttempts) state.LockoutUntil = now.Add(LockoutDuration);
-                _cache.Set(key, state, LockoutDuration);
-                return LoginFailure(Math.Max(0, MaxFailedLoginAttempts - state.Failures), state.LockoutUntil);
-            }
-        }
 
         public AuthController(AppDbContext context, IConfiguration configuration, IMemoryCache cache, ILogger<AuthController> logger) : base(logger)
         {
@@ -82,6 +51,13 @@ namespace MyApp.Api.Controllers
             _seedAdminUserId = configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
             _logger = logger;
         }
+
+        private int CurrentUserId => int.TryParse(
+            User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue(JwtRegisteredClaimNames.Sub),
+            out var id) ? id : 0;
+
+        private Task<Models.User?> CurrentUserAsync() => _context.Users.FirstOrDefaultAsync(u =>
+            u.Id == CurrentUserId && u.SecurityStamp == User.FindFirstValue("stamp"));
 
         [HttpPost("login")]
         [EnableRateLimiting("login")]
@@ -98,7 +74,7 @@ namespace MyApp.Api.Controllers
                 _ = BCrypt.Net.BCrypt.Verify(dto.Password ?? string.Empty, _dummyBcryptHash);
                 _logger.LogWarning("Failed login attempt for username={Username} from {Ip}",
                     dto.Username, HttpContext.Connection.RemoteIpAddress);
-                return UnknownLoginFailure(dto.Username ?? string.Empty);
+                return LoginFailure();
             }
 
             var now = DateTime.UtcNow;
@@ -121,7 +97,7 @@ namespace MyApp.Api.Controllers
                 _ = BCrypt.Net.BCrypt.Verify(dto.Password ?? string.Empty, _dummyBcryptHash);
                 _logger.LogWarning("Login attempt for locked account UserId={UserId} from {Ip} (locked until {LockoutUntil:u})",
                     user.Id, HttpContext.Connection.RemoteIpAddress, user.LockoutUntil.Value);
-                return LoginFailure(0, user.LockoutUntil);
+                return LoginFailure();
             }
 
             if (!BCrypt.Net.BCrypt.Verify(dto.Password ?? string.Empty, user.PasswordHash))
@@ -141,17 +117,15 @@ namespace MyApp.Api.Controllers
                 }
                 _logger.LogWarning("Failed login attempt for UserId={UserId} from {Ip}",
                     user.Id, HttpContext.Connection.RemoteIpAddress);
-                return LoginFailure(isSeedAdmin ? null : Math.Max(0, MaxFailedLoginAttempts - user.FailedLoginAttempts), user.LockoutUntil);
+                return LoginFailure();
             }
 
-            // Successful authentication — clear any failure state.
-            if (user.FailedLoginAttempts != 0 || user.LockoutUntil.HasValue || user.LastFailedLogin.HasValue)
-            {
-                user.FailedLoginAttempts = 0;
-                user.LockoutUntil = null;
-                user.LastFailedLogin = null;
-                await _context.SaveChangesAsync();
-            }
+            // Do not issue a token if a password reset or lock raced this login.
+            var cleared = await _context.Users.Where(u => u.Id == user.Id && u.SecurityStamp == user.SecurityStamp
+                && u.PasswordHash == user.PasswordHash && (isSeedAdmin || !u.LockoutUntil.HasValue || u.LockoutUntil <= now))
+                .ExecuteUpdateAsync(update => update.SetProperty(u => u.FailedLoginAttempts, 0)
+                    .SetProperty(u => u.LockoutUntil, (DateTime?)null).SetProperty(u => u.LastFailedLogin, (DateTime?)null));
+            if (cleared == 0) return LoginFailure();
 
             var token = GenerateJwtToken(user);
             var expiration = DateTime.UtcNow.AddHours(
@@ -172,12 +146,10 @@ namespace MyApp.Api.Controllers
         [Authorize]
         public async Task<ActionResult> GetCurrentUser()
         {
-            var username = User.FindFirstValue(ClaimTypes.Name);
-            var user = await _context.Users
-                .FirstOrDefaultAsync(u => u.Username == username);
+            var user = await CurrentUserAsync();
 
             if (user == null)
-                return NotFound();
+                return Unauthorized();
 
             return Ok(new
             {
@@ -205,17 +177,19 @@ namespace MyApp.Api.Controllers
         [Authorize]
         public async Task<ActionResult> UpdateProfile([FromBody] UpdateProfileDto dto)
         {
-            var username = User.FindFirstValue(ClaimTypes.Name);
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
-            if (user == null) return NotFound();
+            var user = await CurrentUserAsync();
+            if (user == null) return Unauthorized();
 
             // Check if new username is taken by another user
             if (!string.IsNullOrWhiteSpace(dto.Username) && dto.Username != user.Username)
             {
-                var exists = await _context.Users.AnyAsync(u => u.Username == dto.Username);
+                var requestedUsername = dto.Username.Trim();
+                var usernameError = MyApp.Api.Helpers.UsernamePolicy.Validate(requestedUsername);
+                if (usernameError != null) return BadRequest(new { message = usernameError });
+                var exists = await _context.Users.AnyAsync(u => u.Username == requestedUsername && u.Id != user.Id);
                 if (exists)
-                    return BadRequest(new { message = "Username is already taken" });
-                user.Username = dto.Username.Trim();
+                    return BadRequest(new { message = "This username is unavailable. Choose another username." });
+                user.Username = requestedUsername;
             }
 
             if (!string.IsNullOrWhiteSpace(dto.FullName))
@@ -241,9 +215,8 @@ namespace MyApp.Api.Controllers
         [EnableRateLimiting("passwordChange")]
         public async Task<ActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
         {
-            var username = User.FindFirstValue(ClaimTypes.Name);
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
-            if (user == null) return NotFound();
+            var user = await CurrentUserAsync();
+            if (user == null) return Unauthorized();
 
             if (!BCrypt.Net.BCrypt.Verify(dto.CurrentPassword, user.PasswordHash))
                 return BadRequest(new { message = "Current password is incorrect" });
@@ -301,9 +274,8 @@ namespace MyApp.Api.Controllers
 
             var ext = Path.GetExtension(Path.GetFileName(file.FileName ?? "")).ToLowerInvariant();
 
-            var username = User.FindFirstValue(ClaimTypes.Name);
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
-            if (user == null) return NotFound();
+            var user = await CurrentUserAsync();
+            if (user == null) return Unauthorized();
 
             // Save to data/images/avatars/ (persistent, outside wwwroot)
             var avatarsDir = Path.Combine(Directory.GetCurrentDirectory(), "data", "images", "avatars");
@@ -334,9 +306,8 @@ namespace MyApp.Api.Controllers
         [Authorize]
         public async Task<ActionResult> RemoveAvatar()
         {
-            var username = User.FindFirstValue(ClaimTypes.Name);
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
-            if (user == null) return NotFound();
+            var user = await CurrentUserAsync();
+            if (user == null) return Unauthorized();
 
             if (!string.IsNullOrEmpty(user.AvatarPath))
             {
@@ -393,8 +364,7 @@ namespace MyApp.Api.Controllers
         [Authorize]
         public async Task<IActionResult> Logout()
         {
-            var username = User.FindFirstValue(ClaimTypes.Name);
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+            var user = await CurrentUserAsync();
             if (user != null)
             {
                 user.SecurityStamp = Guid.NewGuid().ToString("N");

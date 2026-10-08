@@ -300,6 +300,8 @@ Optional company Gmail inbox: authorize an account once and link it only to assi
 
 ### 2026-10-08
 
+- Harden sign-in privacy, account identity and token revocation while preserving existing credentials and company permissions. Handle duplicate usernames without server errors.
+
 - Port the optional Email Workspace from Trader with company-scoped Gmail, human quotation review, division access checks and Customize quotation numbering. Verify module grants with `scripts/test_email_module_access.py`.
 - List delivery challans and bills/invoices newest-created first, independently of custom document numbers. Record UTC creation time for new challans and retain insertion order for historical challans. Return to the first page after creating, importing or duplicating challans.
 
