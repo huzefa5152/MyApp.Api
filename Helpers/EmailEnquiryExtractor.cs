@@ -8,9 +8,9 @@ public static class EmailEnquiryExtractor
 {
     private static readonly Dictionary<string, string[]> Aliases = new()
     {
-        ["description"] = ["item description", "description", "item", "iteam", "particular", "particulars", "material", "product"],
-        ["quantity"] = ["qty", "quantity", "required qty"],
-        ["unit"] = ["uom", "unit", "units"],
+        ["description"] = ["item description", "material description", "description", "item", "iteam", "particular", "particulars", "material", "product"],
+        ["quantity"] = ["qty", "quantity", "required qty", "required quantity"],
+        ["unit"] = ["uom", "unit", "units", "unit of measure"],
         ["reference"] = ["pr", "pr #", "indent", "indent no", "reference"],
     };
     private static string Clean(string text) => Regex.Replace(HtmlEntity.DeEntitize(text), @"\s+", " ", RegexOptions.None, TimeSpan.FromSeconds(1)).Trim();
@@ -42,17 +42,14 @@ public static class EmailEnquiryExtractor
                 var cells = row.SelectNodes("./th|./td");
                 if (cells == null || cells.Count > 40) continue;
                 var values = cells.Select(c => Clean(c.InnerText)).ToArray();
-                if (map == null)
+                var candidate = new Dictionary<string, int>();
+                foreach (var (key, aliases) in Aliases)
                 {
-                    var candidate = new Dictionary<string, int>();
-                    foreach (var (key, aliases) in Aliases)
-                    {
-                        var indices = values.Select((v, i) => (v, i)).Where(x => aliases.Contains(x.v.ToLowerInvariant().Trim(' ', '.', '#'))).Select(x => x.i).ToArray();
-                        if (indices.Length == 1) candidate[key] = indices[0];
-                    }
-                    if (candidate.ContainsKey("description") && candidate.ContainsKey("quantity")) map = candidate;
-                    continue;
+                    var indices = values.Select((v, i) => (v, i)).Where(x => aliases.Contains(x.v.ToLowerInvariant().Trim(' ', '.', '#'))).Select(x => x.i).ToArray();
+                    if (indices.Length == 1) candidate[key] = indices[0];
                 }
+                if (candidate.ContainsKey("description") && candidate.ContainsKey("quantity")) { map = candidate; continue; }
+                if (map == null) continue;
                 if (cells.Any(c => c.GetAttributeValue("rowspan", 1) > 1 || c.GetAttributeValue("colspan", 1) > 1))
                 { draft.Warnings.Add("A merged data row needs manual review."); continue; }
                 string At(string key) => map.TryGetValue(key, out var i) && i < values.Length ? values[i] : "";
@@ -62,7 +59,7 @@ public static class EmailEnquiryExtractor
                 if (!match.Success || !decimal.TryParse(match.Groups[1].Value, NumberStyles.Number, CultureInfo.InvariantCulture, out var qty) || qty <= 0)
                 { draft.Warnings.Add("A row had an unreadable quantity and was not imported: " + description[..Math.Min(description.Length, 80)]); continue; }
                 if (unit.Length == 0) unit = match.Groups[2].Value.Trim();
-                draft.Items.Add(new() { Description = description[..Math.Min(description.Length, 2000)], Quantity = qty, Unit = unit });
+                draft.Items.Add(new() { Description = description[..Math.Min(description.Length, 2000)], SourceDescription = description[..Math.Min(description.Length, 2000)], Quantity = qty, Unit = unit[..Math.Min(unit.Length, 100)] });
                 var rf = At("reference"); if (rf.Length > 0) references.Add(rf);
                 if (draft.Items.Count >= 200) { draft.Warnings.Add("Only the first 200 items were extracted. Review the source."); break; }
             }

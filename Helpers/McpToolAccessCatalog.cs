@@ -2,7 +2,7 @@ namespace MyApp.Api.Helpers;
 
 public sealed record McpToolAccessDefinition(
     string Name, string Group, string Label, string[] Permissions,
-    string Scope = "read", bool Write = false, bool SeedOnly = false, bool Configurable = true);
+    string Scope = "read", bool Write = false, bool SeedOnly = false, bool Configurable = true, bool RequireAll = false);
 
 /// <summary>Named MCP grants supplement, never replace, business permissions and token limits.</summary>
 public static class McpToolAccessCatalog
@@ -20,6 +20,10 @@ public static class McpToolAccessCatalog
         new("search_suppliers", "Suppliers", "Find suppliers", new[] { "suppliers.manage.view" }),
 
         new("search_quotes", "Sales", "Find quotations", new[] { "salesquotes.list.view" }),
+        new("search_email_enquiries", "Email enquiries", "Find accessible email enquiries", new[] { "email.workspace.use", "email.inbox.view" }, RequireAll: true),
+        new("get_email_enquiry", "Email enquiries", "Read an email enquiry and numbered items", new[] { "email.workspace.use", "email.inbox.view" }, RequireAll: true),
+        new("prepare_email_decision", "Email enquiries", "Prepare Keep, Ignore or Restore", new[] { "email.workspace.use", "email.inbox.view", "email.inbox.manage" }, McpScopes.Email, Write: true, RequireAll: true),
+        new("prepare_email_quotation", "Email enquiries", "Prepare quotation with explicit item prices", new[] { "email.workspace.use", "email.inbox.view", "email.enquiries.manage", "salesquotes.manage.create" }, McpScopes.Quotes, Write: true, RequireAll: true),
         new("get_quote", "Sales", "Read a quotation", new[] { "salesquotes.list.view" }),
         new("prepare_quote", "Sales", "Prepare a quotation", new[] { "salesquotes.manage.create" }, McpScopes.Quotes, Write: true),
         new("search_sales_orders", "Sales", "Find sales orders", new[] { "salesorders.list.view" }),

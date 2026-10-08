@@ -34,11 +34,13 @@ public partial class McpController
         AddDocumentPrintTools(tools);
         AddOnboardingTools(tools);
         AddOperationsTools(tools);
+        AddEmailTools(tools);
         return tools.ToArray();
     }
 
     private async Task<bool> ExpandedToolAllowedAsync(ExpandedTool tool)
     {
+        if (IsEmailTool(tool.Name) && !await EmailToolAllowedAsync(tool.Name)) return false;
         if (tool.SeedOnly && !_permissions.IsSeedAdmin(CurrentUserId)) return false;
         if (!await _permissions.HasMcpToolAccessAsync(CurrentUserId, tool.Name)) return false;
         if (Agent != null && !Agent.HasScope(tool.Scope)) return false;
@@ -94,6 +96,7 @@ public partial class McpController
         {
             "get_mcp_capabilities" => await GetCapabilitiesAsync(),
             "get_action_status" => await GetActionStatusAsync(args),
+            "search_email_enquiries" or "get_email_enquiry" or "prepare_email_decision" or "prepare_email_quotation" => await CallEmailToolAsync(name, args),
             "list_print_templates" or "get_print_template" or "get_print_contract" => await CallPrintToolAsync(name, args),
             "get_document_print_data" => await CallDocumentPrintToolAsync(name, args),
             "get_onboarding_schema" or "get_company_onboarding_status" => await CallOnboardingToolAsync(name, args),
@@ -109,7 +112,9 @@ public partial class McpController
             foreach (var arg in args.EnumerateObject())
                 if (!props.TryGetProperty(arg.Name, out _)) throw new ToolError($"Unknown argument: {arg.Name}.");
         foreach (var key in schema.GetProperty("required").EnumerateArray())
-            if (!Has(args, key.GetString()!)) throw new ToolError($"{key.GetString()} is required.");
+            if (!Has(args, key.GetString()!) && !(IsEmailTool(tool.Name) && key.GetString() == "revision"
+                && args.ValueKind == JsonValueKind.Object && args.TryGetProperty("revision", out var revision) && revision.ValueKind == JsonValueKind.Null))
+                throw new ToolError($"{key.GetString()} is required.");
     }
 
     private async Task<object> GetCapabilitiesAsync()
@@ -135,6 +140,12 @@ public partial class McpController
     {
         var plan = await OwnPlanAsync(OptText(args, "planId", 64));
         await PinCompanyAsync(plan.CompanyId);
+        if (plan.Kind is "email.quote" or "email.decision")
+        {
+            var tool = PrepareToolFor(plan.Kind);
+            if (!await _permissions.HasMcpToolAccessAsync(CurrentUserId, tool) || !await EmailToolAllowedAsync(tool))
+                throw new ToolError("Resource unavailable or access denied.");
+        }
         var status = plan.CommittedAt == null ? plan.ExpiresAt > DateTime.UtcNow ? "prepared" : "expired"
             : plan.ResultRef == "FAILED" ? "failedOrIncomplete"
             : !string.IsNullOrEmpty(plan.ResultRef) ? "succeeded" : "executingOrUnknown";

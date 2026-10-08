@@ -6,6 +6,7 @@ export const SCOPE_INFO = {
   "documents.read": { label: "Read print details", help: "Read document print data, including business details printed on the document, only where your print permissions allow it." },
   "clients.write": { label: "Create and update clients", help: "Each change is shown to you first and saved only after you approve it." },
   "quotes.write": { label: "Create quotations", help: "Sales quotations only, never bills or FBR invoices. Each one is shown to you first." },
+  "email.enquiries.write": { label: "Choose email enquiries", help: "Keep, ignore or restore emails in your permitted companies after your approval. Creating a quotation also needs Create quotations access." },
   "challans.write": { label: "Create delivery challans", help: "Delivery notes without prices. Each one is shown to you first." },
   "bills.write": { label: "Create bills", help: "Uses the next number of your invoice sequence and may reduce stock. Each bill is shown to you first and is never submitted to FBR." },
 };

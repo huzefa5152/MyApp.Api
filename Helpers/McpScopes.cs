@@ -13,20 +13,22 @@ public static class McpScopes
     public const string Read = "read";
     public const string Clients = "clients.write";
     public const string Quotes = "quotes.write";
+    public const string Email = "email.enquiries.write";
     public const string Challans = "challans.write";
     public const string Bills = "bills.write";
     public const string TemplatesRead = "templates.read";
     public const string DocumentsRead = "documents.read";
 
     /// <summary>Write scopes that have tools behind them today. Others are refused, not pre-granted.</summary>
-    public static readonly string[] Write = { Clients, Quotes, Challans, Bills };
-    public static readonly string[] Implemented = { Read, TemplatesRead, DocumentsRead, Clients, Quotes, Challans, Bills };
+    public static readonly string[] Write = { Clients, Quotes, Challans, Bills, Email };
+    public static readonly string[] Implemented = { Read, TemplatesRead, DocumentsRead, Clients, Quotes, Challans, Bills, Email };
 
     // Permissions the owner must hold: ALL of "All", and at least one of "Any" (when listed).
     private static readonly Dictionary<string, (string[] All, string[] Any)> Needs = new()
     {
         [Clients] = (new[] { "clients.manage.create", "clients.manage.update" }, Array.Empty<string>()),
         [Quotes] = (new[] { "salesquotes.manage.create" }, Array.Empty<string>()),
+        [Email] = (new[] { "email.workspace.use", "email.inbox.view", "email.inbox.manage" }, Array.Empty<string>()),
         [Challans] = (new[] { "challans.manage.create", "challans.list.view" }, Array.Empty<string>()),
         // A bill is made from challans or on its own; the two are separately grantable screens.
         [Bills] = (new[] { "challans.list.view" }, new[] { "bills.manage.create", "bills.manage.create.standalone" }),

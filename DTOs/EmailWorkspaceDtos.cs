@@ -34,12 +34,32 @@ public class EmailDraftDto
 }
 public class EmailDraftItem
 {
+    [MaxLength(2000)] public string? SourceDescription { get; set; }
     [MaxLength(2000)] public string Description { get; set; } = "";
     public decimal Quantity { get; set; }
     [MaxLength(100)] public string Unit { get; set; } = "";
     public decimal? UnitPrice { get; set; }
     [MaxLength(200)] public string? Brand { get; set; }
 }
+public class EmailAttachmentRequest
+{
+    [Required, MaxLength(500)] public string AttachmentId { get; set; } = "";
+    public Guid? Revision { get; set; }
+    public List<List<OcrWordDto>>? Pages { get; set; }
+    [MaxLength(10)] public string? Mode { get; set; }
+}
+public class EmailAssistanceRequest
+{
+    public int? ClientId { get; set; }
+    public Guid? Revision { get; set; }
+    [Required, MaxLength(200)] public List<EmailDraftItem> Items { get; set; } = [];
+}
+public record EmailAttachmentPreview(string FileName, string Text, List<EmailDraftItem> Items,
+    List<string> Warnings, bool RequiresOcr, bool RequiresBrand, bool RequiresSpecifications);
+public record EmailPriceEvidence(decimal UnitPrice, DateTime Date, int DocumentNumber);
+public record EmailItemCandidate(string Description, string Unit, int Score, string Reason,
+    EmailPriceEvidence? LastQuote, EmailPriceEvidence? LastPurchase);
+public record EmailItemAssistance(int Index, List<EmailItemCandidate> Candidates);
 public record EmailAttachmentInfo(string Id, string FileName, string MimeType, int Size);
 public record EmailContent(string Text, string Html, List<EmailAttachmentInfo> Attachments);
 public record GmailIdentity(string Subject, string Email, string RefreshToken);

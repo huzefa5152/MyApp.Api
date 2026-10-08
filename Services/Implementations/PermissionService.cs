@@ -86,7 +86,11 @@ namespace MyApp.Api.Services.Implementations
             {
                 var eligible = false;
                 foreach (var key in tool.Permissions)
-                    if (await HasPermissionAsync(userId, key)) { eligible = true; break; }
+                {
+                    var granted = await HasPermissionAsync(userId, key);
+                    if (tool.RequireAll && !granted) return false;
+                    if (granted) { eligible = true; if (!tool.RequireAll) break; }
+                }
                 if (!eligible) return false;
             }
             if (!tool.Configurable) return true;

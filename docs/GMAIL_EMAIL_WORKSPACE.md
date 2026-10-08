@@ -2,6 +2,10 @@
 
 Email Workspace is a separate opt-in module. Each user authorizes their own Gmail account once and explicitly links it to companies they can access. A company assignment never grants access to another user's complete mailbox.
 
+MCP users can also choose emails, supply explicit item prices and approve quotation creation
+from ChatGPT. See [MCP setup and the email command workflow](MCP_AGENT_ACCESS.md#email-enquiries-from-chatgpt).
+The ERP OAuth connection and Gmail OAuth connection are separate; ChatGPT never receives Gmail credentials.
+
 ## Enable for existing users
 
 Startup creates the built-in **Email Workspace** role without assigning it to existing users. Sales Edition, Complete Edition, Tenant Administrator and the general Administrator role exclude email permissions. The platform seed administrator retains its existing global permission bypass.
@@ -20,7 +24,7 @@ The navbar displays a separate **Email Workspace / Inbox & Connections** section
 6. Review the customer, descriptions, quantities, units and requirements. Enter prices and required brand/make details, confirm referenced specifications, then save a draft or explicitly confirm review and create the quotation.
 7. The existing Sales Quote service assigns the company number and recomputes totals. Quote creation and source linking commit together. Repeated or concurrent conversion returns the existing quotation.
 
-Attachments up to 10 MB can be downloaded while the mailbox is connected. Automatic PDF, spreadsheet, image and OCR extraction are outside this release. Unsupported layouts use the shared manual line editor. Email content is not sent to an AI provider; quotations are not automatically emailed or submitted to FBR.
+Attachments up to 10 MB can be downloaded and previewed while the mailbox is connected. PDF text layers, XLSX, XLS, CSV and UTF-8 TXT tables can supply draft items; images and scanned PDFs use the existing browser OCR engine and locally served English language data. Users explicitly append or replace items. Unsupported layouts use the shared manual line editor. Email content is not sent to an AI provider; quotations are not automatically emailed or submitted to FBR.
 
 ## Architecture
 
@@ -40,7 +44,34 @@ flowchart LR
 
 OAuth state is one-use, expires after ten minutes and is bound to the initiating user and company. Credentials, email content and drafts use ASP.NET Data Protection. Sender and subject metadata remain searchable. Workers use separate scopes and a maximum of four concurrent mailbox syncs; SQL leases prevent duplicate work across hosts. Sync rechecks module, connection permission and company access. Cached kept enquiries remain company resources after unlinking, but unassigned users cannot read them.
 
+## Attachment and pricing assistance
+
+After preparing an enquiry, select **Read items from attachment**. This first saves current edits, then shows extracted text, items and warnings without changing draft items. Choose **Append attachment items** or **Replace draft items with attachment** explicitly. No attachment price is imported. Applying items clears review, retains source descriptions and carries brand/drawing requirements into server-side conversion checks. OCR can confuse digits; always compare the result with the original. Current limits are 10 MB, 10 PDF/OCR pages, five workbook sheets, 5,000 rows per sheet and 40 columns. Workbook formulas are skipped, not evaluated; password-protected, unsupported or unreadable files require manual entry. Workbooks also have a 30 MB expanded-content limit. Table extraction requires recognizable description and quantity headings.
+
+Choose the customer and select **Find catalogue matches and prices**. Suggestions come from the selected company's catalogue and recent quotations for that customer. Different numeric model/specification tokens are not fuzzily matched. Previously converted and reviewed enquiries can remember a customer's approved description mapping within that company. Users explicitly accept each description; quantity stays unchanged and its old price is cleared. Confirmed mappings are derived from encrypted converted drafts, so no additional schema migration is required.
+
+Historical quotation rates require `salesquotes.list.view`; purchase costs require `purchasebills.list.view`. Customer and company scope are checked independently of these permissions, including before returning results. Only equal units are priced, brand-specific prices require the same brand text, and no unit/currency conversion is attempted. A price is applied only when the user chooses it. Cost is the latest recorded purchase unit price before tax and additional landed costs, not an inventory valuation; the displayed gross margin is an estimate. Queries use at most 2,000 recent quotation lines for the chosen customer, 2,000 recent company purchase lines, 2,000 company catalogue entries and 200 converted enquiry mappings. Older unmatched history requires manual lookup. No customer selection means no customer quotation history.
+
+## Real-tenant acceptance session — Saturday, 2026-10-10
+
+1. Complete the Google Cloud setup below, register the exact callback URL and add the intended mailbox as a test user when the consent app is in Testing. Store the client secret outside tracked files. Confirm the API and frontend use the intended approved test environment before creating quotations.
+2. Assign Email Workspace and the intended action permissions to the existing tenant user. Assign only their companies. Grant Sales Quote create for conversion, quotation view for historical rates and optional purchase view for cost visibility.
+3. Have the mailbox owner perform consent. Test cancellation, reconnect after revocation and synchronization after signing out/in. Record results without copying tokens or personal mail into the public repository.
+4. Locate the three example messages if they fall within the initial 30-day import window. Confirm sender rules, customer selection and forwarding behavior. Keep one, ignore one, restore it and verify that these choices do not change Gmail.
+5. Review an HTML enquiry, a PDF, an Excel sheet and a scanned image if available. Compare every item, quantity, unit, brand and drawing requirement. Verify preview versus append/replace, manual correction and missing/ambiguous quantity warnings.
+6. Check a known customer's last quotation and purchase cost against the original records. Change customer or company and verify that old suggestions disappear. A user without purchase-view access must never receive costs.
+7. Enter or explicitly accept prices, confirm review and create a quotation. Verify its company, customer, number, quantities, totals and original email link. Retry conversion and confirm it returns the same quotation.
+8. Test a second user with a different company assignment. Verify private mail stays private, kept enquiries and explicit sender sharing stay within the selected company, and revoking company or module access immediately blocks inbox, previews, suggestions and OAuth.
+9. Link a permitted mailbox to a second assigned company and test concurrent synchronization. Confirm there is one connection authorization per user/account with explicit company links and no cross-company customer or price suggestions.
+
+Real Google consent and real-tenant mail acceptance are pending until this session is executed. These instructions are a checklist, not a scheduled job or a claim that the mailbox has been accessed. Later additions such as reply sending, follow-up reminders, enquiry assignment, duplicate/revision management and company approval policies are outside this increment.
 ## Google Cloud setup
+
+For the Saturday MCP acceptance, also connect ChatGPT as the intended ERP user, choose only
+their assigned companies and explicitly enable email-selection and quotation-write scopes.
+Run Keep/Ignore and a priced quotation through preview and approval; confirm totals and the
+source link in the application. Try an unassigned company, revoke module/company access after
+preparation, and verify commit is refused. This live connector acceptance remains pending.
 
 Create a Google Cloud project, enable Gmail API, configure OAuth consent and add test accounts during testing. Create an OAuth client of type Web application and register the exact frontend callback, for example `http://localhost:<frontend-port>/email-workspace` locally or `https://<application-host>/email-workspace` for the intended installation. Include an installation base path where applicable. The backend's configured redirect URI must match it exactly. See [Google's web-server OAuth setup](https://developers.google.com/identity/protocols/oauth2/web-server).
 

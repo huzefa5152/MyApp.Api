@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.RateLimiting;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
 using MyApp.Api.Middleware;
@@ -77,6 +78,21 @@ public sealed class EmailWorkspaceController(EmailWorkspaceService service, ILog
     [HasPermission("email.enquiries.manage")]
     [AuthorizeCompany]
     public Task<IActionResult> Prepare(int companyId, int id, EmailDecisionDto dto, CancellationToken ct) => Run(async () => await service.PrepareAsync(UserId, companyId, id, dto.Revision, ct));
+    [HttpPost("company/{companyId}/messages/{id}/attachment-preview")]
+    [HasPermission("email.enquiries.manage")]
+    [AuthorizeCompany, RequestSizeLimit(4 * 1024 * 1024), EnableRateLimiting("import")]
+    public Task<IActionResult> PreviewAttachment(int companyId, int id, EmailAttachmentRequest dto, CancellationToken ct) =>
+        Run(async () => await service.PreviewAttachmentAsync(UserId, companyId, id, dto, ct));
+    [HttpPost("company/{companyId}/messages/{id}/attachment-items")]
+    [HasPermission("email.enquiries.manage")]
+    [AuthorizeCompany, RequestSizeLimit(4 * 1024 * 1024), EnableRateLimiting("import")]
+    public Task<IActionResult> ApplyAttachment(int companyId, int id, EmailAttachmentRequest dto, CancellationToken ct) =>
+        Run(async () => await service.ApplyAttachmentAsync(UserId, companyId, id, dto, ct));
+    [HttpPost("company/{companyId}/messages/{id}/item-assistance")]
+    [HasPermission("email.enquiries.manage")]
+    [AuthorizeCompany]
+    public Task<IActionResult> AssistItems(int companyId, int id, EmailAssistanceRequest dto, CancellationToken ct) =>
+        Run(async () => await service.AssistItemsAsync(UserId, companyId, id, dto, ct));
     [HttpPut("company/{companyId}/messages/{id}/draft")]
     [HasPermission("email.enquiries.manage")]
     [AuthorizeCompany]
