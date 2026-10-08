@@ -308,8 +308,8 @@ export default function ProfilePage() {
   return (
     <div style={{ maxWidth: 800, margin: "0 auto" }}>
       {/* Page header */}
-      <div style={styles.pageHeader}>
-        <div style={styles.headerIcon}>
+      <div data-admin-page-header="" style={styles.pageHeader}>
+        <div data-admin-page-icon="" style={styles.headerIcon}>
           <MdAccountCircle size={28} color="#fff" />
         </div>
         <div>

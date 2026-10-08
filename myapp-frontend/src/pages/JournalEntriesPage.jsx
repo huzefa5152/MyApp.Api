@@ -229,7 +229,7 @@ export default function JournalEntriesPage() {
       </div>
 
       {companies.length > 0 && (
-        <div style={st.filters}>
+        <div data-admin-toolbar="" style={st.filters}>
           <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <MdBusiness size={20} color={colors.blue} />
             <select
@@ -391,13 +391,13 @@ function JournalForm({ entry, companyId, accounts, isNarrow, onClose, onSaved })
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? `Edit ${entry.reference}` : "New Journal Entry"}</h5>
           <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close">&times;</button>
         </div>
 
         <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
-          <div style={formStyles.body}>
+          <div data-admin-body="" style={formStyles.body}>
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
             <div style={st.formGrid}>
@@ -473,7 +473,7 @@ function JournalForm({ entry, companyId, accounts, isNarrow, onClose, onSaved })
             </div>
           </div>
 
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button
               type="submit"

@@ -111,9 +111,9 @@ export default function ClientsPage() {
   return (
     <div>
       {/* Page Header */}
-      <div style={styles.header}>
+      <div data-admin-page-header="" style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={styles.headerIcon}>
+          <div data-admin-page-icon="" style={styles.headerIcon}>
             <MdPeople size={28} color="#fff" />
           </div>
           <div>

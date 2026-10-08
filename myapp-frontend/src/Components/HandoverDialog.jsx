@@ -37,7 +37,7 @@ export default function HandoverDialog({ mode = "single", invoiceNumber, count =
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.sm }} onMouseDown={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h3 style={formStyles.title}>
             {isBulk
               ? `Mark ${count} invoice${count === 1 ? "" : "s"} delivered`
@@ -48,7 +48,7 @@ export default function HandoverDialog({ mode = "single", invoiceNumber, count =
           </button>
         </div>
 
-        <div style={formStyles.body}>
+        <div data-admin-body="" style={formStyles.body}>
           <div style={{
             display: "flex", gap: 10, alignItems: "flex-start",
             background: "#e8f5e9", border: "1px solid #a5d6a7", color: "#2e7d32",
@@ -62,7 +62,7 @@ export default function HandoverDialog({ mode = "single", invoiceNumber, count =
             </span>
           </div>
 
-          <div style={formStyles.formGroup}>
+          <div data-admin-field="" style={formStyles.formGroup}>
             <label style={formStyles.label}>Remark (optional)</label>
             <input
               style={formStyles.input}
@@ -77,7 +77,7 @@ export default function HandoverDialog({ mode = "single", invoiceNumber, count =
           {error && <div style={formStyles.error}>{error}</div>}
         </div>
 
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           <button data-admin-close="" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose} disabled={busy}>
             Cancel
           </button>

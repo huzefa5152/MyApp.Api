@@ -326,12 +326,12 @@ export default function CompanyForm({ company, onClose, onSaved }) {
     return (
         <div data-admin-backdrop="" style={backdrop}>
             <div data-admin-dialog="" style={{ ...modal, maxWidth: `${modalSizes.md}px` }}>
-                <div style={header}>
+                <div data-admin-header="" style={header}>
                     <h5 style={title}>{company ? "Edit Company" : "New Company"}</h5>
                     <button data-admin-close="" style={closeButton} onClick={onClose}>&times;</button>
                 </div>
                 <form onSubmit={handleSubmit}>
-                    <div style={{ ...body, maxHeight: "65vh", overflowY: "auto" }}>
+                    <div data-admin-body="" style={{ ...body, maxHeight: "65vh", overflowY: "auto" }}>
                         {error && <div ref={errRef} style={errorStyle}>{error}</div>}
 
                         {/* ── Tab bar ─────────────────────────────────────── */}
@@ -356,17 +356,17 @@ export default function CompanyForm({ company, onClose, onSaved }) {
 
                         {/* ── General ─────────────────────────────────────── */}
                         <div hidden={activeTab !== "general"}>
-                            <div style={formGroup}>
+                            <div data-admin-field="" style={formGroup}>
                                 <label style={label}>Company Name *</label>
                                 <input type="text" name="name" value={form.name} onChange={handleChange} style={input} />
                             </div>
 
-                            <div style={formGroup}>
+                            <div data-admin-field="" style={formGroup}>
                                 <label style={label}>Brand Name (for print header)</label>
                                 <input type="text" name="brandName" value={form.brandName} onChange={handleChange} style={input} placeholder="Name as it should print on documents" />
                             </div>
                             <TaxInvoiceGrouping value={form.defaultGroupTaxInvoiceByItemType} onChange={(value) => setForm((prev) => ({ ...prev, defaultGroupTaxInvoiceByItemType: value }))} companyDefault />
-                            <div style={formGroup}>
+                            <div data-admin-field="" style={formGroup}>
                                 <label style={label}>Default withholding tax rate (%)</label>
                                 <input type="number" min="0" max="100" step="0.01" value={form.defaultWithholdingTaxRate ?? ""}
                                     onChange={(e) => setForm((prev) => ({ ...prev, defaultWithholdingTaxRate: e.target.value === "" ? null : Number(e.target.value) }))}
@@ -374,24 +374,24 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                 <small>Pre-fills new sales bills. Leave blank for None; each bill can override it.</small>
                             </div>
 
-                            <div style={formGroup}>
+                            <div data-admin-field="" style={formGroup}>
                                 <label style={label}>Full Address</label>
                                 <input type="text" name="fullAddress" value={form.fullAddress} onChange={handleChange} style={input} />
                             </div>
 
                             <div className="form-grid-2col">
-                                <div style={formGroup}>
+                                <div data-admin-field="" style={formGroup}>
                                     <label style={label}>Phone</label>
                                     <input type="text" name="phone" value={form.phone} onChange={handleChange} style={input} />
                                 </div>
-                                <div style={formGroup}>
+                                <div data-admin-field="" style={formGroup}>
                                     <label style={label}>NTN <span style={hintText}>(display / print only)</span></label>
                                     <input type="text" name="ntn" value={form.ntn} onChange={handleChange} style={input} placeholder="Shown on print templates" />
                                 </div>
                             </div>
 
                             <div className="form-grid-2col">
-                                <div style={formGroup}>
+                                <div data-admin-field="" style={formGroup}>
                                     <label style={label}>CNIC <span style={hintText}>(display / print only)</span></label>
                                     <input
                                         type="text"
@@ -403,7 +403,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                         placeholder="13-digit CNIC — optional, shown on print"
                                     />
                                 </div>
-                                <div style={formGroup}>
+                                <div data-admin-field="" style={formGroup}>
                                     <label style={label}>STRN <span style={hintText}>(display / print only)</span></label>
                                     <input type="text" name="strn" value={form.strn} onChange={handleChange} style={input} />
                                 </div>
@@ -414,7 +414,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                 The number filed to FBR is set separately on the <strong>FBR Integration</strong> tab.
                             </div>
 
-                            <div style={formGroup}>
+                            <div data-admin-field="" style={formGroup}>
                                 <label style={label}>Logo</label>
                                 <input
                                     type="file"
@@ -432,7 +432,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                         <div hidden={activeTab !== "fbr"}>
                             {/* The dedicated seller identity — required, filed to FBR. */}
                             <div style={{ marginBottom: "1rem", padding: "0.85rem", borderRadius: 10, border: "1px solid #0d47a155", backgroundColor: "#e8f0fe" }}>
-                                <div style={formGroup}>
+                                <div data-admin-field="" style={formGroup}>
                                     <label style={label}>
                                         Seller NTN / CNIC for FBR
                                     </label>
@@ -461,13 +461,13 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                             <div style={{ padding: "0.75rem", borderRadius: 10, border: "1px solid #0d47a130", backgroundColor: "#e3f2fd" }}>
                                 <p style={{ margin: "0 0 0.6rem", fontWeight: 700, fontSize: "0.88rem", color: "#0d47a1" }}>FBR Digital Invoicing</p>
 
-                                <div style={formGroup}>
+                                <div data-admin-field="" style={formGroup}>
                                     <label style={label}>Invoice Number Prefix</label>
                                     <input type="text" name="invoiceNumberPrefix" value={form.invoiceNumberPrefix} onChange={handleChange} style={input} placeholder="e.g. INV-" />
                                 </div>
 
                                 <div className="form-grid-2col">
-                                    <div style={formGroup}>
+                                    <div data-admin-field="" style={formGroup}>
                                         <label style={label}>Province</label>
                                         <select name="fbrProvinceCode" value={form.fbrProvinceCode} onChange={handleChange} style={input}>
                                             <option value="">Select...</option>
@@ -476,7 +476,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                             ))}
                                         </select>
                                     </div>
-                                    <div style={formGroup}>
+                                    <div data-admin-field="" style={formGroup}>
                                         <label style={label}>Environment</label>
                                         <select name="fbrEnvironment" value={form.fbrEnvironment} onChange={handleChange} style={input}>
                                             {environments.length > 0 ? environments.map((e) => (
@@ -492,7 +492,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                 </div>
 
                                 <div className="form-grid-2col">
-                                    <div style={formGroup}>
+                                    <div data-admin-field="" style={formGroup}>
                                         <label style={label}>
                                             Business Activity <span style={hintText}>(multiple — drives applicable FBR scenarios)</span>
                                         </label>
@@ -503,7 +503,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                             onChange={handleCsvChange}
                                         />
                                     </div>
-                                    <div style={formGroup}>
+                                    <div data-admin-field="" style={formGroup}>
                                         <label style={label}>
                                             Sector <span style={hintText}>(multiple)</span>
                                         </label>
@@ -516,7 +516,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                     </div>
                                 </div>
 
-                                <div style={formGroup}>
+                                <div data-admin-field="" style={formGroup}>
                                     <label style={label}>FBR Bearer Token {company?.hasFbrToken && <span style={{ color: "#28a745", fontSize: "0.75rem" }}>(set)</span>}</label>
                                     <input type="password" name="fbrToken" value={form.fbrToken} onChange={handleChange} style={input} placeholder={company?.hasFbrToken ? "Leave blank to keep current" : "Paste token from IRIS portal"} />
                                 </div>
@@ -530,7 +530,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                         Used when creating a bill if the line/header didn't specify. Leave blank to use the built-in fallback.
                                     </p>
                                     <div className="form-grid-2col">
-                                        <div style={formGroup}>
+                                        <div data-admin-field="" style={formGroup}>
                                             <label style={label}>Default Sale Type</label>
                                             {saleTypeOptions.length > 0 ? (
                                                 <select name="fbrDefaultSaleType" value={form.fbrDefaultSaleType} onChange={handleChange} style={input}>
@@ -543,7 +543,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                                 <input type="text" name="fbrDefaultSaleType" value={form.fbrDefaultSaleType} onChange={handleChange} style={input} placeholder="e.g. Goods at Standard Rate (default)" />
                                             )}
                                         </div>
-                                        <div style={formGroup}>
+                                        <div data-admin-field="" style={formGroup}>
                                             <label style={label}>Default UOM</label>
                                             {uomOptions.length > 0 ? (
                                                 <select name="fbrDefaultUOM" value={form.fbrDefaultUOM} onChange={handleChange} style={input}>
@@ -558,7 +558,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                         </div>
                                     </div>
                                     <div className="form-grid-2col">
-                                        <div style={formGroup}>
+                                        <div data-admin-field="" style={formGroup}>
                                             <label style={label}>Default Payment Mode — Registered buyers</label>
                                             {paymentModeOptions.length > 0 ? (
                                                 <select name="fbrDefaultPaymentModeRegistered" value={form.fbrDefaultPaymentModeRegistered} onChange={handleChange} style={input}>
@@ -571,7 +571,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                                 <input type="text" name="fbrDefaultPaymentModeRegistered" value={form.fbrDefaultPaymentModeRegistered} onChange={handleChange} style={input} placeholder="Credit / Bank Transfer / …" />
                                             )}
                                         </div>
-                                        <div style={formGroup}>
+                                        <div data-admin-field="" style={formGroup}>
                                             <label style={label}>Default Payment Mode — Unregistered buyers</label>
                                             {paymentModeOptions.length > 0 ? (
                                                 <select name="fbrDefaultPaymentModeUnregistered" value={form.fbrDefaultPaymentModeUnregistered} onChange={handleChange} style={input}>
@@ -591,7 +591,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
 
                         {/* ── Numbering ───────────────────────────────────── */}
                         <div hidden={activeTab !== "numbering"}>
-                            <div style={formGroup}>
+                            <div data-admin-field="" style={formGroup}>
                                 <label style={label}>
                                     Starting Challan Number
                                     {freshCompany?.hasChallans && (
@@ -611,7 +611,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                 )}
                             </div>
 
-                            <div style={formGroup}>
+                            <div data-admin-field="" style={formGroup}>
                                 <label style={label}>
                                     Starting Invoice Number
                                     {freshCompany?.hasInvoices && (
@@ -633,14 +633,14 @@ export default function CompanyForm({ company, onClose, onSaved }) {
 
                             {/* Debit/Credit Notes run their own sequence. */}
                             <div className="form-grid-2col">
-                                <div style={formGroup}>
+                                <div data-admin-field="" style={formGroup}>
                                     <label style={label}>Starting Debit Note Number</label>
                                     <input type="number" name="startingDebitNoteNumber" value={form.startingDebitNoteNumber} onChange={handleChange} style={input} min="1" />
                                     {company?.currentDebitNoteNumber > 0 && (
                                         <span style={currentHint}>Current: {company.currentDebitNoteNumber} (locked — notes exist)</span>
                                     )}
                                 </div>
-                                <div style={formGroup}>
+                                <div data-admin-field="" style={formGroup}>
                                     <label style={label}>Starting Credit Note Number</label>
                                     <input type="number" name="startingCreditNoteNumber" value={form.startingCreditNoteNumber} onChange={handleChange} style={input} min="1" />
                                     {company?.currentCreditNoteNumber > 0 && (
@@ -650,12 +650,12 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                             </div>
 
                             <div className="form-grid-2col">
-                                <div style={formGroup}>
+                                <div data-admin-field="" style={formGroup}>
                                     <label style={label}>Starting Sales Quote #</label>
                                     <input type="number" name="startingSalesQuoteNumber" min={1} value={form.startingSalesQuoteNumber} onChange={handleChange} style={input} />
                                     <span style={currentHint}>Locks once sales quotes exist.</span>
                                 </div>
-                                <div style={formGroup}>
+                                <div data-admin-field="" style={formGroup}>
                                     <label style={label}>Starting Sales Order #</label>
                                     <input type="number" name="startingSalesOrderNumber" min={1} value={form.startingSalesOrderNumber} onChange={handleChange} style={input} />
                                     <span style={currentHint}>Locks once sales orders exist.</span>
@@ -663,12 +663,12 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                             </div>
 
                             <div className="form-grid-2col">
-                                <div style={formGroup}>
+                                <div data-admin-field="" style={formGroup}>
                                     <label style={label}>Starting Purchase Bill #</label>
                                     <input type="number" name="startingPurchaseBillNumber" min={0} value={form.startingPurchaseBillNumber} onChange={handleChange} style={input} />
                                     <span style={currentHint}>Independent of sales-invoice numbering. Locks once purchase bills exist.</span>
                                 </div>
-                                <div style={formGroup}>
+                                <div data-admin-field="" style={formGroup}>
                                     <label style={label}>Starting Goods Receipt #</label>
                                     <input type="number" name="startingGoodsReceiptNumber" min={0} value={form.startingGoodsReceiptNumber} onChange={handleChange} style={input} />
                                     <span style={currentHint}>Locks once goods receipts exist.</span>
@@ -727,7 +727,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                         </div>
                     </div>
 
-                    <div style={footer}>
+                    <div data-admin-footer="" style={footer}>
                         <button data-admin-close="" type="button" style={{ ...button, ...cancel }} onClick={onClose}>Cancel</button>
                         <button type="submit" style={{ ...button, ...submit }}>{company ? "Update" : "Create"}</button>
                     </div>

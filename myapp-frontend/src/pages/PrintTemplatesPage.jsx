@@ -505,7 +505,7 @@ export default function PrintTemplatesPage() {
 
   return (
     <div>
-      <div style={st.header}>
+      <div data-admin-page-header="" style={st.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <div style={st.icon}><MdDescription size={26} color="#fff" /></div>
           <div>
@@ -825,7 +825,7 @@ function StampUploadModal({ onClose, onUpload, uploading }) {
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={uploading ? undefined : onClose}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.sm}px` }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="stamp-upload-title">
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <div>
             <h3 id="stamp-upload-title" style={formStyles.title}>Upload Stamp</h3>
             <p style={{ margin: "0.15rem 0 0", fontSize: "0.78rem", color: "rgba(255,255,255,0.85)" }}>PNG, JPG or WebP. A transparent PNG works best for signatures.</p>

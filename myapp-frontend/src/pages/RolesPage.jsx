@@ -325,9 +325,9 @@ export default function RolesPage() {
   return (
     <div>
       {/* Page Header */}
-      <div style={styles.header}>
+      <div data-admin-page-header="" style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={styles.headerIcon}>
+          <div data-admin-page-icon="" style={styles.headerIcon}>
             <MdAdminPanelSettings style={{ fontSize: "1.5rem", color: "#fff" }} />
           </div>
           <div>
@@ -428,7 +428,7 @@ export default function RolesPage() {
         // mid-edit permission selections from a stray click.
         <div data-admin-backdrop="" style={styles.overlay}>
           <div data-admin-dialog="" style={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.modalHeader}>
+            <div data-admin-header="" style={styles.modalHeader}>
               <h3 style={formStyles.title}>
                 {copySource ? "Copy role to tenants" : editRole ? `Edit role — ${editRole.name}` : "Create new role"}
               </h3>
@@ -443,7 +443,7 @@ export default function RolesPage() {
               </button>
             </div>
 
-            <div style={styles.modalBody}>
+            <div data-admin-body="" style={styles.modalBody}>
               {msg && (
                 <div style={msg.type === "success" ? styles.successMsg : styles.errorMsg}>
                   {msg.text}
@@ -654,7 +654,7 @@ export default function RolesPage() {
               </>}
             </div>
 
-            <div style={styles.modalFooter}>
+            <div data-admin-footer="" style={styles.modalFooter}>
               <button data-admin-close="" style={styles.cancelBtn} onClick={closeModal} disabled={saving}>
                 Cancel
               </button>

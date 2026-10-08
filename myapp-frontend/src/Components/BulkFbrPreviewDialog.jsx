@@ -120,14 +120,14 @@ export default function BulkFbrPreviewDialog({ invoices, onClose }) {
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>FBR Submission Preview · {stats.total} bill{stats.total === 1 ? "" : "s"}</h5>
           <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close" title="Close">
             <MdClose size={20} color="#fff" />
           </button>
         </div>
 
-        <div style={{ ...formStyles.body, overflow: "auto", flex: 1 }}>
+        <div data-admin-body="" style={{ ...formStyles.body, overflow: "auto", flex: 1 }}>
           {/* Summary strip — what's about to go to FBR. Wraps on narrow viewports. */}
           <div style={s.summaryStrip}>
             <div style={s.summaryItem}>
@@ -168,7 +168,7 @@ export default function BulkFbrPreviewDialog({ invoices, onClose }) {
           )}
         </div>
 
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
             Close
           </button>
@@ -191,7 +191,7 @@ function BillRow({ invoice, expanded, payload, onToggle, fmtMoney, fmtNum, fmtQt
   const BadgeIcon = statusBadge.icon;
 
   return (
-    <div style={s.row}>
+    <div data-admin-form-row="" style={s.row}>
       <button
         type="button"
         style={s.rowHeader}

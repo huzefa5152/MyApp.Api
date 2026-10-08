@@ -92,11 +92,11 @@ export default function BillChallansEditor({ invoice, onClose, onSaved, canAttac
     ...options.filter(c => !selected.has(c.id) && !linked.has(c.id))];
   return <div data-admin-backdrop="" style={{ ...formStyles.backdrop, zIndex: 1500 }}>
     <form data-admin-dialog="" onSubmit={save} aria-label="Manage bill challans" style={{ ...formStyles.modal, width: "96vw", maxWidth: 820 }}>
-      <div style={formStyles.header}>
+      <div data-admin-header="" style={formStyles.header}>
         <h5 style={formStyles.title}>Manage challans · Bill #{bill.invoiceNumber}</h5>
         <button data-admin-close="" type="button" disabled={saving} style={{ ...formStyles.closeButton, minHeight: 44, minWidth: 44 }} onClick={onClose} aria-label="Close challan selection">×</button>
       </div>
-      <div style={{ ...formStyles.body, minWidth: 0 }}>
+      <div data-admin-body="" style={{ ...formStyles.body, minWidth: 0 }}>
         <p>Choose challans for <strong>{bill.clientName}</strong>. Retained items keep their rates and adjustments. Removed challans become available for billing again.</p>
         <p role="note"><strong>Next step after saving:</strong> consultant review is required, even when totals still match. The consultant checks the changed bill in Invoices and completes review before FBR validation or submission.</p>
         {error && <div role="alert" style={{ color: "#a21525", background: "#fff0f1", padding: 12, marginBottom: 12 }}>{error}</div>}

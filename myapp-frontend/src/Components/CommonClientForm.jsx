@@ -315,7 +315,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
         style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>Edit Common Client</h5>
           <button data-admin-close=""
             type="button"
@@ -329,7 +329,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: "contents" }}>
-          <div style={formStyles.body}>
+          <div data-admin-body="" style={formStyles.body}>
             {loading ? (
               <div style={s.notice}>Loading…</div>
             ) : (
@@ -356,7 +356,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                   </div>
                 )}
 
-                <div style={formStyles.formGroup}>
+                <div data-admin-field="" style={formStyles.formGroup}>
                   <label style={formStyles.label}>Name *</label>
                   <input
                     name="name"
@@ -371,7 +371,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                     Switching type clears values for hidden fields so a
                     stale NTN doesn't propagate to every member company. */}
                 <div className="form-grid-2col">
-                  <div style={formStyles.formGroup}>
+                  <div data-admin-field="" style={formStyles.formGroup}>
                     <label style={formStyles.label}>Registration Type</label>
                     <select
                       name="registrationType"
@@ -391,7 +391,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                 {(showNtn || showStrn) && (
                   <div className="form-grid-2col">
                     {showNtn && (
-                      <div style={formStyles.formGroup}>
+                      <div data-admin-field="" style={formStyles.formGroup}>
                         <label style={formStyles.label}>{ntnLabel} *</label>
                         <input
                           name="ntn"
@@ -403,7 +403,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                       </div>
                     )}
                     {showStrn && (
-                      <div style={formStyles.formGroup}>
+                      <div data-admin-field="" style={formStyles.formGroup}>
                         <label style={formStyles.label}>STRN *</label>
                         <input
                           name="strn"
@@ -418,7 +418,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                 )}
 
                 {showCnic && (
-                  <div style={formStyles.formGroup}>
+                  <div data-admin-field="" style={formStyles.formGroup}>
                     <label style={formStyles.label}>CNIC (13 digits) *</label>
                     <input
                       name="cnic"
@@ -438,7 +438,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                     `form-grid-3col` collapses to 1 column on phones via
                     the responsive utility class in index.css. */}
                 <div className="form-grid-3col">
-                  <div style={formStyles.formGroup}>
+                  <div data-admin-field="" style={formStyles.formGroup}>
                     <label style={formStyles.label}>FBR Province</label>
                     <select
                       name="fbrProvinceCode"
@@ -457,22 +457,22 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                       ))}
                     </select>
                   </div>
-                  <div style={formStyles.formGroup}>
+                  <div data-admin-field="" style={formStyles.formGroup}>
                     <label style={formStyles.label}>Phone</label>
                     <input name="phone" value={form.phone} onChange={handleChange} style={formStyles.input} />
                   </div>
-                  <div style={formStyles.formGroup}>
+                  <div data-admin-field="" style={formStyles.formGroup}>
                     <label style={formStyles.label}>Email</label>
                     <input name="email" type="email" value={form.email} onChange={handleChange} style={formStyles.input} />
                   </div>
                 </div>
 
-                <div style={formStyles.formGroup}>
+                <div data-admin-field="" style={formStyles.formGroup}>
                   <label style={formStyles.label}>Address</label>
                   <input name="address" value={form.address} onChange={handleChange} style={formStyles.input} />
                 </div>
 
-                <div style={formStyles.formGroup}>
+                <div data-admin-field="" style={formStyles.formGroup}>
                   <label style={formStyles.label}>Sites</label>
                   <input
                     name="site"

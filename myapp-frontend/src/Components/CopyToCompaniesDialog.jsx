@@ -79,7 +79,7 @@ export default function CopyToCompaniesDialog({
   return (
     <div data-admin-backdrop="" style={styles.backdrop} onClick={() => !submitting && onCancel?.()}>
       <div data-admin-dialog="" style={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <div style={styles.header}>
+        <div data-admin-header="" style={styles.header}>
           <MdContentCopy size={20} color="#fff" />
           <h3 style={styles.title}>{title}</h3>
           <button data-admin-close=""
@@ -94,7 +94,7 @@ export default function CopyToCompaniesDialog({
           </button>
         </div>
 
-        <div style={styles.body}>
+        <div data-admin-body="" style={styles.body}>
           {subjectLabel && (
             <p style={styles.subjectLine}>
               <strong>{subjectLabel}</strong>
@@ -153,7 +153,7 @@ export default function CopyToCompaniesDialog({
           {errorMsg && <div style={styles.error}>{errorMsg}</div>}
         </div>
 
-        <div style={styles.footer}>
+        <div data-admin-footer="" style={styles.footer}>
           <button data-admin-close=""
             style={styles.btnSecondary}
             onClick={() => onCancel?.()}

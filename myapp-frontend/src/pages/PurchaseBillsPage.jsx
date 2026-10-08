@@ -157,9 +157,9 @@ export default function PurchaseBillsPage() {
   return (
     <DocumentLinesNavigation type="purchase">
     <div>
-      <div style={styles.pageHeader}>
+      <div data-admin-page-header="" style={styles.pageHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={styles.headerIcon}><MdShoppingCart size={28} color="#fff" /></div>
+          <div data-admin-page-icon="" style={styles.headerIcon}><MdShoppingCart size={28} color="#fff" /></div>
           <div>
             <h2 style={styles.pageTitle}>Purchase Bills</h2>
             <p style={styles.pageSubtitle}>
@@ -369,7 +369,7 @@ export default function PurchaseBillsPage() {
       {showSalePicker && (
         <div data-admin-backdrop="" style={pickerStyles.backdrop} onClick={() => setShowSalePicker(false)}>
           <div data-admin-dialog="" style={pickerStyles.modal} onClick={(e) => e.stopPropagation()}>
-            <div style={pickerStyles.header}>
+            <div data-admin-header="" style={pickerStyles.header}>
               <h3 style={pickerStyles.title}>Pick a sale bill awaiting procurement</h3>
               <button style={pickerStyles.closeBtn} onClick={() => setShowSalePicker(false)}>
                 <MdClose size={20} />

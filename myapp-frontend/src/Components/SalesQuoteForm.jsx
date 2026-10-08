@@ -151,12 +151,12 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? `Edit Quote #${quote.quoteNumber}` : "Create Sales Quote"}</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
-          <div style={formStyles.body}>
+          <div data-admin-body="" className="admin-quote-body" style={formStyles.body}>
             <DocumentCopyPicker companyId={companyId} destination="Quote" allowDetails={!isEdit} disabled={false}
               onCopy={(source,lines,details) => {
                 setItems(prev => appendCopiedLines(details ? [] : prev, lines, blankItem));
@@ -164,7 +164,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
               }} />
             {error && <div ref={errRef} style={s.err}>{error}</div>}
             {<div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="quote" variant={quote ? "edit" : "create"} currentNumber={quote?.quoteNumber} editRecordId={quote?.id} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>}
-            <div style={s.row}>
+            <section className="admin-details-panel" aria-label="Customer & quotation"><h6 className="admin-section-heading">Customer & quotation</h6><div data-admin-form-row="" style={s.row}>
               <div style={{ flex: 2, minWidth: 220 }}>
                 <label style={s.label}>Client</label>
                 <SearchableSelect
@@ -196,7 +196,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
                 <input type="number" min={1} step={1} style={s.input} value={validForDays} onChange={(e) => setValidForDays(e.target.value)} placeholder="blank = no expiry" />
               </div>
             </div>
-            <div style={s.row}>
+            <div data-admin-form-row="" style={s.row}>
               <div style={{ flex: 1.5, minWidth: 180 }}>
                 <label style={s.label}>Customer Enquiry Ref <span style={s.opt}>(optional)</span></label>
                 <input type="text" style={s.input} value={enquiryRef} onChange={(e) => setEnquiryRef(e.target.value)} placeholder="Their RFQ / enquiry number" />
@@ -221,7 +221,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
                   <input type="text" style={s.input} value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} placeholder={client ? "Optional (client has no saved contacts)" : "Pick a client first"} disabled={!client} />
                 )}
               </div>
-            </div>
+            </div></section>
 
             <LineItemsEditor companyId={companyId}
               showImage
@@ -253,7 +253,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
               <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="SalesQuote" entityId={quote?.id ?? null} mode="edit" />
             </div>
           </div>
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.6 : 1 }} disabled={disabled}>{saving ? "Saving..." : isEdit ? "Update Quote" : "Save Quote"}</button>
           </div>

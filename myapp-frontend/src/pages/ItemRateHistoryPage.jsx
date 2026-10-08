@@ -150,9 +150,9 @@ export default function ItemRateHistoryPage() {
 
   return (
     <div className="irh-page">
-      <div style={styles.pageHeader}>
+      <div data-admin-page-header="" style={styles.pageHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
-          <div style={styles.headerIcon}>
+          <div data-admin-page-icon="" style={styles.headerIcon}>
             <MdHistory size={28} color="#fff" />
           </div>
           <div>

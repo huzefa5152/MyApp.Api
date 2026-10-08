@@ -785,12 +785,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>Create Bill</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
-          <div style={{ ...formStyles.body, maxHeight: "70vh", overflowY: "auto" }}>
+          <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "70vh", overflowY: "auto" }}>
             {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
             {loading ? (
@@ -1036,7 +1036,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
 
                       {billHeaderOpen && (
                         <div style={{ ...styles.scenarioCollapseBody, marginBottom: 0 }}>
-                          <div style={styles.row}>
+                          <div data-admin-form-row="" style={styles.row}>
                             <div style={{ flex: 1, minWidth: 180 }}>
                               <BillNumberField
                                 companyId={companyId}
@@ -1631,7 +1631,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
               <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="Invoice" entityId={null} mode="edit" />
             </div>
           </div>
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             {allItems.length > 0 && !allPricesValid && (
               <span style={{ fontSize: "0.8rem", color: colors.danger, marginRight: "auto" }}>
                 All items must have a unit price greater than 0.

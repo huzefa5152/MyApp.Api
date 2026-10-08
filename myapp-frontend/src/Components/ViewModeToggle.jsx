@@ -4,7 +4,7 @@ import { MdViewModule, MdViewList } from "react-icons/md";
 // state (typically a useUiPreference call so the choice persists per screen).
 export default function ViewModeToggle({ mode, onChange, ariaLabel = "View mode" }) {
   return (
-    <div role="tablist" aria-label={ariaLabel} style={styles.group}>
+    <div className="admin-view-mode" role="tablist" aria-label={ariaLabel} style={styles.group}>
       <button
         type="button"
         role="tab"

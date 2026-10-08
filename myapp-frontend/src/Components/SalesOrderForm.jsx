@@ -159,12 +159,12 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? `Edit Sales Order #${order.salesOrderNumber}` : "Create Sales Order"}</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
-          <div style={formStyles.body}>
+          <div data-admin-body="" style={formStyles.body}>
             <DocumentCopyPicker companyId={companyId} destination="Order" allowDetails={!isEdit} disabled={!!salesQuoteId}
               onCopy={(source,lines,details) => {
                 setItems(prev => appendCopiedLines(details ? [] : prev, lines, blankItem));
@@ -177,7 +177,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
               {has("bills.manage.update") && has("challans.manage.update") && <label style={{ display: "flex", gap: 8, minHeight: 44, alignItems: "center" }}><input type="checkbox" checked={applyDetails} onChange={e => setApplyDetails(e.target.checked)} />Apply changed descriptions, units and item types to existing deliveries and editable bills</label>}
               <div>{linkedChallans.filter(c => c.status !== "Cancelled").map(c => <div key={c.id}>Challan #{c.challanNumber}{c.invoiceId ? ` → Bill #${c.invoiceNumber} · ${c.fbrStatus || "Not submitted"}` : " · Unbilled"}</div>)}</div>
             </div>}
-            <div style={s.row}>
+            <section className="admin-details-panel" aria-label="Customer & delivery"><h6 className="admin-section-heading">Customer & delivery</h6><div data-admin-form-row="" className="admin-order-party-row" style={s.row}>
               <div style={{ flex: "1 1 100%", minWidth: 220 }}>
                 <label style={s.label}>Sales Quote <span style={s.opt}>(optional — picking one pre-fills the order)</span></label>
                 <SearchableSelect
@@ -231,7 +231,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
                 })()}
               </div>
             </div>
-            <div style={s.row}>
+            <div data-admin-form-row="" style={s.row}>
               <div style={{ flex: 1, minWidth: 140 }}>
                 <label style={s.label}>Order Date</label>
                 <input type="date" style={s.input} value={orderDate} onChange={(e) => setOrderDate(e.target.value)} />
@@ -248,7 +248,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
                 <label style={s.label}>Customer PO Date</label>
                 <input type="date" style={s.input} value={poDate} onChange={(e) => setPoDate(e.target.value)} />
               </div>
-            </div>
+            </div></section>
 
             <LineItemsEditor companyId={companyId}
               items={items}
@@ -275,7 +275,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
               <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="SalesOrder" entityId={order?.id ?? null} mode="edit" />
             </div>
           </div>
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.6 : 1 }} disabled={disabled}>{saving ? "Saving..." : isEdit ? "Update Order" : "Save Order"}</button>
           </div>

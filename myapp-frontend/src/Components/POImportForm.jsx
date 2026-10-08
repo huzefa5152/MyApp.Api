@@ -442,14 +442,14 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>
             {step === 1 ? (target === "salesquote" ? "Import Enquiry / Demand" : "Import Customer PO") : `Review & ${cfg.verb}`}
           </h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
 
-        <div style={{ ...formStyles.body, maxHeight: "72vh", overflowY: "auto" }}>
+        <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "72vh", overflowY: "auto" }}>
           {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
           {step === 1 && (
@@ -589,7 +589,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
               {/* Quote link is asked FIRST — picking one auto-fills the client
                   below. Order-only; optional; narrows once a client is set. */}
               {cfg.showQuoteLink && (
-                <div style={styles.row}>
+                <div data-admin-form-row="" style={styles.row}>
                   <div style={{ flex: 1, minWidth: 220 }}>
                     <label style={styles.label}>Sales Quote (optional)</label>
                     <select style={styles.select} value={salesQuoteId} onChange={(e) => handleQuotePick(e.target.value)}>
@@ -605,7 +605,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
               )}
 
               {/* Header row: Client / Site / Date */}
-              <div style={styles.row}>
+              <div data-admin-form-row="" style={styles.row}>
                 <div style={{ flex: 2, minWidth: 220 }}>
                   <label style={styles.label}>Client *</label>
                   <select style={styles.select} value={selectedClientId} onChange={(e) => { setSelectedClientId(e.target.value); setSite(""); setSalesQuoteId(""); }}>
@@ -642,7 +642,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
               </div>
 
               {/* PO row: Number + Date (+ Indent No for challan target) */}
-              <div style={styles.row}>
+              <div data-admin-form-row="" style={styles.row}>
                 <div style={{ flex: 1, minWidth: 180 }}>
                   <label style={styles.label}>{target === "salesquote" ? "Enquiry Reference" : "PO Number"}</label>
                   <input style={styles.input} value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="e.g. PO-2026-001" />
@@ -807,7 +807,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
           )}
         </div>
 
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           {step === 2 && (
             <button
               type="button"

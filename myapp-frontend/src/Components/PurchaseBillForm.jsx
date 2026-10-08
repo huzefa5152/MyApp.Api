@@ -282,7 +282,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: 1200, width: "96vw" }}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{readOnly ? "View Purchase Bill" : (isEdit ? "Edit Purchase Bill" : "New Purchase Bill")}</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
@@ -290,7 +290,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
           {/* Scrollable body WRAPS the fieldset so the Attachments section can
               sit inside the scroll region (never clipped) yet outside the
               disabled fieldset (so view-mode preview/download stay clickable). */}
-          <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
+          <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
           <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
             <DocumentCopyPicker companyId={companyId} destination="PurchaseBill" allowDetails={!isEdit && !isAgainstSale} disabled={readOnly || isAgainstSale}
               onCopy={(source,lines,details) => {
@@ -322,36 +322,36 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
             )}
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.75rem" }}>
-              <div style={formStyles.formGroup}>
+              <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Supplier *</label>
                 <select style={formStyles.input} value={supplierId} onChange={e => setSupplierId(e.target.value)}>
                   <option value="">Select supplier...</option>
                   {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
-              <div style={formStyles.formGroup}>
+              <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Bill Date *</label>
                 <input type="date" style={formStyles.input} value={date} onChange={e => setDate(e.target.value)} />
               </div>
-              <div style={formStyles.formGroup}>
+              <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>GST Rate (%)</label>
                 <input type="number" min={0} step={0.01} style={formStyles.input} value={gstRate} onChange={e => setGstRate(e.target.value)} />
               </div>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
-              <div style={formStyles.formGroup}>
+              <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Supplier Bill #</label>
                 <input type="text" style={formStyles.input} value={supplierBillNumber} onChange={e => setSupplierBillNumber(e.target.value)} placeholder="Their invoice number" />
               </div>
-              <div style={formStyles.formGroup}>
+              <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Supplier IRN</label>
                 <input type="text" style={{ ...formStyles.input, fontFamily: "monospace" }} value={supplierIRN} onChange={e => setSupplierIRN(e.target.value)} placeholder="From supplier's tax invoice (FBR-issued)" />
               </div>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
-              <div style={formStyles.formGroup}>
+              <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Payment Mode</label>
                 <select style={formStyles.input} value={paymentMode} onChange={e => setPaymentMode(e.target.value)}>
                   <option value="">— optional —</option>
@@ -362,7 +362,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                   <option value="Online">Online</option>
                 </select>
               </div>
-              <div style={formStyles.formGroup}>
+              <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Payment Terms</label>
                 <input type="text" style={formStyles.input} value={paymentTerms} onChange={e => setPaymentTerms(e.target.value)} placeholder="e.g. Net 30" />
               </div>
@@ -541,7 +541,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
             />
           </div>
           </div>
-          <div style={formStyles.footer}>
+          <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>{readOnly ? "Close" : "Cancel"}</button>
             {!readOnly && (
               <button type="submit" disabled={saving || !numberValid} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}>

@@ -98,9 +98,9 @@ export default function UnitsPage() {
   return (
     <div>
       {/* Header */}
-      <div style={styles.header}>
+      <div data-admin-page-header="" style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={styles.headerIcon}>
+          <div data-admin-page-icon="" style={styles.headerIcon}>
             <MdStraighten style={{ fontSize: "1.5rem", color: "#fff" }} />
           </div>
           <div>
@@ -150,7 +150,7 @@ export default function UnitsPage() {
       </div>
 
       {/* Summary + Search */}
-      <div style={styles.toolbar}>
+      <div data-admin-toolbar="" style={styles.toolbar}>
         <div style={styles.summary}>
           <strong>{units.length}</strong> total units ·{" "}
           <strong>{decimalCount}</strong> allow decimals ·{" "}

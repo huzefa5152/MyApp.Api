@@ -70,7 +70,7 @@ export default function SavedTemplatesManager({
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={busy ? undefined : onClose}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="tpl-mgr-title">
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <div>
             <h3 id="tpl-mgr-title" style={formStyles.title}>{typeLabel} templates</h3>
             <p style={s.subtitle}>The default (★) is what this document type prints with unless a screen picks another.</p>
@@ -78,7 +78,7 @@ export default function SavedTemplatesManager({
           <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} disabled={busy} aria-label="Close"><MdClose size={20} /></button>
         </div>
 
-        <div style={formStyles.body}>
+        <div data-admin-body="" style={formStyles.body}>
           {templates.length === 0 && (
             <div style={s.empty}>No saved {typeLabel} template yet. The editor is showing the built-in default — save it, or start a new one below.</div>
           )}
@@ -167,7 +167,7 @@ export default function SavedTemplatesManager({
           </div>
         </div>
 
-        <div style={s.footer}>
+        <div data-admin-footer="" style={s.footer}>
           <span style={s.count}>{templates.length} {typeLabel} template{templates.length === 1 ? "" : "s"}</span>
           <button type="button" style={s.newBtn} disabled={busy} onClick={onNew}>
             <MdAdd size={17} /> New template…

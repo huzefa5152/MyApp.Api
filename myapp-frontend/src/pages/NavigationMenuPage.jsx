@@ -29,7 +29,7 @@ export default function NavigationMenuPage() {
 
   return (
     <div>
-      <div style={st.header}>
+      <div data-admin-page-header="" style={st.header}>
         <div style={st.icon}><MdMenu size={26} color="#fff" /></div>
         <div>
           <h2 style={st.title}>Navigation Menu</h2>

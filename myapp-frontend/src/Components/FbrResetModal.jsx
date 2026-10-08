@@ -68,14 +68,14 @@ export default function FbrResetModal({ invoice, onClose, onDone }) {
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onMouseDown={(e) => e.stopPropagation()}>
-        <div style={formStyles.header}>
+        <div data-admin-header="" style={formStyles.header}>
           <h3 style={formStyles.title}>Reset FBR state · Bill #{invoice.invoiceNumber}</h3>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} disabled={busy} aria-label="Close">
             <MdClose size={18} />
           </button>
         </div>
 
-        <div style={formStyles.body}>
+        <div data-admin-body="" style={formStyles.body}>
           <div style={{
             display: "flex", gap: 10, alignItems: "flex-start",
             background: "#fff8e1", border: "1px solid #ffe082", color: "#8a6d00",
@@ -95,14 +95,14 @@ export default function FbrResetModal({ invoice, onClose, onDone }) {
             "FBR does have it — enter the IRN so our books match, without submitting again.")}
 
           {mode === "recordExisting" && (
-            <div style={formStyles.formGroup}>
+            <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>IRN (from the FBR portal)</label>
               <input style={formStyles.input} value={irn} onChange={(e) => setIrn(e.target.value)}
                 placeholder="e.g. 1234567890123DI000001" disabled={busy} />
             </div>
           )}
 
-          <div style={formStyles.formGroup}>
+          <div data-admin-field="" style={formStyles.formGroup}>
             <label style={formStyles.label}>Reason (audited) *</label>
             <textarea
               style={{ ...formStyles.input, minHeight: 70, resize: "vertical" }}
@@ -113,7 +113,7 @@ export default function FbrResetModal({ invoice, onClose, onDone }) {
           {error && <div style={formStyles.error}>{error}</div>}
         </div>
 
-        <div style={formStyles.footer}>
+        <div data-admin-footer="" style={formStyles.footer}>
           <button data-admin-close="" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose} disabled={busy}>
             Cancel
           </button>

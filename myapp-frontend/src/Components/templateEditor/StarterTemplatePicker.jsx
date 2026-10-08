@@ -29,7 +29,7 @@ export default function StarterTemplatePicker({ templateType, onSelect, onClose 
   return (
     <div data-admin-backdrop="" style={s.overlay}>
       <div data-admin-dialog="" style={s.modal} onClick={(e) => e.stopPropagation()}>
-        <div style={s.header}>
+        <div data-admin-header="" style={s.header}>
           <h3 style={s.title}>Start from Template</h3>
           <button data-admin-close="" style={s.closeBtn} onClick={onClose}><MdClose size={20} /></button>
         </div>

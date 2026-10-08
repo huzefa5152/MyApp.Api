@@ -131,9 +131,9 @@ export default function GoodsReceiptsPage() {
   return (
     <DocumentLinesNavigation type="receipt">
     <div>
-      <div style={styles.pageHeader}>
+      <div data-admin-page-header="" style={styles.pageHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={styles.headerIcon}><MdInventory2 size={28} color="#fff" /></div>
+          <div data-admin-page-icon="" style={styles.headerIcon}><MdInventory2 size={28} color="#fff" /></div>
           <div>
             <h2 style={styles.pageTitle}>Goods Receipts</h2>
             <p style={styles.pageSubtitle}>

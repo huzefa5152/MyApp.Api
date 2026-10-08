@@ -69,7 +69,7 @@ export default function ApplyStarterModal({ template, onClose, onApplied }) {
   return (
     <div data-admin-backdrop="" style={s.overlay}>
       <div data-admin-dialog="" style={s.modal} onClick={(e) => e.stopPropagation()}>
-        <div style={s.header}>
+        <div data-admin-header="" style={s.header}>
           <div style={{ minWidth: 0 }}>
             <h3 style={s.title}>Apply starter to “{template.name}”</h3>
             <p style={s.subtitle}>
@@ -107,7 +107,7 @@ export default function ApplyStarterModal({ template, onClose, onApplied }) {
           <div style={{ ...s.compareCol, borderLeft: "2px solid #d0d7e2" }}><PreviewPane html={starterHtml} isMobile={false} /></div>
         </div>
 
-        <div style={s.footer}>
+        <div data-admin-footer="" style={s.footer}>
           <div style={s.warn}><MdWarningAmber size={16} /> This overwrites the current design and is recorded in the audit log. It cannot be undone from here.</div>
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <button style={s.backBtn} onClick={() => setStarter(null)} disabled={busy}><MdArrowBack size={16} /> Choose another</button>

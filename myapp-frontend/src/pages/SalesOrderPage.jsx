@@ -185,7 +185,7 @@ export default function SalesOrderPage() {
   return (
     <DocumentLinesNavigation type="order">
     <div>
-      <div style={st.header}>
+      <div data-admin-page-header="" style={st.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <div style={st.icon}><MdAssignment size={28} color="#fff" /></div>
           <div>

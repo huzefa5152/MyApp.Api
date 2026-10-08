@@ -137,9 +137,9 @@ export default function FbrSettingsPage() {
 
   return (
     <div>
-      <div style={styles.header}>
+      <div data-admin-page-header="" style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.7rem" }}>
-          <div style={styles.headerIcon}><MdTune size={24} color="#fff" /></div>
+          <div data-admin-page-icon="" style={styles.headerIcon}><MdTune size={24} color="#fff" /></div>
           <div>
             <h2 style={styles.title}>FBR Settings</h2>
             <p style={styles.subtitle}>{lookups.length} lookup value{lookups.length !== 1 ? "s" : ""} configured</p>
@@ -206,12 +206,12 @@ export default function FbrSettingsPage() {
         // lookup form before the operator finishes typing.
         <div data-admin-backdrop="" style={formStyles.backdrop}>
           <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.sm}px`, cursor: "default" }}>
-            <div style={formStyles.header}>
+            <div data-admin-header="" style={formStyles.header}>
               <h5 style={formStyles.title}>{editItem ? "Edit Lookup Value" : "New Lookup Value"}</h5>
               <button data-admin-close="" style={formStyles.closeButton} onClick={() => setShowForm(false)}>&times;</button>
             </div>
             <form onSubmit={handleSubmit}>
-              <div style={formStyles.body}>
+              <div data-admin-body="" style={formStyles.body}>
                 {error && <div style={{ color: colors.danger, fontSize: "0.85rem", marginBottom: "0.75rem" }}>{error}</div>}
 
                 <div style={{ marginBottom: "0.75rem" }}>
@@ -245,7 +245,7 @@ export default function FbrSettingsPage() {
                   <input type="text" value={formData.label} onChange={(e) => setFormData({ ...formData, label: e.target.value })} style={styles.formInput} placeholder="Display name" autoFocus />
                 </div>
               </div>
-              <div style={formStyles.footer}>
+              <div data-admin-footer="" style={formStyles.footer}>
                 <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setShowForm(false)}>Cancel</button>
                 <button type="submit" style={{ ...formStyles.button, ...formStyles.submit }}>{editItem ? "Update" : "Create"}</button>
               </div>
