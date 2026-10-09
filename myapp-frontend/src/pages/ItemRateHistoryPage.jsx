@@ -345,10 +345,10 @@ export default function ItemRateHistoryPage() {
                           {r.quantity}
                           {r.uom ? <span style={{ color: colors.textSecondary, fontSize: "0.75rem" }}> {r.uom}</span> : null}
                         </td>
-                        <td style={{ ...styles.td, textAlign: "right", fontWeight: 600 }}>
+                        <td style={{ ...styles.td, textAlign: "right", fontWeight: 600, whiteSpace: "nowrap" }}>
                           Rs. {fmt(r.unitPrice)}
                         </td>
-                        <td style={{ ...styles.td, textAlign: "right" }}>
+                        <td style={{ ...styles.td, textAlign: "right", whiteSpace: "nowrap" }}>
                           Rs. {fmt(r.lineTotal)}
                         </td>
                         <td style={{ ...styles.td, textAlign: "center" }}>
@@ -515,6 +515,7 @@ const styles = {
   table: { width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" },
   th: {
     textAlign: "left",
+    whiteSpace: "nowrap",
     padding: "0.65rem 0.85rem",
     backgroundColor: "#f5f8fc",
     borderBottom: `1px solid ${colors.cardBorder}`,

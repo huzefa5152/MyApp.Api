@@ -308,6 +308,9 @@ Publish output optimized from 79 MB to 37 MB via:
 - **Bills / Invoices**: the filter bar keeps the Cards/Table switch on the same row on a 1280px screen.
 - **Phones**: the Import Challans template warning, the Divisions company picker and the Data Migration file picker no longer push the page wider than the screen.
 - **Polish**: page titles no longer centre themselves, buttons no longer jump on hover or show a purple ring, and the pagination bar takes less room.
+- **Sales — card and table actions**: Bill, Invoice and Challan cards show their everyday actions (View, Print, Edit; Validate and Submit on an unfiled invoice; Generate Bill on a pending challan) and fold the rest into a "⋯" menu, so a card's buttons fit on one row instead of four. The Bills, Invoices and Challans tables do the same, which stops the Bills table scrolling sideways on a laptop. Every action is still there, behind the same permissions; the menu works from the keyboard.
+- **Sales — page fixes**: Item Rate History lines up with the other pages and keeps each amount on one line; the New Credit / Debit Note page has a normal-sized title with search and division on one row; the Challans filter pickers share the row width; the Withholding Tax company picker fits a phone screen.
+- **Phones**: the closed sidebar no longer leaves a blue shadow down the left edge of every page.
 
 ### 2026-10-08 — Back-dated bills after a stock-sheet reconcile are costed FIFO
 

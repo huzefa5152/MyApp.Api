@@ -220,11 +220,11 @@ export default function CreditDebitNotePage() {
   }
 
   return (
-    <div style={{ padding: "16px", maxWidth: 1100, margin: "0 auto" }}>
-      <h2 style={{ display: "flex", alignItems: "center", gap: 8, color: colors.textPrimary, margin: "0 0 4px" }}>
-        <MdUndo style={{ color: isCredit ? colors.purple : colors.teal }} /> New {label}
+    <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+      <h2 style={{ display: "flex", alignItems: "center", gap: 8, color: colors.textPrimary, margin: "0 0 4px", fontSize: "1.45rem", fontWeight: 700 }}>
+        <MdUndo style={{ color: isCredit ? colors.purple : colors.teal, flexShrink: 0 }} /> New {label}
       </h2>
-      <p style={{ color: colors.textSecondary, marginTop: 0 }}>
+      <p style={{ color: colors.textSecondary, margin: "0 0 0.9rem", fontSize: "0.88rem", lineHeight: 1.5, maxWidth: "80ch" }}>
         {isCredit
           ? `Reverse ${fbrOn ? "an FBR-submitted" : "any"} invoice — fully or partially, paid or not. A Credit Note reduces the sale (goods returned, cancellation, discount) and re-enters stock only when goods physically come back.`
           : `Record an upward adjustment against ${fbrOn ? "an FBR-submitted" : "any"} invoice (undercharge, rate change, extra goods), paid or not. A Debit Note increases the sale and normally leaves stock untouched.`}
@@ -233,28 +233,30 @@ export default function CreditDebitNotePage() {
 
       {!selected ? (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: 10, margin: "12px 0 0" }}>
-            <label style={{ fontSize: "0.82rem", color: colors.textSecondary }}>
+          {/* Search and division on one row: the search is what the operator
+              came to do, the division only narrows it. */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", margin: "0 0 12px" }}>
+            <div style={{ position: "relative", flex: "3 1 280px", minWidth: 0 }}>
+              <MdSearch style={{ position: "absolute", left: 10, top: 13, color: colors.textSecondary }} />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={fbrOn ? "Search submitted invoices by #, client, or IRN…" : "Search invoices by #, client, or PO…"}
+                style={{ width: "100%", minHeight: 42, padding: "10px 10px 10px 34px", borderRadius: 8, border: `1px solid ${colors.border}`, background: colors.inputBg, boxSizing: "border-box" }}
+              />
+            </div>
+            <label style={{ fontSize: "0.82rem", color: colors.textSecondary, flex: "1 1 200px", maxWidth: 300 }}>
               Division
               <select
                 value={divisionFilter}
                 onChange={(e) => setDivisionFilter(e.target.value)}
-                style={{ width: "100%", padding: 8, borderRadius: 8, border: `1px solid ${colors.border}`, marginTop: 4, background: "#fff" }}
+                style={{ width: "100%", minHeight: 42, padding: 8, borderRadius: 8, border: `1px solid ${colors.border}`, marginTop: 4, background: "#fff" }}
               >
                 <option value="all">All divisions</option>
                 <option value="company">Company level (no division)</option>
                 {divisions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
             </label>
-          </div>
-          <div style={{ position: "relative", margin: "12px 0" }}>
-            <MdSearch style={{ position: "absolute", left: 10, top: 12, color: colors.textSecondary }} />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={fbrOn ? "Search submitted invoices by #, client, or IRN…" : "Search invoices by #, client, or PO…"}
-              style={{ width: "100%", padding: "10px 10px 10px 34px", borderRadius: 8, border: `1px solid ${colors.border}`, background: colors.inputBg, boxSizing: "border-box" }}
-            />
           </div>
           {loading ? (
             <p style={{ color: colors.textSecondary }}>Loading…</p>

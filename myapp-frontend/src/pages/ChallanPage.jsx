@@ -485,7 +485,7 @@ export default function ChallanPage() {
                 <option value="Cancelled">Cancelled</option>
               </select>
               {canViewClients && (
-                <div style={{ minWidth: 220, maxWidth: 340 }}>
+                <div style={{ flex: "1 1 170px", minWidth: 170, maxWidth: 300 }}>
                   <SearchableSelect
                     items={clients}
                     value={clientFilter}
@@ -495,7 +495,7 @@ export default function ChallanPage() {
                 </div>
               )}
               {canViewSalesOrders && (
-                <div style={{ minWidth: 220, maxWidth: 340 }}>
+                <div style={{ flex: "1 1 170px", minWidth: 170, maxWidth: 300 }}>
                   <SearchableSelect
                     items={salesOrderOptions}
                     value={salesOrderFilter}
