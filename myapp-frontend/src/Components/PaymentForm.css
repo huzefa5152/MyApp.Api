@@ -9,3 +9,25 @@
 .payment-dialog thead th { position:sticky; top:0; background:#f7fafc; z-index:1; }
 .payment-dialog button:focus-visible,.payment-dialog summary:focus-visible { outline:2px solid #337dc7; outline-offset:2px; }
 @media (max-width:600px) { .payment-dialog [data-admin-body] { padding:12px; }.payment-doc-search label { max-width:none; }.payment-dialog button { min-height:44px; } }
+
+.payment-dialog .payment-party-tabs {
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.payment-dialog .payment-party-tabs button {
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.payment-dialog .payment-party-tabs button:hover {
+  border-color: var(--admin-accent, #0d47a1);
+  box-shadow: 0 1px 4px rgba(13, 71, 161, .12);
+}
+.payment-dialog [data-admin-field] > input + p,
+.payment-dialog [data-admin-field] > select + input {
+  margin-top: 8px;
+}
+.payment-dialog .payment-notes summary {
+  padding: 4px 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .payment-dialog .payment-party-tabs button { transition: none; }
+}

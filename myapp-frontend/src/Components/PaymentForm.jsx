@@ -595,7 +595,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                 never have to think about contact "types" or subledgers. */}
             <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>{isReceipt ? "Who paid you?" : "Who are you paying?"}</label>
-              <div style={payeeTabs}>
+              <div className="payment-party-tabs" style={payeeTabs}>
                 {[
                   { key: "Client", label: "Client" },
                   { key: "Supplier", label: "Supplier" },
@@ -604,7 +604,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                   <button
                     type="button"
                     key={t.key}
-                    onClick={() => changePayeeType(t.key)}
+                    aria-pressed={payeeType === t.key} onClick={() => changePayeeType(t.key)}
                     style={{ ...payeeTab, ...(payeeType === t.key ? payeeTabActive : null) }}
                   >
                     {t.label}
