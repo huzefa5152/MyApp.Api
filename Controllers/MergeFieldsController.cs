@@ -35,6 +35,7 @@ namespace MyApp.Api.Controllers
 
         [HttpPost]
         [HasPermission("config.mergefields.manage")]
+        [SeedAdminOnly]
         public async Task<ActionResult<MergeFieldDto>> Create([FromBody] MergeFieldDto dto)
         {
             var entity = new MergeField
@@ -51,6 +52,7 @@ namespace MyApp.Api.Controllers
 
         [HttpPut("{id}")]
         [HasPermission("config.mergefields.manage")]
+        [SeedAdminOnly]
         public async Task<ActionResult<MergeFieldDto>> Update(int id, [FromBody] MergeFieldDto dto)
         {
             var entity = await _repo.GetByIdAsync(id);
@@ -68,6 +70,7 @@ namespace MyApp.Api.Controllers
 
         [HttpDelete("{id}")]
         [HasPermission("config.mergefields.manage")]
+        [SeedAdminOnly]
         public async Task<IActionResult> Delete(int id)
         {
             var entity = await _repo.GetByIdAsync(id);
