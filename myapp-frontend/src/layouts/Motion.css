@@ -120,3 +120,9 @@ body.admin-ui {
 @media (pointer: coarse) {
   .card-actions-more { width: 44px !important; height: 44px !important; }
 }
+
+/* Item-row Copy (CopyLineButton): a full, square tap target on a touch
+   screen or a phone-width window (where the admin already makes buttons 44px tall). */
+@media (pointer: coarse), (max-width: 600px) {
+  .copy-line-btn { width: 44px !important; height: 44px !important; }
+}

@@ -14,6 +14,7 @@ import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
 import DocumentNotesEditor from "./DocumentNotesEditor";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
+import CopyLineButton from "./CopyLineButton";
 
 export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSaved }) {
   const isEdit = !!receiptId;
@@ -206,7 +207,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                             style={{ padding: "0.4rem 0.55rem", fontSize: "0.82rem" }}
                           />
                         </div>
-                        <button type="button" title="Copy line" style={{minHeight:44,minWidth:44,border:"1px solid #d0d7e2",borderRadius:8}} onClick={() => setItems(prev => [...prev,copyLine(it,() => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""}))])}>Copy</button>
+                        <CopyLineButton onClick={() => setItems(prev => [...prev,copyLine(it,() => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""}))])} />
                           {items.length > 1 && (
                           <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#c62828", cursor: "pointer", padding: "0.4rem", minWidth: 44, minHeight: 44, flexShrink: 0 }}>
                             <MdDelete size={18} />
@@ -238,7 +239,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                     <th style={th}>Description *</th>
                     <th style={{ ...th, textAlign: "right", width: 80 }}>Qty *</th>
                     <th style={{ ...th, width: 100 }}>UOM</th>
-                    <th style={{ ...th, width: 36 }}></th>
+                    <th style={{ ...th, width: 76 }}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -262,8 +263,8 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                       <td style={td}><input type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} /></td>
                       <td style={td}><input type="number" min={1} style={{ ...cellInput, textAlign: "right" }} value={it.quantity} onChange={e => updateItem(idx, "quantity", e.target.value)} /></td>
                       <td style={td}><input type="text" style={cellInput} value={it.unit} onChange={e => updateItem(idx, "unit", e.target.value)} /></td>
-                      <td style={td}>
-                        <button type="button" title="Copy line" style={{minHeight:44,minWidth:44,border:"1px solid #d0d7e2",borderRadius:8}} onClick={() => setItems(prev => [...prev,copyLine(it,() => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""}))])}>Copy</button>
+                      <td style={{ ...td, whiteSpace: "nowrap" }}>
+                        <CopyLineButton style={{ marginRight: 6 }} onClick={() => setItems(prev => [...prev,copyLine(it,() => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""}))])} />
                           {items.length > 1 && (
                           <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#c62828", cursor: "pointer", padding: 0 }}>
                             <MdDelete size={16} />

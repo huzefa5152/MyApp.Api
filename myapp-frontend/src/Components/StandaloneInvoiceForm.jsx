@@ -25,6 +25,7 @@ import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
 import TaxInvoiceGrouping from "./TaxInvoiceGrouping";
 import DocumentNotesEditor from "./DocumentNotesEditor";
+import CopyLineButton from "./CopyLineButton";
 
 // Bill-without-challan flow ("Standalone Bill"). Per FBR DI-API V1.12:
 //   • §9 (Scenarios) — locks Sale Type per SN.
@@ -1054,7 +1055,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       <div style={{ marginTop: 2, fontSize: "0.62rem", color: colors.warn, fontWeight: 700 }}>Required</div>
                                     )}
                                   </div>
-                                  <button type="button" style={{...styles.removeRowBtn,minWidth:44,minHeight:44}} title="Copy line" onClick={() => setRows(prev => [...prev,{...r,localId:crypto.randomUUID()}])}>Copy</button>
+                                  <CopyLineButton onClick={() => setRows(prev => [...prev,{...r,localId:crypto.randomUUID()}])} />
                                   <button
                                     type="button"
                                     style={{ ...styles.removeRowBtn, minWidth: 44, minHeight: 44, flexShrink: 0 }}
@@ -1166,7 +1167,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               {showMRP && <th style={{ ...styles.unifiedTh, width: "9%", backgroundColor: "#fff8e1" }}>MRP × Qty</th>}
                               {showSRO && <th style={{ ...styles.unifiedTh, width: "10%", backgroundColor: "#fce4ec" }}>SRO Schedule *</th>}
                               {showSRO && <th style={{ ...styles.unifiedTh, width: "8%", backgroundColor: "#fce4ec" }}>SRO Item No *</th>}
-                              <th style={{ ...styles.unifiedTh, width: "4%" }}></th>
+                              <th style={{ ...styles.unifiedTh, width: 84 }}></th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1330,8 +1331,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       />
                                     </td>
                                   )}
-                                  <td style={{ ...styles.unifiedTd, textAlign: "center" }}>
-                                    <button type="button" style={{...styles.removeRowBtn,minWidth:44,minHeight:44}} title="Copy line" onClick={() => setRows(prev => [...prev,{...r,localId:crypto.randomUUID()}])}>Copy</button>
+                                  <td style={{ ...styles.unifiedTd, textAlign: "center", whiteSpace: "nowrap" }}>
+                                    <CopyLineButton style={{ marginRight: 6 }} onClick={() => setRows(prev => [...prev,{...r,localId:crypto.randomUUID()}])} />
                                     <button
                                       type="button"
                                       style={styles.removeRowBtn}

@@ -5,6 +5,7 @@ import LookupAutocomplete from "./LookupAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import QuantityInput from "./QuantityInput";
 import LineItemImageCell from "./LineItemImageCell";
+import CopyLineButton from "./CopyLineButton";
 
 /**
  * Shared line-item entry for the sales module (Quote / Order / Challan).
@@ -370,7 +371,7 @@ export default function LineItemsEditor({
                     </div>
                   )}
                   {!showItemType && <div style={{ flex: 1 }} />}
-                  {!locked && !items[idx].salesOrderItemId && <button type="button" style={{...s.del,color:colors.teal,minWidth:44,minHeight:44}} onClick={() => duplicateItem(idx)} title="Copy line">Copy</button>}
+                  {!locked && !items[idx].salesOrderItemId && <CopyLineButton onClick={() => duplicateItem(idx)} />}
                   {items.length > 1 && !locked && (
                     <button type="button" style={s.del} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={16} /></button>
                   )}
@@ -418,12 +419,12 @@ export default function LineItemsEditor({
                 <th style={{ ...s.th, width: 28, textAlign: "center" }}>#</th>
                 {showImage && <th style={{ ...s.th, width: 64 }}>Photo</th>}
                 {showItemType && <th style={{ ...s.th, width: 180 }}>Item Type</th>}
-                <th style={{ ...s.th, minWidth: 260 }}>Description</th>
+                <th style={{ ...s.th, minWidth: 220 }}>Description</th>
                 <th style={{ ...s.th, width: 92, textAlign: "right" }}>Qty</th>
                 <th style={{ ...s.th, width: 120 }}>Unit</th>
                 {showUnitPrice && <th style={{ ...s.th, width: 120, textAlign: "right" }}>Unit Price</th>}
                 {showUnitPrice && <th style={{ ...s.th, width: 110, textAlign: "right" }}>Amount</th>}
-                <th style={{ ...s.th, width: 40 }}></th>
+                <th style={{ ...s.th, width: 76 }}><span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -464,10 +465,12 @@ export default function LineItemsEditor({
                       <td style={{ ...s.td, textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>{lineTotal(item).toLocaleString()}</td>
                     )}
                     <td style={{ ...s.td, textAlign: "center" }}>
-                      {!locked && !items[idx].salesOrderItemId && <button type="button" style={{...s.del,color:colors.teal,minWidth:44,minHeight:44}} onClick={() => duplicateItem(idx)} title="Copy line">Copy</button>}
+                      <div style={s.rowActions}>
+                      {!locked && !items[idx].salesOrderItemId && <CopyLineButton onClick={() => duplicateItem(idx)} />}
                   {items.length > 1 && !locked && (
                         <button type="button" style={s.del} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={16} /></button>
                       )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -515,6 +518,7 @@ const s = {
   cellInput: { width: "100%", padding: "0.5rem 0.55rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.88rem", backgroundColor: colors.inputBg, color: "#1a2332", outline: "none", boxSizing: "border-box" },
   hint: { fontSize: "0.7rem", color: colors.teal, marginTop: 2, fontWeight: 600 },
   lockHint: { fontSize: "0.7rem", color: colors.textSecondary, marginTop: 2, fontStyle: "italic" },
+  rowActions: { display: "flex", gap: 6, justifyContent: "center", alignItems: "center" },
   del: { display: "grid", placeItems: "center", padding: "0.4rem", borderRadius: 8, border: `1px solid ${colors.danger}25`, backgroundColor: colors.dangerLight, color: colors.danger, cursor: "pointer", margin: "0 auto" },
   addRow: { display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "0.6rem", flexWrap: "wrap" },
   addBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.4rem 0.9rem", borderRadius: 8, border: "none", backgroundColor: `${colors.teal}14`, color: colors.teal, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" },
