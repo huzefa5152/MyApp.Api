@@ -922,6 +922,8 @@ for method, suffix, body in (
     ("POST", "connections", {"connectionId": 0}),
     ("PUT", "connections/0", {"rules": [], "shareMatchingEmails": False}),
     ("DELETE", "connections/0", None),
+    ("DELETE", "connections/0/permanent", None),
+    ("POST", "messages/0/reextract", {"decision": "Kept", "revision": None}),
     ("POST", "sync/0", {}),
     ("GET", "messages/0", None),
     ("PUT", "messages/0/decision", {"decision": "Kept"}),

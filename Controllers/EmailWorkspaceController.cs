@@ -56,6 +56,10 @@ public sealed class EmailWorkspaceController(EmailWorkspaceService service, ILog
     [HasPermission("email.connections.manage")]
     [AuthorizeCompany]
     public Task<IActionResult> Unlink(int companyId, int linkId, CancellationToken ct) => Run(() => Done(() => service.UnlinkAsync(UserId, companyId, linkId, ct)));
+    [HttpDelete("company/{companyId}/connections/{linkId}/permanent")]
+    [HasPermission("email.connections.manage")]
+    [AuthorizeCompany]
+    public Task<IActionResult> RemovePermanently(int companyId, int linkId, CancellationToken ct) => Run(() => Done(() => service.RemoveCompanyConnectionAsync(UserId, companyId, linkId, ct)));
     [HttpPost("company/{companyId}/sync/{connectionId}")]
     [HasPermission("email.connections.manage")]
     [AuthorizeCompany]

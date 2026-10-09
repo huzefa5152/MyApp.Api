@@ -139,6 +139,8 @@ public sealed class GmailProvider(HttpClient http, IConfiguration config) : IGma
                         }
                     }
                 }
+                // Attached messages are source files, not additional bodies of the current enquiry.
+                if (file.Length > 0 || mime == "message/rfc822") return;
                 if (part.TryGetProperty("parts", out var parts)) foreach (var p in parts.EnumerateArray()) Walk(p, depth + 1);
             }
             Walk(payload, 0);

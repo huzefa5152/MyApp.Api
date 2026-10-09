@@ -123,3 +123,103 @@
 .ew-draft > .ew-actions:last-child { padding-top:12px; border-top:1px solid var(--ew-border); }
 @media(max-width:1000px) { .ew-columns { grid-template-columns:1fr; }.ew-message-list { max-height:360px; }.ew-reader { min-height:320px; } }
 @media(max-width:600px) { .ew-reader { padding:14px; }.ew-toolbar { padding:12px; }.ew-message-list { max-height:320px; }.ew-connection { padding:12px; }.ew-connection-guide > div { padding:12px; }.ew-section-heading { align-items:flex-start; }.ew-reader > h2 { font-size:16px; } }
+
+/* Keep mail scrolling inside its panes rather than the application page. */
+.dl-content-wrapper:has(.ew-shell) { height:100dvh; min-height:0; overflow:hidden; }
+.dl-main:has(.ew-shell) { display:flex; flex-direction:column; min-height:0; overflow:hidden; padding:12px 16px; }
+.ew-shell { display:flex; flex-direction:column; flex:1; min-height:0; width:100%; overflow:hidden; }
+.ew-company-bar { flex-shrink:0; padding:8px 12px; margin-bottom:8px; gap:10px; }
+.ew-shell > .ew { display:flex; flex-direction:column; flex:1; min-height:0; width:100%; margin:0; padding:0; overflow:hidden; }
+.ew .ew-header { flex-shrink:0; padding:4px 0 10px; margin-bottom:10px; gap:8px; }
+.ew h1 { font-size:20px; margin-block:0 2px; }
+.ew .ew-heading-icon { width:36px; height:36px; font-size:18px; border-radius:9px; }
+.ew .ew-toolbar { flex-shrink:0; padding:8px 12px; margin-bottom:10px; gap:8px; }
+.ew .ew-columns { flex:1; min-height:0; overflow:hidden; align-items:stretch; gap:12px; }
+.ew .ew-inbox { display:flex; flex-direction:column; min-height:0; overflow:hidden; padding:12px 8px 8px; }
+.ew .ew-inbox > h2 { font-size:15px; margin-bottom:4px; }
+.ew .ew-inbox > p { font-size:12px; line-height:1.4; margin-block:4px 8px; }
+.ew .ew-message-list { flex:1; min-height:0; max-height:none; overflow:auto; scrollbar-gutter:stable; }
+.ew .ew-pagination { flex-shrink:0; margin-top:6px; padding-top:8px; }
+.ew .ew-reader { min-height:0; height:100%; overflow:auto; overscroll-behavior:contain; scrollbar-gutter:stable; padding:16px; }
+.ew .ew-reader .ew-body { max-height:none; overflow:visible; }
+.ew .ew-connections { flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; }
+.ew .ew-error,.ew .ew-notice { flex-shrink:0; margin-block:0 8px; }
+.ew .ew-back { display:none; }
+.ew .ew-empty { min-height:100%; }
+@media(max-width:1000px) {
+  .ew .ew-heading { flex-basis:auto; }
+  .ew .ew-columns { grid-template-columns:minmax(0,1fr); }
+  .ew[data-mobile-pane="inbox"] .ew-reader { display:none; }
+  .ew[data-mobile-pane="reader"] .ew-inbox { display:none; }
+  .ew .ew-back { display:inline-flex; margin-bottom:10px; min-height:44px; }
+}
+@media(max-width:600px) {
+  .dl-main:has(.ew-shell) { padding:8px; }
+  .ew-company-bar { padding:8px; gap:6px; }
+  .ew-company-bar label { font-size:12px; }
+  .ew-company-bar select { flex:1; width:auto; }
+  .ew-company-bar > span { display:none; }
+  .ew .ew-header { padding-bottom:8px; gap:8px; margin-bottom:8px; }
+  .ew .ew-header p { display:none; }
+  .ew .ew-heading { flex-basis:100%; }
+  .ew .ew-kicker { font-size:11px; }
+  .ew h1 { font-size:18px; }
+  .ew .ew-toolbar { padding:8px; gap:8px; margin-bottom:8px; }
+  .ew .ew-search { flex-basis:100%; }
+  .ew .ew-filters { grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; }
+  .ew .ew-filters button { font-size:12px; padding:6px; }
+  .ew .ew-reader { padding:12px; }
+  .ew .ew-inbox > p { margin-bottom:6px; }
+}
+
+@media (max-width:600px) {
+  .ew .ew-filters { display:flex; flex-wrap:nowrap; overflow-x:auto; max-width:100%; padding-bottom:2px; }
+  .ew .ew-filters button { flex:0 0 auto; min-width:72px; min-height:44px; }
+  .ew .ew-toolbar { align-content:start; }
+}
+.ew .ew-message-list { overscroll-behavior:contain; }
+.ew .ew-reader:focus-visible,.ew .ew-message-list:focus-visible { outline:2px solid var(--ew-accent,#2563eb); outline-offset:-2px; }
+
+/* A compact workspace header keeps the focus on mail and quotation review. */
+.ew .ew-header { display:grid; grid-template-columns:minmax(180px,1fr) minmax(180px,280px) auto; gap:16px; padding:8px 0 12px; }
+.ew .ew-header:not(:has(.ew-company-bar)) { grid-template-columns:minmax(0,1fr) auto; }
+.ew .ew-heading { gap:10px; }
+.ew .ew-header .ew-heading p,.ew .ew-header .ew-kicker { display:none; }
+.ew .ew-header .ew-company-bar { display:grid; grid-template-columns:1fr; gap:3px; margin:0; padding:0; border:0; background:transparent; }
+.ew .ew-header .ew-company-bar label { font-size:12px; color:var(--ew-muted); }
+.ew .ew-header .ew-company-bar select { width:100%; max-width:none; }
+.ew .ew-header .ew-company-bar > span { display:none; }
+.ew .ew-navigation { gap:4px; padding:3px; border:1px solid var(--ew-border); border-radius:10px; background:#fff; }
+.ew .ew-navigation button { border-color:transparent; }
+.ew .ew-navigation button[aria-pressed=true] { border-color:#3173c1; }
+.ew .ew-toolbar { align-items:center; padding:10px 12px; background:#fff; }
+.ew .ew-search { flex:1 1 220px; max-width:340px; }
+.ew .ew-columns { grid-template-columns:minmax(270px,.75fr) minmax(0,1.85fr); }
+.ew .ew-inbox { background:#fafcfe; }
+.ew .ew-inbox > p { margin-bottom:10px; }
+.ew button.ew-email { background:#fff; padding:12px; border:1px solid var(--ew-border); margin-bottom:6px; transition:background-color .16s ease,border-color .16s ease,box-shadow .16s ease; }
+.ew button.ew-email[aria-pressed=true] { background:var(--ew-soft); border-color:#729bc8; box-shadow:inset 3px 0 0 var(--ew-accent); }
+.ew .ew-reader { padding:20px; }
+.ew .ew-reader > h2 { font-size:20px; letter-spacing:-.02em; padding-bottom:4px; }
+.ew .ew-reader > p.ew-muted { padding-bottom:12px; border-bottom:1px solid var(--ew-border); }
+.ew .ew-reader details { background:#fafcfe; }
+.ew .ew-reader summary { cursor:pointer; color:var(--ew-accent); }
+.ew .ew-reader .ew-body { font-family:inherit; font-size:14px; line-height:1.75; }
+.ew .ew-pagination { background:#fafcfe; }
+.ew .ew-draft > .ew-actions:last-child { position:sticky; bottom:-20px; margin-bottom:-20px; padding:12px 0; background:#fff; z-index:2; }
+@media(hover:hover) { .ew button.ew-email:hover:not(:disabled) { border-color:#729bc8; background:#f0f6ff; box-shadow:0 2px 7px #164d9110; }.ew .ew-reader summary:hover { text-decoration:underline; text-underline-offset:3px; } }
+@media(max-width:1100px) { .ew .ew-header { gap:10px; grid-template-columns:minmax(150px,1fr) minmax(150px,220px) auto; }.ew .ew-navigation button { padding-inline:8px; } }
+@media(max-width:1000px) { .ew .ew-columns { grid-template-columns:minmax(0,1fr); }.ew .ew-header { grid-template-columns:1fr 1fr; }.ew .ew-navigation { grid-column:1 / -1; justify-self:start; } }
+@media(max-width:600px) {
+ .ew .ew-header { gap:8px; padding:0 0 8px; grid-template-columns:minmax(0,1fr); }
+ .ew .ew-header:not(:has(.ew-company-bar)) { grid-template-columns:minmax(0,1fr); }
+ .ew .ew-header .ew-company-bar { grid-template-columns:auto minmax(0,1fr); align-items:center; gap:8px; }
+ .ew .ew-navigation { width:100%; justify-self:stretch; }
+ .ew .ew-search { max-width:none; }
+ .ew .ew-reader { padding:12px; }
+ .ew .ew-reader > h2 { font-size:18px; }
+ .ew .ew-draft > .ew-actions:last-child { bottom:-12px; margin-bottom:-12px; }
+}
+@media(prefers-reduced-motion:reduce) { .ew button.ew-email { transition:none; } }
+
+.ew .ew-header:not(:has(.ew-company-bar)) .ew-kicker { display:block; }

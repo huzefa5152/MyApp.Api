@@ -64,6 +64,34 @@ public class EmailWorkspaceTests
         Assert.Equal(expected, EmailWorkspaceRules.Matches(new() { Sender = "buyer@example.com", SubjectContains = "quote" }, sender, subject));
 
     [Fact]
+    public void PluralHeadingsAndSplitItemSpecificationsKeepEveryDetail()
+    {
+        var plural = EmailEnquiryExtractor.Extract("RFQ", new("Please mention brand and make", "<table><tr><td>DESCRIPTIONS</td><td>UNIT</td><td>QTY</td></tr><tr><td>Connector 12x20</td><td>PC</td><td>20</td></tr></table>", []));
+        Assert.Equal(20, Assert.Single(plural.Items).Quantity); Assert.True(plural.RequiresBrand);
+        var split = EmailEnquiryExtractor.Extract("RFQ", new("", "<table><tr><td>ITEM</td><td>Description</td><td>A/Unit</td><td>Qty</td></tr><tr><td>Oil seal</td><td>55 x 80 x 10 mm</td><td>Nos</td><td>4</td></tr></table>", []));
+        Assert.Equal("Oil seal 55 x 80 x 10 mm", Assert.Single(split.Items).Description);
+        Assert.Equal("Nos", split.Items[0].Unit); Assert.Null(split.Items[0].UnitPrice);
+    }
+    [Fact]
+    public void HeaderlessRowsKeepSpecificationsAndSkipOlderRepeatedRequests()
+    {
+        var current = "<table><tr><td>526</td><td>Coil 220/240VAC</td><td>AS PER SAMPLE</td><td>10</td><td>PCS</td></tr><tr><td>526</td><td>Coil 24/26VDC</td><td>AS PER SAMPLE</td><td>10</td><td>PCS</td></tr></table>";
+        var old = current.Replace("220/240VAC", "230VAC").Replace("24/26VDC", "24VDC");
+        var draft = EmailEnquiryExtractor.Extract("RFQ", new("As per sample", current + "<blockquote>" + old + "</blockquote>" + old, []));
+        Assert.Equal(2, draft.Items.Count); Assert.Contains("220/240VAC", draft.Items[0].Description);
+        Assert.All(draft.Items, item => { Assert.Contains("AS PER SAMPLE", item.Description); Assert.Equal(10, item.Quantity); Assert.Null(item.UnitPrice); });
+        Assert.Contains(draft.Warnings, w => w.Contains("older quoted requests")); Assert.True(draft.RequiresSpecifications);
+        Assert.Empty(EmailEnquiryExtractor.Extract("Hello", new("", "<table><tr><td>Contact</td><td>Phone</td></tr><tr><td>Office</td><td>12345</td></tr></table>", [])).Items);
+    }
+    [Fact]
+    public void EmbeddedQuantitiesAndExcelItemNamesAreRecognized()
+    {
+        var draft = EmailEnquiryExtractor.Extract("Requirement no 31", new("As per drawing", "<table><tr><td>Particular</td><td>Qty</td></tr><tr><td>Rail 16 ft</td><td>22 no</td></tr><tr><td>Bolt 16 mm</td><td>300 no</td></tr></table>", []));
+        Assert.Equal(new decimal[] { 22, 300 }, draft.Items.Select(i => i.Quantity)); Assert.All(draft.Items, i => Assert.Equal("no", i.Unit));
+        var csv = EmailEnquiryExtractor.Extract("RFQ", new("", "<table><tr><td>S. No</td><td>Item Name</td><td>Quantity</td><td>UOM</td></tr><tr><td>1</td><td>Air fitting</td><td>12</td><td>Nos</td></tr><tr><td>2</td><td>Pipe 4mm</td><td>100</td><td>Mtr</td></tr></table>", []));
+        Assert.Equal(2, csv.Items.Count); Assert.Equal("Pipe 4mm", csv.Items[1].Description); Assert.Null(csv.Items[1].UnitPrice);
+    }
+    [Fact]
     [Trait("Category", "LocalSql")]
     public async Task SqlWorkflowProtectsCompaniesAndCreatesExactlyOneRealQuotation()
     {
@@ -125,6 +153,16 @@ public class EmailWorkspaceTests
         var enquiry = await db.EmailEnquiries.SingleAsync(e => e.MessageId == message.Id);
         var draft = await service.PrepareAsync(user.Id, company.Id, message.Id, enquiry.Revision, default);
         Assert.Equal(client.Id, draft.ClientId); Assert.Single(draft.Items);
+        draft.Notes = "Keep these quotation fields";
+        var saved = JsonSerializer.SerializeToElement(await service.SaveDraftAsync(user.Id, company.Id, message.Id, draft, default));
+        var savedRevision = saved.GetProperty("Revision").GetGuid();
+        await Assert.ThrowsAsync<EmailWorkspaceException>(() => service.ReextractAsync(user.Id, company.Id, message.Id, Guid.NewGuid(), default));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.ReextractAsync(user.Id, other.Id, message.Id, savedRevision, default));
+        draft = await service.ReextractAsync(user.Id, company.Id, message.Id, savedRevision, default);
+        Assert.Equal("Keep these quotation fields", draft.Notes); Assert.False(draft.Reviewed);
+        Assert.Single(draft.Items); Assert.Null(draft.Items[0].UnitPrice);
+
+
         await Assert.ThrowsAsync<EmailWorkspaceException>(() => service.SaveDraftAsync(user.Id, company.Id, message.Id, new() { Revision = Guid.NewGuid() }, default));
         await Assert.ThrowsAsync<EmailWorkspaceException>(() => service.ConvertAsync(user.Id, company.Id, message.Id, draft, default));
         draft.ClientId = foreign.Id; draft.Items[0].UnitPrice = 75; draft.Reviewed = true;
@@ -137,6 +175,7 @@ public class EmailWorkspaceTests
         var quote = await db.SalesQuotes.AsNoTracking().Include(q => q.Items).SingleAsync(q => q.CompanyId == company.Id);
         Assert.Equal(1650, quote.Subtotal); Assert.Equal(1947, quote.GrandTotal);
         Assert.Contains(results, r => JsonSerializer.Serialize(r).Contains("\"AlreadyCreated\":true"));
+        await Assert.ThrowsAsync<EmailWorkspaceException>(() => service.ReextractAsync(user.Id, company.Id, message.Id, draft.Revision, default));
         permissions.ModuleEnabled = false;
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.ReadAsync(user.Id, company.Id, message.Id, default));
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.StartAsync(user.Id, company.Id, default));
@@ -149,6 +188,34 @@ public class EmailWorkspaceTests
         await service.ReadAsync(user.Id + 10000, company.Id, message.Id, default);
         var before = gmail.RefreshCount; guard.Allowed.Clear(); await service.SyncAsync(mailbox.Id, default);
         Assert.Equal(before, gmail.RefreshCount);
+        guard.Allowed = [company.Id, other.Id];
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.RemoveCompanyConnectionAsync(user.Id, company.Id, link.Id, default));
+        permissions.SeedUserId = user.Id + 10000;
+        var seed = permissions.SeedUserId;
+        await Assert.ThrowsAsync<EmailWorkspaceException>(() => service.RemoveCompanyConnectionAsync(seed, other.Id, link.Id, default));
+        guard.DeniedUsers.Add(seed);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.RemoveCompanyConnectionAsync(seed, company.Id, link.Id, default));
+        guard.DeniedUsers.Clear();
+        await db.GmailConnections.Where(c => c.Id == mailbox.Id).ExecuteUpdateAsync(s => s.SetProperty(c => c.SyncLeaseUntil, DateTime.UtcNow.AddMinutes(5)));
+        var syncing = await Assert.ThrowsAsync<EmailWorkspaceException>(() => service.RemoveCompanyConnectionAsync(seed, company.Id, link.Id, default));
+        Assert.Equal(409, syncing.Status);
+        db.ChangeTracker.Clear();
+        await db.GmailConnections.Where(c => c.Id == mailbox.Id).ExecuteUpdateAsync(s => s.SetProperty(c => c.SyncLeaseUntil, (DateTime?)null));
+        await service.RemoveCompanyConnectionAsync(seed, company.Id, link.Id, default);
+        Assert.False(await db.GmailCompanyLinks.AnyAsync(l => l.Id == link.Id));
+        Assert.False(await db.EmailEnquiries.AnyAsync(e => e.CompanyId == company.Id && e.Message.ConnectionId == mailbox.Id));
+        Assert.False(await db.EmailWorkspaceEvents.AnyAsync(e => e.EnquiryId == enquiry.Id));
+        Assert.True(await db.SalesQuotes.AnyAsync(q => q.Id == quote.Id));
+        Assert.True(await db.GmailMessages.AnyAsync(m => m.Id == message.Id));
+        await Assert.ThrowsAsync<EmailWorkspaceException>(() => service.ReadAsync(user.Id, company.Id, message.Id, default));
+        await service.ReadAsync(user.Id, other.Id, message.Id, default);
+        db.ChangeTracker.Clear();
+        var otherLink = await db.GmailCompanyLinks.SingleAsync(l => l.CompanyId == other.Id && l.ConnectionId == mailbox.Id);
+        await service.RemoveCompanyConnectionAsync(seed, other.Id, otherLink.Id, default);
+        Assert.False(await db.GmailMessages.AnyAsync(m => m.ConnectionId == mailbox.Id));
+        Assert.False(await db.GmailConnections.AnyAsync(c => c.Id == mailbox.Id));
+        Assert.True(await db.SalesQuotes.AnyAsync(q => q.Id == quote.Id));
+
     }
     [Fact]
     [Trait("Category", "LocalSql")]
@@ -237,10 +304,11 @@ public class EmailWorkspaceTests
     private sealed class FakePermissions : IPermissionService
     {
         public bool ModuleEnabled = true;
+        public int SeedUserId;
         public Task<bool> HasPermissionAsync(int userId, string permissionKey) => Task.FromResult(permissionKey != "email.workspace.use" || ModuleEnabled);
         public Task<IReadOnlyCollection<string>> GetUserPermissionsAsync(int userId) => Task.FromResult<IReadOnlyCollection<string>>([]);
         public void InvalidateUser(int userId) { } public void InvalidateAll() { }
-        public bool IsSeedAdmin(int userId) => false;
+        public bool IsSeedAdmin(int userId) => userId > 0 && userId == SeedUserId;
         public Task<bool> HasMcpToolAccessAsync(int userId, string toolName) => Task.FromResult(false);
     }
 }
