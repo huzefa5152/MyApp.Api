@@ -195,28 +195,66 @@
 .ew .ew-reader > details { order: 3; }
 .ew .ew-reader > .ew-draft { order: 4; }
 .ew .ew-reader > .ew-empty { flex: 1; }
-.ew-reader-head { display: flex; align-items: flex-start; gap: 12px; padding-bottom: 14px; margin-bottom: 4px; border-bottom: 1px solid var(--ew-line); animation: ewRise 240ms var(--ew-ease) both; }
-.ew-reader-title { flex: 1; min-width: 0; }
-.ew-reader-title h2 { margin: 0 0 2px; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.35; }
-.ew-reader-title p { margin: 0; }
-.ew-reader-head > .ew-status { margin-top: 3px; }
-.ew .ew-decisions { position: sticky; top: -18px; z-index: 2; margin: 0 -22px; padding: 10px 22px; margin-top: 0; background: rgba(255, 255, 255, 0.94); backdrop-filter: blur(6px); border-bottom: 1px solid var(--ew-line); }
+/* Opened message, laid out the way Gmail lays one out: the subject on its own
+   line, then who sent it and when, then the body on plain white. */
+.ew-reader-head { padding-bottom: 12px; margin-bottom: 2px; border-bottom: 1px solid var(--ew-line); animation: ewRise 240ms var(--ew-ease) both; }
+.ew-subject-row { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+.ew .ew-subject-row h2 { flex: 1; min-width: 0; margin: 0; font-size: 21px; font-weight: 500; line-height: 1.35; letter-spacing: -0.005em; color: #1f1f1f; }
+.ew-subject-row > .ew-status { margin-top: 5px; }
+.ew-from-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ew-from { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 1px; }
+.ew-from strong { font-size: 14px; font-weight: 700; color: #1f1f1f; overflow-wrap: anywhere; }
+.ew-from-date { flex-shrink: 0; align-self: flex-start; padding-top: 2px; font-size: 12px; color: var(--ew-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ew .ew-decisions { position: sticky; top: -18px; z-index: 2; margin: 0 -22px; padding: 10px 22px; margin-top: 0; background: #fff; border-bottom: 1px solid var(--ew-line); }
 .ew .ew-decisions:empty { display: none; }
-.ew-reader details { margin: 14px 0; border: 1px solid var(--ew-border); border-radius: 10px; background: var(--ew-subtle); overflow: hidden; }
-.ew-reader summary { display: flex; align-items: center; min-height: 40px; padding: 8px 14px; font-size: 13px; font-weight: 600; color: var(--ew-blue); cursor: pointer; list-style: none; }
+/* The original email reads as the message itself, not a boxed panel. It
+   still folds away once a quotation draft is open below it. */
+.ew-reader details { margin: 6px 0 4px; border: 0; background: transparent; }
+.ew-reader summary { display: inline-flex; align-items: center; min-height: 32px; padding: 4px 8px 4px 0; font-size: 12.5px; font-weight: 600; color: var(--ew-muted); cursor: pointer; list-style: none; border-radius: 6px; }
 .ew-reader summary::-webkit-details-marker { display: none; }
-.ew-reader summary::before { content: ""; width: 7px; height: 7px; margin-right: 10px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform 180ms var(--ew-ease); }
+.ew-reader summary::before { content: ""; width: 6px; height: 6px; margin: 0 10px 0 4px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform 180ms var(--ew-ease); }
 .ew-reader details[open] summary::before { transform: rotate(45deg); }
-.ew-reader details > :not(summary) { margin-inline: 14px; }
-.ew-body { margin: 0 14px 12px !important; padding: 14px; white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; font-size: 14px; line-height: 1.7; color: var(--ew-text); background: var(--ew-surface); border: 1px solid var(--ew-line); border-radius: 8px; }
-.ew-reader details .ew-actions { margin: 0 14px 12px; }
+.ew-body { margin: 6px 0 12px 52px !important; padding: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 1.6; color: #202124; background: transparent; border: 0; }
+
+/* HTML body (EmailHtmlBody): a sandboxed frame sized to its content. */
+.em-html { margin: 6px 0 12px 52px; min-width: 0; }
+.em-html-frame { display: block; width: 100%; border: 0; background: #fff; color-scheme: light; }
+.em-images-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; padding: 7px 10px; border-radius: 8px; background: var(--ew-subtle); border: 1px solid var(--ew-line); font-size: 12.5px; color: var(--ew-muted); }
+.em-images-bar > svg { color: var(--ew-faint); }
+.ew .em-images-bar button { min-height: 28px; padding: 2px 8px; border: 0; background: transparent; color: #1a73e8; font-size: 12.5px; }
+
+/* Attachments (EmailAttachments): Gmail-style cards. */
+.em-attachments { margin: 6px 0 14px 52px; padding-top: 14px; border-top: 1px solid var(--ew-line); }
+.ew .em-attachments-title { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--ew-muted); }
+.em-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(168px, 100%), 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.em-card { position: relative; min-width: 0; }
+.ew button.em-card-open { display: flex; flex-direction: column; align-items: stretch; gap: 0; width: 100%; padding: 0; overflow: hidden; border: 1px solid #dadce0; border-radius: 10px; background: #fff; text-align: left; transition: box-shadow 160ms var(--ew-ease), border-color 160ms var(--ew-ease); }
+.em-card-preview { display: grid; place-items: center; height: 96px; overflow: hidden; background: #f1f3f4; border-bottom: 1px solid #e8eaed; }
+.em-card-preview img { width: 100%; height: 100%; object-fit: cover; }
+.em-card-tile { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--em-tile); }
+.em-card-ext { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; }
+.em-card-foot { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 10px 2px; }
+.em-card-badge { display: grid; place-items: center; flex-shrink: 0; width: 20px; height: 20px; border-radius: 4px; background: var(--em-tile); color: #fff; }
+.em-card-name { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; line-height: 1.35; color: #1f1f1f; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.em-card-size { padding: 0 10px 8px 38px; font-size: 11.5px; font-weight: 400; color: var(--ew-muted); }
+.ew button.em-card-download { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 32px; height: 32px; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: rgba(32, 33, 36, 0.72); color: #fff; opacity: 0; transition: opacity 140ms var(--ew-ease); }
+.em-card:hover .em-card-download, .em-card:focus-within .em-card-download { opacity: 1; }
+@media (hover: hover) {
+  .ew button.em-card-open:hover:not(:disabled) { border-color: #c4c7c5; background: #fff; box-shadow: 0 1px 3px rgba(60, 64, 67, 0.25), 0 4px 10px rgba(60, 64, 67, 0.12); }
+  .ew button.em-card-download:hover:not(:disabled) { background: rgba(32, 33, 36, 0.9); border-color: transparent; }
+}
+/* No hover on a touch screen: Download stays visible, at a full tap size. */
+@media (hover: none) {
+  .ew button.em-card-download { opacity: 1; width: 40px; height: 40px; min-height: 40px; }
+}
+
 .ew-back { display: none !important; }
 
 /* Draft: its own section with a pinned save bar. */
 .ew-draft { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--ew-line); animation: ewRise 260ms var(--ew-ease) both; }
 .ew-draft > h3 { display: flex; align-items: center; gap: 8px; font-size: 15px; }
 .ew-draft > h3::before { content: ""; width: 3px; height: 16px; border-radius: 3px; background: var(--ew-teal); }
-.ew-draft > .ew-actions:last-child { position: sticky; bottom: -18px; z-index: 2; margin: 12px -22px -18px; padding: 12px 22px; justify-content: flex-end; background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(6px); border-top: 1px solid var(--ew-line); }
+.ew-draft > .ew-actions:last-child { position: sticky; bottom: -18px; z-index: 2; margin: 12px -22px -18px; padding: 12px 22px; justify-content: flex-end; background: #fff; border-top: 1px solid var(--ew-line); }
 
 /* Empty reader */
 .ew-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100%; padding: 32px 16px; text-align: center; }
@@ -272,7 +310,7 @@
   .ew .ew-columns { grid-template-columns: minmax(0, 1fr); }
   .ew[data-mobile-pane="inbox"] .ew-reader { display: none; }
   .ew[data-mobile-pane="reader"] .ew-inbox { display: none; }
-  .ew .ew-back { display: inline-flex !important; position: sticky; top: -18px; z-index: 3; margin: -18px -22px 10px; padding: 10px 22px; width: calc(100% + 44px); max-width: none; justify-content: flex-start; border: 0; border-bottom: 1px solid var(--ew-line); border-radius: 0; background: rgba(255, 255, 255, 0.96); color: var(--ew-blue); min-height: 44px; }
+  .ew .ew-back { display: inline-flex !important; position: sticky; top: -18px; z-index: 3; margin: -18px -22px 10px; padding: 10px 22px; width: calc(100% + 44px); max-width: none; justify-content: flex-start; border: 0; border-bottom: 1px solid var(--ew-line); border-radius: 0; background: #fff; color: var(--ew-blue); min-height: 44px; }
   .ew .ew-decisions { top: 26px; }
   .ew .ew-header { grid-template-columns: minmax(0, 1fr) auto; }
   .ew .ew-header .ew-company-bar { grid-column: 1 / -1; grid-row: 2; }
@@ -300,8 +338,10 @@
   .ew .ew-back { top: -14px; margin: -14px -14px 10px; padding-inline: 14px; width: calc(100% + 28px); }
   .ew .ew-decisions { top: 30px; margin-inline: -14px; padding-inline: 14px; }
   .ew .ew-decisions > button { flex: 1 1 140px; }
-  .ew-reader-title h2 { font-size: 16px; }
+  .ew .ew-subject-row h2 { font-size: 18px; }
   .ew-avatar--lg { width: 34px; height: 34px; font-size: 13px; }
+  .ew-body, .em-html, .em-attachments { margin-left: 0 !important; }
+  .em-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ew-draft > .ew-actions:last-child { bottom: -14px; margin: 12px -14px -14px; padding: 10px 14px; }
   .ew-draft > .ew-actions:last-child > button { flex: 1 1 140px; }
   .ew-connect-actions > button, .ew .ew-connect-actions > select { width: 100%; max-width: none; }
@@ -323,11 +363,64 @@ body.admin-ui .ew .ew-message-list:focus-visible, body.admin-ui .ew .ew-reader:f
   /* Refresh as an icon: its text stays as the button's accessible name. */
   .ew .ew-navigation .ew-refresh { font-size: 0 !important; gap: 0; padding: 0; margin-left: 0; }
   .ew .ew-navigation .ew-refresh .ew-icon { width: 17px; height: 17px; }
-  .ew-reader-head { flex-wrap: wrap; gap: 10px; }
-  .ew-reader-title { flex: 1 1 calc(100% - 50px); }
-  .ew-reader-head > .ew-status { order: 3; margin: 0 0 0 44px; }
+  .ew-subject-row { flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .ew-subject-row > .ew-status { margin-top: 0; }
+  .ew-from-row { flex-wrap: wrap; }
+  .ew-from { flex-basis: calc(100% - 50px); }
+  .ew-from-date { padding-left: 46px; padding-top: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .ew *, .ew *::before { animation: none !important; transition: none !important; }
+}
+
+/* ---------- Attachment viewer (portalled to <body>, outside .ew) ---------- */
+.em-viewer { position: fixed; inset: 0; z-index: 2000; display: flex; flex-direction: column; background: rgba(16, 17, 20, 0.96); color: #fff; animation: dlBackdropIn 160ms ease-out both; font-size: 14px; }
+.em-viewer * { box-sizing: border-box; }
+.em-viewer-bar { display: flex; align-items: center; gap: 8px; flex-shrink: 0; min-height: 60px; padding: 8px 12px 8px 16px; background: linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0)); }
+.em-viewer-icon { display: grid; place-items: center; flex-shrink: 0; width: 28px; height: 28px; border-radius: 6px; color: #fff; }
+.em-viewer-name { display: flex; flex-direction: column; flex: 1; min-width: 0; line-height: 1.3; }
+.em-viewer-name strong { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.em-viewer-name span { font-size: 12px; color: rgba(255, 255, 255, 0.7); }
+.em-viewer button, .em-viewer a { font: inherit; }
+.em-viewer .em-viewer-btn { display: grid; place-items: center; flex-shrink: 0; width: 44px; height: 44px; padding: 0; margin: 0; border: 0; border-radius: 50%; background: transparent; color: #fff; cursor: pointer; text-decoration: none; box-shadow: none; transition: background-color 140ms; }
+.em-viewer .em-viewer-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.14); }
+.em-viewer .em-viewer-btn:disabled { opacity: 0.5; }
+.em-viewer :is(button, a):focus-visible { outline: 2px solid #8ab4f8; outline-offset: 2px; }
+.em-viewer-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 72px 24px; }
+.em-viewer-image { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); animation: dlModalIn 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both; background: #fff; }
+.em-viewer-pdf { width: min(100%, 1000px); height: 100%; border: 0; border-radius: 4px; background: #fff; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); }
+.em-viewer-doc { width: min(100%, 1100px); max-height: 100%; overflow: auto; border-radius: 6px; background: #fff; color: #202124; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); animation: dlModalIn 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.em-viewer-text { margin: 0; padding: 20px 24px; white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.6 ui-monospace, Consolas, monospace; }
+.em-viewer-sheet { display: flex; flex-direction: column; overflow: hidden; }
+.em-sheet-tabs { display: flex; gap: 2px; flex-shrink: 0; overflow-x: auto; padding: 6px 6px 0; background: #f1f3f4; border-bottom: 1px solid #dadce0; scrollbar-width: thin; }
+.em-viewer .em-sheet-tabs button { flex-shrink: 0; min-height: 34px; padding: 6px 14px; margin: 0; border: 0; border-radius: 6px 6px 0 0; background: transparent; color: #3c4043; font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.em-viewer .em-sheet-tabs button[aria-selected=true] { background: #fff; color: #188038; box-shadow: inset 0 -2px #188038; }
+.em-table-wrap { flex: 1; min-height: 0; overflow: auto; }
+.em-table { border-collapse: collapse; font-size: 12.5px; }
+.em-table td, .em-table th { padding: 5px 9px; border: 1px solid #e3e3e3; white-space: pre-wrap; vertical-align: top; max-width: 320px; overflow-wrap: anywhere; text-align: left; }
+.em-table th { position: sticky; left: 0; min-width: 40px; background: #f8f9fa; color: #5f6368; font-weight: 500; text-align: center; }
+.em-viewer-note { margin: 0; padding: 10px 16px; font-size: 12.5px; color: #5f6368; background: #fff; }
+.em-viewer-card { display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 380px; padding: 28px 26px; border-radius: 12px; background: #2d2f33; text-align: center; color: rgba(255, 255, 255, 0.8); font-size: 13px; animation: dlModalIn 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.em-viewer-card strong { color: #fff; font-size: 15px; }
+.em-viewer-big { display: grid; place-items: center; width: 64px; height: 64px; margin-bottom: 4px; border-radius: 14px; color: #fff; }
+.em-viewer .em-viewer-download { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; margin-top: 8px; padding: 8px 18px; border: 0; border-radius: 999px; background: #8ab4f8; color: #062e6f; font-weight: 600; cursor: pointer; }
+.em-viewer-loading { flex-direction: row; gap: 12px; }
+.em-spinner { width: 20px; height: 20px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.25); border-top-color: #fff; animation: emSpin 800ms linear infinite; }
+@keyframes emSpin { to { transform: rotate(360deg); } }
+.em-viewer .em-viewer-nav { position: absolute; top: 50%; z-index: 1; display: grid; place-items: center; width: 48px; height: 48px; padding: 0; margin: -24px 0 0; border: 0; border-radius: 50%; background: rgba(0, 0, 0, 0.45); color: #fff; cursor: pointer; transition: background-color 140ms; }
+.em-viewer .em-viewer-nav:hover { background: rgba(0, 0, 0, 0.7); }
+.em-viewer-nav--prev { left: 12px; }
+.em-viewer-nav--next { right: 12px; }
+@media (max-width: 700px) {
+  .em-viewer-bar { padding: 6px 4px 6px 12px; gap: 4px; }
+  .em-viewer-stage { padding: 0 8px 72px; }
+  .em-viewer-pdf, .em-viewer-doc { width: 100%; }
+  /* Arrows move below the file, where a thumb reaches them. */
+  .em-viewer .em-viewer-nav { top: auto; bottom: 12px; margin: 0; }
+  .em-viewer-nav--prev { left: calc(50% - 60px); }
+  .em-viewer-nav--next { right: calc(50% - 60px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .em-viewer, .em-viewer * { animation: none !important; transition: none !important; }
 }

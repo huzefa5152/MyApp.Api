@@ -301,7 +301,8 @@ public sealed partial class EmailWorkspaceService(AppDbContext db, ICompanyAcces
         var content = Unprotect<EmailContent>(m.ProtectedContent);
         var enquiry = await db.EmailEnquiries.AsNoTracking().SingleOrDefaultAsync(e => e.CompanyId == company && e.MessageId == id, ct);
         return new { m.Id, m.Subject, m.Sender, m.ReceivedAt, Text = EmailEnquiryExtractor.PlainText(content),
-            content.Attachments, Decision = enquiry?.Decision ?? "Unreviewed", enquiry?.SalesQuoteId, enquiry?.SalesQuoteNumber,
+            // The sender's HTML, shown in a sandboxed frame. Untrusted: never rendered into the page itself.
+            Html = content.Html ?? "", content.Attachments, Decision = enquiry?.Decision ?? "Unreviewed", enquiry?.SalesQuoteId, enquiry?.SalesQuoteNumber,
             enquiry?.Revision, Draft = enquiry?.ProtectedDraft.Length > 0 ? Unprotect<EmailDraftDto>(enquiry.ProtectedDraft) : null };
     }
     private static void AssertRevision(EmailEnquiry? enquiry, Guid? revision)
