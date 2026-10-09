@@ -1,6 +1,7 @@
 import Handlebars from "handlebars";
 import { withBillFbrSection } from "./billFbrSection.js";
 import { materializeStamp } from "./stampSlot.js";
+import { stripActiveContent, withPrintCsp } from "./printSafety.js";
 
 // Register custom helpers
 Handlebars.registerHelper("fmtDate", (d) => {
@@ -187,14 +188,17 @@ export function mergeTemplate(htmlTemplate, data) {
   const compiled = Handlebars.compile(src);
   // Inject stamps unless the caller already supplied its own.
   const merged = { ...(data || {}), stamps: (data && data.stamps) || _activeStamps };
-  const html = compiled(merged);
+  // Template HTML is operator-edited and the result is printed in a window
+  // sharing this app's origin, so it is made inert here, on the one path every
+  // print, PDF, bulk and portal render takes (utils/printSafety.js).
+  const html = stripActiveContent(compiled(merged));
   if (typeof window !== "undefined" && window.location?.origin) {
     const base = `<base href="${window.location.origin}/">`;
-    return /<head[^>]*>/i.test(html)
+    return withPrintCsp(/<head[^>]*>/i.test(html)
       ? html.replace(/<head[^>]*>/i, (m) => m + base)
-      : base + html;
+      : base + html);
   }
-  return html;
+  return withPrintCsp(html);
 }
 
 /**

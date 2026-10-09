@@ -1,3 +1,4 @@
+using MyApp.Api.Helpers;
 using System.Data;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
@@ -43,7 +44,7 @@ namespace MyApp.Api.Repositories.Implementations
 
             if (existing != null)
             {
-                existing.HtmlContent = htmlContent;
+                existing.HtmlContent = TemplateHtmlSafety.Strip(htmlContent)!;
                 existing.TemplateJson = templateJson;
                 existing.EditorMode = editorMode;
                 existing.UpdatedAt = DateTime.UtcNow;
@@ -56,7 +57,7 @@ namespace MyApp.Api.Repositories.Implementations
                     TemplateType = templateType,
                     Name = "Default",
                     IsDefault = true,
-                    HtmlContent = htmlContent,
+                    HtmlContent = TemplateHtmlSafety.Strip(htmlContent)!,
                     TemplateJson = templateJson,
                     EditorMode = editorMode,
                     UpdatedAt = DateTime.UtcNow
@@ -151,7 +152,7 @@ namespace MyApp.Api.Repositories.Implementations
                     TemplateType = templateType,
                     Name = string.IsNullOrWhiteSpace(name) ? "Untitled" : name.Trim(),
                     IsDefault = makeDefault,
-                    HtmlContent = htmlContent,
+                    HtmlContent = TemplateHtmlSafety.Strip(htmlContent)!,
                     TemplateJson = templateJson,
                     EditorMode = editorMode,
                     StampId = stampId,
@@ -175,7 +176,7 @@ namespace MyApp.Api.Repositories.Implementations
             if (t == null) return null;
 
             t.Name = string.IsNullOrWhiteSpace(name) ? t.Name : name.Trim();
-            t.HtmlContent = htmlContent;
+            t.HtmlContent = TemplateHtmlSafety.Strip(htmlContent)!;
             t.TemplateJson = templateJson;
             t.EditorMode = editorMode;
             t.UpdatedAt = DateTime.UtcNow;
@@ -191,7 +192,7 @@ namespace MyApp.Api.Repositories.Implementations
             t.StampId = stampId;
             // Only the convert / inject flows send HTML; a plain assignment must
             // leave the template body exactly as it was.
-            if (htmlContent != null) t.HtmlContent = htmlContent;
+            if (htmlContent != null) t.HtmlContent = TemplateHtmlSafety.Strip(htmlContent)!;
             t.UpdatedAt = DateTime.UtcNow;
             await _ctx.SaveChangesAsync();
 

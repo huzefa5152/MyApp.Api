@@ -1,4 +1,5 @@
 import { saveAs } from "file-saver";
+import { PRINT_CSP_META } from "./printSafety.js";
 
 /**
  * Parse full HTML document, extract CSS from <style> tags and body content.
@@ -59,7 +60,9 @@ export function createStyledContainer(css, bodyHtml) {
   try {
     const renderDocument = wrapper.contentDocument;
     renderDocument.open();
-    renderDocument.write('<!DOCTYPE html><html><head><meta charset="utf-8"></head><body></body></html>');
+    // The body arrives through innerHTML below; the CSP keeps an inline
+    // handler in it (an <img onerror>) from running in this same-origin frame.
+    renderDocument.write(`<!DOCTYPE html><html><head><meta charset="utf-8">${PRINT_CSP_META}</head><body></body></html>`);
     renderDocument.close();
     let scopedCss = unwrapPrintMedia(css).replace(/\bbody\b/g, ".pdf-content");
     scopedCss = scopedCss.replace(/min-height\s*:\s*100vh\s*;?/g, "");
