@@ -40,7 +40,7 @@ import {
   MdReceiptLong,
   MdAccountTree,
   MdMenuBook,
-  MdSpaceDashboard,
+  MdInsights,
   MdPublic,
   MdPayments,
   MdFolder,
@@ -184,6 +184,12 @@ export default function DashboardLayout() {
   // neither the divider nor the label, so the sidebar doesn't show empty
   // section stubs (which look broken when MANAGEMENT / SALES / PURCHASES
   // / ADMINISTRATION render with nothing under them).
+  // Dashboards — the three overview pages, one nav group.
+  const dashboardsKeys = [
+    "dashboard.view",
+    "stock.dashboard.view",
+    "accounting.dashboard.view",
+  ];
   const configKeys = [
     "companies.manage.view",
     "clients.manage.view",
@@ -213,7 +219,6 @@ export default function DashboardLayout() {
     "purchasebills.list.view",
     "purchasedebitnotes.list.view",
     "goodsreceipts.list.view",
-    "stock.dashboard.view",
     "fbrimport.purchase.preview",
   ];
   const accountingKeys = [
@@ -240,6 +245,7 @@ export default function DashboardLayout() {
     "tenantaccess.manage.view",
     "auditlogs.view",
   ];
+  const canSeeDashboards    = hasAny(dashboardsKeys);
   const canSeeConfiguration = hasAny(configKeys);
   const canSeeSales         = hasAny(salesKeys);
   const canSeePurchases     = hasAny(purchasesKeys);
@@ -271,6 +277,7 @@ export default function DashboardLayout() {
   // Per-group counts (visible-child count for the section's "[N]" badge).
   // Computed from the same permission keys the section gating uses, so
   // the badge always matches what the user can actually see beneath it.
+  const dashboardsCount    = dashboardsKeys.filter(has).length;
   const salesCount         = salesKeys.filter(has).length;
   const purchasesCount     = purchasesKeys.filter(has).length;
   const accountingCount    = accountingKeys.filter(has).length;
@@ -284,10 +291,13 @@ export default function DashboardLayout() {
   // recomputing on every render.
   const activeSection = useMemo(() => {
     const p = location.pathname.toLowerCase();
+    // The three dashboards. Checked first so /stock and /accounting/dashboard
+    // open Dashboards, not Purchases or Accounting.
+    if (p === "/dashboard" || p.startsWith("/stock") || p.startsWith("/accounting/dashboard")) return "dashboards";
     if (p === "/email-workspace") return "email-workspace";
     if (p.startsWith("/challans") || p === "/bills" || p === "/invoices" || p === "/credit-notes" || p === "/debit-notes" || p === "/credit-debit-notes" || p === "/item-rate-history" || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders")) return "sales";
-    if (p.startsWith("/purchase-bills") || p.startsWith("/purchase-debit-notes") || p.startsWith("/goods-receipts") || p.startsWith("/stock") || p.startsWith("/fbr-import/purchase")) return "purchases";
-    if (p.startsWith("/withholding-tax-receipts") || p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/bank-cash-accounts") || p.startsWith("/transfers") || p.startsWith("/chart-of-accounts") || p.startsWith("/journal-entries") || p.startsWith("/accounting")) return "accounting";
+    if (p.startsWith("/purchase-bills") || p.startsWith("/purchase-debit-notes") || p.startsWith("/goods-receipts") || p.startsWith("/fbr-import/purchase")) return "purchases";
+    if (p.startsWith("/withholding-tax-receipts") || p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/bank-cash-accounts") || p.startsWith("/transfers") || p.startsWith("/chart-of-accounts") || p.startsWith("/journal-entries") || p.startsWith("/accounting") || p.startsWith("/help/accounting")) return "accounting";
     if (p.startsWith("/reports")) return "reports";
     if (p.startsWith("/companies") || p.startsWith("/clients") || p.startsWith("/suppliers")
       || p.startsWith("/item-types") || p.startsWith("/units") || p.startsWith("/po-formats")
@@ -386,16 +396,35 @@ export default function DashboardLayout() {
 
         {/* Nav */}
         <nav className="dl-nav" role="navigation">
-          {has("dashboard.view") && <>
-          <span className="dl-nav__section-label">Main</span>
-          <NavLink
-            to="/dashboard"
-            className={({ isActive }) => "dl-item" + (isActive ? " dl-item--active" : "")}
-          >
-            <MdDashboard className="dl-item__icon" aria-hidden="true" />
-            <span className="dl-item__label">Dashboard</span>
-          </NavLink>
-          </>}
+          {canSeeDashboards && (
+            <NavGroup
+              id="dashboards"
+              icon={MdDashboard}
+              title="Dashboards"
+              count={dashboardsCount}
+              defaultOpen={activeSection === "dashboards"}
+              isChildActive={activeSection === "dashboards"}
+            >
+              <Can permission="dashboard.view">
+                <NavLink to="/dashboard" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdDashboard className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Overview</span>
+                </NavLink>
+              </Can>
+              <Can permission="stock.dashboard.view">
+                <NavLink to="/stock" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdInventory className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Inventory</span>
+                </NavLink>
+              </Can>
+              <Can permission="accounting.dashboard.view">
+                <NavLink to="/accounting/dashboard" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdInsights className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Accounting</span>
+                </NavLink>
+              </Can>
+            </NavGroup>
+          )}
 
           {has("email.workspace.use") && has("email.inbox.view") && (
             <NavGroup id="email-workspace" icon={MdEmail} title="Email Workspace" count={1}
@@ -511,12 +540,6 @@ export default function DashboardLayout() {
                   <span>Goods Receipts</span>
                 </NavLink>
               </Can>
-              <Can permission="stock.dashboard.view">
-                <NavLink to="/stock" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
-                  <MdInventory className="dl-subitem__icon" aria-hidden="true" />
-                  <span>Stock Dashboard</span>
-                </NavLink>
-              </Can>
               <Can permission="fbrimport.purchase.preview">
                 <NavLink to="/fbr-import/purchase" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdFileUpload className="dl-subitem__icon" aria-hidden="true" />
@@ -535,12 +558,6 @@ export default function DashboardLayout() {
               defaultOpen={activeSection === "accounting"}
               isChildActive={activeSection === "accounting"}
             >
-              <Can permission="accounting.reports.view">
-                <NavLink to="/accounting/overview" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
-                  <MdSpaceDashboard className="dl-subitem__icon" aria-hidden="true" />
-                  <span>Overview</span>
-                </NavLink>
-              </Can>
               <Can permission="accounting.coa.view">
                 <NavLink to="/bank-cash-accounts" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdAccountBalanceWallet className="dl-subitem__icon" aria-hidden="true" />
@@ -588,6 +605,12 @@ export default function DashboardLayout() {
                   <span>Payments</span>
                 </NavLink>
               </Can>
+              {/* The guide is static help text — no permission of its own;
+                  anyone who can see the Accounting group may read it. */}
+              <NavLink to="/help/accounting" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <MdMenuBook className="dl-subitem__icon" aria-hidden="true" />
+                <span>Accounting Guide</span>
+              </NavLink>
             </NavGroup>
           )}
 
@@ -878,7 +901,7 @@ export default function DashboardLayout() {
 /* ------------------------------------------------------------------ */
 function getBreadcrumb(pathname) {
   const map = {
-    "/dashboard": "Dashboard",
+    "/dashboard": "Dashboards / Overview",
     "/companies/list": "Configuration / Companies List",
     "/Clients/list": "Configuration / Clients List",
     "/Suppliers/list": "Configuration / Suppliers List",
@@ -887,10 +910,11 @@ function getBreadcrumb(pathname) {
     "/goods-receipts": "Purchases / Goods Receipts",
     "/chart-of-accounts": "Accounting / Chart of Accounts",
     "/journal-entries": "Accounting / Journal Entries",
-    "/accounting/overview": "Accounting / Overview",
+    "/accounting/dashboard": "Dashboards / Accounting",
+    "/help/accounting": "Accounting / Accounting Guide",
     "/accounting/reports": "Accounting / Reports",
     "/customer-portals": "Configuration / Customer Portals",
-    "/stock": "Purchases / Stock Dashboard",
+    "/stock": "Dashboards / Inventory",
     "/fbr-import/purchase": "Purchases / FBR Purchase Import",
     "/item-types": "Configuration / Item Types",
     "/import-data": "Configuration / Import Data",

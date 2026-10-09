@@ -1,4 +1,5 @@
-import { MdEmail, MdPhone, MdLocationOn, MdEdit, MdDelete, MdContentCopy } from "react-icons/md";
+import { MdEmail, MdPhone, MdLocationOn, MdEdit, MdDelete, MdContentCopy, MdReceiptLong } from "react-icons/md";
+import { useNavigate } from "react-router-dom";
 import { deleteClient } from "../api/clientApi";
 import { cardStyles, cardHover } from "../theme";
 import { useConfirm } from "./ConfirmDialog";
@@ -11,6 +12,14 @@ export default function ClientList({ clients, onEdit, onCopy, fetchClients }) {
   const canUpdate = has("clients.manage.update");
   const canDelete = has("clients.manage.delete");
   const canCopy = has("clients.manage.copy");
+  // Statement opens the accounting report customer-statement for this client, so it
+  // carries that report's permission — a role without it never sees a button
+  // that would land on a refusal. All periods: a statement answers "how did
+  // this balance come about", which is the whole history.
+  const canStatement = has("accounting.reports.view");
+  const navigate = useNavigate();
+  const openStatement = (c) =>
+    navigate(`/accounting/reports/catalog/customer-statement?${new URLSearchParams({ period: "allPeriods", clientId: String(c.id) })}`);
 
   const handleDelete = async (id) => {
     const ok = await confirm({ title: "Delete Client?", message: "Are you sure you want to delete this client? This action cannot be undone.", variant: "danger", confirmText: "Delete" });
@@ -71,7 +80,7 @@ export default function ClientList({ clients, onEdit, onCopy, fetchClients }) {
                 </p>
               )}
             </div>
-            {(canUpdate || canDelete || canCopy) && (
+            {(canUpdate || canDelete || canCopy || canStatement) && (
               <div style={cardStyles.buttonGroup}>
                 {canUpdate && (
                   <button
@@ -81,6 +90,16 @@ export default function ClientList({ clients, onEdit, onCopy, fetchClients }) {
                     onMouseLeave={(e) => { e.currentTarget.style.filter = ""; }}
                   >
                     <MdEdit /> Edit
+                  </button>
+                )}
+                {canStatement && (
+                  <button
+                    type="button"
+                    style={{ ...cardStyles.button, backgroundColor: "#e0f2f1", color: "#00695c", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
+                    onClick={() => openStatement(client)}
+                    title="Open this client's statement"
+                  >
+                    <MdReceiptLong /> Statement
                   </button>
                 )}
                 {canCopy && onCopy && (

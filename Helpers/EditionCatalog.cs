@@ -128,6 +128,7 @@ namespace MyApp.Api.Helpers
         private static readonly string[] AccountingModulePrefixes =
         {
             "accounting.coa.",
+            "accounting.dashboard.",
             "accounting.gl.",
             "accounting.journal.",
             "accounting.reports.",

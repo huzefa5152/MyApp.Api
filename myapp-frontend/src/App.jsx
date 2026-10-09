@@ -20,6 +20,7 @@ const PaymentsPage = lazy(() => import("./pages/PaymentsPage"));
 const ChartOfAccountsPage = lazy(() => import("./pages/ChartOfAccountsPage"));
 const JournalEntriesPage = lazy(() => import("./pages/JournalEntriesPage"));
 const AccountingDashboardPage = lazy(() => import("./pages/AccountingDashboardPage"));
+const UserGuidePage = lazy(() => import("./pages/UserGuidePage"));
 const AccountingReportsPage = lazy(() => import("./pages/AccountingReportsPage"));
 const AccountingCatalogPage = lazy(() => import("./pages/AccountingCatalogPage"));
 const CustomerPortalsPage = lazy(() => import("./pages/CustomerPortalsPage"));
@@ -119,7 +120,11 @@ export default function App() {
             <Route path="/payments" element={<PaymentsPage key="payments" mode="payments" />} />
             <Route path="/chart-of-accounts" element={<ChartOfAccountsPage />} />
             <Route path="/journal-entries" element={<JournalEntriesPage />} />
-            <Route path="/accounting/overview" element={<AccountingDashboardPage />} />
+            <Route path="/accounting/dashboard" element={<AccountingDashboardPage />} />
+            {/* The old Accounting → Overview address, kept so bookmarks land on
+                its replacement, Dashboards → Accounting. */}
+            <Route path="/accounting/overview" element={<Navigate to="/accounting/dashboard" replace />} />
+            <Route path="/help/accounting" element={<UserGuidePage />} />
             <Route path="/accounting/reports" element={<AccountingReportsPage />} />
             <Route path="/accounting/reports/catalog" element={<AccountingCatalogPage />} />
             <Route path="/accounting/reports/catalog/:reportId" element={<AccountingCatalogPage />} />

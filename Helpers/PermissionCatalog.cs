@@ -286,6 +286,11 @@ namespace MyApp.Api.Helpers
             // work out the balance sheet — splitting them would suggest a
             // privacy boundary that does not exist.
             new("accounting.reports.view",    "Accounting", "Reports", "View",   "View the accounting reports: statements, party ledgers, aging, cash book, expenses, tax control and the dashboard"),
+            // The Dashboards → Accounting screen. Its own key so a role can be
+            // given the one-screen summary without the whole reporting suite;
+            // granted once at start-up to every role that already held
+            // accounting.reports.view (Program.cs, PERM_COPY_ACCOUNTING_DASHBOARD_V1).
+            new("accounting.dashboard.view",  "Accounting", "Dashboard", "View",   "View the accounting summary dashboard"),
 
             // ── Customer Portal ─────────────────────────────────────────────
             // Issuing a portal publishes a client's invoices to anyone holding

@@ -223,4 +223,101 @@ namespace MyApp.Api.DTOs
         public int JournalEntries { get; set; }
         public bool LedgerBalances { get; set; }
     }
+    // ── Accounting summary (Dashboards → Accounting) ──────────────────────
+
+    public class CashAccountBalanceDto
+    {
+        public int AccountId { get; set; }
+        public string Name { get; set; } = "";
+        public string? Code { get; set; }
+        /// <summary>Signed debit-positive closing balance at the period end,
+        /// the cash book's own figure.</summary>
+        public decimal Balance { get; set; }
+    }
+
+    /// <summary>The aged report's bucket totals without its party rows.
+    /// Named apart from the catalog's <c>AgingBucketsDto</c> so a file that
+    /// imports both namespaces never has to disambiguate.</summary>
+    public class SummaryAgingBucketsDto
+    {
+        public decimal Total { get; set; }
+        public decimal Current { get; set; }
+        public decimal Days1To30 { get; set; }
+        public decimal Days31To60 { get; set; }
+        public decimal Days61To90 { get; set; }
+        public decimal Over90 { get; set; }
+    }
+
+    public class PdcSummaryDto
+    {
+        public int Count { get; set; }
+        public decimal Amount { get; set; }
+        /// <summary>Cheques whose cheque date falls within the next 7 days
+        /// (or is already past and still not cleared).</summary>
+        public int DueSoonCount { get; set; }
+        public decimal DueSoonAmount { get; set; }
+    }
+
+    public class RecentMoneyDocDto
+    {
+        public int Id { get; set; }
+        public string Reference { get; set; } = "";
+        public DateTime Date { get; set; }
+        public decimal Amount { get; set; }
+        public string? ContactName { get; set; }
+        public string? Description { get; set; }
+    }
+
+    /// <summary>
+    /// Everything the accounting dashboard shows, in one response. Like
+    /// <see cref="AccountingDashboardDto"/>, every ledger figure is the total of
+    /// a report that can be opened in full, taken FROM that report: cash from
+    /// the cash book, income and expenses from the profit and loss, receivables
+    /// and payables from the aged reports, tax positions from tax control. The
+    /// receipt / payment / cheque figures are the payment subledger itself.
+    /// </summary>
+    public class AccountingSummaryDto
+    {
+        public DateTime From { get; set; }
+        public DateTime To { get; set; }
+        public bool GlEnabled { get; set; }
+
+        // Cash & liquidity — closing balances at the period end.
+        public decimal CashAndBankTotal { get; set; }
+        public List<CashAccountBalanceDto> CashAccounts { get; set; } = new();
+
+        // Working capital, aged as at the period end.
+        public SummaryAgingBucketsDto Receivables { get; set; } = new();
+        public SummaryAgingBucketsDto Payables { get; set; } = new();
+
+        // Profitability for the period.
+        public decimal Income { get; set; }
+        public decimal Expenses { get; set; }
+        public decimal NetProfit { get; set; }
+
+        // Money movement in the period.
+        public int ReceiptCount { get; set; }
+        public decimal ReceiptsTotal { get; set; }
+        public int PaymentCount { get; set; }
+        public decimal PaymentsTotal { get; set; }
+
+        // Cheques not yet cleared (pending or deposited), whenever written.
+        public PdcSummaryDto PdcIn { get; set; } = new();
+        public PdcSummaryDto PdcOut { get; set; } = new();
+
+        public List<RecentMoneyDocDto> RecentReceipts { get; set; } = new();
+        public List<RecentMoneyDocDto> RecentPayments { get; set; } = new();
+
+        // Tax positions for the period, per the ledger (tax control's figure).
+        public decimal OutputTax { get; set; }
+        public decimal InputTax { get; set; }
+        public decimal FurtherTaxPayable { get; set; }
+        public decimal WithholdingReceivable { get; set; }
+        public decimal WithholdingPayable { get; set; }
+
+        /// <summary>Ledger health — entry count, debit/credit totals, lock
+        /// date. Carried here so the dashboard needs no second permission to
+        /// show it.</summary>
+        public GlStatusDto Ledger { get; set; } = new();
+    }
 }

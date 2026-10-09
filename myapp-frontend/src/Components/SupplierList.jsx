@@ -1,4 +1,5 @@
-import { MdEmail, MdPhone, MdLocationOn, MdEdit, MdDelete, MdContentCopy } from "react-icons/md";
+import { MdEmail, MdPhone, MdLocationOn, MdEdit, MdDelete, MdContentCopy, MdReceiptLong } from "react-icons/md";
+import { useNavigate } from "react-router-dom";
 import { deleteSupplier } from "../api/supplierApi";
 import { cardStyles, cardHover } from "../theme";
 import { useConfirm } from "./ConfirmDialog";
@@ -11,6 +12,14 @@ export default function SupplierList({ suppliers, onEdit, onCopy, fetchSuppliers
   const canUpdate = has("suppliers.manage.update");
   const canDelete = has("suppliers.manage.delete");
   const canCopy = has("suppliers.manage.copy");
+  // Statement opens the accounting report supplier-statement for this supplier, so it
+  // carries that report's permission — a role without it never sees a button
+  // that would land on a refusal. All periods: a statement answers "how did
+  // this balance come about", which is the whole history.
+  const canStatement = has("accounting.reports.view");
+  const navigate = useNavigate();
+  const openStatement = (s) =>
+    navigate(`/accounting/reports/catalog/supplier-statement?${new URLSearchParams({ period: "allPeriods", supplierId: String(s.id) })}`);
 
   const handleDelete = async (s) => {
     if (s.hasPurchaseBills) {
@@ -85,7 +94,7 @@ export default function SupplierList({ suppliers, onEdit, onCopy, fetchSuppliers
                 </p>
               )}
             </div>
-            {(canUpdate || canDelete || canCopy) && (
+            {(canUpdate || canDelete || canCopy || canStatement) && (
               <div style={cardStyles.buttonGroup}>
                 {canUpdate && (
                   <button
@@ -93,6 +102,16 @@ export default function SupplierList({ suppliers, onEdit, onCopy, fetchSuppliers
                     onClick={() => onEdit(supplier)}
                   >
                     <MdEdit /> Edit
+                  </button>
+                )}
+                {canStatement && (
+                  <button
+                    type="button"
+                    style={{ ...cardStyles.button, backgroundColor: "#e0f2f1", color: "#00695c", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
+                    onClick={() => openStatement(supplier)}
+                    title="Open this supplier's statement"
+                  >
+                    <MdReceiptLong /> Statement
                   </button>
                 )}
                 {canCopy && onCopy && (

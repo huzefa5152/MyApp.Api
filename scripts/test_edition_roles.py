@@ -54,7 +54,7 @@ VENDOR_ONLY_MODULES = {"RBAC", "Users", "AuditLogs", "Tenant Access"}
 # The keys the accounting module added. Receipts / payments / payment status are
 # deliberately NOT here - see the docstring.
 ACCOUNTING_PREFIXES = (
-    "accounting.coa.", "accounting.gl.", "accounting.journal.",
+    "accounting.coa.", "accounting.dashboard.", "accounting.gl.", "accounting.journal.",
     "accounting.reports.", "accounting.transfers.", "accounting.reconciliation.", "customerportals.",
 )
 
@@ -198,7 +198,7 @@ def main() -> int:
             if key in all_keys:
                 check("3", f"Sales Edition has {key}", key in got_sales, "missing")
         for key in ("accounting.coa.view", "accounting.gl.view", "accounting.journal.view",
-                    "accounting.reports.view", "customerportals.manage.view"):
+                    "accounting.reports.view", "accounting.dashboard.view", "customerportals.manage.view"):
             if key in all_keys:
                 check("3", f"Sales Edition does NOT have {key}", key not in got_sales, "present")
 

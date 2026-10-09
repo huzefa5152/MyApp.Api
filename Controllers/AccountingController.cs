@@ -7,8 +7,8 @@ using MyApp.Api.Services.Interfaces;
 namespace MyApp.Api.Controllers
 {
     /// <summary>
-    /// The general ledger itself: its status, the period close, and the trial
-    /// balance.
+    /// The general ledger itself: its status, the period close, the trial
+    /// balance, and the accounting dashboard's summary.
     ///
     /// There is no endpoint that turns GL posting OFF, and that is deliberate —
     /// see <c>Company.GlPostingEnabled</c>. A company whose documents have been
@@ -22,13 +22,15 @@ namespace MyApp.Api.Controllers
     {
         private readonly IGeneralLedgerService _gl;
         private readonly IPostingService _posting;
+        private readonly IAccountingReportService _reports;
         private readonly ILogger<AccountingController> _logger;
 
         public AccountingController(IGeneralLedgerService gl, IPostingService posting,
-            ILogger<AccountingController> logger)
+            IAccountingReportService reports, ILogger<AccountingController> logger)
         {
             _gl = gl;
             _posting = posting;
+            _reports = reports;
             _logger = logger;
         }
 
@@ -95,6 +97,24 @@ namespace MyApp.Api.Controllers
             {
                 _logger.LogError(ex, "Trial balance failed for company {CompanyId}", companyId);
                 return StatusCode(500, new { error = "Could not build the trial balance." });
+            }
+        }
+
+        /// <summary>The accounting dashboard (Dashboards → Accounting). One
+        /// read for the whole screen; every ledger figure is taken from the
+        /// report a card opens, so the two cannot disagree. From/To default to
+        /// the current month to date.</summary>
+        [HttpGet("summary/company/{companyId}")]
+        [HasPermission("accounting.dashboard.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<AccountingSummaryDto>> GetSummary(
+            int companyId, [FromQuery] DateTime? from = null, [FromQuery] DateTime? to = null)
+        {
+            try { return Ok(await _reports.GetSummaryAsync(companyId, from, to)); }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Accounting summary failed for company {CompanyId}", companyId);
+                return StatusCode(500, new { error = "Could not build the accounting summary." });
             }
         }
     }

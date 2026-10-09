@@ -1953,6 +1953,33 @@ using (var scope = app.Services.CreateScope())
     // with no saved memberships stays private to the seed admin until assigned;
     // startup must never recreate grants an operator deliberately removed.
 
+    // ── One-time perm copy: accounting.reports.view → accounting.dashboard.view ──
+    // The accounting dashboard (Dashboards → Accounting) used to be the
+    // "Overview" screen under accounting.reports.view. It now has its own key;
+    // every role that could open the old screen keeps the new one. RbacSeeder
+    // has just inserted the permission row from the catalog. Run once (marker),
+    // so an administrator who later removes the key from a role is not
+    // overruled on the next boot.
+    db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'PERM_COPY_ACCOUNTING_DASHBOARD_V1')
+        BEGIN
+            DECLARE @reportsId   INT = (SELECT Id FROM Permissions WHERE [Key] = 'accounting.reports.view');
+            DECLARE @dashboardId INT = (SELECT Id FROM Permissions WHERE [Key] = 'accounting.dashboard.view');
+            IF @reportsId IS NOT NULL AND @dashboardId IS NOT NULL
+            BEGIN
+                INSERT INTO RolePermissions (RoleId, PermissionId)
+                SELECT rp.RoleId, @dashboardId FROM RolePermissions rp
+                WHERE rp.PermissionId = @reportsId
+                  AND NOT EXISTS (SELECT 1 FROM RolePermissions x WHERE x.RoleId = rp.RoleId AND x.PermissionId = @dashboardId);
+                -- Marked only once the copy could run: a boot that somehow
+                -- lacks the row must not mark the copy done without doing it.
+                INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp])
+                VALUES ('Info', 'PERM_COPY_ACCOUNTING_DASHBOARD_V1', 'Permission grant copy applied once; an administrator''s later removal is kept.',
+                        'STARTUP', '/migrations/perm-copy-accounting-dashboard', 200, SYSUTCDATETIME());
+            END
+        END
+    ");
+
     // ── One-time perm grant: tenantaccess.manage.* → Administrator role ──
     // The new keys are inserted by RbacSeeder (it walks PermissionCatalog),
     // but RolePermissions is empty for them by default. Grant them to the

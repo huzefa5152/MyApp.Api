@@ -281,6 +281,11 @@ endpoints_to_test = [
     ("GET",  "/api/payments/payments/company/{cid}/paged"),
     ("GET",  "/api/payments/company/{cid}/by-invoice/1"),
     ("GET",  "/api/payments/company/{cid}/by-bill/1"),
+    # Dashboards → Accounting. One read carries another company's cash
+    # balances, aging, recent receipts / payments and ledger health, so it is
+    # [AuthorizeCompany]-gated and must 403 before any figure is computed.
+    ("GET",  "/api/accounting/summary/company/{cid}"),
+    ("GET",  "/api/accounting/summary/company/{cid}?from=2026-01-01&to=2026-12-31"),
     # Document folders + unified attachments — [AuthorizeCompany]-gated
     # companyId routes; a forbidden company 403s before the action runs.
     ("GET",  "/api/folders/company/{cid}"),

@@ -68,8 +68,15 @@ export const ROUTE_PERMISSIONS = {
   // Accounting module
   "/chart-of-accounts": "accounting.coa.view",
   "/journal-entries": "accounting.journal.view",
-  "/accounting/overview": "accounting.reports.view",
+  "/accounting/dashboard": "accounting.dashboard.view",
+  // The old Overview address — now only a redirect to /accounting/dashboard,
+  // gated on the same key so the redirect never lands on a refusal it could
+  // have given itself.
+  "/accounting/overview": "accounting.dashboard.view",
+  // The Accounting Guide is static help text, no tenant data.
+  "/help/accounting": PUBLIC_TO_SIGNED_IN,
   "/accounting/reports/catalog": "accounting.reports.view",
+  "/accounting/reports/catalog/:reportId": "accounting.reports.view",
   "/accounting/reports": "accounting.reports.view",
   "/customer-portals": "customerportals.manage.view",
 
@@ -116,6 +123,17 @@ export const ROUTE_PERMISSIONS = {
 export function permissionForPath(pathname) {
   if (Object.prototype.hasOwnProperty.call(ROUTE_PERMISSIONS, pathname)) {
     return ROUTE_PERMISSIONS[pathname];
+  }
+  // Parameterised entries ("/accounting/reports/catalog/:reportId"): a ":name"
+  // segment matches exactly one path segment. Without this a route with a
+  // parameter could be mapped (and pass the router/map check) yet every real
+  // address under it was refused at runtime.
+  const parts = pathname.split("/");
+  for (const [pattern, key] of Object.entries(ROUTE_PERMISSIONS)) {
+    if (!pattern.includes("/:")) continue;
+    const want = pattern.split("/");
+    if (want.length !== parts.length) continue;
+    if (want.every((seg, i) => seg.startsWith(":") ? parts[i] !== "" : seg === parts[i])) return key;
   }
   // Wildcard entries ("/companies/*"). Longest prefix wins so a more specific
   // pattern can be added later without reordering the object.
