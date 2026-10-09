@@ -1003,7 +1003,7 @@ const expAccountCell = { minWidth: 0 };
 const expAmountCell = { minWidth: 0 };
 const expTaxCell = { minWidth: 0 };
 const expRemove = {
-  display: "grid", placeItems: "center", width: 44, height: 44,
+  display: "grid", placeItems: "center", width: 44, height: 44, padding: 0,
   border: `1px solid ${colors.inputBorder}`, borderRadius: 8, background: colors.inputBg,
   color: colors.textSecondary, fontSize: "1.1rem", cursor: "pointer",
 };

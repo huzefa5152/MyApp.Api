@@ -421,7 +421,7 @@ const st = {
   ctrlBadge: { fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", background: "#e3f2fd", color: "#0d47a1", padding: "1px 5px", borderRadius: 10 },
   accAmt: { color: colors.textSecondary, fontSize: "0.8rem", minWidth: 70, textAlign: "right" },
   rowActions: { display: "flex", gap: 2 },
-  iconBtn: { display: "grid", placeItems: "center", width: 26, height: 26, borderRadius: 6, border: "none", background: "transparent", color: colors.textSecondary, cursor: "pointer" },
+  iconBtn: { display: "grid", placeItems: "center", width: 26, height: 26, padding: 0, borderRadius: 6, border: "none", background: "transparent", color: colors.textSecondary, cursor: "pointer" },
   seedBox: { display: "flex", flexDirection: "column", alignItems: "center", gap: "0.5rem", padding: "2.5rem 1rem", background: colors.cardBg, border: `1px dashed ${colors.inputBorder}`, borderRadius: 12 },
   empty: { padding: "2rem", textAlign: "center", color: colors.textSecondary },
   emptyCol: { padding: "1rem", color: colors.textSecondary, fontSize: "0.85rem" },

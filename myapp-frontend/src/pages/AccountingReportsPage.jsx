@@ -736,7 +736,7 @@ const st = {
     background: "#f7f9fc",
   },
   categoryIcon: {
-    display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 10,
+    display: "grid", placeItems: "center", width: 34, height: 34, padding: 0, borderRadius: 10,
     background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, flexShrink: 0,
   },
   categoryTitle: { margin: 0, fontSize: "0.98rem", fontWeight: 800, color: colors.textPrimary },

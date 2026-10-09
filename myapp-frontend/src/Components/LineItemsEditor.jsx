@@ -522,7 +522,7 @@ const s = {
   cellInput: { width: "100%", padding: "0.5rem 0.55rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.88rem", backgroundColor: colors.inputBg, color: "#1a2332", outline: "none", boxSizing: "border-box" },
   hint: { fontSize: "0.7rem", color: colors.teal, marginTop: 2, fontWeight: 600 },
   lockHint: { fontSize: "0.7rem", color: colors.textSecondary, marginTop: 2, fontStyle: "italic" },
-  del: { display: "grid", placeItems: "center", width: 44, height: 44, borderRadius: 8, border: `1px solid ${colors.danger}25`, backgroundColor: colors.dangerLight, color: colors.danger, cursor: "pointer", margin: "0 auto" },
+  del: { display: "grid", placeItems: "center", width: 44, height: 44, padding: 0, borderRadius: 8, border: `1px solid ${colors.danger}25`, backgroundColor: colors.dangerLight, color: colors.danger, cursor: "pointer", margin: "0 auto" },
   addRow: { display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "0.6rem", flexWrap: "wrap" },
   addBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.5rem 0.9rem", borderRadius: 8, border: "none", backgroundColor: `${colors.teal}14`, color: colors.teal, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", minHeight: 44 },
   // Mobile stacked-card line items (below narrowBreakpoint).

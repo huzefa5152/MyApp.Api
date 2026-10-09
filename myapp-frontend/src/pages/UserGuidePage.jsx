@@ -270,7 +270,7 @@ const st = {
   searchWrap: { position: "relative", marginBottom: "0.6rem" },
   searchIcon: { position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: colors.textSecondary, pointerEvents: "none" },
   search: { width: "100%", minHeight: 40, padding: "0.45rem 2rem 0.45rem 2rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 8, background: colors.inputBg, color: colors.textPrimary, fontSize: "0.85rem" },
-  searchClear: { position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", display: "grid", placeItems: "center", width: 26, height: 26, border: "none", borderRadius: 6, background: "transparent", color: colors.textSecondary, cursor: "pointer" },
+  searchClear: { position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", display: "grid", placeItems: "center", width: 26, height: 26, padding: 0, border: "none", borderRadius: 6, background: "transparent", color: colors.textSecondary, cursor: "pointer" },
   matchCount: { padding: "0 0.35rem 0.5rem", color: colors.textSecondary, fontSize: "0.75rem" },
 
   navGroup: { marginBottom: "0.6rem" },

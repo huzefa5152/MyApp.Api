@@ -722,7 +722,7 @@ const st = {
   page: { padding: "clamp(0.75rem, 2vw, 1.5rem)", maxWidth: 1480, margin: "0 auto" },
 
   headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1rem" },
-  headerIcon: { display: "grid", placeItems: "center", width: 44, height: 44, borderRadius: 12, flexShrink: 0, background: `${colors.blue}15`, color: colors.blue },
+  headerIcon: { display: "grid", placeItems: "center", width: 44, height: 44, padding: 0, borderRadius: 12, flexShrink: 0, background: `${colors.blue}15`, color: colors.blue },
   h2: { margin: 0, fontSize: "1.4rem", color: colors.textPrimary, lineHeight: 1.1 },
   subtitle: { fontSize: "0.8rem", color: colors.textSecondary, marginTop: 2 },
 
@@ -786,7 +786,7 @@ const st = {
   accentStrip: { width: 5, flexShrink: 0 },
   cardBody: { padding: "0.9rem 1rem", flex: 1, minWidth: 0 },
   cardLabelRow: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6 },
-  cardIcon: { display: "grid", placeItems: "center", width: 28, height: 28, borderRadius: 8, flexShrink: 0 },
+  cardIcon: { display: "grid", placeItems: "center", width: 28, height: 28, padding: 0, borderRadius: 8, flexShrink: 0 },
   cardLabel: { fontSize: "0.78rem", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.05em", minWidth: 0, ...clamp2 },
   cardValue: { fontSize: "1.45rem", fontWeight: 800, lineHeight: 1.15, wordBreak: "break-word", fontVariantNumeric: "tabular-nums" },
   cardSub: { fontSize: "0.78rem", color: colors.textSecondary, marginTop: 4 },
@@ -828,7 +828,7 @@ const st = {
     boxShadow: "0 10px 28px -12px rgba(13,71,161,0.5)", marginBottom: "0.35rem",
   },
   calloutIcon: {
-    display: "grid", placeItems: "center", width: 48, height: 48, borderRadius: 12,
+    display: "grid", placeItems: "center", width: 48, height: 48, padding: 0, borderRadius: 12,
     background: "rgba(255,255,255,0.16)", border: "1px solid rgba(255,255,255,0.3)", flexShrink: 0,
   },
   calloutTitle: { fontSize: "1.05rem", fontWeight: 800 },

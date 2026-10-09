@@ -308,7 +308,7 @@ const s = {
   head: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" },
   title: { margin: 0, fontSize: "1.02rem", fontWeight: 700, color: "#1a2332" },
   close: { border: "none", background: "transparent", cursor: "pointer", color: "#5f6d7e",
-    display: "grid", placeItems: "center", width: 32, height: 32, borderRadius: 6 },
+    display: "grid", placeItems: "center", width: 32, height: 32, padding: 0, borderRadius: 6 },
   row: { display: "flex", gap: "0.6rem", flexWrap: "wrap", marginBottom: "0.6rem" },
   lbl: { display: "flex", flexDirection: "column", gap: 4, flex: "1 1 150px",
     fontSize: "0.74rem", fontWeight: 700, color: "#5f6d7e", textTransform: "uppercase",

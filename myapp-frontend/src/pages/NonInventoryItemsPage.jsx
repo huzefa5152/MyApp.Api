@@ -242,9 +242,9 @@ const styles = {
   badgeActive: { fontSize: "0.72rem", fontWeight: 700, color: "#00695c", background: "#e0f2f1", padding: "0.15rem 0.5rem", borderRadius: 8 },
   badgeInactive: { fontSize: "0.72rem", fontWeight: 700, color: "#8d6e63", background: "#efebe9", padding: "0.15rem 0.5rem", borderRadius: 8 },
   actionRow: { display: "flex", gap: 4, justifyContent: "flex-end" },
-  iconBtn: { display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: 8, border: "none", cursor: "pointer" },
+  iconBtn: { display: "grid", placeItems: "center", width: 30, height: 30, padding: 0, borderRadius: 8, border: "none", cursor: "pointer" },
   // Mobile (<768px) stacked-card fallback for the wide table.
-  mIconBtn: { display: "grid", placeItems: "center", width: 44, height: 44, borderRadius: 8, border: "none", cursor: "pointer" },
+  mIconBtn: { display: "grid", placeItems: "center", width: 44, height: 44, padding: 0, borderRadius: 8, border: "none", cursor: "pointer" },
   cardList: { display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: 8 },
   card: { ...cardStyles.card, padding: "0.85rem 0.95rem" },
   cardName: { fontWeight: 700, fontSize: "0.95rem", color: colors.textPrimary, lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },

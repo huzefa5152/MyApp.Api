@@ -391,9 +391,9 @@ const styles = {
   tdActions: { padding: "0.4rem 0.5rem", verticalAlign: "middle" },
   divTag: { marginLeft: 8, fontSize: "0.68rem", fontWeight: 700, color: "#4527a0", background: "#ede7f6", padding: "0.1rem 0.4rem", borderRadius: 8 },
   actionRow: { display: "flex", gap: 4, justifyContent: "flex-end" },
-  iconBtn: { display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: 8, border: "none", cursor: "pointer" },
+  iconBtn: { display: "grid", placeItems: "center", width: 30, height: 30, padding: 0, borderRadius: 8, border: "none", cursor: "pointer" },
   // Mobile (<768px) stacked-card fallback for the wide table.
-  mIconBtn: { display: "grid", placeItems: "center", width: 44, height: 44, borderRadius: 8, border: "none", cursor: "pointer" },
+  mIconBtn: { display: "grid", placeItems: "center", width: 44, height: 44, padding: 0, borderRadius: 8, border: "none", cursor: "pointer" },
   cardList: { display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: 8 },
   card: { ...cardStyles.card, padding: "0.85rem 0.95rem" },
   cardNum: { fontWeight: 700, fontSize: "0.95rem", color: colors.blue },

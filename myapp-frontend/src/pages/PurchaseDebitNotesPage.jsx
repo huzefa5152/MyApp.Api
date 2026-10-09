@@ -348,9 +348,9 @@ const styles = {
   tfMoney: { padding: "0.6rem 0.75rem", textAlign: "right", fontWeight: 800, color: colors.blue, whiteSpace: "nowrap" },
   divTag: { marginLeft: 6, padding: "0.1rem 0.4rem", borderRadius: 4, background: "#eef2ff", color: colors.blue, fontSize: "0.68rem", fontWeight: 700 },
   newBtn: { display: "inline-flex", alignItems: "center", gap: 6, padding: "0.55rem 0.9rem", borderRadius: 8, border: "none", background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, color: "#fff", fontSize: "0.88rem", fontWeight: 600, cursor: "pointer" },
-  iconBtn: { display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: 8, border: "none", cursor: "pointer" },
+  iconBtn: { display: "grid", placeItems: "center", width: 30, height: 30, padding: 0, borderRadius: 8, border: "none", cursor: "pointer" },
   // Mobile (<768px) stacked-card fallback for the wide table.
-  mIconBtn: { display: "grid", placeItems: "center", width: 44, height: 44, borderRadius: 8, border: "none", cursor: "pointer" },
+  mIconBtn: { display: "grid", placeItems: "center", width: 44, height: 44, padding: 0, borderRadius: 8, border: "none", cursor: "pointer" },
   cardList: { display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: 8 },
   card: { ...cardStyles.card, padding: "0.85rem 0.95rem" },
   cardNum: { fontWeight: 700, fontSize: "0.95rem", color: colors.blue },
