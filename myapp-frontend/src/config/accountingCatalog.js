@@ -1,0 +1,870 @@
+// ════════════════════════════════════════════════════════════════════════════
+//  The accounting report registry.
+//
+//  One declarative list drives: the categorised index page, each report's
+//  filter bar, its Excel export, and its drill-down targets. A new report is a
+//  backend method plus an entry here — never a new screen.
+//
+//  Field notes
+//    id        stable slug; also the Excel export id the server dispatches on
+//    path      route segment under /accounting/reports/company/{id}/
+//    filters   which controls the shared filter bar renders, in order
+//    exportId  omit to reuse `id`; set when several reports share one export
+//    drill     { filter } — the filter a group row sets when clicked through
+//
+//  Categories mirror the ten the business asked for. Ones whose reports are not
+//  built yet carry `status: "planned"` so the index can show the roadmap
+//  honestly instead of pretending a link exists.
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Every filter control the bar knows how to render. */
+export const FILTERS = {
+  period: "period",
+  account: "account",
+  accountGroup: "accountGroup",
+  paymentAccount: "paymentAccount",
+  payeeType: "payeeType",
+  payee: "payee",
+  client: "client",
+  supplier: "supplier",
+  tax: "tax",
+  status: "status",
+  search: "search",
+};
+
+/** Date presets, matching Helpers/ReportPeriod.cs exactly. */
+export const PERIOD_OPTIONS = [
+  { value: "thisMonth", label: "This Month" },
+  { value: "lastMonth", label: "Last Month" },
+  { value: "today", label: "Today" },
+  { value: "thisWeek", label: "This Week" },
+  { value: "thisQuarter", label: "This Quarter" },
+  { value: "thisYear", label: "This Year" },
+  { value: "lastYear", label: "Last Year" },
+  { value: "custom", label: "Custom range…" },
+  { value: "allPeriods", label: "All Periods" },
+];
+
+const EXPENSE_FILTERS = [
+  FILTERS.period,
+  FILTERS.account,
+  FILTERS.accountGroup,
+  FILTERS.payeeType,
+  FILTERS.payee,
+  FILTERS.paymentAccount,
+  FILTERS.tax,
+  FILTERS.status,
+  FILTERS.search,
+];
+
+const CUSTOMER_FILTERS = [
+  FILTERS.period,
+  FILTERS.client,
+  FILTERS.status,
+  FILTERS.search,
+];
+
+const SUPPLIER_FILTERS = [
+  FILTERS.period,
+  FILTERS.supplier,
+  FILTERS.status,
+  FILTERS.search,
+];
+
+const SALES_FILTERS = [
+  FILTERS.period,
+  FILTERS.client,
+  FILTERS.tax,
+  FILTERS.status,
+  FILTERS.search,
+];
+
+const PURCHASE_FILTERS = [
+  FILTERS.period,
+  FILTERS.supplier,
+  FILTERS.tax,
+  FILTERS.status,
+  FILTERS.search,
+];
+
+const TAX_FILTERS = [
+  FILTERS.period,
+  FILTERS.client,
+  FILTERS.supplier,
+  FILTERS.status,
+];
+
+const MONEY_FILTERS = [
+  FILTERS.period,
+  FILTERS.paymentAccount,
+  FILTERS.payeeType,
+  FILTERS.payee,
+  FILTERS.tax,
+  FILTERS.status,
+  FILTERS.search,
+];
+
+export const REPORT_CATEGORIES = [
+  {
+    id: "expenses",
+    title: "Expenses",
+    blurb: "Where the company's money went — by account, payee, category or date.",
+    reports: [
+      {
+        id: "expenses",
+        path: "expenses",
+        title: "Company Expense Report",
+        blurb: "Every expense in the period, with by-account and by-payee breakdowns.",
+        filters: EXPENSE_FILTERS,
+        featured: true,
+        // Its by-Account / by-Payee blocks drill into the flat detail list. The
+        // server names the filter per block (accountId / payeeId), so one target
+        // serves both.
+        detailTarget: "expenses-detail",
+      },
+      {
+        id: "expenses-detail",
+        path: "expenses/detail",
+        title: "Expense Detail",
+        blurb: "The same rows as a flat, sortable list with no summary blocks.",
+        filters: EXPENSE_FILTERS,
+      },
+      {
+        id: "expenses-summary",
+        path: "expenses/summary",
+        title: "Expense Summary",
+        blurb: "Totals per expense account for the period.",
+        filters: EXPENSE_FILTERS,
+        query: { groupBy: "account" },
+        exportId: "expenses-summary",
+        detailTarget: "expenses-detail",
+      },
+      {
+        id: "expenses-by-account",
+        path: "expenses/summary",
+        title: "Expenses by Account",
+        blurb: "Which accounts absorbed the spend. Click a row for its detail.",
+        filters: EXPENSE_FILTERS,
+        query: { groupBy: "account" },
+        exportId: "expenses-summary",
+        drill: { filter: "accountId", to: "expenses-detail" },
+      },
+      {
+        id: "expenses-by-payee",
+        path: "expenses/summary",
+        title: "Expenses by Payee",
+        blurb: "Who the company paid, largest first.",
+        filters: EXPENSE_FILTERS,
+        query: { groupBy: "payee" },
+        exportId: "expenses-summary",
+        drill: { filter: "payeeId", to: "expenses-detail" },
+      },
+      {
+        id: "expenses-by-category",
+        path: "expenses/summary",
+        title: "Expenses by Category",
+        // Named honestly: there is no separate category concept in this product,
+        // the grouping is the account's Chart-of-Accounts group.
+        blurb: "Grouped by Chart-of-Accounts group — rent, utilities, travel and so on.",
+        filters: EXPENSE_FILTERS,
+        query: { groupBy: "group" },
+        exportId: "expenses-summary",
+        drill: { filter: "accountGroupId", to: "expenses-detail" },
+      },
+      {
+        id: "expenses-by-date",
+        path: "expenses/summary",
+        title: "Expenses by Date",
+        blurb: "Daily spend across the period, in date order.",
+        filters: EXPENSE_FILTERS,
+        query: { groupBy: "date" },
+        exportId: "expenses-summary",
+      },
+      {
+        id: "expenses-monthly",
+        path: "expenses/summary",
+        title: "Monthly Expenses",
+        blurb: "Month-by-month spend — the trend, not the transactions.",
+        filters: EXPENSE_FILTERS,
+        query: { groupBy: "month" },
+        exportId: "expenses-summary",
+      },
+      {
+        id: "expenses-by-payment-account",
+        path: "expenses/summary",
+        title: "Expenses by Payment Account",
+        blurb: "Which bank or cash account the spend left from.",
+        filters: EXPENSE_FILTERS,
+        query: { groupBy: "paymentAccount" },
+        exportId: "expenses-summary",
+        drill: { filter: "paymentAccountId", to: "expenses-detail" },
+      },
+      {
+        id: "expenses-by-tax",
+        path: "expenses/summary",
+        title: "Expenses by Tax",
+        blurb: "Spend split by the tax rate recorded on it.",
+        filters: EXPENSE_FILTERS,
+        query: { groupBy: "tax" },
+        exportId: "expenses-summary",
+      },
+    ],
+  },
+  {
+    id: "cash-bank",
+    title: "Cash & Bank",
+    blurb: "What you hold, what moved it, and what has not cleared yet.",
+    reports: [
+      {
+        id: "cash-bank-summary",
+        path: "cash-bank-summary",
+        title: "Cash & Bank Summary",
+        blurb: "Every bank and cash account: opening, movement, closing, uncleared cheques.",
+        filters: [FILTERS.period],
+        featured: true,
+        drill: { filter: "accountId", to: "bank-book" },
+      },
+      {
+        id: "cash-book",
+        path: "cash-book",
+        title: "Cash Book",
+        blurb: "Cash receipts and payments with a running balance.",
+        filters: [FILTERS.period, FILTERS.account],
+        accountKind: "cash",
+      },
+      {
+        id: "bank-book",
+        path: "bank-book",
+        title: "Bank Book",
+        blurb: "Bank receipts and payments with a running balance.",
+        filters: [FILTERS.period, FILTERS.account],
+        accountKind: "bank",
+      },
+      {
+        id: "receipts-register",
+        path: "receipts-register",
+        title: "Receipt Register",
+        blurb: "All money in, and what each receipt was applied to.",
+        filters: MONEY_FILTERS,
+      },
+      {
+        id: "payments-register",
+        path: "payments-register",
+        title: "Payment Register",
+        blurb: "All money out, and what each payment settled.",
+        filters: MONEY_FILTERS,
+        featured: true,
+      },
+      {
+        id: "receipts-by-account",
+        path: "receipts-by-account",
+        title: "Receipts by Account",
+        blurb: "Money in, grouped by what it was applied to.",
+        filters: MONEY_FILTERS,
+      },
+      {
+        id: "payments-by-account",
+        path: "payments-by-account",
+        title: "Payments by Account",
+        blurb: "Money out, grouped by what it was applied to.",
+        filters: MONEY_FILTERS,
+      },
+      {
+        id: "cheques-in-hand",
+        path: "cheques-in-hand",
+        title: "Cheques in Hand",
+        blurb: "Cheques received and not yet cleared, soonest due first.",
+        filters: [FILTERS.period, FILTERS.paymentAccount, FILTERS.payee, FILTERS.status],
+      },
+      {
+        id: "cheques-issued",
+        path: "cheques-issued",
+        title: "Cheques Issued",
+        blurb: "Cheques written and not yet cleared — money about to leave.",
+        filters: [FILTERS.period, FILTERS.paymentAccount, FILTERS.payee, FILTERS.status],
+      },
+      {
+        id: "unallocated",
+        path: "unallocated",
+        title: "Unallocated Payments",
+        blurb: "Advances with no invoice or bill against them yet, oldest first.",
+        filters: [FILTERS.period, FILTERS.payeeType, FILTERS.payee],
+      },
+    ],
+  },
+  {
+    id: "financial-statements",
+    title: "Financial Statements",
+    blurb: "The statutory view of the books.",
+    reports: [
+      {
+        id: "balance-sheet",
+        path: "balance-sheet",
+        title: "Balance Sheet",
+        blurb: "Assets, liabilities and equity as at a date, against the same date last year.",
+        filters: [FILTERS.period],
+        featured: true,
+        statementLayout: true,
+        drill: { filter: "accountId", to: "general-ledger" },
+      },
+      {
+        id: "profit-loss",
+        path: "profit-loss",
+        title: "Profit & Loss",
+        blurb: "Income, cost of sales and expenses for a period, against the period before it.",
+        filters: [FILTERS.period],
+        featured: true,
+        statementLayout: true,
+        drill: { filter: "accountId", to: "general-ledger" },
+      },
+      {
+        id: "trial-balance",
+        path: "trial-balance-report",
+        title: "Trial Balance",
+        blurb: "Opening, period debit and credit, and closing for every account.",
+        filters: [FILTERS.period],
+        featured: true,
+        exportId: "trial-balance-report",
+      },
+      {
+        id: "general-ledger",
+        path: "general-ledger",
+        title: "General Ledger",
+        blurb: "Every posting across all accounts in one chronological stream.",
+        filters: [FILTERS.period, FILTERS.account, FILTERS.accountGroup,
+                  FILTERS.status, FILTERS.search],
+      },
+      {
+        id: "account-balance-summary",
+        path: "account-balances",
+        title: "Account Balance Summary",
+        blurb: "Opening, movement and closing per account, filterable by group and type.",
+        filters: [FILTERS.period, FILTERS.account, FILTERS.accountGroup,
+                  FILTERS.status, FILTERS.search],
+        exportId: "account-balances",
+        drill: { filter: "accountId", to: "general-ledger" },
+      },
+    ],
+  },
+  {
+    id: "customers",
+    title: "Customers",
+    blurb: "Who owes you, how much, and how the balance arose.",
+    reports: [
+      {
+        id: "aged-receivables",
+        path: "receivables-aging",
+        title: "Accounts Receivable Aging",
+        blurb: "Outstanding customer balances bucketed by age. Click a customer for the invoices behind it.",
+        filters: [FILTERS.period, FILTERS.client, FILTERS.status, FILTERS.search],
+        featured: true,
+        drill: { filter: "clientId", to: "customer-outstanding" },
+      },
+      {
+        id: "customer-ledger",
+        path: "customer-ledger",
+        title: "Customer Ledger",
+        blurb: "Every transaction on a customer's account, any period including all-time.",
+        filters: CUSTOMER_FILTERS,
+        featured: true,
+      },
+      {
+        id: "customer-statement",
+        path: "customer-statement",
+        title: "Customer Statement",
+        blurb: "The same figures laid out to send to the customer, with an age breakdown.",
+        filters: [FILTERS.period, FILTERS.client],
+        statement: true,
+      },
+      {
+        id: "customer-balances",
+        path: "customer-balances",
+        title: "Customer Balance Summary",
+        blurb: "One line per customer: opening, invoiced, received, owed.",
+        filters: [FILTERS.period, FILTERS.search],
+        drill: { filter: "clientId", to: "customer-ledger" },
+      },
+      {
+        id: "customer-sales",
+        path: "customer-sales",
+        title: "Customer Sales",
+        blurb: "What each customer bought, by item and item type.",
+        filters: [FILTERS.period, FILTERS.client, FILTERS.search],
+      },
+      {
+        id: "customer-outstanding",
+        path: "customer-outstanding",
+        title: "Outstanding Invoices",
+        blurb: "Unpaid sales invoices, oldest debt first, with an age bucket each.",
+        filters: [FILTERS.period, FILTERS.client, FILTERS.search],
+        drill: { filter: "clientId", to: "customer-ledger" },
+      },
+      {
+        // Not a new report: the Receipt Register already answers this, scoped to
+        // one customer. A duplicate implementation would be a second place for
+        // the same figures to drift.
+        id: "customer-receipts",
+        path: "receipts-register",
+        title: "Customer Receipts",
+        blurb: "Every receipt taken from a customer — the Receipt Register, scoped to them.",
+        filters: MONEY_FILTERS,
+        exportId: "receipts-register",
+      },
+    ],
+  },
+  {
+    id: "suppliers",
+    title: "Suppliers",
+    blurb: "What you owe, to whom, and for how long.",
+    reports: [
+      {
+        id: "aged-payables",
+        path: "payables-aging",
+        title: "Accounts Payable Aging",
+        blurb: "Outstanding supplier balances bucketed by age. Click a supplier for the bills behind it.",
+        filters: [FILTERS.period, FILTERS.supplier, FILTERS.status, FILTERS.search],
+        featured: true,
+        drill: { filter: "supplierId", to: "supplier-outstanding" },
+      },
+      {
+        id: "supplier-ledger",
+        path: "supplier-ledger",
+        title: "Supplier Ledger",
+        blurb: "Every transaction on a supplier's account, any period including all-time.",
+        filters: SUPPLIER_FILTERS,
+        featured: true,
+      },
+      {
+        id: "supplier-statement",
+        path: "supplier-statement",
+        title: "Supplier Statement",
+        blurb: "A reconcilable statement of one supplier's account, with an age breakdown.",
+        filters: [FILTERS.period, FILTERS.supplier],
+        statement: true,
+      },
+      {
+        id: "supplier-balances",
+        path: "supplier-balances",
+        title: "Supplier Balance Summary",
+        blurb: "One line per supplier: opening, billed, paid, owed.",
+        filters: [FILTERS.period, FILTERS.search],
+        drill: { filter: "supplierId", to: "supplier-ledger" },
+      },
+      {
+        id: "supplier-purchases",
+        path: "supplier-purchases",
+        title: "Supplier Purchases",
+        blurb: "What was bought from each supplier, by item and item type.",
+        filters: [FILTERS.period, FILTERS.supplier, FILTERS.search],
+      },
+      {
+        id: "supplier-outstanding",
+        path: "supplier-outstanding",
+        title: "Outstanding Bills",
+        blurb: "Unpaid purchase bills, oldest debt first, with an age bucket each.",
+        filters: [FILTERS.period, FILTERS.supplier, FILTERS.search],
+        drill: { filter: "supplierId", to: "supplier-ledger" },
+      },
+      {
+        id: "supplier-payments",
+        path: "payments-register",
+        title: "Supplier Payments",
+        blurb: "Every payment made to a supplier — the Payment Register, scoped to them.",
+        filters: MONEY_FILTERS,
+        exportId: "payments-register",
+      },
+      {
+        id: "supplier-sales",
+        title: "Supplier Sales",
+        blurb: "Sales made to a supplier.",
+        status: "blocked",
+        // Stated on the card rather than quietly omitted, because it was asked
+        // for explicitly.
+        blockedReason:
+          "Not applicable in this system: a sales invoice is always raised to a Client, "
+          + "and suppliers are purchase-side only. If you ever sell to a supplier, add them "
+          + "as a customer too and they will appear in the customer reports.",
+      },
+    ],
+  },
+  {
+    id: "sales",
+    title: "Sales",
+    blurb: "What sold, to whom, and whether it has been paid.",
+    reports: [
+      {
+        id: "sales-invoice-register",
+        path: "sales-register",
+        title: "Sales Invoice Register",
+        blurb: "Every invoice with tax, paid and outstanding, and its payment status.",
+        filters: SALES_FILTERS,
+        featured: true,
+        exportId: "sales-register",
+        drill: { filter: "clientId", to: "customer-ledger" },
+      },
+      {
+        id: "sales-by-customer",
+        path: "customer-sales",
+        title: "Sales by Customer",
+        blurb: "Revenue per customer, with the item detail behind it.",
+        filters: [FILTERS.period, FILTERS.client, FILTERS.search],
+        exportId: "customer-sales",
+      },
+      {
+        id: "sales-by-item",
+        path: "sales-summary",
+        title: "Sales by Item",
+        blurb: "Revenue per item description, largest first.",
+        filters: SALES_FILTERS,
+        query: { groupBy: "item" },
+        exportId: "sales-summary",
+      },
+      {
+        id: "sales-by-item-type",
+        path: "sales-summary",
+        title: "Sales by Item Type",
+        blurb: "Revenue rolled up by item type.",
+        filters: SALES_FILTERS,
+        query: { groupBy: "itemType" },
+        exportId: "sales-summary",
+      },
+      {
+        id: "sales-by-account",
+        path: "sales-summary",
+        title: "Sales by Account",
+        blurb: "Which revenue accounts the sales landed on — read from the ledger.",
+        filters: SALES_FILTERS,
+        query: { groupBy: "account" },
+        exportId: "sales-summary",
+        drill: { filter: "accountId", to: "general-ledger" },
+      },
+      {
+        id: "sales-by-date",
+        path: "sales-summary",
+        title: "Sales by Date",
+        blurb: "Daily sales across the period, in date order.",
+        filters: SALES_FILTERS,
+        query: { groupBy: "date" },
+        exportId: "sales-summary",
+      },
+      {
+        id: "monthly-sales",
+        path: "sales-summary",
+        title: "Monthly Sales",
+        blurb: "Sales, tax and net per month — the trend.",
+        filters: SALES_FILTERS,
+        query: { groupBy: "month" },
+        exportId: "sales-summary",
+      },
+      {
+        id: "sales-by-tax",
+        path: "sales-summary",
+        title: "Sales by Tax",
+        blurb: "Sales split by the tax rate actually charged.",
+        filters: SALES_FILTERS,
+        query: { groupBy: "tax" },
+        exportId: "sales-summary",
+      },
+      {
+        id: "sales-payment-status",
+        path: "sales-payment-status",
+        title: "Sales Payment Status",
+        blurb: "Paid, part-paid, unpaid and overdue invoices at a glance.",
+        filters: SALES_FILTERS,
+        exportId: "sales-payment-status",
+      },
+      {
+        id: "credit-debit-notes",
+        path: "credit-debit-notes",
+        title: "Credit & Debit Notes",
+        blurb: "Sales returns and adjustments, with a split by note type.",
+        filters: [FILTERS.period, FILTERS.client, FILTERS.search],
+        exportId: "credit-debit-notes",
+      },
+      {
+        id: "sales-outstanding",
+        path: "customer-outstanding",
+        title: "Outstanding Sales Invoices",
+        blurb: "Unpaid invoices, oldest debt first — the same report as under Customers.",
+        filters: [FILTERS.period, FILTERS.client, FILTERS.search],
+        exportId: "customer-outstanding",
+      },
+    ],
+  },
+  {
+    id: "purchases",
+    title: "Purchases",
+    blurb: "What was bought, from whom, and what is still owed.",
+    reports: [
+      {
+        id: "purchase-bill-register",
+        path: "purchase-register",
+        title: "Purchase Bill Register",
+        blurb: "Every bill with tax, paid and outstanding, and its payment status.",
+        filters: PURCHASE_FILTERS,
+        featured: true,
+        exportId: "purchase-register",
+        drill: { filter: "supplierId", to: "supplier-ledger" },
+      },
+      {
+        id: "purchases-by-supplier",
+        path: "supplier-purchases",
+        title: "Purchases by Supplier",
+        blurb: "Spend per supplier, with the item detail behind it.",
+        filters: [FILTERS.period, FILTERS.supplier, FILTERS.search],
+        exportId: "supplier-purchases",
+      },
+      {
+        id: "purchases-by-item",
+        path: "purchase-summary",
+        title: "Purchases by Item",
+        blurb: "Value per item description, largest first.",
+        filters: PURCHASE_FILTERS,
+        query: { groupBy: "item" },
+        exportId: "purchase-summary",
+      },
+      {
+        id: "purchases-by-item-type",
+        path: "purchase-summary",
+        title: "Purchases by Item Type",
+        blurb: "Purchases rolled up by item type.",
+        filters: PURCHASE_FILTERS,
+        query: { groupBy: "itemType" },
+        exportId: "purchase-summary",
+      },
+      {
+        id: "purchases-by-account",
+        path: "purchase-summary",
+        title: "Purchases by Account",
+        blurb: "Which cost accounts the purchases landed on — read from the ledger.",
+        filters: PURCHASE_FILTERS,
+        query: { groupBy: "account" },
+        exportId: "purchase-summary",
+        drill: { filter: "accountId", to: "general-ledger" },
+      },
+      {
+        id: "purchases-by-date",
+        path: "purchase-summary",
+        title: "Purchases by Date",
+        blurb: "Daily purchases across the period, in date order.",
+        filters: PURCHASE_FILTERS,
+        query: { groupBy: "date" },
+        exportId: "purchase-summary",
+      },
+      {
+        id: "monthly-purchases",
+        path: "purchase-summary",
+        title: "Monthly Purchases",
+        blurb: "Purchases, tax and net per month — the trend.",
+        filters: PURCHASE_FILTERS,
+        query: { groupBy: "month" },
+        exportId: "purchase-summary",
+      },
+      {
+        id: "purchases-by-tax",
+        path: "purchase-summary",
+        title: "Purchases by Tax",
+        blurb: "Purchases split by the tax rate on the bill.",
+        filters: PURCHASE_FILTERS,
+        query: { groupBy: "tax" },
+        exportId: "purchase-summary",
+      },
+      {
+        id: "purchase-payment-status",
+        path: "purchase-payment-status",
+        title: "Purchase Payment Status",
+        blurb: "Paid, part-paid, unpaid and overdue bills.",
+        filters: PURCHASE_FILTERS,
+        exportId: "purchase-payment-status",
+      },
+      {
+        id: "purchases-outstanding",
+        path: "supplier-outstanding",
+        title: "Outstanding Purchase Bills",
+        blurb: "Unpaid bills, oldest debt first — the same report as under Suppliers.",
+        filters: [FILTERS.period, FILTERS.supplier, FILTERS.search],
+        exportId: "supplier-outstanding",
+      },
+    ],
+  },
+  {
+    id: "taxes",
+    title: "Taxes",
+    blurb: "Output tax collected, input tax paid, and the net position.",
+    reports: [
+      {
+        id: "tax-summary",
+        path: "tax-summary",
+        title: "Tax Summary",
+        blurb: "Output tax owed, input tax reclaimable, and the net position.",
+        filters: [FILTERS.period],
+        featured: true,
+        drill: { filter: "accountId", to: "tax-transactions" },
+      },
+      {
+        id: "output-tax",
+        path: "output-tax",
+        title: "Sales / Output Tax",
+        blurb: "Tax charged to customers, transaction by transaction.",
+        filters: TAX_FILTERS,
+      },
+      {
+        id: "input-tax",
+        path: "input-tax",
+        title: "Purchase / Input Tax",
+        blurb: "Tax paid to suppliers and on expenses — including expense tax.",
+        filters: TAX_FILTERS,
+      },
+      {
+        id: "tax-transactions",
+        path: "tax-transactions",
+        title: "Tax Transaction Detail",
+        blurb: "Every taxed posting behind the totals, both directions.",
+        filters: TAX_FILTERS,
+      },
+      {
+        id: "tax-by-customer",
+        path: "tax-by-customer",
+        title: "Tax by Customer",
+        blurb: "Output tax charged, per customer.",
+        filters: [FILTERS.period, FILTERS.client],
+        drill: { filter: "clientId", to: "output-tax" },
+      },
+      {
+        id: "tax-by-supplier",
+        path: "tax-by-supplier",
+        title: "Tax by Supplier",
+        blurb: "Input tax paid, per supplier.",
+        filters: [FILTERS.period, FILTERS.supplier],
+        drill: { filter: "supplierId", to: "input-tax" },
+      },
+    ],
+  },
+  {
+    id: "control",
+    title: "Accounting Control",
+    blurb: "Checks that the books hang together.",
+    reports: [
+      {
+        id: "journal-register",
+        path: "journal-register",
+        title: "Journal Register",
+        blurb: "Every journal entry, system-posted and manual, with its balance check.",
+        filters: [FILTERS.period, FILTERS.status, FILTERS.search],
+        featured: true,
+      },
+      {
+        id: "posting-exceptions",
+        path: "posting-exceptions",
+        title: "Posting Exceptions",
+        blurb: "Suspense postings, documents with no ledger entry, unbalanced entries — and what to do.",
+        filters: [FILTERS.period],
+      },
+    ],
+  },
+  {
+    id: "management",
+    title: "Management",
+    blurb: "The summary view for decisions.",
+    reports: [
+      {
+        id: "revenue-summary",
+        path: "revenue-summary",
+        title: "Revenue Summary",
+        blurb: "Income by account for the period, largest first.",
+        filters: [FILTERS.period, FILTERS.accountGroup],
+        featured: true,
+        drill: { filter: "accountId", to: "general-ledger" },
+      },
+      {
+        id: "expense-summary-accounts",
+        path: "expense-summary-accounts",
+        title: "Expense Summary",
+        blurb: "Expense by account for the period, largest first.",
+        filters: [FILTERS.period, FILTERS.accountGroup],
+        drill: { filter: "accountId", to: "general-ledger" },
+      },
+      {
+        id: "mgmt-monthly-sales",
+        path: "sales-summary",
+        title: "Monthly Sales",
+        blurb: "Sales, tax and net per month.",
+        filters: [FILTERS.period, FILTERS.client],
+        query: { groupBy: "month" },
+        exportId: "sales-summary",
+      },
+      {
+        id: "mgmt-monthly-purchases",
+        path: "purchase-summary",
+        title: "Monthly Purchases",
+        blurb: "Purchases, tax and net per month.",
+        filters: [FILTERS.period, FILTERS.supplier],
+        query: { groupBy: "month" },
+        exportId: "purchase-summary",
+      },
+      {
+        id: "mgmt-monthly-expenses",
+        path: "expenses/summary",
+        title: "Monthly Expenses",
+        blurb: "Spend per month — the trend, not the transactions.",
+        filters: [FILTERS.period, FILTERS.account],
+        query: { groupBy: "month" },
+        exportId: "expenses-summary",
+      },
+      {
+        id: "cash-flow",
+        path: "cash-flow",
+        title: "Cash Flow Summary",
+        blurb: "Money in, out and net by month, with the cash balance carried forward.",
+        filters: [FILTERS.period],
+        exportId: "cash-flow",
+      },
+      {
+        id: "monthly-profit",
+        title: "Monthly Profit",
+        blurb: "Revenue, cost of sales, gross profit and net profit per month.",
+        status: "blocked",
+        blockedReason:
+          "The revenue and expense halves are available from Monthly Sales and Monthly Expenses. "
+          + "The cost-of-sales half needs cost of goods sold, which is not recorded yet — see "
+          + "Gross Profit below.",
+      },
+      {
+        id: "gross-profit",
+        title: "Gross Profit",
+        blurb: "Revenue less cost of sales.",
+        status: "blocked",
+        // Stated on the card so nobody files this as a missing feature: the
+        // ledger has no cost of sales to report against yet.
+        blockedReason:
+          "Needs cost of sales. Sales invoices post revenue but nothing relieves inventory, "
+          + "so there is no cost to compare against yet.",
+      },
+      {
+        id: "customer-profitability",
+        title: "Customer Profitability",
+        blurb: "Margin per customer.",
+        status: "blocked",
+        blockedReason:
+          "Needs cost of sales — same dependency as Gross Profit.",
+      },
+    ],
+  },
+];
+
+/** Flat lookup by report id. */
+export const REPORTS_BY_ID = Object.fromEntries(
+  REPORT_CATEGORIES.flatMap((c) =>
+    c.reports.map((r) => [r.id, { ...r, categoryId: c.id, categoryTitle: c.title }])
+  )
+);
+
+/** Reports that are actually built (have a server path or a legacy tab). */
+export const isAvailable = (report) =>
+  !!report && !report.status && (!!report.path || !!report.legacy);
+
+/** The handful surfaced as quick links at the top of the index. */
+export const FEATURED_REPORT_IDS = REPORT_CATEGORIES
+  .flatMap((c) => c.reports)
+  .filter((r) => r.featured)
+  .map((r) => r.id);

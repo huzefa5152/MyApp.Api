@@ -211,11 +211,14 @@ export default function DashboardLayout() {
   ];
   const purchasesKeys = [
     "purchasebills.list.view",
+    "purchasedebitnotes.list.view",
     "goodsreceipts.list.view",
     "stock.dashboard.view",
     "fbrimport.purchase.preview",
   ];
   const accountingKeys = [
+    "accounting.transfers.view",
+    "accounting.reconciliation.view",
     "accounting.reports.view",
     "accounting.coa.view",
     "accounting.journal.view",
@@ -283,8 +286,8 @@ export default function DashboardLayout() {
     const p = location.pathname.toLowerCase();
     if (p === "/email-workspace") return "email-workspace";
     if (p.startsWith("/challans") || p === "/bills" || p === "/invoices" || p === "/credit-notes" || p === "/debit-notes" || p === "/credit-debit-notes" || p === "/item-rate-history" || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders")) return "sales";
-    if (p.startsWith("/purchase-bills") || p.startsWith("/goods-receipts") || p.startsWith("/stock") || p.startsWith("/fbr-import/purchase")) return "purchases";
-    if (p.startsWith("/withholding-tax-receipts") || p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/chart-of-accounts") || p.startsWith("/journal-entries") || p.startsWith("/accounting")) return "accounting";
+    if (p.startsWith("/purchase-bills") || p.startsWith("/purchase-debit-notes") || p.startsWith("/goods-receipts") || p.startsWith("/stock") || p.startsWith("/fbr-import/purchase")) return "purchases";
+    if (p.startsWith("/withholding-tax-receipts") || p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/bank-cash-accounts") || p.startsWith("/transfers") || p.startsWith("/chart-of-accounts") || p.startsWith("/journal-entries") || p.startsWith("/accounting")) return "accounting";
     if (p.startsWith("/reports")) return "reports";
     if (p.startsWith("/companies") || p.startsWith("/clients") || p.startsWith("/suppliers")
       || p.startsWith("/item-types") || p.startsWith("/units") || p.startsWith("/po-formats")
@@ -496,6 +499,12 @@ export default function DashboardLayout() {
                   <span>Purchase Bills</span>
                 </NavLink>
               </Can>
+              <Can permission="purchasedebitnotes.list.view">
+                <NavLink to="/purchase-debit-notes" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdReceiptLong className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Purchase Debit Notes</span>
+                </NavLink>
+              </Can>
               <Can permission="goodsreceipts.list.view">
                 <NavLink to="/goods-receipts" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdInventory2 className="dl-subitem__icon" aria-hidden="true" />
@@ -533,6 +542,18 @@ export default function DashboardLayout() {
                 </NavLink>
               </Can>
               <Can permission="accounting.coa.view">
+                <NavLink to="/bank-cash-accounts" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdAccountBalanceWallet className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Bank &amp; Cash Accounts</span>
+                </NavLink>
+              </Can>
+              <Can permission="accounting.transfers.view">
+                <NavLink to="/transfers" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdAccountBalanceWallet className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Internal Transfers</span>
+                </NavLink>
+              </Can>
+              <Can permission="accounting.coa.view">
                 <NavLink to="/chart-of-accounts" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdAccountTree className="dl-subitem__icon" aria-hidden="true" />
                   <span>Chart of Accounts</span>
@@ -556,7 +577,7 @@ export default function DashboardLayout() {
                 </NavLink>
               </Can>
               <Can permission="accounting.reports.view">
-                <NavLink to="/accounting/reports" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink to="/accounting/reports/catalog" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdAssessment className="dl-subitem__icon" aria-hidden="true" />
                   <span>Reports</span>
                 </NavLink>

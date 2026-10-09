@@ -20,3 +20,8 @@ export const defaultPaymentTemplate = classic(paymentStarters, "payment");
 
 import { withholdingTaxStarters } from "./starters/withholdingTax";
 export const defaultWithholdingTaxTemplate = classic(withholdingTaxStarters, "wht");
+
+import { transferStarters } from "./starters/transfer";
+import { journalEntryStarters } from "./starters/journalEntry";
+export const defaultTransferTemplate = classic(transferStarters, "transfer");
+export const defaultJournalEntryTemplate = classic(journalEntryStarters, "journal");

@@ -45,6 +45,7 @@ namespace MyApp.Api.Controllers
             "invoices.list.view", "invoices.manage.update.itemtype", "invoices.note.create",
             "purchasebills.list.view", "purchasebills.manage.create", "purchasebills.manage.update",
             "goodsreceipts.list.view", "goodsreceipts.manage.create", "goodsreceipts.manage.update",
+            "purchasedebitnotes.manage.create", "purchasedebitnotes.manage.update",
             "stock.dashboard.view")]
         public async Task<ActionResult<List<UnitDto>>> GetAll()
         {

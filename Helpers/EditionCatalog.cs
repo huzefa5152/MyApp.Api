@@ -131,6 +131,8 @@ namespace MyApp.Api.Helpers
             "accounting.gl.",
             "accounting.journal.",
             "accounting.reports.",
+            "accounting.transfers.",
+            "accounting.reconciliation.",
             "customerportals.",
         };
 

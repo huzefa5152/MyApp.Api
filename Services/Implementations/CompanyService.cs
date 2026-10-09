@@ -369,6 +369,12 @@ namespace MyApp.Api.Services.Implementations
                 await _context.GmailConnections.Where(c => emailConnectionIds.Contains(c.Id) && !_context.GmailCompanyLinks.Any(l => l.ConnectionId == c.Id && l.IsEnabled))
                     .ExecuteUpdateAsync(s => s.SetProperty(c => c.ProtectedRefreshToken, "").SetProperty(c => c.Status, "Disconnected"));
 
+                // Remove accounting dependants before payments, suppliers and accounts.
+                await _context.BankStatementImports.Where(s => s.CompanyId == id).ExecuteDeleteAsync();
+                await _context.BankReconciliations.Where(r => r.CompanyId == id).ExecuteDeleteAsync();
+                await _context.AccountTransfers.Where(t => t.CompanyId == id).ExecuteDeleteAsync();
+                await _context.PurchaseDebitNotes.Where(n => n.CompanyId == id).ExecuteDeleteAsync();
+
                 // 1. Unlink challans from invoices
                 await _context.DeliveryChallans
                     .Where(dc => dc.CompanyId == id && dc.InvoiceId != null)

@@ -52,6 +52,7 @@ export const ROUTE_PERMISSIONS = {
 
   // Purchases
   "/purchase-bills": "purchasebills.list.view",
+  "/purchase-debit-notes": "purchasedebitnotes.list.view",
   "/goods-receipts": "goodsreceipts.list.view",
   "/stock": "stock.dashboard.view",
   "/fbr-import/purchase": "fbrimport.purchase.preview",
@@ -59,6 +60,8 @@ export const ROUTE_PERMISSIONS = {
   // Money in / money out — part of the Sales edition, they predate the
   // accounting module and do not require the general ledger.
   "/withholding-tax-receipts": "withholdingtax.list.view",
+  "/bank-cash-accounts": "accounting.coa.view",
+  "/transfers": "accounting.transfers.view",
   "/receipts": "accounting.receipts.view",
   "/payments": "accounting.payments.view",
 
@@ -66,6 +69,7 @@ export const ROUTE_PERMISSIONS = {
   "/chart-of-accounts": "accounting.coa.view",
   "/journal-entries": "accounting.journal.view",
   "/accounting/overview": "accounting.reports.view",
+  "/accounting/reports/catalog": "accounting.reports.view",
   "/accounting/reports": "accounting.reports.view",
   "/customer-portals": "customerportals.manage.view",
 

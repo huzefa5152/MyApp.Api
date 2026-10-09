@@ -177,6 +177,7 @@ namespace MyApp.Api.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             ConfigureEmailWorkspace(modelBuilder);
+            ConfigureAccountingExpansion(modelBuilder);
             modelBuilder.Entity<DeliveryChallan>().Property(dc => dc.CreatedAt)
                 .HasDefaultValueSql("SYSUTCDATETIME()");
 

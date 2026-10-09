@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   MdMenuBook, MdAdd, MdEdit, MdDelete, MdSearch, MdBusiness, MdLock,
-  MdChevronLeft, MdChevronRight, MdClose,
+  MdChevronLeft, MdChevronRight, MdClose, MdPrint, MdPictureAsPdf,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -14,7 +14,13 @@ import useScrollToError from "../hooks/useScrollToError";
 import usePageSize from "../hooks/usePageSize";
 import AccountSelect from "../Components/AccountSelect";
 import { getAccountsFlat } from "../api/accountApi";
-import { getGlStatus } from "../api/accountingApi";
+import { getGlStatus, getJournalEntryPrintData } from "../api/accountingApi";
+import { usePrintTemplates } from "../hooks/usePrintTemplates";
+import PrintTemplateSelect from "../Components/PrintTemplateSelect";
+import { defaultJournalEntryTemplate } from "../utils/accountingDocTemplates";
+import { mergeTemplate } from "../utils/templateEngine";
+import { writeAndPrint } from "../utils/printDocument";
+import { exportToPdf } from "../utils/exportUtils";
 import {
   getPagedJournalEntries, createJournalEntry, updateJournalEntry, deleteJournalEntry,
 } from "../api/journalEntryApi";
@@ -48,6 +54,9 @@ export default function JournalEntriesPage() {
   const canCreate = has("accounting.journal.create");
   const canUpdate = has("accounting.journal.update");
   const canDelete = has("accounting.journal.delete");
+  const canPrint = has("accounting.journal.print");
+  const tplPicker = usePrintTemplates("JournalEntry");
+  const [exportingId, setExportingId] = useState(null);
 
   const [rows, setRows] = useState([]);
   const [page, setPage] = useState(1);
@@ -114,6 +123,27 @@ export default function JournalEntriesPage() {
     }
   };
 
+  const resolveTemplate = () => tplPicker.resolveTemplate()?.htmlContent || defaultJournalEntryTemplate;
+  const handlePrint = async (entry) => {
+    const win = window.open("", "_blank");
+    if (!win) { notify("Popup blocked. Please allow popups for this site.", "warning"); return; }
+    win.document.write("<p>Loading journal voucher…</p>");
+    try {
+      const { data } = await getJournalEntryPrintData(entry.id);
+      writeAndPrint(win, mergeTemplate(resolveTemplate(), data));
+    } catch { win.close(); notify("Failed to load print data.", "error"); }
+  };
+
+  const handleExportPdf = async (entry) => {
+    if (exportingId) return;
+    setExportingId(entry.id);
+    try {
+      const { data } = await getJournalEntryPrintData(entry.id);
+      await exportToPdf(mergeTemplate(resolveTemplate(), data), `Journal ${data.reference || entry.id}`);
+    } catch { notify("Failed to export PDF.", "error"); }
+    finally { setExportingId(null); }
+  };
+
   if (!canView) {
     return (
       <div style={{ padding: "2rem", color: colors.textSecondary }}>
@@ -163,6 +193,10 @@ export default function JournalEntriesPage() {
       </div>
 
       <div style={st.cardActions}>
+        {canPrint && <>
+          <button style={st.rowBtn} onClick={() => handlePrint(e)} title="Print journal voucher"><MdPrint size={15} /> Print</button>
+          <button style={st.rowBtn} onClick={() => handleExportPdf(e)} disabled={!!exportingId} title="Download journal PDF"><MdPictureAsPdf size={15} /> {exportingId === e.id ? "Preparing…" : "PDF"}</button>
+        </>}
         {e.isManual ? (
           <>
             {canUpdate && (
@@ -216,6 +250,8 @@ export default function JournalEntriesPage() {
             </>
           )}
         </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+        {canPrint && tplPicker.canChoose && <PrintTemplateSelect picker={tplPicker} />}
         {canCreate && companyId && (
           <button
             style={{ ...st.primaryBtn, opacity: accounts.length === 0 ? 0.5 : 1 }}
@@ -226,6 +262,7 @@ export default function JournalEntriesPage() {
             <MdAdd size={16} /> New Entry
           </button>
         )}
+        </div>
       </div>
 
       {companies.length > 0 && (

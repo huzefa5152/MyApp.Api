@@ -210,6 +210,7 @@ namespace MyApp.Api.Controllers
             "goodsreceipts.list.view", "goodsreceipts.manage.create", "goodsreceipts.manage.update",
             "accounting.payments.view", "accounting.payments.create",
             "accounting.receipts.view", "accounting.receipts.create",
+            "purchasedebitnotes.list.view", "purchasedebitnotes.manage.create", "purchasedebitnotes.manage.update",
             "fbrimport.purchase.preview")]
         [AuthorizeCompany]
         public async Task<ActionResult<IEnumerable<SupplierDto>>> GetByCompany(int companyId)

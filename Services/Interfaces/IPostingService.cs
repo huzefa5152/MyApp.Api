@@ -38,6 +38,8 @@ namespace MyApp.Api.Services.Interfaces
         /// the mirror image. Money not allocated to a document lands on the
         /// PARTY's own control account, which is where an advance belongs.</summary>
         Task PostPaymentAsync(Payment payment);
+        Task PostTransferAsync(AccountTransfer transfer);
+        Task PostPurchaseDebitNoteAsync(PurchaseDebitNote note);
 
         /// <summary>Removes a document's entry. Called from the delete paths.
         /// Safe when there is none.</summary>
@@ -63,5 +65,7 @@ namespace MyApp.Api.Services.Interfaces
         public int PostedInvoices { get; set; }
         public int PostedPurchaseBills { get; set; }
         public int PostedPayments { get; set; }
+        public int PostedTransfers { get; set; }
+        public int PostedPurchaseDebitNotes { get; set; }
     }
 }

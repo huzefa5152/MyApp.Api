@@ -1,0 +1,369 @@
+import "../Components/AccountingModalTables.css";
+import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { MdReceiptLong, MdSearch, MdVisibility, MdDelete, MdPrint, MdPictureAsPdf, MdEdit, MdAdd } from "react-icons/md";
+import { getPurchaseDebitNotesByCompany, deletePurchaseDebitNote, getPurchaseDebitNotePrintData } from "../api/purchaseDebitNoteApi";
+import PrintTemplateSelect from "../Components/PrintTemplateSelect";
+import PurchaseDebitNoteForm from "../Components/PurchaseDebitNoteForm";
+import { useConfirm } from "../Components/ConfirmDialog";
+import { useCompany } from "../contexts/CompanyContext";
+import { usePermissions } from "../contexts/PermissionsContext";
+import { notify } from "../utils/notify";
+import { usePrintTemplates } from "../hooks/usePrintTemplates";
+import useIsNarrow from "../hooks/useIsNarrow";
+import { writeAndPrint } from "../utils/printDocument";
+import { mergeTemplate } from "../utils/templateEngine";
+import { exportToPdf } from "../utils/exportUtils";
+import { defaultDebitNoteTemplate } from "../utils/purchaseNoteDocTemplates";
+import { formStyles, modalSizes, dropdownStyles, cardStyles } from "../theme";
+
+const colors = { blue: "#0d47a1", teal: "#00897b", textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3", danger: "#dc3545", inputBg: "#f8f9fb", inputBorder: "#d0d7e2" };
+const money = (n) => "Rs. " + (Number(n) || 0).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtDate = (d) => (d ? new Date(d).toLocaleDateString("en-GB") : "");
+
+export default function PurchaseDebitNotesPage() {
+  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const { has } = usePermissions();
+  const confirm = useConfirm();
+  const canView = has("purchasedebitnotes.list.view");
+  const canDelete = has("purchasedebitnotes.manage.delete");
+  const canPrint = has("purchasedebitnotes.print.view");
+  const canCreate = has("purchasedebitnotes.manage.create");
+  const canUpdate = has("purchasedebitnotes.manage.update");
+  const isNarrow = useIsNarrow();
+
+  const [notes, setNotes] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [viewNote, setViewNote] = useState(null);
+  const [exportingId, setExportingId] = useState(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [formNoteId, setFormNoteId] = useState(null);
+
+  const openCreate = () => { setFormNoteId(null); setFormOpen(true); };
+  const openEdit = (n) => { setFormNoteId(n.id); setFormOpen(true); };
+  const closeForm = () => setFormOpen(false);
+
+  // Reuse the "Debit Note" print template (issuer letterhead = our company,
+  // the debited supplier = the buyer block). Scoped to the company filter so
+  // a company-specific default template wins when one is set.
+  const tplPicker = usePrintTemplates("DebitNote");
+  const resolveTpl = (n) => tplPicker.resolveTemplate(n)?.htmlContent || defaultDebitNoteTemplate;
+
+  const handlePrint = async (n) => {
+    const w = window.open("", "_blank");
+    if (!w) { notify("Popup blocked. Allow popups for this site to print.", "warning"); return; }
+    w.document.write("<p style='font-family:sans-serif;padding:24px'>Loading debit note…</p>");
+    try {
+      const { data } = await getPurchaseDebitNotePrintData(n.id);
+      writeAndPrint(w, mergeTemplate(resolveTpl(n), data));
+    } catch {
+      w.close();
+      notify("Failed to prepare the print view.", "error");
+    }
+  };
+
+  const handleExportPdf = async (n) => {
+    if (exportingId) return;
+    setExportingId(n.id);
+    try {
+      const { data } = await getPurchaseDebitNotePrintData(n.id);
+      await exportToPdf(mergeTemplate(resolveTpl(n), data), `Debit Note ${n.debitNoteNumber || n.id}`);
+    } catch {
+      notify("Failed to export PDF.", "error");
+    } finally {
+      setExportingId(null);
+    }
+  };
+
+  const fetchNotes = useCallback(async (companyId) => {
+    if (!companyId) return;
+    setLoading(true);
+    try {
+      const { data } = await getPurchaseDebitNotesByCompany(companyId);
+      setNotes(Array.isArray(data) ? data : []);
+    } catch {
+      notify("Failed to load purchase debit notes.", "error");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedCompany?.id) fetchNotes(selectedCompany.id);
+  }, [selectedCompany, fetchNotes]);
+
+  const handleDelete = async (n) => {
+    if (!(await confirm({ title: "Delete purchase debit note?", message: `Debit note #${n.debitNoteNumber} to ${n.supplierName} will be removed.`, confirmText: "Delete", danger: true }))) return;
+    try {
+      await deletePurchaseDebitNote(n.id);
+      notify("Purchase debit note deleted.", "success");
+      fetchNotes(selectedCompany.id);
+    } catch (err) {
+      notify(err.response?.data?.error || "Delete failed.", "error");
+    }
+  };
+
+  const filtered = useMemo(() => notes.filter((n) => {
+    if (!search.trim()) return true;
+    const t = search.toLowerCase();
+    return (n.supplierName || "").toLowerCase().includes(t)
+      || (n.notes || "").toLowerCase().includes(t)
+      || String(n.debitNoteNumber).includes(t);
+  }), [notes, search]);
+
+  const total = useMemo(() => filtered.reduce((s, n) => s + (Number(n.grandTotal) || 0), 0), [filtered]);
+
+  if (!canView) {
+    return <div style={styles.emptyState}><MdReceiptLong size={40} color={colors.cardBorder} /><p style={{ color: colors.textSecondary, marginTop: 8 }}>You don't have access to Purchase Debit Notes.</p></div>;
+  }
+
+  return (
+    <DocumentLinesNavigation type="purchaseDebit">
+    <div>
+      <div style={styles.headerRow}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+          <div style={styles.iconBadge}><MdReceiptLong size={22} color="#fff" /></div>
+          <div>
+            <h2 style={{ margin: 0, fontSize: "1.4rem", color: colors.textPrimary }}>Purchase Debit Notes</h2>
+            <div style={{ color: colors.textSecondary, fontSize: "0.85rem" }}>
+              {filtered.length} note{filtered.length !== 1 ? "s" : ""} · {money(total)} total
+            </div>
+          </div>
+        </div>
+        {canCreate && (companies?.length > 0) && (
+          <button style={styles.newBtn} onClick={openCreate}>
+            <MdAdd size={18} /> New Purchase Debit Note
+          </button>
+        )}
+      </div>
+
+      <div data-admin-toolbar="" style={styles.filters}>
+        {companies.length > 1 && <select
+          aria-label="Company"
+          style={styles.select}
+          value={selectedCompany?.id || ""}
+          onChange={(e) => setSelectedCompany(companies.find((c) => String(c.id) === e.target.value) || null)}
+          disabled={loadingCompanies}
+        >
+          {(companies || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>}
+        <PrintTemplateSelect picker={tplPicker} />
+        <div style={styles.searchWrap}>
+          <MdSearch size={18} color={colors.textSecondary} style={{ position: "absolute", left: 10, top: 10 }} />
+          <input style={styles.searchInput} placeholder="Search supplier / description / #…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+      </div>
+
+      {loading ? (
+        <p style={{ color: colors.textSecondary }}>Loading…</p>
+      ) : filtered.length === 0 ? (
+        <div style={styles.emptyState}>
+          <MdReceiptLong size={40} color={colors.cardBorder} />
+          <p style={{ color: colors.textSecondary, marginTop: 8 }}>No purchase debit notes for this company.</p>
+        </div>
+      ) : isNarrow ? (
+        <div style={styles.cardList}>
+          {filtered.map((n) => (
+            <div key={n.id} style={styles.card}>
+              <div style={cardStyles.cardHeader}>
+                <span style={styles.cardNum}>#{n.debitNoteNumber}</span>
+                <span style={styles.cardDate}>{fmtDate(n.date)}</span>
+              </div>
+              <div style={cardStyles.cardLead}>
+                {n.supplierName}{n.companyName ? <span style={styles.divTag}>{n.companyName}</span> : null}
+              </div>
+              <div style={cardStyles.metaGrid}>
+                <div>
+                  <span style={cardStyles.metaLabel}>Notes</span>
+                  <span style={cardStyles.metaValue}>{n.supplierRef || n.notes || "—"}</span>
+                </div>
+              </div>
+              <div style={cardStyles.amountBox}>
+                <span style={cardStyles.amountLabel}>Amount</span>
+                <span style={cardStyles.amount}>{money(n.grandTotal)}</span>
+              </div>
+              <div style={styles.cardActions}>
+                <button style={{ ...styles.mIconBtn, ...styles.view }} title="View" onClick={() => setViewNote(n)}><MdVisibility size={18} /></button>
+                {canUpdate && <button style={{ ...styles.mIconBtn, ...styles.edit }} title="Edit" onClick={() => openEdit(n)}><MdEdit size={18} /></button>}
+                {canPrint && (
+                  <button
+                    style={{ ...styles.mIconBtn, ...styles.print, ...(tplPicker.noTemplate ? styles.disabled : {}) }}
+                    disabled={tplPicker.noTemplate}
+                    title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"}
+                    onClick={() => handlePrint(n)}
+                  ><MdPrint size={18} /></button>
+                )}
+                {canPrint && (
+                  <button
+                    style={{ ...styles.mIconBtn, ...styles.pdf, ...(tplPicker.noTemplate || exportingId === n.id ? styles.disabled : {}) }}
+                    disabled={tplPicker.noTemplate || exportingId === n.id}
+                    title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}
+                    onClick={() => handleExportPdf(n)}
+                  ><MdPictureAsPdf size={18} /></button>
+                )}
+                {canDelete && <button style={{ ...styles.mIconBtn, ...styles.del }} title="Delete" onClick={() => handleDelete(n)}><MdDelete size={18} /></button>}
+              </div>
+            </div>
+          ))}
+          <div style={styles.totalCard}>
+            <span style={styles.totalCardLabel}>Total ({filtered.length})</span>
+            <span style={styles.totalCardValue}>{money(total)}</span>
+          </div>
+        </div>
+      ) : (
+        <div data-admin-table-region="" style={styles.scroll}>
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={styles.thNum}>#</th>
+                <th style={styles.th}>Date</th>
+                <th style={styles.th}>Supplier</th>
+                <th style={styles.th}>Notes</th>
+                <th style={styles.thMoney}>Amount</th>
+                <th style={styles.thActions}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((n) => (
+                <tr key={n.id}>
+                  <td style={styles.tdNum}>{n.debitNoteNumber}</td>
+                  <td style={styles.td}>{fmtDate(n.date)}</td>
+                  <td style={{ ...styles.td, fontWeight: 600 }}>
+                    {n.supplierName}{n.companyName ? <span style={styles.divTag}>{n.companyName}</span> : null}
+                  </td>
+                  <td style={{ ...styles.td, color: colors.textSecondary }}>{n.supplierRef || n.notes || "—"}</td>
+                  <td style={styles.tdMoney}>{money(n.grandTotal)}</td>
+                  <td style={styles.tdActions}>
+                    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                      <button style={{ ...styles.iconBtn, ...styles.view }} title="View" onClick={() => setViewNote(n)}><MdVisibility size={16} /></button>
+                      {canUpdate && <button style={{ ...styles.iconBtn, ...styles.edit }} title="Edit" onClick={() => openEdit(n)}><MdEdit size={16} /></button>}
+                      {canPrint && (
+                        <button
+                          style={{ ...styles.iconBtn, ...styles.print, ...(tplPicker.noTemplate ? styles.disabled : {}) }}
+                          disabled={tplPicker.noTemplate}
+                          title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"}
+                          onClick={() => handlePrint(n)}
+                        ><MdPrint size={16} /></button>
+                      )}
+                      {canPrint && (
+                        <button
+                          style={{ ...styles.iconBtn, ...styles.pdf, ...(tplPicker.noTemplate || exportingId === n.id ? styles.disabled : {}) }}
+                          disabled={tplPicker.noTemplate || exportingId === n.id}
+                          title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}
+                          onClick={() => handleExportPdf(n)}
+                        ><MdPictureAsPdf size={16} /></button>
+                      )}
+                      {canDelete && <button style={{ ...styles.iconBtn, ...styles.del }} title="Delete" onClick={() => handleDelete(n)}><MdDelete size={16} /></button>}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={4} style={styles.tfLabel}>Total</td>
+                <td style={styles.tfMoney}>{money(total)}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+
+      {viewNote && (
+        <div data-admin-backdrop="" style={formStyles.backdrop} onClick={() => setViewNote(null)}>
+          <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }} onClick={(e) => e.stopPropagation()}>
+            <div data-admin-header="" style={formStyles.header}>
+              <h5 style={formStyles.title}>Purchase Debit Note #{viewNote.debitNoteNumber}</h5>
+              <button data-admin-close="" style={formStyles.closeButton} onClick={() => setViewNote(null)}>&times;</button>
+            </div>
+            <div data-admin-body="" style={formStyles.body}>
+              <div style={styles.vRow}><span style={styles.vLbl}>Supplier</span><span style={styles.vVal}>{viewNote.supplierName}</span></div>
+              <div style={styles.vRow}><span style={styles.vLbl}>Date</span><span style={styles.vVal}>{fmtDate(viewNote.date)}</span></div>
+              {viewNote.companyName && <div style={styles.vRow}><span style={styles.vLbl}>Company</span><span style={styles.vVal}>{viewNote.companyName}</span></div>}
+              {viewNote.supplierRef && <div style={styles.vRow}><span style={styles.vLbl}>Reference</span><span style={styles.vVal}>{viewNote.supplierRef}</span></div>}
+              <div className="accounting-modal-cards" data-admin-table-region="" style={styles.scroll}>
+                <table style={styles.table}>
+                  <thead><tr><th style={styles.th}>Description</th><th style={styles.thMoney}>Qty</th><th style={styles.th}>UOM</th><th style={styles.thMoney}>Unit Price</th><th style={styles.thMoney}>Line Total</th></tr></thead>
+                  <tbody>
+                    {(viewNote.items || []).map((i) => (
+                      <tr key={i.id}>
+                        <td data-label="Description" style={styles.td}>{i.description}</td>
+                        <td data-label="Quantity" style={styles.tdMoney}>{Number(i.quantity).toLocaleString()}</td>
+                        <td data-label="UOM" style={styles.td}>{i.uom || "—"}</td>
+                        <td data-label="Unit price" style={styles.tdMoney}>{money(i.unitPrice)}</td>
+                        <td data-label="Line total" style={styles.tdMoney}>{money(i.lineTotal)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ ...styles.vRow, borderTop: `1px solid ${colors.cardBorder}`, marginTop: 8, paddingTop: 12 }}>
+                <span style={styles.vLbl}>Total</span><span style={{ ...styles.vVal, fontSize: "1.15rem", fontWeight: 700, color: colors.blue }}>{money(viewNote.grandTotal)}</span>
+              </div>
+            </div>
+            <div data-admin-footer="" style={formStyles.footer}>
+              <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setViewNote(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {formOpen && selectedCompany && (
+        <PurchaseDebitNoteForm
+          companyId={selectedCompany.id}
+          company={selectedCompany}
+          noteId={formNoteId}
+          onClose={closeForm}
+          onSaved={() => { closeForm(); fetchNotes(selectedCompany.id); }}
+        />
+      )}
+    </div>
+    </DocumentLinesNavigation>
+  );
+}
+
+const styles = {
+  headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem", marginBottom: "1rem" },
+  iconBadge: { width: 40, height: 40, borderRadius: 10, background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, display: "flex", alignItems: "center", justifyContent: "center" },
+  filters: { display: "flex", gap: "0.6rem", flexWrap: "wrap", marginBottom: "1rem" },
+  select: { padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: colors.inputBg, fontSize: "0.9rem", color: colors.textPrimary, minWidth: 220 },
+  searchWrap: { position: "relative", flex: 1, minWidth: 220 },
+  searchInput: { width: "100%", padding: "0.55rem 0.75rem 0.55rem 2.1rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: colors.inputBg, fontSize: "0.9rem", boxSizing: "border-box" },
+  scroll: { width: "100%", overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, marginTop: 8 },
+  table: { width: "100%", borderCollapse: "collapse", minWidth: 640 },
+  th: { padding: "0.6rem 0.75rem", textAlign: "left", fontSize: "0.72rem", fontWeight: 800, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: `1px solid ${colors.cardBorder}`, background: "#f8f9fb" },
+  thNum: { padding: "0.6rem 0.75rem", textAlign: "left", fontSize: "0.72rem", fontWeight: 800, color: colors.textSecondary, borderBottom: `1px solid ${colors.cardBorder}`, background: "#f8f9fb", width: 60 },
+  thMoney: { padding: "0.6rem 0.75rem", textAlign: "right", fontSize: "0.72rem", fontWeight: 800, color: colors.textSecondary, textTransform: "uppercase", borderBottom: `1px solid ${colors.cardBorder}`, background: "#f8f9fb" },
+  thActions: { padding: "0.6rem 0.75rem", borderBottom: `1px solid ${colors.cardBorder}`, background: "#f8f9fb", width: 160 },
+  td: { padding: "0.55rem 0.75rem", fontSize: "0.85rem", borderBottom: `1px solid ${colors.cardBorder}`, color: colors.textPrimary },
+  tdNum: { padding: "0.55rem 0.75rem", fontSize: "0.85rem", borderBottom: `1px solid ${colors.cardBorder}`, color: colors.textSecondary },
+  tdMoney: { padding: "0.55rem 0.75rem", fontSize: "0.85rem", borderBottom: `1px solid ${colors.cardBorder}`, color: colors.textPrimary, textAlign: "right", whiteSpace: "nowrap" },
+  tdActions: { padding: "0.4rem 0.75rem", borderBottom: `1px solid ${colors.cardBorder}` },
+  tfLabel: { padding: "0.6rem 0.75rem", textAlign: "right", fontWeight: 700, color: colors.textSecondary },
+  tfMoney: { padding: "0.6rem 0.75rem", textAlign: "right", fontWeight: 800, color: colors.blue, whiteSpace: "nowrap" },
+  divTag: { marginLeft: 6, padding: "0.1rem 0.4rem", borderRadius: 4, background: "#eef2ff", color: colors.blue, fontSize: "0.68rem", fontWeight: 700 },
+  newBtn: { display: "inline-flex", alignItems: "center", gap: 6, padding: "0.55rem 0.9rem", borderRadius: 8, border: "none", background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, color: "#fff", fontSize: "0.88rem", fontWeight: 600, cursor: "pointer" },
+  iconBtn: { display: "grid", placeItems: "center", width: 30, height: 30, padding: 0, borderRadius: 8, border: "none", cursor: "pointer" },
+  // Mobile (<768px) stacked-card fallback for the wide table.
+  mIconBtn: { display: "grid", placeItems: "center", width: 44, height: 44, padding: 0, borderRadius: 8, border: "none", cursor: "pointer" },
+  cardList: { display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: 8 },
+  card: { ...cardStyles.card, padding: "0.85rem 0.95rem" },
+  cardNum: { fontWeight: 700, fontSize: "0.95rem", color: colors.blue },
+  cardDate: { fontSize: "0.78rem", color: colors.textSecondary },
+  cardActions: { display: "flex", flexWrap: "wrap", gap: "0.4rem", justifyContent: "flex-end", borderTop: `1px solid ${colors.cardBorder}`, paddingTop: "0.6rem" },
+  totalCard: { ...cardStyles.card, padding: "0.75rem 0.95rem", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f0f7ff" },
+  totalCardLabel: { fontWeight: 700, color: colors.textSecondary },
+  totalCardValue: { fontWeight: 800, color: colors.blue },
+  view: { background: "#eef2ff", color: colors.blue },
+  edit: { background: "#e8f5e9", color: "#2e7d32" },
+  print: { background: "#e6f7f4", color: colors.teal },
+  pdf: { background: "#fdecea", color: "#c62828" },
+  del: { background: "#fff0f1", color: colors.danger },
+  disabled: { opacity: 0.4, cursor: "not-allowed" },
+  emptyState: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "3rem 1rem", textAlign: "center" },
+  vRow: { display: "flex", justifyContent: "space-between", padding: "0.3rem 0", gap: 12 },
+  vLbl: { color: colors.textSecondary, fontSize: "0.85rem" },
+  vVal: { color: colors.textPrimary, fontSize: "0.9rem", fontWeight: 500, textAlign: "right" },
+};

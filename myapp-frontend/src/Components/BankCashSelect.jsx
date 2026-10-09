@@ -4,13 +4,11 @@ import SearchableSelect from "./SearchableSelect";
 import { getBankCashAccounts } from "../api/accountApi";
 
 /**
- * "Received in / Paid from" bank-or-cash account picker. Loads the company's
- * bank/cash accounts and renders them in the shared searchable dropdown
- * (SearchableSelect) so a long list can be typed-to-filter.
- *
- * Falls back to a free-text box ONLY when the company has no bank/cash accounts
- * yet — a company that has not built its chart can still record a receipt, and
- * the hint tells the operator where the list comes from.
+ * Reusable "Received in / Paid from" bank-or-cash account picker. Loads the
+ * company's bank/cash accounts and renders them in the standard searchable
+ * dropdown ([SearchableSelect]) so a long list (e.g. 30 bank accounts) can be
+ * typed-to-filter. Falls back to a free-text box only when the company has no
+ * bank/cash accounts yet.
  *
  * Props:
  *   companyId
@@ -18,11 +16,11 @@ import { getBankCashAccounts } from "../api/accountApi";
  *   name             — current account name (free-text fallback value / display)
  *   onChange(id,name)— id is null for the free-text fallback / cleared
  *   includeAccount   — {id, name} to guarantee an out-of-list account stays
- *                      selectable (used on edit, so a payment's current account
- *                      is never silently dropped because it was deactivated)
+ *                      selectable (used on edit so a payment's current account
+ *                      is never dropped)
  *   autoSelectSingle — auto-pick the only account (create flow)
- *   onLoaded(list)   — fired once with the loaded accounts; the parent uses the
- *                      count to decide whether the field is mandatory
+ *   onLoaded(list)   — fired once with the loaded accounts (parent uses the
+ *                      count to decide whether the field is mandatory)
  *   label, labelStyle, style, placeholder
  */
 export default function BankCashSelect({
@@ -38,7 +36,7 @@ export default function BankCashSelect({
     getBankCashAccounts(companyId)
       .then(({ data }) => {
         if (cancelled) return;
-        // Display the account NAME only; the code stays searchable.
+        // Display the account NAME only (no GL code). Code is still searchable.
         let list = (data || []).map((a) => ({ ...a, label: a.name }));
         if (includeAccount?.id && !list.some((a) => a.id === includeAccount.id)) {
           list = [{ id: includeAccount.id, name: includeAccount.name, label: includeAccount.name }, ...list];
@@ -69,7 +67,7 @@ export default function BankCashSelect({
         style={formStyles.input}
         value={name || ""}
         onChange={(e) => onChange?.(null, e.target.value)}
-        placeholder="e.g. Bank current account, Cash"
+        placeholder="e.g. Meezan A/C 1234, Cash"
       />
       {loaded && (
         <span style={{ fontSize: "0.72rem", color: colors.textSecondary, marginTop: 4, display: "block" }}>

@@ -55,6 +55,7 @@ export default function AccountingReportsPage() {
   const { has } = usePermissions();
   const isNarrow = useIsNarrow(860);
   const canView = has("accounting.reports.view");
+  const canExport = has("accounting.reports.export");
 
   const [tab, setTab] = useState("balance-sheet");
   const [from, setFrom] = useState(isoYearStart());
@@ -355,15 +356,15 @@ export default function AccountingReportsPage() {
           <button style={st.secondaryBtn} onClick={load} disabled={!companyId}>
             <MdRefresh size={16} /> Refresh
           </button>
-          <button style={st.primaryBtn} onClick={exportCsv} disabled={!ready}>
+          {canExport && <button style={st.primaryBtn} onClick={exportCsv} disabled={!ready}>
             <MdDownload size={16} /> Export CSV
-          </button>
-          <button style={st.secondaryBtn} onClick={() => exportReport("print")} disabled={!ready || !!printBusy}>
+          </button>}
+          {canExport && <button style={st.secondaryBtn} onClick={() => exportReport("print")} disabled={!ready || !!printBusy}>
             <MdPrint size={18} /> {printBusy === "print" ? "Preparing…" : "Print"}
-          </button>
-          <button style={st.secondaryBtn} onClick={() => exportReport("pdf")} disabled={!ready || !!printBusy}>
+          </button>}
+          {canExport && <button style={st.secondaryBtn} onClick={() => exportReport("pdf")} disabled={!ready || !!printBusy}>
             <MdPictureAsPdf size={18} /> {printBusy === "pdf" ? "Building…" : "PDF"}
-          </button>
+          </button>}
         </div>
       </div>
 

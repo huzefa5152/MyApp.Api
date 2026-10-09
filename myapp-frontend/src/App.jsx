@@ -13,11 +13,15 @@ const SalesQuotePage = lazy(() => import("./pages/SalesQuotePage"));
 const EmailWorkspacePage = lazy(() => import("./pages/EmailWorkspacePage"));
 const SalesOrderPage = lazy(() => import("./pages/SalesOrderPage"));
 const WithholdingTaxReceiptsPage = lazy(() => import("./pages/WithholdingTaxReceiptsPage"));
+const BankCashAccountsPage = lazy(() => import("./pages/BankCashAccountsPage"));
+const TransfersPage = lazy(() => import("./pages/TransfersPage"));
+const PurchaseDebitNotesPage = lazy(() => import("./pages/PurchaseDebitNotesPage"));
 const PaymentsPage = lazy(() => import("./pages/PaymentsPage"));
 const ChartOfAccountsPage = lazy(() => import("./pages/ChartOfAccountsPage"));
 const JournalEntriesPage = lazy(() => import("./pages/JournalEntriesPage"));
 const AccountingDashboardPage = lazy(() => import("./pages/AccountingDashboardPage"));
 const AccountingReportsPage = lazy(() => import("./pages/AccountingReportsPage"));
+const AccountingCatalogPage = lazy(() => import("./pages/AccountingCatalogPage"));
 const CustomerPortalsPage = lazy(() => import("./pages/CustomerPortalsPage"));
 const NavigationMenuPage = lazy(() => import("./pages/NavigationMenuPage"));
 const CreditDebitNotePage = lazy(() => import("./pages/CreditDebitNotePage"));
@@ -108,12 +112,17 @@ export default function App() {
             {/* Receipts (money in) / Payments (money out) — one component,
                 mounted twice with distinct keys so filter/search state doesn't
                 leak when switching between the two. */}
+            <Route path="/bank-cash-accounts" element={<BankCashAccountsPage />} />
+            <Route path="/transfers" element={<TransfersPage />} />
+            <Route path="/purchase-debit-notes" element={<PurchaseDebitNotesPage />} />
             <Route path="/receipts" element={<PaymentsPage key="receipts" mode="receipts" />} />
             <Route path="/payments" element={<PaymentsPage key="payments" mode="payments" />} />
             <Route path="/chart-of-accounts" element={<ChartOfAccountsPage />} />
             <Route path="/journal-entries" element={<JournalEntriesPage />} />
             <Route path="/accounting/overview" element={<AccountingDashboardPage />} />
             <Route path="/accounting/reports" element={<AccountingReportsPage />} />
+            <Route path="/accounting/reports/catalog" element={<AccountingCatalogPage />} />
+            <Route path="/accounting/reports/catalog/:reportId" element={<AccountingCatalogPage />} />
             <Route path="/customer-portals" element={<CustomerPortalsPage />} />
             {/* Bills tab — pre-FBR data entry. No item-type column, no FBR
                 bulk actions, but shows a per-row "Submitted to FBR" badge so

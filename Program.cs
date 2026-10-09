@@ -441,6 +441,10 @@ builder.Services.AddHostedService<MyApp.Api.Services.HostedServices.GmailSyncSer
 builder.Services.AddScoped<ISalesOrderService, SalesOrderService>();
 // Receipts (money in) + Payments (money out) — AR/AP subledger.
 builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IAccountTransferService, AccountTransferService>();
+builder.Services.AddScoped<IPurchaseDebitNoteService, PurchaseDebitNoteService>();
+builder.Services.AddScoped<IBankReconciliationService, BankReconciliationService>();
+builder.Services.AddScoped<IBankStatementService, BankStatementService>();
 // Chart of Accounts: the account tree plus the sector preset that makes a new
 // company's chart usable without hand-building it.
 builder.Services.AddScoped<IAccountService, AccountService>();
@@ -455,6 +459,7 @@ builder.Services.AddScoped<IPostingService, PostingService>();
 // The accounting reports. They read the ledger and reuse its primitives —
 // nothing here recomputes a balance of its own.
 builder.Services.AddScoped<IAccountingReportService, AccountingReportService>();
+builder.Services.AddScoped<IAccountingCatalogService, AccountingCatalogService>();
 // Customer Portal: management for internal users, plus the only anonymous
 // surface in the app. See PublicCustomerPortalController for why.
 builder.Services.AddScoped<ICustomerPortalService, CustomerPortalService>();

@@ -22,6 +22,13 @@ A full-stack ERP system for Pakistani businesses to manage the complete **Purcha
 - **Item Types & Lookups** - Autocomplete item descriptions and units, auto-create on first use
 - **Import Data (onboarding)** - One Excel workbook brings a new company's customers, items, suppliers and opening stock in: download a sample that marks every column required or optional, upload, review each row, import
 
+### Complete Edition Accounting
+
+- Bank and cash accounts, internal transfers, statement reconciliation and CSV bank statements.
+- Purchase debit notes, journal voucher printing, settlement adjustments and inclusive tax.
+- Detailed accounting reports with company-scoped permissions, export and printing.
+- Trader remains division-free; Manager.io import and legacy migration are excluded.
+
 ### Optional Email Workspace
 
 - Assign Email Workspace separately to existing users and administrators.
@@ -297,6 +304,12 @@ Publish output optimized from 79 MB to 37 MB via:
 ---
 
 ## Changelog
+
+### 2026-10-09
+
+- Expand Trader Complete Edition accounting with transfers, bank reconciliation and statements, purchase debit notes, voucher printing and detailed reports. Add inclusive tax and settlement adjustments while preserving company access boundaries.
+- Verify restored local database upgrades and update accounting test fixtures for private tenant roles and expanded edition permissions.
+
 
 ### 2026-10-09
 

@@ -320,6 +320,19 @@ namespace MyApp.Api.Helpers
             // exactly the decision an operator needs to see. The keys are
             // unchanged: EditionCatalog splits on key PREFIX, so the module name
             // is free to say what the editor should show.
+            new("accounting.journal.print",   "Accounting", "Journal Entries", "Print",  "Print or download a journal voucher"),
+            new("accounting.transfers.view",   "Accounting", "Account Transfers", "View",   "View inter-account (bank/cash) transfers"),
+            new("accounting.transfers.create", "Accounting", "Account Transfers", "Create", "Record and edit inter-account transfers"),
+            new("accounting.transfers.delete", "Accounting", "Account Transfers", "Delete", "Delete inter-account transfers"),
+            new("accounting.transfers.print",  "Accounting", "Account Transfers", "Print",  "Print or download a transfer advice"),
+            new("accounting.reconciliation.view",   "Accounting", "Bank Reconciliation", "View",   "View bank/cash account balances and reconciliation status"),
+            new("accounting.reconciliation.manage", "Accounting", "Bank Reconciliation", "Manage", "Mark transactions cleared and reconcile a bank statement"),
+            new("accounting.reports.export",  "Accounting", "Reports", "Export", "Download an accounting report as Excel"),
+            new("purchasedebitnotes.list.view",     "PurchaseDebitNotes", "List",   "View",   "View the purchase (supplier) debit-notes list and a single note"),
+            new("purchasedebitnotes.print.view",    "PurchaseDebitNotes", "Print",  "View",   "Print / export a purchase debit note"),
+            new("purchasedebitnotes.manage.create", "PurchaseDebitNotes", "Manage", "Create", "Create a purchase debit note"),
+            new("purchasedebitnotes.manage.update", "PurchaseDebitNotes", "Manage", "Update", "Edit a purchase debit note"),
+            new("purchasedebitnotes.manage.delete", "PurchaseDebitNotes", "Manage", "Delete", "Delete a purchase debit note"),
             new("accounting.receipts.view",   "Receipts & Payments", "Receipts", "View",   "View receipts (money in) and an invoice's settled payments"),
             new("accounting.receipts.create", "Receipts & Payments", "Receipts", "Create", "Record a receipt against one or more sales invoices"),
             new("accounting.receipts.delete", "Receipts & Payments", "Receipts", "Delete", "Delete a receipt"),

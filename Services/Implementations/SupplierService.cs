@@ -260,6 +260,9 @@ namespace MyApp.Api.Services.Implementations
             if (await _repo.HasPurchaseBillsAsync(id))
                 throw new InvalidOperationException("Cannot delete supplier — purchase bills exist against this supplier. Delete the bills first.");
 
+            if (await _context.PurchaseDebitNotes.AnyAsync(n => n.SupplierId == id))
+                throw new InvalidOperationException("Cannot delete supplier while purchase debit notes exist. Delete the notes first.");
+
             await _repo.DeleteAsync(supplier);
         }
     }
