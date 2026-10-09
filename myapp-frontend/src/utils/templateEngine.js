@@ -1,6 +1,7 @@
 import Handlebars from "handlebars";
 import { materializeStamp } from "./stampSlot.js";
 import { applyPrintLayoutToHtml } from "./printLayout.js";
+import { stripActiveContent, withPrintCsp } from "./printSafety.js";
 
 // Register custom helpers
 Handlebars.registerHelper("fmtDate", (d) => {
@@ -168,18 +169,20 @@ export function mergeTemplate(htmlTemplate, data) {
   const compiled = Handlebars.compile(src);
   // Inject stamps unless the caller already supplied its own.
   const merged = { ...(data || {}), stamps: (data && data.stamps) || _activeStamps };
-  // Repeat the signature at the bottom of every printed page. Done here rather
-  // than per template so print, the customer portal, the PDF export and the
-  // editor preview agree, and templates already saved in the database get the
-  // pagination fix without being rewritten. See utils/printLayout.js.
-  const html = applyPrintLayoutToHtml(compiled(merged));
+  // Template HTML is operator-edited and the result is printed in a window
+  // sharing this app's origin, so it is made inert first (utils/printSafety.js).
+  // Then the signature is repeated at the bottom of every printed page. Done
+  // here rather than per template so print, the customer portal, the PDF export
+  // and the editor preview agree, and templates already saved in the database
+  // get the pagination fix without being rewritten. See utils/printLayout.js.
+  const html = applyPrintLayoutToHtml(stripActiveContent(compiled(merged)));
   if (typeof window !== "undefined" && window.location?.origin) {
     const base = `<base href="${window.location.origin}/">`;
-    return /<head[^>]*>/i.test(html)
+    return withPrintCsp(/<head[^>]*>/i.test(html)
       ? html.replace(/<head[^>]*>/i, (m) => m + base)
-      : base + html;
+      : base + html);
   }
-  return html;
+  return withPrintCsp(html);
 }
 
 /**
