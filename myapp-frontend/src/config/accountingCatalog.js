@@ -825,20 +825,22 @@ export const REPORT_CATEGORIES = [
         blurb: "Revenue, cost of sales, gross profit and net profit per month.",
         status: "blocked",
         blockedReason:
-          "The revenue and expense halves are available from Monthly Sales and Monthly Expenses. "
-          + "The cost-of-sales half needs cost of goods sold, which is not recorded yet — see "
-          + "Gross Profit below.",
+          "This report is not built yet. Each sale already posts the cost of the stock it "
+          + "takes out, so the figures exist: run the Profit & Loss for one month to read that "
+          + "month's revenue, cost of goods sold and net profit.",
       },
       {
         id: "gross-profit",
         title: "Gross Profit",
         blurb: "Revenue less cost of sales.",
         status: "blocked",
-        // Stated on the card so nobody files this as a missing feature: the
-        // ledger has no cost of sales to report against yet.
+        // Stated on the card so nobody files this as a missing feature. Since
+        // 2026-09-23 a sale relieves inventory into Cost of goods sold, so the
+        // figures exist; only this report is not built.
         blockedReason:
-          "Needs cost of sales. Sales invoices post revenue but nothing relieves inventory, "
-          + "so there is no cost to compare against yet.",
+          "This report is not built yet. Each sale already posts the cost of the stock it "
+          + "takes out to Cost of goods sold, so the Profit & Loss shows revenue less cost "
+          + "of sales for any period.",
       },
       {
         id: "customer-profitability",
@@ -846,7 +848,8 @@ export const REPORT_CATEGORIES = [
         blurb: "Margin per customer.",
         status: "blocked",
         blockedReason:
-          "Needs cost of sales — same dependency as Gross Profit.",
+          "This report is not built yet. The cost of goods sold is posted for every sale, "
+          + "but margin is not yet broken down by customer.",
       },
     ],
   },
