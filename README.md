@@ -300,6 +300,7 @@ Optional company Gmail inbox: authorize an account once and link it only to assi
 
 ### 2026-10-09
 
+- Redesign the Email Workspace: inbox rows show the sender with a coloured initial, a short received date and a coloured status chip; the open enquiry has a header with sender, full date and status, its Keep / Ignore / Prepare actions stay in reach at the top, and the panes fill the screen. On a phone the list and the reader are separate views with a back bar. What each button does is unchanged.
 - Add motion and feedback across the admin: sidebar links nudge on hover, active markers grow in, opening a group cascades its links, the user menu drops in; every shared dialog dims the page and rises into place; toasts slide in; buttons give press feedback and show a clear keyboard-focus ring. All of it switches off under the operating system's reduced-motion setting.
 - Fix sidebar groups being cut off when they hold many links: a group now opens to its full height, and the sidebar scrolls the current page's link into view.
 - Animate the dashboard's KPI figures counting up, keep them on one line, fit the donut's total inside its ring, and give the client and supplier legends room for names.
