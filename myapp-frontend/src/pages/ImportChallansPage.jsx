@@ -953,7 +953,7 @@ function toInputDate(v) {
 /*  Styles                                                             */
 /* ------------------------------------------------------------------ */
 const styles = {
-  wrap: { padding: "1rem", maxWidth: "1100px", margin: "0 auto" },
+  wrap: { padding: 0, maxWidth: "1100px", margin: "0 auto" },
   header: {
     display: "flex",
     justifyContent: "space-between",

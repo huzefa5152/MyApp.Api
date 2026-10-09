@@ -256,7 +256,7 @@ const nextOf = (s) => GUIDE_SECTIONS[idx(s) + 1];
 // ── styles ──────────────────────────────────────────────────────────────────
 
 const st = {
-  page: { padding: "1.25rem" },
+  page: { padding: 0 },
   header: { display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1rem" },
   h2: { margin: 0, fontSize: "1.35rem", fontWeight: 800, color: colors.textPrimary },
   subtitle: { marginTop: "0.25rem", color: colors.textSecondary, fontSize: "0.88rem", maxWidth: 620 },

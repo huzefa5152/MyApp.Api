@@ -141,7 +141,7 @@ export default function TransfersPage() {
   const pageTotal = rows.reduce((s, r) => s + Number(r.amount || 0), 0);
 
   return (
-    <div style={{ padding: "clamp(0.75rem, 2vw, 1.5rem)" }}>
+    <div>
       <div style={st.headerRow}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
           <span style={{ ...st.headerIcon, background: `${accent}15`, color: accent }}><MdSwapHoriz size={24} /></span>
