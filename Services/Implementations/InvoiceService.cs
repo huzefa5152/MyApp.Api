@@ -678,12 +678,13 @@ namespace MyApp.Api.Services.Implementations
             foreach (var challanId in dto.ChallanIds)
             {
                 challanMap.TryGetValue(challanId, out var dc);
-                if (dc == null) throw new KeyNotFoundException($"Challan {challanId} not found.");
+                // Another company's challan answers exactly like a missing one, and
+                // is checked FIRST: its number and status are that company's data.
+                if (dc == null || dc.CompanyId != dto.CompanyId) throw new KeyNotFoundException($"Challan {challanId} not found.");
                 // Commercial billing permits an optional PO. Billed and cancelled
                 // challans stay outside the pool.
                 if (!ChallanBillingRules.IsBillable(dc.Status, dc.InvoiceId))
                     throw new InvalidOperationException($"Challan {dc.ChallanNumber} is not in a billable status (got '{dc.Status}').");
-                if (dc.CompanyId != dto.CompanyId) throw new InvalidOperationException($"Challan {dc.ChallanNumber} does not belong to this company.");
                 if (dc.ClientId != dto.ClientId) throw new InvalidOperationException($"Challan {dc.ChallanNumber} belongs to a different client than this bill.");
                 challans.Add(dc);
             }

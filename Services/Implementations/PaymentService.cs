@@ -295,6 +295,12 @@ namespace MyApp.Api.Services.Implementations
                 if (a.PurchaseBillId.HasValue) billIds.Add(a.PurchaseBillId.Value);
             }
             await AssertAllocationAccountsAsync(companyId, dto);
+            // The same adjustment-account check CreateAsync makes: the id comes from the
+            // body, and the receipt reads the account's name back.
+            var updateAdjIds = dto.Allocations.Where(a => a.AdjustmentAmount > 0 && a.AdjustmentAccountId.HasValue)
+                .Select(a => a.AdjustmentAccountId!.Value).Distinct().ToList();
+            if (updateAdjIds.Count > 0 && await _context.Accounts.CountAsync(x => x.CompanyId == companyId && updateAdjIds.Contains(x.Id)) != updateAdjIds.Count)
+                throw new InvalidOperationException("The selected adjustment account doesn't belong to this company.");
 
             var invoices = await _context.Invoices.Where(i => invoiceIds.Contains(i.Id)).ToListAsync();
             var bills = await _context.PurchaseBills.Where(b => billIds.Contains(b.Id)).ToListAsync();

@@ -284,6 +284,31 @@ namespace MyApp.Api.Services.Implementations
             return dto;
         }
 
+        /// <summary>
+        /// Cross-tenant link guard for the Sales Order links a NEW challan
+        /// carries. The order rolls up its delivered quantities from these
+        /// links and the challan reads the order's number and selling prices
+        /// back, so a forged id from another company would both leak that
+        /// company's prices and corrupt its order. The order must belong to
+        /// this company, and every linked order line must belong to one of this
+        /// company's orders (to the linked order, when there is one).
+        /// </summary>
+        private async Task ValidateSalesOrderLinksAsync(int companyId, DeliveryChallanDto dto)
+        {
+            var lineIds = (dto.Items ?? Enumerable.Empty<DeliveryItemDto>())
+                .Where(i => i.SalesOrderItemId.HasValue).Select(i => i.SalesOrderItemId!.Value).Distinct().ToList();
+            if (dto.SalesOrderId.HasValue
+                && !await _context.SalesOrders.AnyAsync(o => o.Id == dto.SalesOrderId.Value && o.CompanyId == companyId))
+                throw new InvalidOperationException("The linked sales order was not found for this company.");
+            if (lineIds.Count == 0) return;
+            var valid = await _context.SalesOrderItems
+                .Where(it => lineIds.Contains(it.Id) && it.SalesOrder.CompanyId == companyId
+                    && (!dto.SalesOrderId.HasValue || it.SalesOrderId == dto.SalesOrderId.Value))
+                .CountAsync();
+            if (valid != lineIds.Count)
+                throw new InvalidOperationException("A challan line references a sales-order line that does not belong to the linked order.");
+        }
+
         public async Task<DeliveryChallanDto> CreateDeliveryChallanAsync(int companyId, DeliveryChallanDto dto)
         {
             // Make sure any new unit name typed by the operator gets a
@@ -310,6 +335,7 @@ namespace MyApp.Api.Services.Implementations
             if (client.CompanyId != companyId)
                 throw new InvalidOperationException("Client does not belong to this company.");
             await ValidatePrivateCostsAsync(companyId, dto.Items ?? Enumerable.Empty<DeliveryItemDto>());
+            await ValidateSalesOrderLinksAsync(companyId, dto);
             var fbrReady = company != null && IsFbrReady(company, client);
 
             string status;
