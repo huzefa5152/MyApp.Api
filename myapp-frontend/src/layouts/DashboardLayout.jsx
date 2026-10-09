@@ -859,26 +859,28 @@ export default function DashboardLayout() {
 
         {/* Account & Footer – pinned to bottom, never scrolls. */}
         <div className="dl-sidebar-bottom">
-          <NavLink
-            to="/profile"
-            className={({ isActive }) => "dl-item" + (isActive ? " dl-item--active" : "")}
-          >
-            {avatarUrl ? (
-              <img src={avatarUrl} alt="" className="dl-item__avatar" aria-hidden="true" />
-            ) : (
-              <MdAccountCircle className="dl-item__icon" aria-hidden="true" />
-            )}
-            <span className="dl-item__label">{displayName}</span>
-          </NavLink>
-          <button
-            type="button"
-            className="dl-logout-btn"
-            onClick={logout}
-            aria-label="Logout"
-          >
-            <MdLogout aria-hidden="true" />
-            <span>Logout</span>
-          </button>
+          <div className="dl-sidebar-account">
+            <NavLink
+              to="/profile"
+              className={({ isActive }) => "dl-item dl-sidebar-account__profile" + (isActive ? " dl-item--active" : "")}
+            >
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" className="dl-item__avatar" aria-hidden="true" />
+              ) : (
+                <MdAccountCircle className="dl-item__icon" aria-hidden="true" />
+              )}
+              <span className="dl-item__label">{displayName}</span>
+            </NavLink>
+            <button
+              type="button"
+              className="dl-logout-btn"
+              onClick={logout}
+              aria-label="Logout"
+              title="Logout"
+            >
+              <MdLogout size={18} aria-hidden="true" />
+            </button>
+          </div>
           <p className="dl-sidebar-footer__copy">
             &copy; {new Date().getFullYear()} FBR Digital ERP
           </p>
@@ -962,50 +964,89 @@ export default function DashboardLayout() {
 /* ------------------------------------------------------------------ */
 /*  Breadcrumb helper                                                   */
 /* ------------------------------------------------------------------ */
+// Section names mirror the sidebar's group titles, so the trail at the top of
+// a page always names the menu the operator just clicked through.
+const BREADCRUMBS = {
+  "/dashboard": ["Dashboards", "Dashboard"],
+  "/stock": ["Dashboards", "Inventory"],
+  "/stock/reconcile": ["Dashboards", "Inventory", "Reconcile to stock sheet"],
+  "/stock/split": ["Dashboards", "Inventory", "Split an item"],
+  "/accounting/dashboard": ["Dashboards", "Accounting"],
+
+  "/sales-quotes": ["Sales", "Sales Quotes"],
+  "/sales-orders": ["Sales", "Sales Orders"],
+  "/challans/import": ["Sales", "Import Challans"],
+  "/challans": ["Sales", "Delivery Challans"],
+  "/bills": ["Sales", "Bills"],
+  "/invoices": ["Sales", "Invoices"],
+  "/credit-notes": ["Sales", "Credit Notes"],
+  "/debit-notes": ["Sales", "Debit Notes"],
+  "/credit-debit-notes": ["Sales", "New Credit / Debit Note"],
+  "/withholding-tax": ["Sales", "Withholding Tax"],
+  "/item-rate-history": ["Sales", "Item Rate History"],
+
+  "/purchase-bills": ["Purchases", "Purchase Bills"],
+  "/purchase-debit-notes": ["Purchases", "Purchase Debit Notes"],
+  "/goods-receipts": ["Purchases", "Goods Receipts"],
+  "/fbr-import/purchase": ["Purchases", "FBR Purchase Import"],
+  "/imports/costing": ["Purchases", "Import Costing"],
+  "/imports/consignments": ["Purchases", "Consignments"],
+  "/imports/tax-desk": ["Purchases", "Import Tax Desk"],
+  "/imports/lcs": ["Purchases", "Letters of Credit"],
+  "/guides/import": ["Purchases", "Import Costing Guide"],
+
+  "/bank-cash-accounts": ["Accounting", "Bank & Cash Accounts"],
+  "/receipts": ["Accounting", "Receipts"],
+  "/payments": ["Accounting", "Payments"],
+  "/customer-ledger": ["Accounting", "Customer Ledger"],
+  "/transfers": ["Accounting", "Transfers"],
+  "/journal-entries": ["Accounting", "Journal Entries"],
+  "/chart-of-accounts": ["Accounting", "Chart of Accounts"],
+  "/accounting/spreadsheet-import": ["Accounting", "Spreadsheet Import"],
+  "/help/accounting": ["Accounting", "Accounting Guide"],
+
+  "/reports/sales": ["Reports", "Sales Report"],
+  "/reports/invoice-sales-detail": ["Reports", "Invoice Sales Detail"],
+  "/reports/tax-sheet": ["Reports", "Tax Sheet"],
+  "/reports/client-ledger": ["Reports", "Client Ledger"],
+  "/accounting/reports": ["Reports", "Accounting Reports"],
+
+  "/Clients/list": ["Master Data", "Clients"],
+  "/Suppliers/list": ["Master Data", "Suppliers"],
+  "/item-types": ["Master Data", "Item Types"],
+  "/non-inventory-items": ["Master Data", "Non-Inventory Items"],
+  "/units": ["Master Data", "Units"],
+
+  "/companies/list": ["Settings", "Companies"],
+  "/configuration/divisions": ["Settings", "Divisions"],
+  "/customer-portals": ["Settings", "Customer Portal"],
+  "/templates": ["Settings", "Print Templates"],
+  "/templates/edit": ["Settings", "Print Templates", "Editor"],
+  "/po-formats": ["Settings", "PO Formats"],
+  "/fbr-settings": ["Settings", "FBR Settings"],
+  "/fbr-sandbox": ["Settings", "FBR Sandbox"],
+  "/fbr-monitor": ["Settings", "FBR Monitor"],
+  "/configuration/navigation-menu": ["Settings", "Navigation Menu"],
+
+  "/administrators": ["Administration", "Administrators"],
+  "/users": ["Administration", "Users"],
+  "/roles": ["Administration", "Roles & Permissions"],
+  "/tenant-access": ["Administration", "Tenant Access"],
+  "/audit-logs": ["Administration", "Audit Logs"],
+  "/accounting/data-migration": ["Administration", "Data Migration"],
+  "/accounting/manager-import": ["Administration", "Manager.io Import"],
+
+  "/profile": ["My Profile"],
+};
+
 function getBreadcrumb(pathname) {
-  const map = {
-    "/dashboard": "Dashboard",
-    "/companies/list": "Configuration / Companies List",
-    "/Clients/list": "Configuration / Clients List",
-    "/Suppliers/list": "Configuration / Suppliers List",
-    "/purchase-bills": "Purchases / Purchase Bills",
-    "/purchase-debit-notes": "Purchases / Purchase Debit Notes",
-    "/goods-receipts": "Purchases / Goods Receipts",
-    "/stock": "Purchases / Stock Dashboard",
-    "/fbr-import/purchase": "Purchases / FBR Purchase Import",
-    "/imports/costing": "Purchases / Import Costing",
-    "/imports/consignments": "Purchases / Consignments",
-    "/imports/tax-desk": "Purchases / Import Tax Desk",
-    "/imports/lcs": "Purchases / Letters of Credit",
-    "/item-types": "Configuration / Item Types",
-    "/non-inventory-items": "Configuration / Non-Inventory Items",
-    "/challans": "Sales / Delivery Challans",
-    "/challans/import": "Sales / Import Challans",
-    "/bills": "Sales / Bills",
-    "/invoices": "Sales / Invoices",
-    "/credit-notes": "Sales / Credit Notes",
-    "/debit-notes": "Sales / Debit Notes",
-    "/withholding-tax": "Sales / Withholding Tax Receipts",
-    "/credit-debit-notes": "Sales / New Credit / Debit Note",
-    "/item-rate-history": "Sales / Item Rate History",
-    "/customer-ledger": "Accounting / Customer Ledger",
-    "/profile": "My Profile",
-    "/users": "User Management",
-    "/roles": "Roles & Permissions",
-    "/customer-portals": "Configuration / Customer Portal",
-    "/templates": "Configuration / Print Templates",
-    "/templates/edit": "Configuration / Print Templates / Editor",
-    "/po-formats": "Configuration / PO Formats",
-    "/units": "Configuration / Units",
-    "/fbr-settings": "Configuration / FBR Settings",
-    "/fbr-sandbox": "Configuration / FBR Sandbox",
-    "/fbr-monitor": "Configuration / FBR Monitor",
-    "/tenant-access": "Administration / Tenant Access",
-    "/administrators": "Administration / Administrators",
-    "/audit-logs": "Administration / Audit Logs",
-    "/guides/import": "Purchases / Import Costing Guide",
-    "/stock/reconcile": "Dashboards / Inventory / Reconcile to stock sheet",
-    "/stock/split": "Dashboards / Inventory / Split an item",
-  };
-  return map[pathname] ?? pathname.replace(/\//g, " / ").replace(/^\s\/\s/, "");
+  let parts = BREADCRUMBS[pathname];
+  if (!parts && pathname.startsWith("/accounting/reports/")) parts = BREADCRUMBS["/accounting/reports"];
+  if (!parts) parts = pathname.split("/").filter(Boolean);
+  return parts.map((p, i) => (
+    <span key={i} className={i === parts.length - 1 ? "dl-crumb dl-crumb--current" : "dl-crumb"}>
+      {i > 0 && <span className="dl-crumb__sep" aria-hidden="true">/</span>}
+      {p}
+    </span>
+  ));
 }

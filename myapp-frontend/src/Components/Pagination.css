@@ -6,8 +6,8 @@
   align-items: center;
   justify-content: center;
   gap: 0.6rem 1rem;
-  padding: 1rem 0;
-  margin-top: 0.5rem;
+  padding: 0.6rem 0 0.2rem;
+  margin-top: 0.25rem;
 }
 
 .pagination-nav {
@@ -32,6 +32,13 @@
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
+  box-shadow: none;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: #f0f4f8;
+  border-color: #b8c4d4;
+  transform: none;
   box-shadow: none;
 }
 

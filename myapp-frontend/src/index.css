@@ -63,7 +63,8 @@ button {
   box-shadow: 0 4px 15px rgba(0,0,0,0.2);
 }
 button:hover {
-  border-color: var(--color-primary);
+  /* No border-color here: the starter's purple (#646cff) is not in this
+     app's palette, and it painted a purple ring on every unstyled button. */
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(0,0,0,0.25);
 }

@@ -195,7 +195,7 @@ export const formStyles = {
     boxShadow: "0 20px 60px rgba(13,71,161,0.2)",
     overflow: "hidden",
     color: colors.textPrimary,
-    animation: "fadeIn 0.3s ease",
+    animation: "fadeIn 0.2s ease",
     // Flex column so header / body / footer stack and body can scroll independently
     display: "flex",
     flexDirection: "column",
@@ -207,7 +207,8 @@ export const formStyles = {
     background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
     // clamp keeps the header tidy on phones (~0.9rem horizontal) while
     // restoring the comfortable 1.5rem on tablet/desktop.
-    padding: "1.1rem clamp(0.9rem, 2vw, 1.5rem)",
+    padding: "0.8rem clamp(0.9rem, 2vw, 1.35rem)",
+    gap: "0.75rem",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
@@ -215,8 +216,9 @@ export const formStyles = {
   },
   title: {
     margin: 0,
-    fontSize: "1.15rem",
+    fontSize: "1.05rem",
     fontWeight: "700",
+    lineHeight: 1.3,
     color: "#ffffff",
   },
   closeButton: {
@@ -252,7 +254,7 @@ export const formStyles = {
     // Padding shrinks on phones via a clamp() — 1rem at narrow widths,
     // 1.5rem on tablet+. Keeps long forms from feeling claustrophobic
     // on a 360px viewport without cramping the desktop look.
-    padding: "clamp(1rem, 2vw, 1.5rem)",
+    padding: "clamp(0.85rem, 1.6vw, 1.25rem)",
     // Body takes remaining space and scrolls internally when content exceeds it —
     // this is the key fix for tall modals on high-resolution screens.
     overflowY: "auto",
@@ -262,34 +264,34 @@ export const formStyles = {
     // other non-flex container — without this, flex:1 gets ignored and the
     // body balloons to its natural height, pushing the footer off-screen.
     // Math: 96vh modal cap − ~75px header − ~65px footer ≈ 140px safety room.
-    maxHeight: "calc(96vh - 140px)",
+    maxHeight: "calc(96vh - 120px)",
   },
   error: {
     backgroundColor: colors.dangerLight,
     color: colors.danger,
-    padding: "0.75rem 1rem",
+    padding: "0.6rem 0.85rem",
     borderRadius: "8px",
-    marginBottom: "1rem",
+    marginBottom: "0.85rem",
     fontWeight: "500",
     border: `1px solid ${colors.danger}30`,
     fontSize: "0.88rem",
   },
   formGroup: {
-    marginBottom: "1.1rem",
+    marginBottom: "0.85rem",
   },
   label: {
     display: "block",
-    marginBottom: "0.35rem",
+    marginBottom: "0.25rem",
     fontWeight: "600",
-    fontSize: "0.85rem",
+    fontSize: "0.82rem",
     color: colors.textSecondary,
   },
   input: {
     width: "100%",
-    padding: "0.6rem 0.85rem",
+    padding: "0.5rem 0.75rem",
     borderRadius: "8px",
     border: `1px solid ${colors.inputBorder}`,
-    fontSize: "0.95rem",
+    fontSize: "0.92rem",
     backgroundColor: colors.inputBg,
     color: colors.textPrimary,
     outline: "none",
@@ -301,8 +303,8 @@ export const formStyles = {
     // flexWrap lets long button rows (e.g. Save / Cancel / Delete) wrap
     // to a second line on narrow phones instead of overflowing.
     flexWrap: "wrap",
-    padding: "1rem clamp(0.9rem, 2vw, 1.5rem)",
-    gap: "0.6rem",
+    padding: "0.7rem clamp(0.9rem, 2vw, 1.35rem)",
+    gap: "0.5rem",
     backgroundColor: "#f5f7fa",
     borderTop: `1px solid ${colors.cardBorder}`,
     flexShrink: 0, // footer always visible (buttons like Save/Cancel)

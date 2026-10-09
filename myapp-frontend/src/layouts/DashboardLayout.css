@@ -73,7 +73,11 @@ body.dl-body--locked {
 
 /* ---------- Brand / Logo Area ---------- */
 .dl-brand {
-  padding: 1.1rem 1rem;
+  padding: 0 1rem;
+  height: var(--topbar-height);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   border-bottom: 1px solid var(--sidebar-border-accent);
   flex-shrink: 0;
 }
@@ -97,6 +101,7 @@ body.dl-body--locked {
   color: #ffffff;
   line-height: 1.25;
   margin: 0;
+  text-align: left;
   flex: 1;
   min-width: 0;
   white-space: nowrap;
@@ -227,7 +232,7 @@ body.dl-body--locked {
 .dl-group {
   display: flex;
   flex-direction: column;
-  margin-top: 0.35rem;
+  margin-top: 0.15rem;
 }
 
 .dl-group__header {
@@ -409,7 +414,7 @@ body.dl-body--locked {
 /* ---------- Sidebar Bottom (Account + Footer – pinned) ---------- */
 .dl-sidebar-bottom {
   flex-shrink: 0;
-  padding: 0.6rem 0.5rem 0.75rem;
+  padding: 0.5rem 0.5rem 0.5rem;
   border-top: 1px solid var(--sidebar-border-accent);
   display: flex;
   flex-direction: column;
@@ -424,21 +429,32 @@ body.dl-body--locked {
   flex-shrink: 0;
 }
 
-.dl-logout-btn {
+/* Profile and logout share one row: the topbar menu offers both again, so
+   the pinned footer does not need two full-width rows of its own. */
+.dl-sidebar-account {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  width: 100%;
-  padding: 0.55rem 0.75rem;
-  min-height: 38px;
+  gap: 0.4rem;
+}
+.dl-sidebar-account__profile { flex: 1; min-width: 0; }
+.dl-sidebar-account__profile .dl-item__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap; /* the operator's own name, not a list of look-alikes */
+}
+
+.dl-logout-btn {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  flex-shrink: 0;
   border-radius: 8px;
   background: rgba(255, 82, 82, 0.14);
   color: #ffcdd2;
-  font-size: 0.88rem;
-  font-weight: 500;
   border: 1px solid rgba(255, 82, 82, 0.25);
   cursor: pointer;
-  text-align: left;
   transition: background var(--transition-fast) var(--easing-standard),
               color var(--transition-fast) var(--easing-standard),
               border-color var(--transition-fast) var(--easing-standard);
@@ -450,11 +466,30 @@ body.dl-body--locked {
   border-color: rgba(255, 82, 82, 0.5);
 }
 
+/* index.css carries the Vite starter's global button look (drop shadow, a
+   2px hover lift, a purple hover border). In the shell it turned every
+   sidebar group header into a floating tile; the shell's buttons are flat. */
+.dl-sidebar button,
+.dl-topbar button {
+  box-shadow: none;
+}
+.dl-sidebar button:hover,
+.dl-topbar button:hover {
+  transform: none;
+  box-shadow: none;
+}
+.dl-sidebar button:focus-visible,
+.dl-topbar button:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 1px;
+}
+.dl-topbar button:focus-visible { outline-color: #0d47a1; }
+
 .dl-sidebar-footer__copy {
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   color: rgba(255, 255, 255, 0.4);
   text-align: center;
-  margin: 0.25rem 0 0;
+  margin: 0;
   letter-spacing: 0.3px;
 }
 
@@ -516,9 +551,36 @@ body.dl-body--locked {
 
 .dl-topbar__breadcrumb {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   font-size: 0.85rem;
   color: #6c757d;
 }
+.dl-crumb { display: inline-flex; align-items: center; }
+.dl-crumb__sep { margin: 0 0.45rem; color: #b8c2cf; }
+.dl-crumb--current { color: #1a2332; font-weight: 600; }
+
+/* Phones: the section is already the open sidebar group, and the user's
+   name is in the menu it opens — keep the bar to page title + avatar. */
+@media (max-width: 599.98px) {
+  .dl-topbar { padding: 0 0.75rem; gap: 0.5rem; }
+  .dl-crumb:not(.dl-crumb--current) { display: none; }
+  .dl-crumb--current .dl-crumb__sep { display: none; }
+  .dl-topbar__user > span { display: none; }
+}
+
+/* The Vite starter's global h1 (3rem, centred) leaks into every page that
+   styles its heading inline. Page titles in the app read left-aligned. */
+.dl-main h1:not([class]) { text-align: left; }
+
+/* Same starter leak inside pages: every button without its own shadow got a
+   heavy drop shadow and jumped 2px on hover. :where() keeps this at the
+   global rule's specificity, so any button that styles its own shadow or
+   hover (class or inline) is untouched. */
+:where(.dl-main) button { box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06); }
+:where(.dl-main) button:hover { transform: none; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.1); }
 
 .dl-topbar__user-wrapper {
   position: relative;
@@ -634,7 +696,7 @@ body.dl-body--locked {
 .dl-main {
   flex: 1;
   min-width: 0;
-  padding: 1.75rem 2rem;
+  padding: 1.25rem 1.5rem;
   overflow-x: auto;
 }
 
@@ -1604,6 +1666,7 @@ body.dl-body--locked {
 
 .pof-header__title {
   margin: 0;
+  text-align: left;
   font-size: 1.5rem;
   font-weight: 700;
   color: #1a2332;
