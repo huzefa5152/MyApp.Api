@@ -344,11 +344,13 @@ export default function UsersPage() {
                     <div style={{ fontWeight: 600, color: colors.textPrimary, fontSize: "0.95rem" }}>
                       {u.fullName}
                     </div>
-                    <div style={{ color: colors.textSecondary, fontSize: "0.84rem" }}>
+                    <div style={{ color: colors.textSecondary, fontSize: "0.84rem", overflowWrap: "anywhere" }}>
                       @{u.username}
                     </div>
+                    {/* Under the name, not beside it: role names are typed by
+                        admins and a long one ran off the card on a phone. */}
+                    <span style={{ ...styles.roleBadge, marginTop: 4 }}>{u.role}</span>
                   </div>
-                  <span style={styles.roleBadge}>{u.role}</span>
                 </div>
                 <div style={styles.userCardMeta}>
                   <span style={{ color: colors.textSecondary, fontSize: "0.82rem" }}>
@@ -791,7 +793,9 @@ const styles = {
   },
   roleBadge: {
     display: "inline-block",
-    padding: "0.25rem 0.75rem",
+    maxWidth: "100%",
+    overflowWrap: "anywhere",
+    padding: "0.2rem 0.65rem",
     borderRadius: 50,
     fontSize: "0.78rem",
     fontWeight: 600,

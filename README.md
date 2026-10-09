@@ -311,6 +311,12 @@ Publish output optimized from 79 MB to 37 MB via:
 - **Sales — card and table actions**: Bill, Invoice and Challan cards show their everyday actions (View, Print, Edit; Validate and Submit on an unfiled invoice; Generate Bill on a pending challan) and fold the rest into a "⋯" menu, so a card's buttons fit on one row instead of four. The Bills, Invoices and Challans tables do the same, which stops the Bills table scrolling sideways on a laptop. Every action is still there, behind the same permissions; the menu works from the keyboard.
 - **Sales — page fixes**: Item Rate History lines up with the other pages and keeps each amount on one line; the New Credit / Debit Note page has a normal-sized title with search and division on one row; the Challans filter pickers share the row width; the Withholding Tax company picker fits a phone screen.
 - **Phones**: the closed sidebar no longer leaves a blue shadow down the left edge of every page.
+- **Every section — buttons**: buttons no longer carry the starter template's drop shadow and hover jump, so link-style buttons (a customer name, a count to drill into) read as links instead of floating pills, and links and focus rings use the app's blue instead of the starter's purple. Fixed-size icon buttons on Clients, Chart of Accounts, Bank & Cash Accounts, Purchase Debit Notes and Consignments render at their designed size instead of being stretched to about 50px wide.
+- **Every section — alignment**: about 30 pages (Accounting, Reports, Import Costing, Stock, Audit Logs, Tenant Access and more) added their own padding on top of the app's, so their titles sat indented from the rest; every page now starts at the same edge.
+- **Purchases**: Purchase Bill and Goods Receipt cards and tables use the same everyday-actions-plus-"⋯" layout as Sales.
+- **Dashboards**: KPI figures stay on one line on a laptop instead of splitting "Rs." from the number; the Stock Dashboard shows its inventory and costing badges under the title and its actions on one toolbar.
+- **Master Data / Settings / Administration**: the Clients table fits a laptop screen with its actions in view; company cards show their document numbering in a compact two-column block; a user's role sits under their name instead of running off the card on a phone.
+- **Phones**: company and other pickers are full-width on a phone and can no longer push the page sideways (Sales Report, Tax Sheet, Client Ledger, Non-Inventory Items, Navigation Menu).
 
 ### 2026-10-08 — Back-dated bills after a stock-sheet reconcile are costed FIFO
 

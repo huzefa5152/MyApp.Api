@@ -579,6 +579,14 @@ body.dl-body--locked {
    styles its heading inline. Page titles in the app read left-aligned. */
 .dl-main h1:not([class]) { text-align: left; }
 
+/* Phones: a <select> is as wide as its longest option, so one long company
+   name pushed the whole page sideways. Full-width pickers on a phone are the
+   house rule anyway; a percentage width also makes the select compressible,
+   so its options can no longer force its container wider. */
+@media (max-width: 599.98px) {
+  .dl-main select { width: 100% !important; min-width: 0 !important; max-width: 100%; }
+}
+
 
 /* CardActions' "more" button is sized to sit among the small action chips
    with a mouse; on a touch screen it gets a full 44px target. */

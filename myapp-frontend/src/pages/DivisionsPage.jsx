@@ -69,7 +69,7 @@ export default function DivisionsPage() {
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
         <MdAccountTree size={28} color="#0d47a1" />
         <div>
-          <h2 style={{ margin: 0, color: "#1a2332" }}>Divisions</h2>
+          <h2 style={{ margin: 0, color: "#1a2332", fontSize: "1.5rem", fontWeight: 700 }}>Divisions</h2>
           <p style={{ margin: 0, color: "#5f6d7e", fontSize: "0.9rem" }}>
             Sub-brands within a company — each with its own logo, branding and Sales Quote numbering.
           </p>

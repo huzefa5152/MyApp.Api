@@ -135,7 +135,10 @@ Click to see the breakdown.` : title}
       </div>
 
       <div className="dash-kpi-card__value" style={{
-        fontSize: "clamp(1.3rem, 4.2vw, 1.8rem)",
+        // Sized to the viewport so a 15-character figure ("Rs. 233,005,315")
+        // stays on one line in a four-across tile; 4.2vw hit the 1.8rem cap on
+        // every desktop and split "Rs." from the number.
+        fontSize: "clamp(1.1rem, 1.45vw, 1.6rem)",
         fontWeight: 600,
         color: "#0c1830",
         lineHeight: 1.1,

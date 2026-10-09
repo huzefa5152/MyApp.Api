@@ -762,29 +762,33 @@ export default function StockDashboardPage() {
                 ? `On-hand inventory for ${selectedCompany.brandName || selectedCompany.name}`
                 : "Select a company"}
             </p>
+            {/* What the company is set to sits with the title it describes;
+                the actions get the toolbar row to themselves. */}
+            <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginTop: "0.4rem" }}>
+              {selectedCompany && (
+                <span
+                  style={flowVersion === 2 ? styles.verPillV2 : styles.verPillV1}
+                  title={flowVersion === 2
+                    ? "V2 Standard Inventory — all item types are tracked; HS code is FBR metadata only."
+                    : "V1 Legacy — only HS-coded item types are stock-tracked."}
+                >
+                  {flowVersion === 2 ? "Inventory V2 · Standard" : "Inventory V1 · Legacy"}
+                </span>
+              )}
+              {selectedCompany && (
+                <span
+                  style={isFifo ? styles.verPillV2 : styles.verPillV1}
+                  title={isFifo
+                    ? "Stock is valued FIFO by GD: a sale uses claimed GDs first, oldest GD date first, then unclaimed GDs."
+                    : "Stock is valued at the weighted average of everything held."}
+                >
+                  {isFifo ? "Costing · FIFO by GD" : "Costing · Weighted average"}
+                </span>
+              )}
+            </div>
           </div>
         </div>
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-          {selectedCompany && (
-            <span
-              style={flowVersion === 2 ? styles.verPillV2 : styles.verPillV1}
-              title={flowVersion === 2
-                ? "V2 Standard Inventory — all item types are tracked; HS code is FBR metadata only."
-                : "V1 Legacy — only HS-coded item types are stock-tracked."}
-            >
-              {flowVersion === 2 ? "Inventory V2 · Standard" : "Inventory V1 · Legacy"}
-            </span>
-          )}
-          {selectedCompany && (
-            <span
-              style={isFifo ? styles.verPillV2 : styles.verPillV1}
-              title={isFifo
-                ? "Stock is valued FIFO by GD: a sale uses claimed GDs first, oldest GD date first, then unclaimed GDs."
-                : "Stock is valued at the weighted average of everything held."}
-            >
-              {isFifo ? "Costing · FIFO by GD" : "Costing · Weighted average"}
-            </span>
-          )}
+        <div style={styles.toolbar}>
           {/* V2 is one-way. Under V2 every item type is inventory, so a company
               builds up positions on items V1 does not track; going back would
               hide them rather than remove them, which reads as stock vanishing.
@@ -2687,7 +2691,8 @@ const drillStyles = {
 };
 
 const styles = {
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.75rem" },
+  toolbar: { display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap", width: "100%", paddingTop: "0.75rem", borderTop: `1px solid ${colors.cardBorder}` },
   headerIcon: { width: 48, height: 48, borderRadius: 14, background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, display: "flex", alignItems: "center", justifyContent: "center" },
   title: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
   subtitle: { margin: "0.15rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },

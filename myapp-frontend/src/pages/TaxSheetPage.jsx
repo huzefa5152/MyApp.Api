@@ -305,7 +305,8 @@ function Field({ label, icon, children }) {
   );
 }
 
-const th = { padding: "6px 10px", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.02em", color: colors.textSecondary, whiteSpace: "nowrap" };
+// Headings may wrap (bottom-aligned): "Excluding Amount" set the column wider than its figures.
+const th = { padding: "6px 10px", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.02em", color: colors.textSecondary, verticalAlign: "bottom", lineHeight: 1.25 };
 const td = { padding: "6px 10px", color: colors.textPrimary, verticalAlign: "top" };
 const tdR = { ...td, textAlign: "right", whiteSpace: "nowrap" };
 const clamp2 = { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" };

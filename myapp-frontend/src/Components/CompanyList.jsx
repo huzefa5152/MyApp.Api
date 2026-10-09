@@ -76,7 +76,16 @@ export default function CompanyList({ companies, onEdit, fetchCompanies }) {
               )}
               {/* Every document-number sequence for the company — Starting seed
                   and last-issued (Current), shown only when the sequence exists. */}
-              <div style={{ display: "grid", gap: "0.15rem", marginTop: "0.3rem" }}>
+              {/* Two columns, label over value: eight one-line rows made every
+                  company card twice the height of its content. Same figures. */}
+              <div style={{
+                display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0.35rem 0.75rem",
+                marginTop: "0.5rem", padding: "0.5rem 0.6rem", background: "#f8f9fb",
+                border: "1px solid #e8edf3", borderRadius: 8,
+              }}>
+                <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 4, fontSize: "0.66rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#5f6d7e" }}>
+                  <MdReceipt style={{ fontSize: "0.85rem" }} /> Numbering — starts at → current
+                </div>
                 {[
                   ["Challan", c.startingChallanNumber, c.currentChallanNumber],
                   ["Invoice", c.startingInvoiceNumber, c.currentInvoiceNumber],
@@ -87,10 +96,12 @@ export default function CompanyList({ companies, onEdit, fetchCompanies }) {
                   ["Credit Note", c.startingCreditNoteNumber, c.currentCreditNoteNumber],
                   ["Debit Note", c.startingDebitNoteNumber, c.currentDebitNoteNumber],
                 ].map(([label, start, current]) => (
-                  <p key={label} style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem", margin: 0 }}>
-                    <MdReceipt style={{ color: "#5f6d7e", flexShrink: 0, fontSize: "0.9rem" }} />
-                    <strong>{label} #:</strong> Starts at {start || 1}{current > 0 ? ` → Current: #${current}` : ""}
-                  </p>
+                  <div key={label} style={{ minWidth: 0, lineHeight: 1.25 }}>
+                    <div style={{ fontSize: "0.68rem", color: "#5f6d7e" }}>{label}</div>
+                    <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "#1a2332", fontVariantNumeric: "tabular-nums" }}>
+                      #{start || 1}{current > 0 ? <span style={{ color: "#0d47a1" }}>{` → #${current}`}</span> : null}
+                    </div>
+                  </div>
                 ))}
               </div>
               {c.logoPath && (
