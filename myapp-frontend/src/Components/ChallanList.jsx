@@ -1,3 +1,4 @@
+import CardActions from "./CardActions";
 import { useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning, MdRequestQuote, MdLocationOn, MdContentCopy, MdCopyAll } from "react-icons/md";
@@ -197,8 +198,9 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                   </p>
                 </div>
 
-                <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
+                <CardActions style={cardStyles.buttonGroup}>
                   <button
+                    data-primary
                     style={{ ...styles.actionBtn, ...styles.viewBtn }}
                     onClick={() => setSelectedChallan(c)}
                   >
@@ -206,6 +208,7 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                   </button>
                   {permPrint && (
                     <button
+                      data-primary
                       style={{ ...styles.actionBtn, ...styles.printBtn, ...(printDisabled ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
                       disabled={printDisabled}
                       title={printDisabled ? printDisabledReason : "Print"}
@@ -235,6 +238,7 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                   )}
                   {permUpdate && isEditable && (
                     <button
+                      data-primary={!canGenerateBill || undefined}
                       style={{ ...styles.actionBtn, ...styles.editBtn }}
                       onClick={() => onEditItems?.(c)}
                       title={c.status === "Invoiced" ? "Edit items (bill will auto-sync)" : "Edit items"}
@@ -272,6 +276,7 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                   )}
                   {canGenerateBill && (
                     <button
+                      data-primary
                       style={{ ...styles.actionBtn, ...styles.generateBillBtn }}
                       onClick={() => onGenerateBill?.(c)}
                       title="Open the New Bill form with this challan pre-selected"
@@ -298,7 +303,7 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       <MdDelete size={14} /> Delete
                     </button>
                   )}
-                </div>
+                </CardActions>
               </div>
             </div>
           );

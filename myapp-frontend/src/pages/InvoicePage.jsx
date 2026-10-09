@@ -19,6 +19,7 @@ import InvoiceTable from "../Components/InvoiceTable";
 import CorrectionWizard from "../Components/CorrectionWizard";
 import FbrResetModal from "../Components/FbrResetModal";
 import ViewModeToggle from "../Components/ViewModeToggle";
+import CardActions from "../Components/CardActions";
 import { useListViewMode } from "../hooks/useListViewMode";
 import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice, deleteInvoice, cancelInvoice, setInvoiceFbrExcluded } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
@@ -1347,7 +1348,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                       </div>
                     )}
                   </div>
-                  <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
+                  <CardActions style={cardStyles.buttonGroup}>
                     {/* Receipt shortcut — record money in against this invoice,
                         pre-filling the client + this document in the form. */}
                     {canRecordReceipt && !inv.isCancelled && (
@@ -1363,6 +1364,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         Invoices card: Tax Print, Tax PDF, Tax XLS, View FBR, Validate, Submit. */}
                     {!isNotesMode && (
                       <button
+                        data-primary={isBillsMode || undefined}
                         style={{ ...styles.printBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" }}
                         onClick={() => setViewingId(inv.id)}
                         title={isBillsMode ? "View bill details (read-only)" : "View invoice details (read-only)"}
@@ -1387,12 +1389,12 @@ export default function InvoicePage({ mode = "invoices" }) {
                       </button>
                     )}
                     {isBillsMode && canPrint && (
-                      <button style={{ ...styles.printBtn, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print bill"} onClick={() => handlePrintBill(inv)}>
+                      <button data-primary style={{ ...styles.printBtn, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print bill"} onClick={() => handlePrintBill(inv)}>
                         <MdPrint size={14} /> Bill
                       </button>
                     )}
                     {!isBillsMode && canPrint && (
-                      <button style={{ ...styles.taxBtn, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print tax invoice"} onClick={() => handlePrintTax(inv)}>
+                      <button data-primary={isNotesMode || inv.fbrStatus === "Submitted" || inv.isCancelled || undefined} style={{ ...styles.taxBtn, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print tax invoice"} onClick={() => handlePrintTax(inv)}>
                         <MdDescription size={14} /> Tax Invoice
                       </button>
                     )}
@@ -1427,6 +1429,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         modes so the operator can see locked rows. */}
                     {!isBillsMode && canFbrPreview && (
                       <button
+                        data-primary={inv.fbrStatus === "Submitted" || undefined}
                         style={{ ...styles.printBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" }}
                         onClick={() => setFbrPreviewId(inv.id)}
                         title="Preview the FBR payload — grouped items, total qty, total value, total tax. Read-only, doesn't send anything."
@@ -1447,6 +1450,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                       <>
                         {canFbrValidate && (
                           <button
+                            data-primary
                             style={{
                               ...styles.fbrValidateBtn,
                               opacity: fbrLoading || !inv.fbrReady ? 0.4 : 1,
@@ -1467,6 +1471,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         )}
                         {canFbrSubmit && (
                           <button
+                            data-primary
                             style={{
                               ...styles.fbrSubmitBtn,
                               opacity: fbrLoading || !fbrValidated.has(inv.id) || !inv.fbrReady ? 0.4 : 1,
@@ -1494,6 +1499,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         edits permanently). */}
                     {isBillsMode && canEditInThisMode && inv.fbrStatus !== "Submitted" && !inv.isCancelled && !inv.isMigrated && (
                       <button
+                        data-primary
                         style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
                         onClick={() => setEditingId(inv.id)}
                         title={canUpdate
@@ -1536,6 +1542,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         FBR-submitted or cancelled. */}
                     {!isBillsMode && canEditInThisMode && inv.fbrStatus !== "Submitted" && !inv.isCancelled && !inv.isMigrated && (
                       <button
+                        data-primary
                         style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
                         onClick={() => setEditingId(inv.id)}
                         title="Edit item type, qty & unit price (saved as an adjustment over the bill)"
@@ -1623,7 +1630,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdPostAdd size={14} /> Correct
                       </button>
                     )}
-                  </div>
+                  </CardActions>
                 </div>
               </div>
             ))}

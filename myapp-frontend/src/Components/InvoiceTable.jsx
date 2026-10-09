@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import CardActions from "./CardActions";
 import {
   MdVisibility, MdPrint, MdPictureAsPdf, MdGridOn, MdDescription,
   MdCloudUpload, MdCheckCircle, MdHourglassEmpty, MdError, MdBlock, MdRestore,
@@ -191,8 +192,10 @@ export default function InvoiceTable({
     {
       key: "clientName",
       header: "Client",
+      // A floor on the width so a long buyer name reads on two lines, not
+      // three or four squeezed beside empty columns.
       render: (i) => (
-        <span>
+        <span style={{ display: "block", minWidth: 115 }}>
           {i.clientName || "—"}
           {i.divisionName && <span style={divisionChip}>{i.divisionName}</span>}
         </span>
@@ -309,19 +312,19 @@ export default function InvoiceTable({
     const isFbrPending = isFbrInFlight(inv);
     const canReset = !!perms?.canFbrReset && isFbrPending;
     return (
-      <>
+      <CardActions nowrap label={`More actions for ${inv.invoiceNumber}`}>
         {!isReturnsMode && (
-          <button style={btn.view} onClick={() => onView?.(inv)} title={isBillsMode ? "View bill" : "View invoice (read-only)"}>
+          <button data-label="View" data-primary={(isBillsMode || isReturnsMode) || undefined} style={btn.view} onClick={() => onView?.(inv)} title={isBillsMode ? "View bill" : "View invoice (read-only)"}>
             <MdVisibility size={14} />
           </button>
         )}
         {perms.canRecordReceipt && !inv.isCancelled && (
-          <button style={btn.receipt} onClick={() => onRecordReceipt?.(inv)} title="Record a receipt (payment received) against this invoice">
+          <button data-label="Record receipt" style={btn.receipt} onClick={() => onRecordReceipt?.(inv)} title="Record a receipt (payment received) against this invoice">
             <MdPayments size={14} />
           </button>
         )}
         {isBillsMode && (
-          <button
+          <button data-label="Open in Invoices"
             style={btn.teal}
             onClick={() => navigate(`/invoices?search=${encodeURIComponent(inv.invoiceNumber)}`)}
             title="Open this bill on the Invoices tab"
@@ -330,17 +333,17 @@ export default function InvoiceTable({
           </button>
         )}
         {isBillsMode && perms.canPrint && (
-          <button style={{ ...btn.print, ...(perms.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={perms.noTemplate} onClick={() => onPrintBill?.(inv)} title={perms.noTemplate ? perms.noTemplateReason : "Print bill"}>
+          <button data-label="Print bill" data-primary style={{ ...btn.print, ...(perms.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={perms.noTemplate} onClick={() => onPrintBill?.(inv)} title={perms.noTemplate ? perms.noTemplateReason : "Print bill"}>
             <MdPrint size={14} />
           </button>
         )}
         {!isBillsMode && perms.canPrint && (
-          <button style={{ ...btn.tax, ...(perms.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={perms.noTemplate} onClick={() => onPrintTax?.(inv)} title={perms.noTemplate ? perms.noTemplateReason : "Print tax invoice"}>
+          <button data-label="Print tax invoice" data-primary={(isSubmitted || inv.isCancelled || isReturnsMode) || undefined} style={{ ...btn.tax, ...(perms.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={perms.noTemplate} onClick={() => onPrintTax?.(inv)} title={perms.noTemplate ? perms.noTemplateReason : "Print tax invoice"}>
             <MdDescription size={14} />
           </button>
         )}
         {isBillsMode && perms.canPrint && (
-          <button
+          <button data-label="Bill PDF"
             style={{ ...btn.pdf, opacity: (exportingId || perms.noTemplate) ? 0.55 : 1, ...(perms.noTemplate ? { cursor: "not-allowed" } : {}) }}
             disabled={!!exportingId || perms.noTemplate}
             onClick={() => onExportBillPdf?.(inv)}
@@ -350,7 +353,7 @@ export default function InvoiceTable({
           </button>
         )}
         {!isBillsMode && perms.canPrint && (
-          <button
+          <button data-label="Tax invoice PDF"
             style={{ ...btn.pdf, opacity: (exportingId || perms.noTemplate) ? 0.55 : 1, ...(perms.noTemplate ? { cursor: "not-allowed" } : {}) }}
             disabled={!!exportingId || perms.noTemplate}
             onClick={() => onExportTaxPdf?.(inv)}
@@ -360,7 +363,7 @@ export default function InvoiceTable({
           </button>
         )}
         {isBillsMode && perms.canPrint && hasExcelBill && (
-          <button
+          <button data-label="Bill XLS"
             style={{ ...btn.excel, opacity: exportingId ? 0.55 : 1 }}
             disabled={!!exportingId}
             onClick={() => onExportBillExcel?.(inv)}
@@ -370,7 +373,7 @@ export default function InvoiceTable({
           </button>
         )}
         {!isBillsMode && perms.canPrint && hasExcelTax && (
-          <button
+          <button data-label="Tax invoice XLS"
             style={{ ...btn.excel, opacity: exportingId ? 0.55 : 1 }}
             disabled={!!exportingId}
             onClick={() => onExportTaxExcel?.(inv)}
@@ -380,12 +383,12 @@ export default function InvoiceTable({
           </button>
         )}
         {!isBillsMode && perms.canFbrPreview && (
-          <button style={btn.view} onClick={() => onFbrPreview?.(inv)} title="Preview FBR payload">
+          <button data-label="View FBR payload" data-primary={(isSubmitted) || undefined} style={btn.view} onClick={() => onFbrPreview?.(inv)} title="Preview FBR payload">
             <MdVisibility size={14} />
           </button>
         )}
         {!isBillsMode && canReset && (
-          <button
+          <button data-label="Reset FBR" data-primary
             style={{ ...btn.neutral, backgroundColor: "#fff8e1", color: "#8a6d00", border: "1px solid #ffe082" }}
             onClick={() => onFbrReset?.(inv)}
             title="Reset this bill's FBR state (it is stuck after a timed-out/uncertain submit). Verify at FBR first."
@@ -396,7 +399,7 @@ export default function InvoiceTable({
         {!isBillsMode && perms.canFbrAny && selectedCompanyHasFbrToken && !isSubmitted && !isFbrPending && !inv.isCancelled && !isFutureDocDate(inv.date) && (
           <>
             {perms.canFbrValidate && (
-              <button
+              <button data-label="Validate with FBR" data-primary
                 style={{
                   ...btn.fbrValidate,
                   opacity: fbrLoading || !inv.fbrReady ? 0.45 : 1,
@@ -415,7 +418,7 @@ export default function InvoiceTable({
               </button>
             )}
             {perms.canFbrSubmit && (
-              <button
+              <button data-label="Submit to FBR" data-primary
                 style={{
                   ...btn.fbrSubmit,
                   opacity: fbrLoading || !fbrValidated.has(inv.id) || !inv.fbrReady ? 0.4 : 1,
@@ -435,7 +438,7 @@ export default function InvoiceTable({
           </>
         )}
         {perms.canCopy && onCopy && !inv.isMigrated && (
-          <button style={btn.copy} onClick={() => onCopy(inv)} title="Copy this bill">
+          <button data-label="Copy" style={btn.copy} onClick={() => onCopy(inv)} title="Copy this bill">
             <MdCopyAll size={14} />
           </button>
         )}
@@ -445,7 +448,7 @@ export default function InvoiceTable({
             action for the rest. */}
         {perms.canCreateChallan && onCreateChallan && !inv.isCancelled
           && Number(inv.challanRemainingQuantity || 0) > 0 && (
-          <button
+          <button data-label="Create challan"
             style={btn.challan}
             onClick={() => onCreateChallan(inv)}
             title={`Create a delivery challan — ${Number(inv.challanRemainingQuantity).toLocaleString()} still to deliver`}
@@ -456,7 +459,7 @@ export default function InvoiceTable({
         {/* An imported ledger document carries a total and no line items, and
             the server refuses to edit one -- so no Edit button on those rows. */}
         {perms.canOpenEdit && !isSubmitted && !inv.isCancelled && !inv.isMigrated && (
-          <button
+          <button data-label="Edit" data-primary
             style={btn.edit}
             onClick={() => onEdit?.(inv)}
             title={isBillsMode ? "Edit bill" : "Edit item type, qty & unit price (saved as an adjustment over the bill)"}
@@ -465,7 +468,7 @@ export default function InvoiceTable({
           </button>
         )}
         {!isBillsMode && perms.canFbrExclude && !isSubmitted && !inv.isCancelled && (
-          <button
+          <button data-label={inv.isFbrExcluded ? "Include in FBR bulk" : "Exclude from FBR bulk"}
             style={{
               ...btn.neutral,
               backgroundColor: inv.isFbrExcluded ? "#e8f5e9" : "#eceff1",
@@ -481,12 +484,12 @@ export default function InvoiceTable({
           </button>
         )}
         {perms.canDelete && !isSubmitted && !inv.isCancelled && (
-          <button style={btn.delete} onClick={() => onDelete?.(inv)} title="Delete — removes the row entirely, reverts its GL + inventory impact and frees its challans (leaves a numbering gap). Use Void to keep the number.">
+          <button data-label="Delete" style={btn.delete} onClick={() => onDelete?.(inv)} title="Delete — removes the row entirely, reverts its GL + inventory impact and frees its challans (leaves a numbering gap). Use Void to keep the number.">
             <MdDelete size={14} />
           </button>
         )}
         {(isBillsMode || isReturnsMode) && perms.canVoid && !isSubmitted && !inv.isCancelled && (
-          <button
+          <button data-label="Void"
             style={btn.void}
             onClick={() => onVoid?.(inv)}
             title="Void bill — keeps the bill number (no gap), marks it cancelled and reverts its delivery challan(s) to Pending so they can be re-billed."
@@ -496,7 +499,7 @@ export default function InvoiceTable({
         )}
         {perms.canReverse && isSubmitted && !inv.isCancelled && !inv.fbrCancelledAt &&
          inv.documentType !== 9 && inv.documentType !== 10 && (
-          <button
+          <button data-label="Reverse"
             style={btn.reverse}
             onClick={() => onReverse?.(inv)}
             title="Reverse this FBR-submitted bill — opens the Credit Note screen prefilled with its lines (trim for a partial return)."
@@ -514,7 +517,7 @@ export default function InvoiceTable({
         {perms.canReverse && !inv.isCancelled && !inv.hasSupplement && !inv.isMigrated &&
          inv.documentType !== 9 && inv.documentType !== 10 &&
          fbrEnabled && isSubmitted && (
-          <button
+          <button data-label="Correct"
             style={btn.teal}
             onClick={() => onCorrect?.(inv)}
             title="Bill the balance quantity under-reported on this bill — creates a new unclassified bill (+ same challan/PO) to classify and, when FBR is on, submit to FBR."
@@ -522,7 +525,7 @@ export default function InvoiceTable({
             <MdPostAdd size={14} />
           </button>
         )}
-      </>
+      </CardActions>
     );
   };
 

@@ -65,9 +65,13 @@ body.dl-body--locked {
   .dl-sidebar {
     width: min(88vw, 320px);
     transform: translateX(-100%);
+    /* The closed drawer sits just off-screen; its shadow would still bleed
+       24px into view as a blue strip down the left edge of every page. */
+    box-shadow: none;
   }
   .dl-sidebar.dl-sidebar--open {
     transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(13, 71, 161, 0.22);
   }
 }
 
@@ -582,6 +586,12 @@ body.dl-body--locked {
 :where(.dl-main) button { box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06); }
 :where(.dl-main) button:hover { transform: none; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.1); }
 
+/* CardActions' "more" button is sized to sit among the small action chips
+   with a mouse; on a touch screen it gets a full 44px target. */
+@media (pointer: coarse) {
+  .card-actions-more { width: 44px !important; height: 44px !important; }
+}
+
 .dl-topbar__user-wrapper {
   position: relative;
 }
@@ -1060,15 +1070,17 @@ body.dl-body--locked {
    Same pattern as audit logs above. The card layout puts Unit Price
    (the "answer" the page exists to show) in the top-right at large size,
    so a glance is enough. */
+/* .dl-main already pads every page; a second padding here indented this
+   page's title away from every other page's. */
 .irh-page {
-  padding: 1.5rem 2rem;
+  padding: 0;
 }
 .irh-table { display: block; }
 .irh-cards { display: none; }
 
 @media (max-width: 767.98px) {
   .irh-page {
-    padding: 1rem 0.85rem 1.25rem;
+    padding: 0;
   }
   .irh-table { display: none; }
   .irh-cards {
