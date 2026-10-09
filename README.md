@@ -300,6 +300,8 @@ Optional company Gmail inbox: authorize an account once and link it only to assi
 
 ### 2026-10-09
 
+- Improve receipt/payment document search, client loading feedback and modal readability without changing allocation calculations.
+
 - Show emails the way Gmail does: an email's own formatting (tables, bold, links) now displays in the Email Workspace instead of plain text only. It runs in a locked-down frame where nothing the sender wrote can run; links open in a new tab, and images from the sender stay hidden until you choose Show images, so opening an email does not tell the sender. Plain-text emails read as before.
 - Preview email attachments without downloading them: each attachment is a card (a thumbnail for photos), and clicking one opens a full-screen viewer for PDFs, pictures, Excel sheets (every tab), CSV and text files, with Download, next / previous and Esc to close. Other file types, and web pages sent as attachments, offer Download only.
 - Redesign the Email Workspace: inbox rows show the sender with a coloured initial, a short received date and a coloured status chip; the open enquiry has a header with sender, full date and status, its Keep / Ignore / Prepare actions stay in reach at the top, and the panes fill the screen. On a phone the list and the reader are separate views with a back bar. What each button does is unchanged.

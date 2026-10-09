@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from "react";
 import { MdClose } from "react-icons/md";
 import { formStyles, modalSizes, colors, dropdownStyles } from "../theme";
+import "./PaymentForm.css";
 import SearchableSelect from "./SearchableSelect";
 import DocumentNotesEditor from "./DocumentNotesEditor";
 import DivisionSelect from "./DivisionSelect";
@@ -112,6 +113,9 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
     return a ? String(a.amount) : "";
   });
 
+  const [documentSearch, setDocumentSearch] = useState("");
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [contactsError, setContactsError] = useState("");
   const [docs, setDocs] = useState([]);          // open documents for the contact
   // alloc[docId] = { cash: "30000", adj: "0.50", adjMode: "none"|"discount"|
   //                  "writeoff"|"other", adjAccountId: <id|null> }
@@ -139,9 +143,11 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
     if (payeeType === "Other") { setContacts([]); return; }
     let cancelled = false;
     const load = payeeType === "Client" ? getClientsByCompany : getSuppliersByCompany;
+    setContactsLoading(true); setContactsError(""); setContacts([]);
     load(companyId)
       .then(({ data }) => { if (!cancelled) setContacts(data || []); })
-      .catch(() => { if (!cancelled) setContacts([]); });
+      .catch(() => { if (!cancelled) { setContacts([]); setContactsError("Could not load clients or suppliers. Close and reopen this form to retry."); } })
+      .finally(() => { if (!cancelled) setContactsLoading(false); });
     return () => { cancelled = true; };
   }, [companyId, payeeType]);
 
@@ -206,10 +212,18 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
     if (purpose !== "settle" || !canSettle) { setDocs([]); setAlloc({}); return; }
     if (!contactId) { setDocs([]); setAlloc({}); return; }
     let cancelled = false;
-    setLoadingDocs(true);
-    const fetcher = isReceipt
-      ? getPagedInvoicesByCompany(companyId, { clientId: contactId, pageSize: 100 })
-      : getPurchaseBillsByCompanyPaged(companyId, { supplierId: contactId, pageSize: 100 });
+    setLoadingDocs(true); setDocumentSearch("");
+    const fetchPage = page => isReceipt
+      ? getPagedInvoicesByCompany(companyId, { clientId: contactId, pageSize: 100, page })
+      : getPurchaseBillsByCompanyPaged(companyId, { supplierId: contactId, pageSize: 100, page });
+    const fetcher = (async () => {
+      const first = await fetchPage(1);
+      const items = [...(first.data.items || [])];
+      for (let page = 2; page <= (first.data.totalPages || 1) && !cancelled; page++) {
+        const next = await fetchPage(page); items.push(...(next.data.items || []));
+      }
+      return { data: { ...first.data, items } };
+    })();
     fetcher
       .then(({ data }) => {
         if (cancelled) return;
@@ -319,6 +333,8 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   const setAdjAccount = (docId, id) => patchRow(docId, { adjAccountId: id != null ? Number(id) : null });
 
   // "Max" = settle the whole balance in cash (drops any adjustment).
+  const visibleDocs = docs.filter(d => String(d.number ?? "").toLowerCase().includes(documentSearch.trim().toLowerCase()));
+
   const fillBalance = (doc) =>
     setAlloc((prev) => ({ ...prev, [doc.id]: { cash: String(doc.available), adj: "0", adjMode: "none", adjAccountId: null } }));
 
@@ -566,7 +582,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div className="payment-dialog" data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? `Edit ${editPayment.reference || (isReceipt ? "Receipt" : "Payment")}` : (isReceipt ? "Record Receipt" : "Record Payment")}</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
@@ -606,6 +622,8 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                 <div style={{ marginTop: "0.5rem" }}>
                   <SearchableSelect
                     items={contacts}
+                    loading={contactsLoading}
+                    disabled={contactsLoading}
                     value={contactId}
                     onChange={(id) => setContactId(id ? String(id) : "")}
                     placeholder={`— Select ${contactLabel} —`}
@@ -619,6 +637,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
               )}
             </div>
 
+            {contactsError && <p role="alert">{contactsError}</p>}
             {/* Question 2: what for. Decides which account the other side of the
                 entry lands on; the operator picks a purpose, not a debit. */}
             <div data-admin-field="" style={formStyles.formGroup}>
@@ -705,7 +724,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
               <label style={formStyles.label}>Description (optional)</label>
               <input style={formStyles.input} value={description} onChange={(e) => setDescription(e.target.value)} />
             </div>
-            <DocumentNotesEditor value={notes} onChange={setNotes} />
+            <details className="payment-notes"><summary>Notes (optional)</summary><DocumentNotesEditor value={notes} onChange={setNotes} /></details>
 
             {/* Income/expense lines — the everyday "paid the electricity bill".
                 Amount is what left the bank; the tax rate carves the recoverable
@@ -804,6 +823,8 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
             {purpose === "settle" && (
             <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>Apply to open {docLabel.toLowerCase()}s</label>
+              {contactId && !loadingDocs && docs.length > 0 && <div className="payment-doc-search"><label>Search {docLabel.toLowerCase()} number<input type="search" value={documentSearch} onChange={e => setDocumentSearch(e.target.value)} placeholder={`Find ${docLabel.toLowerCase()} #`} style={formStyles.input} /></label><span>{visibleDocs.length} of {docs.length} open {docLabel.toLowerCase()}s</span></div>}
+              {contactId && !loadingDocs && docs.length > 0 && visibleDocs.length === 0 && <p role="status">No matching {docLabel.toLowerCase()} number. Clear search to see all open documents.</p>}
               {!contactId ? (
                 <div style={hintBox}>Select a {contactLabel.toLowerCase()} to see their unpaid {docLabel.toLowerCase()}s.</div>
               ) : loadingDocs ? (
@@ -815,7 +836,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                    input + Max button get full-width tap targets instead of a
                    5-column table squeezed into ~340px. */
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                  {docs.map((d) => {
+                  {visibleDocs.map((d) => {
                     const c = rowCalc(d);
                     return (
                       <div key={d.id} style={allocCard}>
@@ -856,7 +877,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                       </tr>
                     </thead>
                     <tbody>
-                      {docs.map((d) => {
+                      {visibleDocs.map((d) => {
                         const c = rowCalc(d);
                         const adjNode = renderAdjust(d, c);
                         // Drop the main row's bottom border when an adjustment
