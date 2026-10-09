@@ -300,6 +300,13 @@ Optional company Gmail inbox: authorize an account once and link it only to assi
 
 ### 2026-10-09
 
+- Add motion and feedback across the admin: sidebar links nudge on hover, active markers grow in, opening a group cascades its links, the user menu drops in; every shared dialog dims the page and rises into place; toasts slide in; buttons give press feedback and show a clear keyboard-focus ring. All of it switches off under the operating system's reduced-motion setting.
+- Fix sidebar groups being cut off when they hold many links: a group now opens to its full height, and the sidebar scrolls the current page's link into view.
+- Animate the dashboard's KPI figures counting up, keep them on one line, fit the donut's total inside its ring, and give the client and supplier legends room for names.
+- Fold rarely used actions on Bill, Invoice, Challan and Purchase Bill cards and tables into a "⋯" menu, so a card's buttons fit on one row (Bills cards carried up to ten). Every action is still there behind the same permissions, and the menu works from the keyboard.
+- Line pages up: about 20 pages added their own padding inside the app's; report and FBR Monitor titles no longer centre themselves; card totals keep "Rs." with the figure; company pickers can no longer push a phone page sideways; icon buttons on Sales Orders, Sales Quotes and several other screens render at their designed size. The breadcrumb shows the current page in bold, and the challan dialog puts its number and Sales Order picker on one row.
+- Remove the starter template's purple accent and the drop shadow and hover jump it gave every button.
+
 - Clarify seed-admin Gmail account linking: personal account choices do not indicate a connection to the selected company.
 
 - Polish the email workspace with an integrated company header, clear message selection and compact navigation. Keep the email inbox and reader within the viewport with independent scrolling, compact controls and a mobile inbox/detail view.

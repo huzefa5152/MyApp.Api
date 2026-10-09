@@ -266,3 +266,13 @@ body.admin-ui .dl-main h1 { text-align: left; }
 @media (max-width: 599.98px) {
   body.admin-ui .dl-main select { width: 100% !important; min-width: 0 !important; max-width: 100%; }
 }
+
+/* A document dialog's header row: number, a source picker, the copy shortcut.
+   Labels share a top line; the label-less copy button drops by one label
+   height so it lines up with the inputs. Opened, the copy panel takes the row. */
+body.admin-ui .doc-header-row { display: flex; flex-wrap: wrap; gap: 0.6rem 1rem; align-items: flex-start; margin-bottom: 0.85rem; }
+body.admin-ui .doc-header-row__number { flex: 0 1 340px; min-width: min(260px, 100%); }
+body.admin-ui .doc-header-row__number > div { max-width: none !important; margin-bottom: 0 !important; }
+body.admin-ui .doc-header-row__grow { flex: 1 1 280px; min-width: 0; }
+body.admin-ui .doc-header-row__grow > div { margin-bottom: 0 !important; }
+body.admin-ui .doc-header-row__copy { flex: 0 0 auto; margin-left: auto; padding-top: 1.35rem; }

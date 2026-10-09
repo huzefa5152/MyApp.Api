@@ -305,35 +305,41 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
 
         <form onSubmit={handleSubmit}>
           <div data-admin-body="" style={formStyles.body}>
-            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} divisionId={fromOrder ? order?.divisionId : divisionId} documentType="challan" mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
             {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
-            {/* Optional: build this challan by delivering an open Sales Order.
-                Picking one fills every undelivered line; the operator just sets
-                how much to deliver now. */}
-            <div style={styles.soPickerCard}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                <span style={styles.soPickerLabel}>Deliver a Sales Order <span style={{ fontWeight: 400, color: colors.textSecondary }}>(optional)</span></span>
-                <div style={{ flex: 1, minWidth: 240 }}>
-                  <SearchableSelect
-                    items={orderOptions}
-                    value={salesOrderId}
-                    onChange={(id) => pickOrder(id)}
-                    searchKeys={["name", "salesOrderNumber", "clientName"]}
-                    placeholder={openOrders.length ? "Search open sales orders…" : "No open sales orders"}
-                    disabled={loadingOrder || openOrders.length === 0}
-                  />
+            {/* Number and the Sales Order picker share one row instead of two. */}
+            <div className="doc-header-row">
+              <div className="doc-header-row__number"><BillNumberField companyId={companyId} divisionId={fromOrder ? order?.divisionId : divisionId} documentType="challan" mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
+              <div className="doc-header-row__grow">
+
+                {/* Optional: build this challan by delivering an open Sales Order.
+                    Picking one fills every undelivered line; the operator just sets
+                    how much to deliver now. */}
+                <div style={styles.soPickerCard}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                    <span style={styles.soPickerLabel}>Deliver a Sales Order <span style={{ fontWeight: 400, color: colors.textSecondary }}>(optional)</span></span>
+                    <div style={{ flex: 1, minWidth: 240 }}>
+                      <SearchableSelect
+                        items={orderOptions}
+                        value={salesOrderId}
+                        onChange={(id) => pickOrder(id)}
+                        searchKeys={["name", "salesOrderNumber", "clientName"]}
+                        placeholder={openOrders.length ? "Search open sales orders…" : "No open sales orders"}
+                        disabled={loadingOrder || openOrders.length === 0}
+                      />
+                    </div>
+                    {fromOrder && (
+                      <button type="button" style={styles.soClearBtn} onClick={clearOrder}>Clear &amp; enter manually</button>
+                    )}
+                  </div>
+                  {fromOrder && (
+                    <div style={styles.soBanner}>
+                      Delivering <strong>SO #{order.salesOrderNumber}</strong> for <strong>{order.clientName}</strong>.
+                      Enter how much to deliver per line — defaults to the remaining quantity, capped at it; set 0 to skip a line.
+                    </div>
+                  )}
                 </div>
-                {fromOrder && (
-                  <button type="button" style={styles.soClearBtn} onClick={clearOrder}>Clear &amp; enter manually</button>
-                )}
               </div>
-              {fromOrder && (
-                <div style={styles.soBanner}>
-                  Delivering <strong>SO #{order.salesOrderNumber}</strong> for <strong>{order.clientName}</strong>.
-                  Enter how much to deliver per line — defaults to the remaining quantity, capped at it; set 0 to skip a line.
-                </div>
-              )}
             </div>
 
             {/* Header row: Client / Site / Delivery Date — same layout as
