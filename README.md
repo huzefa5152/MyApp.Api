@@ -300,6 +300,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-10-09
 
+- Separate receipt/payment party buttons from the picker and improve spacing between related controls.
+
 - Improve receipt/payment document search and modal readability; fix the Trader party picker without changing allocation calculations.
 
 - Show emails the way Gmail does: an email's own formatting (tables, bold, links) now displays in the Email Workspace instead of plain text only. It runs in a locked-down frame where nothing the sender wrote can run; links open in a new tab, and images from the sender stay hidden until you choose Show images, so opening an email does not tell the sender. Plain-text emails read as before.

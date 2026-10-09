@@ -257,10 +257,10 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
 
             <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>{isReceipt ? "Who paid you?" : "Who are you paying?"}</label>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <div className="payment-party-tabs" role="group" aria-label="Party type" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {["Client", "Supplier", "Other"].map(type => <button key={type} type="button"
                   style={{ ...fillBtn, minHeight: 44, padding: "8px 14px", background: contactType === type ? "#d9f1ed" : "#fff" }}
-                  onClick={() => changeContactType(type)}>{type === "Other" ? "Someone else" : type}</button>)}
+                  aria-pressed={contactType === type} onClick={() => changeContactType(type)}>{type === "Other" ? "Someone else" : type}</button>)}
               </div>
               {contactType === "Other" ? <input aria-label="Payee or payer name" maxLength={200} style={formStyles.input}
                 value={contactName} onChange={e => setContactName(e.target.value)} placeholder="Name" />
@@ -318,7 +318,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                 </select>
                 <input
                   style={formStyles.input}
-                  value={bankAccountName}
+                  aria-label="Bank or cash account name" value={bankAccountName}
                   onChange={(e) => setBankAccountName(e.target.value)}
                   placeholder="e.g. Cash in Hand, HBL Current A/C"
                 />
