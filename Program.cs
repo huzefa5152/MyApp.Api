@@ -1006,14 +1006,22 @@ using (var scope = app.Services.CreateScope())
                'Duplicate a delivery challan (clone with the same number for a different PO)'
         WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'challans.manage.duplicate');
 
-        DECLARE @createId INT = (SELECT Id FROM Permissions WHERE [Key] = 'challans.manage.create');
-        DECLARE @dupId    INT = (SELECT Id FROM Permissions WHERE [Key] = 'challans.manage.duplicate');
-        IF @createId IS NOT NULL AND @dupId IS NOT NULL
+        -- Run once (marker), not on every boot: re-copying each start silently
+        -- gave back a duplicate permission an administrator had removed.
+        IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'PERM_COPY_CHALLAN_DUPLICATE_V1')
         BEGIN
-            INSERT INTO RolePermissions (RoleId, PermissionId)
-            SELECT rp.RoleId, @dupId FROM RolePermissions rp
-            WHERE rp.PermissionId = @createId
-              AND NOT EXISTS (SELECT 1 FROM RolePermissions x WHERE x.RoleId = rp.RoleId AND x.PermissionId = @dupId);
+            DECLARE @createId INT = (SELECT Id FROM Permissions WHERE [Key] = 'challans.manage.create');
+            DECLARE @dupId    INT = (SELECT Id FROM Permissions WHERE [Key] = 'challans.manage.duplicate');
+            IF @createId IS NOT NULL AND @dupId IS NOT NULL
+            BEGIN
+                INSERT INTO RolePermissions (RoleId, PermissionId)
+                SELECT rp.RoleId, @dupId FROM RolePermissions rp
+                WHERE rp.PermissionId = @createId
+                  AND NOT EXISTS (SELECT 1 FROM RolePermissions x WHERE x.RoleId = rp.RoleId AND x.PermissionId = @dupId);
+            END
+            INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp])
+            VALUES ('Info', 'PERM_COPY_CHALLAN_DUPLICATE_V1', 'Permission grant copy applied once; an administrator''s later removal is kept.',
+                    'STARTUP', '/migrations/perm-copy-challan-duplicate', 200, SYSUTCDATETIME());
         END
     ");
 
@@ -1098,6 +1106,10 @@ using (var scope = app.Services.CreateScope())
                'Download an accounting report as Excel'
         WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'accounting.reports.export');
 
+        -- Run once (marker): accounting.reports.view is still in the catalog, so
+        -- re-copying on every boot gave export back to a role it was removed from.
+        IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'PERM_COPY_REPORTS_EXPORT_V1')
+        BEGIN
         DECLARE @rptViewId   INT = (SELECT Id FROM Permissions WHERE [Key] = 'accounting.reports.view');
         DECLARE @rptExportId INT = (SELECT Id FROM Permissions WHERE [Key] = 'accounting.reports.export');
         IF @rptViewId IS NOT NULL AND @rptExportId IS NOT NULL
@@ -1107,6 +1119,10 @@ using (var scope = app.Services.CreateScope())
             WHERE rp.PermissionId = @rptViewId
               AND NOT EXISTS (SELECT 1 FROM RolePermissions x
                               WHERE x.RoleId = rp.RoleId AND x.PermissionId = @rptExportId);
+        END
+            INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp])
+            VALUES ('Info', 'PERM_COPY_REPORTS_EXPORT_V1', 'Permission grant copy applied once; an administrator''s later removal is kept.',
+                    'STARTUP', '/migrations/perm-copy-reports-export', 200, SYSUTCDATETIME());
         END
     ");
 
@@ -1197,7 +1213,12 @@ using (var scope = app.Services.CreateScope())
                'Print or download a Bill (Bill print, Bill PDF, Bill XLS)'
         WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'bills.print.view');
 
-        -- Step 2: copy invoices.manage.* grants to bills.manage.*
+        -- Step 2: copy invoices.manage.* grants to bills.manage.*. Once only
+        -- (marker): invoices.list.view and invoices.print.view are still in the
+        -- catalog, so re-copying on every boot gave back bills.list.view /
+        -- bills.print.view to a role an administrator had removed them from.
+        IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'PERM_COPY_INVOICES_TO_BILLS_V1')
+        BEGIN
         DECLARE @oldKey NVARCHAR(200), @newKey NVARCHAR(200);
         DECLARE pairs CURSOR LOCAL FOR
             SELECT 'invoices.manage.create',                  'bills.manage.create' UNION ALL
@@ -1226,6 +1247,10 @@ using (var scope = app.Services.CreateScope())
         END
         CLOSE pairs;
         DEALLOCATE pairs;
+            INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp])
+            VALUES ('Info', 'PERM_COPY_INVOICES_TO_BILLS_V1', 'Permission grant copy applied once; an administrator''s later removal is kept.',
+                    'STARTUP', '/migrations/perm-copy-invoices-to-bills', 200, SYSUTCDATETIME());
+        END
     ");
 
     // ── One-time backfill: heal bills orphaned by the legacy UpdateChallanAsync bug ──
@@ -2134,6 +2159,22 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();
 }
+
+// Security headers on every response. Chosen so that nothing the app does can
+// break: no page may frame this one (clickjacking), plugins and <base>
+// hijacking are off, and browsers do not sniff a download into HTML. A
+// script-src policy is deliberately NOT set for the app itself — Handlebars
+// compiles print templates with new Function — the print documents carry their
+// own script-blocking CSP instead (myapp-frontend/src/utils/printSafety.js).
+app.Use(async (ctx, next) =>
+{
+    var headers = ctx.Response.Headers;
+    headers["X-Content-Type-Options"] = "nosniff";
+    headers["X-Frame-Options"] = "DENY";
+    headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    headers["Content-Security-Policy"] = "frame-ancestors 'none'; object-src 'none'; base-uri 'self'";
+    await next();
+});
 
 // after app = builder.Build()
 app.UseCors("AllowFrontend");

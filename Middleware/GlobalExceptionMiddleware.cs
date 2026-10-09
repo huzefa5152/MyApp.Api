@@ -146,6 +146,27 @@ namespace MyApp.Api.Middleware
             return null;
         }
 
+        /// <summary>
+        /// The 4xx exception types double as the app's way of saying something to
+        /// the operator ("Client does not belong to this company."), so their text
+        /// is echoed — but only when THIS app threw them. The framework throws the
+        /// same types with internal detail: EF's InvalidOperationException describes
+        /// tracking and connection state, and System.IO's UnauthorizedAccessException
+        /// names an absolute file path.
+        /// </summary>
+        private static bool ThrownByThisApp(Exception ex)
+        {
+            var origin = new System.Diagnostics.StackTrace(ex, false).GetFrame(0)?.GetMethod()?.DeclaringType;
+            return origin?.FullName?.StartsWith("MyApp.", StringComparison.Ordinal) == true;
+        }
+
+        private static string GenericMessageFor(int statusCode) => statusCode switch
+        {
+            (int)HttpStatusCode.NotFound => "The requested item was not found.",
+            (int)HttpStatusCode.Forbidden => "You do not have access to this resource.",
+            _ => "This request could not be completed.",
+        };
+
         private async Task HandleExceptionAsync(HttpContext context, Exception ex)
         {
             // Determine status code from exception type. UnauthorizedAccessException
@@ -259,7 +280,7 @@ namespace MyApp.Api.Middleware
 
             var userMessage = UsernamePolicy.IsConflict(ex) ? UsernamePolicy.UnavailableMessage : statusCode >= 500
                 ? "An unexpected error occurred. Please try again later."
-                : ex.Message;
+                : ThrownByThisApp(ex) ? ex.Message : GenericMessageFor(statusCode);
 
             var response = new
             {
