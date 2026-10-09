@@ -1,4 +1,4 @@
-import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
+import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { MdInventory2, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf } from "react-icons/md";
 import { getGoodsReceiptsByCompanyPaged, deleteGoodsReceipt, getGoodsReceiptPrintData } from "../api/goodsReceiptApi";
@@ -140,6 +140,7 @@ export default function GoodsReceiptsPage() {
               {selectedCompany ? `${totalCount} receipt${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}` : "Select a company"}
             </p>
           </div>
+          <DocumentLinesHeaderLink />
         </div>
         {companies.length > 0 && canCreate && (
           <button style={styles.addBtn} onClick={() => { setEditingId(null); setShowForm(true); }}>

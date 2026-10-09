@@ -1,4 +1,4 @@
-import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
+import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { richTextToPlain } from "../utils/richText";
 import { useNavigate } from "react-router-dom";
@@ -192,6 +192,7 @@ export default function SalesOrderPage() {
             <h2 style={st.title}>Sales Orders</h2>
             <p style={st.subtitle}>{selectedCompany ? `${totalCount} order${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}` : "Select a company to view orders"}</p>
           </div>
+          <DocumentLinesHeaderLink />
         </div>
         {companies.length > 0 && (canCreate || canImportPo) && (
           <div style={{ display: "flex", gap: "0.5rem" }}>

@@ -1,4 +1,4 @@
-import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
+import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { MdShoppingCart, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdChevronLeft, MdChevronRight, MdReceipt, MdClose, MdPrint, MdPictureAsPdf } from "react-icons/md";
 import { getPurchaseBillsByCompanyPaged, deletePurchaseBill, getPurchaseBillPrintData } from "../api/purchaseBillApi";
@@ -168,6 +168,7 @@ export default function PurchaseBillsPage() {
                 : "Select a company"}
             </p>
           </div>
+          <DocumentLinesHeaderLink />
         </div>
         {companies.length > 0 && canCreate && (
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>

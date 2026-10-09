@@ -1,6 +1,6 @@
 import { createSalesOrderFromBill } from "../api/salesOrderApi";
 import CardActions from "../Components/CardActions";
-import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
+import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdUndo, MdPostAdd, MdLocalShipping, MdAssignmentTurnedIn } from "react-icons/md";
@@ -908,6 +908,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                 : "Select a company"}
             </p>
           </div>
+          <DocumentLinesHeaderLink />
         </div>
         {/* Creation buttons live on the Bills tab only — Invoices tab is
             for FBR classification & submission of existing records. */}

@@ -307,6 +307,7 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-10-10
 
+- The Document lines shortcut on the document list pages (challans, bills, invoices, notes, goods receipts, purchase bills, purchase debit notes, sales orders, sales quotes) is now one small button beside the page title instead of a full-width row above and below the list. On a phone it sits on its own short line under the title.
 - **Security hardening (audit 2026-10-09).** No workflow changes; every fix is a server-side check.
   - Print templates can no longer run script: anything that could execute (script tags, event handlers, `javascript:` links) is removed when a template is saved and again when a document is printed, exported to PDF or opened from the customer portal, and print windows carry a script-blocking policy. Layouts, styles, images and merge fields print exactly as before.
   - The shared FBR lookup codes and template merge fields can only be changed by the system administrator; other administrators can still read them.
