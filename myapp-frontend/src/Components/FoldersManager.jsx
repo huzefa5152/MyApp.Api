@@ -191,7 +191,7 @@ const st = {
   meta: { marginTop: "0.5rem", fontSize: "0.76rem", color: colors.textSecondary },
   actions: { display: "flex", gap: "0.4rem", marginTop: "0.9rem", paddingTop: "0.75rem", borderTop: `1px solid ${colors.cardBorder}`, alignItems: "center" },
   viewBtn: { flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "0.45rem 0.6rem", borderRadius: 8, border: "none", background: `linear-gradient(135deg, ${colors.blue}, #1565c0)`, color: "#fff", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" },
-  iconBtn: { display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.blue, cursor: "pointer" },
+  iconBtn: { display: "grid", placeItems: "center", width: 34, height: 34, padding: 0, borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.blue, cursor: "pointer" },
   uncatCard: { background: "#fafcff", borderStyle: "dashed" },
   uncatIcon: { background: `linear-gradient(135deg, ${colors.teal}, #26a69a)` },
   systemTag: { fontSize: "0.66rem", fontWeight: 700, color: colors.textSecondary, background: "#eef1f5", padding: "0.15rem 0.5rem", borderRadius: 6, textTransform: "uppercase", letterSpacing: "0.03em" },

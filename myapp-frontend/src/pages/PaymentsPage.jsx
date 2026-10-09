@@ -475,7 +475,7 @@ function PaymentViewDialog({ p, companyId, accent, docNoun, onClose }) {
 
 const st = {
   headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1rem" },
-  headerIcon: { display: "grid", placeItems: "center", width: 44, height: 44, borderRadius: 12, flexShrink: 0 },
+  headerIcon: { display: "grid", placeItems: "center", width: 44, height: 44, padding: 0, borderRadius: 12, flexShrink: 0 },
   h2: { margin: 0, fontSize: "1.4rem", color: colors.textPrimary, lineHeight: 1.1 },
   subtitle: { fontSize: "0.8rem", color: colors.textSecondary, marginTop: 2 },
   primaryBtn: { display: "inline-flex", alignItems: "center", gap: 6, padding: "0.55rem 1rem", minHeight: 44, borderRadius: 8, border: "none", color: "#fff", fontWeight: 700, cursor: "pointer" },

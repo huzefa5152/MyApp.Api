@@ -324,7 +324,7 @@ const st = {
   subMeta: { marginTop: "0.1rem", fontSize: "0.74rem", color: colors.textSecondary },
   converted: { marginTop: "0.3rem", fontSize: "0.78rem", color: colors.teal, fontWeight: 600 },
   actions: { display: "flex", gap: "0.4rem", marginTop: "0.75rem", flexWrap: "wrap", alignItems: "center" },
-  actBtn: { display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.blue, cursor: "pointer" },
+  actBtn: { display: "grid", placeItems: "center", width: 34, height: 34, padding: 0, borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.blue, cursor: "pointer" },
   pagination: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", padding: "1rem 0", marginTop: "0.5rem" },
   pageBtn: { display: "inline-flex", alignItems: "center", gap: "0.2rem", padding: "0.4rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" },
   pageInfo: { fontSize: "0.82rem", color: colors.textSecondary, fontWeight: 500 },

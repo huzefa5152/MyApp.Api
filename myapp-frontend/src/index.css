@@ -4,8 +4,10 @@
   --color-bg-light: #ffffff;
   --color-text-dark: rgba(255, 255, 255, 0.87);
   --color-text-light: #213547;
-  --color-primary: #646cff;
-  --color-primary-hover: #535bf2;
+  /* Was the Vite starter's purple (#646cff); the app's palette is the
+     blue/teal in theme.js, so links and focus rings use its blue. */
+  --color-primary: #0d47a1;
+  --color-primary-hover: #0a3680;
   --color-button-bg-dark: #2c2c2c;
   --color-button-bg-light: #f5f5f5;
   --radius: 12px;
@@ -60,13 +62,9 @@ button {
   cursor: pointer;
   transition: background-color var(--transition), border-color var(--transition),
               transform var(--transition), box-shadow var(--transition);
-  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
 }
-button:hover {
-  border-color: var(--color-primary);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
-}
+/* The starter gave EVERY button a drop shadow, a 2px hover lift and a purple
+   hover ring. A button that wants a shadow or a hover effect sets its own. */
 button:focus,
 button:focus-visible {
   outline: 4px auto var(--color-primary);
@@ -184,11 +182,6 @@ button:focus-visible {
   button {
     background-color: var(--color-button-bg-light);
     color: var(--color-text-light);
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-  }
-
-  button:hover {
-    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
   }
 
   .card {
@@ -201,6 +194,15 @@ button:focus-visible {
   }
 
   a:hover {
-    color: #747bff;
+    color: var(--color-primary-hover);
   }
+}
+
+/* Toast entrance (NotificationProvider): slides in from the right edge. */
+@keyframes dlToastIn {
+  from { opacity: 0; transform: translateX(24px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  @keyframes dlToastIn { from { opacity: 0; } to { opacity: 1; } }
 }
