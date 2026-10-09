@@ -440,7 +440,7 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
               </div>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(200px, 100%), 1fr))", columnGap: "0.75rem" }}>
               <div style={{ ...formStyles.formGroup, gridColumn: "1 / -1" }}>
                 <label style={{ ...formStyles.label, display: "flex", alignItems: "center", gap: 8 }}>
                   Supplier *
@@ -474,16 +474,13 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
                 <label style={formStyles.label}>Bill Date *</label>
                 <input type="date" style={formStyles.input} value={date} onChange={e => setDate(e.target.value)} />
               </div>
-              <div style={formStyles.formGroup}>
-                <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={formStyles.label} style={formStyles.input} />
-              </div>
+              {/* No wrapper cell: with no divisions the picker renders nothing,
+                  and an empty wrapper left a hole in the grid. */}
+              <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={formStyles.label} wrapStyle={formStyles.formGroup} style={formStyles.input} />
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>GST Rate (%)</label>
                 <input type="number" min={0} step={0.01} style={formStyles.input} value={gstRate} onChange={e => setGstRate(e.target.value)} />
               </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Withholding Tax</label>
                 <select style={formStyles.input} value={whtMode} onChange={e => setWhtMode(e.target.value)} title="Income tax withheld from the supplier — reduces the balance payable, not the bill total">
@@ -504,9 +501,6 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
                   <input type="number" min={0} step={0.01} style={formStyles.input} value={whtAmount} onChange={e => setWhtAmount(e.target.value)} placeholder="0.00" />
                 </div>
               )}
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Supplier Bill #</label>
                 <input type="text" style={formStyles.input} value={supplierBillNumber} onChange={e => setSupplierBillNumber(e.target.value)} placeholder="Their invoice number" />
@@ -515,9 +509,6 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
                 <label style={formStyles.label}>Supplier IRN</label>
                 <input type="text" style={{ ...formStyles.input, fontFamily: "monospace" }} value={supplierIRN} onChange={e => setSupplierIRN(e.target.value)} placeholder="From supplier's tax invoice (FBR-issued)" />
               </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Payment Mode</label>
                 <select style={formStyles.input} value={paymentMode} onChange={e => setPaymentMode(e.target.value)}>

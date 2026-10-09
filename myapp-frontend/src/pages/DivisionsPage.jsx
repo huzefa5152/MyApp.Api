@@ -77,12 +77,12 @@ export default function DivisionsPage() {
       </div>
 
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", margin: "18px 0" }}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-          <MdBusiness color="#5f6d7e" />
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flex: "1 1 240px", maxWidth: 360, minWidth: 0 }}>
+          <MdBusiness color="#5f6d7e" style={{ flexShrink: 0 }} />
           <select
             value={companyId}
             onChange={(e) => setCompanyId(Number(e.target.value) || "")}
-            style={{ padding: "0.5rem 0.75rem", borderRadius: 8, border: "1px solid #d0d7e2", minWidth: 240, background: "#fff" }}
+            style={{ padding: "0.5rem 0.75rem", borderRadius: 8, border: "1px solid #d0d7e2", width: "100%", minWidth: 0, minHeight: 44, background: "#fff" }}
           >
             <option value="">Select a company…</option>
             {companies.map((c) => (

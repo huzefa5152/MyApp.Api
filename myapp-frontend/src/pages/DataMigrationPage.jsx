@@ -111,7 +111,7 @@ export default function DataMigrationPage() {
       <div style={{ ...st.card, marginTop: "1rem", flexDirection: "column", alignItems: "stretch", gap: "0.6rem" }}>
         <div style={st.stepLabel}>0. Upload backup (.bak)</div>
         <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", alignItems: "center" }}>
-          <input type="file" accept=".bak" onChange={(e) => setFile(e.target.files?.[0] || null)} disabled={uploading || !!sourceDb} />
+          <input type="file" accept=".bak" style={{ maxWidth: "100%", minWidth: 0 }} onChange={(e) => setFile(e.target.files?.[0] || null)} disabled={uploading || !!sourceDb} />
           <button
             style={{ ...st.runBtn, opacity: !file || uploading || sourceDb ? 0.6 : 1 }}
             disabled={!file || uploading || !!sourceDb}

@@ -987,7 +987,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                 />
               </div>
               {canViewClients && (
-                <div style={{ minWidth: 220, maxWidth: 340 }}>
+                <div style={{ flex: "1 1 170px", minWidth: 170, maxWidth: 300 }}>
                   <SearchableSelect
                     items={clients}
                     value={clientFilter}

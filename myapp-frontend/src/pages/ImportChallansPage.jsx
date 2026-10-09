@@ -230,9 +230,14 @@ export default function ImportChallansPage() {
 
       {templateReady === false && step === 1 && targetCompany && (
         <div style={styles.warnBanner}>
-          <MdError /> No Challan Excel template is configured for{" "}
-          <b>{targetCompany.name}</b>. Please upload one in{" "}
-          <i>Configuration → Print Templates</i> before importing.
+          <MdError style={{ flexShrink: 0 }} />
+          {/* One text block, so the sentence wraps as a sentence: as separate
+              flex items its pieces could not shrink and pushed the page wide. */}
+          <span style={{ minWidth: 0 }}>
+            No Challan Excel template is configured for{" "}
+            <b>{targetCompany.name}</b>. Please upload one in{" "}
+            <i>Settings → Print Templates</i> before importing.
+          </span>
         </div>
       )}
 

@@ -298,6 +298,17 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-10-09 — Tighter admin layout, Consignments fits without scrolling
+
+- **Fix**: the Consignments list no longer scrolls sideways on a laptop. Date and line count sit under the GD number, Settled sits under Credited, and the status badge sits under Outstanding, so the table fits at 1280px with real GD amounts. The company picker and the outstanding total now share one toolbar.
+- **Navigation**: the breadcrumb at the top of each page now uses the same section names as the sidebar (Master Data, Settings, Administration…), covers every page, and shows the current page in bold. Sidebar group headers no longer look like raised tiles, the brand row lines up with the top bar, and profile and logout share one row at the foot of the sidebar. On phones the top bar shows only the page name and the avatar.
+- **Pop-ups**: every form and dialog built on the shared modal style has a slimmer header, body and footer, and tighter field spacing, so more of a form fits on screen.
+- **Import Tax Desk**: the worksheet keeps its Month column frozen while it scrolls sideways, and figure headings wrap so each column is only as wide as its numbers.
+- **New Purchase Bill**: the header fields flow in one grid (date, GST, withholding, supplier bill, IRN, payment on one row on a laptop) with no gap where the division picker sits for a company without divisions.
+- **Bills / Invoices**: the filter bar keeps the Cards/Table switch on the same row on a 1280px screen.
+- **Phones**: the Import Challans template warning, the Divisions company picker and the Data Migration file picker no longer push the page wider than the screen.
+- **Polish**: page titles no longer centre themselves, buttons no longer jump on hover or show a purple ring, and the pagination bar takes less room.
+
 ### 2026-10-08 — Back-dated bills after a stock-sheet reconcile are costed FIFO
 
 - **Fix**: a bill dated before a "Reconcile to stock sheet" date but entered afterwards used to take its quantity off every GD line of the sheet in proportion, which costed it at the sheet's average instead of the claimed, oldest GD. On one item that took 68,479 more out of stock than the bill was worth. The quantity now leaves the GD lines in FIFO order, so what leaves stock matches the price the bill form showed. Every affected bill corrects itself, with no re-entry needed.
