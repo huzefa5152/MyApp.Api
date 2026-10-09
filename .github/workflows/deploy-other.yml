@@ -94,6 +94,9 @@ jobs:
           mkdir -p site-stage/admin
           cp landing/index.html site-stage/index.html
           cp -r myapp-frontend/dist/* site-stage/admin/
+          # The deployed commit, read by open pages (utils/serviceContinuity.js) so a
+          # new version is picked up on the operator's next page change.
+          echo "{\"version\":\"$GITHUB_SHA\"}" > site-stage/admin/version.json
           rm -rf site-stage/admin/images/products
 
       - name: Deploy frontend via FTP
@@ -143,6 +146,9 @@ jobs:
           mkdir -p wwwroot/admin
           cp landing/index.html wwwroot/index.html
           cp -r myapp-frontend/dist/* wwwroot/admin/
+          # The deployed commit, read by open pages (utils/serviceContinuity.js) so a
+          # new version is picked up on the operator's next page change.
+          echo "{\"version\":\"$GITHUB_SHA\"}" > wwwroot/admin/version.json
           rm -rf wwwroot/admin/images/products
 
       - name: Publish .NET API

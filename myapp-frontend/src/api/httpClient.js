@@ -1,5 +1,6 @@
 // src/api/httpClient.js
 import axios from "axios";
+import { installServiceContinuity } from "../utils/serviceContinuity";
 import { notify } from "../utils/notify";
 
 function getApiBase() {
@@ -22,6 +23,11 @@ const httpClient = axios.create({
   headers: { "Content-Type": "application/json" },
   withCredentials: false,
 });
+
+// Before any other interceptor: a service pause or dropped connection is waited
+// out and safe requests are replayed, so open pages simply carry on.
+// /auth/me answers 401 without a login: any non-5xx reply means the API is up.
+installServiceContinuity(httpClient, { probePath: `${getApiBase()}/auth/me` });
 
 // Request interceptor: attach Bearer token from localStorage
 httpClient.interceptors.request.use(
