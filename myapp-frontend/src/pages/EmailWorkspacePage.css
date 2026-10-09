@@ -65,3 +65,161 @@
 @media(max-width:1000px) { .ew-columns { grid-template-columns:1fr; }.ew-heading { flex-basis:100%; }.ew-empty { min-height:220px; } }
 @media(max-width:600px) { .ew { padding:0; }.ew-header { gap:12px; }.ew-heading { gap:10px; }.ew-heading-icon { width:38px; height:38px; font-size:18px; }.ew h1 { font-size:20px; }.ew-header p { font-size:12px; }.ew-panel { padding:12px; }.ew-toolbar { padding:10px; }.ew-search { flex-basis:100%; }.ew-actions { width:100%; }.ew-navigation { display:grid; grid-template-columns:1fr 1.35fr 1fr; }.ew-navigation button { padding-inline:8px; }.ew-filters { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); }.ew button,.ew input,.ew select { min-height:44px; }.ew input,.ew select,.ew textarea { font-size:16px; }.ew-actions select { width:100%; }.ew-columns { gap:12px; }.ew-empty { min-height:230px; padding-inline:0; }.ew-empty-steps { gap:5px; font-size:10px; }.ew-empty-steps>span { padding-inline:5px; } }
 @media(prefers-reduced-motion:reduce) { .ew button,.ew .ew-icon,.ew input,.ew select,.ew textarea { transition:none; }.ew button:hover:not(:disabled) .ew-icon { transform:none; } }
+
+.ew-shell { max-width:1600px; margin-inline:auto; min-width:0; }
+.ew-company-bar { display:flex; flex-wrap:wrap; align-items:center; gap:12px; padding:12px 16px; margin-bottom:16px; background:#fff; border:1px solid #dce5ee; border-radius:10px; }
+.ew-company-bar label { font-size:13px; font-weight:600; color:#213247; }
+.ew-company-bar select { width:min(100%,360px); min-width:0; min-height:36px; padding:7px 10px; border:1px solid #c7d5e3; border-radius:7px; background:#fff; color:#213247; font:inherit; font-size:13px; }
+.ew-company-bar span { color:#5b6b7d; font-size:12px; }
+.ew-company-bar select:focus-visible { outline:2px solid #337dc7; outline-offset:3px; }
+.ew .ew-header { padding-bottom:16px; border-bottom:1px solid var(--ew-border); }
+.ew-connections > p { max-width:85ch; }
+.ew-connect-actions { padding-block:12px; border-block:1px solid var(--ew-border); gap:12px; }
+.ew .ew-connect-actions > select { flex:1 1 240px; width:auto; max-width:420px; }
+.ew-connections > p:last-child { color:var(--ew-muted); padding-block:8px; }
+@media(max-width:600px) { .ew-company-bar { padding:12px; gap:8px; }.ew-company-bar select { width:100%; min-height:44px; font-size:16px; }.ew-company-bar span { flex-basis:100%; }.ew .ew-connect-actions > select { width:100%; max-width:none; }.ew-connect-actions > button { width:100%; } }
+
+/* Mail triage uses a stable message list beside the reading and quotation pane. */
+.ew { --ew-radius:12px; }
+.ew-panel { border-radius:var(--ew-radius); }
+.ew-header { padding:8px 0 18px; }
+.ew-heading-icon { background:linear-gradient(135deg,#e7f1ff,#eaf6f2); }
+.ew-toolbar { background:#fff; padding:14px 16px; }
+.ew-filters { gap:4px; }
+.ew-filters button { border-radius:6px; background:transparent; }
+.ew-filters button[aria-pressed=true] { box-shadow:inset 0 -2px 0 #3173c1; }
+.ew-columns { grid-template-columns:minmax(280px, .82fr) minmax(0,1.8fr); gap:16px; }
+.ew-inbox { padding:16px 12px 12px; }
+.ew-inbox > :is(h2,p) { margin-inline:4px; }
+.ew-message-list { max-height:620px; overflow-y:auto; overscroll-behavior:contain; padding:2px 4px; scrollbar-width:thin; }
+.ew button.ew-email { border:1px solid transparent; border-bottom-color:var(--ew-border); border-radius:8px; padding:12px; gap:8px; margin-bottom:4px; }
+.ew button.ew-email[aria-pressed=true] { border-color:#729bc8; background:var(--ew-soft); box-shadow:inset 3px 0 0 var(--ew-accent); }
+.ew-sender-row { display:flex; align-items:center; gap:8px; min-width:0; }
+.ew-sender-row > .ew-muted { overflow-wrap:anywhere; min-width:0; }
+.ew-avatar { display:grid; place-items:center; width:28px; height:28px; flex-shrink:0; border-radius:8px; background:#edf3fa; color:var(--ew-accent); font-weight:700; font-size:12px; }
+.ew-message-meta { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:6px; }
+.ew-status { display:inline-flex; align-items:center; border:1px solid var(--ew-border); border-radius:5px; padding:2px 6px; color:var(--ew-muted); background:#f5f8fb; font-size:11px; line-height:1.5; overflow-wrap:anywhere; }
+.ew-reader { min-height:410px; padding:20px; }
+.ew-reader > h2 { font-size:18px; line-height:1.45; }
+.ew-reader details { margin-block:16px; padding:0 12px 12px; border:1px solid var(--ew-border); border-radius:8px; background:#fafcfe; }
+.ew-reader summary { font-weight:600; padding-block:12px; }
+.ew-list-empty { padding:36px 16px; text-align:center; color:var(--ew-muted); }
+.ew-list-empty > svg { width:28px; height:28px; color:var(--ew-accent); margin-bottom:8px; }
+.ew-list-empty h3 { margin:0; color:var(--ew-text); }
+.ew-list-empty p { font-size:12px; }
+.ew-section-heading { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+.ew-section-heading h2 { margin:0 0 2px; }
+.ew-connection-guide { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr)); gap:12px; margin-block:16px; }
+.ew-connection-guide > div { display:grid; grid-template-columns:20px minmax(0,1fr); gap:4px 10px; padding:14px; border:1px solid var(--ew-border); border-radius:8px; background:#f7fafc; }
+.ew-connection-guide svg { color:var(--ew-accent); margin-top:3px; }
+.ew-connection-guide strong { font-size:13px; font-weight:600; }
+.ew-connection-guide span { grid-column:2; font-size:12px; color:var(--ew-muted); line-height:1.6; }
+.ew-mailbox-heading { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+.ew-mailbox-heading > svg { color:var(--ew-accent); flex-shrink:0; }
+.ew-mailbox-heading h3 { margin:0; min-width:0; }
+.ew-connection { padding:16px; border:1px solid var(--ew-border); border-radius:10px; background:#fff; }
+.ew-rule { border:1px solid var(--ew-border); align-items:end; }
+.ew-draft > h3 { padding-block:8px; }
+.ew-draft > .ew-actions:last-child { padding-top:12px; border-top:1px solid var(--ew-border); }
+@media(max-width:1000px) { .ew-columns { grid-template-columns:1fr; }.ew-message-list { max-height:360px; }.ew-reader { min-height:320px; } }
+@media(max-width:600px) { .ew-reader { padding:14px; }.ew-toolbar { padding:12px; }.ew-message-list { max-height:320px; }.ew-connection { padding:12px; }.ew-connection-guide > div { padding:12px; }.ew-section-heading { align-items:flex-start; }.ew-reader > h2 { font-size:16px; } }
+
+/* Keep mail scrolling inside its panes rather than the application page. */
+.dl-content-wrapper:has(.ew-shell) { height:100dvh; min-height:0; overflow:hidden; }
+.dl-main:has(.ew-shell) { display:flex; flex-direction:column; min-height:0; overflow:hidden; padding:12px 16px; }
+.ew-shell { display:flex; flex-direction:column; flex:1; min-height:0; width:100%; overflow:hidden; }
+.ew-company-bar { flex-shrink:0; padding:8px 12px; margin-bottom:8px; gap:10px; }
+.ew-shell > .ew { display:flex; flex-direction:column; flex:1; min-height:0; width:100%; margin:0; padding:0; overflow:hidden; }
+.ew .ew-header { flex-shrink:0; padding:4px 0 10px; margin-bottom:10px; gap:8px; }
+.ew h1 { font-size:20px; margin-block:0 2px; }
+.ew .ew-heading-icon { width:36px; height:36px; font-size:18px; border-radius:9px; }
+.ew .ew-toolbar { flex-shrink:0; padding:8px 12px; margin-bottom:10px; gap:8px; }
+.ew .ew-columns { flex:1; min-height:0; overflow:hidden; align-items:stretch; gap:12px; }
+.ew .ew-inbox { display:flex; flex-direction:column; min-height:0; overflow:hidden; padding:12px 8px 8px; }
+.ew .ew-inbox > h2 { font-size:15px; margin-bottom:4px; }
+.ew .ew-inbox > p { font-size:12px; line-height:1.4; margin-block:4px 8px; }
+.ew .ew-message-list { flex:1; min-height:0; max-height:none; overflow:auto; scrollbar-gutter:stable; }
+.ew .ew-pagination { flex-shrink:0; margin-top:6px; padding-top:8px; }
+.ew .ew-reader { min-height:0; height:100%; overflow:auto; overscroll-behavior:contain; scrollbar-gutter:stable; padding:16px; }
+.ew .ew-reader .ew-body { max-height:none; overflow:visible; }
+.ew .ew-connections { flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; }
+.ew .ew-error,.ew .ew-notice { flex-shrink:0; margin-block:0 8px; }
+.ew .ew-back { display:none; }
+.ew .ew-empty { min-height:100%; }
+@media(max-width:1000px) {
+  .ew .ew-heading { flex-basis:auto; }
+  .ew .ew-columns { grid-template-columns:minmax(0,1fr); }
+  .ew[data-mobile-pane="inbox"] .ew-reader { display:none; }
+  .ew[data-mobile-pane="reader"] .ew-inbox { display:none; }
+  .ew .ew-back { display:inline-flex; margin-bottom:10px; min-height:44px; }
+}
+@media(max-width:600px) {
+  .dl-main:has(.ew-shell) { padding:8px; }
+  .ew-company-bar { padding:8px; gap:6px; }
+  .ew-company-bar label { font-size:12px; }
+  .ew-company-bar select { flex:1; width:auto; }
+  .ew-company-bar > span { display:none; }
+  .ew .ew-header { padding-bottom:8px; gap:8px; margin-bottom:8px; }
+  .ew .ew-header p { display:none; }
+  .ew .ew-heading { flex-basis:100%; }
+  .ew .ew-kicker { font-size:11px; }
+  .ew h1 { font-size:18px; }
+  .ew .ew-toolbar { padding:8px; gap:8px; margin-bottom:8px; }
+  .ew .ew-search { flex-basis:100%; }
+  .ew .ew-filters { grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; }
+  .ew .ew-filters button { font-size:12px; padding:6px; }
+  .ew .ew-reader { padding:12px; }
+  .ew .ew-inbox > p { margin-bottom:6px; }
+}
+
+@media (max-width:600px) {
+  .ew .ew-filters { display:flex; flex-wrap:nowrap; overflow-x:auto; max-width:100%; padding-bottom:2px; }
+  .ew .ew-filters button { flex:0 0 auto; min-width:72px; min-height:44px; }
+  .ew .ew-toolbar { align-content:start; }
+}
+.ew .ew-message-list { overscroll-behavior:contain; }
+.ew .ew-reader:focus-visible,.ew .ew-message-list:focus-visible { outline:2px solid var(--ew-accent,#2563eb); outline-offset:-2px; }
+
+/* A compact workspace header keeps the focus on mail and quotation review. */
+.ew .ew-header { display:grid; grid-template-columns:minmax(180px,1fr) minmax(180px,280px) auto; gap:16px; padding:8px 0 12px; }
+.ew .ew-header:not(:has(.ew-company-bar)) { grid-template-columns:minmax(0,1fr) auto; }
+.ew .ew-heading { gap:10px; }
+.ew .ew-header .ew-heading p,.ew .ew-header .ew-kicker { display:none; }
+.ew .ew-header .ew-company-bar { display:grid; grid-template-columns:1fr; gap:3px; margin:0; padding:0; border:0; background:transparent; }
+.ew .ew-header .ew-company-bar label { font-size:12px; color:var(--ew-muted); }
+.ew .ew-header .ew-company-bar select { width:100%; max-width:none; }
+.ew .ew-header .ew-company-bar > span { display:none; }
+.ew .ew-navigation { gap:4px; padding:3px; border:1px solid var(--ew-border); border-radius:10px; background:#fff; }
+.ew .ew-navigation button { border-color:transparent; }
+.ew .ew-navigation button[aria-pressed=true] { border-color:#3173c1; }
+.ew .ew-toolbar { align-items:center; padding:10px 12px; background:#fff; }
+.ew .ew-search { flex:1 1 220px; max-width:340px; }
+.ew .ew-columns { grid-template-columns:minmax(270px,.75fr) minmax(0,1.85fr); }
+.ew .ew-inbox { background:#fafcfe; }
+.ew .ew-inbox > p { margin-bottom:10px; }
+.ew button.ew-email { background:#fff; padding:12px; border:1px solid var(--ew-border); margin-bottom:6px; transition:background-color .16s ease,border-color .16s ease,box-shadow .16s ease; }
+.ew button.ew-email[aria-pressed=true] { background:var(--ew-soft); border-color:#729bc8; box-shadow:inset 3px 0 0 var(--ew-accent); }
+.ew .ew-reader { padding:20px; }
+.ew .ew-reader > h2 { font-size:20px; letter-spacing:-.02em; padding-bottom:4px; }
+.ew .ew-reader > p.ew-muted { padding-bottom:12px; border-bottom:1px solid var(--ew-border); }
+.ew .ew-reader details { background:#fafcfe; }
+.ew .ew-reader summary { cursor:pointer; color:var(--ew-accent); }
+.ew .ew-reader .ew-body { font-family:inherit; font-size:14px; line-height:1.75; }
+.ew .ew-pagination { background:#fafcfe; }
+.ew .ew-draft > .ew-actions:last-child { position:sticky; bottom:-20px; margin-bottom:-20px; padding:12px 0; background:#fff; z-index:2; }
+@media(hover:hover) { .ew button.ew-email:hover:not(:disabled) { border-color:#729bc8; background:#f0f6ff; box-shadow:0 2px 7px #164d9110; }.ew .ew-reader summary:hover { text-decoration:underline; text-underline-offset:3px; } }
+@media(max-width:1100px) { .ew .ew-header { gap:10px; grid-template-columns:minmax(150px,1fr) minmax(150px,220px) auto; }.ew .ew-navigation button { padding-inline:8px; } }
+@media(max-width:1000px) { .ew .ew-columns { grid-template-columns:minmax(0,1fr); }.ew .ew-header { grid-template-columns:1fr 1fr; }.ew .ew-navigation { grid-column:1 / -1; justify-self:start; } }
+@media(max-width:600px) {
+ .ew .ew-header { gap:8px; padding:0 0 8px; grid-template-columns:minmax(0,1fr); }
+ .ew .ew-header:not(:has(.ew-company-bar)) { grid-template-columns:minmax(0,1fr); }
+ .ew .ew-header .ew-company-bar { grid-template-columns:auto minmax(0,1fr); align-items:center; gap:8px; }
+ .ew .ew-navigation { width:100%; justify-self:stretch; }
+ .ew .ew-search { max-width:none; }
+ .ew .ew-reader { padding:12px; }
+ .ew .ew-reader > h2 { font-size:18px; }
+ .ew .ew-draft > .ew-actions:last-child { bottom:-12px; margin-bottom:-12px; }
+}
+@media(prefers-reduced-motion:reduce) { .ew button.ew-email { transition:none; } }
+
+.ew .ew-header:not(:has(.ew-company-bar)) .ew-kicker { display:block; }

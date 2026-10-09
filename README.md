@@ -302,6 +302,15 @@ Publish output optimized from 79 MB to 37 MB via:
 
 - Merge current Trader into the selectable-theme branch, preserving Classic and Workspace alongside current billing, OAuth, security and accessible admin workflows.
 
+- Polish the email workspace with an integrated company header, clear message selection and compact navigation. Keep the email inbox and reader within the viewport with independent scrolling, compact controls and a mobile inbox/detail view.
+
+- Recognize quote enquiries and improve extraction for plural headings, split item/specification columns and repeated tables without headings. Allow confirmed re-reading of saved draft items and exclude attached message bodies.
+
+- Allow only seed admin to permanently remove a company Gmail connection and its enquiries while preserving created quotations and other company connections.
+
+- Hide company selectors for users assigned to a single company while retaining automatic selection and multi-company switching.
+
+- Add an accessible-company selector and refine Email Workspace with compact message rows, a reading pane, mailbox setup guidance, and responsive controls.
 - Refine admin screens and create/edit dialogs with compact desktop controls, responsive mobile layouts, consistent spacing, and clearer scrolling and actions.
 
 ### 2026-10-08

@@ -42,7 +42,7 @@ export function PageHeader({ icon: Icon, tone = "blue", title, count, subtitle, 
 export function CompanyPicker({ onChange, label = "Company" }) {
   const { companies, selectedCompany, setSelectedCompany } = useCompany();
   const topbarSwitcher = useUi2();
-  if (topbarSwitcher || !companies || companies.length === 0) return null;
+  if (topbarSwitcher || !companies || companies.length <= 1) return null;
   return (
     <div className="k-company">
       <MdBusiness size={20} aria-hidden="true" />

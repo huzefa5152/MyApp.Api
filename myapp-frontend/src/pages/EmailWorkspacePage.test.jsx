@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { MemoryRouter } from "react-router-dom";
 import EmailWorkspacePage from "./EmailWorkspacePage";
 import http from "../api/httpClient";
-const state = vi.hoisted(() => ({ selectedCompany: { id: 1, name: "Sample Company" }, allowed: new Set() }));
+const state = vi.hoisted(() => ({ selectedCompany: { id: 1, name: "Sample Company" }, companies: [], setSelectedCompany: vi.fn(), allowed: new Set() }));
 const has = vi.hoisted(() => key => state.allowed.has(key));
 vi.mock("../contexts/CompanyContext", () => ({ useCompany: () => state }));
 vi.mock("../contexts/PermissionsContext", () => ({ usePermissions: () => ({ has }) }));
@@ -16,6 +16,7 @@ const message = { id: 3, sender: "buyer@example.com", subject: "Sample RFQ", rec
 const setup = () => render(<MemoryRouter><EmailWorkspacePage /></MemoryRouter>);
 beforeEach(() => {
   vi.resetAllMocks(); state.selectedCompany = { id: 1, name: "Sample Company" };
+  state.companies = [state.selectedCompany, { id: 2, name: "Other Company" }];
   state.allowed = new Set(["email.workspace.use", "email.inbox.view", "email.inbox.manage", "email.enquiries.manage", "email.connections.manage", "salesquotes.manage.create"]);
   http.get.mockImplementation(url => Promise.resolve({ data: url.endsWith("/customers") ? [] : url.endsWith("/connections") ? { configured: true, links: [], ownConnections: [] } : url.endsWith("/messages") ? { items: [message], totalCount: 1 } : message }));
   http.put.mockResolvedValue({ data: { revision: "new-revision" } });
@@ -64,4 +65,58 @@ it("module access alone does not grant inbox access", () => {
   state.allowed = new Set(["email.workspace.use"]); setup();
   expect(screen.getByRole("alert").textContent).toContain("inbox permission");
   expect(http.get).not.toHaveBeenCalled();
+});
+
+it("keeps company selection available in Connections and selects only accessible companies", async () => {
+  setup();
+  fireEvent.change(screen.getByRole("combobox", { name: "Email workspace company" }), { target: { value: "2" } });
+  expect(state.setSelectedCompany).toHaveBeenCalledWith(state.companies[1]);
+  expect(screen.getAllByRole("option").map(o => o.value)).toEqual(["1", "2"]);
+  fireEvent.click(screen.getByRole("button", { name: "Connections" }));
+  expect(screen.getByRole("combobox", { name: "Email workspace company" })).toBeTruthy();
+});
+it("offers company selection without loading mail when no company is selected", () => {
+  state.selectedCompany = null; setup();
+  expect(screen.getByRole("combobox", { name: "Email workspace company" })).toBeTruthy();
+  expect(http.get).not.toHaveBeenCalled();
+});
+
+it("hides the company selector for single-company users without blocking inbox or connections", async () => {
+  state.companies = [state.selectedCompany];
+  setup();
+  await screen.findByText("Sample RFQ");
+  expect(screen.queryByRole("combobox", { name: "Email workspace company" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Connections" }));
+  expect(screen.queryByRole("combobox", { name: "Email workspace company" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Connect Gmail" })).toBeTruthy();
+});
+
+it.each([false, true])("restricts permanent removal to the server seed-admin capability (%s)", async canPermanentlyRemove => {
+  http.get.mockImplementation(url => Promise.resolve({ data: url.endsWith("/customers") ? [] : url.endsWith("/connections") ? {
+    configured: true, canPermanentlyRemove, ownConnections: [],
+    links: [{ id: 7, connectionId: 8, emailAddress: "owner@example.com", isEnabled: false, isOwner: true }]
+  } : { items: [], totalCount: 0 } }));
+  http.delete.mockResolvedValue({ data: { success: true } });
+  setup(); fireEvent.click(screen.getByText("Connections"));
+  await screen.findByText("owner@example.com");
+  const remove = screen.queryByRole("button", { name: "Remove company connection permanently" });
+  if (!canPermanentlyRemove) { expect(remove).toBeNull(); return; }
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  fireEvent.click(remove); expect(http.delete).not.toHaveBeenCalled();
+  confirm.mockReturnValue(true); fireEvent.click(remove);
+  await waitFor(() => expect(http.delete).toHaveBeenCalledWith("/email-workspace/company/1/connections/7/permanent"));
+  expect(confirm.mock.calls[0][0]).toContain("Created quotations remain");
+  confirm.mockRestore();
+});
+
+it("re-reads saved enquiry items only after confirmation", async () => {
+  http.get.mockImplementation(url => Promise.resolve({ data: url.endsWith("/customers") ? [] : url.endsWith("/connections") ? { configured: true, links: [], ownConnections: [] } : url.endsWith("/messages") ? { items: [message], totalCount: 1 } : { ...message, decision: "Kept", revision: "old", draft: { items: [], warnings: [], date: "2026-10-09", reviewed: false } } }));
+  http.post.mockResolvedValue({ data: { items: [], warnings: [], revision: "new", reviewed: false } });
+  setup(); fireEvent.click(await screen.findByText("Sample RFQ"));
+  const button = await screen.findByText("Re-read email items");
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  fireEvent.click(button); expect(http.post).not.toHaveBeenCalled();
+  confirm.mockReturnValue(true); fireEvent.click(button);
+  await waitFor(() => expect(http.post).toHaveBeenCalledWith("/email-workspace/company/1/messages/3/reextract", { decision: "Kept", revision: "old" }));
+  confirm.mockRestore();
 });

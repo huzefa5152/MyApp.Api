@@ -11,7 +11,7 @@ import "./ui2.css";
  */
 export function CompanySwitcher() {
   const { companies, selectedCompany, setSelectedCompany } = useCompany();
-  if (!companies || companies.length === 0) return null;
+  if (!companies || companies.length <= 1) return null;
   return (
     <label className="u2-company" title="Company">
       <MdBusiness size={16} aria-hidden="true" />
