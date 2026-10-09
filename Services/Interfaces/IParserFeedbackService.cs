@@ -16,10 +16,10 @@ namespace MyApp.Api.Services.Interfaces
     public interface IParserFeedbackService
     {
         Task<ParserFeedbackDto> RecordAsync(RecordParserFeedbackInput input);
-        Task<ParserFeedbackPageDto> GetIncorrectAsync(ParserFeedbackQuery query);
-        Task<ParserFeedbackStatisticsDto> GetStatisticsAsync();
+        Task<ParserFeedbackPageDto> GetIncorrectAsync(ParserFeedbackQuery query, IReadOnlyCollection<int>? accessibleCompanyIds);
+        Task<ParserFeedbackStatisticsDto> GetStatisticsAsync(IReadOnlyCollection<int>? accessibleCompanyIds);
         Task<ParserFeedbackPdf?> GetPdfAsync(int id);
-        Task<byte[]?> GetBulkZipAsync(IReadOnlyCollection<int> ids);
+        Task<byte[]?> GetBulkZipAsync(IReadOnlyCollection<int> ids, IReadOnlyCollection<int>? accessibleCompanyIds);
     }
 
     /// <summary>Input for recording one feedback verdict from the Review screen.</summary>
@@ -51,5 +51,6 @@ namespace MyApp.Api.Services.Interfaces
     {
         public string FilePath { get; set; } = "";
         public string FileName { get; set; } = "download.pdf";
+        public int? CompanyId { get; set; }
     }
 }

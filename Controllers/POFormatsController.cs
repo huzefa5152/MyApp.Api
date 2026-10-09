@@ -29,6 +29,14 @@ namespace MyApp.Api.Controllers
         private readonly IPOParserService _rawParser;
         private readonly AppDbContext _db;
         private readonly ICompanyAccessGuard _access;
+        private readonly IManagementScopeService _scope;
+
+        // A format with no company is a legacy GLOBAL layout every tenant's parser
+        // matches against, so only the seed admin may create, change or remove one.
+        private ObjectResult GlobalFormatRefused() => StatusCode(StatusCodes.Status403Forbidden, new
+        {
+            error = "Shared PO formats are managed by the system administrator. Choose a company for this format."
+        });
 
         private static readonly JsonSerializerOptions JsonOpts = new()
         {
@@ -41,8 +49,10 @@ namespace MyApp.Api.Controllers
             IPOFormatFingerprintService fingerprint,
             IPOParserService rawParser,
             AppDbContext db,
-            ICompanyAccessGuard access)
+            ICompanyAccessGuard access,
+            IManagementScopeService scope)
         {
+            _scope = scope;
             _registry = registry;
             _fingerprint = fingerprint;
             _rawParser = rawParser;
@@ -121,6 +131,9 @@ namespace MyApp.Api.Controllers
                 .Include(x => x.ClientGroup)
                 .FirstOrDefaultAsync(x => x.Id == id);
             if (f == null) return NotFound();
+            // Another tenant's format carries its company, client and rule set.
+            if (f.CompanyId.HasValue && !await _access.HasAccessAsync(CurrentUserId, f.CompanyId.Value))
+                return NotFound();
             return Ok(ToDto(f));
         }
 
@@ -170,6 +183,8 @@ namespace MyApp.Api.Controllers
             // Tenant guard — audit H-4 (2026-05-13).
             if (dto.CompanyId.HasValue)
                 await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId.Value);
+            else if (!_scope.IsSeedAdmin(CurrentUserId))
+                return GlobalFormatRefused();
             await AssertClientAccessAsync(dto.ClientId);
 
             var createdBy = User?.Identity?.Name;
@@ -197,6 +212,8 @@ namespace MyApp.Api.Controllers
             // Tenant guard — audit H-4 (2026-05-13).
             if (dto.CompanyId.HasValue)
                 await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId.Value);
+            else if (!_scope.IsSeedAdmin(CurrentUserId))
+                return GlobalFormatRefused();
             await AssertClientAccessAsync(dto.ClientId);
 
             // Dedup. Each company owns its own PO formats, so one format
@@ -267,6 +284,8 @@ namespace MyApp.Api.Controllers
             // against the new client if it's being reassigned.
             if (format.CompanyId.HasValue)
                 await _access.AssertAccessAsync(CurrentUserId, format.CompanyId.Value);
+            else if (!_scope.IsSeedAdmin(CurrentUserId))
+                return GlobalFormatRefused();
             await AssertClientAccessAsync(dto.ClientId);
 
             // Dedup on edit — same company-aware check as Create. The
@@ -364,6 +383,8 @@ namespace MyApp.Api.Controllers
             // Tenant guard — audit H-4 (2026-05-13).
             if (format.CompanyId.HasValue)
                 await _access.AssertAccessAsync(CurrentUserId, format.CompanyId.Value);
+            else if (!_scope.IsSeedAdmin(CurrentUserId))
+                return GlobalFormatRefused();
 
             _db.POFormats.Remove(format);
             await _db.SaveChangesAsync();

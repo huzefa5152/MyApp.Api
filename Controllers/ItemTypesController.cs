@@ -47,6 +47,8 @@ namespace MyApp.Api.Controllers
         /// the source.
         /// </summary>
         [HttpGet("uoms-for-hs")]
+        // The lookup runs on THIS company's FBR token; never on another tenant's.
+        [AuthorizeCompany]
         public async Task<ActionResult<List<FbrUOMDto>>> GetUomsForHs(
             [FromQuery] int companyId, [FromQuery] string hsCode)
         {
@@ -66,6 +68,8 @@ namespace MyApp.Api.Controllers
         /// operator never wonders "is 18 % right for this HS code?".
         /// </summary>
         [HttpGet("fbr-hints")]
+        // The lookup runs on THIS company's FBR token; never on another tenant's.
+        [AuthorizeCompany]
         public async Task<IActionResult> GetFbrHints(
             [FromQuery] int companyId, [FromQuery] string hsCode)
         {

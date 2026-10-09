@@ -36,6 +36,8 @@ namespace MyApp.Api.Controllers
         private readonly AppDbContext _context;
         private readonly IWebHostEnvironment _env;
         private readonly ILogger<POImportController> _logger;
+        private readonly ICompanyAccessGuard _access;
+        private readonly IPermissionService _permissions;
 
         public POImportController(
             IPOParserService parser,
@@ -43,8 +45,12 @@ namespace MyApp.Api.Controllers
             IRuleBasedPOParser ruleParser,
             AppDbContext context,
             IWebHostEnvironment env,
-            ILogger<POImportController> logger)
+            ILogger<POImportController> logger,
+            ICompanyAccessGuard access,
+            IPermissionService permissions)
         {
+            _access = access;
+            _permissions = permissions;
             _parser = parser;
             _formatRegistry = formatRegistry;
             _ruleParser = ruleParser;
@@ -81,6 +87,7 @@ namespace MyApp.Api.Controllers
         [EnableRateLimiting("import")]
         public async Task<IActionResult> ParsePdf(IFormFile file, [FromQuery] int? companyId)
         {
+            if (await CompanyScopeErrorAsync(companyId) is { } scopeError) return scopeError;
             if (file == null || file.Length == 0)
                 return BadRequest(new { error = "No file uploaded." });
 
@@ -151,6 +158,7 @@ namespace MyApp.Api.Controllers
         [HasPermission("poformats.import.create")]
         public async Task<IActionResult> ParseText([FromBody] ParseTextRequest request, [FromQuery] int? companyId)
         {
+            if (await CompanyScopeErrorAsync(companyId) is { } scopeError) return scopeError;
             if (string.IsNullOrWhiteSpace(request.Text))
                 return BadRequest(new { error = "No text provided." });
 
@@ -391,7 +399,19 @@ namespace MyApp.Api.Controllers
             if (pageSize < 1 || pageSize > 200) pageSize = 50;
 
             var q = _context.PoImportArchives.AsNoTracking().AsQueryable();
-            if (companyId.HasValue) q = q.Where(a => a.CompanyId == companyId.Value);
+            // Tenant scope: a named company must be reachable; without one the list
+            // is the caller's accessible set — never every tenant's customer POs.
+            var isSeed = _permissions.IsSeedAdmin(CurrentUserId() ?? 0);
+            if (companyId.HasValue)
+            {
+                await _access.AssertAccessAsync(CurrentUserId() ?? 0, companyId.Value);
+                q = q.Where(a => a.CompanyId == companyId.Value);
+            }
+            else if (!isSeed)
+            {
+                var allowed = (await _access.GetAccessibleCompanyIdsAsync(CurrentUserId() ?? 0)).ToList();
+                q = q.Where(a => a.CompanyId != null && allowed.Contains(a.CompanyId.Value));
+            }
             if (!string.IsNullOrWhiteSpace(outcome)) q = q.Where(a => a.ParseOutcome == outcome);
             if (from.HasValue) q = q.Where(a => a.UploadedAt >= from.Value);
             if (to.HasValue) q = q.Where(a => a.UploadedAt < to.Value);
@@ -419,6 +439,15 @@ namespace MyApp.Api.Controllers
                     a.Notes,
                 })
                 .ToListAsync();
+            // The stored error is the parser's raw exception text: internal detail,
+            // shown to the seed admin only.
+            if (!isSeed)
+                return Ok(new { total, page, pageSize, rows = rows.Select(r => new
+                {
+                    r.Id, r.CompanyId, r.UploadedByUserId, r.UploadedAt, r.OriginalFileName, r.FileSizeBytes, r.ContentSha256,
+                    r.ParseOutcome, r.MatchedFormatId, r.MatchedFormatVersion, r.ItemsExtracted, r.ParseDurationMs,
+                    ErrorMessage = r.ErrorMessage == null ? null : "The parser could not read this file.", r.Notes,
+                }) });
 
             return Ok(new { total, page, pageSize, rows });
         }
@@ -429,15 +458,39 @@ namespace MyApp.Api.Controllers
         {
             var row = await _context.PoImportArchives.AsNoTracking().FirstOrDefaultAsync(a => a.Id == id);
             if (row == null) return NotFound();
+            // Tenant scope: only the owning company's users may download it;
+            // unattributed legacy archives are the seed admin's.
+            if (row.CompanyId.HasValue)
+                await _access.AssertAccessAsync(CurrentUserId() ?? 0, row.CompanyId.Value);
+            else if (!_permissions.IsSeedAdmin(CurrentUserId() ?? 0))
+                return NotFound();
 
             var abs = Path.Combine(GetArchiveRoot(), row.StoredPath.Replace('/', Path.DirectorySeparatorChar));
             if (!System.IO.File.Exists(abs))
-                return NotFound(new { error = "Archived file is missing on disk — the DB row exists but the bytes were removed.", row.StoredPath });
+                return NotFound(new { error = "Archived file is missing on disk — the DB row exists but the bytes were removed." });
 
             // Stream from disk so large PDFs don't sit in memory. Original
             // filename so the operator's download keeps a recognisable name.
             var stream = new FileStream(abs, FileMode.Open, FileAccess.Read, FileShare.Read);
             return File(stream, "application/pdf", row.OriginalFileName);
+        }
+
+        /// <summary>
+        /// The company decides which saved PO formats are matched and which
+        /// company's customers are looked up, so it must be the caller's. Without
+        /// one, the client lookup would search every company; only the seed admin
+        /// keeps that.
+        /// </summary>
+        private async Task<IActionResult?> CompanyScopeErrorAsync(int? companyId)
+        {
+            if (companyId is > 0)
+            {
+                await _access.AssertAccessAsync(CurrentUserId() ?? 0, companyId.Value);
+                return null;
+            }
+            return _permissions.IsSeedAdmin(CurrentUserId() ?? 0)
+                ? null
+                : BadRequest(new { error = "Choose a company before importing a PO." });
         }
 
         // ── Archive helpers ─────────────────────────────────────────────

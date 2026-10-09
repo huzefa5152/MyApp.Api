@@ -73,6 +73,8 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            // A division-restricted user manages only the divisions they hold.
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.Id);
             try
             {
                 var updated = await _service.UpdateAsync(id, dto);
@@ -88,6 +90,8 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            // A division-restricted user manages only the divisions they hold.
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.Id);
             var ok = await _service.DeleteAsync(id);
             return ok ? NoContent() : NotFound();
         }
@@ -103,6 +107,8 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            // A division-restricted user manages only the divisions they hold.
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.Id);
 
             var validation = ImageUploadValidator.Validate(file, ImageUploadValidator.LogoMaxBytes);
             if (validation != null)

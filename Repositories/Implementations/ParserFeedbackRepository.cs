@@ -35,9 +35,10 @@ namespace MyApp.Api.Repositories.Implementations
 
         public async Task<(List<ParserFeedback> Rows, int Total)> ListAsync(
             ParserFeedbackStatus? status, DateTime? from, DateTime? to,
-            string? parserVersion, string? sortBy, bool descending, int page, int pageSize)
+            string? parserVersion, string? sortBy, bool descending, int page, int pageSize,
+            IReadOnlyCollection<int>? accessibleCompanyIds)
         {
-            var q = _db.ParserFeedbacks.AsNoTracking().AsQueryable();
+            var q = Scoped(accessibleCompanyIds);
             if (status.HasValue) q = q.Where(f => f.FeedbackStatus == status.Value);
             if (from.HasValue) q = q.Where(f => f.CreatedDate >= from.Value);
             if (to.HasValue) q = q.Where(f => f.CreatedDate < to.Value);
@@ -56,9 +57,17 @@ namespace MyApp.Api.Repositories.Implementations
             return (rows, total);
         }
 
-        public async Task<List<ParserFeedbackVersionCount>> AggregateAsync()
+        // Null is explicitly reserved for the seed admin; an empty set reads nothing.
+        private IQueryable<ParserFeedback> Scoped(IReadOnlyCollection<int>? accessibleCompanyIds)
         {
-            var raw = await _db.ParserFeedbacks.AsNoTracking()
+            var query = _db.ParserFeedbacks.AsNoTracking();
+            return accessibleCompanyIds == null ? query : query.Where(f =>
+                f.CompanyId.HasValue && accessibleCompanyIds.Contains(f.CompanyId.Value));
+        }
+
+        public async Task<List<ParserFeedbackVersionCount>> AggregateAsync(IReadOnlyCollection<int>? accessibleCompanyIds)
+        {
+            var raw = await Scoped(accessibleCompanyIds)
                 .GroupBy(f => new { f.ParserVersion, f.FeedbackStatus })
                 .Select(g => new { g.Key.ParserVersion, g.Key.FeedbackStatus, Count = g.Count() })
                 .ToListAsync();

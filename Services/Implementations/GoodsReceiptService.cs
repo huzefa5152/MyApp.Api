@@ -211,7 +211,7 @@ namespace MyApp.Api.Services.Implementations
                     if (billCompanyId == null)
                         throw new KeyNotFoundException("Purchase bill not found.");
                     if (billCompanyId != dto.CompanyId)
-                        throw new InvalidOperationException("Purchase bill belongs to a different company.");
+                        throw new KeyNotFoundException("Purchase bill not found."); // another company's bill answers like a missing one
                 }
                 if (dto.Items == null || dto.Items.Count == 0)
                     throw new InvalidOperationException("At least one item is required.");
@@ -300,10 +300,16 @@ namespace MyApp.Api.Services.Implementations
                 if (billCompanyId == null)
                     throw new KeyNotFoundException("Purchase bill not found.");
                 if (billCompanyId != gr.CompanyId)
-                    throw new InvalidOperationException("Purchase bill belongs to a different company.");
+                    throw new KeyNotFoundException("Purchase bill not found."); // another company's bill answers like a missing one
             }
 
             gr.ReceiptDate = dto.ReceiptDate.Date;
+            // Cross-tenant link guard, the same one Create applies: a forged
+            // supplier id from another company would otherwise be stored and
+            // read back (name, address, phone) through this receipt.
+            if (dto.SupplierId != gr.SupplierId
+                && !await _context.Suppliers.AnyAsync(s => s.Id == dto.SupplierId && s.CompanyId == gr.CompanyId))
+                throw new KeyNotFoundException("Supplier not found.");
             gr.SupplierId = dto.SupplierId;
             gr.PurchaseBillId = dto.PurchaseBillId;
             gr.SupplierChallanNumber = dto.SupplierChallanNumber?.Trim();

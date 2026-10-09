@@ -384,7 +384,6 @@ namespace MyApp.Api.Services.Implementations
             // Cross-tenant link guard for non-inventory item refs on the lines.
             await ValidateNonInvAsync(companyId, (dto.Items ?? Enumerable.Empty<DeliveryItemDto>()).Select(i => i.NonInventoryItemId));
             await ValidatePrivateCostsAsync(companyId, dto.Items ?? Enumerable.Empty<DeliveryItemDto>());
-
             var fbrReady = company != null && IsFbrReady(company, client);
 
             string status;

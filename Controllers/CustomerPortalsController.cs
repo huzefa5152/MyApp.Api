@@ -24,14 +24,30 @@ namespace MyApp.Api.Controllers
         private readonly ICustomerPortalService _service;
         private readonly ICompanyAccessGuard _access;
         private readonly IConfiguration _config;
+        private readonly IDivisionAccessGuard _divisionAccess;
 
         public CustomerPortalsController(
-            ICustomerPortalService service, ICompanyAccessGuard access, IConfiguration config)
+            ICustomerPortalService service, ICompanyAccessGuard access, IConfiguration config,
+            IDivisionAccessGuard divisionAccess)
         {
+            _divisionAccess = divisionAccess;
             _service = service;
             _access = access;
             _config = config;
         }
+
+        /// <summary>
+        /// A portal publishes every one of the customer's documents, whatever
+        /// division raised them, so a division-restricted user may not open one:
+        /// it would show other divisions' invoices on a public link.
+        /// </summary>
+        private async Task<ObjectResult?> RestrictedPortalRefusalAsync(int companyId) =>
+            await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId) == null
+                ? null
+                : StatusCode(StatusCodes.Status403Forbidden, new
+                {
+                    message = "A customer portal shows the customer's documents from every division, so it can only be opened by a user who is not limited to divisions."
+                });
 
         private int CurrentUserId =>
             int.TryParse(
@@ -76,6 +92,7 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<CustomerPortalDto>> Create([FromBody] CreateCustomerPortalDto dto)
         {
             await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
+            if (await RestrictedPortalRefusalAsync(dto.CompanyId) is { } refused) return refused;
             try
             {
                 var created = await _service.CreateAsync(
@@ -122,6 +139,8 @@ namespace MyApp.Api.Controllers
             var existing = await _service.GetByIdAsync(id, UrlBuilder());
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            // Switching a portal OFF is always allowed; switching one back on publishes it again.
+            if (body.IsActive && await RestrictedPortalRefusalAsync(existing.CompanyId) is { } refused) return refused;
             try
             {
                 var updated = await _service.SetActiveAsync(id, body.IsActive, CurrentUserId, UrlBuilder());

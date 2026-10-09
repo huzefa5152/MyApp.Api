@@ -566,7 +566,9 @@ namespace MyApp.Api.Services.Implementations
             foreach (var challanId in dto.ChallanIds)
             {
                 var dc = await _challanRepo.GetByIdAsync(challanId);
-                if (dc == null) throw new KeyNotFoundException($"Challan {challanId} not found.");
+                // Another company's challan answers exactly like a missing one, and
+                // is checked FIRST: its number and status are that company's data.
+                if (dc == null || dc.CompanyId != dto.CompanyId) throw new KeyNotFoundException($"Challan {challanId} not found.");
                 // Both "Pending" (natively-created) and "Imported" (back-filled)
                 // are billable. "No PO" (FBR fields ready, just no customer PO)
                 // is billable in every FBR mode — a PO is optional metadata, not
@@ -577,7 +579,9 @@ namespace MyApp.Api.Services.Implementations
                             || dc.Status == "No PO";
                 if (!billable)
                     throw new InvalidOperationException($"Challan {dc.ChallanNumber} is not in a billable status (got '{dc.Status}').");
-                if (dc.CompanyId != dto.CompanyId) throw new InvalidOperationException($"Challan {dc.ChallanNumber} does not belong to this company.");
+                // One bill, one buyer: the same rule LinkDeliveriesAsync applies.
+                if (dc.ClientId != dto.ClientId)
+                    throw new InvalidOperationException($"Challan {dc.ChallanNumber} belongs to a different client than this bill.");
                 challans.Add(dc);
             }
 
@@ -2410,7 +2414,7 @@ namespace MyApp.Api.Services.Implementations
             // a bill of its own company AND its own buyer, or the two documents would
             // claim goods went to someone they did not.
             if (challan.CompanyId != invoice.CompanyId)
-                throw new InvalidOperationException("That delivery challan belongs to another company.");
+                throw new KeyNotFoundException("Delivery challan not found."); // another company's challan answers like a missing one
             if (challan.ClientId != invoice.ClientId)
                 throw new InvalidOperationException(
                     "That delivery challan was delivered to a different buyer.");

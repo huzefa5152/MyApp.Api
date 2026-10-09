@@ -28,11 +28,13 @@ namespace MyApp.Api.Controllers
     {
         private readonly IParserFeedbackService _service;
         private readonly ICompanyAccessGuard _access;
+        private readonly IPermissionService _permissions;
 
-        public ImportFeedbackController(IParserFeedbackService service, ICompanyAccessGuard access)
+        public ImportFeedbackController(IParserFeedbackService service, ICompanyAccessGuard access, IPermissionService permissions)
         {
             _service = service;
             _access = access;
+            _permissions = permissions;
         }
 
         private int CurrentUserId =>
@@ -57,7 +59,9 @@ namespace MyApp.Api.Controllers
             if (!Enum.TryParse<ParserFeedbackStatus>(feedbackStatus, ignoreCase: true, out var status))
                 return BadRequest(new { error = "feedbackStatus must be 'Correct' or 'Incorrect'." });
 
-            // Tenant guard — if a company is named, the caller must own it.
+            if (!companyId.HasValue && !_permissions.IsSeedAdmin(CurrentUserId))
+                return BadRequest(new { error = "Choose a company before recording feedback." });
+            // Company-less platform feedback is reserved for seed admin.
             if (companyId.HasValue)
                 await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
 
@@ -96,7 +100,7 @@ namespace MyApp.Api.Controllers
                 Descending = desc,
                 Page = page,
                 PageSize = pageSize,
-            });
+            }, await ReadScopeAsync());
             return Ok(result);
         }
 
@@ -104,7 +108,7 @@ namespace MyApp.Api.Controllers
         [HttpGet("statistics")]
         [HasPermission("importfeedback.list.view")]
         public async Task<ActionResult<ParserFeedbackStatisticsDto>> GetStatistics()
-            => Ok(await _service.GetStatisticsAsync());
+            => Ok(await _service.GetStatisticsAsync(await ReadScopeAsync()));
 
         // Download one retained PDF.
         [HttpGet("{id:int}/download")]
@@ -113,6 +117,11 @@ namespace MyApp.Api.Controllers
         {
             var pdf = await _service.GetPdfAsync(id);
             if (pdf == null) return NotFound(new { error = "No retained PDF for this feedback." });
+            // Tenant scope (audit H7): don't serve another tenant's retained PO PDF.
+            if (pdf.CompanyId.HasValue)
+                await _access.AssertAccessAsync(CurrentUserId, pdf.CompanyId.Value);
+            else if (!_permissions.IsSeedAdmin(CurrentUserId))
+                return NotFound();
             var stream = new FileStream(pdf.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
             return File(stream, "application/pdf", pdf.FileName);
         }
@@ -124,9 +133,15 @@ namespace MyApp.Api.Controllers
         {
             if (body?.Ids == null || body.Ids.Count == 0)
                 return BadRequest(new { error = "Provide at least one id." });
-            var zip = await _service.GetBulkZipAsync(body.Ids);
+            // Tenant scope (audit H7): zip only PDFs the caller can reach.
+            var accessible = await ReadScopeAsync();
+            var zip = await _service.GetBulkZipAsync(body.Ids, accessible);
             if (zip == null) return NotFound(new { error = "None of the selected feedbacks have a retained PDF." });
             return File(zip, "application/zip", "parser-feedback-pdfs.zip");
         }
+
+        private async Task<IReadOnlyCollection<int>?> ReadScopeAsync() =>
+            _permissions.IsSeedAdmin(CurrentUserId) ? null :
+                await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
     }
 }

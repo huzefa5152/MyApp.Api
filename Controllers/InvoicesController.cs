@@ -2,6 +2,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
 using MyApp.Api.Middleware;
@@ -19,10 +21,13 @@ namespace MyApp.Api.Controllers
         private readonly IDivisionAccessGuard _divisionAccess;
         private readonly ILogger<InvoicesController> _logger;
         private readonly int _defaultPageSize;
+        private readonly AppDbContext _db;
 
         public InvoicesController(IInvoiceService service, ICompanyAccessGuard access,
-            IDivisionAccessGuard divisionAccess, IConfiguration configuration, ILogger<InvoicesController> logger)
+            IDivisionAccessGuard divisionAccess, IConfiguration configuration, ILogger<InvoicesController> logger,
+            AppDbContext db)
         {
+            _db = db;
             _service = service;
             _access = access;
             _divisionAccess = divisionAccess;
@@ -246,6 +251,14 @@ namespace MyApp.Api.Controllers
             {
                 if (dto.ChallanIds == null || !dto.ChallanIds.Any())
                     return BadRequest(new { error = "At least one challan must be selected." });
+                // A division-restricted user may bill only challans of divisions
+                // they can reach: the bill copies the challans' lines, so another
+                // division's challan would be read (and marked Invoiced) here.
+                var challanDivisions = await _db.DeliveryChallans.AsNoTracking()
+                    .Where(c => dto.ChallanIds.Contains(c.Id) && c.CompanyId == dto.CompanyId)
+                    .Select(c => c.DivisionId).Distinct().ToListAsync();
+                foreach (var challanDivision in challanDivisions)
+                    await _divisionAccess.AssertAccessAsync(CurrentUserId, dto.CompanyId, challanDivision);
                 if (dto.Items == null || !dto.Items.Any())
                     return BadRequest(new { error = "At least one item with unit price is required." });
                 if (dto.Items.Any(i => i.UnitPrice <= 0))

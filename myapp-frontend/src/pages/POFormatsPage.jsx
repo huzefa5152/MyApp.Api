@@ -25,7 +25,10 @@ const colors = {
 };
 
 export default function POFormatsPage() {
-  const { has } = usePermissions();
+  const { has, isSeedAdmin } = usePermissions();
+  // A legacy global format (no company) is shared by every tenant's parser:
+  // only the system administrator may change or remove it (the server agrees).
+  const canChange = (f) => f.companyId != null || isSeedAdmin;
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
   const confirm = useConfirm();
   const canCreate = has("poformats.manage.create");
@@ -209,10 +212,10 @@ export default function POFormatsPage() {
                       {new Date(f.updatedAt).toLocaleDateString()}
                     </td>
                     <td style={{ ...styles.td, textAlign: "right" }}>
-                      {canUpdate && (
+                      {canUpdate && canChange(f) && (
                         <button style={styles.iconBtn} onClick={() => handleEdit(f)} title="Edit"><MdEdit size={16} /></button>
                       )}
-                      {canDelete && (
+                      {canDelete && canChange(f) && (
                         <button style={{ ...styles.iconBtn, ...styles.iconBtnDanger }} onClick={() => handleDelete(f)} title="Delete"><MdDelete size={16} /></button>
                       )}
                     </td>
@@ -257,7 +260,7 @@ export default function POFormatsPage() {
                     </div>
                   </div>
 
-                  {(canUpdate || canDelete) && (
+                  {(canUpdate || canDelete) && canChange(f) && (
                     <div className="pof-card__actions">
                       {canUpdate && (
                         <button className="pof-card__edit" onClick={() => handleEdit(f)}>

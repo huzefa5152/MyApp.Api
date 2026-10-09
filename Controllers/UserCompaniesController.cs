@@ -218,17 +218,36 @@ namespace MyApp.Api.Controllers
                             if (!await _context.UserDivisions.AnyAsync(d => d.UserId == userId && d.DivisionId == did))
                                 _context.UserDivisions.Add(new UserDivision { UserId = userId, DivisionId = did, AssignedAt = DateTime.UtcNow, AssignedByUserId = CurrentUserId });
                 }
+                var cascaded = 0;
                 if (toRemove.Count > 0)
+                {
                     _context.UserCompanies.RemoveRange(toRemove);
+                    // A company leaves the whole tree beneath this user with it.
+                    // An Administrator can only grant what it holds, so without
+                    // this the accounts it created would keep a company it no
+                    // longer has: the company would stay reachable from a tenant
+                    // tree that has been taken off it.
+                    var removedIds = toRemove.Select(r => r.CompanyId).ToList();
+                    var beneath = await _scope.GetManageableUserIdsAsync(userId);
+                    beneath.Remove(userId);
+                    if (beneath.Count > 0)
+                        cascaded = await _context.UserCompanies
+                            .Where(uc => beneath.Contains(uc.UserId) && removedIds.Contains(uc.CompanyId))
+                            .ExecuteDeleteAsync();
+                }
 
                 await _context.SaveChangesAsync();
                 await tx.CommitAsync();
 
-                _access.InvalidateUser(userId);
+                // Descendants may have lost grants too (cascade below), so drop every cached set.
+                _access.InvalidateAll();
                 // A removed company grant also removes its RestrictToDivisions
                 // flag — drop the division-guard cache so restrictions don't
                 // linger for the 60s TTL.
-                _divisionAccess.InvalidateUser(userId);
+                _divisionAccess.InvalidateAll();
+                if (cascaded > 0)
+                    _logger.LogInformation("Company access removed from user {UserId} also removed {Count} grant(s) from the accounts beneath it",
+                        userId, cascaded);
 
                 return Ok(new SetUserCompaniesResultDto
                 {

@@ -22,10 +22,11 @@ namespace MyApp.Api.Repositories.Interfaces
             string? sortBy,
             bool descending,
             int page,
-            int pageSize);
+            int pageSize,
+            IReadOnlyCollection<int>? accessibleCompanyIds);
 
         /// <summary>Per-(version, status) counts backing the statistics view.</summary>
-        Task<List<ParserFeedbackVersionCount>> AggregateAsync();
+        Task<List<ParserFeedbackVersionCount>> AggregateAsync(IReadOnlyCollection<int>? accessibleCompanyIds);
     }
 
     /// <summary>One grouped count row: how many feedbacks of a given status
