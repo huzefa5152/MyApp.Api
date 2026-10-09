@@ -1,4 +1,5 @@
 import { useState } from "react";
+import CardActions from "./CardActions";
 import { MdVisibility, MdEdit, MdPrint, MdPictureAsPdf, MdGridOn, MdRequestQuote, MdContentCopy, MdCopyAll, MdCancel, MdDelete, MdWarning } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
 import DataTable from "./DataTable";
@@ -141,17 +142,17 @@ export default function ChallanTable({
     const flags = evalRowFlags(c, perms);
     const isDuplicating = duplicatingId === c.id;
     return (
-      <>
-        <button style={btnStyles.view} onClick={() => setSelectedChallan(c)} title="View challan">
+      <CardActions nowrap label={`More actions for challan ${c.challanNumber}`}>
+        <button data-label="View" data-primary style={btnStyles.view} onClick={() => setSelectedChallan(c)} title="View challan">
           <MdVisibility size={14} />
         </button>
         {perms.permPrint && (
-          <button style={{ ...btnStyles.print, ...(printDisabled ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={printDisabled} onClick={() => onPrint?.(c)} title={printDisabled ? printDisabledReason : "Print"}>
+          <button data-label="Print" data-primary style={{ ...btnStyles.print, ...(printDisabled ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={printDisabled} onClick={() => onPrint?.(c)} title={printDisabled ? printDisabledReason : "Print"}>
             <MdPrint size={14} />
           </button>
         )}
         {perms.permPrint && (
-          <button
+          <button data-label="PDF"
             style={{ ...btnStyles.pdf, opacity: (printDisabled || exportingId) ? 0.55 : 1, ...(printDisabled ? { cursor: "not-allowed" } : {}) }}
             disabled={printDisabled || !!exportingId}
             onClick={() => onExportPdf?.(c)}
@@ -161,7 +162,7 @@ export default function ChallanTable({
           </button>
         )}
         {perms.permPrint && onExportExcel && (
-          <button
+          <button data-label="Excel"
             style={{ ...btnStyles.excel, opacity: exportingId ? 0.55 : 1 }}
             disabled={!!exportingId}
             onClick={() => onExportExcel(c)}
@@ -171,12 +172,12 @@ export default function ChallanTable({
           </button>
         )}
         {perms.permUpdate && flags.isEditable && (
-          <button style={btnStyles.edit} onClick={() => onEditItems?.(c)} title="Edit items">
+          <button data-label="Edit items" data-primary={(!flags.canGenerateBill) || undefined} style={btnStyles.edit} onClick={() => onEditItems?.(c)} title="Edit items">
             <MdEdit size={14} />
           </button>
         )}
         {flags.canDuplicate && onDuplicate && (
-          <button
+          <button data-label="Duplicate"
             style={{
               ...btnStyles.duplicate,
               opacity: duplicatingId ? 0.55 : 1,
@@ -190,26 +191,26 @@ export default function ChallanTable({
           </button>
         )}
         {perms.permCopy && onCopy && (
-          <button style={btnStyles.copy} onClick={() => onCopy(c)} title="Copy this challan (new challan number)">
+          <button data-label="Copy" style={btnStyles.copy} onClick={() => onCopy(c)} title="Copy this challan (new challan number)">
             <MdCopyAll size={14} />
           </button>
         )}
         {flags.canGenerateBill && (
-          <button style={btnStyles.generateBill} onClick={() => onGenerateBill?.(c)} title="Generate Bill from this challan">
+          <button data-label="Generate bill" data-primary style={btnStyles.generateBill} onClick={() => onGenerateBill?.(c)} title="Generate Bill from this challan">
             <MdRequestQuote size={14} />
           </button>
         )}
         {perms.permUpdate && flags.canCancel && (
-          <button data-admin-close="" style={btnStyles.cancel} onClick={() => onCancel?.(c)} title="Cancel challan">
+          <button data-label="Cancel challan" data-admin-close="" style={btnStyles.cancel} onClick={() => onCancel?.(c)} title="Cancel challan">
             <MdCancel size={14} />
           </button>
         )}
         {perms.permDelete && flags.canDelete && (
-          <button style={btnStyles.delete} onClick={() => onDelete?.(c)} title="Delete">
+          <button data-label="Delete" style={btnStyles.delete} onClick={() => onDelete?.(c)} title="Delete">
             <MdDelete size={14} />
           </button>
         )}
-      </>
+      </CardActions>
     );
   };
 
