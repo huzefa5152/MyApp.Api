@@ -186,7 +186,7 @@ export default function CreditDebitNotePage() {
   }
 
   return (
-    <div style={{ padding: "16px", maxWidth: 1100, margin: "0 auto" }}>
+    <div style={{ maxWidth: 1100, margin: "0 auto" }}>
       <h2 style={{ display: "flex", alignItems: "center", gap: 8, color: colors.textPrimary, margin: "0 0 4px" }}>
         <MdUndo style={{ color: isCredit ? colors.purple : colors.teal }} /> New {label}
       </h2>

@@ -359,7 +359,7 @@ function EditModal({ user, selected, onToggle, onSubmit, onClose, saving, canAss
 }
 
 const pageStyles = {
-  shell: { padding: "1.5rem", maxWidth: 1200, margin: "0 auto" },
+  shell: { padding: 0, maxWidth: 1200, margin: "0 auto" },
   header: { marginBottom: "1.5rem" },
   headerInner: { display: "flex", gap: "1rem", alignItems: "flex-start" },
   title: { margin: 0, color: colors.textPrimary, fontSize: "1.5rem" },

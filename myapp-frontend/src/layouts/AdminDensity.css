@@ -250,3 +250,15 @@ body.admin-ui .admin-stock-modal > form { display: flex; flex-direction: column;
 body.admin-ui .dash-kpi-card__label { align-items: flex-start !important; min-height: 30px; }
 body.admin-ui .dash-kpi-card__label > span:last-child { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }
 body.admin-ui .dash-mov-row__name { white-space: normal !important; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+/* The Vite starter's global h1 is centred. Every admin page title reads
+   left-aligned, with its label and subtitle (report headers, the dashboard
+   hero, FBR Monitor all inherited the centring). */
+body.admin-ui .dl-main h1 { text-align: left; }
+
+/* Phones: a <select> is as wide as its longest option, so one long company
+   name pushed the page sideways. Full-width pickers are the house rule on a
+   phone; a percentage width also makes the select compressible. */
+@media (max-width: 599.98px) {
+  body.admin-ui .dl-main select { width: 100% !important; min-width: 0 !important; max-width: 100%; }
+}

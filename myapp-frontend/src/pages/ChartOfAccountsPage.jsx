@@ -227,7 +227,7 @@ export default function ChartOfAccountsPage() {
   );
 
   return (
-    <div style={{ padding: "clamp(0.75rem, 2vw, 1.5rem)" }}>
+    <div>
       <div style={st.headerRow}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
           <MdAccountTree size={26} color={colors.blue} />

@@ -171,7 +171,7 @@ export default function TaxSheetPage() {
   }
 
   return (
-    <div style={{ padding: "clamp(12px, 3vw, 24px)" }}>
+    <div>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
         <MdFactCheck size={26} color={colors.blue} />

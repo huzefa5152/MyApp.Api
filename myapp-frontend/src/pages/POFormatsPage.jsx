@@ -272,7 +272,7 @@ function CompanyPOFormats({ company }) {
 }
 
 const styles = {
-  page: { padding: "1.5rem", maxWidth: 1200, margin: "0 auto" },
+  page: { padding: 0, maxWidth: 1200, margin: "0 auto" },
   header: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" },
   title: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
   companyRow: { display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap" },
