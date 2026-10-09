@@ -60,13 +60,13 @@ export default function ConfirmProvider({ children }) {
           //
           // Backdrop click is intentionally a no-op — destructive
           // confirmations should require explicit Cancel / Confirm.
-          style={{ ...formStyles.backdrop, zIndex: 1101, animation: "fadeIn 0.2s ease" }}
+          style={{ ...formStyles.backdrop, zIndex: 1101 }}
         >
           <div data-admin-dialog=""
             // Smallest size tier — confirm dialogs are short by design.
             // Reuses formStyles.modal so width/border-radius/box-shadow/
             // non-movable behaviour all match the rest of the app.
-            style={{ ...formStyles.modal, maxWidth: `${modalSizes.sm}px`, animation: "fadeIn 0.25s ease" }}
+            style={{ ...formStyles.modal, maxWidth: `${modalSizes.sm}px` }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Icon header */}

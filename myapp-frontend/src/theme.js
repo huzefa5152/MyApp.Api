@@ -74,9 +74,11 @@ export const cardStyles = {
   metaGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(120px, 100%), 1fr))", gap: "0.5rem 1rem", marginBottom: "0.7rem" },
   metaLabel: { display: "block", fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary, marginBottom: 1 },
   metaValue: { fontSize: "0.85rem", fontWeight: 600, color: colors.textPrimary, lineHeight: 1.3, wordBreak: "break-word" },
-  amountBox: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, padding: "0.5rem 0.7rem", background: "linear-gradient(135deg, rgba(13,71,161,0.06), rgba(0,137,123,0.07))", borderRadius: 10, marginBottom: "0.6rem" },
+  // flexWrap: when a status badge shares the row, the badge drops below
+  // rather than the amount breaking "Rs." away from its figure.
+  amountBox: { display: "flex", flexWrap: "wrap", alignItems: "baseline", justifyContent: "space-between", gap: 8, padding: "0.5rem 0.7rem", background: "linear-gradient(135deg, rgba(13,71,161,0.06), rgba(0,137,123,0.07))", borderRadius: 10, marginBottom: "0.6rem" },
   amountLabel: { fontSize: "0.66rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary },
-  amount: { fontSize: "1.2rem", fontWeight: 800, color: colors.blue, letterSpacing: "-0.01em" },
+  amount: { fontSize: "1.2rem", fontWeight: 800, color: colors.blue, letterSpacing: "-0.01em", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" },
   statusRow: { display: "flex", flexWrap: "wrap", gap: "0.4rem", margin: "0.1rem 0 0.2rem" },
   buttonGroup: {
     display: "flex",
@@ -153,6 +155,8 @@ export const formStyles = {
     // Stronger blur (was 4px) so the backdrop reads as "the rest of the app
     // is suspended" — matches user request for consistent blurred overlay.
     backdropFilter: "blur(6px)",
+    // Keyframes live in layouts/Motion.css: the page dims, then the panel rises.
+    animation: "dlBackdropIn 180ms ease-out both",
     WebkitBackdropFilter: "blur(6px)", // Safari prefix
     display: "flex",
     alignItems: "center",
@@ -176,7 +180,7 @@ export const formStyles = {
     boxShadow: "0 20px 60px rgba(13,71,161,0.2)",
     overflow: "hidden",
     color: colors.textPrimary,
-    animation: "fadeIn 0.3s ease",
+    animation: "dlModalIn 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both",
     // Flex column so header / body / footer stack and body can scroll independently
     display: "flex",
     flexDirection: "column",
