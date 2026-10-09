@@ -1,4 +1,4 @@
-import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
+import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { MdRequestQuote, MdAdd, MdBusiness, MdSearch, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdSwapHoriz, MdAttachFile, MdVisibility, MdUploadFile, MdCopyAll } from "react-icons/md";
 import SalesQuoteForm from "../Components/SalesQuoteForm";
@@ -215,6 +215,7 @@ export default function SalesQuotePage() {
             <h2 style={st.title}>Sales Quotes</h2>
             <p style={st.subtitle}>{selectedCompany ? `${totalCount} quote${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}` : "Select a company to view quotes"}</p>
           </div>
+          <DocumentLinesHeaderLink />
         </div>
         {companies.length > 0 && (canCreate || canImportPo) && (
           <div style={{ display: "flex", gap: "0.5rem" }}>

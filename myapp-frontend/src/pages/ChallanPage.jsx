@@ -1,4 +1,4 @@
-import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
+import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { MdDescription, MdAdd, MdBusiness, MdSearch, MdUploadFile } from "react-icons/md";
@@ -403,6 +403,7 @@ export default function ChallanPage() {
                 : "Select a company to view challans"}
             </p>
           </div>
+          <DocumentLinesHeaderLink />
         </div>
         {companies.length > 0 && (
           <div style={{ display: "flex", gap: "0.5rem" }}>

@@ -120,3 +120,21 @@ body.admin-ui {
 @media (pointer: coarse) {
   .card-actions-more { width: 44px !important; height: 44px !important; }
 }
+
+/* Document lines pill beside a page title: a full tap target on touch screens. */
+@media (pointer: coarse) {
+  .doc-lines-pill { min-height: 44px !important; padding: 0 14px !important; }
+}
+
+/* On a phone the pill would squeeze the page title; it drops onto its own
+   short line beneath the title instead, so the title keeps the full width. */
+@media (max-width: 600px) {
+  .dl-main div:has(> .doc-lines-pill) { flex-wrap: wrap; row-gap: 4px; }
+  /* The title text shrinks beside its icon (never drops below it), so only the
+     pill moves to the next line. */
+  .dl-main div:has(> .doc-lines-pill) > :nth-child(2) { flex: 1 1 0; min-width: 0; }
+  /* A zero-height break, ordered between the title and the pill, starts the
+     pill's own line while the pill keeps its natural width. */
+  .dl-main div:has(> .doc-lines-pill)::after { content: ""; order: 2; flex-basis: 100%; height: 0; }
+  .doc-lines-pill { order: 3; }
+}

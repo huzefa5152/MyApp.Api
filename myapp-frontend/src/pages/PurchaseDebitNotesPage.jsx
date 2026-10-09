@@ -1,4 +1,4 @@
-import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
+import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { MdReceiptLong, MdSearch, MdVisibility, MdDelete, MdPrint, MdPictureAsPdf, MdEdit, MdAdd } from "react-icons/md";
 import { getPurchaseDebitNotesByCompany, deletePurchaseDebitNote, getPurchaseDebitNotePrintData } from "../api/purchaseDebitNoteApi";
@@ -132,6 +132,7 @@ export default function PurchaseDebitNotesPage() {
               {filtered.length} note{filtered.length !== 1 ? "s" : ""} · {money(total)} total
             </div>
           </div>
+          <DocumentLinesHeaderLink />
         </div>
         {canCreate && (companies?.length > 0) && (
           <button style={styles.newBtn} onClick={openCreate}>

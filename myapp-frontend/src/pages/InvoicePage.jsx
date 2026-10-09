@@ -1,4 +1,4 @@
-import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
+import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import CardActions from "../Components/CardActions";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -800,6 +800,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                 : "Select a company"}
             </p>
           </div>
+          <DocumentLinesHeaderLink />
         </div>
         {/* Creation buttons live on the Bills tab only — Invoices tab is
             for FBR classification & submission of existing records. */}

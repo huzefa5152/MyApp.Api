@@ -1,4 +1,4 @@
-import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
+import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { MdAssignment, MdAdd, MdBusiness, MdSearch, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdLocalShipping, MdUploadFile, MdVisibility, MdReceiptLong, MdLink, MdCopyAll } from "react-icons/md";
@@ -243,6 +243,7 @@ export default function SalesOrderPage() {
             <h2 style={st.title}>Sales Orders</h2>
             <p style={st.subtitle}>{selectedCompany ? `${totalCount} order${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}` : "Select a company to view orders"}</p>
           </div>
+          <DocumentLinesHeaderLink />
         </div>
         {companies.length > 0 && (
           <div style={{ display: "flex", gap: "0.5rem" }}>
