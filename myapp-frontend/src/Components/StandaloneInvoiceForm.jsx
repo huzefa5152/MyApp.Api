@@ -618,19 +618,6 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         </div>
         <form onSubmit={handleSubmit}>
           <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
-            {billsMode && <DocumentCopyPicker companyId={companyId} destination="Bill" disabled={!!salesOrderId}
-              onCopy={(source,lines,details) => {
-                const mapped = lines.map(line => ({ ...copyLine(line,blankRow),
-                  itemTypeId: line.itemTypeId ? String(line.itemTypeId) : "",
-                  uom: line.uom || line.unit || "", quantity: String(line.quantity), unitPrice: String(line.unitPrice || 0),
-                  lineTotal: String(lineTotalFrom(line.quantity,line.unitPrice || 0)) }));
-                setRows(prev => [...(details || prev.length===1 && !prev[0].description ? [] : prev), ...mapped]);
-                if(details) {
-                  setSelectedClientId(String(source.clientId));setPoNumber(source.poNumber || "");setPoDate(source.poDate?.slice(0,10)||"");
-                  setGstRate(source.gstRate??18);setFreightCharges(source.freightCharges||0);setPaymentTerms(source.paymentTerms||"");setNotes(source.notes||"");
-                  setFurtherTaxRate(source.furtherTaxRate??null);setWithholdingTaxRate(source.withholdingTaxRate??null);setWithholdingTaxAmount(null);
-                }
-              }} />}
             {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
             {loading ? (
@@ -663,6 +650,23 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                     <div style={{ flex: 1, minWidth: 140 }}>
                       <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary }}>PO Date</label>
                       <input type="date" value={poDate} onChange={(e) => setPoDate(e.target.value)} style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: "#fff", color: colors.textPrimary, outline: "none", boxSizing: "border-box" }} />
+                    </div>
+                    {/* Copy joins the order / PO row instead of a row of its own;
+                        opened, its panel takes the full width of the row. */}
+                    <div className="doc-header-row__copy">
+                      <DocumentCopyPicker companyId={companyId} destination="Bill" disabled={!!salesOrderId}
+                      onCopy={(source,lines,details) => {
+                        const mapped = lines.map(line => ({ ...copyLine(line,blankRow),
+                          itemTypeId: line.itemTypeId ? String(line.itemTypeId) : "",
+                          uom: line.uom || line.unit || "", quantity: String(line.quantity), unitPrice: String(line.unitPrice || 0),
+                          lineTotal: String(lineTotalFrom(line.quantity,line.unitPrice || 0)) }));
+                        setRows(prev => [...(details || prev.length===1 && !prev[0].description ? [] : prev), ...mapped]);
+                        if(details) {
+                          setSelectedClientId(String(source.clientId));setPoNumber(source.poNumber || "");setPoDate(source.poDate?.slice(0,10)||"");
+                          setGstRate(source.gstRate??18);setFreightCharges(source.freightCharges||0);setPaymentTerms(source.paymentTerms||"");setNotes(source.notes||"");
+                          setFurtherTaxRate(source.furtherTaxRate??null);setWithholdingTaxRate(source.withholdingTaxRate??null);setWithholdingTaxAmount(null);
+                        }
+                      }} />
                     </div>
                   </div>
                 )}

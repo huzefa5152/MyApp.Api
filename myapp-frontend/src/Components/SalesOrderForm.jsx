@@ -165,11 +165,6 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
         </div>
         <form onSubmit={handleSubmit}>
           <div data-admin-body="" style={formStyles.body}>
-            <DocumentCopyPicker companyId={companyId} destination="Order" allowDetails={!isEdit} disabled={!!salesQuoteId}
-              onCopy={(source,lines,details) => {
-                setItems(prev => appendCopiedLines(details ? [] : prev, lines, blankItem));
-                if(details) { setClient({id:source.clientId,label:source.clientName});setNotes(source.notes||"");setPoNumber(source.customerPoNumber||"");setPoDate(source.customerPoDate?.slice(0,10)||"");setSite(source.site||"");setSalesQuoteId(""); }
-              }} />
             {error && <div ref={errRef} style={s.err}>{error}</div>}
             {isEdit && <div style={{ background: "#eff6ff", padding: 12, borderRadius: 8, marginBottom: 12 }}>
               <p>Changing ordered quantities changes the remaining commitment; it does not rewrite actual deliveries. Rates and descriptions apply to future deliveries unless you choose below. PO changes update unbilled challans.</p>
@@ -177,7 +172,14 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
               {has("bills.manage.update") && has("challans.manage.update") && <label style={{ display: "flex", gap: 8, minHeight: 44, alignItems: "center" }}><input type="checkbox" checked={applyDetails} onChange={e => setApplyDetails(e.target.checked)} />Apply changed descriptions, units and item types to existing deliveries and editable bills</label>}
               <div>{linkedChallans.filter(c => c.status !== "Cancelled").map(c => <div key={c.id}>Challan #{c.challanNumber}{c.invoiceId ? ` → Bill #${c.invoiceNumber} · ${c.fbrStatus || "Not submitted"}` : " · Unbilled"}</div>)}</div>
             </div>}
-            <section className="admin-details-panel" aria-label="Customer & delivery"><h6 className="admin-section-heading">Customer & delivery</h6><div data-admin-form-row="" className="admin-order-party-row" style={s.row}>
+            <section className="admin-details-panel" aria-label="Customer & delivery"><div className="admin-section-heading-row"><h6 className="admin-section-heading">Customer & delivery</h6>
+              {/* Copy sits on the heading line instead of a row of its own. */}
+              <DocumentCopyPicker companyId={companyId} destination="Order" allowDetails={!isEdit} disabled={!!salesQuoteId}
+                onCopy={(source,lines,details) => {
+                  setItems(prev => appendCopiedLines(details ? [] : prev, lines, blankItem));
+                  if(details) { setClient({id:source.clientId,label:source.clientName});setNotes(source.notes||"");setPoNumber(source.customerPoNumber||"");setPoDate(source.customerPoDate?.slice(0,10)||"");setSite(source.site||"");setSalesQuoteId(""); }
+                }} />
+            </div><div data-admin-form-row="" className="admin-order-party-row" style={s.row}>
               <div style={{ flex: "1 1 100%", minWidth: 220 }}>
                 <label style={s.label}>Sales Quote <span style={s.opt}>(optional — picking one pre-fills the order)</span></label>
                 <SearchableSelect
@@ -191,24 +193,29 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
               </div>
               <div style={{ flex: "1 1 100%", minWidth: 220 }}>
                 <label style={s.label}>Client</label>
-                <SearchableSelect
-                  items={clients}
-                  value={client?.id || ""}
-                  onChange={(id, item) => { setClient(item); setSite(""); setSalesQuoteId(""); }}
-                  placeholder="— Select Client —"
-                />
-                {canCreateClient ? (
-                  <button
-                    type="button"
-                    style={{ ...s.inlineAddBtn, marginTop: "0.4rem", minHeight: 44 }}
-                    onClick={() => setShowAddClient(true)}
-                    title="Create a new client without leaving this form"
-                  >
-                    <MdPersonAdd size={14} /> New Client
-                  </button>
-                ) : (
-                  <PermissionLackedHint perm="clients.manage.create" what="add a new client" />
-                )}
+                {/* New Client sits beside the picker rather than on a line of its own. */}
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "stretch" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <SearchableSelect
+                      items={clients}
+                      value={client?.id || ""}
+                      onChange={(id, item) => { setClient(item); setSite(""); setSalesQuoteId(""); }}
+                      placeholder="— Select Client —"
+                    />
+                  </div>
+                  {canCreateClient && (
+                    <button
+                      type="button"
+                      style={{ ...s.inlineAddBtn, minHeight: 0, whiteSpace: "nowrap", flexShrink: 0 }}
+                      onClick={() => setShowAddClient(true)}
+                      title="Create a new client without leaving this form"
+                      aria-label="New client"
+                    >
+                      <MdPersonAdd size={15} /> New
+                    </button>
+                  )}
+                </div>
+                {!canCreateClient && <PermissionLackedHint perm="clients.manage.create" what="add a new client" />}
 
               </div>
               <div style={{ flex: 1, minWidth: 150 }}>

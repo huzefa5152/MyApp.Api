@@ -239,20 +239,18 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
 
         <form onSubmit={handleSubmit}>
           <div data-admin-body="" style={formStyles.body}>
-            <DocumentCopyPicker companyId={companyId} destination="Challan" allowDetails={true} disabled={!!salesOrderId}
-              onCopy={(source,lines,details) => {
-                setItems(prev => appendCopiedLines(details ? [] : prev, lines, () => ({description:"",quantity:1,unit:""})));
-                if(details) { setClient(clients.find(c=>c.id===source.clientId) || {id:source.clientId,label:source.clientName});setSite(source.site||"");setNotes(source.notes||"");setPoNumber(source.poNumber||"");setPoDate(source.poDate?.slice(0,10)||"");setIndentNo(source.indentNo||"");setSalesOrderId("");setDeliveryDate(todayYmd()); }
-              }} />
             {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
-            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="challan" clientId={client?.id} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
 
-            {/* Optional: fulfil a Sales Order. Picking one autofills the client,
-                PO, site and the order's undelivered lines below, and links the
-                challan to the order (fulfilment tracking + auto-close). */}
-            {canUseOrders && (
-              <div data-admin-form-row="" style={styles.row}>
-                <div style={{ flex: 1, minWidth: 260 }}>
+            {/* One header row: number, the order it fulfils, and the copy
+                shortcut. Stacked, each took a full line of a wide dialog. The
+                copy panel takes the full row once it is opened. */}
+            <div className="doc-header-row">
+              <div className="doc-header-row__number"><BillNumberField companyId={companyId} documentType="challan" clientId={client?.id} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
+              {/* Optional: fulfil a Sales Order. Picking one autofills the client,
+                  PO, site and the order's undelivered lines below, and links the
+                  challan to the order (fulfilment tracking + auto-close). */}
+              {canUseOrders && (
+                <div className="doc-header-row__grow">
                   <label style={styles.label}>
                     From Sales Order <span style={{ color: colors.textSecondary, fontWeight: 400 }}>(optional — autofills the challan)</span>
                   </label>
@@ -264,8 +262,15 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                     placeholder={openOrders.length ? "— not from an order —" : "No open sales orders for this company"}
                   />
                 </div>
+              )}
+              <div className="doc-header-row__copy">
+                <DocumentCopyPicker companyId={companyId} destination="Challan" allowDetails={true} disabled={!!salesOrderId}
+                  onCopy={(source,lines,details) => {
+                    setItems(prev => appendCopiedLines(details ? [] : prev, lines, () => ({description:"",quantity:1,unit:""})));
+                    if(details) { setClient(clients.find(c=>c.id===source.clientId) || {id:source.clientId,label:source.clientName});setSite(source.site||"");setNotes(source.notes||"");setPoNumber(source.poNumber||"");setPoDate(source.poDate?.slice(0,10)||"");setIndentNo(source.indentNo||"");setSalesOrderId("");setDeliveryDate(todayYmd()); }
+                  }} />
               </div>
-            )}
+            </div>
 
             {/* Header row: Client / Site / Delivery Date — same layout as
                 Edit Challan so operators see identical shape on both flows.
@@ -274,24 +279,30 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
             <section className="admin-details-panel" aria-label="Delivery details"><h6 className="admin-section-heading">Delivery details</h6><div data-admin-form-row="" style={styles.row}>
               <div style={{ flex: 2, minWidth: 220 }}>
                 <label style={styles.label}>Client</label>
-                <SearchableSelect
-                  items={clients}
-                  value={client?.id || ""}
-                  onChange={(id, item) => { setClient(item); setSite(""); }}
-                  placeholder="— Select Client —"
-                />
-                {canCreateClient ? (
-                  <button
-                    type="button"
-                    style={{ ...styles.inlineAddBtn, marginTop: "0.4rem", minHeight: 44 }}
-                    onClick={() => setShowAddClient(true)}
-                    title="Create a new client without leaving this form"
-                  >
-                    <MdPersonAdd size={14} /> New Client
-                  </button>
-                ) : (
-                  <PermissionLackedHint perm="clients.manage.create" what="add a new client" />
-                )}
+                {/* New Client sits beside the picker rather than on a line of
+                    its own under it. */}
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "stretch" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <SearchableSelect
+                      items={clients}
+                      value={client?.id || ""}
+                      onChange={(id, item) => { setClient(item); setSite(""); }}
+                      placeholder="— Select Client —"
+                    />
+                  </div>
+                  {canCreateClient && (
+                    <button
+                      type="button"
+                      style={{ ...styles.inlineAddBtn, minHeight: 0, whiteSpace: "nowrap", flexShrink: 0 }}
+                      onClick={() => setShowAddClient(true)}
+                      title="Create a new client without leaving this form"
+                      aria-label="New client"
+                    >
+                      <MdPersonAdd size={15} /> New
+                    </button>
+                  )}
+                </div>
+                {!canCreateClient && <PermissionLackedHint perm="clients.manage.create" what="add a new client" />}
               </div>
               <div style={{ flex: 1.5, minWidth: 180 }}>
                 <label style={styles.label}>Site / Department</label>

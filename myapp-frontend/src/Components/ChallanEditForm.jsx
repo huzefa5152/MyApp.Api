@@ -251,14 +251,20 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
         <form onSubmit={handleSubmit}>
           <div data-admin-body="" style={formStyles.body}>
             {challan.invoiceId && <p role="status" style={{ background: "#eff6ff", padding: 12, borderRadius: 8 }}>Saving changes updates bill #{challan.invoiceNumber || challan.invoiceId}, its totals and linked order delivery figures. Consultant review will be required before FBR validation. New items start without a rate: open the bill to price them. To cancel or remove a whole challan, use its order management actions or Bills → Manage challans.</p>}
-            <DocumentCopyPicker companyId={challan.companyId} destination="Challan" allowDetails={false} disabled={!!challan.salesOrderId || !!challan.invoiceId}
-              onCopy={(source,lines,details) => {
-                setItems(prev => appendCopiedLines(details ? [] : prev, lines, () => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""})));
-                if(details) {  }
-              }} />
             {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
-            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={challan.companyId} documentType="challan" clientId={clientId} currentClientId={challan.clientId} variant="edit" currentNumber={challan.challanNumber} editRecordId={challan.id} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} lockedReason={isDuplicate ? "Duplicate challan numbers are inherited and cannot be changed." : undefined} disabled={saving} /></div>
+            {/* Number and the copy shortcut share one row; the copy panel takes
+                the full row once it is opened. */}
+            <div className="doc-header-row">
+              <div className="doc-header-row__number"><BillNumberField companyId={challan.companyId} documentType="challan" clientId={clientId} currentClientId={challan.clientId} variant="edit" currentNumber={challan.challanNumber} editRecordId={challan.id} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} lockedReason={isDuplicate ? "Duplicate challan numbers are inherited and cannot be changed." : undefined} disabled={saving} /></div>
+              <div className="doc-header-row__copy">
+                <DocumentCopyPicker companyId={challan.companyId} destination="Challan" allowDetails={false} disabled={!!challan.salesOrderId || !!challan.invoiceId}
+                  onCopy={(source,lines,details) => {
+                    setItems(prev => appendCopiedLines(details ? [] : prev, lines, () => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""})));
+                    if(details) {  }
+                  }} />
+              </div>
+            </div>
 
             {/* Duplicate-mode banner — explains why so many fields are
                 read-only and what the operator IS allowed to change. */}

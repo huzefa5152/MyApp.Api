@@ -167,24 +167,29 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
             <section className="admin-details-panel" aria-label="Customer & quotation"><h6 className="admin-section-heading">Customer & quotation</h6><div data-admin-form-row="" style={s.row}>
               <div style={{ flex: 2, minWidth: 220 }}>
                 <label style={s.label}>Client</label>
-                <SearchableSelect
-                  items={clients}
-                  value={client?.id || ""}
-                  onChange={(id, item) => setClient(item)}
-                  placeholder="— Select Client —"
-                />
-                {canCreateClient ? (
-                  <button
-                    type="button"
-                    style={{ ...s.inlineAddBtn, marginTop: "0.4rem", minHeight: 44 }}
-                    onClick={() => setShowAddClient(true)}
-                    title="Create a new client without leaving this form"
-                  >
-                    <MdPersonAdd size={14} /> New Client
-                  </button>
-                ) : (
-                  <PermissionLackedHint perm="clients.manage.create" what="add a new client" />
-                )}
+                {/* New Client sits beside the picker rather than on a line of its own. */}
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "stretch" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <SearchableSelect
+                      items={clients}
+                      value={client?.id || ""}
+                      onChange={(id, item) => setClient(item)}
+                      placeholder="— Select Client —"
+                    />
+                  </div>
+                  {canCreateClient && (
+                    <button
+                      type="button"
+                      style={{ ...s.inlineAddBtn, minHeight: 0, whiteSpace: "nowrap", flexShrink: 0 }}
+                      onClick={() => setShowAddClient(true)}
+                      title="Create a new client without leaving this form"
+                      aria-label="New client"
+                    >
+                      <MdPersonAdd size={15} /> New
+                    </button>
+                  )}
+                </div>
+                {!canCreateClient && <PermissionLackedHint perm="clients.manage.create" what="add a new client" />}
 
               </div>
               <div style={{ flex: 1, minWidth: 140 }}>

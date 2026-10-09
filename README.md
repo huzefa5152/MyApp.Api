@@ -300,6 +300,16 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-10-09
 
+- Add motion and feedback across the admin: sidebar links nudge on hover, active markers grow in, opening a group cascades its links, the user menu drops in; every shared dialog dims the page and rises into place; toasts slide in; buttons give press feedback and show a clear keyboard-focus ring. All of it switches off under the operating system's reduced-motion setting.
+- Animate the dashboard's KPI figures counting up to their value, keep them on one line, fit the donut's total inside its ring, and give the Sales by Client legend room for client names.
+- Fold rarely used actions on Bill, Invoice and Challan cards and tables into a "⋯" menu, so a card's buttons fit on one row. Every action is still there behind the same permissions, and the menu works from the keyboard.
+- Line pages up: about 20 pages added their own padding inside the app's, page titles (reports, FBR Monitor, the dashboard) no longer centre themselves, card totals no longer split "Rs." from the figure, and company pickers can no longer push a phone page sideways. The breadcrumb shows the current page in bold.
+- Remove the starter template's purple accent and the drop shadow and hover jump it gave every button.
+- Tighten the document dialogs: on Delivery Challan, Edit Challan, Purchase Bill, Sales Quote, Sales Order and Bill (No Challan), the number, the source picker and "Copy from a document" share one row, and "New Client" sits beside the client picker instead of on a line of its own.
+- Rework "Copy from a document": type and search on one line, a clear message when there is nothing to copy (or nothing matches the search) instead of an empty list and pager, paging only when there is more than one page, and the chosen document's lines as a tidy list with an "Add selected items" button that shows the count.
+- Space the Customer picker from the upload tabs in Import Customer PO and Import Enquiry / Demand.
+- Fix sidebar groups being cut off when they hold many links (FBR Monitor was cut in half under Configuration): a group now opens to its full height, and the sidebar scrolls the current page's link into view.
+
 - Clarify seed-admin Gmail account linking: personal account choices do not indicate a connection to the selected company.
 
 - Polish the email workspace with an integrated company header, clear message selection and compact navigation. Keep the email inbox and reader within the viewport with independent scrolling, compact controls and a mobile inbox/detail view.

@@ -174,8 +174,9 @@ body.admin-ui .dl-main [data-admin-toolbar] { gap: 12px !important; margin-botto
 @media(min-width:768px) {
  body.admin-ui .admin-quote-body:has(> .admin-document-copy) { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 12px; align-content: start; }
  body.admin-ui .admin-quote-body:has(> .admin-document-copy) > * { grid-column: 1 / -1; }
- body.admin-ui .admin-quote-body > .admin-document-copy { grid-column: 1 !important; grid-row: 1; align-self: start; margin-bottom: 0 !important; }
- body.admin-ui .admin-quote-body:has(> .admin-document-copy) > div:has(> .admin-document-number) { grid-column: 2; grid-row: 1; max-width: none !important; margin-bottom: 0 !important; }
+ /* Number on the left, copy on the right with its inputs, as on every other document dialog. */
+ body.admin-ui .admin-quote-body > .admin-document-copy { grid-column: 2 !important; grid-row: 1; align-self: start; justify-self: end; margin-top: 1.35rem; margin-bottom: 0 !important; }
+ body.admin-ui .admin-quote-body:has(> .admin-document-copy) > div:has(> .admin-document-number) { grid-column: 1; grid-row: 1; max-width: none !important; margin-bottom: 0 !important; }
 }
 
 /* Consistent visual grouping for create and edit workflows. */
@@ -229,7 +230,7 @@ body.admin-ui .admin-document-copy[data-open=false] { display: inline-block; wid
 body.admin-ui .admin-document-copy[data-open=true] { width: 100%; padding: 12px !important; margin-bottom: 12px !important; }
 body.admin-ui .admin-document-copy > button:first-child { padding-inline: 10px; }
 @media(min-width:768px) {
- body.admin-ui .admin-quote-body > .admin-document-copy[data-open=true] { grid-column: 1 / -1 !important; grid-row: auto; }
+ body.admin-ui .admin-quote-body > .admin-document-copy[data-open=true] { grid-column: 1 / -1 !important; grid-row: auto; justify-self: stretch; margin-top: 0; }
  body.admin-ui .admin-quote-body:has(> .admin-document-copy[data-open=true]) > div:has(> .admin-document-number) { grid-column: 1 / -1; grid-row: auto; }
 }
 
@@ -262,3 +263,22 @@ body.admin-ui .dl-main h1 { text-align: left; }
 @media (max-width: 599.98px) {
   body.admin-ui .dl-main select { width: 100% !important; min-width: 0 !important; max-width: 100%; }
 }
+
+/* A document dialog's header row: number, a source picker, the copy shortcut.
+   Labels share a top line; the label-less copy button drops by one label
+   height so it lines up with the inputs. Opened, the copy panel takes the row. */
+body.admin-ui .doc-header-row { display: flex; flex-wrap: wrap; gap: 0.6rem 1rem; align-items: flex-start; margin-bottom: 0.85rem; }
+body.admin-ui .doc-header-row__number { flex: 0 1 340px; min-width: min(260px, 100%); }
+body.admin-ui .doc-header-row__number > div { max-width: none !important; margin-bottom: 0 !important; }
+body.admin-ui .doc-header-row__grow { flex: 1 1 280px; min-width: 0; }
+body.admin-ui .doc-header-row__copy { flex: 0 0 auto; margin-left: auto; padding-top: 1.35rem; }
+body.admin-ui .doc-header-row__copy > .admin-document-copy[data-open=false] { margin-bottom: 0 !important; }
+body.admin-ui .doc-header-row__copy:has(> .admin-document-copy[data-open=true]) { flex-basis: 100%; padding-top: 0; margin-left: 0; order: 10; }
+
+/* A dialog section heading that also carries a shortcut (the copy picker):
+   the row owns the underline, the button sits at the right, and an opened
+   copy panel takes the full width under the heading. */
+body.admin-ui [data-admin-dialog] .admin-section-heading-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 14px; padding: 0 0 8px; border-bottom: 1px solid #e8edf3; }
+body.admin-ui [data-admin-dialog] .admin-section-heading-row > .admin-section-heading { margin: 0; padding: 0; border-bottom: 0; }
+body.admin-ui [data-admin-dialog] .admin-section-heading-row > .admin-document-copy[data-open=false] { margin-bottom: 0 !important; }
+body.admin-ui [data-admin-dialog] .admin-section-heading-row > .admin-document-copy[data-open=true] { flex-basis: 100%; margin-bottom: 0 !important; }

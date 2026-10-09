@@ -454,11 +454,15 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
 
           {step === 1 && (
             <>
-              <label style={styles.label}>Customer *</label>
-              <select aria-label="Import customer" disabled={parsing} style={styles.input} value={selectedClientId} onChange={e => { setSelectedClientId(e.target.value); setWorkbook(null); }}>
-                <option value="">Choose customer</option>
-                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              {/* One field, spaced from the tabs below: the picker sat flush
+                  against them, and its focus ring ran into the tab buttons. */}
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={styles.label}>Customer *</label>
+                <select aria-label="Import customer" disabled={parsing} style={styles.input} value={selectedClientId} onChange={e => { setSelectedClientId(e.target.value); setWorkbook(null); }}>
+                  <option value="">Choose customer</option>
+                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
               {/* Mode Tabs */}
               <div style={styles.modeTabs}>
                 <button

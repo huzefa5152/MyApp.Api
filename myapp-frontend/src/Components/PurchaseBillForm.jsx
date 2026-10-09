@@ -292,13 +292,19 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               disabled fieldset (so view-mode preview/download stay clickable). */}
           <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
           <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
-            <DocumentCopyPicker companyId={companyId} destination="PurchaseBill" allowDetails={!isEdit && !isAgainstSale} disabled={readOnly || isAgainstSale}
-              onCopy={(source,lines,details) => {
-                setItems(prev => appendCopiedLines(details ? [] : prev, lines, newRow).map(row => ({...row,uom:row.uom || row.unit || ""})));
-                if(details) { setSupplierId(String(source.supplierId));setNotes(source.notes||"");setGstRate(source.gstRate??18);setPaymentTerms(source.paymentTerms||"");setPaymentMode(source.paymentMode||"");setSupplierIRN("");setSupplierBillNumber("");setWithholdingTaxRate(source.withholdingTaxRate??null);setWithholdingTaxAmount(null); }
-              }} />
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
-            {<div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="purchase-bill" variant={isEdit ? "edit" : "create"} currentNumber={currentNumber} editRecordId={billId} lockedReason={readOnly ? "Document number is read-only in View." : undefined} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>}
+            {/* Number and the copy shortcut share one row; the copy panel takes
+                the full row once it is opened. */}
+            <div className="doc-header-row">
+              <div className="doc-header-row__number"><BillNumberField companyId={companyId} documentType="purchase-bill" variant={isEdit ? "edit" : "create"} currentNumber={currentNumber} editRecordId={billId} lockedReason={readOnly ? "Document number is read-only in View." : undefined} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
+              <div className="doc-header-row__copy">
+                <DocumentCopyPicker companyId={companyId} destination="PurchaseBill" allowDetails={!isEdit && !isAgainstSale} disabled={readOnly || isAgainstSale}
+                  onCopy={(source,lines,details) => {
+                    setItems(prev => appendCopiedLines(details ? [] : prev, lines, newRow).map(row => ({...row,uom:row.uom || row.unit || ""})));
+                    if(details) { setSupplierId(String(source.supplierId));setNotes(source.notes||"");setGstRate(source.gstRate??18);setPaymentTerms(source.paymentTerms||"");setPaymentMode(source.paymentMode||"");setSupplierIRN("");setSupplierBillNumber("");setWithholdingTaxRate(source.withholdingTaxRate??null);setWithholdingTaxAmount(null); }
+                  }} />
+              </div>
+            </div>
 
             {sourceBill && (
               <div style={{
