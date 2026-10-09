@@ -301,6 +301,7 @@ Publish output optimized from 79 MB to 37 MB via:
 ### 2026-10-09
 
 - Merge current Trader into the selectable-theme branch, preserving Classic and Workspace alongside current billing, OAuth, security and accessible admin workflows.
+- Clarify seed-admin Gmail account linking: personal account choices do not indicate a connection to the selected company.
 
 - Polish the email workspace with an integrated company header, clear message selection and compact navigation. Keep the email inbox and reader within the viewport with independent scrolling, compact controls and a mobile inbox/detail view.
 
