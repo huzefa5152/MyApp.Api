@@ -166,7 +166,7 @@ export default function ItemTypesPage() {
             </p>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+        {companies.length > 1 && (<div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
           {companies?.length > 0 && (
             <select
               value={companyId ?? ""}
@@ -184,7 +184,7 @@ export default function ItemTypesPage() {
               <MdAdd size={18} /> New Item
             </button>
           )}
-        </div>
+        </div>)}
       </div>
 
       {!companyId && companies?.length > 0 && (

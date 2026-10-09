@@ -168,7 +168,7 @@ export default function GoodsReceiptsPage() {
         <div style={styles.empty}>No companies available.</div>
       ) : (
         <>
-          <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          {companies.length > 1 && (<div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
             <MdBusiness size={20} color={colors.blue} />
             <select style={dropdownStyles.base} value={selectedCompany?.id || ""} onChange={e => setSelectedCompany(companies.find(c => parseInt(c.id) === parseInt(e.target.value)))}>
               {companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
@@ -176,7 +176,7 @@ export default function GoodsReceiptsPage() {
             {selectedCompany && (
               <DivisionSelect companyId={selectedCompany.id} value={divisionFilter} onChange={(v) => { setDivisionFilter(v); setPage(1); }} style={dropdownStyles.base} />
             )}
-          </div>
+          </div>)}
 
           {selectedCompany && (
             <div className="filters-row">

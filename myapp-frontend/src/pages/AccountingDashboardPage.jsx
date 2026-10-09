@@ -224,7 +224,7 @@ export default function AccountingDashboardPage() {
 
       {/* Company selector — same mechanism as Receipts/Payments. */}
       {companies.length > 0 && (
-        <div style={st.companyRow}>
+        companies.length > 1 && (<div style={st.companyRow}>
           <MdBusiness size={20} color={colors.blue} />
           <select
             style={dropdownStyles.base}
@@ -233,7 +233,7 @@ export default function AccountingDashboardPage() {
           >
             {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
           </select>
-        </div>
+        </div>)
       )}
 
       {!companyId ? (

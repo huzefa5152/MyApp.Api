@@ -61,7 +61,7 @@ export default function AccountingReportsPage() {
         </div>
 
         {companies.length > 1 && (
-          <label style={st.companyPicker}>
+          companies.length > 1 && (<label style={st.companyPicker}>
             <MdBusiness size={20} color={colors.blue} />
             <select
               style={{ ...dropdownStyles.base, minHeight: 44, flex: 1, minWidth: 0 }}
@@ -75,7 +75,7 @@ export default function AccountingReportsPage() {
                 <option key={c.id} value={c.id}>{c.brandName || c.name}</option>
               ))}
             </select>
-          </label>
+          </label>)
         )}
       </div>
 

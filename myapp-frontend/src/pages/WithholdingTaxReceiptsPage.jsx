@@ -164,7 +164,7 @@ export default function WithholdingTaxReceiptsPage() {
         <div style={styles.loading}><div style={styles.spinner} /></div>
       ) : companies.length > 0 ? (
         <div data-admin-toolbar="" style={styles.filters}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+          {companies.length > 1 && (<div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
             <MdBusiness size={20} color={colors.blue} />
             <select
               style={dropdownStyles.base}
@@ -173,7 +173,7 @@ export default function WithholdingTaxReceiptsPage() {
             >
               {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
             </select>
-          </div>
+          </div>)}
           {has("divisions.manage.view") && selectedCompany && (
             <DivisionSelect companyId={selectedCompany.id} value={divisionFilter} onChange={setDivisionFilter} style={dropdownStyles.base} wrapStyle={{ minWidth: 180 }} />
           )}

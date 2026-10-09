@@ -273,14 +273,14 @@ export default function CustomerPortalsPage() {
           in the app. */}
       {portals.length > 0 && (
         <div data-admin-toolbar="" style={st.filterBar}>
-          <label style={st.filterField}>
+          {companies.length > 1 && (<label style={st.filterField}>
             <span style={st.filterLabel}>Company</span>
             <select style={{ ...dropdownStyles.base, ...st.filterInput }} value={companyFilter}
                     onChange={(e) => setFilters({ companyId: e.target.value, clientId: "" })}>
               <option value="">All companies</option>
               {companyOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
-          </label>
+          </label>)}
           <label style={st.filterField}>
             <span style={st.filterLabel}>Client</span>
             <select style={{ ...dropdownStyles.base, ...st.filterInput }} value={clientFilter}
@@ -487,7 +487,7 @@ function CreatePortalModal({ companies, defaultCompanyId, loadingCompanies, onCl
         <div data-admin-body="" style={formStyles.body}>
           {error && <div style={st.err}>{error}</div>}
 
-          <label style={st.label}>Company</label>
+          {companies.length > 1 && (<><label style={st.label}>Company</label>
           <select
             style={{ ...dropdownStyles.base, width: "100%", marginBottom: "1rem" }}
             value={companyId}
@@ -498,7 +498,7 @@ function CreatePortalModal({ companies, defaultCompanyId, loadingCompanies, onCl
             {(companies || []).map((co) => (
               <option key={co.id} value={co.id}>{co.name}</option>
             ))}
-          </select>
+          </select></>)}
 
           <label style={st.label}>Client</label>
           <SearchableSelect

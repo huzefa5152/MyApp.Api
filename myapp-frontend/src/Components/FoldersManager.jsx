@@ -77,13 +77,13 @@ export default function FoldersManager() {
     <div>
       <div style={st.bar}>
         {companies.length > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+          companies.length > 1 && (<div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
             <MdBusiness size={20} color={colors.blue} />
             <select style={dropdownStyles.base} value={selectedCompany?.id || ""}
               onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))}>
               {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
             </select>
-          </div>
+          </div>)
         )}
         {selectedCompany && canCreate && (
           <button style={st.addBtn} onClick={() => { setEditFolder(null); setShowForm(true); }}>

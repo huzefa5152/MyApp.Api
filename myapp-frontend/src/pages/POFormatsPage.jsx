@@ -122,7 +122,7 @@ export default function POFormatsPage() {
       {/* Company scope — only companies the operator can access are
           listed (the /companies endpoint filters to their set). */}
       {!loadingCompanies && companies.length > 0 && (
-        <div style={styles.companyRow}>
+        companies.length > 1 && (<div style={styles.companyRow}>
           <MdBusiness size={20} color={colors.blue} />
           <select
             style={dropdownStyles.base}
@@ -133,7 +133,7 @@ export default function POFormatsPage() {
               <option key={c.id} value={c.id}>{c.brandName || c.name}</option>
             ))}
           </select>
-        </div>
+        </div>)
       )}
 
       {error && (

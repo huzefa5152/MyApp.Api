@@ -77,7 +77,7 @@ export default function DivisionsPage() {
       </div>
 
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", margin: "18px 0" }}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+        {companies.length > 1 && (<span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
           <MdBusiness color="#5f6d7e" />
           <select
             value={companyId}
@@ -89,7 +89,7 @@ export default function DivisionsPage() {
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
-        </span>
+        </span>)}
         {canCreate && companyId && (
           <button
             onClick={() => { setEditDiv(null); setShowForm(true); }}

@@ -902,7 +902,7 @@ export default function TemplateEditorPage() {
 
         {isMobile ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", width: "100%" }}>
-            <div style={styles.fieldGroup}>
+            {companies.length > 1 && (<div style={styles.fieldGroup}>
               <label style={styles.fieldLabel}>Company</label>
               <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
                 <MdBusiness size={16} color={colors.blue} style={{ flexShrink: 0 }} />
@@ -914,7 +914,7 @@ export default function TemplateEditorPage() {
                   {companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
                 </select>
               </div>
-            </div>
+            </div>)}
             <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
               <div style={{ ...styles.fieldGroup, flex: 1, minWidth: 0 }}>
                 <label style={styles.fieldLabel}>Document Type</label>
@@ -996,7 +996,7 @@ export default function TemplateEditorPage() {
           </div>
         ) : (
           <div style={{ display: "flex", alignItems: "flex-end", gap: "0.75rem", flexWrap: "wrap" }}>
-            <div style={styles.fieldGroup}>
+            {companies.length > 1 && (<div style={styles.fieldGroup}>
               <label style={styles.fieldLabel}>Company</label>
               <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
                 <MdBusiness size={18} color={colors.blue} style={{ flexShrink: 0 }} />
@@ -1008,7 +1008,7 @@ export default function TemplateEditorPage() {
                   {companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
                 </select>
               </div>
-            </div>
+            </div>)}
 
             <div style={styles.fieldGroup}>
               <label style={styles.fieldLabel}>Document Type</label>

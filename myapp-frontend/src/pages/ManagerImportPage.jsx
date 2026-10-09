@@ -25,7 +25,8 @@ export default function ManagerImportPage() {
   const [trialBalance, setTrialBalance] = useState(null);
   const [mode, setMode] = useState("new");            // "new" | "existing"
   const [companyName, setCompanyName] = useState("Al-Qahera Trading Co.");
-  const [companyId, setCompanyId] = useState("");
+  const [pickedCompanyId, setCompanyId] = useState("");
+  const companyId = companies.length === 1 ? String(companies[0].id) : pickedCompanyId;
   const [dryRun, setDryRun] = useState(true);
   const [fresh, setFresh] = useState(false);
   // Full General Ledger (perpetual): build a journal entry per document + true-up
@@ -100,10 +101,10 @@ export default function ManagerImportPage() {
         {existing ? (
           <label style={st.field}>
             <span style={st.fieldLabel}>Existing company</span>
-            <select style={st.input} value={companyId} onChange={(e) => setCompanyId(e.target.value)} disabled={busy}>
+            {companies.length > 1 ? <select style={st.input} value={companyId} onChange={(e) => setCompanyId(e.target.value)} disabled={busy}>
               <option value="">Select a company…</option>
               {(companies || []).map((c) => <option key={c.id} value={c.id}>{c.name} (id {c.id})</option>)}
-            </select>
+            </select> : <span>{companies[0]?.name || "No accessible company"}</span>}
             <span style={{ fontSize: "0.75rem", color: "#b26a00" }}>Importing into a company that already has data requires <strong>Fresh</strong> (it wipes that company first).</span>
           </label>
         ) : (
