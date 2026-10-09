@@ -377,6 +377,9 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 - `IsTenantIsolated` flip: gated by `tenantaccess.manage.update`.
 - Role string assignment of "Admin": **seed admin only** (`_seedAdminUserId`).
 - Server-side `/auth/logout` rotates `SecurityStamp` → previous JWTs reject on next request.
+- MCP agent tokens are NOT bound to `SecurityStamp` on this line, because logout rotates it and that would end every AI connection at each browser logout. A password change and an admin reset revoke the user's tokens explicitly (`Helpers/McpTokenRevocation`).
+- Print templates are operator HTML printed in a same-origin window: `Helpers/TemplateHtmlSafety` strips script on save and `utils/printSafety.js` strips it again (plus a script-blocking CSP) on render. Do not add a print path that bypasses `mergeTemplate`.
+- Installation-wide tables (FBR lookup codes, merge fields) are written by the seed admin only (`[SeedAdminOnly]`): a permission key alone reaches tenant Administrators.
 
 ### 10. FBR integration specifics
 

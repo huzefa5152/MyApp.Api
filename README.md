@@ -298,6 +298,21 @@ Optional company Gmail inbox: authorize an account once and link it only to assi
 
 ## Changelog
 
+### 2026-10-10
+
+- **Security hardening (audit 2026-10-09).** No workflow changes; every fix is a server-side check.
+  - Print templates can no longer run script: anything that could execute (script tags, event handlers, `javascript:` links) is removed when a template is saved and again when a document is printed, exported to PDF or opened from the customer portal, and print windows carry a script-blocking policy. Layouts, styles, images and merge fields print exactly as before.
+  - The shared FBR lookup codes and template merge fields can only be changed by the system administrator; other administrators can still read them.
+  - A password change or an administrator's reset now also ends that user's AI agent (MCP) connections. Sign-in connections from AI apps have a hard maximum age, unused app registrations are cleared after a day, and the connect screen warns when an app is not a recognised AI client. Hourly limits on what AI agents may create are counted per user and now include quotations and client changes.
+  - Taking a company away from an administrator also takes it from the accounts that administrator created.
+  - Changing your own password goes through My Profile (which asks for the current one); the Users page no longer offers it for your own account.
+  - The system administrator account locks for 15 minutes after 10 wrong passwords, instead of never.
+  - Email Workspace: attachments are fetched only for a company still linked to the mailbox; a quotation draft is shown only to people who prepare quotations; someone else's kept enquiry can only be dismissed by its keeper, the mailbox owner or a quotation preparer; a disconnected mailbox's Google access is revoked at Google; mail whose sender failed Gmail's DMARC check is never shared automatically by a sender rule.
+  - Records from another company now answer exactly like missing ones, so error messages no longer reveal another company's challan numbers, purchase bills, company ids or NTNs; editing a common supplier no longer rewrites another tenant's supplier group.
+  - Security headers on every response (no framing, no content sniffing); internal error details no longer reach the screen; permission copies at start-up run once, so a permission an administrator removed stays removed.
+  - Dashboard figures, imported PO files, the PO import archive, PO parsing, tax-claim summaries, FBR unit lookups, goods-receipt suppliers and receipt adjustment accounts are checked against the company; shared PO formats with no company can only be changed by the system administrator.
+  - Users limited to divisions cannot bill another division's challans, change divisions they do not hold, see quotation drafts prepared for other divisions, or open a customer portal (which shows every division's documents). A bill's challans must belong to the bill's customer.
+
 ### 2026-10-09
 
 - Separate receipt/payment party buttons from the picker and improve spacing between related controls.
