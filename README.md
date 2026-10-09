@@ -300,6 +300,7 @@ Optional company Gmail inbox: authorize an account once and link it only to assi
 
 ### 2026-10-10
 
+- Fixed the bill / invoice number field overlapping the Bill Date on the Create Bill, New Bill (No Challan) and Edit Bill screens: the Auto / Custom switch now sits above the number when the column is narrow, and beside it only where there is room.
 - **Open pages ride through a service restart.** While the service is briefly unavailable (a deploy or a dropped connection) an open screen shows a small "Reconnecting…" note instead of an error, keeps everything typed into it, and carries on by itself when the service answers: a save that never reached the server is sent once the service is back, a read is simply retried, and a save cut off mid-flight is never repeated — the operator is asked to check whether it was saved. FBR submissions are never retried. When a newer version of the app is published, the next page change loads it; the screen being worked on is never reloaded underneath the operator. The maintenance page itself now reads as a neutral "One moment" and refreshes by itself.
 - The Document lines shortcut on the document list pages (challans, bills, invoices, notes, goods receipts, purchase bills, purchase debit notes, sales orders, sales quotes) is now one small button beside the page title instead of a full-width row above and below the list. On a phone it sits on its own short line under the title.
 - **Security hardening (audit 2026-10-09).** No workflow changes; every fix is a server-side check.
