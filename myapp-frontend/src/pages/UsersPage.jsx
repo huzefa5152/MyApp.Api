@@ -1,6 +1,6 @@
 import UserSessionsPanel from "../Components/UserSessionsPanel";
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   MdPeople,
   MdAdd,
@@ -481,11 +481,17 @@ export default function UsersPage() {
                 onChange={(e) => setForm({ ...form, username: e.target.value })}
               />
 
-              {/* Password */}
+              {/* Password. Your own is changed from My Profile, which asks for the
+                  current one; the server refuses it here. */}
               <label style={styles.label}>
                 <MdLock style={styles.labelIcon} />
                 {editUser ? "New Password (leave blank to keep)" : "Password"}
               </label>
+              {editUser && editUser.id === currentUser?.id ? (
+                <p style={{ margin: "0 0 0.75rem", fontSize: "0.85rem", color: "#5f6d7e" }}>
+                  Change your own password from <Link to="/profile">My Profile</Link>, where your current password is asked for.
+                </p>
+              ) : (
               <input
                 style={styles.input}
                 type="password"
@@ -493,6 +499,7 @@ export default function UsersPage() {
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
               />
+              )}
 
               {/* Role */}
               <label style={styles.label}>

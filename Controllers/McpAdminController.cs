@@ -106,6 +106,7 @@ public class McpAdminController(
             UserId = user.Id, Name = name, TokenHash = McpAgentAuthHandler.Hash(secret), Hint = secret.Substring(0, McpAgentToken.Prefix.Length + 4),
             CompanyIds = companyValue!, Scopes = string.Join(',', scopes), AllowWrites = scopes.Any(McpScopes.IsWrite),
             CreatedAt = now, CreatedByUserId = CurrentUserId, ExpiresAt = now.AddDays(req.ExpiresInDays),
+            SecurityStamp = user.SecurityStamp,
         };
         db.McpAgentTokens.Add(token);
         await db.SaveChangesAsync();

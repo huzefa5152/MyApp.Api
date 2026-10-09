@@ -49,6 +49,19 @@ public class McpAgentToken
     public string? RefreshHash { get; set; }
     public DateTime? RefreshExpiresAt { get; set; }
 
+    /// <summary>
+    /// The owner's <see cref="User.SecurityStamp"/> when the token was issued. A
+    /// password change, an admin reset and "sign out everywhere" rotate the user's
+    /// stamp, and a token whose stamp no longer matches is refused on every call
+    /// and on refresh. NULL on rows issued before this column existed; those are
+    /// revoked outright by <c>McpTokenRevocation</c> when the stamp rotates.
+    /// </summary>
+    public string? SecurityStamp { get; set; }
+
+    /// <summary>Hard ceiling on a token's whole life, renewals included.</summary>
+    public static int MaxLifetimeFor(bool ownerIsSeedAdmin) =>
+        ownerIsSeedAdmin ? SeedAdminMaxLifetimeDays : MaxLifetimeDays;
+
     /// <summary>"Active" while the access secret is live, or an OAuth connection can still renew.</summary>
     public string Status(DateTime now) =>
         RevokedAt != null ? "Revoked"

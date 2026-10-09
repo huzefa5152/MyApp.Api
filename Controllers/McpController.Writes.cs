@@ -41,7 +41,9 @@ namespace MyApp.Api.Controllers
         // field declared in another file while it is being initialised.
         private static readonly object WCompanyId = new { type = "integer", minimum = 1, description = "Company id from list_companies." };
         private static readonly object PrepareAnnotations = new { readOnlyHint = false, destructiveHint = false, idempotentHint = true, openWorldHint = false };
-        private static readonly object CommitAnnotations = new { readOnlyHint = false, destructiveHint = false, idempotentHint = false, openWorldHint = false };
+        // Destructive: a commit takes the next legal document number, moves stock
+        // and cannot be undone by the agent, so clients should confirm it with the user.
+        private static readonly object CommitAnnotations = new { readOnlyHint = false, destructiveHint = true, idempotentHint = false, openWorldHint = false };
         private static readonly object IdemKeyProp = new { type = "string", maxLength = 100, description = "Optional. A stable id for this request (an email message id, say). Repeating it returns the original plan or result instead of creating a duplicate." };
 
         private static readonly object PrepareClientTool = new
@@ -249,6 +251,9 @@ namespace MyApp.Api.Controllers
             var companyId = await CompanyArg(args);
             var clientId = IntArg(args, "clientId");
             await Need(clientId.HasValue ? "clients.manage.update" : "clients.manage.create");
+            // An update plan echoes the client's stored contact details back, so it
+            // needs the same right that reads them on screen.
+            if (clientId.HasValue) await Need("clients.manage.view");
             var key = IdemKey(args);
             if (await PriorForKeyAsync(agent, key, companyId, McpScopes.Clients) is { } prior) return prior;
 

@@ -100,8 +100,10 @@ public class McpSelfController(
             return BadRequest(new { message = $"You already have {MaxActiveTokens} active tokens. Revoke one first." });
 
         var secret = McpAgentAuthHandler.NewSecret();
+        var stamp = await db.Users.Where(u => u.Id == uid).Select(u => u.SecurityStamp).FirstOrDefaultAsync();
         var token = new McpAgentToken
         {
+            SecurityStamp = stamp,
             UserId = uid, Name = name, TokenHash = McpAgentAuthHandler.Hash(secret),
             Hint = secret.Substring(0, McpAgentToken.Prefix.Length + 4),
             CompanyIds = companyValue!, Scopes = string.Join(',', scopes), AllowWrites = scopes.Any(McpScopes.IsWrite),

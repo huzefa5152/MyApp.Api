@@ -52,6 +52,10 @@ public sealed class McpAgentAuthHandler(
         var now = DateTime.UtcNow;
         if (token?.User == null || token.RevokedAt != null || token.ExpiresAt <= now)
             return AuthenticateResult.Fail("Invalid agent token.");
+        // The owner's password changed, an admin reset it, or they signed out
+        // everywhere: a token issued under the old credentials stops here.
+        if (token.SecurityStamp != null && token.SecurityStamp != token.User.SecurityStamp)
+            return AuthenticateResult.Fail("Invalid agent token.");
 
         // At most one write a minute; the activity log is the real record of use.
         if (token.LastUsedAt == null || token.LastUsedAt < now.AddMinutes(-1))
