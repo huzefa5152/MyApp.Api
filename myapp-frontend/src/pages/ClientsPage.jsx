@@ -158,7 +158,7 @@ export default function ClientsPage() {
           <span style={{ color: colors.textSecondary, fontSize: "0.9rem" }}>Loading companies...</span>
         </div>
       ) : companies.length > 0 ? (
-        <div style={{ marginBottom: "1.5rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+        companies.length > 1 && (<div style={{ marginBottom: "1.5rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
           <MdBusiness size={20} color={colors.blue} />
           <select
             style={dropdownStyles.base}
@@ -171,7 +171,7 @@ export default function ClientsPage() {
               <option key={c.id} value={c.id}>{c.brandName || c.name}</option>
             ))}
           </select>
-        </div>
+        </div>)
       ) : (
         <div style={styles.emptyState}>
           <MdBusiness size={40} color={colors.cardBorder} />

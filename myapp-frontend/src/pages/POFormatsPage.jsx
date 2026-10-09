@@ -27,14 +27,14 @@ const colors = {
 export default function POFormatsPage() {
   const { companies, selectedCompany, setSelectedCompany } = useCompany();
   return <>
-    <div style={{ ...styles.companyRow, padding: "1rem 1.5rem 0", maxWidth: 1200, margin: "0 auto" }}>
+    {companies.length > 1 && (<div style={{ ...styles.companyRow, padding: "1rem 1.5rem 0", maxWidth: 1200, margin: "0 auto" }}>
       <label htmlFor="po-format-company">Company</label>
       <select id="po-format-company" style={{ padding: "0.5rem 0.75rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, background: "white", maxWidth: "100%" }} value={selectedCompany?.id ?? ""}
         onChange={e => setSelectedCompany(companies.find(c => c.id === Number(e.target.value)) || null)}>
         {!selectedCompany && <option value="">Select company</option>}
         {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
       </select>
-    </div>
+    </div>)}
     {selectedCompany ? <CompanyPOFormats key={selectedCompany.id} company={selectedCompany} />
       : <p style={styles.page}>No company access is configured for your account.</p>}
   </>;

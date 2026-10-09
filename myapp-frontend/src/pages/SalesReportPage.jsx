@@ -318,7 +318,7 @@ export default function SalesReportPage() {
         display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end",
         background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: 14, marginBottom: 16,
       }}>
-        <Field label="Company" icon={<MdBusiness size={15} />}>
+        {companies.length > 1 && (<Field label="Company" icon={<MdBusiness size={15} />}>
           <select
             style={{ ...dropdownStyles.base, minWidth: 180 }}
             value={selectedCompany?.id || ""}
@@ -326,7 +326,7 @@ export default function SalesReportPage() {
           >
             {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
           </select>
-        </Field>
+        </Field>)}
 
         <Field label="Period">
           <div style={{ display: "inline-flex", border: `1px solid ${colors.inputBorder}`, borderRadius: 8, overflow: "hidden", background: "#fff" }}>

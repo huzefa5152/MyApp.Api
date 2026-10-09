@@ -163,14 +163,14 @@ export default function ItemTypesPage() {
         </div>
       </div>
 
-      <label style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
+      {companies.length > 1 && (<label style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
         Company
         <select aria-label="Catalog company" value={selectedCompany?.id || ""}
           onChange={(e) => setSelectedCompany(companies.find(c => c.id === Number(e.target.value)))}
           style={{ padding: "0.6rem", borderRadius: 6, border: `1px solid ${colors.inputBorder}`, maxWidth: "100%" }}>
           {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-      </label>
+      </label>)}
 
       <div style={styles.infoBox}>
         <MdInfo size={16} style={{ flexShrink: 0 }} />

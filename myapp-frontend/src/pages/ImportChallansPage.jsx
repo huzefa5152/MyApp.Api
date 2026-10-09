@@ -375,7 +375,7 @@ function UploadStep({
       {/* the template dictates where fields live. Picking the wrong one   */}
       {/* means the parser reads garbage. Surfacing this explicitly        */}
       {/* prevents quiet mistakes.                                         */}
-      <div style={styles.companyPickerWrap}>
+      {companies.length > 1 && (<div style={styles.companyPickerWrap}>
         <label style={styles.fieldLabel}>Target Company</label>
         <select
           value={targetCompany?.id ?? ""}
@@ -405,7 +405,7 @@ function UploadStep({
             </span>
           )}
         </small>
-      </div>
+      </div>)}
 
       {canSheetPin && templateReady === true && (
         <div style={styles.sheetPickerRow}>

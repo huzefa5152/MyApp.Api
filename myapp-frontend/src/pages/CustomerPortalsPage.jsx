@@ -290,7 +290,7 @@ function PortalForm({ companies, defaultCompanyId, isNarrow, onClose, onSaved })
           <div data-admin-body="" style={formStyles.body}>
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
-            <div style={formStyles.formGroup}>
+            {companies.length > 1 && (<div style={formStyles.formGroup}>
               <label style={formStyles.label}>Company</label>
               <select
                 style={{ ...dropdownStyles.base, width: "100%" }}
@@ -299,7 +299,7 @@ function PortalForm({ companies, defaultCompanyId, isNarrow, onClose, onSaved })
               >
                 {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
               </select>
-            </div>
+            </div>)}
 
             <div style={formStyles.formGroup}>
               <label style={formStyles.label}>Customer</label>

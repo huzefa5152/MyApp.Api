@@ -230,7 +230,7 @@ export default function JournalEntriesPage() {
 
       {companies.length > 0 && (
         <div data-admin-toolbar="" style={st.filters}>
-          <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          {companies.length > 1 && (<span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <MdBusiness size={20} color={colors.blue} />
             <select
               style={dropdownStyles.base}
@@ -240,7 +240,7 @@ export default function JournalEntriesPage() {
             >
               {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
             </select>
-          </span>
+          </span>)}
 
           <form
             onSubmit={(e) => { e.preventDefault(); setPage(1); fetchRows(1); }}

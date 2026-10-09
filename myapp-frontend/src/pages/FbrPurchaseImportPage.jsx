@@ -282,7 +282,7 @@ export default function FbrPurchaseImportPage() {
       {/* ── Upload card ─────────────────────────────────────────────── */}
       <section className="fbr-imp-card" style={styles.card}>
         <div className="fbr-imp-upload-row" style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "1rem" }}>
-          <div className="fbr-imp-upload-row__field" style={{ minWidth: 220 }}>
+          {companies.length > 1 && (<div className="fbr-imp-upload-row__field" style={{ minWidth: 220 }}>
             <label style={styles.label}>Company</label>
             <select
               style={styles.input}
@@ -295,7 +295,7 @@ export default function FbrPurchaseImportPage() {
             >
               {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
-          </div>
+          </div>)}
 
           <div className="fbr-imp-upload-row__field" style={{ minWidth: 200 }}>
             <label style={styles.label}>Sheet format</label>

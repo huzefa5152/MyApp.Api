@@ -369,7 +369,7 @@ export default function AccountingReportsPage() {
 
       <div style={st.controls}>
         {companies.length > 0 && (
-          <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          companies.length > 1 && (<span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <MdBusiness size={20} color={colors.blue} />
             <select
               style={dropdownStyles.base}
@@ -379,7 +379,7 @@ export default function AccountingReportsPage() {
             >
               {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
             </select>
-          </span>
+          </span>)
         )}
         {current?.period === "range" && (
           <label style={st.dateLabel}>
