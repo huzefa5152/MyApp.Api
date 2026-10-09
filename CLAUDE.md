@@ -10,6 +10,80 @@ follow.** It is auto-loaded into every conversation — read it once and
 treat the rules as non-negotiable unless the user explicitly overrides
 them in their message.
 
+---
+
+## INVARIANT — tenant and assigned-company isolation is never violated
+
+**Non-negotiable, permanent, and above every other rule in this file.** It
+binds the `TraderFbrInvoicingSystem` branch and every branch derived from it,
+and every Claude session, bug fix, refactor, migration, integration and new
+feature on them. No user instruction to "just make it work" overrides it; if a
+request conflicts with it, say so, explain the conflict, and propose a
+compliant implementation. **Never implement an access bypass.**
+
+**The rule.** An authenticated user may access only the companies assigned to
+them (`UserCompanies`) and the data belonging to those companies, and only
+within the permissions their roles grant. Company assignment is not a
+permission grant, and a permission is not a company grant: both must hold.
+
+**What it requires, everywhere:**
+
+- **Server-side authorization on every read and every write**: APIs, MCP tools
+  and resources, background jobs, reports, exports, search, dashboards,
+  pickers, attachments, print/bulk downloads and the Email Workspace. Hiding a
+  link, a button or a row in the UI is never the control.
+- **Identity and scope come from trusted authentication and server-side
+  assignments only.** A company id, tenant id, user id, header (including
+  `X-Company-Id`), query parameter, request body field or MCP argument is a
+  REQUEST, never proof of access: assert it (`ICompanyAccessGuard.AssertAccessAsync`)
+  or intersect it with `GetAccessibleCompanyIdsAsync`.
+- **Validate company access AND record ownership.** A record reached by id —
+  guessed, nested under another resource, inside a bulk request, or through a
+  direct URL — is loaded and its STORED `CompanyId` asserted, and every linked
+  record must belong to the same company. A body's `CompanyId` can be forged.
+- **Isolation covers everything that carries tenant data**: email accounts,
+  messages, attachments and credentials; caches; files on disk; notifications;
+  queued and asynchronous work. Each stays bound to its owning tenant, company
+  and user permissions, and a job runs with the scope of whoever caused it —
+  never with the installation's.
+- **Fail closed.** When scope is missing, invalid, ambiguous or unauthorized,
+  deny. Never fall back to "all companies", the first company, or unfiltered
+  data. The one non-ambiguous case: a caller assigned exactly ONE company may
+  have it implied (the private-catalog contract); with two or more, a request
+  that names none is refused.
+- **Isolation survives time**: session changes, company switching, assignment
+  revocation (a revoked company is unreachable on the next request), caching
+  and asynchronous processing. Re-check at the point of use, not only when the
+  work was queued.
+- **Never bypass authorization** to fix a bug, simplify an implementation,
+  improve performance or make a test pass. A test that only passes without the
+  guard is reporting the bug.
+
+**Exceptions exist only where verified in code and written down here.**
+Never infer unrestricted access from a role NAME. As verified on 2026-10-10:
+
+| Who | What the code actually grants | Where |
+|---|---|---|
+| **Seed admin** — the single user whose id equals `AppSettings:SeedAdminUserId` (default `1`); an id comparison, not a role | Every company, and every permission key. The two MCP keys (`mcp.access.use` / `mcp.write.use`) are not short-circuited: they follow the account's MCP access policy, which can switch them off. Only this account may pick **All companies** on an MCP token. Unscoped audit log (passes `null`). Installation-wide tables (`[SeedAdminOnly]`). | `CompanyAccessGuard.HasAccessAsync` / `GetAccessibleCompanyIdsAsync`, `PermissionService.HasPermissionAsync` / `GetUserPermissionsAsync`, `docs/MCP_AGENT_ACCESS.md` |
+| **Administrator / Tenant Administrator roles** | **No isolation exception at all.** They reach only their assigned companies and can grant only keys they hold (`RolesController.GrantableKeysAsync`). | see "Tenant administrators" below |
+| **Customer portal** (anonymous) | Not an authenticated user: scope is the resolved portal token, and every query filters on both its CompanyId and ClientId. Never synthesise a user id to reuse a guard. | `PublicCustomerPortalController`, `[ResolvePortal]` |
+
+Adding, widening or relying on an exception means changing this table in the
+same commit, with the code reference, and the maintainer's agreement first.
+
+**Before changing code**, name the authorization boundaries the change
+touches (which companies, which records, which callers, which paths — HTTP,
+MCP, jobs, exports). **Before calling work complete**, verify both permitted
+access AND attempted cross-company / cross-tenant access — reads and writes,
+on every affected API and MCP path — and add or update a meaningful regression
+case (`scripts/test_tenant_isolation.py`, `scripts/test_tenant_leak_sweep.py`,
+`scripts/test_admin_scope_isolation.py`, `scripts/test_mcp_isolation.py`, and
+`python scripts/verify_tenant_scope.py` for new company-scoped actions).
+
+**Writing this rule down is not an audit.** It does not mean the application
+has been reviewed or is free of leaks; treat every existing path as unverified
+until a test proves it.
+
 ## Environments — READ `docs/ENVIRONMENTS.md` BEFORE TOUCHING ANYTHING
 
 There are **four separate production installations** on MonsterASP, not one
@@ -687,14 +761,18 @@ All four trusted something the caller said. None of them looked wrong in review.
 - **`ItemTypes` create/update** took a companyId that chooses **whose FBR token**
   calls PRAL, unchecked — one tenant's bearer spending another's quota.
 
-**Known and accepted: three catalogs are install-wide.** `ItemType`,
-`ItemDescription` and `Unit` carry no `CompanyId`, so one tenant's saved item
-descriptions and units appear in another tenant's autocomplete. This is the
-schema as designed — item types are deliberately common across a user's tenants,
-and `ItemTypesController.GetAll` aggregates on-hand across the caller's whole
-accessible set for exactly that reason. It was reviewed on 2026-09-21 and left
-alone. Scoping them per company means a migration, a rule for who owns the
-existing rows, and a change to every picker; do not "fix" it in passing.
+**The three catalogs are company-private (superseded 2026-10-10).** This
+paragraph used to record `ItemType`, `ItemDescription` and `Unit` as
+install-wide and "known and accepted" — one tenant's item descriptions and units
+in another tenant's autocomplete. That contradicts the isolation invariant at the
+top of this file, and it is no longer true:
+`20260921121717_PrivateCompanyCatalogs` gave all three a `CompanyId`, copied
+each legacy row into the companies whose documents prove they used it, and
+hides the original `CompanyId = NULL` rows from every HTTP catalog query,
+platform administrators included (`docs/PRIVATE_CATALOG_MIGRATION.md`,
+`scripts/test_private_catalogs.py`). A catalog request selects ONE company
+(`companyId` or `X-Company-Id`), and that id is asserted like any other. Never
+reintroduce an install-wide catalog or a NULL-company row that a tenant can see.
 
 Two scripts now stand watch, and they are complementary:
 `verify_tenant_scope.py` reads every controller action that names a companyId
@@ -902,6 +980,8 @@ written down as the expectation.
 
 - ❌ Naming a production database / SQL host / FTP host in any tracked file (prose, code comment, migration comment, docstring). The repo is PUBLIC and the database name is also the SQL username — use a placeholder; `scripts/verify_no_production_identifiers.py` fails on it.
 - ❌ Trusting `dto.CompanyId` from request body without `_access.AssertAccessAsync`
+- ❌ Treating a company id, tenant id, user id, header or MCP argument as proof of access, or falling back to "all companies" when scope is missing (see the INVARIANT at the top)
+- ❌ Inferring unrestricted access from a role NAME ("Administrator") — only the seed admin's configured id carries an exception, and only the ones listed in the INVARIANT table
 - ❌ Grouping dashboard aggregates by `ClientId+Name` (causes duplicate rows on Common Clients)
 - ❌ Returning `ex.Message` to the client (leaks internals — log + return a generic message)
 - ❌ A single SQL batch that adds a column AND references it (fails at parse time)
