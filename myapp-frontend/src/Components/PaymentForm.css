@@ -1,0 +1,11 @@
+.payment-dialog { width:min(100%,1040px); }
+.payment-dialog [data-admin-body] { padding:16px 20px; }
+.payment-dialog .payment-notes { border:1px solid #dce5ee; border-radius:8px; padding:8px 12px; margin:12px 0; }
+.payment-notes summary { cursor:pointer; font-weight:600; color:#213247; }
+.payment-doc-search { display:flex; align-items:end; justify-content:space-between; flex-wrap:wrap; gap:8px; margin:10px 0; }
+.payment-doc-search label { display:flex; flex-direction:column; gap:4px; flex:1 1 220px; max-width:340px; font-size:13px; }
+.payment-doc-search span { color:#5b6b7d; font-size:12px; padding-bottom:8px; }
+.payment-dialog [data-admin-table-region] { max-height:360px; overflow:auto; overscroll-behavior:contain; }
+.payment-dialog thead th { position:sticky; top:0; background:#f7fafc; z-index:1; }
+.payment-dialog button:focus-visible,.payment-dialog summary:focus-visible { outline:2px solid #337dc7; outline-offset:2px; }
+@media (max-width:600px) { .payment-dialog [data-admin-body] { padding:12px; }.payment-doc-search label { max-width:none; }.payment-dialog button { min-height:44px; } }

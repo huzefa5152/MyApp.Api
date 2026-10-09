@@ -12,6 +12,7 @@ import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
 import DocumentNotesEditor from "./DocumentNotesEditor";
 
+import "./PaymentForm.css";
 import { todayYmd } from "../utils/dateInput";
 const METHODS = ["Cash", "Bank Transfer", "Cheque", "Online", "Other"];
 
@@ -57,6 +58,9 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   const [contacts, setContacts] = useState([]);
   const [contactId, setContactId] = useState(
     editPayment?.contactId ? String(editPayment.contactId) : (preset?.contactId ? String(preset.contactId) : ""));
+  const [documentSearch, setDocumentSearch] = useState("");
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [contactsError, setContactsError] = useState("");
   const [docs, setDocs] = useState([]);          // open documents for the contact
   const [alloc, setAlloc] = useState({});         // docId -> amount string
   const [loadingDocs, setLoadingDocs] = useState(false);
@@ -77,11 +81,13 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   // Load the contact list once.
   useEffect(() => {
     let cancelled = false;
-    if (contactType === "Other") { setContacts([]); return; }
+    if (contactType === "Other") { setContacts([]); setContactsLoading(false); setContactsError(""); return; }
     const load = contactType === "Client" ? getClientsByCompany : getSuppliersByCompany;
+    setContactsLoading(true); setContactsError(""); setContacts([]);
     load(companyId)
       .then(({ data }) => { if (!cancelled) setContacts(data || []); })
-      .catch(() => { if (!cancelled) setContacts([]); });
+      .catch(() => { if (!cancelled) { setContacts([]); setContactsError("Could not load clients or suppliers. Close and reopen this form to retry."); } })
+      .finally(() => { if (!cancelled) setContactsLoading(false); });
     return () => { cancelled = true; };
   }, [companyId, contactType]);
 
@@ -89,10 +95,18 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   useEffect(() => {
     if (!contactId || !canSettle || purpose !== "settle") { setDocs([]); setAlloc({}); setLoadingDocs(false); return; }
     let cancelled = false;
-    setLoadingDocs(true);
-    const fetcher = isReceipt
-      ? getPagedInvoicesByCompany(companyId, { clientId: contactId, pageSize: 100 })
-      : getPurchaseBillsByCompanyPaged(companyId, { supplierId: contactId, pageSize: 100 });
+    setLoadingDocs(true); setDocumentSearch("");
+    const fetchPage = page => isReceipt
+      ? getPagedInvoicesByCompany(companyId, { clientId: contactId, pageSize: 100, page })
+      : getPurchaseBillsByCompanyPaged(companyId, { supplierId: contactId, pageSize: 100, page });
+    const fetcher = (async () => {
+      const first = await fetchPage(1);
+      const items = [...(first.data.items || [])];
+      for (let page = 2; page <= (first.data.totalPages || 1) && !cancelled; page++) {
+        const next = await fetchPage(page); items.push(...(next.data.items || []));
+      }
+      return { data: { ...first.data, items } };
+    })();
     fetcher
       .then(({ data }) => {
         if (cancelled) return;
@@ -144,6 +158,8 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
       .finally(() => { if (!cancelled) setLoadingDocs(false); });
     return () => { cancelled = true; };
   }, [contactId, companyId, isReceipt, preset?.documentId, editPayment?.id, contactType, purpose]);
+
+  const visibleDocs = docs.filter(d => String(d.number ?? "").toLowerCase().includes(documentSearch.trim().toLowerCase()));
 
   const setAllocAmount = (docId, value) =>
     setAlloc((prev) => ({ ...prev, [docId]: value }));
@@ -230,7 +246,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div className="payment-dialog" data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? `Edit ${editPayment.reference || (isReceipt ? "Receipt" : "Payment")}` : (isReceipt ? "Record Receipt" : "Record Payment")}</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
@@ -248,9 +264,10 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
               </div>
               {contactType === "Other" ? <input aria-label="Payee or payer name" maxLength={200} style={formStyles.input}
                 value={contactName} onChange={e => setContactName(e.target.value)} placeholder="Name" />
-                : <SearchableSelect options={contacts.map(c => ({ id:c.id, label:c.name }))} value={contactId}
+                : <SearchableSelect items={contacts} loading={contactsLoading} disabled={contactsLoading} value={contactId}
                   onChange={v => { setContactId(v); setAlloc({}); }} placeholder={`Select ${contactType.toLowerCase()}`} />}
             </div>
+            {contactsError && <p role="alert">{contactsError}</p>}
             <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>What is this for?</label>
               <select aria-label="Payment purpose" style={formStyles.input} value={purpose} onChange={e => setPurpose(e.target.value)}>
@@ -325,11 +342,13 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
               <label style={formStyles.label}>Description (optional)</label>
               <input style={formStyles.input} value={description} onChange={(e) => setDescription(e.target.value)} />
             </div>
-            <DocumentNotesEditor value={notes} onChange={setNotes} />
+            <details className="payment-notes"><summary>Notes (optional)</summary><DocumentNotesEditor value={notes} onChange={setNotes} /></details>
 
             {/* Allocation against open documents */}
             {purpose === "settle" && <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>Apply to open {docLabel.toLowerCase()}s</label>
+              {contactId && !loadingDocs && docs.length > 0 && <div className="payment-doc-search"><label>Search {docLabel.toLowerCase()} number<input type="search" value={documentSearch} onChange={e => setDocumentSearch(e.target.value)} placeholder={`Find ${docLabel.toLowerCase()} #`} style={formStyles.input} /></label><span>{visibleDocs.length} of {docs.length} open {docLabel.toLowerCase()}s</span></div>}
+              {contactId && !loadingDocs && docs.length > 0 && visibleDocs.length === 0 && <p role="status">No matching {docLabel.toLowerCase()} number. Clear search to see all open documents.</p>}
               {!contactId ? (
                 <div style={hintBox}>Select a {contactLabel.toLowerCase()} to see their unpaid {docLabel.toLowerCase()}s.</div>
               ) : loadingDocs ? (
@@ -339,7 +358,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
               ) : (
                 isNarrow ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-                    {docs.map((d) => (
+                    {visibleDocs.map((d) => (
                       <div key={d.id} style={{ border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.45rem" }}>
                           <strong style={{ color: colors.textPrimary }}>#{d.number}</strong>
@@ -372,7 +391,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                       </tr>
                     </thead>
                     <tbody>
-                      {docs.map((d) => (
+                      {visibleDocs.map((d) => (
                         <tr key={d.id}>
                           <td style={td}><strong>#{d.number}</strong></td>
                           <td style={td}>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</td>

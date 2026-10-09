@@ -300,6 +300,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-10-09
 
+- Improve receipt/payment document search and modal readability; fix the Trader party picker without changing allocation calculations.
+
 - Show emails the way Gmail does: an email's own formatting (tables, bold, links) now displays in the Email Workspace instead of plain text only. It runs in a locked-down frame where nothing the sender wrote can run; links open in a new tab, and images from the sender stay hidden until you choose Show images, so opening an email does not tell the sender. Plain-text emails read as before.
 - Preview email attachments without downloading them: each attachment is a card (a thumbnail for photos), and clicking one opens a full-screen viewer for PDFs, pictures, Excel sheets (every tab), CSV and text files, with Download, next / previous and Esc to close. Other file types, and web pages sent as attachments, offer Download only.
 - Item rows' Copy button is now the same small teal copy icon beside the Remove button on every form (quotations, sales orders, bills, the standalone bill, purchase bills, goods receipts). It used to be a word that wrapped onto two lines in narrow tables, in a different style on each form.
