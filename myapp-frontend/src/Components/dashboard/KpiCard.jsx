@@ -9,12 +9,52 @@
 // icon chip carrying the section identity (sales/purchases/fbr/inv).
 // Hover lift + entrance animation live in DashboardPage.css via the
 // .dash-kpi-card class; the accent reaches CSS through `--acc`.
+import { useEffect, useRef, useState } from "react";
 import { MdTrendingUp, MdTrendingDown, MdTrendingFlat } from "react-icons/md";
 import Sparkline from "./Sparkline";
 
 function formatPkr(v) {
   if (v == null || isNaN(v)) return "—";
   return Number(v).toLocaleString("en-PK", { maximumFractionDigits: 0 });
+}
+
+// Counts the displayed figure up to the real one when it arrives or changes.
+// Display only: the card is always handed the true value, and a reduced-motion
+// preference or a non-numeric value shows it immediately.
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+function useCountUp(value, duration = 700) {
+  // First paint shows 0, not the final figure, or the count would open with a
+  // flash of the answer.
+  const [shown, setShown] = useState(() =>
+    typeof value === "number" && isFinite(value) && !prefersReducedMotion() ? 0 : value);
+  // Where the display actually is. Starts at 0: the card mounts before its
+  // data arrives, and the first real figure is the one worth counting up to.
+  // Updated per frame (not to the target up front) so an effect that is torn
+  // down and re-run mid-count -- StrictMode does this on every mount in dev --
+  // resumes from the figure on screen instead of jumping to the end.
+  const at = useRef(0);
+  useEffect(() => {
+    const target = value;
+    if (typeof target !== "number" || !isFinite(target) || prefersReducedMotion()) {
+      setShown(target); if (typeof target === "number") at.current = target; return undefined;
+    }
+    const start = typeof at.current === "number" && isFinite(at.current) ? at.current : 0;
+    if (start === target) { setShown(target); return undefined; }
+    let raf; const t0 = performance.now();
+    const tick = (t) => {
+      const k = Math.min(1, (t - t0) / duration);
+      const eased = 1 - Math.pow(1 - k, 3);
+      const v = k < 1 ? start + (target - start) * eased : target;
+      at.current = v;
+      setShown(v);
+      if (k < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, duration]);
+  return shown;
 }
 
 function formatPct(v) {
@@ -40,6 +80,8 @@ export default function KpiCard({
   // Icon shown next to the label.
   icon = null,
 }) {
+  const shownValue = useCountUp(value);
+
   // Compute % delta vs previous when both numbers are available.
   let deltaPct = null;
   if (prevValue != null && prevValue !== 0) {
@@ -117,7 +159,9 @@ export default function KpiCard({
       </div>
 
       <div className="dash-kpi-card__value" style={{
-        fontSize: "clamp(1.3rem, 4.2vw, 1.8rem)",
+        // Sized to the viewport so a 15-character figure stays on one line in
+        // a four-across tile; 4.2vw hit the 1.8rem cap on every desktop.
+        fontSize: "clamp(1.1rem, 1.45vw, 1.6rem)",
         fontWeight: 600,
         color: "#0c1830",
         lineHeight: 1.1,
@@ -125,7 +169,7 @@ export default function KpiCard({
         fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
         fontVariantNumeric: "tabular-nums",
       }}>
-        {format(value)}
+        {format(shownValue)}
       </div>
 
       {(deltaPct != null) && (

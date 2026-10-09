@@ -140,7 +140,9 @@ export default function DonutChart({
           ))}
         </g>
         {/* Center label — total + caption */}
-        <text x={cx} y={cy - 1} textAnchor="middle" fontSize="9" fontWeight="800" fill="#1a2332" style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+        {/* Shrink a long total to fit the hole: at size 9 a monospace
+            "Rs. 156,568" is wider than the ring's inner radius allows. */}
+        <text x={cx} y={cy - 1} textAnchor="middle" fontSize={Math.min(9, 44 / (String(formatValue(total)).length * 0.6))} fontWeight="800" fill="#1a2332" style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
           {formatValue(total)}
         </text>
         <text x={cx} y={cy + 8} textAnchor="middle" fontSize="4.5" fill="#5f6d7e" style={{ textTransform: "uppercase", letterSpacing: "0.1em" }}>
