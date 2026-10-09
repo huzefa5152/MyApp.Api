@@ -104,7 +104,7 @@ function Badge({ tone, children }) {
  * the delete icon is never a flex/SVG sizing gamble. */
 function iconBtn(tone, disabled) {
   return {
-    display: "grid", placeItems: "center", width: 40, height: 40,
+    display: "grid", placeItems: "center", width: 40, height: 40, padding: 0,
     borderRadius: 8, border: "none", background: disabled ? "#c8d1de" : tone,
     color: "#fff", cursor: disabled ? "not-allowed" : "pointer", flexShrink: 0,
   };

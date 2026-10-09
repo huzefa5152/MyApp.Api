@@ -313,7 +313,7 @@ const styles = {
   commonBadge: { display: "inline-block", padding: "0.05rem 0.4rem", borderRadius: 10, border: "1px solid #b7d4f0", background: "#f0f7ff", color: "#0d47a1", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.02em", textTransform: "uppercase" },
   pill: { display: "inline-block", padding: "0.15rem 0.55rem", borderRadius: 12, border: "1px solid", fontSize: "0.7rem", fontWeight: 700 },
   actionRow: { display: "flex", gap: 4, justifyContent: "flex-end" },
-  iconBtn: { display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: 8, border: "none", cursor: "pointer" },
+  iconBtn: { display: "grid", placeItems: "center", width: 30, height: 30, padding: 0, borderRadius: 8, border: "none", cursor: "pointer" },
   edit: { background: "#e3f2fd", color: "#0d47a1" },
   copy: { background: "#ede7f6", color: "#4527a0" },
   del: { background: "#ffebee", color: "#c62828" },
@@ -329,5 +329,5 @@ const styles = {
   mMoneyRow: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", borderTop: "1px dashed #e8edf3", paddingTop: "0.55rem" },
   mMoneyVal: { fontSize: "0.92rem", fontWeight: 700, color: "#1a2332", fontVariantNumeric: "tabular-nums" },
   mActions: { display: "flex", gap: 8, justifyContent: "flex-end", borderTop: "1px solid #eef2f7", paddingTop: "0.55rem" },
-  mIconBtn: { display: "grid", placeItems: "center", width: 44, height: 44, borderRadius: 10, border: "none", cursor: "pointer" },
+  mIconBtn: { display: "grid", placeItems: "center", width: 44, height: 44, padding: 0, borderRadius: 10, border: "none", cursor: "pointer" },
 };

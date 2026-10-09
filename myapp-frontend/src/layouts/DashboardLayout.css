@@ -470,9 +470,9 @@ body.dl-body--locked {
   border-color: rgba(255, 82, 82, 0.5);
 }
 
-/* index.css carries the Vite starter's global button look (drop shadow, a
-   2px hover lift, a purple hover border). In the shell it turned every
-   sidebar group header into a floating tile; the shell's buttons are flat. */
+/* The shell's buttons are flat. index.css no longer gives buttons a shadow
+   or a hover lift (that starter look turned every sidebar group header into
+   a floating tile); this keeps the shell flat even if it comes back. */
 .dl-sidebar button,
 .dl-topbar button {
   box-shadow: none;
@@ -579,12 +579,6 @@ body.dl-body--locked {
    styles its heading inline. Page titles in the app read left-aligned. */
 .dl-main h1:not([class]) { text-align: left; }
 
-/* Same starter leak inside pages: every button without its own shadow got a
-   heavy drop shadow and jumped 2px on hover. :where() keeps this at the
-   global rule's specificity, so any button that styles its own shadow or
-   hover (class or inline) is untouched. */
-:where(.dl-main) button { box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06); }
-:where(.dl-main) button:hover { transform: none; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.1); }
 
 /* CardActions' "more" button is sized to sit among the small action chips
    with a mouse; on a touch screen it gets a full 44px target. */

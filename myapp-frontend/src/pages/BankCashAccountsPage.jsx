@@ -696,7 +696,7 @@ const st = {
   code: { fontFamily: "monospace", fontSize: "0.75rem", color: colors.textSecondary, background: colors.inputBg, padding: "1px 6px", borderRadius: 4 },
   muted: { color: colors.textSecondary, fontSize: "0.82rem" },
   reviewLink: { border: "none", background: "transparent", padding: 0, fontSize: "0.82rem", fontWeight: 700, cursor: "pointer", textDecoration: "underline" },
-  iconBtn: { display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 8, border: "none", background: "transparent", color: colors.blue, cursor: "pointer" },
+  iconBtn: { display: "grid", placeItems: "center", width: 34, height: 34, padding: 0, borderRadius: 8, border: "none", background: "transparent", color: colors.blue, cursor: "pointer" },
   empty: { padding: "2.5rem 1rem", textAlign: "center", color: colors.textSecondary, background: colors.cardBg, border: `1px dashed ${colors.inputBorder}`, borderRadius: 12 },
 
   // Mobile stacked-card fallback for the accounts table (<768px).
