@@ -49,6 +49,14 @@ public sealed class GmailProvider(HttpClient http, IConfiguration config) : IGma
         using var doc = await TokenAsync(new() { ["refresh_token"] = refreshToken, ["grant_type"] = "refresh_token" }, ct);
         return doc.RootElement.GetProperty("access_token").GetString()!;
     }
+    public async Task RevokeAsync(string refreshToken, CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(refreshToken)) return;
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://oauth2.googleapis.com/revoke")
+        { Content = new FormUrlEncodedContent(new Dictionary<string, string> { ["token"] = refreshToken }) };
+        // Google answers 200, or 400 for a token that is already dead; neither is our error.
+        using var _ = await http.SendAsync(request, ct);
+    }
     private async Task<JsonDocument> TokenAsync(Dictionary<string, string> fields, CancellationToken ct)
     {
         fields["client_id"] = ClientId; fields["client_secret"] = ClientSecret;
@@ -144,9 +152,14 @@ public sealed class GmailProvider(HttpClient http, IConfiguration config) : IGma
                 if (part.TryGetProperty("parts", out var parts)) foreach (var p in parts.EnumerateArray()) Walk(p, depth + 1);
             }
             Walk(payload, 0);
+            // Only an explicit DMARC failure counts: a message without the header,
+            // or with a pass, is treated exactly as before.
+            var dmarcFailed = headers.Any(h =>
+                string.Equals(h.GetProperty("name").GetString(), "Authentication-Results", StringComparison.OrdinalIgnoreCase)
+                && (h.GetProperty("value").GetString() ?? "").Contains("dmarc=fail", StringComparison.OrdinalIgnoreCase));
             return new(id, r.GetProperty("threadId").GetString()!, from, Header("Subject")[..Math.Min(Header("Subject").Length, 1000)],
                 DateTimeOffset.FromUnixTimeMilliseconds(long.Parse(r.GetProperty("internalDate").GetString()!)).UtcDateTime,
-                new(text.ToString(), html.ToString(), attachments.Take(100).ToList()));
+                new(text.ToString(), html.ToString(), attachments.Take(100).ToList()), dmarcFailed);
         }
     }
     public async Task<byte[]> AttachmentAsync(string token, string messageId, string attachmentId, CancellationToken ct)

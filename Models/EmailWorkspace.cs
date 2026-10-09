@@ -41,6 +41,13 @@ public class GmailMessage
     [MaxLength(1000)] public string Subject { get; set; } = "";
     public DateTime ReceivedAt { get; set; }
     public string ProtectedContent { get; set; } = "";
+    /// <summary>
+    /// Gmail's own Authentication-Results said dmarc=fail: the From address is
+    /// forged or broken. The owner still sees the message, but a sender rule never
+    /// shares it with the company or picks its customer, because anyone can type
+    /// a rule's address into From. False for every message synced before this.
+    /// </summary>
+    public bool SenderUnverified { get; set; }
 }
 public class EmailEnquiry
 {

@@ -131,9 +131,22 @@ public sealed class EmailWorkspaceService(AppDbContext db, ICompanyAccessGuard a
         Event(user, company, "GmailUnlinked"); await db.SaveChangesAsync(ct);
         if (!await db.GmailCompanyLinks.AnyAsync(l => l.ConnectionId == link.ConnectionId && l.IsEnabled, ct))
         {
+            var discarded = link.Connection.ProtectedRefreshToken;
             link.Connection.ProtectedRefreshToken = ""; link.Connection.Status = "Disconnected";
             await db.SaveChangesAsync(ct);
+            await RevokeAtGoogleAsync(discarded, ct);
         }
+    }
+    /// <summary>
+    /// The mailbox is no longer connected anywhere: ask Google to invalidate the
+    /// refresh token as well, so a copy of it (a backup, a log) is worthless.
+    /// Best effort — the local copy is already gone either way.
+    /// </summary>
+    private async Task RevokeAtGoogleAsync(string protectedRefreshToken, CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(protectedRefreshToken)) return;
+        try { await gmail.RevokeAsync(Unprotect<string>(protectedRefreshToken), CancellationToken.None); }
+        catch { /* Google unreachable or the token already dead: nothing more to do. */ }
     }
     public async Task RemoveCompanyConnectionAsync(int user, int company, int linkId, CancellationToken ct)
     {
@@ -165,6 +178,8 @@ public sealed class EmailWorkspaceService(AppDbContext db, ICompanyAccessGuard a
         Event(user, company, "GmailCompanyPermanentlyRemoved");
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
+        if (!await db.GmailCompanyLinks.AnyAsync(l => l.ConnectionId == link.ConnectionId, ct))
+            await RevokeAtGoogleAsync(link.Connection.ProtectedRefreshToken, ct);
     }
     private async Task<bool> OwnerCanSyncAsync(GmailConnection connection, int? company = null)
     {
@@ -213,7 +228,8 @@ public sealed class EmailWorkspaceService(AppDbContext db, ICompanyAccessGuard a
                 var fetched = await gmail.ReadAsync(token, id, deadline.Token);
                 if (fetched == null) continue;
                 db.GmailMessages.Add(new() { ConnectionId = connectionId, ProviderMessageId = fetched.Id, ThreadId = fetched.ThreadId,
-                    Sender = fetched.Sender, Subject = fetched.Subject, ReceivedAt = fetched.ReceivedAt, ProtectedContent = Protect(fetched.Content) });
+                    Sender = fetched.Sender, Subject = fetched.Subject, ReceivedAt = fetched.ReceivedAt, ProtectedContent = Protect(fetched.Content),
+                    SenderUnverified = fetched.SenderUnverified });
             }
             access.InvalidateUser(connection.OwnerUserId);
             permissions.InvalidateUser(connection.OwnerUserId);
@@ -269,6 +285,7 @@ public sealed class EmailWorkspaceService(AppDbContext db, ICompanyAccessGuard a
             SELECT 1 FROM GmailCompanyLinks l
             CROSS APPLY OPENJSON(l.RulesJson) WITH (Sender nvarchar(320) '$.Sender', SubjectContains nvarchar(200) '$.SubjectContains') r
             WHERE l.ConnectionId = m.ConnectionId AND l.CompanyId = {company} AND l.IsEnabled = 1
+              AND m.SenderUnverified = 0
               AND LOWER(m.Sender) = LOWER(r.Sender)
               AND (r.SubjectContains IS NULL OR r.SubjectContains = '' OR CHARINDEX(LOWER(r.SubjectContains), LOWER(m.Subject)) > 0))
             """);
@@ -303,19 +320,37 @@ public sealed class EmailWorkspaceService(AppDbContext db, ICompanyAccessGuard a
         return new { m.Id, m.Subject, m.Sender, m.ReceivedAt, Text = EmailEnquiryExtractor.PlainText(content),
             // The sender's HTML, shown in a sandboxed frame. Untrusted: never rendered into the page itself.
             Html = content.Html ?? "", content.Attachments, Decision = enquiry?.Decision ?? "Unreviewed", enquiry?.SalesQuoteId, enquiry?.SalesQuoteNumber,
-            enquiry?.Revision, Draft = enquiry?.ProtectedDraft.Length > 0 ? Unprotect<EmailDraftDto>(enquiry.ProtectedDraft) : null };
+            enquiry?.Revision,
+            // The draft holds the chosen customer and the prices being quoted: it
+            // is quotation work, shown to those who may prepare quotations.
+            Draft = enquiry?.ProtectedDraft.Length > 0 && await permissions.HasPermissionAsync(user, "email.enquiries.manage")
+                ? await DraftVisibleToAsync(user, company, Unprotect<EmailDraftDto>(enquiry.ProtectedDraft)) : null };
     }
+    /// <summary>
+    /// A draft prepared for a division is that division's quotation work: a
+    /// division-restricted user who cannot reach it does not see it, the same
+    /// rule saving and converting a draft already apply.
+    /// </summary>
+    private async Task<EmailDraftDto?> DraftVisibleToAsync(int user, int company, EmailDraftDto draft) =>
+        draft.DivisionId is null || await divisions.HasAccessAsync(user, company, draft.DivisionId) ? draft : null;
     private static void AssertRevision(EmailEnquiry? enquiry, Guid? revision)
     {
         if (enquiry != null && enquiry.Revision != revision) throw new EmailWorkspaceException(409, "This enquiry changed in another session. Reload before saving.");
     }
     public async Task<object> DecideAsync(int user, int company, int id, EmailDecisionDto dto, CancellationToken ct)
     {
-        await MessageAsync(user, company, id, ct);
+        var message = await MessageAsync(user, company, id, ct);
         if (dto.Decision is not ("Kept" or "Ignored" or "Unreviewed")) throw Invalid("Choose Keep, Ignore or Restore.");
         var enquiry = await db.EmailEnquiries.SingleOrDefaultAsync(e => e.CompanyId == company && e.MessageId == id, ct);
         AssertRevision(enquiry, dto.Revision);
         if (enquiry?.SalesQuoteId != null) throw Invalid("A converted enquiry cannot be ignored or restored.");
+        // Taking an enquiry OUT of Kept hides it from everyone it was shared with,
+        // so it is not open to every inbox user: the person who kept it, the
+        // mailbox owner, or someone who prepares quotations may.
+        if (enquiry?.Decision == "Kept" && dto.Decision != "Kept" && enquiry.DecidedByUserId != user
+            && !await db.GmailConnections.AnyAsync(c => c.Id == message.ConnectionId && c.OwnerUserId == user, ct)
+            && !await permissions.HasPermissionAsync(user, "email.enquiries.manage"))
+            throw Invalid("Only the person who kept this enquiry, the mailbox owner or a quotation preparer can ignore or restore it.");
         if (enquiry == null)
         {
             enquiry = new() { CompanyId = company, MessageId = id };
@@ -339,7 +374,9 @@ public sealed class EmailWorkspaceService(AppDbContext db, ICompanyAccessGuard a
         var draft = EmailEnquiryExtractor.Extract(m.Subject, Unprotect<EmailContent>(m.ProtectedContent));
         draft.Date = DateTime.UtcNow.AddHours(5).Date;
         var link = await db.GmailCompanyLinks.AsNoTracking().SingleAsync(l => l.CompanyId == company && l.ConnectionId == m.ConnectionId, ct);
-        var candidates = EmailWorkspaceRules.Read(link.RulesJson).Where(r => r.ClientId != null && EmailWorkspaceRules.Matches(r, m.Sender, m.Subject)).Select(r => r.ClientId).Distinct().ToList();
+        // A forged From (Gmail reported dmarc=fail) never picks a rule's customer.
+        var candidates = m.SenderUnverified ? new List<int?>()
+            : EmailWorkspaceRules.Read(link.RulesJson).Where(r => r.ClientId != null && EmailWorkspaceRules.Matches(r, m.Sender, m.Subject)).Select(r => r.ClientId).Distinct().ToList();
         if (candidates.Count == 1 && await db.Clients.AnyAsync(c => c.Id == candidates[0] && c.CompanyId == company, ct)) draft.ClientId = candidates[0];
         else draft.Warnings.Add("Confirm the customer. The sender may be a forwarder.");
         enquiry.Revision = Guid.NewGuid(); draft.Revision = enquiry.Revision; enquiry.ProtectedDraft = Protect(draft);
@@ -434,6 +471,11 @@ public sealed class EmailWorkspaceService(AppDbContext db, ICompanyAccessGuard a
         if (info.Size > 10 * 1024 * 1024) throw Invalid("Attachments are limited to 10 MB.");
         var connection = await db.GmailConnections.AsNoTracking().SingleAsync(c => c.Id == message.ConnectionId, ct);
         if (connection.Status != "Connected" || !await OwnerCanSyncAsync(connection, company)) throw Invalid("Reconnect the mailbox to download attachments.");
+        // The file is fetched live from the owner's mailbox, so only a company the
+        // owner still links that mailbox to may ask for it. A kept enquiry stays
+        // readable after an unlink; its attachments are not fetched for it any more.
+        if (!await db.GmailCompanyLinks.AnyAsync(l => l.ConnectionId == connection.Id && l.CompanyId == company && l.IsEnabled, ct))
+            throw Invalid("This mailbox is no longer linked to this company, so its attachments cannot be downloaded here.");
         var token = await gmail.RefreshAsync(Unprotect<string>(connection.ProtectedRefreshToken), ct);
         var bytes = await gmail.AttachmentAsync(token, message.ProviderMessageId, attachmentId, ct);
         if (bytes.Length > 10 * 1024 * 1024) throw Invalid("Attachments are limited to 10 MB.");

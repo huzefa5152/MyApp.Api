@@ -45,4 +45,5 @@ public record EmailAttachmentInfo(string Id, string FileName, string MimeType, i
 public record EmailContent(string Text, string Html, List<EmailAttachmentInfo> Attachments);
 public record GmailIdentity(string Subject, string Email, string RefreshToken);
 public record GmailBatch(List<string> MessageIds, string? NextPageToken, string? HistoryId);
-public record GmailFetchedMessage(string Id, string ThreadId, string Sender, string Subject, DateTime ReceivedAt, EmailContent Content);
+public record GmailFetchedMessage(string Id, string ThreadId, string Sender, string Subject, DateTime ReceivedAt, EmailContent Content,
+    bool SenderUnverified = false);
