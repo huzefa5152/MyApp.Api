@@ -12,4 +12,6 @@ public interface IGmailProvider
     Task<GmailBatch> HistoryAsync(string accessToken, string historyId, string? pageToken, CancellationToken ct);
     Task<GmailFetchedMessage?> ReadAsync(string accessToken, string id, CancellationToken ct);
     Task<byte[]> AttachmentAsync(string accessToken, string messageId, string attachmentId, CancellationToken ct);
+    /// <summary>Tell Google to invalidate a refresh token we are discarding. Best effort.</summary>
+    Task RevokeAsync(string refreshToken, CancellationToken ct) => Task.CompletedTask;
 }
