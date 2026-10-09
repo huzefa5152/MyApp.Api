@@ -55,7 +55,7 @@ VENDOR_ONLY_MODULES = {"RBAC", "Users", "AuditLogs", "Tenant Access"}
 # deliberately NOT here - see the docstring.
 ACCOUNTING_PREFIXES = (
     "accounting.coa.", "accounting.gl.", "accounting.journal.",
-    "accounting.reports.", "customerportals.",
+    "accounting.reports.", "accounting.transfers.", "accounting.reconciliation.", "customerportals.",
 )
 
 PW = "Passw0rd!23"

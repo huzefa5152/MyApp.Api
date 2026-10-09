@@ -114,6 +114,7 @@ def main() -> int:
 
     co_a = co_b = None
     role_view = role_full = None
+    copied_roles = []
     user_view = user_full = None
 
     today = datetime.now(timezone.utc).date()
@@ -191,8 +192,16 @@ def main() -> int:
                 "username": username, "fullName": username, "password": PW, "role": "User"})
             if not check("0", f"{username} created", s in (200, 201), f"{s} {err_text(u)}"):
                 return None
-            http("PUT", f"/api/users/{u['id']}/roles", base, token=seed, body={"roleIds": [role["id"]]})
-            http("PUT", f"/api/usercompanies/user/{u['id']}", base, token=seed, body={"companyIds": companies})
+            sc, copies = http("POST", f"/api/roles/{role['id']}/copy", base, token=seed,
+                              body={"tenantAdminUserIds": [u['id']]})
+            if not check("0", f"{username} tenant role copied", sc == 200 and isinstance(copies, list) and len(copies) == 1, str(sc)):
+                return None
+            role = copies[0]
+            copied_roles.append(role)
+            s2, d2 = http("PUT", f"/api/users/{u['id']}/roles", base, token=seed, body={"roleIds": [role["id"]]})
+            check("0", f"{username} got its role", s2 == 200, f"{s2} {err_text(d2)}")
+            s3, d3 = http("PUT", f"/api/usercompanies/user/{u['id']}", base, token=seed, body={"companyIds": companies})
+            check("0", f"{username} granted company access", s3 == 200, f"{s3} {err_text(d3)}")
             return u
 
         user_view = make_user("tempGlViewer", role_view, [a_id])
@@ -489,7 +498,7 @@ def main() -> int:
         for u in (user_view, user_full):
             if u:
                 http("DELETE", f"/api/users/{u['id']}", base, token=seed)
-        for r in (role_view, role_full):
+        for r in (*copied_roles, role_view, role_full):
             if r:
                 http("DELETE", f"/api/roles/{r['id']}", base, token=seed)
         for c in (co_a, co_b):
