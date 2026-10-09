@@ -29,7 +29,8 @@ namespace MyApp.Api.Controllers;
 /// </summary>
 [ApiController]
 public class McpOAuthController(
-    AppDbContext db, IPermissionService permissions, ICompanyAccessGuard access, ILogger<McpOAuthController> logger)
+    AppDbContext db, IPermissionService permissions, ICompanyAccessGuard access, ILogger<McpOAuthController> logger,
+    IConfiguration configuration)
     : ControllerBase
 {
     private const int AccessMinutes = 60;
@@ -48,6 +49,7 @@ public class McpOAuthController(
     public IActionResult ProtectedResource()
     {
         var b = McpPublicUrl.Base(HttpContext);
+        NoStore(); // built from the request's host when Mcp:PublicBaseUrl is unset: never let a cache keep it
         return Ok(new { resource = b + "/mcp", authorization_servers = new[] { b }, bearer_methods_supported = new[] { "header" }, scopes_supported = Scopes });
     }
 
@@ -56,6 +58,7 @@ public class McpOAuthController(
     public IActionResult AuthorizationServer()
     {
         var b = McpPublicUrl.Base(HttpContext);
+        NoStore();
         return Ok(new
         {
             issuer = b,
@@ -89,6 +92,14 @@ public class McpOAuthController(
         if (uris.Count is < 1 or > 10) return OAuthError("invalid_redirect_uri", "Provide 1 to 10 redirect URIs.");
         if (uris.Any(u => !IsAcceptableRedirect(u))) return OAuthError("invalid_redirect_uri", "Redirect URIs must be https, or http on localhost.");
         if (string.Join('\n', uris).Length > 1900) return OAuthError("invalid_redirect_uri", "Redirect URIs are too long.");
+        // Registration is anonymous, so a client that never completed a sign-in is
+        // pruned after a day: the registry cannot be filled to lock real clients out.
+        var stale = DateTime.UtcNow.AddHours(-24);
+        await db.McpOAuthClients
+            .Where(c => c.CreatedAt < stale
+                && !db.McpAgentTokens.Any(t => t.OAuthClientId == c.Id)
+                && !db.McpOAuthCodes.Any(x => x.ClientId == c.Id && x.ExpiresAt > DateTime.UtcNow))
+            .ExecuteDeleteAsync();
         if (await db.McpOAuthClients.CountAsync() >= McpOAuthClient.MaxClients)
             return OAuthError("temporarily_unavailable", "Registration is full. Ask the administrator.", 503);
 
@@ -166,6 +177,9 @@ public class McpOAuthController(
         return Ok(new
         {
             clientName = client.Name, redirectHost = new Uri(redirect_uri!).Authority,
+            // Anyone can register an application under any name, so the consent
+            // screen warns when the address the code goes to is not a known AI client.
+            knownClient = IsKnownRedirectHost(new Uri(redirect_uri!)),
             enabled, reason = enabled ? "" : "not-enabled", canUseAllCompanies = isSeed, companies,
             scopes = enabled ? await McpScopes.AvailableAsync(permissions, uid) : new List<string>(),
         });
@@ -308,6 +322,10 @@ public class McpOAuthController(
         var token = await db.McpAgentTokens.AsNoTracking().FirstOrDefaultAsync(t => t.RefreshHash == oldHash);
         if (token == null || token.RevokedAt != null || token.OAuthClientId != clientId || token.RefreshExpiresAt <= now)
             return OAuthError("invalid_grant", "The refresh token is not valid.");
+        // Renewal never stretches a connection past the same ceiling a pasted token has.
+        var lifetimeEnd = token.CreatedAt.AddDays(McpAgentToken.MaxLifetimeFor(permissions.IsSeedAdmin(token.UserId)));
+        if (now >= lifetimeEnd)
+            return OAuthError("invalid_grant", "This connection has reached its maximum age. Connect again.");
         if (!await permissions.HasPermissionAsync(token.UserId, "mcp.access.use"))
             return OAuthError("invalid_grant", "MCP access is no longer enabled for this user.");
 
@@ -319,8 +337,8 @@ public class McpOAuthController(
         var newRefresh = NewRefreshSecret();
         var newAccessHash = McpAgentAuthHandler.Hash(newAccess);
         var newRefreshHash = McpAgentAuthHandler.Hash(newRefresh);
-        var expires = now.AddMinutes(AccessMinutes);
-        var refreshExpires = now.AddDays(RefreshDays);
+        var expires = Min(now.AddMinutes(AccessMinutes), lifetimeEnd);
+        var refreshExpires = Min(now.AddDays(RefreshDays), lifetimeEnd);
         // Rotate in one conditional write: a refresh secret works exactly once.
         var done = await db.McpAgentTokens.Where(t => t.Id == token.Id && t.RefreshHash == oldHash && t.RevokedAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.TokenHash, newAccessHash).SetProperty(t => t.Hint, newAccess.Substring(0, McpAgentToken.Prefix.Length + 4))
@@ -330,6 +348,22 @@ public class McpOAuthController(
     }
 
     // ── helpers ────────────────────────────────────────────────────────
+
+    private static DateTime Min(DateTime a, DateTime b) => a < b ? a : b;
+
+    /// <summary>
+    /// A loopback callback (an app on this computer) or a host listed in
+    /// Mcp:TrustedRedirectHosts, whose default is the major AI clients.
+    /// </summary>
+    private bool IsKnownRedirectHost(Uri uri)
+    {
+        if (uri.IsLoopback) return true;
+        var trusted = configuration.GetSection("Mcp:TrustedRedirectHosts").Get<string[]>()
+            ?? ["claude.ai", "claude.com", "chatgpt.com", "chat.openai.com"];
+        var host = uri.Host.ToLowerInvariant();
+        return trusted.Any(t => !string.IsNullOrWhiteSpace(t)
+            && (host == t.Trim().ToLowerInvariant() || host.EndsWith("." + t.Trim().ToLowerInvariant(), StringComparison.Ordinal)));
+    }
 
     private IActionResult TokenResponse(string accessToken, string refreshToken, string scope) => Ok(new
     {

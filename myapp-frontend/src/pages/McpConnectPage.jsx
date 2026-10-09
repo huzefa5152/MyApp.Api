@@ -58,6 +58,11 @@ export default function McpConnectPage() {
         <div>
           <h2 style={s.title}>Connect “{info.clientName}”</h2>
           <p style={s.sub}>wants to connect to your ERP ERP account. It will return to <strong>{info.redirectHost}</strong>.</p>
+          {info.knownClient === false && (
+            <p role="alert" style={{ margin: "0.6rem 0 0", padding: "0.6rem 0.8rem", borderRadius: 8, background: "#fff4e5", border: "1px solid #f5c26b", color: "#7a4a00", fontSize: "0.85rem", lineHeight: 1.45 }}>
+              <strong>Unrecognised application.</strong> Anyone can register an app under any name. Approve only if you set up an app that returns to <strong>{info.redirectHost}</strong> yourself; if you followed a link someone sent you, deny.
+            </p>
+          )}
         </div>
       </div>
 

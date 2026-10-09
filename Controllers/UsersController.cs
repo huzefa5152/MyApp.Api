@@ -1,3 +1,4 @@
+using MyApp.Api.Helpers;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
@@ -325,8 +326,17 @@ namespace MyApp.Api.Controllers
                 user.Role = desiredRole;
             }
 
+            if (!string.IsNullOrWhiteSpace(dto.Password) && id == CurrentUserId)
+            {
+                // Your own password changes through /api/auth/password (My Profile),
+                // which asks for the current one and is rate-limited. Here it would
+                // let anyone holding a stolen session set a new password outright.
+                return BadRequest(new { message = "Change your own password from My Profile, where your current password is asked for." });
+            }
+            var passwordReset = false;
             if (!string.IsNullOrWhiteSpace(dto.Password))
             {
+                passwordReset = true;
                 // Audit H-12 (2026-05-13).
                 var policyError = AuthController.ValidatePasswordPolicy(dto.Password);
                 if (policyError != null) return BadRequest(new { message = policyError });
@@ -337,6 +347,8 @@ namespace MyApp.Api.Controllers
             }
 
             await _context.SaveChangesAsync();
+            // A reset ends the user's AI agent connections as well as their sessions.
+            if (passwordReset) await McpTokenRevocation.RevokeAllForUserAsync(_context, id, CurrentUserId);
 
             return Ok(new
             {

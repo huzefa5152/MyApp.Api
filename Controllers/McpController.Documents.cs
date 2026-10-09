@@ -22,6 +22,8 @@ namespace MyApp.Api.Controllers
         private const int BillsPerHour = 10;
         private const int ChallansPerHour = 30;
                 private static bool CustomizeMcpBillable(string status, int? invoiceId) => invoiceId == null && status is "Pending" or "Imported" or "No PO";
+        private const int QuotesPerHour = 30;
+        private const int ClientChangesPerHour = 30;
         private static readonly string[] ChallanStatuses = { "Pending", "Imported", "No PO", "Invoiced", "Cancelled", "Setup Required" };
         private static readonly string[] PaymentModes = { "Cash", "Credit", "Bank Transfer", "Cheque", "Online" };
 
@@ -351,16 +353,28 @@ namespace MyApp.Api.Controllers
 
         // ── commit helpers ─────────────────────────────────────────────────
 
-        /// <summary>Ceiling on documents an agent token may commit in an hour, so a runaway loop cannot burn numbers.</summary>
+        /// <summary>
+        /// Ceiling on what one USER's agents may commit in an hour, so a runaway or
+        /// prompt-injected loop cannot burn document numbers or flood the client
+        /// list. Counted per user, not per token: reconnecting or minting a second
+        /// token must not reset it.
+        /// </summary>
         private async Task EnforceHourlyCapAsync(McpAgentToken agent, string kind)
         {
-            var (prefix, cap, noun) = kind.StartsWith("bill.", StringComparison.Ordinal) ? ("bill.", BillsPerHour, "bills")
-                : kind == "challan.create" ? ("challan.", ChallansPerHour, "challans") : ("", int.MaxValue, "");
+            var (prefixes, cap, noun) =
+                kind.StartsWith("bill.", StringComparison.Ordinal) ? (new[] { "bill." }, BillsPerHour, "bills")
+                : kind == "challan.create" ? (new[] { "challan." }, ChallansPerHour, "challans")
+                : kind is "quote.create" or "email.quote" ? (new[] { "quote.", "email.quote" }, QuotesPerHour, "quotations")
+                : kind.StartsWith("client.", StringComparison.Ordinal) ? (new[] { "client." }, ClientChangesPerHour, "client changes")
+                : (Array.Empty<string>(), int.MaxValue, "");
             if (cap == int.MaxValue) return;
             var since = DateTime.UtcNow.AddHours(-1);
-            var done = await _context.McpPendingActions.CountAsync(a => a.AgentTokenId == agent.Id && a.CommittedAt != null && a.CommittedAt > since
-                && a.Kind.StartsWith(prefix) && a.ResultRef != null && a.ResultRef != "FAILED");
-            if (done >= cap) throw new ToolError($"This token has already created {cap} {noun} in the last hour. Try again later, or create the rest by hand.");
+            var userId = agent.UserId;
+            // Spelled out (at most two prefixes) so EF can translate it to SQL.
+            string first = prefixes[0], second = prefixes.Length > 1 ? prefixes[1] : prefixes[0];
+            var done = await _context.McpPendingActions.CountAsync(a => a.UserId == userId && a.CommittedAt != null && a.CommittedAt > since
+                && (a.Kind.StartsWith(first) || a.Kind.StartsWith(second)) && a.ResultRef != null && a.ResultRef != "FAILED");
+            if (done >= cap) throw new ToolError($"Your AI agents have already made {cap} {noun} in the last hour. Try again later, or do the rest by hand.");
         }
 
         private static DeliveryChallanDto ChallanFromPlan(JsonElement p, int companyId)
