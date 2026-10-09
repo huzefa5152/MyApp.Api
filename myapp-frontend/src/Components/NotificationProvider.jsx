@@ -45,8 +45,8 @@ export default function NotificationProvider({ children }) {
             top: 20,
             right: 20,
             zIndex: 9999,
-            minWidth: 320,
-            maxWidth: 480,
+            minWidth: "min(320px, calc(100vw - 40px))",
+            maxWidth: "min(480px, calc(100vw - 40px))",
             padding: "12px 16px",
             borderRadius: 8,
             border: `1px solid ${s.border}`,
@@ -58,7 +58,8 @@ export default function NotificationProvider({ children }) {
             display: "flex",
             alignItems: "center",
             gap: 10,
-            animation: "fadeIn 0.3s ease",
+            // Keyframes in index.css: toasts also show outside the admin shell.
+            animation: "dlToastIn 320ms cubic-bezier(0.34, 1.4, 0.64, 1) both",
           }}
         >
           <span style={{ fontWeight: 700, fontSize: "1.1rem", lineHeight: 1 }}>{s.icon}</span>

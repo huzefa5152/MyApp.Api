@@ -318,19 +318,27 @@ body.dl-body--locked {
   color: #ffffff;
 }
 
-/* Body — pure-CSS height transition. max-height upper bound covers
-   the largest section we ship (Configuration, 9 items ≈ 360px). */
+/* Body — pure-CSS height transition via grid rows (0fr -> 1fr), which
+   animates to the group's real height. It used to animate max-height to a
+   fixed 480px, and Configuration grew to 12 links: the last one (FBR
+   Monitor) was cut in half. No cap means no group can outgrow it. */
 .dl-group__body {
-  overflow: hidden;
-  max-height: 0;
-  transition: max-height var(--transition-normal) var(--easing-standard);
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--transition-normal) var(--easing-standard);
 }
 
 .dl-group--open > .dl-group__body {
-  max-height: 480px;
+  grid-template-rows: 1fr;
+}
+/* A closed group must be exactly 0 tall; its inner padding would show. */
+.dl-group:not(.dl-group--open) > .dl-group__body > .dl-group__body-inner {
+  padding-block: 0;
 }
 
 .dl-group__body-inner {
+  min-height: 0;
+  overflow: hidden;
   padding: 2px 0 4px;
   display: flex;
   flex-direction: column;
@@ -521,6 +529,15 @@ body.dl-body--locked {
   flex: 1;
   font-size: 0.85rem;
   color: #6c757d;
+}
+.dl-crumbs { display: inline-flex; flex-wrap: wrap; align-items: center; animation: dlFadeUp 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.dl-crumb { display: inline-flex; align-items: center; }
+.dl-crumb__sep { margin: 0 0.45rem; color: #b8c2cf; }
+.dl-crumb--current { color: #1a2332; font-weight: 600; }
+@media (max-width: 599.98px) {
+  /* The section is the open sidebar group; the bar shows the page. */
+  .dl-crumb:not(.dl-crumb--current) { display: none; }
+  .dl-crumb--current .dl-crumb__sep { display: none; }
 }
 
 .dl-topbar__user-wrapper {
@@ -852,7 +869,7 @@ body.dl-body--locked {
 
 @media (max-width: 767.98px) {
   .audit-page {
-    padding: 1rem 0.85rem 1.25rem !important;
+    padding: 0 !important;
   }
   /* Header summary chips wrap below the title rather than getting squeezed
      to the right. */
@@ -994,15 +1011,16 @@ body.dl-body--locked {
    Same pattern as audit logs above. The card layout puts Unit Price
    (the "answer" the page exists to show) in the top-right at large size,
    so a glance is enough. */
+/* .dl-main already pads every page; a second padding indented this one. */
 .irh-page {
-  padding: 1.5rem 2rem;
+  padding: 0;
 }
 .irh-table { display: block; }
 .irh-cards { display: none; }
 
 @media (max-width: 767.98px) {
   .irh-page {
-    padding: 1rem 0.85rem 1.25rem;
+    padding: 0;
   }
   .irh-table { display: none; }
   .irh-cards {
@@ -1249,13 +1267,14 @@ body.dl-body--locked {
    Same pattern as Item Rate History above. The mobile card layout
    surfaces the page's primary "answer" top-right at large size — for
    On-Hand it's the on-hand quantity; for Movements it's the +/- delta. */
-.stock-page { padding: 1.5rem 2rem; }
+/* .dl-main pads every page; a second padding indented this one. */
+.stock-page { padding: 0; }
 .stock-table { display: block; }
 .stock-cards { display: none; }
 
 @media (max-width: 991.98px) {
   .stock-page {
-    padding: 1rem 0.85rem 1.25rem;
+    padding: 0;
   }
 }
 

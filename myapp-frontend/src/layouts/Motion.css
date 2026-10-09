@@ -1,0 +1,122 @@
+/* =====================================================
+   Motion.css — the admin shell's micro-interactions.
+   Presentation only: nothing here changes what a control does, only how it
+   moves. Anything that touches every button is wrapped in :where() so it
+   sits at the global `button` rule's specificity and a component that
+   styles its own hover, press or animation keeps it.
+   ===================================================== */
+
+body.admin-ui {
+  --dl-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dl-ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --dl-fast: 140ms;
+  --dl-med: 220ms;
+  --dl-slow: 320ms;
+  --dl-focus: #0d47a1;
+}
+
+/* ---------- Sidebar ---------- */
+.dl-item,
+.dl-group__header,
+.dl-subitem {
+  transition:
+    background-color var(--dl-fast) var(--dl-ease-out),
+    color var(--dl-fast) var(--dl-ease-out),
+    transform var(--dl-fast) var(--dl-ease-out);
+}
+/* A nudge toward the content says "this goes somewhere". */
+.dl-subitem:hover { transform: translateX(3px); }
+.dl-item__icon,
+.dl-group__icon,
+.dl-subitem__icon { transition: transform var(--dl-med) var(--dl-ease-spring), opacity var(--dl-fast); }
+.dl-item:hover .dl-item__icon,
+.dl-group__header:hover .dl-group__icon,
+.dl-subitem:hover .dl-subitem__icon { transform: scale(1.12); opacity: 1; }
+
+/* The active marks grow in rather than appearing. */
+.dl-item--active::before,
+.dl-group--child-active:not(.dl-group--open) > .dl-group__header::before {
+  animation: dlBarIn var(--dl-med) var(--dl-ease-out) both;
+  transform-origin: center;
+}
+.dl-subitem--active::before { animation: dlDotIn var(--dl-med) var(--dl-ease-spring) both; }
+
+/* Opening a group cascades its links in. */
+.dl-group--open > .dl-group__body .dl-subitem {
+  animation: dlSubIn var(--dl-med) var(--dl-ease-out) backwards;
+}
+.dl-group--open > .dl-group__body .dl-subitem:nth-child(2) { animation-delay: 20ms; }
+.dl-group--open > .dl-group__body .dl-subitem:nth-child(3) { animation-delay: 40ms; }
+.dl-group--open > .dl-group__body .dl-subitem:nth-child(4) { animation-delay: 60ms; }
+.dl-group--open > .dl-group__body .dl-subitem:nth-child(5) { animation-delay: 80ms; }
+.dl-group--open > .dl-group__body .dl-subitem:nth-child(6) { animation-delay: 100ms; }
+.dl-group--open > .dl-group__body .dl-subitem:nth-child(n+7) { animation-delay: 120ms; }
+
+.dl-group__chevron { transition: transform var(--dl-med) var(--dl-ease-spring) !important; }
+.dl-group__body { transition: grid-template-rows var(--dl-slow) var(--dl-ease-out) !important; }
+
+/* Mobile drawer: a decelerating slide, the overlay fades with it. */
+.dl-sidebar { transition: transform var(--dl-slow) var(--dl-ease-out) !important; }
+
+/* Top bar: the user menu drops in instead of popping. */
+.dl-user-menu { animation: dlDropIn var(--dl-med) var(--dl-ease-out) both; transform-origin: top right; }
+.dl-topbar__user-arrow { transition: transform var(--dl-med) var(--dl-ease-spring); }
+
+/* ---------- Controls ---------- */
+/* Press feedback. Disabled controls do not move: nothing is happening. */
+:where(body.admin-ui) button:not(:disabled):active,
+:where(body.admin-ui) [role="tab"]:not([aria-disabled="true"]):active {
+  transform: scale(0.97);
+  transition-duration: 70ms;
+}
+:where(body.admin-ui) :is(button, a, [role="tab"], [role="menuitem"]):focus-visible {
+  outline: 2px solid var(--dl-focus);
+  outline-offset: 2px;
+}
+/* Inputs show focus with a soft ring rather than only a border colour. */
+:where(body.admin-ui) :is(input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea) {
+  transition: border-color var(--dl-fast) var(--dl-ease-out), box-shadow var(--dl-fast) var(--dl-ease-out);
+}
+:where(body.admin-ui) :is(input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea):focus-visible {
+  outline: none;
+  border-color: var(--dl-focus);
+  box-shadow: 0 0 0 3px rgba(13, 71, 161, 0.14);
+}
+
+/* ---------- Dialogs ---------- */
+/* Used by theme.js formStyles.backdrop / .modal, so every shared dialog
+   gets the same entrance: the page dims, the panel rises into place. */
+@keyframes dlBackdropIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dlModalIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ---------- Keyframes ---------- */
+@keyframes dlBarIn  { from { transform: scaleY(0); opacity: 0; } to { transform: scaleY(1); opacity: 1; } }
+@keyframes dlDotIn  { from { transform: translateY(-50%) scale(0); } to { transform: translateY(-50%) scale(1); } }
+@keyframes dlSubIn  { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+@keyframes dlDropIn { from { opacity: 0; transform: translateY(-6px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes dlFadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  body.admin-ui *,
+  body.admin-ui *::before,
+  body.admin-ui *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------- CardActions menu ---------- */
+.card-actions-menu { animation: dlDropIn var(--dl-med) var(--dl-ease-out) both; transform-origin: top right; }
+.card-actions-menu--up { transform-origin: bottom right; }
+.card-actions-more { transition: background-color var(--dl-fast), border-color var(--dl-fast), color var(--dl-fast); }
+.card-actions-more:hover { border-color: #b8c4d4 !important; color: #1a2332 !important; }
+/* Sized to sit among the small action chips with a mouse; a full 44px target
+   on a touch screen. */
+@media (pointer: coarse) {
+  .card-actions-more { width: 44px !important; height: 44px !important; }
+}

@@ -54,6 +54,7 @@ import NoCompanyConfigured from "../Components/NoCompanyConfigured";
 import { getAvatarUrl } from "../utils/avatarUrl";
 import "./DashboardLayout.css";
 import "./AdminDensity.css";
+import "./Motion.css";
 
 /* ------------------------------------------------------------------ */
 /*  NavGroup — generic collapsible section header                       */
@@ -155,6 +156,23 @@ export default function DashboardLayout() {
   const { user, logout, avatarVersion } = useAuth();
   const { hasAny, has } = usePermissions();
   const location = useLocation();
+
+  // Keep the active link in view: a long group (Configuration) can run past
+  // the bottom of the sidebar, leaving the page you are on out of sight.
+  // Waits for the group's open animation, then scrolls the sidebar only.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const nav = document.querySelector(".dl-nav");
+      const link = nav?.querySelector(".dl-subitem--active, .dl-item--active");
+      if (!nav || !link) return;
+      const n = nav.getBoundingClientRect(), l = link.getBoundingClientRect();
+      if (l.top < n.top || l.bottom > n.bottom) {
+        const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        nav.scrollBy({ top: l.bottom > n.bottom ? l.bottom - n.bottom + 12 : l.top - n.top - 12, behavior: reduce ? "auto" : "smooth" });
+      }
+    }, 340);
+    return () => clearTimeout(t);
+  }, [location.pathname]);
   const navigate = useNavigate();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -767,7 +785,17 @@ export default function DashboardLayout() {
           </button>
 
           <div className="dl-topbar__breadcrumb" aria-label="Breadcrumb">
-            {getBreadcrumb(location.pathname)}
+            {/* The map's "Section / Page" text, drawn as a trail: the section
+                muted, the page the operator is on in bold. key= the path so
+                the trail fades in on each navigation. */}
+            <span key={location.pathname} className="dl-crumbs">
+              {getBreadcrumb(location.pathname).split(" / ").map((part, i, all) => (
+                <span key={i} className={i === all.length - 1 ? "dl-crumb dl-crumb--current" : "dl-crumb"}>
+                  {i > 0 && <span className="dl-crumb__sep" aria-hidden="true">/</span>}
+                  {part}
+                </span>
+              ))}
+            </span>
           </div>
 
           <div className="dl-topbar__user-wrapper" ref={userMenuRef} onKeyDown={event => { if (event.key === "Escape") { setUserMenuOpen(false); userMenuRef.current?.querySelector("button")?.focus(); } }}>
