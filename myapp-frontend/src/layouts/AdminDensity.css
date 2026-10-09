@@ -141,7 +141,10 @@ body.admin-ui [data-admin-form-row] { gap: 12px !important; margin-bottom: 12px 
 body.admin-ui [data-admin-form-row] > * { min-width: 0 !important; }
 body.admin-ui [data-admin-dialog] label { line-height: 1.4; margin-bottom: 4px; }
 body.admin-ui .admin-document-copy { padding: 8px 10px !important; margin-bottom: 12px !important; }
-body.admin-ui .admin-document-number { display: grid; grid-template-columns: minmax(120px, .9fr) minmax(140px, 1.1fr); gap: 6px 8px; align-items: start; }
+/* Auto/Custom beside the number only when the cell has room for both; a narrow
+   cell (the bill forms' six-column detail row) stacks them instead of spilling
+   the number under the next field. */
+body.admin-ui .admin-document-number { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(130px, 100%), 1fr)); gap: 6px 8px; align-items: start; min-width: 0; }
 body.admin-ui .admin-document-number > label { grid-column: 1 / -1; margin: 0 !important; }
 body.admin-ui .admin-document-number > div:has(> button[title*="sequence"]) { margin: 0 !important; }
 body.admin-ui .admin-document-number > div:not(:has(> button[title*="sequence"])):not(:has(> input)) { grid-column: 1 / -1; margin-top: 0 !important; }
@@ -154,7 +157,6 @@ body.admin-ui .admin-document-number button { padding-inline: 8px !important; }
  body.admin-ui [data-admin-header] [data-admin-close] { min-width: 44px !important; min-height: 44px !important; height: 44px !important; padding: 0 !important; }
  body.admin-ui [data-admin-form-row] { flex-direction: column; gap: 10px !important; }
  body.admin-ui [data-admin-form-row] > * { width: 100%; flex: auto !important; }
- body.admin-ui .admin-document-number { grid-template-columns: minmax(120px,.9fr) minmax(120px,1.1fr); }
 }
 @media (max-height: 500px) and (min-width: 768px) {
  body.admin-ui [data-admin-backdrop] { padding: 6px !important; }
