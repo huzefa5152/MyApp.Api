@@ -324,19 +324,34 @@ function Check({ title, good, a, b, diff, extra, off }) {
 
 // ── Pieces ──────────────────────────────────────────────────────────────
 
+// The first column is frozen so a wide worksheet keeps each row's label in
+// view while it scrolls sideways; figure headings may wrap onto two lines so
+// a column is only as wide as its numbers.
 function Grid({ head, rows, numericFrom, maxHeight }) {
+  const frozen = { position: "sticky", left: 0, zIndex: 1, boxShadow: `1px 0 0 ${colors.cardBorder}` };
   return (
     <div style={{ ...st.gridBox, maxHeight: `min(${maxHeight}px, 65vh)` }}>
       <table style={st.table}>
         <thead>
-          <tr>{head.map((h, i) => <th key={h} style={{ ...st.th, ...(i >= numericFrom ? { textAlign: "right" } : null) }}>{h}</th>)}</tr>
+          <tr>{head.map((h, i) => (
+            <th key={h} style={{
+              ...st.th,
+              ...(i >= numericFrom ? { textAlign: "right", whiteSpace: "normal", verticalAlign: "bottom", minWidth: 72 } : null),
+              ...(i === 0 ? { ...frozen, zIndex: 2 } : null),
+            }}>{h}</th>
+          ))}</tr>
         </thead>
         <tbody>
-          {rows.map((cells, r) => (
-            <tr key={r} style={r % 2 ? { background: "#fafbfd" } : null}>
-              {cells.map((c, i) => <td key={i} style={i >= numericFrom ? st.num : st.td}>{c}</td>)}
-            </tr>
-          ))}
+          {rows.map((cells, r) => {
+            const bg = r % 2 ? "#fafbfd" : "#fff";
+            return (
+              <tr key={r} style={{ background: bg }}>
+                {cells.map((c, i) => (
+                  <td key={i} style={{ ...(i >= numericFrom ? st.num : st.td), ...(i === 0 ? { ...frozen, background: bg } : null) }}>{c}</td>
+                ))}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -423,10 +438,10 @@ const st = {
   chipOn: { background: colors.blue, borderColor: colors.blue, color: "#fff" },
   gridBox: { overflow: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, background: "#fff" },
   table: { width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 13 },
-  th: { position: "sticky", top: 0, zIndex: 1, textAlign: "left", padding: "0.5rem 0.6rem", background: "#f3f6fa",
+  th: { position: "sticky", top: 0, zIndex: 1, textAlign: "left", padding: "0.5rem 0.5rem", background: "#f3f6fa",
     borderBottom: `1px solid ${colors.cardBorder}`, whiteSpace: "nowrap", fontSize: 12 },
-  td: { padding: "0.4rem 0.6rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "top", whiteSpace: "nowrap" },
-  num: { padding: "0.4rem 0.6rem", borderBottom: `1px solid ${colors.cardBorder}`, textAlign: "right", whiteSpace: "nowrap",
+  td: { padding: "0.4rem 0.5rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "top", whiteSpace: "nowrap" },
+  num: { padding: "0.4rem 0.5rem", borderBottom: `1px solid ${colors.cardBorder}`, textAlign: "right", whiteSpace: "nowrap",
     fontVariantNumeric: "tabular-nums", verticalAlign: "top" },
   wrap: { whiteSpace: "normal", minWidth: 200, maxWidth: 320, overflowWrap: "anywhere" },
   pill: { display: "inline-block", padding: "2px 8px", borderRadius: 999, fontSize: 11.5, fontWeight: 700 },

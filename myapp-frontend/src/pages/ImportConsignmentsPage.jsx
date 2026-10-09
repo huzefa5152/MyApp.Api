@@ -53,10 +53,6 @@ const card = {
   background: colors.cardBg, border: `1px solid ${colors.cardBorder}`,
   borderRadius: 12, padding: "1rem 1.1rem", marginBottom: "1rem",
 };
-const grid = {
-  display: "grid", gap: "0.75rem",
-  gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
-};
 const input = {
   width: "100%", padding: "0.55rem 0.65rem", borderRadius: 8,
   border: `1px solid ${colors.inputBorder}`, background: colors.inputBg,
@@ -71,6 +67,8 @@ const td = {
   padding: "0.55rem 0.6rem", fontSize: 13.5, borderBottom: `1px solid ${colors.cardBorder}`,
   verticalAlign: "top",
 };
+const num = { ...td, textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" };
+const sub = { fontSize: 11.5, color: colors.textSecondary, marginTop: 2, whiteSpace: "nowrap" };
 // User-supplied text (GD description, disposition note) must never use
 // nowrap+ellipsis -- it visually collapses distinct values sharing a prefix.
 const wrap2 = { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" };
@@ -397,49 +395,46 @@ export default function ImportConsignmentsPage() {
   const items = result?.items || [];
 
   return (
-    <div style={{ padding: "1.25rem", maxWidth: 1200, margin: "0 auto" }}>
+    <div style={{ maxWidth: 1200, margin: "0 auto" }}>
       <h1 style={{ fontSize: 22, margin: "0 0 0.25rem", color: colors.textPrimary }}>Consignments</h1>
       <p style={{ margin: "0 0 1rem", color: colors.textSecondary, fontSize: 14, maxWidth: "62ch" }}>
         Every GD costing consignment imported into this company. Expand a row to see its lines and
         why each one was matched, skipped, or created as new stock.
       </p>
 
-      <div style={card}>
-        <div style={grid}>
-          <label style={{ fontSize: 13, color: colors.textSecondary }}>
-            Company
-            <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} style={input}>
-              <option value="">Choose a company…</option>
-              {(companies || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </label>
-          <label style={{
-            fontSize: 13, color: colors.textSecondary, display: "flex",
-            alignItems: "center", gap: 8, marginTop: "auto", minHeight: 44,
-          }}>
-            <input
-              type="checkbox" checked={onlyOutstanding}
-              onChange={(e) => setOnlyOutstanding(e.target.checked)}
-              style={{ width: 18, height: 18 }}
-            />
-            Only show what's still owed
-          </label>
-        </div>
+      <div style={{ ...card, display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "0.75rem 1.25rem" }}>
+        <label style={{ fontSize: 13, color: colors.textSecondary, flex: "1 1 260px", maxWidth: 420 }}>
+          Company
+          <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} style={input}>
+            <option value="">Choose a company…</option>
+            {(companies || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
+        <label style={{
+          fontSize: 13, color: colors.textSecondary, display: "flex",
+          alignItems: "center", gap: 8, minHeight: 44, cursor: "pointer",
+        }}>
+          <input
+            type="checkbox" checked={onlyOutstanding}
+            onChange={(e) => setOnlyOutstanding(e.target.checked)}
+            style={{ width: 18, height: 18 }}
+          />
+          Only show what's still owed
+        </label>
+        {companyId && result && (
+          <div style={{ marginLeft: "auto", textAlign: "right", minHeight: 44, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+            <span style={{ fontSize: 11.5, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              Outstanding on Import Clearing
+            </span>
+            <strong style={{
+              fontSize: 20, lineHeight: 1.2, fontVariantNumeric: "tabular-nums",
+              color: (result.totalOutstanding || 0) > 0.005 ? colors.danger : colors.success,
+            }}>
+              {money(result.totalOutstanding)}
+            </strong>
+          </div>
+        )}
       </div>
-
-      {companyId && result && (
-        <div style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-          <span style={{ fontSize: 14, color: colors.textSecondary }}>
-            Total outstanding on Import Clearing for this company
-          </span>
-          <strong style={{
-            fontSize: 20, fontVariantNumeric: "tabular-nums",
-            color: (result.totalOutstanding || 0) > 0.005 ? colors.danger : colors.success,
-          }}>
-            {money(result.totalOutstanding)}
-          </strong>
-        </div>
-      )}
 
       {!companyId ? (
         <div style={card}><p style={{ margin: 0, color: colors.textSecondary }}>Choose a company to see its consignments.</p></div>
@@ -455,18 +450,14 @@ export default function ImportConsignmentsPage() {
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
               <thead>
                 <tr>
-                  <th style={th} />
-                  <th style={th}>GD number</th>
-                  <th style={th}>Date</th>
-                  <th style={{ ...th, textAlign: "right" }}>Lines</th>
-                  <th style={{ ...th, textAlign: "right" }}>Total cost</th>
+                  <th style={{ ...th, width: 28, padding: "0.5rem 0.2rem" }} />
+                  <th style={th}>GD</th>
                   <th style={th}>Mode</th>
-                  <th style={{ ...th, textAlign: "right" }}>Credited</th>
-                  <th style={{ ...th, textAlign: "right" }}>Settled</th>
+                  <th style={{ ...th, textAlign: "right" }}>Total cost</th>
+                  <th style={{ ...th, textAlign: "right" }}>Credited / settled</th>
                   <th style={{ ...th, textAlign: "right" }}>Outstanding</th>
-                  <th style={th}>Status</th>
                   <th style={th}>Imported</th>
-                  <th style={th} />
+                  <th style={th} aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
@@ -474,37 +465,38 @@ export default function ImportConsignmentsPage() {
                   const expanded = expandedId === row.id;
                   return (
                     <Fragment key={row.id}>
-                      <tr style={{ cursor: "pointer" }} onClick={() => toggleRow(row.id)}>
-                        <td style={{ ...td, width: 32 }}>
+                      <tr style={{ cursor: "pointer", background: expanded ? colors.inputBg : undefined }}
+                        onClick={() => toggleRow(row.id)}>
+                        <td style={{ ...td, width: 28, padding: "0.55rem 0.2rem", color: colors.textSecondary }}>
                           {expanded ? <MdExpandMore size={18} /> : <MdChevronRight size={18} />}
                         </td>
-                        <td style={td}><div style={wrap2}>{row.gdNumber}</div></td>
-                        <td style={{ ...td, whiteSpace: "nowrap" }}>{dt(row.gdDate)}</td>
-                        <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{row.lineCount}</td>
-                        <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{money(row.totalCostExcludingTax)}</td>
                         <td style={td}>
-                          {MODE_LABEL[row.mode] || row.mode}
-                          {row.hasJournalEntry && <div><Badge tone={colors.success}>Posted</Badge></div>}
-                        </td>
-                        <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{money(row.importClearingCredited)}</td>
-                        <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{money(row.amountSettled)}</td>
-                        <td style={{
-                          ...td, textAlign: "right", fontVariantNumeric: "tabular-nums",
-                          fontWeight: row.outstanding > 0.005 ? 700 : 400,
-                        }}>
-                          {money(row.outstanding)}
+                          <div style={{ ...wrap2, fontWeight: 600 }}>{row.gdNumber}</div>
+                          <div style={sub}>{dt(row.gdDate)} · {row.lineCount} line{row.lineCount === 1 ? "" : "s"}</div>
                         </td>
                         <td style={td}>
-                          <Badge tone={SETTLEMENT_TONE[row.settlementStatus] || colors.textSecondary}>
-                            {SETTLEMENT_LABEL[row.settlementStatus] || row.settlementStatus}
-                          </Badge>
+                          <div style={{ whiteSpace: "nowrap" }}>{MODE_LABEL[row.mode] || row.mode}</div>
+                          {row.hasJournalEntry && <div style={{ marginTop: 3 }}><Badge tone={colors.success}>Posted</Badge></div>}
+                        </td>
+                        <td style={num}>{money(row.totalCostExcludingTax)}</td>
+                        <td style={num}>
+                          <div>{money(row.importClearingCredited)}</div>
+                          <div style={{ ...sub, textAlign: "right" }}>settled {money(row.amountSettled)}</div>
+                        </td>
+                        <td style={num}>
+                          <div style={{ fontWeight: row.outstanding > 0.005 ? 700 : 400 }}>{money(row.outstanding)}</div>
+                          <div style={{ marginTop: 3 }}>
+                            <Badge tone={SETTLEMENT_TONE[row.settlementStatus] || colors.textSecondary}>
+                              {SETTLEMENT_LABEL[row.settlementStatus] || row.settlementStatus}
+                            </Badge>
+                          </div>
                         </td>
                         <td style={td}>
-                          <div style={{ fontSize: 12.5 }}>{dt(row.importedAt)}</div>
-                          <div style={{ fontSize: 11.5, color: colors.textSecondary }}>{row.importedByUserName || "—"}</div>
+                          <div style={{ fontSize: 12.5, whiteSpace: "nowrap" }}>{dt(row.importedAt)}</div>
+                          <div style={sub}>{row.importedByUserName || "—"}</div>
                         </td>
                         <td style={td} onClick={(e) => e.stopPropagation()}>
-                          <div style={{ display: "flex", gap: 6 }}>
+                          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                             {canSettle && row.outstanding > 0.005 && (
                               <button
                                 onClick={() => setSettlingRow(row)}
@@ -531,7 +523,7 @@ export default function ImportConsignmentsPage() {
                       </tr>
                       {expanded && (
                         <tr>
-                          <td colSpan={12} style={{ ...td, background: colors.cardBg }}>
+                          <td colSpan={8} style={{ ...td, background: colors.inputBg, padding: "0.4rem 0.8rem 0.9rem" }}>
                             <ConsignmentLines
                               detail={detail}
                               loading={detailLoading}
