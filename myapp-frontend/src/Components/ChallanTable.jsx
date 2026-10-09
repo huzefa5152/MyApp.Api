@@ -1,4 +1,5 @@
 import { isBillableChallan } from "../utils/challanBilling";
+import CardActions from "./CardActions";
 import { useState } from "react";
 import { MdVisibility, MdEdit, MdPrint, MdPictureAsPdf, MdGridOn, MdRequestQuote, MdContentCopy, MdCancel, MdDelete, MdWarning, MdLink } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -138,12 +139,12 @@ export default function ChallanTable({
     const isDuplicating = duplicatingId === c.id;
     const canLink = onLinkOrder && c.status === "No PO" && !c.salesOrderId && !c.invoiceId;
     return (
-      <>
-        <button style={btnStyles.view} onClick={() => setSelectedChallan(c)} title="View challan">
+      <CardActions nowrap label={`More actions for challan ${c.challanNumber}`}>
+        <button data-label="View" data-primary style={btnStyles.view} onClick={() => setSelectedChallan(c)} title="View challan">
           <MdVisibility size={14} />
         </button>
         {perms.permPrint && (
-          <button
+          <button data-label="Print" data-primary
             style={{ ...btnStyles.print, opacity: printDisabled ? 0.5 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
             disabled={printDisabled}
             onClick={() => onPrint?.(c)}
@@ -153,7 +154,7 @@ export default function ChallanTable({
           </button>
         )}
         {perms.permPrint && (
-          <button
+          <button data-label="PDF"
             style={{ ...btnStyles.pdf, opacity: printDisabled || exportingId ? 0.55 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
             disabled={printDisabled || !!exportingId}
             onClick={() => onExportPdf?.(c)}
@@ -163,7 +164,7 @@ export default function ChallanTable({
           </button>
         )}
         {perms.permPrint && onExportExcel && (
-          <button
+          <button data-label="Excel"
             style={{ ...btnStyles.excel, opacity: exportingId ? 0.55 : 1 }}
             disabled={!!exportingId}
             onClick={() => onExportExcel(c)}
@@ -173,12 +174,12 @@ export default function ChallanTable({
           </button>
         )}
         {perms.permUpdate && flags.isEditable && (
-          <button style={btnStyles.edit} onClick={() => onEditItems?.(c)} title="Edit items">
+          <button data-label="Edit items" data-primary={(!flags.canGenerateBill) || undefined} style={btnStyles.edit} onClick={() => onEditItems?.(c)} title="Edit items">
             <MdEdit size={14} />
           </button>
         )}
         {flags.canDuplicate && onDuplicate && (
-          <button
+          <button data-label="Duplicate"
             style={{
               ...btnStyles.duplicate,
               opacity: duplicatingId ? 0.55 : 1,
@@ -192,26 +193,26 @@ export default function ChallanTable({
           </button>
         )}
         {flags.canGenerateBill && (
-          <button style={btnStyles.generateBill} onClick={() => onGenerateBill?.(c)} title="Generate Bill from this challan">
+          <button data-label="Generate bill" data-primary style={btnStyles.generateBill} onClick={() => onGenerateBill?.(c)} title="Generate Bill from this challan">
             <MdRequestQuote size={14} />
           </button>
         )}
         {canLink && (
-          <button style={btnStyles.link} onClick={() => onLinkOrder?.(c)} title="Link this challan to a Sales Order">
+          <button data-label="Link to sales order" style={btnStyles.link} onClick={() => onLinkOrder?.(c)} title="Link this challan to a Sales Order">
             <MdLink size={14} />
           </button>
         )}
         {perms.permUpdate && flags.canCancel && (
-          <button data-admin-close="" style={btnStyles.cancel} onClick={() => onCancel?.(c)} title="Cancel challan">
+          <button data-label="Cancel challan" data-admin-close="" style={btnStyles.cancel} onClick={() => onCancel?.(c)} title="Cancel challan">
             <MdCancel size={14} />
           </button>
         )}
         {perms.permDelete && flags.canDelete && (
-          <button style={btnStyles.delete} onClick={() => onDelete?.(c)} title="Delete">
+          <button data-label="Delete" style={btnStyles.delete} onClick={() => onDelete?.(c)} title="Delete">
             <MdDelete size={14} />
           </button>
         )}
-      </>
+      </CardActions>
     );
   };
 

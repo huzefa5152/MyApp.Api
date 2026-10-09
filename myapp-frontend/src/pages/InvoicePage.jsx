@@ -1,4 +1,5 @@
 import { createSalesOrderFromBill } from "../api/salesOrderApi";
+import CardActions from "../Components/CardActions";
 import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -1252,14 +1253,14 @@ export default function InvoicePage({ mode = "invoices" }) {
                       )}
                     </div>
                   </div>
-                  <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
+                  <CardActions style={cardStyles.buttonGroup}>
                     {/* Bills card: View, Print Bill, Bill PDF, Bill XLS, Edit, Delete.
                         Invoices card: View, Tax Print, Tax PDF, Tax XLS, View FBR, Validate, Submit. */}
                     {/* Read-only View — shown on BOTH tabs. On the Invoices tab
                         it opens the same read-only bill view so the operator can
                         inspect the grouped-by-Item-Type and individual line
                         items without switching to the Bills tab. */}
-                    <button
+                    <button data-primary={(isBillsMode) || undefined}
                       style={{ ...styles.printBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" }}
                       onClick={() => setViewingId(inv.id)}
                       title="View bill details (read-only) — grouped & individual line items"
@@ -1283,7 +1284,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                       </button>
                     )}
                     {isBillsMode && canPrint && (
-                      <button
+                      <button data-primary
                         style={{ ...styles.printBtn, opacity: tplPicker.noTemplate ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }}
                         disabled={tplPicker.noTemplate}
                         title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"}
@@ -1293,7 +1294,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                       </button>
                     )}
                     {!isBillsMode && canPrint && (
-                      <button
+                      <button data-primary={(inv.fbrStatus === "Submitted" || inv.isCancelled) || undefined}
                         style={{ ...styles.taxBtn, opacity: tplPicker.noTemplate ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }}
                         disabled={tplPicker.noTemplate}
                         title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"}
@@ -1332,7 +1333,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         status badge above the buttons still shows in both
                         modes so the operator can see locked rows. */}
                     {!isBillsMode && canFbrPreview && (
-                      <button
+                      <button data-primary={(inv.fbrStatus === "Submitted") || undefined}
                         style={{ ...styles.printBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" }}
                         onClick={() => setFbrPreviewId(inv.id)}
                         title="Preview the FBR payload — grouped items, total qty, total value, total tax. Read-only, doesn't send anything."
@@ -1352,7 +1353,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                     {!isBillsMode && canFbrAny && selectedCompany?.hasFbrToken && inv.fbrReady && inv.fbrStatus !== "Submitted" && inv.fbrStatus !== "Submitting" && inv.fbrStatus !== "Uncertain" && !inv.isCancelled && (
                       <>
                         {canFbrValidate && (
-                          <button
+                          <button data-primary
                             style={{
                               ...styles.fbrValidateBtn,
                               opacity: fbrLoading || !inv.fbrReady ? 0.4 : 1,
@@ -1374,7 +1375,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                           </button>
                         )}
                         {canFbrSubmit && (
-                          <button
+                          <button data-primary
                             style={{
                               ...styles.fbrSubmitBtn,
                               opacity: fbrLoading || !fbrValidated.has(inv.id) || !inv.fbrReady ? 0.4 : 1,
@@ -1405,7 +1406,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                     {isBillsMode && canCreateOrderFromBill && inv.canCreateSalesOrder && <button style={styles.printBtn} disabled={!!creatingOrderFor} onClick={() => handleCreateOrderFromBill(inv)}>Create sales order</button>}
                     {isBillsMode && has("salesorders.list.view") && inv.salesOrders?.map(o => <button key={o.id} style={styles.printBtn} onClick={() => navigate(`/sales-orders?viewOrder=${o.id}`)}>Open sales order #{o.number || o.id}</button>)}
                     {isBillsMode && canEditInThisMode && inv.isEditable && (
-                      <button
+                      <button data-primary
                         style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
                         onClick={() => setEditingId(inv.id)}
                         title={canUpdate
@@ -1420,7 +1421,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         qty, dates) is read-only and reflects whatever was
                         last saved on the Bills tab. Hidden once submitted. */}
                     {!isBillsMode && canEditInThisMode && inv.isEditable && (
-                      <button
+                      <button data-primary
                         style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
                         onClick={() => setEditingId(inv.id)}
                         title="Review and adjust the current bill for FBR; commercial bill edits are on Bills"
@@ -1524,7 +1525,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdPostAdd size={14} /> Correct
                       </button>
                     )}
-                  </div>
+                  </CardActions>
                 </div>
               </div>
             ))}
