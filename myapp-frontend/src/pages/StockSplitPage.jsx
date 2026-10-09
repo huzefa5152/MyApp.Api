@@ -158,7 +158,7 @@ export default function StockSplitPage() {
 }
 
 const st = {
-  page: { padding: "1rem", maxWidth: 900, margin: "0 auto" },
+  page: { padding: 0, maxWidth: 900, margin: "0 auto" },
   back: { display: "inline-flex", alignItems: "center", gap: 4, color: colors.blue, fontSize: 13, textDecoration: "none", minHeight: 44 },
   h1: { margin: "0.25rem 0 0.4rem", fontSize: "1.35rem", color: colors.textPrimary },
   h2: { margin: "0 0 0.6rem", fontSize: "1rem" },

@@ -129,7 +129,7 @@ export default function PurchaseDebitNotesPage() {
   }
 
   return (
-    <div style={{ padding: "clamp(0.75rem, 2vw, 1.5rem)" }}>
+    <div>
       <div style={styles.headerRow}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
           <div style={styles.iconBadge}><MdReceiptLong size={22} color="#fff" /></div>

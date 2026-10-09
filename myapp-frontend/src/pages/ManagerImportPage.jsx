@@ -70,7 +70,7 @@ export default function ManagerImportPage() {
   const apMatch = report && Math.abs((report.apManager ?? 0) - (report.apMyApp ?? 0)) < 0.01;
 
   return (
-    <div style={{ padding: "clamp(0.75rem, 2vw, 1.5rem)", maxWidth: 820 }}>
+    <div style={{ maxWidth: 820 }}>
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
         <MdCloudUpload size={26} color={colors.blue} />
         <h2 style={{ margin: 0, fontSize: "1.4rem", color: colors.textPrimary }}>Manager.io Import</h2>

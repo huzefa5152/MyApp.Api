@@ -247,7 +247,7 @@ export default function FbrPurchaseImportPage() {
   }, [result]);
 
   return (
-    <div className="fbr-imp-page" style={{ padding: "1.5rem 2rem", maxWidth: 1400, margin: "0 auto" }}>
+    <div className="fbr-imp-page" style={{ maxWidth: 1400, margin: "0 auto" }}>
       <header className="fbr-imp-header" style={{ display: "flex", alignItems: "center", gap: "0.85rem", marginBottom: "0.75rem" }}>
         <div className="fbr-imp-header__icon" style={styles.headerIcon}><MdCloudUpload size={28} color="#fff" /></div>
         <div style={{ minWidth: 0 }}>

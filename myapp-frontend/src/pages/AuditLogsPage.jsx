@@ -104,7 +104,7 @@ export default function AuditLogsPage() {
   }
 
   return (
-    <div className="audit-page" style={{ padding: "1.5rem", maxWidth: 1200, margin: "0 auto" }}>
+    <div className="audit-page" style={{ maxWidth: 1200, margin: "0 auto" }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
         <div style={{ width: 44, height: 44, borderRadius: 12, background: `linear-gradient(135deg, ${colors.danger}, #b71c1c)`, display: "flex", alignItems: "center", justifyContent: "center" }}>

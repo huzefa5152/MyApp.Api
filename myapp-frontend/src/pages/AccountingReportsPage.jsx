@@ -673,7 +673,7 @@ const money = (n) => {
 
 // ── Styles ──────────────────────────────────────────────────────────────────
 const st = {
-  page: { padding: "clamp(0.75rem, 2vw, 1.5rem)" },
+  page: { padding: 0 },
   pageHead: {
     display: "flex", flexWrap: "wrap", alignItems: "center",
     justifyContent: "space-between", gap: "0.75rem", marginBottom: "1.25rem",

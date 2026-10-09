@@ -435,7 +435,7 @@ function initials(name) {
 }
 
 const styles = {
-  page: { padding: "clamp(0.75rem, 2vw, 1.5rem)", maxWidth: 1200, margin: "0 auto" },
+  page: { padding: 0, maxWidth: 1200, margin: "0 auto" },
   header: {
     display: "flex", justifyContent: "space-between", alignItems: "center",
     gap: "1rem", flexWrap: "wrap", marginBottom: "1rem",

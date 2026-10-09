@@ -878,7 +878,7 @@ function GlHealthFooter({ status, canManage, rebuilding, onRebuild }) {
 // ── Styles ───────────────────────────────────────────────────────────
 
 const st = {
-  page: { padding: "clamp(0.75rem, 2vw, 1.5rem)", maxWidth: 1480, margin: "0 auto" },
+  page: { padding: 0, maxWidth: 1480, margin: "0 auto" },
 
   headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1rem" },
   headerIcon: { display: "grid", placeItems: "center", width: 44, height: 44, borderRadius: 12, flexShrink: 0, background: `${colors.blue}15`, color: colors.blue },

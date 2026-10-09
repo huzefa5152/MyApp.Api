@@ -403,7 +403,7 @@ const Note = ({ children, list }) => (
 );
 
 const st = {
-  page: { padding: "1rem", maxWidth: 1280, margin: "0 auto" },
+  page: { padding: 0, maxWidth: 1280, margin: "0 auto" },
   header: { display: "flex", flexWrap: "wrap", gap: "0.75rem 1.5rem", alignItems: "flex-end", justifyContent: "space-between",
     background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.85rem 1rem" },
   h1: { margin: 0, fontSize: "1.3rem", color: colors.textPrimary },

@@ -396,7 +396,7 @@ export default function FbrSandboxPage() {
 }
 
 const styles = {
-  page: { padding: "1.25rem 1.5rem", maxWidth: 1400 },
+  page: { padding: 0, maxWidth: 1400 },
   header: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", marginBottom: "1rem" },
   title: { fontSize: "1.4rem", fontWeight: 800, color: colors.textPrimary, margin: 0 },
   subtitle: { fontSize: "0.86rem", color: colors.textSecondary, margin: "0.25rem 0 0", maxWidth: 720 },

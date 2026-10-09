@@ -31,7 +31,7 @@ const GLOSSARY = [
 ];
 
 const st = {
-  page: { padding: "1.25rem", maxWidth: 880, margin: "0 auto" },
+  page: { padding: 0, maxWidth: 880, margin: "0 auto" },
   header: { marginBottom: "0.75rem" },
   h1: { margin: 0, fontSize: "1.4rem", fontWeight: 800, color: colors.textPrimary, display: "flex", alignItems: "center", gap: 10 },
   subtitle: { marginTop: "0.45rem", color: colors.textSecondary, fontSize: "0.92rem", lineHeight: 1.65, maxWidth: "64ch" },

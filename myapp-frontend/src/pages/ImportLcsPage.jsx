@@ -203,7 +203,7 @@ function Field({ label, children }) {
 }
 
 const st = {
-  page: { padding: "1rem", maxWidth: 1280, margin: "0 auto" },
+  page: { padding: 0, maxWidth: 1280, margin: "0 auto" },
   header: { display: "flex", flexWrap: "wrap", gap: "0.75rem 1.5rem", alignItems: "flex-end", justifyContent: "space-between", marginBottom: "0.75rem" },
   h1: { margin: 0, fontSize: 22 },
   muted: { color: "#5f6d7e", fontSize: 13, margin: "0.25rem 0" },

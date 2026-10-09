@@ -922,7 +922,7 @@ body.dl-body--locked {
 
 @media (max-width: 767.98px) {
   .audit-page {
-    padding: 1rem 0.85rem 1.25rem !important;
+    padding: 0 !important;
   }
   /* Header summary chips wrap below the title rather than getting squeezed
      to the right. */
@@ -1321,13 +1321,14 @@ body.dl-body--locked {
    Same pattern as Item Rate History above. The mobile card layout
    surfaces the page's primary "answer" top-right at large size — for
    On-Hand it's the on-hand quantity; for Movements it's the +/- delta. */
-.stock-page { padding: 1.5rem 2rem; }
+/* .dl-main pads every page; a second padding indented this one. */
+.stock-page { padding: 0; }
 .stock-table { display: block; }
 .stock-cards { display: none; }
 
 @media (max-width: 991.98px) {
   .stock-page {
-    padding: 1rem 0.85rem 1.25rem;
+    padding: 0;
   }
 }
 

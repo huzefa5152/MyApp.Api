@@ -465,7 +465,7 @@ export default function GdCostingImportPage() {
   const notes = source ? sheetNotes : (preview?.warnings || []);
 
   return (
-    <div ref={pageRef} style={{ padding: "1.1rem clamp(0.75rem, 2vw, 1.25rem) 7.5rem", maxWidth: 1100, margin: "0 auto" }}>
+    <div ref={pageRef} style={{ padding: "0 0 7.5rem", maxWidth: 1100, margin: "0 auto" }}>
       <h1 style={{ fontSize: 22, margin: "0 0 0.25rem", color: billColors.textPrimary }}>Import Costing</h1>
       <p style={{ margin: "0 0 0.35rem", color: billColors.textSecondary, fontSize: 14, maxWidth: "68ch" }}>
         Bring a customs GD's goods and their landed cost onto the books. Every line is checked first,
