@@ -300,6 +300,7 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-10-09
 
+- Redesign the Email Workspace: inbox rows show the sender with a coloured initial, a short received date and a coloured status chip; the open enquiry has a header with sender, full date and status, its Keep / Ignore / Prepare actions stay in reach at the top, and the panes fill the screen. On a phone the list and the reader are separate views with a back bar. What each button does is unchanged.
 - Add motion and feedback across the admin: sidebar links nudge on hover, active markers grow in, opening a group cascades its links, the user menu drops in; every shared dialog dims the page and rises into place; toasts slide in; buttons give press feedback and show a clear keyboard-focus ring. All of it switches off under the operating system's reduced-motion setting.
 - Animate the dashboard's KPI figures counting up to their value, keep them on one line, fit the donut's total inside its ring, and give the Sales by Client legend room for client names.
 - Fold rarely used actions on Bill, Invoice and Challan cards and tables into a "⋯" menu, so a card's buttons fit on one row. Every action is still there behind the same permissions, and the menu works from the keyboard.
