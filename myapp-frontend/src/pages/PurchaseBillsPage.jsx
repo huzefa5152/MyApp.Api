@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import CardActions from "../Components/CardActions";
 import { useSearchParams } from "react-router-dom";
 import { MdShoppingCart, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdReceipt, MdClose, MdPayments, MdAssignment, MdPrint, MdPictureAsPdf, MdLocalShipping, MdCopyAll } from "react-icons/md";
 import { getPurchaseBillsByCompanyPaged, deletePurchaseBill, getPurchaseBillPrintData } from "../api/purchaseBillApi";
@@ -531,12 +532,12 @@ export default function PurchaseBillsPage() {
                           {b.items?.length || 0} items · Status: {b.reconciliationStatus}
                         </p>
                       </div>
-                      <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
-                        <button style={btnView} onClick={() => { setEditingId(b.id); setViewOnly(true); setShowForm(true); }}>
+                      <CardActions style={cardStyles.buttonGroup}>
+                        <button data-primary style={btnView} onClick={() => { setEditingId(b.id); setViewOnly(true); setShowForm(true); }}>
                           <MdVisibility size={14} /> View
                         </button>
                         {canPrint && (
-                          <button style={{ ...btnPrint, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} onClick={() => handlePrint(b)} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print purchase bill"}>
+                          <button data-primary style={{ ...btnPrint, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} onClick={() => handlePrint(b)} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print purchase bill"}>
                             <MdPrint size={14} /> Print
                           </button>
                         )}
@@ -551,7 +552,7 @@ export default function PurchaseBillsPage() {
                           </button>
                         )}
                         {canUpdate && (
-                          <button style={btnEdit} onClick={() => { setEditingId(b.id); setViewOnly(false); setShowForm(true); }}>
+                          <button data-primary style={btnEdit} onClick={() => { setEditingId(b.id); setViewOnly(false); setShowForm(true); }}>
                             <MdEdit size={14} /> Edit
                           </button>
                         )}
@@ -565,7 +566,7 @@ export default function PurchaseBillsPage() {
                             <MdDelete size={14} /> Delete
                           </button>
                         )}
-                      </div>
+                      </CardActions>
                     </div>
                   </div>
                 ))}

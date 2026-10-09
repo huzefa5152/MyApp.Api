@@ -1,4 +1,5 @@
 import { MdVisibility, MdEdit, MdDelete, MdPrint, MdPictureAsPdf, MdCopyAll } from "react-icons/md";
+import CardActions from "./CardActions";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
 
@@ -53,36 +54,36 @@ export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onD
   ];
 
   const renderActions = (g) => (
-    <>
-      <button style={btn.view} onClick={() => onView?.(g)} title="View">
+    <CardActions nowrap label={`More actions for goods receipt ${g.goodsReceiptNumber}`}>
+      <button data-label="View" data-primary style={btn.view} onClick={() => onView?.(g)} title="View">
         <MdVisibility size={14} />
       </button>
       {perms.canPrint && onPrint && (
-        <button style={{ ...btn.print, ...(printDisabled ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={printDisabled} onClick={() => onPrint(g)} title={printDisabled ? printDisabledReason : "Print goods receipt"}>
+        <button data-label="Print" data-primary style={{ ...btn.print, ...(printDisabled ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={printDisabled} onClick={() => onPrint(g)} title={printDisabled ? printDisabledReason : "Print goods receipt"}>
           <MdPrint size={14} />
         </button>
       )}
       {perms.canPrint && onExportPdf && (
-        <button style={{ ...btn.pdf, opacity: (printDisabled || exportingId === g.id) ? 0.5 : 1, ...(printDisabled ? { cursor: "not-allowed" } : {}) }} disabled={printDisabled || !!exportingId} onClick={() => onExportPdf(g)} title={printDisabled ? printDisabledReason : "Download PDF"}>
+        <button data-label="PDF" style={{ ...btn.pdf, opacity: (printDisabled || exportingId === g.id) ? 0.5 : 1, ...(printDisabled ? { cursor: "not-allowed" } : {}) }} disabled={printDisabled || !!exportingId} onClick={() => onExportPdf(g)} title={printDisabled ? printDisabledReason : "Download PDF"}>
           <MdPictureAsPdf size={14} />
         </button>
       )}
       {perms.canUpdate && (
-        <button style={btn.edit} onClick={() => onEdit?.(g)} title="Edit">
+        <button data-label="Edit" data-primary style={btn.edit} onClick={() => onEdit?.(g)} title="Edit">
           <MdEdit size={14} />
         </button>
       )}
       {perms.canCopy && onCopy && (
-        <button style={btn.copy} onClick={() => onCopy(g)} title="Copy this receipt">
+        <button data-label="Copy" style={btn.copy} onClick={() => onCopy(g)} title="Copy this receipt">
           <MdCopyAll size={14} />
         </button>
       )}
       {perms.canDelete && (
-        <button style={btn.delete} onClick={() => onDelete?.(g)} title="Delete">
+        <button data-label="Delete" style={btn.delete} onClick={() => onDelete?.(g)} title="Delete">
           <MdDelete size={14} />
         </button>
       )}
-    </>
+    </CardActions>
   );
 
   return (

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import CardActions from "../Components/CardActions";
 import { MdInventory2, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdPrint, MdPictureAsPdf, MdCopyAll } from "react-icons/md";
 import { getGoodsReceiptsByCompanyPaged, deleteGoodsReceipt, getGoodsReceiptPrintData } from "../api/goodsReceiptApi";
 import { mergeTemplate } from "../utils/templateEngine";
@@ -247,14 +248,14 @@ export default function GoodsReceiptsPage() {
                         {gr.divisionName && <span style={styles.divisionChip}>{gr.divisionName}</span>}
                         <p style={{ ...cardStyles.text, fontSize: "0.74rem" }}>{gr.items?.length || 0} items · {gr.status}</p>
                       </div>
-                      <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
-                        <button style={btnView} onClick={() => { setEditingId(gr.id); setShowForm(true); }}><MdVisibility size={14} /> View</button>
-                        {canPrint && <button style={{ ...btnPrint, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} onClick={() => handlePrint(gr)} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print goods receipt"}><MdPrint size={14} /> Print</button>}
+                      <CardActions style={cardStyles.buttonGroup}>
+                        <button data-primary style={btnView} onClick={() => { setEditingId(gr.id); setShowForm(true); }}><MdVisibility size={14} /> View</button>
+                        {canPrint && <button data-primary style={{ ...btnPrint, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} onClick={() => handlePrint(gr)} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print goods receipt"}><MdPrint size={14} /> Print</button>}
                         {canPrint && <button style={{ ...btnPdf, ...((tplPicker.noTemplate || exportingId === gr.id) ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate || !!exportingId} onClick={() => handleExportPdf(gr)} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}><MdPictureAsPdf size={14} /> PDF</button>}
-                        {canUpdate && <button style={btnEdit} onClick={() => { setEditingId(gr.id); setShowForm(true); }}><MdEdit size={14} /> Edit</button>}
+                        {canUpdate && <button data-primary style={btnEdit} onClick={() => { setEditingId(gr.id); setShowForm(true); }}><MdEdit size={14} /> Edit</button>}
                         {canCopy && <button style={btnCopy} onClick={() => copy.openCopy(gr.id, `Goods Receipt #${gr.goodsReceiptNumber}`)}><MdCopyAll size={14} /> Copy</button>}
                         {canDelete && <button style={btnDelete} onClick={() => handleDelete(gr)}><MdDelete size={14} /> Delete</button>}
-                      </div>
+                      </CardActions>
                     </div>
                   </div>
                 ))}
