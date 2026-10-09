@@ -228,7 +228,9 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 - FBR token write: gated by `companies.manage.fbrtoken` (NOT `companies.manage.update`).
 - `IsTenantIsolated` flip: gated by `tenantaccess.manage.update`.
 - Role string assignment of "Admin": **seed admin only** (`_seedAdminUserId`).
-- Server-side `/auth/logout` rotates `SecurityStamp` → previous JWTs reject on next request.
+- Server-side `/auth/logout` revokes THIS device's session row, so that session's JWTs reject on the next request. It does not rotate `SecurityStamp`; a password change, an admin reset and the seed admin's "sign out everywhere" do, and each of those also revokes the user's MCP agent tokens (`Helpers/McpTokenRevocation`). Tokens minted since 2026-10-09 carry the stamp and are refused on mismatch (`McpAgentAuthHandler`).
+- Print templates are operator HTML printed in a same-origin window: `Helpers/TemplateHtmlSafety` strips script on save and `utils/printSafety.js` adds a script-blocking CSP on render. Do not add a print path that bypasses `mergeTemplate`.
+- Installation-wide tables (FBR lookup codes, merge fields) are written by the seed admin only (`[SeedAdminOnly]`): a permission key alone reaches tenant Administrators.
 
 ### 10. FBR integration specifics
 
