@@ -300,6 +300,8 @@ Optional company Gmail inbox: authorize an account once and link it only to assi
 
 ### 2026-10-09
 
+- Clarify seed-admin Gmail account linking: personal account choices do not indicate a connection to the selected company.
+
 - Polish the email workspace with an integrated company header, clear message selection and compact navigation. Keep the email inbox and reader within the viewport with independent scrolling, compact controls and a mobile inbox/detail view.
 
 - Recognize quote enquiries and improve extraction for plural headings, split item/specification columns and repeated tables without headings. Allow confirmed re-reading of saved draft items and exclude attached message bodies.
