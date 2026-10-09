@@ -37,8 +37,11 @@ const categoryLabels = {
 
 export default function FbrSettingsPage() {
   const confirm = useConfirm();
-  const { has } = usePermissions();
+  const { has, isSeedAdmin } = usePermissions();
   const canManage = has("fbr.config.update");
+  // The lookup codes are shared by every company, so only the system
+  // administrator may change them; everyone else with the permission reads them.
+  const canEdit = isSeedAdmin;
   const [lookups, setLookups] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState(null);
@@ -145,11 +148,16 @@ export default function FbrSettingsPage() {
             <p style={styles.subtitle}>{lookups.length} lookup value{lookups.length !== 1 ? "s" : ""} configured</p>
           </div>
         </div>
-        <button style={styles.addBtn} onClick={() => openAdd()}>
+        {canEdit && <button style={styles.addBtn} onClick={() => openAdd()}>
           <MdAdd size={18} /> New Value
-        </button>
+        </button>}
       </div>
 
+      {!canEdit && (
+        <p role="note" style={{ margin: "0 0 1rem", padding: "0.6rem 0.85rem", borderRadius: 8, background: "#f7f9fc", border: `1px solid ${colors.cardBorder}`, color: colors.textSecondary, fontSize: "0.85rem" }}>
+          These lookup values are shared by every company on this installation, so only the system administrator can change them.
+        </p>
+      )}
       <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1.25rem", flexWrap: "wrap", alignItems: "center" }}>
         <div style={styles.searchWrap}>
           <MdSearch size={18} style={styles.searchIcon} />
@@ -170,9 +178,9 @@ export default function FbrSettingsPage() {
           <div key={cat} style={{ marginBottom: "1.5rem" }}>
             <div style={styles.categoryHeader}>
               <h3 style={styles.categoryTitle}>{categoryLabels[cat] || cat}</h3>
-              <button style={styles.catAddBtn} onClick={() => openAdd(cat)}>
+              {canEdit && <button style={styles.catAddBtn} onClick={() => openAdd(cat)}>
                 <MdAdd size={16} /> Add
-              </button>
+              </button>}
             </div>
             {items.length === 0 ? (
               <p style={{ color: colors.textSecondary, fontSize: "0.85rem", padding: "0.5rem 0" }}>No values in this category.</p>
@@ -189,10 +197,10 @@ export default function FbrSettingsPage() {
                         )}
                       </div>
                     </div>
-                    <div style={{ display: "flex", gap: "0.4rem" }}>
+                    {canEdit && <div style={{ display: "flex", gap: "0.4rem" }}>
                       <button style={styles.editBtn} onClick={() => openEdit(item)}><MdEdit size={16} /></button>
                       <button style={styles.deleteBtn} onClick={() => handleDelete(item)}><MdDelete size={16} /></button>
-                    </div>
+                    </div>}
                   </div>
                 ))}
               </div>
