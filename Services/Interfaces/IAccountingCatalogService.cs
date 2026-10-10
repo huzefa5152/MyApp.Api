@@ -259,5 +259,27 @@ namespace MyApp.Api.Services.Interfaces
         /// A cash-movement summary, NOT a statutory statement of cash flows — the
         /// accounts carry no operating/investing/financing classification.</summary>
         Task<ReportResultDto> GetCashFlowSummaryAsync(int companyId, ReportFilterDto filter);
+
+        // -- Profit -----------------------------------------------------------------
+
+        /// <summary>
+        /// Revenue less cost of sales for the period, laid out as the P&amp;L's income
+        /// and Cost of Sales sections with a gross margin. Reads the same
+        /// classification and movement the P&amp;L does, so it ties to it exactly.
+        /// <paramref name="comparative"/> adds the preceding period of the same length.
+        /// </summary>
+        Task<StatementResultDto> GetGrossProfitAsync(int companyId, ReportFilterDto filter,
+            bool comparative);
+
+        /// <summary>One row per calendar month: revenue, cost of sales, gross profit,
+        /// gross margin, other expenses and net profit. Each row is the P&amp;L for
+        /// that month; the totals are the P&amp;L for the whole range.</summary>
+        Task<ReportResultDto> GetMonthlyProfitAsync(int companyId, ReportFilterDto filter);
+
+        /// <summary>Revenue, cost of goods sold and gross profit per customer, read
+        /// from the journal lines of the sale documents posted against them. What
+        /// the P&amp;L holds that no customer's sale carries is its own row, so the
+        /// totals equal the P&amp;L's revenue and cost of sales.</summary>
+        Task<ReportResultDto> GetCustomerProfitabilityAsync(int companyId, ReportFilterDto filter);
     }
 }

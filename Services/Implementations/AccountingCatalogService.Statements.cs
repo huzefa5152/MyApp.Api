@@ -182,13 +182,7 @@ namespace MyApp.Api.Services.Implementations
 
             // Comparative: the immediately preceding period of the SAME length, so
             // a month compares to a month and a quarter to a quarter.
-            DateTime? priorFrom = null, priorTo = null;
-            if (comparative && window.From.HasValue && window.To.HasValue)
-            {
-                var days = (window.To.Value - window.From.Value).Days + 1;
-                priorTo = window.From.Value.AddDays(-1);
-                priorFrom = priorTo.Value.AddDays(-(days - 1));
-            }
+            var (priorFrom, priorTo) = comparative ? PriorPeriod(window) : (null, null);
             var hasComparative = comparative && priorFrom.HasValue;
 
             var report = await NewStatementAsync(companyId, "Profit & Loss", window, filter,
@@ -222,9 +216,12 @@ namespace MyApp.Api.Services.Implementations
             decimal pIncome = 0, pCostOfSales = 0, pExpenses = 0;
             var costSectionSeen = false;
 
-            foreach (var root in RootsOf(groups, FinancialStatement.ProfitAndLoss))
+            // One classification of the P&L's top-level groups, shared with the
+            // Gross Profit, Monthly Profit and Customer Profitability reports so
+            // "revenue" and "cost of sales" mean the same accounts on all four.
+            foreach (var (root, kind) in ClassifyProfitAndLossRoots(groups, accounts))
             {
-                var isIncome = SectionIsIncome(root, accounts);
+                var isIncome = kind == PlSection.Income;
                 // Income is credit-natural, so negate for display; costs and
                 // expenses are debit-natural and pass through.
                 var sign = isIncome ? -1m : 1m;
@@ -235,7 +232,7 @@ namespace MyApp.Api.Services.Implementations
                 var pTotal = section.Comparative ?? 0m;
                 lines.Add(Subtotal($"Total {root.Name}", 0, total, then == null ? null : pTotal));
 
-                var isCost = IsCostOfSalesSection(root);
+                var isCost = kind == PlSection.CostOfSales;
                 if (isIncome) { income += total; pIncome += pTotal; }
                 else if (isCost) { costOfSales += total; pCostOfSales += pTotal; costSectionSeen = true; }
                 else { expenses += total; pExpenses += pTotal; }
@@ -275,23 +272,129 @@ namespace MyApp.Api.Services.Implementations
                 report.TotalLabels["grossProfit"] = "Gross Profit";
             }
 
-            // The COGS caveat, stated on the statement rather than left to be
-            // discovered. Selling stock does not currently relieve inventory, so a
-            // company that tracks stock has revenue with no matched cost.
-            var tracksInventory = await _context.Companies.AsNoTracking()
-                .Where(c => c.Id == companyId).Select(c => c.InventoryTrackingEnabled)
-                .FirstOrDefaultAsync();
-            if (tracksInventory && income != 0m)
-            {
-                var note = "This company tracks inventory, and a sale does not yet move the cost of "
-                         + "the goods out of stock. Purchases are held as inventory on the balance "
-                         + "sheet, so the cost of what you sold is not in this statement and the "
-                         + "profit shown is before cost of sales.";
-                report.Notice = report.Notice is null ? note : report.Notice + " " + note;
-            }
+            // The cost-of-sales caveat, stated on the statement rather than left to
+            // be discovered. Since 2026-09-23 a sale relieves inventory, but only
+            // for stock-tracked items — the same sentence the three profit reports
+            // print, so the four never describe cost of sales differently.
+            if (income != 0m)
+                AppendNotice(report, await CostOfSalesNoteAsync(companyId));
 
             return report;
         }
+
+        // ── Shared P&L primitives ─────────────────────────────────────────────────
+        //
+        // The Profit & Loss, Gross Profit, Monthly Profit and Customer
+        // Profitability reports all answer "what is revenue, what is cost of
+        // sales" from these, so a figure on one ties to the others by
+        // construction rather than by coincidence.
+
+        private enum PlSection { Income, CostOfSales, Expenses }
+
+        /// <summary>The P&amp;L's top-level groups in statement order, each with the
+        /// section it counts towards. Income is decided first (by the account types
+        /// inside it), then the Cost of Sales naming convention; everything else is
+        /// an expense — exactly the order the P&amp;L has always applied.</summary>
+        private static List<(AccountGroup Root, PlSection Section)> ClassifyProfitAndLossRoots(
+            List<AccountGroup> groups, List<Account> accounts) =>
+            RootsOf(groups, FinancialStatement.ProfitAndLoss)
+                .Select(root => (root,
+                    SectionIsIncome(root, accounts) ? PlSection.Income
+                    : IsCostOfSalesSection(root) ? PlSection.CostOfSales
+                    : PlSection.Expenses))
+                .ToList();
+
+        /// <summary>
+        /// Every account that sits under a P&amp;L top-level group, mapped to that
+        /// group's section. Walks the same parent → child links
+        /// <see cref="BuildStatementSection"/> walks, so an account counts here
+        /// exactly when it counts in the statement. Balance-sheet accounts are
+        /// absent: they are neither revenue nor cost.
+        /// </summary>
+        private static Dictionary<int, PlSection> PlSectionByAccount(
+            List<AccountGroup> groups, List<Account> accounts)
+        {
+            var sectionByGroup = new Dictionary<int, PlSection>();
+            foreach (var (root, kind) in ClassifyProfitAndLossRoots(groups, accounts))
+            {
+                var stack = new Stack<int>();
+                stack.Push(root.Id);
+                while (stack.Count > 0)
+                {
+                    var id = stack.Pop();
+                    if (!sectionByGroup.TryAdd(id, kind)) continue;   // a cycle cannot loop
+                    foreach (var child in groups.Where(g => g.ParentGroupId == id))
+                        stack.Push(child.Id);
+                }
+            }
+            return accounts
+                .Where(a => sectionByGroup.ContainsKey(a.AccountGroupId))
+                .ToDictionary(a => a.Id, a => sectionByGroup[a.AccountGroupId]);
+        }
+
+        /// <summary>The three P&amp;L section totals for one set of per-account
+        /// movements, in natural reading direction (income positive as a credit,
+        /// costs positive as debits).</summary>
+        private sealed record PlTotals(decimal Income, decimal CostOfSales, decimal Expenses)
+        {
+            public decimal GrossProfit => Income - CostOfSales;
+            public decimal NetProfit => Income - CostOfSales - Expenses;
+        }
+
+        private static PlTotals SumProfitAndLoss(Dictionary<int, PlSection> sections,
+            IReadOnlyDictionary<int, decimal> movement)
+        {
+            decimal income = 0, cost = 0, expenses = 0;
+            foreach (var (accountId, net) in movement)
+            {
+                if (!sections.TryGetValue(accountId, out var kind)) continue;
+                switch (kind)
+                {
+                    case PlSection.Income: income -= net; break;
+                    case PlSection.CostOfSales: cost += net; break;
+                    default: expenses += net; break;
+                }
+            }
+            return new PlTotals(income, cost, expenses);
+        }
+
+        /// <summary>Margin as a percentage of revenue, 1dp. Null when there is no
+        /// revenue — a margin on nothing is not a number worth printing.</summary>
+        private static decimal? MarginPercent(decimal profit, decimal revenue) =>
+            revenue == 0m ? null : Math.Round(profit / revenue * 100m, 1, MidpointRounding.AwayFromZero);
+
+        /// <summary>The preceding period of the same length — a month against a
+        /// month. (null, null) for an unbounded window.</summary>
+        private static (DateTime? From, DateTime? To) PriorPeriod(ReportWindow window)
+        {
+            if (!window.From.HasValue || !window.To.HasValue) return (null, null);
+            var days = (window.To.Value - window.From.Value).Days + 1;
+            var priorTo = window.From.Value.AddDays(-1);
+            return (priorTo.AddDays(-(days - 1)), priorTo);
+        }
+
+        /// <summary>
+        /// What cost of sales means for this company, in one sentence shared by
+        /// every report that shows it. A sale posts cost of goods sold only for
+        /// stock it actually moves (stock-tracked, HS-classified items) — the cost
+        /// is never invented for anything else.
+        /// </summary>
+        private async Task<string> CostOfSalesNoteAsync(int companyId)
+        {
+            var tracksInventory = await _context.Companies.AsNoTracking()
+                .Where(c => c.Id == companyId).Select(c => c.InventoryTrackingEnabled)
+                .FirstOrDefaultAsync();
+            return tracksInventory
+                ? "Cost of goods sold is recorded only for stock-tracked items: each sale posts the "
+                  + "weighted-average purchase cost of the stock it moves. A sale of an item that is "
+                  + "not stock-tracked carries no cost here."
+                : "Cost of goods sold is recorded only for stock-tracked items, and this company does "
+                  + "not track stock, so no sale carries a cost. Purchases are charged to cost of sales "
+                  + "when they are bought instead.";
+        }
+
+        private static void AppendNotice(ReportResultDto report, string note) =>
+            report.Notice = string.IsNullOrEmpty(report.Notice) ? note : report.Notice + " " + note;
 
         // ── General Ledger ────────────────────────────────────────────────────────
 
@@ -625,6 +728,9 @@ namespace MyApp.Api.Services.Implementations
             {
                 if (l.Comparative is null || l.Change is null) continue;
                 if (l.Comparative.Value == 0m) continue;
+                // A ratio's change is already in percentage points; a percentage
+                // of a percentage is noise.
+                if (l.Kind == "ratio") continue;
                 l.ChangePercent = Math.Round(l.Change.Value / Math.Abs(l.Comparative.Value) * 100m, 1);
             }
             report.Rows = lines.Cast<object>().ToList();
@@ -755,14 +861,21 @@ namespace MyApp.Api.Services.Implementations
         private async Task<Dictionary<int, decimal>> MovementByAccountAsync(int companyId,
             ReportFilterDto f, DateTime? from, DateTime? to)
         {
+            return (await PeriodLinesQuery(companyId, from, to).GroupBy(l => l.AccountId)
+                .Select(g => new { AccountId = g.Key, Net = g.Sum(x => x.Debit - x.Credit) })
+                .ToListAsync()).ToDictionary(x => x.AccountId, x => x.Net);
+        }
+
+        /// <summary>The journal lines a P&amp;L window reads — one company, the
+        /// entry date inside the window. Every period figure on the four profit
+        /// reports is a sum over this query, so they share one date rule.</summary>
+        private IQueryable<JournalLine> PeriodLinesQuery(int companyId, DateTime? from, DateTime? to)
+        {
             var q = _context.JournalLines.AsNoTracking()
                 .Where(l => l.JournalEntry.CompanyId == companyId);
             if (from.HasValue) q = q.Where(l => l.JournalEntry.Date >= from.Value);
             if (to.HasValue) q = q.Where(l => l.JournalEntry.Date <= to.Value);
-
-            return (await q.GroupBy(l => l.AccountId)
-                .Select(g => new { AccountId = g.Key, Net = g.Sum(x => x.Debit - x.Credit) })
-                .ToListAsync()).ToDictionary(x => x.AccountId, x => x.Net);
+            return q;
         }
 
         private static StatementLineDto Subtotal(string label, int level, decimal amount, decimal? comparative) =>

@@ -87,6 +87,12 @@ export default function AccountingCatalogShell({
     [columns, customerLedger]
   );
 
+  // A report whose rows each stand for something with its own ledger (a
+  // customer) names the filter; a row carrying a drillKey then opens it.
+  const drillRow = report?.rowDrillFilter && typeof onDrill === "function"
+    ? (row) => onDrill(report.rowDrillFilter, row.drillKey)
+    : null;
+
   const totalPages = report?.pageSize
     ? Math.max(1, Math.ceil((report.totalCount || 0) / report.pageSize))
     : 1;
@@ -218,8 +224,8 @@ export default function AccountingCatalogShell({
           {Object.entries(totals).map(([key, value]) => (
             <div key={key} style={st.totalTile}>
               <span style={st.totalLabel}>{totalLabels[key] || humanise(key)}</span>
-              <span style={{ ...st.totalValue, ...(isCount(key) ? st.totalValueCount : {}) }}>
-                {isCount(key) ? fmtInt(value) : fmtMoney(value)}
+              <span style={{ ...st.totalValue, ...(isCount(key) || isPercentKey(key) ? st.totalValueCount : {}) }}>
+                {fmtTotal(key, value)}
               </span>
             </div>
           ))}
@@ -277,6 +283,7 @@ export default function AccountingCatalogShell({
               leadCol={leadCol}
               amountCol={amountCol}
               onOpenRow={onOpenRow}
+              onDrillRow={drillRow}
             />
           ))}
         </div>
@@ -288,7 +295,7 @@ export default function AccountingCatalogShell({
                 {columns.map((c) => (
                   <th key={c.key} style={isNumeric(c.format) ? st.thNum : st.th}>{c.label}</th>
                 ))}
-                {onOpenRow && <th style={st.thNum} aria-label="Open" />}
+                {(onOpenRow || drillRow) && <th style={st.thNum} aria-label="Open" />}
               </tr>
             </thead>
             <tbody>
@@ -301,9 +308,20 @@ export default function AccountingCatalogShell({
                         : renderCell(row, c)}
                     </td>
                   ))}
-                  {onOpenRow && (
+                  {(onOpenRow || drillRow) && (
                     <td style={st.tdAction}>
-                      {canOpen(row) && (
+                      {drillRow && row?.drillKey && (
+                        <button
+                          type="button"
+                          style={st.openBtn}
+                          onClick={() => drillRow(row)}
+                          title={`Open the ledger behind ${rowLabel(row, leadCol)}`}
+                          aria-label={`Open the ledger behind ${rowLabel(row, leadCol)}`}
+                        >
+                          <MdChevronRight size={18} />
+                        </button>
+                      )}
+                      {onOpenRow && canOpen(row) && (
                         <button
                           type="button"
                           style={st.openBtn}
@@ -329,7 +347,7 @@ export default function AccountingCatalogShell({
                         : idx === 0 ? "Total" : ""}
                     </td>
                   ))}
-                  {onOpenRow && <td style={st.tdAction} />}
+                  {(onOpenRow || drillRow) && <td style={st.tdAction} />}
                 </tr>
               </tfoot>
             )}
@@ -510,12 +528,22 @@ function BookFigure({ label, value, text, strong }) {
  * becomes a card: who/what on top, the figure in its own band, the rest as a
  * label/value grid that reflows to one column.
  */
-function RowCard({ row, columns, leadCol, amountCol, onOpenRow }) {
+function RowCard({ row, columns, leadCol, amountCol, onOpenRow, onDrillRow }) {
   const meta = columns.filter((c) => c !== leadCol && c !== amountCol);
   return (
     <div className="report-row-card" style={st.card}>
       <div className="report-row-card-top" style={st.cardTop}>
         <span style={st.cardLead}>{renderCell(row, leadCol) || "—"}</span>
+        {onDrillRow && row?.drillKey && (
+          <button
+            type="button"
+            style={st.openBtnMobile}
+            onClick={() => onDrillRow(row)}
+            aria-label={`Open the ledger behind ${rowLabel(row, leadCol)}`}
+          >
+            <MdChevronRight size={20} />
+          </button>
+        )}
         {onOpenRow && canOpen(row) && (
           <button
             type="button"
@@ -596,18 +624,18 @@ function StatementTable({ report, rows, onDrill }) {
                   {line.label}
                   {line.code && <span style={st.stmtCode}>{line.code}</span>}
                 </td>
-                <td style={{ ...st.stmtNum, ...tone.amount }}>{fmtMoney(line.amount)}</td>
+                <td style={{ ...st.stmtNum, ...tone.amount }}>{fmtLine(line, line.amount)}</td>
                 {hasComparative && (
                   <td style={{ ...st.stmtNum, ...tone.amount, color: colors.textSecondary }}>
                     {line.comparative === null || line.comparative === undefined
-                      ? "" : fmtMoney(line.comparative)}
+                      ? "" : fmtLine(line, line.comparative)}
                   </td>
                 )}
                 {hasComparative && (
                   <td style={{ ...st.stmtNum, ...changeTone(line.change) }}>
                     {line.change === null || line.change === undefined ? "" : (
                       <>
-                        {fmtMoney(line.change)}
+                        {line.kind === "ratio" ? fmtPoints(line.change) : fmtMoney(line.change)}
                         {line.changePercent !== null && line.changePercent !== undefined && (
                           <span style={st.stmtPct}>
                             {line.changePercent > 0 ? "+" : ""}{line.changePercent}%
@@ -640,6 +668,10 @@ const STMT_TONE = {
   total: {
     label: { fontWeight: 800, color: colors.textPrimary, fontSize: "0.92rem" },
     amount: { fontWeight: 800, fontSize: "0.92rem", borderTop: `2px solid ${colors.blue}` },
+  },
+  ratio: {
+    label: { fontWeight: 700, color: colors.textSecondary },
+    amount: { fontWeight: 700, color: colors.textSecondary },
   },
 };
 
@@ -700,8 +732,31 @@ function GroupSummary({ group, onDrill }) {
 
 // ── Formatting ──────────────────────────────────────────────────────────────
 
-const isNumeric = (format) => format === "money" || format === "int";
+const isNumeric = (format) => format === "money" || format === "int" || format === "percent";
 const isCount = (key) => /count$/i.test(key);
+// Totals keyed "...Percent" (gross margin) are a percentage, not money.
+const isPercentKey = (key) => /percent$/i.test(key);
+
+/** 23.5 -> "23.5%". The server sends the percentage itself, never a fraction. */
+export function fmtPercent(v) {
+  if (v === null || v === undefined || v === "") return "";
+  const n = Number(v);
+  return `${n.toLocaleString("en-PK", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+}
+
+/** A change in a percentage, in percentage points. */
+const fmtPoints = (v) => {
+  const n = Number(v || 0);
+  return `${n > 0 ? "+" : ""}${n.toLocaleString("en-PK", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} pts`;
+};
+
+const fmtTotal = (key, value) =>
+  isCount(key) ? fmtInt(value) : isPercentKey(key) ? fmtPercent(value) : fmtMoney(value);
+
+/** A statement line's figure — a ratio line carries a percentage. */
+const fmtLine = (line, v) => (line.kind === "ratio" ? fmtPercent(v) : fmtMoney(v));
+
+const rowLabel = (row, col) => String((col && row?.[col.key]) || "this row");
 
 /** Negatives in parentheses — accounting convention, not a minus sign. */
 export function fmtMoney(v) {
@@ -727,6 +782,7 @@ function renderCell(row, col) {
   switch (col.format) {
     case "money": return fmtMoney(v);
     case "int": return fmtInt(v);
+    case "percent": return fmtPercent(v);
     case "date": return fmtDate(v);
     case "status": return <StatusChip value={String(v)} />;
     default: return String(v);
@@ -796,9 +852,9 @@ export function buildReportHtml(report) {
       const indent = 2 + (l.level || 0) * 10;
       return `<tr class="${cls}">`
         + `<td style="padding-left:${indent}px">${esc(l.label)}</td>`
-        + `<td class="num">${esc(fmtMoney(l.amount))}</td>`
-        + (hasComp ? `<td class="num">${l.comparative == null ? "" : esc(fmtMoney(l.comparative))}</td>` : "")
-        + (hasComp ? `<td class="num">${l.change == null ? "" : esc(fmtMoney(l.change))}</td>` : "")
+        + `<td class="num">${esc(fmtLine(l, l.amount))}</td>`
+        + (hasComp ? `<td class="num">${l.comparative == null ? "" : esc(fmtLine(l, l.comparative))}</td>` : "")
+        + (hasComp ? `<td class="num">${l.change == null ? "" : esc(l.kind === "ratio" ? fmtPoints(l.change) : fmtMoney(l.change))}</td>` : "")
         + `</tr>`;
     }).join("");
 
@@ -843,6 +899,7 @@ export function buildReportHtml(report) {
       const raw = row?.[c.key];
       const text = c.format === "money" ? fmtMoney(raw)
         : c.format === "int" ? fmtInt(raw)
+        : c.format === "percent" ? fmtPercent(raw)
         : c.format === "date" ? fmtDate(raw)
         : raw ?? "";
       return `<td class="${isNumeric(c.format) ? "num" : ""}">${esc(text)}</td>`;
@@ -859,7 +916,7 @@ export function buildReportHtml(report) {
 
   const totals = Object.entries(report.totals || {}).map(([k, v]) =>
     `<div class="kpi"><span>${esc(report.totalLabels?.[k] || humanise(k))}</span>`
-    + `<strong>${esc(isCount(k) ? fmtInt(v) : fmtMoney(v))}</strong></div>`).join("");
+    + `<strong>${esc(fmtTotal(k, v))}</strong></div>`).join("");
 
   const groups = (report.groupSummaries || []).map((g) => `
     <h3>${esc(g.title)}</h3>

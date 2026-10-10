@@ -300,6 +300,16 @@ endpoints_to_test = [
     # runs before authorization, so looping them over every company tests the
     # limiter instead of the tenant guard.
     ("GET",  "/api/onboarding-import/company/{cid}/sample"),
+    # Accounting → Reports → Management profit reports (2026-10-10). Each one
+    # sums another company's revenue, cost of goods sold and per-customer
+    # margin, so each must 403 before any ledger line is read — the screen
+    # route and the Excel export alike.
+    ("GET",  "/api/accounting/catalog/company/{cid}/gross-profit?period=thisYear"),
+    ("GET",  "/api/accounting/catalog/company/{cid}/monthly-profit?period=thisYear"),
+    ("GET",  "/api/accounting/catalog/company/{cid}/customer-profitability?period=thisYear"),
+    ("GET",  "/api/accounting/catalog/company/{cid}/export/gross-profit?period=thisYear"),
+    ("GET",  "/api/accounting/catalog/company/{cid}/export/monthly-profit?period=thisYear"),
+    ("GET",  "/api/accounting/catalog/company/{cid}/export/customer-profitability?period=thisYear"),
 ]
 for username, forbidden in forbidden_for.items():
     if not forbidden:
@@ -343,6 +353,14 @@ for username, allowed in allowed_for.items():
         status, _ = request("GET", path, token=tok)
         check(suite, f"[{username}] GET {path}", status == 200,
               f"expected 200, got {status}")
+        # The profit reports answer for a company the caller holds — the
+        # positive half, so a guard that refused everything would fail here.
+        for report in ("gross-profit", "monthly-profit", "customer-profitability"):
+            path = f"/api/accounting/catalog/company/{cid}/{report}?period=thisYear"
+            status, body = request("GET", path, token=tok)
+            check(suite, f"[{username}] GET {path}", status == 200
+                  and isinstance(body, dict) and body.get("title"),
+                  f"expected 200 with a report, got {status}")
         path = f"/api/printtemplates/company/{cid}/accounting-report-invoice-layout"
         status, layout = request("GET", path, token=tok)
         check(suite, f"[{username}] invoice layout belongs to report company", status == 200

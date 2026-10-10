@@ -16,11 +16,9 @@ namespace MyApp.Api.Services.Implementations
     /// summary and the statement it summarises cannot disagree.
     ///
     /// ── What is NOT here ──
-    /// Gross Profit, Net Profit by period, Customer Profitability and Monthly Profit
-    /// need the cost of the goods sold, and selling stock does not currently relieve
-    /// inventory (see FEATURE_ACCOUNTING_REPORTS.md §2). They are listed in the UI as
-    /// Blocked with the reason on the card, rather than shipped as a number that
-    /// looks like profit and is not.
+    /// Gross Profit, Monthly Profit and Customer Profitability live in
+    /// <c>AccountingCatalogService.Profit.cs</c>: they read the P&amp;L's own
+    /// section classification, which belongs with the statements.
     /// </summary>
     public partial class AccountingCatalogService
     {

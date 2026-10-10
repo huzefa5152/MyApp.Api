@@ -33,6 +33,7 @@ namespace MyApp.Api.Helpers
 
         private const string MoneyFormat = "#,##0.00";
         private const string DateFormat = "dd-MM-yyyy";
+        private const string PercentFormat = "0.0\"%\"";
 
         /// <summary>Hard ceiling on exported detail rows. An export beyond this is
         /// almost certainly an unfiltered year of data; we truncate and say so on the
@@ -189,7 +190,9 @@ namespace MyApp.Api.Helpers
                 var valueCell = ws.Cell(r, 2);
                 valueCell.Value = extra.Value;
                 valueCell.Style.NumberFormat.Format =
-                    extra.Key.EndsWith("Count", StringComparison.OrdinalIgnoreCase) ? "#,##0" : MoneyFormat;
+                    extra.Key.EndsWith("Count", StringComparison.OrdinalIgnoreCase) ? "#,##0"
+                    : extra.Key.EndsWith("Percent", StringComparison.OrdinalIgnoreCase) ? PercentFormat
+                    : MoneyFormat;
                 valueCell.Style.Font.Bold = true;
                 r++;
             }
@@ -257,6 +260,13 @@ namespace MyApp.Api.Helpers
                     cell.Style.NumberFormat.Format = "#,##0";
                     cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
                     return;
+                case "percent":
+                    // Stored as the percentage itself (23.5 = 23.5%), so the format
+                    // appends the sign rather than scaling by 100.
+                    cell.Value = ToDecimal(value);
+                    cell.Style.NumberFormat.Format = PercentFormat;
+                    cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                    return;
                 case "date":
                     if (value is DateTime dt)
                     {
@@ -280,7 +290,7 @@ namespace MyApp.Api.Helpers
             _ => decimal.TryParse(value.ToString(), out var p) ? p : 0m,
         };
 
-        private static bool IsNumeric(string format) => format is "money" or "int";
+        private static bool IsNumeric(string format) => format is "money" or "int" or "percent";
 
         /// <summary>Shared with the template engine so injection neutralisation has
         /// exactly one implementation.</summary>
@@ -295,7 +305,7 @@ namespace MyApp.Api.Helpers
                 // Names and descriptions run long in this catalog; money stays compact.
                 var width = columns[c].Format switch
                 {
-                    "money" or "int" => 15,
+                    "money" or "int" or "percent" => 15,
                     "date" => 12,
                     _ => columns[c].Key.Contains("escription", StringComparison.OrdinalIgnoreCase)
                          || columns[c].Key.Contains("ccount", StringComparison.OrdinalIgnoreCase)

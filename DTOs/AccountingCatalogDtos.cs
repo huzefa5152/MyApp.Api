@@ -112,6 +112,13 @@ namespace MyApp.Api.DTOs.AccountingCatalog
         public int Page { get; set; }
         public int PageSize { get; set; }
         public int TotalCount { get; set; }
+
+        /// <summary>
+        /// When set, a detail row that carries a <c>drillKey</c> opens the report's
+        /// drill target narrowed by this filter (e.g. "clientId" → that customer's
+        /// ledger). Null for every report whose rows are not drillable.
+        /// </summary>
+        public string? RowDrillFilter { get; set; }
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -550,7 +557,8 @@ namespace MyApp.Api.DTOs.AccountingCatalog
 
         /// <summary>"group" (a heading), "account" (a postable line),
         /// "subtotal" (a group's total), "total" (a statement total),
-        /// "spacer" (blank separator).</summary>
+        /// "ratio" (a percentage such as gross margin — Amount is the percentage,
+        /// Change is in percentage points), "spacer" (blank separator).</summary>
         public string Kind { get; set; } = "account";
 
         public string Label { get; set; } = "";
@@ -583,7 +591,7 @@ namespace MyApp.Api.DTOs.AccountingCatalog
     /// </summary>
     public class StatementResultDto : ReportResultDto
     {
-        /// <summary>"BalanceSheet" | "ProfitAndLoss".</summary>
+        /// <summary>"BalanceSheet" | "ProfitAndLoss" | "GrossProfit".</summary>
         public string Statement { get; set; } = "";
 
         /// <summary>Balance sheet: the date it is drawn at. P&amp;L: the period end.</summary>
@@ -612,12 +620,60 @@ namespace MyApp.Api.DTOs.AccountingCatalog
         /// out rather than shown as a flattering number.
         /// </summary>
         public bool GrossProfitMeaningful { get; set; }
+
+        /// <summary>Gross Profit report: gross profit as a percentage of revenue,
+        /// 1dp. Null when there is no revenue.</summary>
+        public decimal? GrossMarginPercent { get; set; }
     }
 
     /// <summary>
     /// One posting in the General Ledger. Flat and chronological across every
     /// account — the report you open to answer "where did this entry come from".
     /// </summary>
+    /// <summary>One calendar month of the Monthly Profit report. Every figure is
+    /// the Profit &amp; Loss for <see cref="From"/>–<see cref="To"/>: a whole month,
+    /// or the part of it the period covers.</summary>
+    public class MonthlyProfitRowDto
+    {
+        public string Label { get; set; } = "";
+        public DateTime From { get; set; }
+        public DateTime To { get; set; }
+        public decimal Revenue { get; set; }
+        public decimal CostOfSales { get; set; }
+        public decimal GrossProfit { get; set; }
+        /// <summary>Null when the month had no revenue.</summary>
+        public decimal? GrossMarginPercent { get; set; }
+        /// <summary>The P&amp;L's expense sections — everything below gross profit.</summary>
+        public decimal OtherExpenses { get; set; }
+        public decimal NetProfit { get; set; }
+    }
+
+    /// <summary>
+    /// One customer on the Customer Profitability report — or, with
+    /// <see cref="IsUnattributed"/>, the revenue and cost of sales the P&amp;L holds
+    /// that no customer's sale document carries, so the report ties out.
+    /// </summary>
+    public class CustomerProfitRowDto
+    {
+        public string Customer { get; set; } = "";
+        /// <summary>The client record the ledger drill opens — the one carrying the
+        /// most revenue when one customer is kept under several records.</summary>
+        public int? ClientId { get; set; }
+        public List<int> ClientIds { get; set; } = new();
+        public string? DrillKey { get; set; }
+        public bool IsUnattributed { get; set; }
+        /// <summary>Sale invoices with a posting in the period (notes excluded).</summary>
+        public int Invoices { get; set; }
+        /// <summary>Credit and debit notes with a posting in the period.</summary>
+        public int Notes { get; set; }
+        /// <summary>Net of credit notes.</summary>
+        public decimal Revenue { get; set; }
+        public decimal CostOfSales { get; set; }
+        public decimal GrossProfit { get; set; }
+        /// <summary>Null when there is no revenue.</summary>
+        public decimal? MarginPercent { get; set; }
+    }
+
     public class GeneralLedgerRowDto
     {
         public DateTime Date { get; set; }

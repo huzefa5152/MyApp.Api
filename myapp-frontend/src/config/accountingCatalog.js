@@ -11,6 +11,8 @@
 //    filters   which controls the shared filter bar renders, in order
 //    exportId  omit to reuse `id`; set when several reports share one export
 //    drill     { filter } — the filter a group row sets when clicked through
+//    defaultPeriod  the period a report opens on when the URL names none
+//                   (omit for This Month)
 //
 //  Categories mirror the ten the business asked for. Ones whose reports are not
 //  built yet carry `status: "planned"` so the index can show the roadmap
@@ -821,35 +823,29 @@ export const REPORT_CATEGORIES = [
       },
       {
         id: "monthly-profit",
+        path: "monthly-profit",
         title: "Monthly Profit",
-        blurb: "Revenue, cost of sales, gross profit and net profit per month.",
-        status: "blocked",
-        blockedReason:
-          "This report is not built yet. Each sale already posts the cost of the stock it "
-          + "takes out, so the figures exist: run the Profit & Loss for one month to read that "
-          + "month's revenue, cost of goods sold and net profit.",
+        blurb: "Revenue, cost of sales, gross profit and net profit per month — each month is its Profit & Loss.",
+        filters: [FILTERS.period],
+        // A trend needs more than one month to read as one.
+        defaultPeriod: "thisYear",
       },
       {
         id: "gross-profit",
+        path: "gross-profit",
         title: "Gross Profit",
-        blurb: "Revenue less cost of sales.",
-        status: "blocked",
-        // Stated on the card so nobody files this as a missing feature. Since
-        // 2026-09-23 a sale relieves inventory into Cost of goods sold, so the
-        // figures exist; only this report is not built.
-        blockedReason:
-          "This report is not built yet. Each sale already posts the cost of the stock it "
-          + "takes out to Cost of goods sold, so the Profit & Loss shows revenue less cost "
-          + "of sales for any period.",
+        blurb: "Revenue less cost of sales, with the gross margin, against the period before it.",
+        filters: [FILTERS.period],
+        statementLayout: true,
+        drill: { filter: "accountId", to: "general-ledger" },
       },
       {
         id: "customer-profitability",
+        path: "customer-profitability",
         title: "Customer Profitability",
-        blurb: "Margin per customer.",
-        status: "blocked",
-        blockedReason:
-          "This report is not built yet. The cost of goods sold is posted for every sale, "
-          + "but margin is not yet broken down by customer.",
+        blurb: "Revenue, cost of goods sold and margin per customer. Click a customer for their ledger.",
+        filters: [FILTERS.period],
+        drill: { filter: "clientId", to: "customer-ledger" },
       },
     ],
   },

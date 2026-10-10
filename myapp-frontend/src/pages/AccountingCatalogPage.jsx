@@ -244,10 +244,10 @@ function GenericReport({ companyId, report, canExport, onBack, onNavigate }) {
   const filters = useMemo(() => {
     const f = {};
     searchParams.forEach((v, k) => { f[k] = NUMERIC_KEYS.has(k) ? parseInt(v, 10) : v; });
-    if (!f.period) f.period = report.id.startsWith("expenses") ? "thisMonth" : "thisMonth";
+    if (!f.period) f.period = report.defaultPeriod || "thisMonth";
     if (!f.page) f.page = 1;
     return f;
-  }, [searchParams, report.id]);
+  }, [searchParams, report.defaultPeriod]);
 
   const applyFilters = useCallback((next) => {
     const params = {};

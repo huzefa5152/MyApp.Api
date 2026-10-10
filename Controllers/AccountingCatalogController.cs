@@ -571,6 +571,40 @@ namespace MyApp.Api.Controllers
             return Ok(await _reports.GetCashFlowSummaryAsync(companyId, filter));
         }
 
+        // ── Profit ────────────────────────────────────────────────────────────────
+
+        /// <summary>Gross Profit — revenue less cost of sales, the top of the P&amp;L.
+        /// <c>comparative=true</c> adds the preceding period of the same length.</summary>
+        [HttpGet("company/{companyId}/gross-profit")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<StatementResultDto>> GrossProfit(
+            int companyId, [FromQuery] ReportFilterDto filter, [FromQuery] bool comparative = true)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetGrossProfitAsync(companyId, filter, comparative));
+        }
+
+        [HttpGet("company/{companyId}/monthly-profit")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> MonthlyProfit(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetMonthlyProfitAsync(companyId, filter));
+        }
+
+        [HttpGet("company/{companyId}/customer-profitability")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> CustomerProfitability(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetCustomerProfitabilityAsync(companyId, filter));
+        }
+
         // ── Export ────────────────────────────────────────────────────────────────
 
         /// <summary>
@@ -688,6 +722,12 @@ namespace MyApp.Api.Controllers
                     report = await _reports.GetRevenueExpenseSummaryAsync(companyId, filter, false); break;
                 case "cash-flow":
                     report = await _reports.GetCashFlowSummaryAsync(companyId, filter); break;
+                case "gross-profit":
+                    report = await _reports.GetGrossProfitAsync(companyId, filter, true); break;
+                case "monthly-profit":
+                    report = await _reports.GetMonthlyProfitAsync(companyId, filter); break;
+                case "customer-profitability":
+                    report = await _reports.GetCustomerProfitabilityAsync(companyId, filter); break;
                 default:
                     return BadRequest(new { message = "Unknown report." });
             }
