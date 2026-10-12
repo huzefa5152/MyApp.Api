@@ -132,6 +132,12 @@ namespace MyApp.Api.Services.Implementations
         internal static string SanitizeNtn(string? ntn)
         {
             if (string.IsNullOrWhiteSpace(ntn)) return "";
+            // Alphabetic NTNs retain their prefix; the final digit after the
+            // dash is a check digit, not part of the registration number.
+            var normalized = ntn.Trim().ToUpperInvariant();
+            var alphabetic = System.Text.RegularExpressions.Regex.Match(
+                normalized, @"^([A-Z][0-9]{6})(?:-?[0-9])?$");
+            if (alphabetic.Success) return alphabetic.Groups[1].Value;
             var digits = new string(ntn.Where(char.IsDigit).ToArray());
             if (digits.Length < 7) return digits;
             var dashCount = ntn.Count(c => c == '-');
