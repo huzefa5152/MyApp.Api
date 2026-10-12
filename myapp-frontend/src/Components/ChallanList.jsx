@@ -244,13 +244,13 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       {exportingId === c.id + "-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Excel
                     </button>
                   )}
-                  {permUpdate && isEditable && (
+                  {permUpdate && (isEditable || (c.status === "Invoiced" && !c.hasAutoPurchaseBills)) && (
                     <button data-primary={(!canGenerateBill) || undefined}
                       style={{ ...styles.actionBtn, ...styles.editBtn }}
                       onClick={() => onEditItems?.(c)}
-                      title={c.status === "Invoiced" ? "Edit items (bill will auto-sync)" : "Edit items"}
+                      title={c.invoiceId || c.status === "Invoiced" ? "Edit supplier & cost" : "Edit items"}
                     >
-                      <MdEdit size={14} /> Edit
+                      <MdEdit size={14} /> {c.invoiceId || c.status === "Invoiced" ? "Supplier & cost" : "Edit"}
                     </button>
                   )}
                   {canDuplicate && onDuplicate && (

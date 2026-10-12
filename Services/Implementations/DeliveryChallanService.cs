@@ -99,6 +99,35 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException("Purchase bills already exist for this challan. Remove those bills before changing its delivery lines or cancelling it.");
         }
 
+        public async Task<DeliveryChallanDto?> UpdatePrivateCostsAsync(int challanId, ChallanPrivateCostsDto dto)
+        {
+            await using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            var dc = await _repository.GetByIdAsync(challanId);
+            if (dc == null) return null;
+            if (dc.Status == "Cancelled")
+                throw new InvalidOperationException("Cannot edit a cancelled challan.");
+            if (string.IsNullOrWhiteSpace(dto.Version) || dto.Version != DeliveryVersion(dc))
+                throw new InvalidOperationException("This challan changed after you opened it. Reload before saving.");
+            if (dto.Items == null || dto.Items.Count != dc.Items.Count ||
+                dto.Items.Select(i => i.Id).Distinct().Count() != dto.Items.Count ||
+                dto.Items.Any(i => !dc.Items.Any(line => line.Id == i.Id)))
+                throw new InvalidOperationException("Costs must reference the existing lines of this challan.");
+            await AssertNoAutoPurchaseBillsAsync(challanId);
+            await ValidatePrivateCostsAsync(dc.CompanyId, dto.Items.Select(i => new DeliveryItemDto
+            {
+                SupplierId = i.SupplierId, ActualUnitCost = i.ActualUnitCost
+            }));
+            foreach (var line in dc.Items)
+            {
+                var cost = dto.Items.Single(i => i.Id == line.Id);
+                line.SupplierId = cost.SupplierId;
+                line.ActualUnitCost = cost.ActualUnitCost;
+            }
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+            return await GetByIdAsync(challanId);
+        }
+
         private async Task MarkAutoPurchaseBillsAsync(List<DeliveryChallanDto> dtos)
         {
             var ids = dtos.Select(d => d.Id).ToList();

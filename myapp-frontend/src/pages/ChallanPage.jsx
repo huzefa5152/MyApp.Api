@@ -7,6 +7,7 @@ import ChallanList from "../Components/ChallanList";
 import ChallanTable from "../Components/ChallanTable";
 import ChallanForm from "../Components/ChallanForm";
 import ChallanEditForm from "../Components/ChallanEditForm";
+import ChallanCostEditForm from "../Components/ChallanCostEditForm";
 import POImportForm from "../Components/POImportForm";
 import InvoiceForm from "../Components/InvoiceForm";
 import AttachChallanToOrderModal from "../Components/AttachChallanToOrderModal";
@@ -301,6 +302,7 @@ export default function ChallanPage() {
     }
   };
 
+  const ChallanEditor = editChallan?.invoiceId || editChallan?.status === "Invoiced" ? ChallanCostEditForm : ChallanEditForm;
   const handleEditItems = (challan) => setEditChallan(challan);
   const handleEditSaved = () => {
     setEditChallan(null);
@@ -611,7 +613,7 @@ export default function ChallanPage() {
       )}
 
       {editChallan && (
-        <ChallanEditForm
+        <ChallanEditor
           challan={editChallan}
           onClose={() => { setEditChallan(null); refreshAttachCounts(); }}
           onSaved={handleEditSaved}

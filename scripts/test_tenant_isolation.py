@@ -471,6 +471,23 @@ check("Cross-tenant ClientId guard",
       "alice -> POST /api/deliverychallans/company/{alpha} (clientId=beta-owned)",
       status == 400, f"expected 400, got {status}")
 
+status, cost_challan = request("POST", f"/api/deliverychallans/company/{beta['id']}",
+    token=admin, body={"clientId": beta_client["id"], "deliveryDate": "2026-05-16",
+        "items": [{"description": "Sample cost line", "quantity": 1, "unit": "Pcs"}]})
+assert status in (200, 201), f"seed cost challan: {status}"
+cost_path = f"/api/deliverychallans/{cost_challan['id']}/private-costs"
+cost_payload = {"version": cost_challan["version"], "items": [
+    {"id": cost_challan["items"][0]["id"], "supplierId": None, "actualUnitCost": 12}]}
+status, _ = request("PATCH", cost_path, token=tokens["alice"], body=cost_payload)
+status_check("Private challan costs", "unassigned company write refused", status, 403)
+status, saved_costs = request("PATCH", cost_path, token=admin, body=cost_payload)
+check("Private challan costs", "assigned company write succeeds", status == 200 and
+      saved_costs["items"][0]["actualUnitCost"] == 12)
+status, _ = request("GET", f"/api/deliverychallans/{cost_challan['id']}", token=tokens["alice"])
+status_check("Private challan costs", "unassigned company read refused", status, 403)
+status, _ = request("DELETE", f"/api/deliverychallans/{cost_challan['id']}", token=admin)
+assert status in (200, 204), f"cleanup cost challan: {status}"
+
 # Standalone bill path already had this check; we re-verify it still
 # fires from the same forgery vector for completeness.
 forged_bill = {

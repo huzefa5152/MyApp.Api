@@ -141,6 +141,24 @@ namespace MyApp.Api.Controllers
             }
         }
 
+        [HttpPatch("{id}/private-costs")]
+        [HasPermission("challans.manage.update")]
+        public async Task<ActionResult<DeliveryChallanDto>> UpdatePrivateCosts(int id, [FromBody] ChallanPrivateCostsDto dto)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            try
+            {
+                var updated = await _service.UpdatePrivateCostsAsync(id, dto);
+                return updated == null ? NotFound() : Ok(updated);
+            }
+            catch (InvalidOperationException)
+            {
+                return BadRequest(new { error = "Could not save supplier costs. Reload the challan, check suppliers and non-negative costs, and ensure no supplier purchase bills already exist." });
+            }
+        }
+
         [HttpPut("{id}/items")]
         [HasPermission("challans.manage.update")]
         public async Task<ActionResult<DeliveryChallanDto>> UpdateItems(int id, [FromBody] List<DeliveryItemDto> items)

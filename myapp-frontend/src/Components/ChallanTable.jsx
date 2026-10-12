@@ -173,8 +173,8 @@ export default function ChallanTable({
             {exportingId === c.id + "-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />}
           </button>
         )}
-        {perms.permUpdate && flags.isEditable && (
-          <button data-label="Edit items" data-primary={(!flags.canGenerateBill) || undefined} style={btnStyles.edit} onClick={() => onEditItems?.(c)} title="Edit items">
+        {perms.permUpdate && (flags.isEditable || (c.status === "Invoiced" && !c.hasAutoPurchaseBills)) && (
+          <button data-label={c.invoiceId || c.status === "Invoiced" ? "Supplier & cost" : "Edit items"} data-primary={(!flags.canGenerateBill) || undefined} style={btnStyles.edit} onClick={() => onEditItems?.(c)} title={c.invoiceId || c.status === "Invoiced" ? "Edit supplier & cost" : "Edit items"}>
             <MdEdit size={14} />
           </button>
         )}

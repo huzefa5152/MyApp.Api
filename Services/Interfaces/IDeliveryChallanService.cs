@@ -4,6 +4,7 @@ namespace MyApp.Api.Services.Interfaces
 {
     public interface IDeliveryChallanService
     {
+        Task<DeliveryChallanDto?> UpdatePrivateCostsAsync(int challanId, ChallanPrivateCostsDto dto);
         Task<List<DeliveryChallanDto>> GetDeliveryChallansByCompanyAsync(int companyId);
         Task<PagedResult<DeliveryChallanDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
