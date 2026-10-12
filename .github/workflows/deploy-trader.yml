@@ -101,7 +101,7 @@ jobs:
       - name: Stage site root (landing at /, app under /admin)
         run: |
           mkdir -p site-stage/admin
-          cp landing/index.html site-stage/index.html
+          cp landing/index.html landing/privacy.html landing/google2d83b8b03b065692.html site-stage/
           cp -r myapp-frontend/dist/* site-stage/admin/
           # The deployed commit, read by open pages (utils/serviceContinuity.js) so a
           # new version is picked up on the operator's next page change.
@@ -153,7 +153,7 @@ jobs:
         run: |
           rm -rf wwwroot
           mkdir -p wwwroot/admin
-          cp landing/index.html wwwroot/index.html
+          cp landing/index.html landing/privacy.html landing/google2d83b8b03b065692.html wwwroot/
           cp -r myapp-frontend/dist/* wwwroot/admin/
           # The deployed commit, read by open pages (utils/serviceContinuity.js) so a
           # new version is picked up on the operator's next page change.
