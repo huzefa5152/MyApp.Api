@@ -4,6 +4,8 @@ namespace MyApp.Api.Services.Interfaces
 {
     public interface IInvoiceService
     {
+        Task<TaxFilingEditorDto?> GetTaxFilingAsync(int id);
+        Task<TaxFilingEditorDto?> SaveTaxFilingAsync(int id, SaveTaxFilingDto dto, int actorId, string actorName, bool allowNumericalChanges);
         Task<bool> SetTaxInvoiceGroupingAsync(int id, bool grouped);
         Task<List<InvoiceDto>> GetByCompanyAsync(int companyId);
         /// <summary>

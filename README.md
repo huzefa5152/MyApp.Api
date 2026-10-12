@@ -42,6 +42,7 @@ A full-stack ERP system for Pakistani businesses to manage the complete **Purcha
 - **Sandbox + Production** - Test with 28 FBR scenarios before going live
 - **Reference Data** - HS codes, provinces, UOM, sale types, SRO schedules from FBR API
 - **FBR Readiness Validation** - Auto-detects missing fields and shows warnings per challan
+- **Tax filing rows** - Consultants combine selected bill groups or classify each separately, entering exact filing amounts while the original bill and stock remain unchanged.
 - **Registration Status Check** - Verify buyer NTN/STRN against FBR database
 
 ### AI-Powered PO Import
@@ -304,6 +305,10 @@ Publish output optimized from 79 MB to 37 MB via:
 ---
 
 ## Changelog
+
+### 2026-10-12
+
+- **Independent tax filing rows.** Every Trader company can combine selected bill groups under one HS classification, keep groups separate, or separate a group into its original lines. Consultants enter filing quantity and exact amount excluding tax, with a live reconciliation to the bill subtotal. Original bill lines, stock and accounting remain unchanged. Saved filing rows drive tax invoice printing, FBR payloads and tax reports; changed bills require fresh review, concurrent edits are refused, and submission locks stay enforced.
 
 ### 2026-10-10
 

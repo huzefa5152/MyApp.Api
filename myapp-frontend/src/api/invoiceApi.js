@@ -1,5 +1,8 @@
 import httpClient from "./httpClient";
 
+export const getTaxFiling = (id) => httpClient.get(`/invoices/${id}/tax-filing`);
+export const saveTaxFiling = (id, payload) => httpClient.put(`/invoices/${id}/tax-filing`, payload);
+
 export const getBillChallans = (id, search = "") =>
   httpClient.get(`/invoices/${id}/challans`, { params: { search } });
 export const updateBillChallans = (id, payload) =>

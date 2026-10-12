@@ -31,6 +31,7 @@ import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
 import BillNumberField from "./BillNumberField";
 import DocumentNotesEditor from "./DocumentNotesEditor";
+import TaxFilingRowsEditor from "./TaxFilingRowsEditor";
 
 const colors = {
   blue: "#0d47a1",
@@ -59,7 +60,12 @@ const colors = {
  * Description and UOM use LookupAutocomplete with /api/lookup/items and /api/lookup/units,
  * matching the delivery challan form — picks existing values, creates new ones if needed.
  */
-export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSaved, readOnly = false, billsMode = false, forceItemTypeAndQty = false }) {
+export default function EditBillForm(props) {
+  return props.forceItemTypeAndQty && !props.billsMode
+    ? <TaxFilingRowsEditor {...props} /> : <CommercialBillEditor {...props} />;
+}
+
+function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, readOnly = false, billsMode = false, forceItemTypeAndQty = false }) {
   const confirm = useConfirm();
   // billsMode: true when this form is mounted from the Bills tab. Hides
   // the Item Type column + picker and the bulk-apply toolbar (item-type

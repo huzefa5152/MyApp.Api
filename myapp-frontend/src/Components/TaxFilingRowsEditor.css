@@ -1,0 +1,39 @@
+.tax-filing { color: #1a2332; min-width: 0; }
+#tax-filing-dialog button, #tax-filing-dialog input[type=number] { min-height: 44px !important; }
+#tax-filing-dialog input[type=number] { height: 44px !important; max-height: none !important; font-size: 16px !important; }
+#tax-filing-dialog .tf-field-error { color: #96283c; }
+.tax-filing .tf-fields button > span:first-child { white-space: normal !important; text-overflow: clip !important; overflow-wrap: anywhere; }
+.tax-filing button { min-height: 44px; padding: 8px 14px; border: 1px solid #c4d3e4; border-radius: 8px; background: #fff; color: #174579; cursor: pointer; box-shadow: none; }
+.tax-filing button:disabled { opacity: .55; cursor: not-allowed; }
+.tax-filing :focus-visible { outline: 3px solid #2273bc; outline-offset: 2px; }
+.tf-header, .tf-footer { padding: 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; flex-shrink: 0; }
+.tf-header { border-bottom: 1px solid #dde5ef; }
+.tf-header h2 { font-size: 20px; margin: 0 0 8px; }
+.tf-header p { margin: 0; max-width: 760px; color: #4e6074; line-height: 1.5; }
+.tf-body { padding: 20px; overflow-y: auto; flex: 1; min-height: 0; }
+.tf-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); gap: 12px; margin-bottom: 18px; }
+.tf-summary > div { padding: 14px; background: #f4f7fb; border-radius: 10px; }
+.tf-summary strong { display: block; font-size: 20px; margin-top: 6px; overflow-wrap: anywhere; }
+.tf-match { color: #17603e; } .tf-mismatch { color: #9b331b; }
+.tf-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.tf-toolbar span, .tf-footer span { color: #4e6074; font-size: 14px; }
+.tf-row { border: 1px solid #d4deea; border-radius: 12px; padding: 16px; margin-bottom: 14px; background: #fff; }
+.tf-row-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.tf-select { display: flex; align-items: center; gap: 10px; min-height: 44px; flex-wrap: wrap; }
+.tf-select input { width: 22px; height: 22px; margin: 0; }
+.tf-select span { color: #4e6074; font-size: 14px; }
+.tf-fields { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.4fr); gap: 16px; }
+.tf-fields label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.tf-fields > * { min-width: 0; }
+.tf-fields input { width: 100%; box-sizing: border-box; min-height: 44px; padding: 10px; border: 1px solid #bccbdd; border-radius: 8px; font-size: 16px; color: #1a2332; background: #fff; }
+.tf-fields small { display: block; color: #4e6074; font-size: 13px; line-height: 1.5; font-weight: 400; margin-top: 6px; overflow-wrap: anywhere; }
+.tf-fields p { overflow-wrap: anywhere; }
+.tf-row summary { min-height: 44px; cursor: pointer; display: list-item; align-content: center; color: #174579; }
+.tf-row li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; flex-wrap: wrap; overflow-wrap: anywhere; }
+.tf-row ul { padding-left: 20px; margin: 0; }
+.tf-error, .tf-warning { padding: 14px; border-radius: 8px; margin-bottom: 14px; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
+.tf-error { background: #fff0f1; color: #96283c; border: 1px solid #edb4c0; }
+.tf-warning { background: #fff7e3; color: #805318; border: 1px solid #e4cb8d; }
+.tf-footer { border-top: 1px solid #dde5ef; }
+.tf-footer button[type=submit] { background: #174579; color: #fff; }
+@media (max-width: 759px) { .tf-fields { grid-template-columns: 1fr; } .tf-body, .tf-header, .tf-footer { padding: 14px; } .tf-footer button { width: 100%; } .tf-row { padding: 12px; } }

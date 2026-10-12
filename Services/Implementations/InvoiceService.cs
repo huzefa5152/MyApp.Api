@@ -186,7 +186,7 @@ namespace MyApp.Api.Services.Implementations
             if (inv.Company == null || inv.Client == null || !FbrSetupRules.IsReady(inv.Company, inv.Client))
                 missing.Add("Seller or buyer FBR setup");
             if (inv.Items == null || !inv.Items.Any()) return missing;
-            var items = inv.Items.ToList();
+            var items = TaxFilingProjection.Lines(inv);
             for (int i = 0; i < items.Count; i++)
             {
                 var it = items[i];
@@ -290,9 +290,14 @@ namespace MyApp.Api.Services.Implementations
                 : (decimal?)null;
             bool adjustmentStale = anyOverlay
                 && Math.Abs(fbrAdjustedSubtotal!.Value - inv.Subtotal) > _totalTolerancePkr;
+            if (inv.TaxFilingRowsJson != null) {
+                fbrAdjustedSubtotal = TaxFilingProjection.Lines(inv).Sum(i => i.LineTotal);
+                adjustmentStale = TaxFilingProjection.IsStale(inv);
+            }
             return new InvoiceDto
         {
             Id = inv.Id,
+            HasTaxFilingRows = inv.TaxFilingRowsJson != null,
             InvoiceNumber = inv.InvoiceNumber,
             Date = inv.Date,
             CompanyId = inv.CompanyId,
@@ -1881,6 +1886,8 @@ namespace MyApp.Api.Services.Implementations
         {
             var invoice = await _invoiceRepo.GetByIdAsync(id);
             if (invoice == null) return null;
+            if (invoice.TaxFilingRowsJson != null)
+                throw new InvalidOperationException("This invoice uses tax filing rows. Edit its classifications in Tax filing rows to preserve the original bill.");
 
             if (!IsInvoiceEditable(invoice))
                 throw new InvalidOperationException(invoice.IsCancelled
@@ -3269,14 +3276,17 @@ namespace MyApp.Api.Services.Implementations
             decimal EffTotal(InvoiceItem src) => overlays.TryGetValue(src.Id, out var ov) && ov.AdjustedLineTotal != null ? ov.AdjustedLineTotal.Value : src.LineTotal;
 
             var noteItems = new List<InvoiceItem>();
+            var noteSourceIds = new List<int>();
             var partial = dto.Lines != null && dto.Lines.Count > 0;
             // Filled when a full credit note hands the bill's challans back.
             var releasedChallans = new List<int>();
             if (!partial)
             {
                 // Full reversal — every line at its full effective quantity.
-                foreach (var src in original.Items)
+                foreach (var src in original.Items) {
                     noteItems.Add(BuildLine(src, EffQty(src), EffPrice(src), EffTotal(src)));
+                    noteSourceIds.Add(src.Id);
+                }
             }
             else
             {
@@ -3306,10 +3316,13 @@ namespace MyApp.Api.Services.Implementations
                         unitPrice = sel.UnitPrice.Value;
                     }
                     noteItems.Add(BuildLine(src, qty, unitPrice, Math.Round(qty * unitPrice, 2)));
+                    noteSourceIds.Add(src.Id);
                 }
             }
             if (noteItems.Count == 0)
                 throw new InvalidOperationException("Select at least one line (with a quantity greater than zero) for the note.");
+            var noteFilingRows = original.TaxFilingRowsJson == null ? null
+                : await BuildNoteFilingRowsAsync(original, noteItems, noteSourceIds, partial);
 
             // Header totals. For a FULL reversal, mirror the original's stored
             // totals exactly — re-summing effective line totals can drift by a
@@ -3436,6 +3449,17 @@ namespace MyApp.Api.Services.Implementations
                     };
 
                     var created = await _invoiceRepo.CreateAsync(note);
+                    if (noteFilingRows != null) {
+                        var mapped = System.Text.Json.JsonSerializer.Deserialize<List<TaxFilingRowDto>>(
+                            System.Text.Json.JsonSerializer.Serialize(noteFilingRows))!;
+                        foreach (var row in mapped) row.SourceLineIds = row.SourceLineIds
+                            .Select(source => created.Items.ElementAt(noteSourceIds.IndexOf(source)).Id).ToList();
+                        created.TaxFilingRowsJson = System.Text.Json.JsonSerializer.Serialize(new TaxFilingPlan {
+                            SourceVersion = TaxFilingProjection.SourceVersion(created), Rows = mapped,
+                            SavedAt = DateTime.UtcNow
+                        });
+                        await _context.SaveChangesAsync();
+                    }
                     await _companyRepo.UpdateAsync(company);
 
                     // Stock reflow: only when NoteAffectsStock (goods actually
@@ -3831,6 +3855,8 @@ namespace MyApp.Api.Services.Implementations
         {
             var inv = await _invoiceRepo.GetByIdAsync(invoiceId);
             if (inv == null) return null;
+            if (inv.TaxFilingRowsJson != null && TaxFilingProjection.IsStale(inv))
+                throw new InvalidOperationException("Review the filing rows against the changed bill before printing or exporting its tax invoice.");
 
             // A STANDALONE bill has no challan to carry a PO, so it keeps its
             // own on Invoice.PoNumber — set on the bill form. Taking the PO
@@ -4047,7 +4073,27 @@ namespace MyApp.Api.Services.Implementations
                             }, new[] { ii }, inv.GSTRate);
                         }).ToList()
             };
-            ReconcilePrintTaxes(result.Items, inv.GSTRate);
+            if (inv.TaxFilingRowsJson != null) {
+                var filing = TaxFilingProjection.Plan(inv)!;
+                var lines = TaxFilingProjection.Lines(inv);
+                var taxes = FurtherTaxCalculator.Allocate(inv.GSTAmount, lines.Select(i =>
+                    string.Equals(i.SaleType, "3rd Schedule Goods", StringComparison.OrdinalIgnoreCase)
+                        ? i.FixedNotifiedValueOrRetailPrice ?? 0m : i.LineTotal).ToArray());
+                result.Items = lines.Select((i, n) => new PrintTaxItemDto {
+                    ItemTypeName = i.ItemTypeName, Description = i.Description, HSCode = i.HSCode,
+                    UOM = i.UOM, Quantity = i.Quantity, UnitPrice = Math.Round(i.UnitPrice, 12),
+                    ValueExclTax = i.LineTotal, GSTRate = inv.GSTRate,
+                    GSTAmount = taxes[n], TotalInclTax = i.LineTotal + taxes[n],
+                    InvoiceItemTypeName = i.ItemTypeName, InvoiceUom = i.UOM,
+                    InvoiceQuantity = i.Quantity, InvoiceUnitPrice = Math.Round(i.UnitPrice, 12),
+                    InvoiceValueExclTax = i.LineTotal,
+                    InvoiceGstAmount = taxes[n], InvoiceTotalInclTax = i.LineTotal + taxes[n],
+                    BillQuantity = inv.Items.Where(s => filing.Rows[n].SourceLineIds.Contains(s.Id)).Sum(s => s.Quantity),
+                    BillItemTypeName = string.Join(" / ", inv.Items.Where(s => filing.Rows[n].SourceLineIds.Contains(s.Id)).Select(s => s.ItemTypeName).Distinct()),
+                    BillUom = string.Join(" / ", inv.Items.Where(s => filing.Rows[n].SourceLineIds.Contains(s.Id)).Select(s => s.UOM).Distinct())
+                }).ToList();
+            }
+            else ReconcilePrintTaxes(result.Items, inv.GSTRate);
             ReconcilePrintTaxes(result.BillItems, inv.GSTRate);
             return result;
         }

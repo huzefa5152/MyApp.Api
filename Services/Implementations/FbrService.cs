@@ -597,6 +597,7 @@ namespace MyApp.Api.Services.Implementations
             // base (else it wrongly fails "HS Code is required" [0019]).
             var effectiveItems = (invoice.Items ?? new List<InvoiceItem>())
                 .Select(ApplyAdjustmentOverlay).ToList();
+            if (invoice.TaxFilingRowsJson != null) effectiveItems = TaxFilingProjection.Lines(invoice);
             if (invoice.Items == null || !invoice.Items.Any())
                 errors.Add("Invoice must have at least one item.");
             else
@@ -701,7 +702,9 @@ namespace MyApp.Api.Services.Implementations
             // dry-run preview) until the consultant re-opens Invoice mode and
             // re-adjusts qty/price back to the bill total. Mirrors the
             // in-memory InvoiceDto.FbrAdjustmentStale flag the UI shows.
-            if (invoice.Items != null && invoice.Items.Any(ii => ii.Adjustment != null))
+            if (invoice.TaxFilingRowsJson != null && TaxFilingProjection.IsStale(invoice))
+                errors.Add("The bill changed after its filing rows were reviewed. Open Tax filing rows and review the current bill before validation or submission.");
+            if (invoice.TaxFilingRowsJson == null && invoice.Items != null && invoice.Items.Any(ii => ii.Adjustment != null))
             {
                 var billSubtotal = invoice.Items.Sum(ii => ii.LineTotal);
                 var fbrSubtotal  = invoice.Items.Sum(ii =>
@@ -770,6 +773,8 @@ namespace MyApp.Api.Services.Implementations
 
             if (invoice.FbrReviewRequiredAt != null)
                 return Fail("Needs consultant review: open Invoices and complete review of the changed bill before FBR validation, preview or submission.");
+            if (invoice.TaxFilingRowsJson != null && TaxFilingProjection.IsStale(invoice))
+                return Fail("The bill changed after its filing rows were reviewed. Review the current bill before FBR preview, validation or submission.");
 
             // A voided bill is a non-document — never validate, submit, or
             // even preview it against FBR.
@@ -874,7 +879,7 @@ namespace MyApp.Api.Services.Implementations
             //     item — otherwise 3rd-Schedule / Reduced-Rate scenarios get
             //     clobbered to the item's Standard-Rate sale type and FBR rejects
             //     the saleType↔scenarioId mismatch.
-            if (!dryRun
+            if (!dryRun && invoice.TaxFilingRowsJson == null
                 && !string.Equals(invoice.FbrStatus, FbrSubmissionStatus.Submitted, StringComparison.OrdinalIgnoreCase))
             {
                 if (invoice.IsDemo)
@@ -1046,12 +1051,12 @@ namespace MyApp.Api.Services.Implementations
             // projected into an "effective" copy — NULL overlay fields
             // fall back to the underlying InvoiceItem. The printed bill
             // is NEVER touched; only this in-memory view is.
-            var effectiveItems = invoice.Items.Select(ApplyAdjustmentOverlay).ToList();
+            var effectiveItems = TaxFilingProjection.Lines(invoice);
 
             // FBR groups by effective classification independently of the company's
             // print preference. Individual prints retain commercial lines and units.
             // Tax treatments stay separate; unclassified rows remain singletons.
-            var fbrItems = effectiveItems
+            var fbrItems = invoice.TaxFilingRowsJson != null ? effectiveItems : effectiveItems
                     .GroupBy(TaxInvoiceGrouping.Key)
                     .Select(g =>
                     {
@@ -1085,9 +1090,13 @@ namespace MyApp.Api.Services.Implementations
             var furtherTaxAmounts = FurtherTaxCalculator.Allocate(invoice.FurtherTaxAmount,
                 fbrItems.Select(item => item.LineTotal).ToArray());
             var furtherTaxIndex = 0;
+            var filingSalesTaxes = invoice.TaxFilingRowsJson == null ? null : FurtherTaxCalculator.Allocate(invoice.GSTAmount,
+                fbrItems.Select(item => string.Equals(item.SaleType, "3rd Schedule Goods", StringComparison.OrdinalIgnoreCase)
+                    ? item.FixedNotifiedValueOrRetailPrice ?? 0m : item.LineTotal).ToArray());
             foreach (var item in fbrItems)
             {
                 var (salesTax, retailPrice) = ComputeFbrSalesTax(item, invoice.GSTRate);
+                if (filingSalesTaxes != null) salesTax = filingSalesTaxes[furtherTaxIndex];
                 // The commercial document, accounting and FBR must charge the same tax.
                 var furtherTax = furtherTaxAmounts[furtherTaxIndex++];
                 var uomDesc = await ResolveUomDesc(company, item.FbrUOMId, item.UOM);
@@ -1221,15 +1230,7 @@ namespace MyApp.Api.Services.Implementations
                     // WHERE mirrors FbrSubmissionStatus.IsSubmittable — kept as
                     // inline constant comparisons because EF cannot translate a
                     // method call to SQL. If you change one, change the other.
-                    var payloadItemIds = invoice.Items.Select(i => i.Id).ToList();
-                    var claimed = await _db.Invoices
-                        .Where(i => i.Id == invoice.Id
-                                 && i.FbrIRN == null && !i.IsCancelled && i.FbrReviewRequiredAt == null
-                                 && i.Items.Count == payloadItemIds.Count
-                                 && !i.Items.Any(line => !payloadItemIds.Contains(line.Id))
-                                 && (i.FbrStatus == null
-                                     || i.FbrStatus == FbrSubmissionStatus.Failed
-                                     || i.FbrStatus == FbrSubmissionStatus.Validated))
+                    var claimed = await FbrSubmissionClaim.Eligible(_db.Invoices, invoice)
                         .ExecuteUpdateAsync(s => s.SetProperty(i => i.FbrStatus, FbrSubmissionStatus.Submitting));
 
                     if (claimed == 0)

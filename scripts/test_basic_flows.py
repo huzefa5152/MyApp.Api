@@ -732,6 +732,33 @@ def print_report() -> int:
 
 
 # ── Main ───────────────────────────────────────────────────────────
+def test_independent_tax_filing(base, token, company, client, classified):
+    suite = "Independent tax filing preserves commercial bill"
+    status, bill = http("POST", "/api/invoices/standalone", base, token=token, body={
+        "companyId": company["id"], "clientId": client["id"],
+        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"), "gstRate": 18,
+        "items": [{"description": "Filing source A", "quantity": 1, "uom": classified["uom"], "unitPrice": 12500, "itemTypeId": classified["id"]},
+                  {"description": "Filing source B", "quantity": 2, "uom": classified["uom"], "unitPrice": 8750, "itemTypeId": classified["id"]}]})
+    check(suite, "source bill created", status in (200, 201), str(status))
+    if status not in (200, 201): return
+    iid = bill["id"]
+    _, before = http("GET", f"/api/invoices/{iid}/print/bill", base, token=token)
+    status, editor = http("GET", f"/api/invoices/{iid}/tax-filing", base, token=token)
+    check(suite, "filing editor loads", status == 200, str(status))
+    if status != 200: return
+    status, saved = http("PUT", f"/api/invoices/{iid}/tax-filing", base, token=token, body={
+        "version": editor["version"], "rows": [{"sourceLineIds": [i["id"] for i in bill["items"]],
+            "itemTypeId": classified["id"], "quantity": 3, "valueExclTax": 30000}]})
+    check(suite, "independent filing saves", status == 200, str(saved))
+    if status != 200: return
+    check(suite, "original items unchanged", saved["bill"]["items"] == bill["items"])
+    _, after = http("GET", f"/api/invoices/{iid}/print/bill", base, token=token)
+    check(suite, "original bill print unchanged", after == before)
+    _, tax = http("GET", f"/api/invoices/{iid}/print/tax-invoice", base, token=token)
+    check(suite, "tax print has one filing row", len(tax["items"]) == 1)
+    check(suite, "filing value and GST reconcile", tax["items"][0]["valueExclTax"] == 30000 and tax["items"][0]["gstAmount"] == 5400)
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--base", default="http://localhost:5134")
@@ -784,6 +811,7 @@ def main() -> int:
         test_freight_charges(args.base, token, company, client)
         from bill_challan_checks import run as check_challan_selection
         check_challan_selection(http, check, args.base, token, company["id"], client["id"])
+        test_independent_tax_filing(args.base, token, company, client, classified)
     finally:
         teardown(args.base, token, company, args.keep)
 

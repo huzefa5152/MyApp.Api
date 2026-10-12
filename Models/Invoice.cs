@@ -2,6 +2,8 @@ namespace MyApp.Api.Models
 {
     public class Invoice
     {
+        [System.ComponentModel.DataAnnotations.ConcurrencyCheck]
+        public string? TaxFilingRowsJson { get; set; }
         public bool GroupTaxInvoiceByItemType { get; set; }
         public string? Notes { get; set; }
         public int Id { get; set; }

@@ -8,6 +8,7 @@ namespace MyApp.Api.DTOs
 
     public class InvoiceDto
     {
+        public bool HasTaxFilingRows { get; set; }
         public bool CanCreateSalesOrder { get; set; }
         public List<BillSalesOrderLinkDto> SalesOrders { get; set; } = new();
         public bool GroupTaxInvoiceByItemType { get; set; }

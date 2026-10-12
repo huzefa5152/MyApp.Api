@@ -142,7 +142,12 @@ namespace MyApp.Api.Services.Implementations
                 };
 
                 int sr = 0;
-                foreach (var item in inv.Items.OrderBy(x => x.Id))
+                var filingCurrent = inv.TaxFilingRowsJson != null && !TaxFilingProjection.IsStale(inv);
+                var reportItems = filingCurrent ? TaxFilingProjection.Lines(inv) : inv.Items.OrderBy(x => x.Id).ToList();
+                var filingTaxes = filingCurrent ? FurtherTaxCalculator.Allocate(inv.GSTAmount, reportItems.Select(i =>
+                    string.Equals(i.SaleType, "3rd Schedule Goods", StringComparison.OrdinalIgnoreCase)
+                        ? i.FixedNotifiedValueOrRetailPrice ?? 0m : i.LineTotal).ToArray()) : null;
+                foreach (var item in reportItems)
                 {
                     // Dual-book overlay: show what was FILED to FBR.
                     var a = item.Adjustment;
@@ -158,6 +163,7 @@ namespace MyApp.Api.Services.Implementations
                                     : item.ItemTypeName);
 
                     var tax = ComputeLineTax(saleType, amount, item.FixedNotifiedValueOrRetailPrice, inv.GSTRate);
+                    if (filingTaxes != null) tax = filingTaxes[sr];
 
                     invDto.Lines.Add(new SalesReportLineDto
                     {
@@ -435,7 +441,7 @@ namespace MyApp.Api.Services.Implementations
                 // invoice's overlay is out of date.
                 var order = new List<string>();
                 var groups = new Dictionary<string, (decimal qty, decimal amount, decimal tax, string uom)>();
-                foreach (var item in inv.Items)
+                foreach (var item in inv.TaxFilingRowsJson == null || outOfDate ? inv.Items : TaxFilingProjection.Lines(inv))
                 {
                     if (!outOfDate && !string.IsNullOrWhiteSpace(EffectiveHs(item)))
                         continue; // classified + current — not our concern
@@ -600,7 +606,7 @@ namespace MyApp.Api.Services.Implementations
             {
                 // Only invoices that still carry an un-classified line are "remaining".
                 var hasUnclassified = IsAdjustmentOutOfDate(inv)
-                    || inv.Items.Any(item => string.IsNullOrWhiteSpace(EffectiveHs(item)));
+                    || TaxFilingProjection.Lines(inv).Any(item => string.IsNullOrWhiteSpace(EffectiveHs(item)));
                 if (!hasUnclassified) continue;
 
                 // A submitted / cancelled invoice can't be re-dated (already filed
@@ -934,6 +940,7 @@ namespace MyApp.Api.Services.Implementations
         // line carries an overlay. Mirrors FbrService's out-of-date gate.
         private bool IsAdjustmentOutOfDate(Invoice inv)
         {
+            if (inv.TaxFilingRowsJson != null) return TaxFilingProjection.IsStale(inv);
             if (inv.Items == null || !inv.Items.Any(ii => ii.Adjustment != null)) return false;
             var billSubtotal = inv.Items.Sum(ii => ii.LineTotal);
             var fbrSubtotal = inv.Items.Sum(ii =>

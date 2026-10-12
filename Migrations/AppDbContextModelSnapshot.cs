@@ -2269,6 +2269,10 @@ namespace MyApp.Api.Migrations
                     b.Property<int?>("SupplementsInvoiceId")
                         .HasColumnType("int");
 
+                    b.Property<string>("TaxFilingRowsJson")
+                        .IsConcurrencyToken()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<decimal>("WithholdingTaxAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");

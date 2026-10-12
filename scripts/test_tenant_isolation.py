@@ -504,6 +504,14 @@ beta_bill_payload = {
 status, beta_bill = request("POST", "/api/invoices/standalone", token=admin, body=beta_bill_payload)
 assert status in (200, 201), f"seed beta bill: {status} {beta_bill}"
 
+# The independent filing editor asserts the invoice's stored company on both paths.
+status, filing = request("GET", f"/api/invoices/{beta_bill['id']}/tax-filing", token=tokens["bob"])
+status_check("Tax filing isolation", "assigned consultant can read its invoice", status, 200)
+status, _ = request("GET", f"/api/invoices/{beta_bill['id']}/tax-filing", token=tokens["alice"])
+status_check("Tax filing isolation", "foreign consultant cannot read invoice filing", status, 403)
+status, _ = request("PUT", f"/api/invoices/{beta_bill['id']}/tax-filing", token=tokens["alice"], body={"version": filing["version"], "rows": []})
+status_check("Tax filing isolation", "foreign consultant cannot write invoice filing", status, 403)
+
 # alice (Alpha only) is blocked on Beta's invoice on both single endpoints.
 status, _ = request("POST", f"/api/invoices/{beta_bill['id']}/handover", token=tokens["alice"], body={})
 status_check("Handover tenant guard", "alice -> POST /invoices/{beta}/handover", status, 403)

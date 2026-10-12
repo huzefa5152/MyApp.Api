@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Services.Implementations
@@ -342,6 +343,7 @@ namespace MyApp.Api.Services.Implementations
                 join it in _context.ItemTypes.AsNoTracking() on ii.ItemTypeId equals it.Id into itJoin
                 from it in itJoin.DefaultIfEmpty()
                 where inv.CompanyId == request.CompanyId
+                   && inv.TaxFilingRowsJson == null
                    && !inv.IsDemo
                    && !inv.IsCancelled
                    && (period.From == null || inv.Date >= period.From)
@@ -357,6 +359,16 @@ namespace MyApp.Api.Services.Implementations
                     RowHs      = ii.HSCode,
                 }
             ).ToListAsync();
+
+            var filedSales = await _context.Invoices.AsNoTracking()
+                .Where(i => i.CompanyId == request.CompanyId && i.TaxFilingRowsJson != null
+                    && !i.IsDemo && !i.IsCancelled && i.FbrCancelledAt == null && (period.From == null || i.Date >= period.From)
+                    && (period.To == null || i.Date < period.To)).ToListAsync();
+            rawSales.AddRange(filedSales.SelectMany(i => TaxFilingProjection.Lines(i)
+                .Where(l => l.HSCode != null && hsCodes.Contains(l.HSCode))
+                .Select(l => new { Quantity = i.NoteKind == 2 ? -l.Quantity : l.Quantity,
+                    LineTotal = i.NoteKind == 2 ? -l.LineTotal : l.LineTotal, InvRate = i.GSTRate,
+                    ItemTypeHs = l.HSCode, RowHs = l.HSCode })));
 
             var salesAgg = rawSales
                 .Select(x => new
@@ -394,9 +406,12 @@ namespace MyApp.Api.Services.Implementations
                 join adj in _context.InvoiceItemAdjustments.AsNoTracking() on ii.Id equals adj.InvoiceItemId into adjJoin
                 from adj in adjJoin.DefaultIfEmpty()
                 let effLineTotal = adj != null && adj.AdjustedLineTotal != null ? adj.AdjustedLineTotal.Value : ii.LineTotal
-                where inv.CompanyId == request.CompanyId && !inv.IsDemo && !inv.IsCancelled
+                where inv.CompanyId == request.CompanyId && !inv.IsDemo && !inv.IsCancelled && inv.TaxFilingRowsJson == null
                 select effLineTotal * (inv.GSTRate / 100m)
             ).SumAsync();
+            lifetimeSaleTax += await _context.Invoices.AsNoTracking()
+                .Where(i => i.CompanyId == request.CompanyId && !i.IsDemo && !i.IsCancelled && i.FbrCancelledAt == null && i.TaxFilingRowsJson != null)
+                .SumAsync(i => i.NoteKind == 2 ? -i.GSTAmount : i.GSTAmount);
             decimal currentPeriodSaleTax = salesAgg.Values.Sum(s => s.Tax);
             // Approximate: net unclaimed = lifetime input − lifetime
             // output, then subtract this period's already-counted

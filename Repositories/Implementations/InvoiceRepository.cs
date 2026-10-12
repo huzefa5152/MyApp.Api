@@ -128,21 +128,21 @@ namespace MyApp.Api.Repositories.Implementations
                         query = query.Where(i =>
                             i.FbrStatus != "Submitted" && !i.IsCancelled && !i.IsFbrExcluded &&
                             i.FbrReviewRequiredAt == null && i.Items.Any() &&
-                            !i.Items.Any(it =>
+                            (i.TaxFilingRowsJson != null || !i.Items.Any(it =>
                                 (it.Adjustment.AdjustedHSCode ?? it.HSCode) == null || (it.Adjustment.AdjustedHSCode ?? it.HSCode) == "" ||
                                 (it.Adjustment.AdjustedSaleType ?? it.SaleType) == null || (it.Adjustment.AdjustedSaleType ?? it.SaleType) == "" ||
                                 ((it.Adjustment.AdjustedFbrUOMId ?? it.FbrUOMId) == null && ((it.Adjustment.AdjustedUOM ?? it.UOM) == null || (it.Adjustment.AdjustedUOM ?? it.UOM) == "")) ||
-                                (it.Adjustment.AdjustedUnitPrice ?? it.UnitPrice) <= 0));
+                                (it.Adjustment.AdjustedUnitPrice ?? it.UnitPrice) <= 0)));
                         break;
                     case "notadjusted":
                         query = query.Where(i =>
                             i.FbrStatus != "Submitted" && !i.IsCancelled && !i.IsFbrExcluded &&
                             (i.FbrReviewRequiredAt != null || !i.Items.Any() ||
-                             i.Items.Any(it =>
+                             (i.TaxFilingRowsJson == null && i.Items.Any(it =>
                                 (it.Adjustment.AdjustedHSCode ?? it.HSCode) == null || (it.Adjustment.AdjustedHSCode ?? it.HSCode) == "" ||
                                 (it.Adjustment.AdjustedSaleType ?? it.SaleType) == null || (it.Adjustment.AdjustedSaleType ?? it.SaleType) == "" ||
                                 ((it.Adjustment.AdjustedFbrUOMId ?? it.FbrUOMId) == null && ((it.Adjustment.AdjustedUOM ?? it.UOM) == null || (it.Adjustment.AdjustedUOM ?? it.UOM) == "")) ||
-                                (it.Adjustment.AdjustedUnitPrice ?? it.UnitPrice) <= 0)));
+                                (it.Adjustment.AdjustedUnitPrice ?? it.UnitPrice) <= 0))));
                         break;
                     case "excluded":
                         query = query.Where(i => i.IsFbrExcluded);
