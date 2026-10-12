@@ -1,6 +1,8 @@
-.ew-conversation { margin-top: 20px; border-top: 1px solid #e8edf3; padding-top: 16px; min-width: 0; }
-.ew-thread-message { border: 1px solid #e8edf3; border-radius: 12px; padding: 12px; margin: 10px 0; background: #f8f9fb; }
-.ew-thread-message summary { min-height: 44px; cursor: pointer; overflow-wrap: anywhere; }
+.ew .ew-reader > .ew-conversation { order: 3; margin-top: 20px; border-top: 1px solid #e8edf3; padding-top: 16px; min-width: 0; }
+.ew .ew-thread-message { border: 1px solid #e8edf3; border-radius: 12px; padding: 12px; margin: 10px 0; background: #f8f9fb; }
+.ew .ew-thread-message > summary { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 4px 8px; min-height: 44px; width: 100%; cursor: pointer; overflow-wrap: anywhere; }
+.ew .ew-thread-message > summary::before { grid-column: 1; grid-row: 1 / 4; align-self: center; }
+.ew .ew-thread-message > summary > * { grid-column: 2; min-width: 0; }
 .ew-thread-message summary span { display: block; color: #5f6d7e; font-size: .85rem; }
 .ew-thread-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .ew-reply { border: 1px solid #d0d7e2; border-radius: 12px; padding: clamp(12px, 2vw, 20px); margin-top: 16px; background: white; }
