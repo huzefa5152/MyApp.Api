@@ -62,6 +62,25 @@ namespace MyApp.Api.Controllers
             }
         }
 
+        [HttpPost("stock-preview")]
+        [HasAnyPermission("purchasebills.manage.create", "purchasebills.manage.update")]
+        public async Task<ActionResult<PurchaseStockPreviewDto>> PreviewStock(PurchaseStockPreviewRequest request)
+        {
+            await _access.AssertAccessAsync(CurrentUserId, request.CompanyId);
+            if (request.BillId.HasValue)
+            {
+                var companyId = await _context.PurchaseBills.Where(b => b.Id == request.BillId.Value)
+                    .Select(b => (int?)b.CompanyId).FirstOrDefaultAsync();
+                if (companyId == null) return NotFound();
+                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
+                if (companyId != request.CompanyId) return BadRequest(new { error = "Purchase bill belongs to another company." });
+                if (!await _permissions.HasPermissionAsync(CurrentUserId, "purchasebills.manage.update")) return Forbid();
+            }
+            else if (!await _permissions.HasPermissionAsync(CurrentUserId, "purchasebills.manage.create")) return Forbid();
+            try { return Ok(await _service.PreviewStockAsync(request)); }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
         [HttpGet("count")]
         [HasPermission("purchasebills.list.view")]
         [AuthorizeCompany]

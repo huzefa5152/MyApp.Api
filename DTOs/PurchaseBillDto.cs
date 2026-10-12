@@ -2,6 +2,7 @@ namespace MyApp.Api.DTOs
 {
     public class PurchaseBillDto
     {
+        public string? SupplierLockedReason { get; set; }
         // ── Withholding income tax (s.153) ──
         // We withhold it and remit it to FBR, so it reduces what the supplier is
         // owed without moving the grand total. Defaults to none.
@@ -140,6 +141,7 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class UpdatePurchaseBillDto
     {
+        public int? SupplierId { get; set; }
         public int? CustomNumber { get; set; }
         // ── Withholding income tax (s.153) — optional, defaults to none ──
         /// <summary>Rate %. Null with an amount means fixed-amount mode; null

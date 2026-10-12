@@ -2,7 +2,7 @@ import DocumentCopyPicker from "./DocumentCopyPicker";
 import { appendCopiedLines, copyLine } from "../utils/documentCopy";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { MdAdd, MdDelete, MdReceipt } from "react-icons/md";
-import { createPurchaseBill, updatePurchaseBill, getPurchaseBillById } from "../api/purchaseBillApi";
+import { createPurchaseBill, updatePurchaseBill, getPurchaseBillById, previewPurchaseStock } from "../api/purchaseBillApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getPurchaseTemplate } from "../api/invoiceApi";
@@ -18,6 +18,8 @@ import useScrollToError from "../hooks/useScrollToError";
 import DocumentNotesEditor from "./DocumentNotesEditor";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import CopyLineButton from "./CopyLineButton";
+import SearchableSelect from "./SearchableSelect";
+import { purchaseBillTotals } from "../utils/purchaseBillTotals.mjs";
 
 const colors = {
   blue: "#0d47a1",
@@ -40,6 +42,8 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   // same behaviour as the sales bill form.
   const [units, setUnits] = useState([]);
   const [supplierId, setSupplierId] = useState("");
+  const [supplierLockedReason, setSupplierLockedReason] = useState(null);
+  const [savedSupplierName, setSavedSupplierName] = useState("");
   const [date, setDate] = useState(todayYmd());
   const [supplierBillNumber, setSupplierBillNumber] = useState("");
   const [supplierIRN, setSupplierIRN] = useState("");
@@ -52,6 +56,24 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const [notes, setNotes] = useState("");
   const [paymentMode, setPaymentMode] = useState("");
   const [items, setItems] = useState([newRow()]);
+  const [stockPreview, setStockPreview] = useState(null);
+  const [stockPreviewAttempt, setStockPreviewAttempt] = useState(0);
+  const stockPreviewKey = JSON.stringify({ companyId, billId, items: items.map(i => ({ itemTypeId: i.itemTypeId || null, quantity: Math.max(0, Number(i.quantity) || 0), hsCode: i.hsCode || null })) });
+  const needsStockPreview = !readOnly && !isNonStock && (isEdit || items.some(i => i.itemTypeId));
+  const stockPreviewReady = !needsStockPreview || (stockPreview?.key === stockPreviewKey && !!stockPreview.data);
+  useEffect(() => {
+    if (!needsStockPreview) return;
+    let active = true;
+    const timer = setTimeout(async () => {
+      try {
+        const response = await previewPurchaseStock(JSON.parse(stockPreviewKey));
+        if (active) setStockPreview({ key: stockPreviewKey, data: response.data });
+      } catch {
+        if (active) setStockPreview({ key: stockPreviewKey, error: true });
+      }
+    }, 250);
+    return () => { active = false; clearTimeout(timer); };
+  }, [needsStockPreview, stockPreviewKey, stockPreviewAttempt]);
   // Responsive: the wide line-item table side-scrolls on a phone, so below
   // 760px each line renders as a tap-friendly stacked card instead.
   const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 760);
@@ -116,6 +138,8 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
         setCurrentNumber(data.purchaseBillNumber);
         setCustomNumber(String(data.purchaseBillNumber));
         setSupplierId(String(data.supplierId));
+        setSupplierLockedReason(data.supplierLockedReason || (data.isNonStockSupplierPurchase ? "Supplier is fixed by the source challan." : null));
+        setSavedSupplierName(data.supplierName || "");
         setDate(data.date.slice(0, 10));
         setSupplierBillNumber(data.supplierBillNumber || "");
         setSupplierIRN(data.supplierIRN || "");
@@ -127,7 +151,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
         setNotes(data.notes || "");
         setPaymentMode(data.paymentMode || "");
         setItems((data.items || []).map(i => ({
-          id: i.id, itemTypeId: i.itemTypeId, description: i.description,
+          id: i.id, itemTypeId: i.itemTypeId, itemTypeName: i.itemTypeName, description: i.description,
           quantity: i.quantity, unitPrice: i.unitPrice, uom: i.uom,
           hsCode: i.hsCode || "", saleType: i.saleType || "",
           sourceInvoiceItemIds: i.sourceInvoiceItemIds || [],
@@ -182,15 +206,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
     })();
   }, [prefillFromInvoiceId]);
 
-  const subtotal = useMemo(
-    () => items.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.unitPrice) || 0), 0),
-    [items]
-  );
-  const gstAmount = useMemo(
-    () => Math.round(subtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100,
-    [subtotal, gstRate]
-  );
-  const grandTotal = subtotal + gstAmount;
+  const { subtotal, gstAmount, grandTotal, lineTotals } = useMemo(() => purchaseBillTotals(items, gstRate), [items, gstRate]);
 
   const updateItem = (idx, field, value) => {
     setItems(prev => {
@@ -206,7 +222,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
       const r = { ...next[idx], itemTypeId: newId ? parseInt(newId) : null };
       if (picked) {
         if (picked.uom) r.uom = picked.uom;
-        if (picked.hsCode) r.hsCode = picked.hsCode;
+        r.hsCode = picked.hsCode || "";
         if (picked.saleType) r.saleType = picked.saleType;
         if (!r.description?.trim() && picked.name) r.description = picked.name;
       } else {
@@ -226,7 +242,8 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
     if (items.length === 0) return setError("Add at least one item.");
     if (items.some(i => !i.description?.trim())) return setError("Every line needs a description.");
     if (items.some(i => !(parseFloat(i.quantity) > 0))) return setError("Quantity must be greater than zero on every line.");
-    if (items.some(i => parseFloat(i.unitPrice) < 0)) return setError("Unit price cannot be negative.");
+    if (items.some(i => !Number.isFinite(parseFloat(i.unitPrice)) || parseFloat(i.unitPrice) < 0)) return setError("Enter a non-negative unit price on every line.");
+    if (!Number.isFinite(parseFloat(gstRate)) || parseFloat(gstRate) < 0 || parseFloat(gstRate) > 100) return setError("GST rate must be between 0 and 100.");
     if (isAgainstSale) {
       // In the "Purchase Against Sale" flow every row MUST have an
       // ItemType picked — that's the whole point (binding the sale's
@@ -235,6 +252,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
       if (unbound.length > 0)
         return setError("Pick an FBR-compliant Item Type (with HS Code) for every row.");
     }
+    if (!stockPreviewReady) return;
     setSaving(true);
     try {
       const payload = {
@@ -300,13 +318,13 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                 the full row once it is opened. */}
             <div className="doc-header-row">
               <div className="doc-header-row__number"><BillNumberField companyId={companyId} documentType="purchase-bill" variant={isEdit ? "edit" : "create"} currentNumber={currentNumber} editRecordId={billId} lockedReason={readOnly ? "Document number is read-only in View." : undefined} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
-              <div className="doc-header-row__copy">
+              {!readOnly && <div className="doc-header-row__copy">
                 <DocumentCopyPicker companyId={companyId} destination="PurchaseBill" allowDetails={!isEdit && !isAgainstSale} disabled={readOnly || isAgainstSale || isNonStock}
                   onCopy={(source,lines,details) => {
                     setItems(prev => appendCopiedLines(details ? [] : prev, lines, newRow).map(row => ({...row,uom:row.uom || row.unit || ""})));
                     if(details) { setSupplierId(String(source.supplierId));setNotes(source.notes||"");setGstRate(source.gstRate??18);setPaymentTerms(source.paymentTerms||"");setPaymentMode(source.paymentMode||"");setSupplierIRN("");setSupplierBillNumber("");setWithholdingTaxRate(source.withholdingTaxRate??null);setWithholdingTaxAmount(null); }
                   }} />
-              </div>
+              </div>}
             </div>
 
             {sourceBill && (
@@ -333,10 +351,10 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.75rem" }}>
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Supplier *</label>
-                <select style={formStyles.input} value={supplierId} onChange={e => setSupplierId(e.target.value)}>
-                  <option value="">Select supplier...</option>
-                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+                {readOnly ? <input aria-label="Supplier" readOnly style={formStyles.input} value={savedSupplierName || suppliers.find(s => String(s.id) === supplierId)?.name || "—"} />
+                  : <SearchableSelect items={suppliers} value={supplierId} onChange={id => { if (isEdit && String(id) !== supplierId) { setSupplierIRN(""); setSupplierBillNumber(""); } setSupplierId(String(id)); }}
+                    placeholder="Search supplier…" searchKeys={["name", "ntn", "phone"]} disabled={!!supplierLockedReason} allowClear={!isEdit} style={formStyles.input} />}
+                {!readOnly && supplierLockedReason && <p style={{fontSize:"0.8rem",color:colors.textSecondary,marginTop:6}}>{supplierLockedReason}</p>}
               </div>
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Bill Date *</label>
@@ -344,7 +362,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               </div>
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>GST Rate (%)</label>
-                <input type="number" min={0} step={0.01} style={formStyles.input} value={gstRate} onChange={e => setGstRate(e.target.value)} />
+                <input aria-label="GST rate" type="number" min={0} max={100} step={0.01} style={formStyles.input} value={gstRate} onChange={e => setGstRate(e.target.value)} />
               </div>
             </div>
 
@@ -381,21 +399,21 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
             <div style={{ marginTop: "0.75rem", padding: "0.75rem", borderRadius: 10, border: `1px solid ${colors.cardBorder}`, backgroundColor: colors.inputBg }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
                 <strong style={{ color: colors.textPrimary }}>Items ({items.length})</strong>
-                <button type="button" onClick={() => setItems([...items, newRow()])} style={{ ...formStyles.button, padding: "0.3rem 0.65rem", fontSize: "0.8rem", display: "inline-flex", alignItems: "center", gap: "0.25rem", background: "#e3f2fd", color: "#0d47a1", border: "none" }}>
+                {!readOnly && <button type="button" onClick={() => setItems([...items, newRow()])} style={{ ...formStyles.button, padding: "0.3rem 0.65rem", fontSize: "0.8rem", display: "inline-flex", alignItems: "center", gap: "0.25rem", background: "#e3f2fd", color: "#0d47a1", border: "none" }}>
                   <MdAdd size={14} /> Add line
-                </button>
+                </button>}
               </div>
               {isNarrow ? (
                 <div style={mStyles.cards}>
                   {items.map((it, idx) => {
-                    const lineTotal = (parseFloat(it.quantity) || 0) * (parseFloat(it.unitPrice) || 0);
+                    const lineTotal = lineTotals[idx];
                     const linkedToSale = (it.sourceInvoiceItemIds?.length || 0) > 0;
                     return (
                       <div key={idx} style={mStyles.card}>
                         <div style={mStyles.head}>
                           <div style={{ flex: 1 }}>
-                            {isNonStock ? <span>Non-stock supplier cost</span> : <SearchableItemTypeSelect
-                              items={eligibleItemTypes}
+                            {isNonStock || readOnly ? <span>{isNonStock ? "Non-stock supplier cost" : it.itemTypeName || eligibleItemTypes.find(t => t.id === it.itemTypeId)?.name || "—"}</span> : <SearchableItemTypeSelect
+                              items={eligibleItemTypes} groupByHsCode
                               value={it.itemTypeId || ""}
                               onChange={(newId, picked) => pickItemType(idx, newId, picked)}
                               placeholder={isAgainstSale ? "— pick item with HS Code —" : "— optional —"}
@@ -410,8 +428,8 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                               </div>
                             )}
                           </div>
-                          <CopyLineButton onClick={() => setItems(prev => [...prev,{...copyLine(it,newRow),uom:it.uom,hsCode:it.hsCode,saleType:it.saleType}])} />
-                          {items.length > 1 && (
+                          {!readOnly && <CopyLineButton onClick={() => setItems(prev => [...prev,{...copyLine(it,newRow),uom:it.uom,hsCode:it.hsCode,saleType:it.saleType}])} />}
+                          {!readOnly && items.length > 1 && (
                             <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#c62828", cursor: "pointer", padding: "0.4rem", minWidth: 44, minHeight: 44, flexShrink: 0 }}>
                               <MdDelete size={18} />
                             </button>
@@ -419,7 +437,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                         </div>
                         <div style={{ marginBottom: "0.4rem" }}>
                           <label style={mStyles.label}>Description *</label>
-                          <input type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} />
+                          <input aria-label={`Description for item ${idx + 1}`} type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} />
                         </div>
                         <div style={mStyles.grid3}>
                           <div>
@@ -428,7 +446,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                           </div>
                           <div>
                             <label style={mStyles.label}>Unit Price *</label>
-                            <input type="number" min={0} step={0.01} style={{ ...cellInput, textAlign: "right" }} value={it.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
+                            <input aria-label={`Unit price for item ${idx + 1}`} type="number" min={0} step={0.01} style={{ ...cellInput, textAlign: "right" }} value={it.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
                           </div>
                           <div>
                             <label style={mStyles.label}>UOM</label>
@@ -451,18 +469,18 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                       <th style={{ ...th, textAlign: "right", width: 100 }}>Unit Price *</th>
                       <th style={{ ...th, width: 100 }}>UOM</th>
                       <th style={{ ...th, textAlign: "right", width: 110 }}>Line Total</th>
-                      <th style={{ ...th, width: 76 }}></th>
+                      {!readOnly && <th style={{ ...th, width: 76 }}></th>}
                     </tr>
                   </thead>
                   <tbody>
                     {items.map((it, idx) => {
-                      const lineTotal = (parseFloat(it.quantity) || 0) * (parseFloat(it.unitPrice) || 0);
+                      const lineTotal = lineTotals[idx];
                       const linkedToSale = (it.sourceInvoiceItemIds?.length || 0) > 0;
                       return (
                         <tr key={idx}>
                           <td style={td}>
-                            {isNonStock ? <span>Non-stock supplier cost</span> : <SearchableItemTypeSelect
-                              items={eligibleItemTypes}
+                            {isNonStock || readOnly ? <span>{isNonStock ? "Non-stock supplier cost" : it.itemTypeName || eligibleItemTypes.find(t => t.id === it.itemTypeId)?.name || "—"}</span> : <SearchableItemTypeSelect
+                              items={eligibleItemTypes} groupByHsCode
                               value={it.itemTypeId || ""}
                               onChange={(newId, picked) => pickItemType(idx, newId, picked)}
                               placeholder={isAgainstSale ? "— pick item with HS Code —" : "— optional —"}
@@ -479,7 +497,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                             )}
                           </td>
                           <td style={td}>
-                            <input type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} />
+                            <input aria-label={`Description for item ${idx + 1}`} type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} />
                           </td>
                           <td style={td}>
                             <QuantityInput
@@ -491,20 +509,20 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                             />
                           </td>
                           <td style={td}>
-                            <input type="number" min={0} step={0.01} style={{ ...cellInput, textAlign: "right" }} value={it.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
+                            <input aria-label={`Unit price for item ${idx + 1}`} type="number" min={0} step={0.01} style={{ ...cellInput, textAlign: "right" }} value={it.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
                           </td>
                           <td style={td}>
                             <input type="text" style={cellInput} value={it.uom} onChange={e => updateItem(idx, "uom", e.target.value)} />
                           </td>
                           <td style={{ ...td, textAlign: "right", fontWeight: 600 }}>{lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                          <td style={{ ...td, whiteSpace: "nowrap" }}>
-                            <CopyLineButton style={{ marginRight: 6 }} onClick={() => setItems(prev => [...prev,{...copyLine(it,newRow),uom:it.uom,hsCode:it.hsCode,saleType:it.saleType}])} />
-                          {items.length > 1 && (
+                          {!readOnly && <td style={{ ...td, whiteSpace: "nowrap" }}>
+                            {!readOnly && <CopyLineButton style={{ marginRight: 6 }} onClick={() => setItems(prev => [...prev,{...copyLine(it,newRow),uom:it.uom,hsCode:it.hsCode,saleType:it.saleType}])} />}
+                          {!readOnly && items.length > 1 && (
                               <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#c62828", cursor: "pointer", padding: 0 }}>
                                 <MdDelete size={16} />
                               </button>
                             )}
-                          </td>
+                          </td>}
                         </tr>
                       );
                     })}
@@ -526,7 +544,30 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               <strong style={{ fontSize: "1.05rem", color: colors.blue }}>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
             </div>
 
+            {!readOnly && <section aria-label="Inventory impact" aria-live="polite" style={{ marginTop:16, padding:16, borderRadius:10, border:`1px solid ${colors.cardBorder}`, background:"#f8faff" }}>
+              <strong style={{color:colors.blue}}>Inventory impact</strong>
+              <p style={{fontSize:"0.85rem",color:colors.textSecondary,margin:"8px 0"}}>Items without an HS code and challan supplier purchases do not move stock.</p>
+              {isNonStock ? <p>No inventory movement. This purchase records supplier costs only.</p>
+                : needsStockPreview && stockPreview?.key !== stockPreviewKey ? <p role="status">Calculating inventory impact…</p>
+                : needsStockPreview && stockPreview?.error ? <div><p role="alert">Inventory preview could not load. Retry before saving.</p><button type="button" style={formStyles.button} onClick={() => { setStockPreview(null); setStockPreviewAttempt(a => a + 1); }}>Retry inventory preview</button></div>
+                : stockPreview?.key === stockPreviewKey && stockPreview.data && <>
+                  {!stockPreview.data.trackingEnabled && <p>Inventory tracking is off for this company. No stock will move.</p>}
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(min(260px, 100%), 1fr))",gap:12}}>
+                    {stockPreview.data.items.map(item => <div key={item.itemTypeId} style={{padding:12,background:"white",borderRadius:8,border:`1px solid ${colors.cardBorder}`,overflowWrap:"anywhere"}}>
+                      <strong>{item.name}</strong><div style={{fontSize:"0.8rem",color:colors.textSecondary}}>{item.hsCode || "No HS code"}</div>
+                      {!item.tracksStock && item.changeQuantity === 0 ? <p style={{marginBottom:0}}>No stock movement</p> : <dl style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8,marginBottom:0}}>
+                        <dt>Current stock</dt><dd style={{margin:0}}>{item.currentQuantity.toLocaleString()} {item.uom}</dd>
+                        <dt>This save</dt><dd style={{margin:0,color:item.changeQuantity < 0 ? "#b45309" : colors.teal}}>{item.changeQuantity > 0 ? "+" : ""}{item.changeQuantity.toLocaleString()}</dd>
+                        <dt>After saving</dt><dd style={{margin:0,fontWeight:700}}>{item.afterQuantity.toLocaleString()} {item.uom}</dd>
+                      </dl>}
+                    </div>)}
+                  </div>
+                  <p style={{fontSize:"0.8rem",color:colors.textSecondary,marginBottom:0}}>Preview uses current inventory. Other documents saved meanwhile can change the final balance.</p>
+                </>}
+            </section>}
+
             <DocumentTaxFields
+              readOnly={readOnly}
               subtotal={subtotal}
               gstAmount={gstAmount}
               withholdingTaxRate={withholdingTaxRate}
@@ -553,7 +594,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
           <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>{readOnly ? "Close" : "Cancel"}</button>
             {!readOnly && (
-              <button type="submit" disabled={saving || !numberValid} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}>
+              <button type="submit" disabled={saving || !numberValid || !stockPreviewReady} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving || !stockPreviewReady ? 0.6 : 1 }}>
                 {saving ? "Saving..." : (isEdit ? "Update" : "Create")}
               </button>
             )}

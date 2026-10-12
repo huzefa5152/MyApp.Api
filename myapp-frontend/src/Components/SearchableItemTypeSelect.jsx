@@ -13,7 +13,7 @@ import { MdArrowDropDown, MdSearch, MdStar } from "react-icons/md";
  *   onChange   — (newId, pickedItemType) ⇒ void
  *   placeholder, style — passthroughs
  */
-export default function SearchableItemTypeSelect({ items, value, onChange, placeholder, style }) {
+export default function SearchableItemTypeSelect({ items, value, onChange, placeholder, style, groupByHsCode = false }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlightIdx, setHighlightIdx] = useState(-1);
@@ -45,6 +45,7 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
     const hasHs = (it) => !!(it.hsCode && it.hsCode.trim());
     const inStock = (it) => (it.availableQty || 0) > 0;
     arr.sort((a, b) => {
+      if (groupByHsCode && hasHs(a) !== hasHs(b)) return hasHs(a) ? -1 : 1;
       if (inStock(a) !== inStock(b)) return inStock(a) ? -1 : 1;
       if (inStock(a) && inStock(b)) {
         const av = a.availableQty || 0;
@@ -57,7 +58,7 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
       return (a.name || "").localeCompare(b.name || "");
     });
     return arr;
-  }, [items]);
+  }, [items, groupByHsCode]);
 
   const filteredItems = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -208,13 +209,20 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
               </div>
             )}
 
-            {stocked.length > 0 && (
+            {groupByHsCode && [true, false].map(withHs => {
+              const group = filteredItems.filter(it => hasHs(it) === withHs);
+              return group.length > 0 && <div key={String(withHs)}>
+                <div style={styles.sectionHeader}>{withHs ? "With HS code · inventory items" : "Without HS code · no stock movement"}</div>
+                {group.map(it => renderItem(it, filteredItems.indexOf(it), highlightIdx, setHighlightIdx, handlePick, withHs))}
+              </div>;
+            })}
+            {!groupByHsCode && stocked.length > 0 && (
               <>
                 <div style={styles.sectionHeader}>📦 IN STOCK</div>
                 {stocked.map((it, i) => renderItem(it, i, highlightIdx, setHighlightIdx, handlePick))}
               </>
             )}
-            {quick.length > 0 && (
+            {!groupByHsCode && quick.length > 0 && (
               <>
                 <div style={styles.sectionHeader}>⚡ QUICK (no HS code)</div>
                 {quick.map((it, i) => {
@@ -223,7 +231,7 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
                 })}
               </>
             )}
-            {favorites.length > 0 && (
+            {!groupByHsCode && favorites.length > 0 && (
               <>
                 <div style={styles.sectionHeader}>★ FAVORITES</div>
                 {favorites.map((it, i) => {
@@ -232,7 +240,7 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
                 })}
               </>
             )}
-            {others.length > 0 && (
+            {!groupByHsCode && others.length > 0 && (
               <>
                 {(stocked.length > 0 || quick.length > 0 || favorites.length > 0) && <div style={styles.sectionHeader}>OTHER</div>}
                 {others.map((it, i) => {
@@ -249,7 +257,7 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
   );
 }
 
-function renderItem(it, idx, highlightIdx, setHighlightIdx, handlePick) {
+function renderItem(it, idx, highlightIdx, setHighlightIdx, handlePick, showStock = true) {
   const highlighted = idx === highlightIdx;
   return (
     <div
@@ -269,7 +277,7 @@ function renderItem(it, idx, highlightIdx, setHighlightIdx, handlePick) {
         <div style={styles.rowMeta}>
           {it.hsCode && <span style={styles.hsChip}>{it.hsCode}</span>}
           {it.uom && <span style={{ color: "#5f6d7e" }}> {it.uom}</span>}
-          {typeof it.availableQty === "number" && (
+          {showStock && typeof it.availableQty === "number" && (
             <span style={(it.availableQty || 0) > 0 ? styles.stockChipOk : styles.stockChipEmpty}>
               {(it.availableQty || 0) > 0 ? `${Number(it.availableQty).toLocaleString("en-PK")} in stock` : "out of stock"}
             </span>
@@ -317,8 +325,8 @@ const styles = {
       position: "fixed",
       top: flipAbove ? undefined : rect.bottom + 2,
       bottom: flipAbove ? window.innerHeight - rect.top + 2 : undefined,
-      left: rect.left,
-      width: Math.max(rect.width, 360),
+      left: Math.min(rect.left, Math.max(8, window.innerWidth - Math.min(Math.max(rect.width, 360), window.innerWidth - 16) - 8)),
+      width: Math.min(Math.max(rect.width, 360), window.innerWidth - 16),
       maxHeight: flipAbove ? Math.min(listHeight, rect.top - 10) : Math.min(listHeight, spaceBelow - 10),
       backgroundColor: "#fff",
       border: "1px solid #d0d7e2",

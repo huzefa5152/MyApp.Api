@@ -4,6 +4,7 @@ namespace MyApp.Api.Services.Interfaces
 {
     public interface IPurchaseBillService
     {
+        Task<PurchaseStockPreviewDto> PreviewStockAsync(PurchaseStockPreviewRequest request);
         Task<PagedResult<PurchaseBillDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, int? supplierId = null,

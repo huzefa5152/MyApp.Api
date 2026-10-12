@@ -1,5 +1,7 @@
 import http from "./httpClient";
 
+export const previewPurchaseStock = (payload) => http.post("/purchasebills/stock-preview", payload);
+
 export const getPurchaseBillsByCompanyPaged = (companyId, params = {}) =>
   http.get(`/purchasebills/company/${companyId}/paged`, { params });
 export const getPurchaseBillById = (id) => http.get(`/purchasebills/${id}`);

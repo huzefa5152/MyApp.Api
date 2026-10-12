@@ -17,6 +17,41 @@ namespace MyApp.Api.Services.Implementations
     /// </summary>
     public class PurchaseBillService : IPurchaseBillService
     {
+        public async Task<PurchaseStockPreviewDto> PreviewStockAsync(PurchaseStockPreviewRequest request)
+        {
+            if (request.Items == null || request.Items.Any(i => i == null || i.Quantity < 0))
+                throw new InvalidOperationException("Enter valid purchase quantities.");
+            var nonStock = request.BillId.HasValue && await _context.PurchaseBills.AnyAsync(b =>
+                b.Id == request.BillId.Value && b.CompanyId == request.CompanyId && b.Source == "challan-supplier");
+            var posted = request.BillId.HasValue
+                ? await _context.StockMovements.Where(m => m.CompanyId == request.CompanyId
+                    && m.SourceType == StockMovementSourceType.PurchaseBill && m.SourceId == request.BillId)
+                    .GroupBy(m => m.ItemTypeId).Select(g => new { Id = g.Key,
+                        Net = g.Sum(m => m.Direction == StockMovementDirection.In ? m.Quantity : -m.Quantity) })
+                    .ToDictionaryAsync(g => g.Id, g => g.Net)
+                : new Dictionary<int, decimal>();
+            var ids = request.Items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value)
+                .Union(posted.Keys).Distinct().ToList();
+            var catalog = await _context.ItemTypes.Where(i => ids.Contains(i.Id) && i.CompanyId == request.CompanyId)
+                .ToDictionaryAsync(i => i.Id);
+            if (ids.Any(id => !catalog.ContainsKey(id)))
+                throw new InvalidOperationException("An item type does not belong to this document's company.");
+            var enabled = await _stock.IsTrackingEnabledAsync(request.CompanyId);
+            var quantities = await _stock.GetOnHandBulkAsync(request.CompanyId, ids);
+            var impacts = new List<PurchaseStockImpactDto>();
+            foreach (var id in ids)
+            {
+                var item = catalog[id];
+                var tracked = enabled && !nonStock && !string.IsNullOrWhiteSpace(item.HSCode);
+                var desired = tracked ? request.Items.Where(i => i.ItemTypeId == id
+                    && !string.IsNullOrWhiteSpace(i.HSCode ?? item.HSCode)).Sum(i => i.Quantity) : 0m;
+                var delta = enabled && !nonStock ? desired - posted.GetValueOrDefault(id) : 0m;
+                var current = quantities.GetValueOrDefault(id);
+                impacts.Add(new(id, item.Name, item.HSCode, item.UOM, tracked, current, delta, current + delta));
+            }
+            return new(enabled, nonStock, impacts);
+        }
+
         private readonly AppDbContext _context;
         private readonly IStockService _stock;
         private readonly IPostingService _posting;
@@ -163,7 +198,21 @@ namespace MyApp.Api.Services.Implementations
                         .ThenInclude(sl => sl.InvoiceItem!)
                             .ThenInclude(ii => ii.Invoice)
                 .FirstOrDefaultAsync(p => p.Id == id);
-            return pb == null ? null : ToDto(pb);
+            if (pb == null) return null;
+            var dto = ToDto(pb);
+            dto.SupplierLockedReason = await SupplierLockedReasonAsync(pb);
+            return dto;
+        }
+
+        private async Task<string?> SupplierLockedReasonAsync(PurchaseBill bill)
+        {
+            if (bill.SourceDeliveryChallanId.HasValue || bill.Source == "challan-supplier")
+                return "Supplier is fixed by the source challan.";
+            if (bill.Source == "fbr-import")
+                return "Supplier is fixed by the imported supplier invoice.";
+            if (bill.AmountPaid > 0 || await _context.PaymentAllocations.AnyAsync(a => a.PurchaseBillId == bill.Id))
+                return "Supplier cannot change after a payment has been linked.";
+            return null;
         }
 
         /// <summary>Set/clear the bill's AP payment due date — drives the
@@ -282,8 +331,12 @@ namespace MyApp.Api.Services.Implementations
             var supplier = await _context.Suppliers
                 .FirstOrDefaultAsync(s => s.Id == dto.SupplierId && s.CompanyId == dto.CompanyId);
             if (supplier == null) throw new KeyNotFoundException("Supplier not found.");
+            if (dto.GSTRate < 0 || dto.GSTRate > 100)
+                throw new InvalidOperationException("GST rate must be between 0 and 100.");
             if (dto.Items == null || dto.Items.Count == 0)
                 throw new InvalidOperationException("At least one item is required.");
+            if (dto.Items.Any(i => i == null || string.IsNullOrWhiteSpace(i.Description)))
+                throw new InvalidOperationException("Every line needs a description.");
             if (dto.Items.Any(i => i.Quantity <= 0))
                 throw new InvalidOperationException("Quantity must be greater than zero.");
             if (dto.Items.Any(i => i.UnitPrice < 0))
@@ -366,7 +419,7 @@ namespace MyApp.Api.Services.Implementations
                     UOM = i.UOM ?? itemType?.UOM ?? "",
                     UnitPrice = i.UnitPrice,
                     LineTotal = Math.Round(i.Quantity * i.UnitPrice, 2),
-                    HSCode = i.HSCode ?? itemType?.HSCode,
+                    HSCode = itemType != null && string.IsNullOrWhiteSpace(itemType.HSCode) ? null : i.HSCode ?? itemType?.HSCode,
                     FbrUOMId = i.FbrUOMId ?? itemType?.FbrUOMId,
                     SaleType = i.SaleType ?? itemType?.SaleType,
                     RateId = i.RateId,
@@ -463,7 +516,7 @@ namespace MyApp.Api.Services.Implementations
             foreach (var it in items)
             {
                 if (!it.ItemTypeId.HasValue || it.Quantity <= 0) continue;
-                if (!trackedOnCreate.Contains(it.ItemTypeId.Value)) continue;
+                if (!trackedOnCreate.Contains(it.ItemTypeId.Value) || string.IsNullOrWhiteSpace(it.HSCode)) continue;
                 createMovements.Add(new StockMovementBatchItem(
                     ItemTypeId: it.ItemTypeId.Value,
                     Direction: StockMovementDirection.In,
@@ -709,14 +762,32 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<PurchaseBillDto?> UpdateAsync(int id, UpdatePurchaseBillDto dto)
         {
-            await using var tx = await _context.Database.BeginTransactionAsync();
+            await using var tx = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
             try
             {
             var bill = await _context.PurchaseBills
                 .Include(p => p.Items)
                 .FirstOrDefaultAsync(p => p.Id == id);
             if (bill == null) return null;
-            if (bill.Source == "challan-supplier" && dto.Items.Any(i => i.ItemTypeId.HasValue || !string.IsNullOrWhiteSpace(i.HSCode) || i.SourceInvoiceItemIds.Count > 0))
+            var targetSupplierId = dto.SupplierId ?? bill.SupplierId;
+            var supplierChanged = targetSupplierId != bill.SupplierId;
+            if (supplierChanged)
+            {
+                var reason = await SupplierLockedReasonAsync(bill);
+                if (reason != null) throw new InvalidOperationException(reason);
+                if (!await _context.Suppliers.AnyAsync(s => s.Id == targetSupplierId && s.CompanyId == bill.CompanyId))
+                    throw new InvalidOperationException("Supplier does not belong to this company.");
+                bill.SupplierId = targetSupplierId;
+            }
+            if (dto.GSTRate < 0 || dto.GSTRate > 100)
+                throw new InvalidOperationException("GST rate must be between 0 and 100.");
+            if (dto.Items == null || dto.Items.Count == 0)
+                throw new InvalidOperationException("At least one item is required.");
+            if (dto.Items.Any(i => i == null || string.IsNullOrWhiteSpace(i.Description)))
+                throw new InvalidOperationException("Every line needs a description.");
+            if (dto.Items.Any(i => i.Quantity <= 0 || i.UnitPrice < 0))
+                throw new InvalidOperationException("Quantity must be positive and unit price cannot be negative.");
+            if (bill.Source == "challan-supplier" && dto.Items.Any(i => i.ItemTypeId.HasValue || !string.IsNullOrWhiteSpace(i.HSCode) || (i.SourceInvoiceItemIds?.Count ?? 0) > 0))
                 throw new InvalidOperationException("Challan supplier purchases are non-stock. Record inventory purchases separately.");
 
 
@@ -756,7 +827,7 @@ namespace MyApp.Api.Services.Implementations
             var irnChanged = !string.Equals(oldIrn, newIrn, StringComparison.OrdinalIgnoreCase);
             if (string.IsNullOrWhiteSpace(newIrn))
                 bill.ReconciliationStatus = "ManualOnly";
-            else if (bill.ReconciliationStatus == "ManualOnly")
+            else if (bill.ReconciliationStatus == "ManualOnly" || supplierChanged)
                 bill.ReconciliationStatus = "Pending";
             else if (irnChanged
                      && (bill.ReconciliationStatus == "Matched"
@@ -782,7 +853,7 @@ namespace MyApp.Api.Services.Implementations
                     UOM = i.UOM ?? itemType?.UOM ?? "",
                     UnitPrice = i.UnitPrice,
                     LineTotal = Math.Round(i.Quantity * i.UnitPrice, 2),
-                    HSCode = i.HSCode ?? itemType?.HSCode,
+                    HSCode = itemType != null && string.IsNullOrWhiteSpace(itemType.HSCode) ? null : i.HSCode ?? itemType?.HSCode,
                     FbrUOMId = i.FbrUOMId ?? itemType?.FbrUOMId,
                     SaleType = i.SaleType ?? itemType?.SaleType,
                     RateId = i.RateId,
@@ -862,7 +933,7 @@ namespace MyApp.Api.Services.Implementations
             foreach (var ni in newItems)
             {
                 if (!ni.ItemTypeId.HasValue || ni.Quantity <= 0) continue;
-                if (!trackedNew.Contains(ni.ItemTypeId.Value)) continue;
+                if (!trackedNew.Contains(ni.ItemTypeId.Value) || string.IsNullOrWhiteSpace(ni.HSCode)) continue;
                 desired.TryGetValue(ni.ItemTypeId.Value, out var cur);
                 desired[ni.ItemTypeId.Value] = cur + ni.Quantity;
             }

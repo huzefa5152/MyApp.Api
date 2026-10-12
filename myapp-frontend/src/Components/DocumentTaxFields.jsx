@@ -34,7 +34,9 @@ export default function DocumentTaxFields({
   withholdingTaxAmount = null,
   onWithholdingChange,
   disabled = false,
+  readOnly = false,
 }) {
+  disabled = disabled || readOnly;
   const supportsFurtherTax = furtherTaxRate !== undefined;
 
   const furtherTaxOn = supportsFurtherTax && furtherTaxRate !== null && furtherTaxRate !== "";
@@ -74,13 +76,13 @@ export default function DocumentTaxFields({
       )}
 
       <div style={st.chipRow}>
-        {supportsFurtherTax && !furtherTaxOn && (
+        {!readOnly && supportsFurtherTax && !furtherTaxOn && (
           <button type="button" style={st.addChip} disabled={disabled}
             onClick={() => onFurtherTaxRateChange?.(4)}>
             <MdAdd size={15} /> Further tax
           </button>
         )}
-        {!withholdingOn && (
+        {!readOnly && !withholdingOn && (
           <button type="button" style={st.addChip} disabled={disabled}
             onClick={() => onWithholdingChange?.({ rate: 0.5, amount: null })}>
             <MdAdd size={15} /> Withholding tax
@@ -102,11 +104,11 @@ export default function DocumentTaxFields({
               On the net value of supply. Adds Rs. {money(furtherTaxAmount)} to the bill.
             </div>
           </div>
-          <button type="button" style={st.removeBtn} disabled={disabled}
+          {!readOnly && <button type="button" style={st.removeBtn} disabled={disabled}
             aria-label="Remove further tax" title="Remove further tax"
             onClick={() => onFurtherTaxRateChange?.(null)}>
             <MdClose size={16} />
-          </button>
+          </button>}
         </div>
       )}
 
@@ -139,11 +141,11 @@ export default function DocumentTaxFields({
               it reduces what is collected to Rs. {money(collectible)}.
             </div>
           </div>
-          <button type="button" style={st.removeBtn} disabled={disabled}
+          {!readOnly && <button type="button" style={st.removeBtn} disabled={disabled}
             aria-label="Remove withholding tax" title="Remove withholding tax"
             onClick={() => onWithholdingChange?.({ rate: null, amount: null })}>
             <MdClose size={16} />
-          </button>
+          </button>}
         </div>
       )}
 

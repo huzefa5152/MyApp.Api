@@ -45,7 +45,7 @@ namespace MyApp.Api.Services.Implementations
             return (await _context.ItemTypes
                 .Where(it => ids.Contains(it.Id)
                           && it.HSCode != null
-                          && it.HSCode != "")
+                          && it.HSCode.Trim() != "")
                 .Select(it => it.Id)
                 .ToListAsync())
                 .ToHashSet();
