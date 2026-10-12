@@ -65,7 +65,8 @@ function renderFbrPill(inv, isBillsMode) {
   if (inv.fbrStatus === "Submitted") return statusPill("green", MdCheckCircle, "Submitted", inv.fbrIRN ? `Submitted to FBR — IRN ${inv.fbrIRN} (locked from edits)` : "Submitted to FBR (locked from edits)");
   if (inv.fbrStatus === "Submitting") return statusPill("blue", MdHourglassEmpty, "Submitting…", "A submission is in progress. Please wait and refresh — do not submit again.");
   if (inv.fbrStatus === "Uncertain") return statusPill("amber", MdError, "Uncertain", "A previous submission timed out and its FBR outcome is unconfirmed. An administrator must verify it at FBR and reset it before it can be submitted again.");
-  if (inv.fbrReviewRequired) return statusPill("amber", MdError, "Needs consultant review", "Challans changed. Next: a tax consultant opens Invoices, checks all current items and chooses Complete review. FBR submission is blocked.");
+  if (inv.fbrAdjustmentRequired) return statusPill("amber", MdEdit, "Needs adjustment", "Complete the initial HS classification and filing review before validating or submitting to FBR");
+  if (inv.fbrReviewRequired) return statusPill("amber", MdError, "Needs consultant re-review", "Filing details changed. Next: a tax consultant opens Invoices, checks all current items and chooses Complete review. FBR submission is blocked.");
   if (isBillsMode) return statusPill("amber", MdHourglassEmpty, "Pending", "Pending FBR submission — open the Invoices tab to validate & submit.");
   if (inv.fbrStatus === "Failed") return statusPill("red", MdError, "Failed", inv.fbrErrorMessage || "FBR rejected this submission. Open View FBR for details.");
   if (inv.fbrAdjustmentStale) return statusPill("amber", MdError, "Re-adjust", `Bill changed after FBR adjust — Bill Rs. ${Number(inv.subtotal).toLocaleString()} vs FBR Rs. ${Number(inv.fbrAdjustedSubtotal ?? inv.subtotal).toLocaleString()}. Reopen, re-adjust qty/price, then save.`);

@@ -128,6 +128,7 @@ namespace MyApp.Api.Repositories.Implementations
                         query = query.Where(i =>
                             i.FbrStatus != "Submitted" && !i.IsCancelled && !i.IsFbrExcluded &&
                             i.FbrReviewRequiredAt == null && i.Items.Any() &&
+                            (i.IsDemo || i.NoteKind != 0 || i.FbrReviewedAt != null || i.TaxFilingRowsJson != null || i.Items.Any(it => it.Adjustment != null)) &&
                             (i.TaxFilingRowsJson != null || !i.Items.Any(it =>
                                 (it.Adjustment.AdjustedHSCode ?? it.HSCode) == null || (it.Adjustment.AdjustedHSCode ?? it.HSCode) == "" ||
                                 (it.Adjustment.AdjustedSaleType ?? it.SaleType) == null || (it.Adjustment.AdjustedSaleType ?? it.SaleType) == "" ||
@@ -137,7 +138,7 @@ namespace MyApp.Api.Repositories.Implementations
                     case "notadjusted":
                         query = query.Where(i =>
                             i.FbrStatus != "Submitted" && !i.IsCancelled && !i.IsFbrExcluded &&
-                            (i.FbrReviewRequiredAt != null || !i.Items.Any() ||
+                            (i.FbrReviewRequiredAt != null || (!i.IsDemo && i.NoteKind == 0 && i.FbrReviewedAt == null && i.TaxFilingRowsJson == null && !i.Items.Any(it => it.Adjustment != null)) || !i.Items.Any() ||
                              (i.TaxFilingRowsJson == null && i.Items.Any(it =>
                                 (it.Adjustment.AdjustedHSCode ?? it.HSCode) == null || (it.Adjustment.AdjustedHSCode ?? it.HSCode) == "" ||
                                 (it.Adjustment.AdjustedSaleType ?? it.SaleType) == null || (it.Adjustment.AdjustedSaleType ?? it.SaleType) == "" ||

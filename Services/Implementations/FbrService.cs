@@ -696,8 +696,10 @@ namespace MyApp.Api.Services.Implementations
                 }
             }
 
-            if (invoice.FbrReviewRequiredAt != null)
-                errors.Add("Needs consultant review: challans changed. Open Invoices, review all current items and complete review before validating or submitting to FBR.");
+            if (TaxFilingProjection.NeedsInitialAdjustment(invoice))
+                errors.Add("Needs adjustment: open Invoices and complete the initial tax filing review before FBR validation or submission.");
+            if (TaxFilingProjection.NeedsReReview(invoice))
+                errors.Add("Needs consultant re-review: filing-relevant bill details changed. Open Invoices, review all current items and complete review before validating or submitting to FBR.");
 
             // ── Dual-book "adjustment out of date" gate (2026-07-15) ──
             // If the delivery bill was edited AFTER the tax consultant
@@ -777,8 +779,10 @@ namespace MyApp.Api.Services.Implementations
             if (invoice == null)
                 return Fail("Invoice not found.");
 
-            if (invoice.FbrReviewRequiredAt != null)
-                return Fail("Needs consultant review: open Invoices and complete review of the changed bill before FBR validation, preview or submission.");
+            if (TaxFilingProjection.NeedsInitialAdjustment(invoice))
+                return Fail("Needs adjustment: open Invoices and complete the initial tax filing review before FBR preview, validation or submission.");
+            if (TaxFilingProjection.NeedsReReview(invoice))
+                return Fail("Needs consultant re-review: open Invoices and complete review of the changed bill before FBR validation, preview or submission.");
             if (invoice.TaxFilingRowsJson != null && TaxFilingProjection.IsStale(invoice))
                 return Fail("The bill changed after its filing rows were reviewed. Review the current bill before FBR preview, validation or submission.");
 

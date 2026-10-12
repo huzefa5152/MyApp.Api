@@ -11,6 +11,7 @@ public static class FbrSubmissionClaim
         var filing = snapshot.TaxFilingRowsJson;
         return invoices.Where(i => i.Id == snapshot.Id && i.FbrIRN == null && !i.IsCancelled
             && i.FbrReviewRequiredAt == null && i.TaxFilingRowsJson == filing
+            && (i.IsDemo || i.NoteKind != 0 || i.FbrReviewedAt != null || i.TaxFilingRowsJson != null || i.Items.Any(line => line.Adjustment != null))
             && i.Items.Count == ids.Count && !i.Items.Any(line => !ids.Contains(line.Id))
             && (i.FbrStatus == null || i.FbrStatus == FbrSubmissionStatus.Failed || i.FbrStatus == FbrSubmissionStatus.Validated));
     }

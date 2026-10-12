@@ -172,6 +172,9 @@ public partial class InvoiceService
         if (addedIds.Count == 0 && removedIds.Count == 0)
             return ToDto(invoice);
 
+        var previousFilingSource = TaxFilingProjection.SourceVersion(invoice);
+        var hadConsultantWork = TaxFilingProjection.HasConsultantWork(invoice);
+        if (removedLines.Any(i => i.Adjustment != null)) TaxFilingProjection.PreserveLegacyFiling(invoice);
         foreach (var line in removedLines)
         {
             if (line.Adjustment != null) _context.InvoiceItemAdjustments.Remove(line.Adjustment);
@@ -236,8 +239,8 @@ public partial class InvoiceService
                 });
             }
         }
-        invoice.FbrReviewRequiredAt = DateTime.UtcNow;
         RecalculateBillTotals(invoice);
+        TaxFilingProjection.RecordCommercialChange(invoice, previousFilingSource, hadConsultantWork);
         invoice.FbrStatus = null;
         invoice.FbrErrorMessage = null;
         await _context.SaveChangesAsync();
@@ -271,13 +274,13 @@ public partial class InvoiceService
             throw new InvalidOperationException("The linked bill is in a locked accounting period.");
     }
 
-    public async Task ReconcileChallanBillAsync(int id)
+    public async Task ReconcileChallanBillAsync(int id, string previousFilingSource, bool hadConsultantWork)
     {
         var bill = await _invoiceRepo.GetByIdAsync(id) ?? throw new InvalidOperationException("Linked bill not found.");
         if (bill.Items.Count == 0)
             throw new InvalidOperationException("This would leave an empty bill. Replace its challan, or cancel the bill explicitly first.");
         RecalculateBillTotals(bill);
-        bill.FbrReviewRequiredAt = DateTime.UtcNow;
+        TaxFilingProjection.RecordCommercialChange(bill, previousFilingSource, hadConsultantWork);
         bill.FbrStatus = null; bill.FbrErrorMessage = null;
         await _context.SaveChangesAsync();
         await _stock.SyncInvoiceStockMovementsAsync(bill);

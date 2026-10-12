@@ -140,6 +140,7 @@ namespace MyApp.Api.DTOs
         /// false while this is true.
         /// </summary>
         public bool FbrReviewRequired { get; set; }
+        public bool FbrAdjustmentRequired { get; set; }
         public DateTime? FbrReviewRequiredAt { get; set; }
         public DateTime? FbrReviewedAt { get; set; }
         public string FbrReviewVersion { get; set; } = "";

@@ -47,7 +47,7 @@ public partial class InvoiceService
     private TaxFilingEditorDto FilingEditor(Invoice bill) => new() {
         Bill = ToDto(bill), Version = TaxFilingProjection.EditVersion(bill),
         HasSavedRows = bill.TaxFilingRowsJson != null,
-        RequiresReview = TaxFilingProjection.IsStale(bill) || bill.FbrReviewRequiredAt != null,
+        RequiresReview = TaxFilingProjection.NeedsReReview(bill),
         Rows = TaxFilingProjection.Plan(bill)?.Rows ?? TaxFilingProjection.InitialRows(bill),
         InitialRows = TaxFilingProjection.InitialRows(bill, commercial: true)
     };

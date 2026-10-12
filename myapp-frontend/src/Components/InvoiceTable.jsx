@@ -32,7 +32,8 @@ function fbrStatusBadge(inv, isBillsMode) {
   if (inv.fbrStatus === "Uncertain") {
     return <StatusBadge tone="warning" title="A previous submission timed out — its FBR outcome is unconfirmed. An administrator must verify it at FBR and reset it.">Uncertain</StatusBadge>;
   }
-  if (inv.fbrReviewRequired) return <StatusBadge tone="warning" title="Next: consultant opens Invoices, reviews every current item and completes review. FBR validation and submission are blocked.">Needs consultant review</StatusBadge>;
+  if (inv.fbrAdjustmentRequired) return <StatusBadge tone="warning" title="Complete initial HS classification and filing review before FBR validation or submission.">Needs adjustment</StatusBadge>;
+  if (inv.fbrReviewRequired) return <StatusBadge tone="warning" title="Next: consultant opens Invoices, reviews every current item and completes review. FBR validation and submission are blocked.">Needs consultant re-review</StatusBadge>;
   if (isBillsMode) {
     return <StatusBadge tone="warning">Pending FBR</StatusBadge>;
   }

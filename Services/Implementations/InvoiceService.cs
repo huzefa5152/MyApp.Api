@@ -343,8 +343,9 @@ namespace MyApp.Api.Services.Implementations
             NoteReason = inv.NoteReason,
             NoteReasonRemarks = inv.NoteReasonRemarks,
             NoteAffectsStock = inv.NoteAffectsStock,
-            FbrReady = missing.Count == 0 && !adjustmentStale && inv.FbrReviewRequiredAt == null,
-            FbrReviewRequired = inv.FbrReviewRequiredAt != null,
+            FbrReady = missing.Count == 0 && !adjustmentStale && !TaxFilingProjection.NeedsReReview(inv) && !TaxFilingProjection.NeedsInitialAdjustment(inv),
+            FbrAdjustmentRequired = TaxFilingProjection.NeedsInitialAdjustment(inv),
+            FbrReviewRequired = TaxFilingProjection.NeedsReReview(inv),
             FbrReviewRequiredAt = inv.FbrReviewRequiredAt,
             FbrReviewedAt = inv.FbrReviewedAt,
             FbrReviewVersion = BillChallanVersion(inv),
@@ -1625,8 +1626,8 @@ namespace MyApp.Api.Services.Implementations
             try
             {
                 await AssertBillSnapshotCurrentAsync(invoice);
-                var commercialSnapshot = BillChallanVersion(invoice);
-                var previouslyAdjusted = invoice.FbrReviewedAt != null || invoice.Items.Any(i => i.Adjustment != null);
+                var commercialSnapshot = TaxFilingProjection.SourceVersion(invoice);
+                var previouslyAdjusted = TaxFilingProjection.HasConsultantWork(invoice);
                 // Update invoice-level fields
                 if (dto.Date.HasValue)
                 {
@@ -1777,7 +1778,7 @@ namespace MyApp.Api.Services.Implementations
                             : (pickedType.UOM ?? "");
                         existing.FbrUOMId = itemDto.FbrUOMId ?? pickedType.FbrUOMId;
                         existing.HSCode = pickedType.HSCode;
-                        existing.SaleType = pickedType.SaleType;
+                        existing.SaleType = pickedType.SaleType ?? itemDto.SaleType ?? existing.SaleType;
                     }
                     else
                     {
@@ -1816,8 +1817,7 @@ namespace MyApp.Api.Services.Implementations
                     throw new InvalidOperationException("The commercial bill total cannot be less than receipts already allocated to this bill.");
                 invoice.AmountInWords = NumberToWordsConverter.Convert(invoice.GrandTotal);
 
-                if (previouslyAdjusted && commercialSnapshot != BillChallanVersion(invoice))
-                    invoice.FbrReviewRequiredAt = DateTime.UtcNow;
+                TaxFilingProjection.RecordCommercialChange(invoice, commercialSnapshot, previouslyAdjusted);
 
                 RecalculateBillTotals(invoice);
 
@@ -2151,8 +2151,8 @@ namespace MyApp.Api.Services.Implementations
             try
             {
                 await AssertBillSnapshotCurrentAsync(invoice);
-                var commercialSnapshot = BillChallanVersion(invoice);
-                var previouslyAdjusted = invoice.FbrReviewedAt != null || invoice.Items.Any(i => i.Adjustment != null);
+                var commercialSnapshot = TaxFilingProjection.SourceVersion(invoice);
+                var previouslyAdjusted = TaxFilingProjection.HasConsultantWork(invoice);
                 if (dto.CompleteConsultantReview && !asAdjustment)
                     throw new InvalidOperationException("Complete review from the Invoices screen with consultant adjustment permission.");
                 if (asAdjustment && (dto.CompleteConsultantReview || !string.IsNullOrEmpty(dto.ReviewVersion))
@@ -2385,8 +2385,7 @@ namespace MyApp.Api.Services.Implementations
                     }
                 }
 
-                if (!asAdjustment && previouslyAdjusted && commercialSnapshot != BillChallanVersion(invoice))
-                    invoice.FbrReviewRequiredAt = DateTime.UtcNow;
+                if (!asAdjustment) TaxFilingProjection.RecordCommercialChange(invoice, commercialSnapshot, previouslyAdjusted);
                 if (dto.CompleteConsultantReview)
                 {
                     var reviewItems = invoice.Items.Select(ii =>

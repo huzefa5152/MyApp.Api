@@ -23,6 +23,31 @@ public static class TaxFilingProjection
             i.RateId, i.SroScheduleNo, i.SroItemSerialNo, Retail = Number(i.FixedNotifiedValueOrRetailPrice)
         })
     });
+    public static bool HasConsultantWork(Invoice bill) => bill.FbrReviewedAt != null
+        || bill.TaxFilingRowsJson != null || bill.Items.Any(i => i.Adjustment != null);
+
+    public static bool NeedsInitialAdjustment(Invoice bill) => !bill.IsDemo && bill.NoteKind == 0
+        && !bill.IsCancelled && bill.FbrStatus != FbrSubmissionStatus.Submitted && !HasConsultantWork(bill);
+
+    public static bool NeedsReReview(Invoice bill) => HasConsultantWork(bill)
+        && (bill.FbrReviewRequiredAt != null || IsStale(bill));
+
+    public static void PreserveLegacyFiling(Invoice bill)
+    {
+        var overlays = bill.Items.Where(i => i.Adjustment != null).Select(i => i.Adjustment!).ToList();
+        if (bill.TaxFilingRowsJson != null || overlays.Count == 0) return;
+        bill.TaxFilingRowsJson = JsonSerializer.Serialize(new TaxFilingPlan {
+            SourceVersion = SourceVersion(bill), Rows = InitialRows(bill),
+            SavedAt = overlays.Max(a => a.UpdatedAt ?? a.CreatedAt), SavedBy = overlays[0].CreatedByUserId ?? 0
+        });
+    }
+
+    public static void RecordCommercialChange(Invoice bill, string previousSource, bool hadConsultantWork)
+    {
+        if (!hadConsultantWork) bill.FbrReviewRequiredAt = null;
+        else if (previousSource != SourceVersion(bill)) bill.FbrReviewRequiredAt = DateTime.UtcNow;
+    }
+
     public static string EditVersion(Invoice bill) => Hash(new { Source = SourceVersion(bill), bill.TaxFilingRowsJson });
     public static TaxFilingPlan? Plan(Invoice bill) => bill.TaxFilingRowsJson == null ? null
         : JsonSerializer.Deserialize<TaxFilingPlan>(bill.TaxFilingRowsJson)

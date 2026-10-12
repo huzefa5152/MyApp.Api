@@ -645,9 +645,13 @@ namespace MyApp.Api.Services.Implementations
             List<DeliveryItem> newlyAddedDeliveryItems)
         {
             var invoice = await _context.Invoices
-                .Include(i => i.Items)
+                .Include(i => i.Items).ThenInclude(i => i.Adjustment)
                 .FirstOrDefaultAsync(i => i.Id == dc.InvoiceId!.Value);
             if (invoice == null) return;
+            var previousFilingSource = TaxFilingProjection.SourceVersion(invoice);
+            var hadConsultantWork = TaxFilingProjection.HasConsultantWork(invoice);
+            if (invoice.Items.Any(i => i.Adjustment != null && i.DeliveryItemId.HasValue && removedDeliveryItemIds.Contains(i.DeliveryItemId.Value)))
+                TaxFilingProjection.PreserveLegacyFiling(invoice);
 
             // Remove invoice items linked to deleted delivery items
             if (removedDeliveryItemIds.Count > 0)
@@ -700,7 +704,7 @@ namespace MyApp.Api.Services.Implementations
                 });
             }
 
-            await _invoices.ReconcileChallanBillAsync(invoice.Id);
+            await _invoices.ReconcileChallanBillAsync(invoice.Id, previousFilingSource, hadConsultantWork);
         }
 
         public async Task<bool> CancelAsync(int challanId)
