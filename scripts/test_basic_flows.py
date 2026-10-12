@@ -306,6 +306,22 @@ def test_standalone_bill(base: str, token: str, company: dict, client: dict) -> 
 
 
 # ── Suite: private supplier / actual cost on challans → purchase bills ─
+
+def test_challan_supplier_purchase_gst(base, token, company, client):
+    suite = "Supplier purchase GST preview"
+    status, supplier = http("POST", "/api/suppliers", base, token=token, body={"companyId": company["id"], "name": "GST preview supplier"})
+    if not must("GST preview supplier", status): return
+    status, challan = http("POST", f"/api/deliverychallans/company/{company['id']}", base, token=token, body={"clientId": client["id"], "poNumber": "", "deliveryDate": datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z"), "items": [{"description": "GST preview goods", "quantity": 2, "unit": "Pcs", "supplierId": supplier["id"], "actualUnitCost": 5}]})
+    if not must("GST preview challan", status): return
+    status, preview = http("GET", f"/api/purchasebills/from-challan/{challan['id']}/preview", base, token=token)
+    if not must("GST preview", status): return
+    status, bills = http("POST", f"/api/purchasebills/from-challan/{challan['id']}", base, token=token, body={"revision": preview["revision"], "date": preview["date"], "suppliers": [{"supplierId": supplier["id"], "gstRate": 7.5}]})
+    check(suite, "purchase uses chosen GST without changing challan cost", status == 200 and bills[0]["gstAmount"] == 0.75 and bills[0]["grandTotal"] == 10.75)
+    if status == 200:
+        for bill in bills: http("DELETE", f"/api/purchasebills/{bill['id']}", base, token=token)
+    http("DELETE", f"/api/deliverychallans/{challan['id']}", base, token=token)
+    http("DELETE", f"/api/suppliers/{supplier['id']}", base, token=token)
+
 def test_private_challan_costs(base: str, token: str, company: dict, client: dict) -> None:
     suite = "Challan private costs and supplier purchase bills"
     print(f"\n=== {suite} ===")
@@ -808,6 +824,7 @@ def main() -> int:
         test_billform_itemtype_override(args.base, token, company, client,
                                         classified, second_classified)
         test_private_challan_costs(args.base, token, company, client)
+        test_challan_supplier_purchase_gst(args.base, token, company, client)
         test_freight_charges(args.base, token, company, client)
         from bill_challan_checks import run as check_challan_selection
         check_challan_selection(http, check, args.base, token, company["id"], client["id"])

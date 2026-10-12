@@ -306,6 +306,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+- **2026-10-12:** Add a supplier-grouped purchase preview to challan creation and editing, with zero GST by default, editable per-supplier GST, bill date and reference, duplicate/stale-preview protection, and purchase source filters. Trader creates descriptive supplier payables without stock movements; Customize retains challan item types and its inventory rules.
+
 ### 2026-10-12
 
 - Improve Trader receipts and payments: create bank/cash accounts from the form, group saved allocations before unpaid documents, preserve cheque status, handle bounced cheques consistently, and enable built-in vouchers.

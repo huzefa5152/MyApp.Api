@@ -78,11 +78,12 @@ namespace MyApp.Api.Controllers
             [FromQuery] string? search = null,
             [FromQuery] int? supplierId = null,
             [FromQuery] DateTime? dateFrom = null,
-            [FromQuery] DateTime? dateTo = null)
+            [FromQuery] DateTime? dateTo = null,
+            [FromQuery] bool? fromChallan = null)
         {
             var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
             var clampedPage = PaginationHelper.ClampPage(page);
-            var result = await _service.GetPagedByCompanyAsync(companyId, clampedPage, size, search, supplierId, dateFrom, dateTo);
+            var result = await _service.GetPagedByCompanyAsync(companyId, clampedPage, size, search, supplierId, dateFrom, dateTo, fromChallan);
             await ScrubPaymentIfDenied(result.Items);
             return Ok(result);
         }
@@ -137,9 +138,23 @@ namespace MyApp.Api.Controllers
         /// supplier / actual-cost lines. Authorized on the challan's STORED
         /// company — the route carries only the challan id.
         /// </summary>
+        [HttpGet("from-challan/{challanId}/preview")]
+        [HasPermission("purchasebills.manage.create")]
+        [HasPermission("challans.list.view")]
+        public async Task<ActionResult<ChallanPurchasePreviewDto>> PreviewFromChallan(int challanId)
+        {
+            var companyId = await _context.DeliveryChallans.AsNoTracking()
+                .Where(c => c.Id == challanId && !c.IsDemo).Select(c => (int?)c.CompanyId).FirstOrDefaultAsync();
+            if (companyId == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
+            try { return Ok(await _service.PreviewFromChallanAsync(challanId)); }
+            catch (KeyNotFoundException) { return NotFound(); }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
         [HttpPost("from-challan/{challanId}")]
         [HasPermission("purchasebills.manage.create")]
-        public async Task<ActionResult<List<PurchaseBillDto>>> CreateFromChallan(int challanId)
+        public async Task<ActionResult<List<PurchaseBillDto>>> CreateFromChallan(int challanId, [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] CreateChallanPurchasesDto? request = null)
         {
             var companyId = await _context.DeliveryChallans.AsNoTracking()
                 .Where(c => c.Id == challanId && !c.IsDemo)
@@ -147,7 +162,7 @@ namespace MyApp.Api.Controllers
                 .FirstOrDefaultAsync();
             if (companyId == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
-            try { return Ok(await _service.CreateFromChallanAsync(challanId)); }
+            try { var bills = await _service.CreateFromChallanAsync(challanId, request); await ScrubPaymentIfDenied(bills); return Ok(bills); }
             catch (KeyNotFoundException ex) { return NotFound(new { error = ex.Message }); }
             catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
         }

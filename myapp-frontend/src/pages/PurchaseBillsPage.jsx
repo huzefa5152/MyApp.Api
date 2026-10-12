@@ -60,6 +60,7 @@ export default function PurchaseBillsPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [search, setSearch] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
   const [supplierFilter, setSupplierFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -83,6 +84,7 @@ export default function PurchaseBillsPage() {
       if (pageSize) params.pageSize = pageSize;
       if (search) params.search = search;
       if (supplierFilter) params.supplierId = supplierFilter;
+      if (sourceFilter) params.fromChallan = sourceFilter === "challan";
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
       const { data } = await getPurchaseBillsByCompanyPaged(selectedCompany.id, params);
@@ -95,7 +97,7 @@ export default function PurchaseBillsPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCompany, page, pageSize, search, supplierFilter, dateFrom, dateTo]);
+  }, [selectedCompany, page, pageSize, search, supplierFilter, sourceFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     if (selectedCompany) {
@@ -107,11 +109,11 @@ export default function PurchaseBillsPage() {
     }
   }, [selectedCompany]);
 
-  useEffect(() => { if (selectedCompany) fetchBills(page); }, [page, pageSize, search, supplierFilter, dateFrom, dateTo]);
+  useEffect(() => { if (selectedCompany) fetchBills(page); }, [page, pageSize, search, supplierFilter, sourceFilter, dateFrom, dateTo]);
 
   const onFilterChange = (setter) => (e) => { setter(e.target.value); setPage(1); };
-  const hasFilters = search || supplierFilter || dateFrom || dateTo;
-  const resetFilters = () => { setSearch(""); setSupplierFilter(""); setDateFrom(""); setDateTo(""); setPage(1); };
+  const hasFilters = search || supplierFilter || sourceFilter || dateFrom || dateTo;
+  const resetFilters = () => { setSearch(""); setSupplierFilter(""); setSourceFilter(""); setDateFrom(""); setDateTo(""); setPage(1); };
 
   const handleDelete = async (b) => {
     const ok = await confirm({
@@ -226,6 +228,7 @@ export default function PurchaseBillsPage() {
                 <span className="filter-date-sep">–</span>
                 <input type="date" className="filter-date-input" value={dateTo} onChange={onFilterChange(setDateTo)} title="To" />
               </div>
+              <select className="filter-select" aria-label="Purchase source" value={sourceFilter} onChange={onFilterChange(setSourceFilter)}><option value="">All purchase sources</option><option value="challan">Challan supplier purchases</option><option value="other">Other purchases</option></select>
               {hasFilters && <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>}
               <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 {canPrint && <PrintTemplateSelect picker={tplPicker} />}
@@ -279,7 +282,7 @@ export default function PurchaseBillsPage() {
                           <AttachmentBadge count={attachCounts[b.id]} onClick={() => setAttachTarget(b)} />
                         </div>
                         <p style={cardStyles.text}><strong>Supplier:</strong> {b.supplierName}</p>
-                        {b.sourceDeliveryChallanId && <p style={cardStyles.text}><strong>Source:</strong> Delivery challan</p>}
+                        {b.sourceDeliveryChallanId && <p style={cardStyles.text}><strong>Source:</strong> Challan supplier purchase</p>}
                         <p style={cardStyles.text}><strong>Date:</strong> {new Date(b.date).toLocaleDateString()}</p>
                         <p style={cardStyles.text}><strong>Grand Total:</strong> Rs. {b.grandTotal?.toLocaleString()}</p>
                         {b.supplierIRN && (

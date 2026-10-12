@@ -31,6 +31,7 @@ const colors = {
 
 export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, prefillFromInvoiceId = null, readOnly = false }) {
   const isEdit = !!billId;
+  const [isNonStock, setIsNonStock] = useState(false);
   const isAgainstSale = !!prefillFromInvoiceId;
   const [suppliers, setSuppliers] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
@@ -111,6 +112,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
     (async () => {
       try {
         const { data } = await getPurchaseBillById(billId);
+        setIsNonStock(!!data.isNonStockSupplierPurchase);
         setCurrentNumber(data.purchaseBillNumber);
         setCustomNumber(String(data.purchaseBillNumber));
         setSupplierId(String(data.supplierId));
@@ -299,7 +301,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
             <div className="doc-header-row">
               <div className="doc-header-row__number"><BillNumberField companyId={companyId} documentType="purchase-bill" variant={isEdit ? "edit" : "create"} currentNumber={currentNumber} editRecordId={billId} lockedReason={readOnly ? "Document number is read-only in View." : undefined} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
               <div className="doc-header-row__copy">
-                <DocumentCopyPicker companyId={companyId} destination="PurchaseBill" allowDetails={!isEdit && !isAgainstSale} disabled={readOnly || isAgainstSale}
+                <DocumentCopyPicker companyId={companyId} destination="PurchaseBill" allowDetails={!isEdit && !isAgainstSale} disabled={readOnly || isAgainstSale || isNonStock}
                   onCopy={(source,lines,details) => {
                     setItems(prev => appendCopiedLines(details ? [] : prev, lines, newRow).map(row => ({...row,uom:row.uom || row.unit || ""})));
                     if(details) { setSupplierId(String(source.supplierId));setNotes(source.notes||"");setGstRate(source.gstRate??18);setPaymentTerms(source.paymentTerms||"");setPaymentMode(source.paymentMode||"");setSupplierIRN("");setSupplierBillNumber("");setWithholdingTaxRate(source.withholdingTaxRate??null);setWithholdingTaxAmount(null); }
@@ -392,13 +394,13 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                       <div key={idx} style={mStyles.card}>
                         <div style={mStyles.head}>
                           <div style={{ flex: 1 }}>
-                            <SearchableItemTypeSelect
+                            {isNonStock ? <span>Non-stock supplier cost</span> : <SearchableItemTypeSelect
                               items={eligibleItemTypes}
                               value={it.itemTypeId || ""}
                               onChange={(newId, picked) => pickItemType(idx, newId, picked)}
                               placeholder={isAgainstSale ? "— pick item with HS Code —" : "— optional —"}
                               style={{ padding: "0.4rem 0.55rem", fontSize: "0.82rem", ...(isAgainstSale && !it.itemTypeId ? { borderColor: "#dc3545" } : {}) }}
-                            />
+                            />}
                             {linkedToSale && (
                               <div style={{ fontSize: "0.7rem", color: "#5f6d7e", marginTop: 2 }}>
                                 {it._saleLineCount > 1
@@ -459,14 +461,14 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                       return (
                         <tr key={idx}>
                           <td style={td}>
-                            <SearchableItemTypeSelect
+                            {isNonStock ? <span>Non-stock supplier cost</span> : <SearchableItemTypeSelect
                               items={eligibleItemTypes}
                               value={it.itemTypeId || ""}
                               onChange={(newId, picked) => pickItemType(idx, newId, picked)}
                               placeholder={isAgainstSale ? "— pick item with HS Code —" : "— optional —"}
                               style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem",
                                        ...(isAgainstSale && !it.itemTypeId ? { borderColor: "#dc3545" } : {}) }}
-                            />
+                            />}
                             {linkedToSale && (
                               <div style={{ fontSize: "0.7rem", color: "#5f6d7e", marginTop: 2 }}>
                                 {it._saleLineCount > 1

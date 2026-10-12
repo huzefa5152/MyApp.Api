@@ -7,7 +7,7 @@ namespace MyApp.Api.Services.Interfaces
         Task<PagedResult<PurchaseBillDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, int? supplierId = null,
-            DateTime? dateFrom = null, DateTime? dateTo = null);
+            DateTime? dateFrom = null, DateTime? dateTo = null, bool? fromChallan = null);
         Task<PurchaseBillDto?> GetByIdAsync(int id);
         /// <summary>Set/clear the bill's AP payment due date (drives the
         /// Overdue / Coming-due status). Returns the updated bill or null.</summary>
@@ -15,7 +15,8 @@ namespace MyApp.Api.Services.Interfaces
         /// <summary>Flat merge-data payload for the PurchaseBill print templates.</summary>
         Task<PrintPurchaseBillDto?> GetPrintDataAsync(int id);
         Task<PurchaseBillDto> CreateAsync(CreatePurchaseBillDto dto);
-        Task<List<PurchaseBillDto>> CreateFromChallanAsync(int challanId);
+        Task<ChallanPurchasePreviewDto> PreviewFromChallanAsync(int challanId);
+        Task<List<PurchaseBillDto>> CreateFromChallanAsync(int challanId, CreateChallanPurchasesDto? request = null);
         Task<PurchaseBillDto?> UpdateAsync(int id, UpdatePurchaseBillDto dto);
         Task<bool> DeleteAsync(int id);
         Task<int> GetCountByCompanyAsync(int companyId);

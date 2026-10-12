@@ -19,8 +19,7 @@ import useScrollToError from "../hooks/useScrollToError";
 import DocumentNotesEditor from "./DocumentNotesEditor";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import ChallanPrivateCosts, { useChallanSuppliers } from "./ChallanPrivateCosts";
-import { createPurchaseBillsFromChallan } from "../api/purchaseBillApi";
-import { useConfirm } from "./ConfirmDialog";
+import { useChallanPurchasePreview } from "./ChallanPurchasePreview";
 
 const colors = {
   blue: "#0d47a1",
@@ -70,7 +69,8 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   const [numberValid, setNumberValid] = useState(true);
   const attachmentRef = useRef(null);
   const suppliers = useChallanSuppliers(companyId);
-  const confirm = useConfirm();
+  const purchasePreview = useChallanPurchasePreview();
+  const purchaseRequested = useRef(false);
   // Set when the challan saved but its purchase bills failed — the form then
   // offers a retry instead of saving the challan a second time.
   const [savedChallanId, setSavedChallanId] = useState(null);
@@ -81,10 +81,8 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   const offerPurchaseBills = async (saved, lines) => {
     if (!saved?.id || !has("purchasebills.manage.create") || !lines.length ||
       !lines.every((line) => line.supplierId && line.actualUnitCost !== null && line.actualUnitCost !== undefined && line.actualUnitCost !== "")) return true;
-    const supplierCount = new Set(lines.map((line) => Number(line.supplierId))).size;
-    const yes = await confirm({ title: "Create purchase bills?", message: `Every line has a supplier and actual cost. Create ${supplierCount} unpaid purchase bill${supplierCount === 1 ? "" : "s"} now, one per supplier?`, variant: "info", confirmText: "Create purchase bills", cancelText: "Not now" });
-    if (!yes) return true;
-    try { await createPurchaseBillsFromChallan(saved.id); return true; }
+    if (!purchaseRequested.current) return true;
+    try { await purchasePreview.create(saved.id); return true; }
     catch (err) {
       setSavedChallanId(saved.id);
       setPurchaseError(err.response?.data?.error || "The challan was saved, but purchase bills could not be created.");
@@ -231,6 +229,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   // header or the Cancel button to dismiss.
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
+      {purchasePreview.dialog}
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>Create Delivery Challan</h5>
@@ -373,12 +372,13 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                 itemsLabel="Items"
               />
               <ChallanPrivateCosts companyId={companyId} items={items} onItemsChange={setItems} suppliers={suppliers} />
+              {has("purchasebills.manage.create") && has("challans.list.view") && <div style={{ marginTop: 12 }}><button type="button" style={{ ...formStyles.button, ...formStyles.submit }} disabled={isDisabled || !!savedChallanId || !items.length || !items.every(i => i.supplierId && i.actualUnitCost != null && i.actualUnitCost !== "")} onClick={e => { purchaseRequested.current = true; e.currentTarget.closest("form").requestSubmit(); }}>Save & preview supplier purchases</button><p style={{ fontSize: ".875rem" }}>Set a supplier and actual unit cost on every line to review purchase bills.</p></div>}
             </div>
 
             {savedChallanId && <div role="alert" style={{ marginTop: 12, padding: 12, borderRadius: 8, background: "#fff3e0", color: "#92400e" }}>
               Challan saved. {purchaseError}
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                <button data-admin-close="" type="button" style={{ minHeight: 44 }} disabled={saving} onClick={async () => { setSaving(true); try { await createPurchaseBillsFromChallan(savedChallanId); onClose(); } catch (err) { setPurchaseError(err.response?.data?.error || "Could not create purchase bills."); } finally { setSaving(false); } }}>Retry purchase bills</button>
+                <button data-admin-close="" type="button" style={{ minHeight: 44 }} disabled={saving} onClick={async () => { setSaving(true); try { await purchasePreview.create(savedChallanId); onClose(); } catch (err) { setPurchaseError(err.response?.data?.error || "Could not create purchase bills."); } finally { setSaving(false); } }}>Retry purchase bills</button>
                 <button data-admin-close="" type="button" style={{ minHeight: 44 }} onClick={onClose}>Close without purchase bills</button>
               </div>
             </div>}
