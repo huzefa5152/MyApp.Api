@@ -298,6 +298,8 @@ Optional company Gmail inbox: authorize an account once and link it only to assi
 
 ## Changelog
 
+- **2026-10-12:** Add a supplier-grouped purchase preview to challan creation and editing, with zero GST by default, editable per-supplier GST, bill date and reference, duplicate/stale-preview protection, and purchase source filters. Purchases retain the challan item types and follow the company inventory policy, including V2.
+
 ### 2026-10-10
 
 - Fixed the bill / invoice number field overlapping the Bill Date on the Create Bill, New Bill (No Challan) and Edit Bill screens: the Auto / Custom switch now sits above the number when the column is narrow, and beside it only where there is room.

@@ -87,6 +87,7 @@ export default function PurchaseBillsPage() {
   const [search, setSearch] = useState("");
   // Seed from ?supplierId= so the Suppliers page "N purchase bills" chip
   // deep-links straight to this list filtered to that supplier.
+  const [sourceFilter, setSourceFilter] = useState("");
   const [supplierFilter, setSupplierFilter] = useState(() => searchParams.get("supplierId") || "");
   const [divisionFilter, setDivisionFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -281,6 +282,7 @@ export default function PurchaseBillsPage() {
       if (size) params.pageSize = size;
       if (search) params.search = search;
       if (supplierFilter) params.supplierId = supplierFilter;
+      if (sourceFilter) params.fromChallan = sourceFilter === "challan";
       if (divisionFilter) params.divisionId = divisionFilter;
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
@@ -293,7 +295,7 @@ export default function PurchaseBillsPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCompany, page, size, search, supplierFilter, divisionFilter, dateFrom, dateTo]);
+  }, [selectedCompany, page, size, search, supplierFilter, sourceFilter, divisionFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     if (selectedCompany) {
@@ -311,12 +313,12 @@ export default function PurchaseBillsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCompany]);
 
-  useEffect(() => { if (selectedCompany) fetchBills(page); }, [page, size, search, supplierFilter, divisionFilter, dateFrom, dateTo]);
+  useEffect(() => { if (selectedCompany) fetchBills(page); }, [page, size, search, supplierFilter, sourceFilter, divisionFilter, dateFrom, dateTo]);
   const copy = useDocumentCopy({ sourceType: DOC_COPY_TYPES.purchaseBill, onRefresh: () => fetchBills(page) });
 
   const onFilterChange = (setter) => (e) => { setter(e.target.value); setPage(1); };
-  const hasFilters = search || supplierFilter || divisionFilter || dateFrom || dateTo;
-  const resetFilters = () => { setSearch(""); setSupplierFilter(""); setDivisionFilter(""); setDateFrom(""); setDateTo(""); setPage(1); };
+  const hasFilters = search || supplierFilter || sourceFilter || divisionFilter || dateFrom || dateTo;
+  const resetFilters = () => { setSearch(""); setSupplierFilter(""); setSourceFilter(""); setDivisionFilter(""); setDateFrom(""); setDateTo(""); setPage(1); };
 
   const handleDelete = async (b) => {
     const ok = await confirm({
@@ -452,6 +454,7 @@ export default function PurchaseBillsPage() {
                 <span className="filter-date-sep">–</span>
                 <input type="date" className="filter-date-input" value={dateTo} onChange={onFilterChange(setDateTo)} title="To" />
               </div>
+              <select className="filter-select" aria-label="Purchase source" value={sourceFilter} onChange={onFilterChange(setSourceFilter)}><option value="">All purchase sources</option><option value="challan">Challan supplier purchases</option><option value="other">Other purchases</option></select>
               {hasFilters && <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>}
               <PrintTemplateSelect picker={tplPicker} />
               {isBigScreen && (
@@ -503,7 +506,7 @@ export default function PurchaseBillsPage() {
                         </h5>
                         {b.divisionName && <span style={styles.divisionChip}>{b.divisionName}</span>}
                         <p style={cardStyles.text}><strong>Supplier:</strong> {b.supplierName}</p>
-                        {b.sourceDeliveryChallanId && <p style={cardStyles.text}><strong>Source:</strong> Delivery challan</p>}
+                        {b.sourceDeliveryChallanId && <p style={cardStyles.text}><strong>Source:</strong> Challan supplier purchase</p>}
                         <p style={cardStyles.text}><strong>Date:</strong> {new Date(b.date).toLocaleDateString()}</p>
                         <p style={cardStyles.text}><strong>Grand Total:</strong> Rs. {b.grandTotal?.toLocaleString()}</p>
                         {/* Payment status + balance — clickable to see all

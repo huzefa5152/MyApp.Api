@@ -73,7 +73,8 @@ namespace MyApp.Api.Controllers
             [FromQuery] int? supplierId = null,
             [FromQuery] DateTime? dateFrom = null,
             [FromQuery] DateTime? dateTo = null,
-            [FromQuery] int? divisionId = null)
+            [FromQuery] int? divisionId = null,
+            [FromQuery] bool? fromChallan = null)
         {
             var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
             var clampedPage = PaginationHelper.ClampPage(page);
@@ -83,7 +84,7 @@ namespace MyApp.Api.Controllers
             if (divisionId.HasValue)
                 await _divisionAccess.AssertAccessAsync(CurrentUserId, companyId, divisionId.Value);
             var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
-            var result = await _service.GetPagedByCompanyAsync(companyId, clampedPage, size, search, supplierId, dateFrom, dateTo, divisionId, divScope);
+            var result = await _service.GetPagedByCompanyAsync(companyId, clampedPage, size, search, supplierId, dateFrom, dateTo, divisionId, divScope, fromChallan);
             return Ok(result);
         }
 
@@ -136,18 +137,35 @@ namespace MyApp.Api.Controllers
             }
         }
 
+        [HttpGet("from-challan/{challanId}/preview")]
+        [HasPermission("purchasebills.manage.create")]
+        [HasPermission("challans.list.view")]
+        public async Task<ActionResult<ChallanPurchasePreviewDto>> PreviewFromChallan(int challanId)
+        {
+            var companyId = await _context.DeliveryChallans.AsNoTracking()
+                .Where(c => c.Id == challanId && !c.IsDemo).Select(c => (int?)c.CompanyId).FirstOrDefaultAsync();
+            if (companyId == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
+            var divisionId = await _context.DeliveryChallans.Where(c => c.Id == challanId).Select(c => c.DivisionId).FirstAsync();
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, companyId.Value, divisionId);
+            try { return Ok(await _service.PreviewFromChallanAsync(challanId)); }
+            catch (KeyNotFoundException) { return NotFound(); }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
         [HttpPost("from-challan/{challanId}")]
         [HasPermission("purchasebills.manage.create")]
-        public async Task<ActionResult<List<PurchaseBillDto>>> CreateFromChallan(int challanId)
+        public async Task<ActionResult<List<PurchaseBillDto>>> CreateFromChallan(int challanId, [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] CreateChallanPurchasesDto? request = null)
         {
             var challan = await _context.DeliveryChallans.AsNoTracking()
-                .Where(c => c.Id == challanId)
+                .Where(c => c.Id == challanId && !c.IsDemo)
                 .Select(c => new { c.CompanyId, c.DivisionId })
                 .FirstOrDefaultAsync();
             if (challan == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, challan.CompanyId);
             await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, challan.CompanyId, challan.DivisionId);
-            try { return Ok(await _service.CreateFromChallanAsync(challanId)); }
+            try { return Ok(await _service.CreateFromChallanAsync(challanId, request)); }
+            catch (KeyNotFoundException) { return NotFound(); }
             catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
         }
 

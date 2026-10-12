@@ -28,7 +28,7 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
         <>
           {b.supplierName || "—"}
           {b.divisionName && <span style={divisionChip}>{b.divisionName}</span>}
-          {b.sourceDeliveryChallanId && <span style={divisionChip}>From delivery challan</span>}
+          {b.sourceDeliveryChallanId && <span style={divisionChip}>Challan supplier purchase</span>}
         </>
       ),
     },

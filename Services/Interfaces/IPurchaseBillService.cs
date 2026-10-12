@@ -11,12 +11,13 @@ namespace MyApp.Api.Services.Interfaces
             int companyId, int page, int pageSize,
             string? search = null, int? supplierId = null,
             DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? divisionId = null, HashSet<int>? allowedDivisionIds = null);
+            int? divisionId = null, HashSet<int>? allowedDivisionIds = null, bool? fromChallan = null);
         Task<PurchaseBillDto?> GetByIdAsync(int id);
         /// <summary>Flat merge-data payload for the PurchaseBill print templates.</summary>
         Task<PrintPurchaseBillDto?> GetPrintDataAsync(int id);
         Task<PurchaseBillDto> CreateAsync(CreatePurchaseBillDto dto);
-        Task<List<PurchaseBillDto>> CreateFromChallanAsync(int challanId);
+        Task<ChallanPurchasePreviewDto> PreviewFromChallanAsync(int challanId);
+        Task<List<PurchaseBillDto>> CreateFromChallanAsync(int challanId, CreateChallanPurchasesDto? request = null);
         Task<PurchaseBillDto?> UpdateAsync(int id, UpdatePurchaseBillDto dto);
         /// <summary>Set (or clear, when null) the bill's payment due date —
         /// drives the Overdue/Coming-due status (design §11.5).</summary>

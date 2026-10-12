@@ -13,4 +13,5 @@ export const getPurchaseBillsCount = (companyId) =>
 // Purchase-bill count per supplier (supplierId -> count) for the Suppliers page chip.
 export const getPurchaseBillCountsBySupplier = (companyId) =>
   http.get(`/purchasebills/company/${companyId}/counts-by-supplier`);
-export const createPurchaseBillsFromChallan = (challanId) => http.post(`/purchasebills/from-challan/${challanId}`);
+export const createPurchaseBillsFromChallan = (challanId, settings) => http.post(`/purchasebills/from-challan/${challanId}`, settings);
+export const previewPurchaseBillsFromChallan = (challanId) => http.get(`/purchasebills/from-challan/${challanId}/preview`);

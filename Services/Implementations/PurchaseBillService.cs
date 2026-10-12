@@ -118,7 +118,7 @@ namespace MyApp.Api.Services.Implementations
             int companyId, int page, int pageSize,
             string? search = null, int? supplierId = null,
             DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? divisionId = null, HashSet<int>? allowedDivisionIds = null)
+            int? divisionId = null, HashSet<int>? allowedDivisionIds = null, bool? fromChallan = null)
         {
             var q = _context.PurchaseBills
                 .Include(pb => pb.Supplier)
@@ -135,6 +135,8 @@ namespace MyApp.Api.Services.Implementations
             // top — the controller asserts it against the same allowed set.
             if (allowedDivisionIds != null)
                 q = q.Where(pb => pb.DivisionId == null || allowedDivisionIds.Contains(pb.DivisionId.Value));
+            if (fromChallan.HasValue)
+                q = q.Where(pb => pb.SourceDeliveryChallanId.HasValue == fromChallan.Value);
             if (supplierId.HasValue)
                 q = q.Where(pb => pb.SupplierId == supplierId.Value);
             if (divisionId.HasValue)
@@ -543,7 +545,45 @@ namespace MyApp.Api.Services.Implementations
                 " attempts. Please retry the request.", lastConflict);
         }
 
-        public async Task<List<PurchaseBillDto>> CreateFromChallanAsync(int challanId)
+        private static string ChallanPurchaseRevision(DeliveryChallan challan) =>
+            Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(new {
+                    challan.Id, challan.Status, challan.DeliveryDate,
+                    Items = challan.Items.OrderBy(i => i.Id).Select(i => new {
+                        i.Id, i.Description, i.Quantity, i.Unit, i.SupplierId, i.ActualUnitCost, i.ItemTypeId, i.NonInventoryItemId
+                    })
+                }))));
+
+        public async Task<ChallanPurchasePreviewDto> PreviewFromChallanAsync(int challanId)
+        {
+            var challan = await _context.DeliveryChallans.AsNoTracking()
+                .Include(c => c.Items).ThenInclude(i => i.Supplier)
+                .FirstOrDefaultAsync(c => c.Id == challanId && !c.IsDemo)
+                ?? throw new KeyNotFoundException("Challan not found.");
+            if (challan.Status == "Cancelled") throw new InvalidOperationException("Cannot purchase from a cancelled challan.");
+            if (challan.Items.Count == 0 || challan.Items.Any(i => !i.SupplierId.HasValue || !i.ActualUnitCost.HasValue || i.ActualUnitCost < 0 || i.Quantity <= 0))
+                throw new InvalidOperationException("Set a supplier and non-negative actual unit cost on every line first.");
+            if (challan.Items.Any(i => i.Supplier == null || i.Supplier.CompanyId != challan.CompanyId))
+                throw new InvalidOperationException("A supplier does not belong to this company.");
+            return new ChallanPurchasePreviewDto {
+                ChallanId = challan.Id, ChallanNumber = challan.ChallanNumber,
+                Revision = ChallanPurchaseRevision(challan),
+                Date = (challan.DeliveryDate ?? DateTime.UtcNow).Date,
+                TracksStock = true,
+                AlreadyCreated = await _context.PurchaseBills.AnyAsync(p => p.SourceDeliveryChallanId == challan.Id),
+                Suppliers = challan.Items.GroupBy(i => i.SupplierId!.Value).OrderBy(g => g.Key)
+                    .Select(g => new ChallanSupplierPurchaseDto {
+                        SupplierId = g.Key, SupplierName = g.First().Supplier!.Name,
+                        Items = g.Select(i => new PurchaseItemDto {
+                            Id = i.Id, Description = i.Description, Quantity = i.Quantity,
+                            UOM = i.Unit, UnitPrice = i.ActualUnitCost!.Value,
+                            LineTotal = Math.Round(i.Quantity * i.ActualUnitCost.Value, 2)
+                        }).ToList()
+                    }).ToList()
+            };
+        }
+
+        public async Task<List<PurchaseBillDto>> CreateFromChallanAsync(int challanId, CreateChallanPurchasesDto? request = null)
         {
             // Keep the whole supplier batch atomic. The source+supplier unique index
             // also makes a repeated confirmation safe after a lost HTTP response.
@@ -551,6 +591,7 @@ namespace MyApp.Api.Services.Implementations
             try
             {
                 var challan = await _context.DeliveryChallans
+                    .FromSqlInterpolated($"SELECT * FROM DeliveryChallans WITH (UPDLOCK, HOLDLOCK) WHERE Id = {challanId}")
                     .Include(c => c.Items)
                     .FirstOrDefaultAsync(c => c.Id == challanId && !c.IsDemo);
                 if (challan == null) throw new KeyNotFoundException("Challan not found.");
@@ -561,8 +602,18 @@ namespace MyApp.Api.Services.Implementations
                 if (challan.Items.Any(i => i.ActualUnitCost < 0))
                     throw new InvalidOperationException("Actual unit cost cannot be negative.");
 
+                if (request != null && (request.Revision != ChallanPurchaseRevision(challan) || request.Date == default))
+                    throw new InvalidOperationException("The challan changed or the bill date is missing. Refresh the preview before creating bills.");
+                if (challan.Items.Any(i => i.Quantity <= 0))
+                    throw new InvalidOperationException("Purchase quantities must be positive.");
+
                 var groups = challan.Items.GroupBy(i => i.SupplierId!.Value).OrderBy(g => g.Key).ToList();
                 var supplierIds = groups.Select(g => g.Key).ToList();
+                if (request != null && (request.Suppliers == null || request.Suppliers.Count != groups.Count || request.Suppliers.Any(s => s == null) ||
+                    request.Suppliers.Select(s => s.SupplierId).Distinct().Count() != groups.Count ||
+                    request.Suppliers.Any(s => !supplierIds.Contains(s.SupplierId) || s.GSTRate < 0 || s.GSTRate > 100 || Math.Round(s.GSTRate, 2) != s.GSTRate || s.SupplierBillNumber?.Length > 100)))
+                    throw new InvalidOperationException("Review the suppliers and GST rates (0–100%) before creating bills.");
+
                 var supplierMap = await _context.Suppliers
                     .Where(s => s.CompanyId == challan.CompanyId && supplierIds.Contains(s.Id))
                     .ToDictionaryAsync(s => s.Id);
@@ -576,6 +627,11 @@ namespace MyApp.Api.Services.Implementations
                     throw new InvalidOperationException("A line item type does not belong to this company.");
                 await ValidateNonInvItemsAsync(challan.CompanyId, challan.Items.Select(i => i.NonInventoryItemId));
 
+                // Use the allocator's company lock before reading purchase gaps,
+                // so different challans cannot deadlock while claiming bill numbers.
+                var company = await _context.Companies
+                    .FromSqlInterpolated($"SELECT * FROM Companies WITH (UPDLOCK, ROWLOCK) WHERE Id = {challan.CompanyId}")
+                    .FirstOrDefaultAsync() ?? throw new KeyNotFoundException("Company not found.");
                 var existing = await _context.PurchaseBills.AsNoTracking()
                     .Where(p => p.SourceDeliveryChallanId == challanId)
                     .Select(p => new { p.Id, p.SupplierId })
@@ -591,8 +647,6 @@ namespace MyApp.Api.Services.Implementations
                     return previous;
                 }
 
-                var company = await _context.Companies.FindAsync(challan.CompanyId)
-                    ?? throw new KeyNotFoundException("Company not found.");
                 var number = 0;
                 var createdIds = new List<int>();
                 foreach (var group in groups)
@@ -610,6 +664,10 @@ namespace MyApp.Api.Services.Implementations
                         LineTotal = Math.Round(i.Quantity * i.ActualUnitCost.Value, 2),
                     }).ToList();
                     var total = lines.Sum(i => i.LineTotal);
+                    var settings = request?.Suppliers.Single(s => s.SupplierId == group.Key);
+                    var gstRate = settings?.GSTRate ?? 0m;
+                    var gstAmount = Math.Round(total * gstRate / 100m, 2);
+                    var grandTotal = total + gstAmount;
                     var bill = new PurchaseBill
                     {
                         CompanyId = challan.CompanyId,
@@ -618,10 +676,13 @@ namespace MyApp.Api.Services.Implementations
                         SourceDeliveryChallanId = challan.Id,
                         Source = "delivery-challan",
                         PurchaseBillNumber = number,
-                        Date = (challan.DeliveryDate ?? DateTime.UtcNow).Date,
+                        Date = request?.Date.Date ?? (challan.DeliveryDate ?? DateTime.UtcNow).Date,
                         Subtotal = total,
-                        GrandTotal = total,
-                        AmountInWords = NumberToWordsConverter.Convert(total),
+                        GSTRate = gstRate,
+                        GSTAmount = gstAmount,
+                        GrandTotal = grandTotal,
+                        SupplierBillNumber = settings?.SupplierBillNumber?.Trim(),
+                        AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                         ReconciliationStatus = "ManualOnly",
                         Items = lines,
                     };
