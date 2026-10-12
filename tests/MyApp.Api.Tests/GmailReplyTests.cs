@@ -121,6 +121,24 @@ public class GmailReplyTests
         Assert.Equal("Sent",checkedStatus.GetProperty("Status").GetString());
         permissions.Denied.Add("email.workspace.use");
         await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>service.SendReplyAsync(owner.Id,company.Id,preview.Id,default));
+        permissions.Denied.Clear();
+        var originalContent=message.ProtectedContent;
+        mailbox.HistoryId="saved-history";
+        await db.SaveChangesAsync();
+        fake.Identity=new GmailIdentity(mailbox.GoogleSubject,mailbox.EmailAddress,"replacement-fake-token",GmailProvider.ModifyScope);
+        var upgrade=JsonSerializer.SerializeToElement(await service.StartAsync(owner.Id,company.Id,default,mailbox.Id));
+        var oauthState=Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(upgrade.GetProperty("AuthorizationUrl").GetString()!).Query)["state"].ToString();
+        var completed=JsonSerializer.SerializeToElement(await service.CompleteAsync(owner.Id,new GmailCompleteDto("fake-code",oauthState),default));
+        Assert.Equal(mailbox.Id,completed.GetProperty("Id").GetInt32());
+        Assert.Equal("saved-history",(await db.GmailConnections.AsNoTracking().SingleAsync(c=>c.Id==mailbox.Id)).HistoryId);
+        Assert.Equal(originalContent,(await db.GmailMessages.AsNoTracking().SingleAsync(m=>m.Id==message.Id)).ProtectedContent);
+        Assert.Single(await db.GmailCompanyLinks.Where(l=>l.ConnectionId==mailbox.Id).ToListAsync());
+        await Assert.ThrowsAsync<EmailWorkspaceException>(()=>service.CompleteAsync(owner.Id,new GmailCompleteDto("fake-code",oauthState),default));
+        var wrongUpgrade=JsonSerializer.SerializeToElement(await service.StartAsync(owner.Id,company.Id,default,mailbox.Id));
+        var wrongState=Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(wrongUpgrade.GetProperty("AuthorizationUrl").GetString()!).Query)["state"].ToString();
+        fake.Identity=new GmailIdentity("different-account","different@example.com","fake-token",GmailProvider.ModifyScope);
+        await Assert.ThrowsAsync<EmailWorkspaceException>(()=>service.CompleteAsync(owner.Id,new GmailCompleteDto("fake-code",wrongState),default));
+        Assert.Single(await db.GmailConnections.Where(c=>c.OwnerUserId==owner.Id).ToListAsync());
         await tx.RollbackAsync();
     }
     private class Guard(int company):ICompanyAccessGuard
@@ -143,7 +161,9 @@ public class GmailReplyTests
         public int SendCount;public bool TimeoutAfterSend;
         public bool IsConfigured=>true;public string RedirectUri=>"http://localhost/callback";
         public string AuthorizationUrl(string state,string challenge)=>"http://localhost/?state="+state;
-        public Task<GmailIdentity> ExchangeAsync(string code,string verifier,CancellationToken ct)=>Task.FromResult(new GmailIdentity("test","owner@example.com","local-fake"));
+        public string UpgradeAuthorizationUrl(string state,string challenge)=>AuthorizationUrl(state,challenge);
+        public GmailIdentity Identity=new("test","owner@example.com","local-fake");
+        public Task<GmailIdentity> ExchangeAsync(string code,string verifier,CancellationToken ct)=>Task.FromResult(Identity);
         public Task<string> RefreshAsync(string token,CancellationToken ct)=>Task.FromResult("fake-access");
         public Task<string> GetHistoryIdAsync(string token,CancellationToken ct)=>Task.FromResult("1");
         public Task<GmailBatch> ListAsync(string token,DateTime since,string? page,CancellationToken ct)=>Task.FromResult(new GmailBatch([],null,null));
