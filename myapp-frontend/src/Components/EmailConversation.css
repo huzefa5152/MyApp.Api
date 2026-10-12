@@ -1,0 +1,13 @@
+.ew-conversation { margin-top: 20px; border-top: 1px solid #e8edf3; padding-top: 16px; min-width: 0; }
+.ew-thread-message { border: 1px solid #e8edf3; border-radius: 12px; padding: 12px; margin: 10px 0; background: #f8f9fb; }
+.ew-thread-message summary { min-height: 44px; cursor: pointer; overflow-wrap: anywhere; }
+.ew-thread-message summary span { display: block; color: #5f6d7e; font-size: .85rem; }
+.ew-thread-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.ew-reply { border: 1px solid #d0d7e2; border-radius: 12px; padding: clamp(12px, 2vw, 20px); margin-top: 16px; background: white; }
+.ew-reply-preview { margin-top: 16px; padding: 12px; border-radius: 12px; background: #f1f7fa; }
+.ew-reply-preview dd { margin: 0 0 10px; overflow-wrap: anywhere; }
+.ew-reply label { display: block; color: #5f6d7e; font-weight: 600; margin: 12px 0; }
+.ew-reply textarea { width: 100%; box-sizing: border-box; min-height: 88px; border-radius: 8px; border: 1px solid #d0d7e2; padding: 12px; font: inherit; color: #1a2332; }
+.ew-email[data-unread=true] .ew-subject { font-weight: 800; }
+.ew-email[data-unread=true] { border-left: 3px solid #0d47a1; }
+@media(max-width:759px) { .ew-reply .ew-actions button { flex: 1 1 100%; } }
