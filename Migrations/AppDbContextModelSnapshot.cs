@@ -1263,6 +1263,52 @@ namespace MyApp.Api.Migrations
                     b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
+            modelBuilder.Entity("MyApp.Api.Models.EmailReplyAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ConnectionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("MessageId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ProtectedPreview")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ProviderMessageId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId", "UserId", "MessageId");
+
+                    b.ToTable("EmailReplyAttempts");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
             modelBuilder.Entity("MyApp.Api.Models.EmailWorkspaceEvent", b =>
                 {
                     b.Property<long>("Id")
@@ -1831,6 +1877,9 @@ namespace MyApp.Api.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<bool>("AllowCompanyReplies")
+                        .HasColumnType("bit");
+
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
 
@@ -1883,6 +1932,11 @@ namespace MyApp.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("GrantedScopes")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<string>("HistoryId")
                         .HasColumnType("nvarchar(max)");
@@ -1941,6 +1995,15 @@ namespace MyApp.Api.Migrations
                     b.Property<int>("ConnectionId")
                         .HasColumnType("int");
 
+                    b.Property<bool>("IsRemoved")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("IsUnread")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("LabelsSyncedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("ProtectedContent")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -1998,6 +2061,9 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("ProtectedVerifier")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("UpgradeConnectionId")
+                        .HasColumnType("int");
 
                     b.Property<bool>("Used")
                         .HasColumnType("bit");

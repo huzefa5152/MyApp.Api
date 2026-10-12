@@ -12,6 +12,7 @@ public class EmailSenderRule
 public class EmailLinkSettingsDto
 {
     public bool ShareMatchingEmails { get; set; }
+    public bool AllowCompanyReplies { get; set; }
     [Required, MaxLength(100)] public List<EmailSenderRule> Rules { get; set; } = new();
 }
 public record EmailDecisionDto([Required] string Decision, Guid? Revision);
@@ -62,7 +63,22 @@ public record EmailItemCandidate(string Description, string Unit, int Score, str
 public record EmailItemAssistance(int Index, List<EmailItemCandidate> Candidates);
 public record EmailAttachmentInfo(string Id, string FileName, string MimeType, int Size);
 public record EmailContent(string Text, string Html, List<EmailAttachmentInfo> Attachments);
-public record GmailIdentity(string Subject, string Email, string RefreshToken);
+public record GmailIdentity(string Subject, string Email, string RefreshToken, string GrantedScopes = "https://www.googleapis.com/auth/gmail.readonly");
 public record GmailBatch(List<string> MessageIds, string? NextPageToken, string? HistoryId);
 public record GmailFetchedMessage(string Id, string ThreadId, string Sender, string Subject, DateTime ReceivedAt, EmailContent Content,
-    bool SenderUnverified = false);
+    bool SenderUnverified = false, bool? IsUnread = null, GmailReplyHeaders? ReplyHeaders = null);
+
+public record GmailReplyHeaders(string MessageId, string References, string ReplyTo, List<string> To, List<string> Cc, bool InvalidRecipients = false);
+public record GmailSentMessage(string Id, string ThreadId);
+public record EmailReadStatusDto(bool IsUnread);
+public class EmailReplyDraftDto
+{
+    public bool ReplyAll { get; set; }
+    [MaxLength(128)] public string? TargetProviderMessageId { get; set; }
+    [MaxLength(4000)] public string Introduction { get; set; } = "Please find our quotation below.";
+    [MaxLength(4000)] public string Notes { get; set; } = "";
+    public bool IncludeCurrentMessage { get; set; } = true;
+    [Required, MaxLength(200)] public List<EmailDraftItem> Items { get; set; } = [];
+}
+public record EmailReplyPreview(Guid Id, string Subject, List<string> To, List<string> Cc,
+    string Text, string Html, string ThreadId, string InReplyTo, string References);

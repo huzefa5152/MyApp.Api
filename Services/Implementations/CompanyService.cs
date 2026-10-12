@@ -362,6 +362,7 @@ namespace MyApp.Api.Services.Implementations
                 //    operator saying its links go too.
                 await _context.CustomerPortals.Where(p => p.CompanyId == id).ExecuteDeleteAsync();
                 var emailConnectionIds = await _context.GmailCompanyLinks.Where(e => e.CompanyId == id).Select(e => e.ConnectionId).ToListAsync();
+                await _context.EmailReplyAttempts.Where(e => e.CompanyId == id).ExecuteDeleteAsync();
                 await _context.EmailEnquiries.Where(e => e.CompanyId == id).ExecuteDeleteAsync();
                 await _context.EmailWorkspaceEvents.Where(e => e.CompanyId == id).ExecuteDeleteAsync();
                 await _context.GmailOAuthRequests.Where(e => e.CompanyId == id).ExecuteDeleteAsync();

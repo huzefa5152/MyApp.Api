@@ -3,11 +3,13 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 using MyApp.Api.Services.Interfaces;
 namespace MyApp.Api.Services.Implementations;
 
 public sealed class GmailProvider(HttpClient http, IConfiguration config) : IGmailProvider
 {
+    public const string ModifyScope = "https://www.googleapis.com/auth/gmail.modify";
     public const string ReadScope = "https://www.googleapis.com/auth/gmail.readonly";
     private string ClientId => config["Gmail:ClientId"] ?? "";
     private string ClientSecret => config["Gmail:ClientSecret"] ?? "";
@@ -17,12 +19,15 @@ public sealed class GmailProvider(HttpClient http, IConfiguration config) : IGma
         && (uri.Scheme == "https" || uri.IsLoopback && uri.Scheme == "http");
     private const string Api = "https://gmail.googleapis.com/gmail/v1/users/me/";
     public string AuthorizationUrl(string state, string challenge)
+        => BuildAuthorizationUrl(state, challenge, ReadScope);
+    public string UpgradeAuthorizationUrl(string state, string challenge) => BuildAuthorizationUrl(state, challenge, ModifyScope);
+    private string BuildAuthorizationUrl(string state, string challenge, string requestedScope)
     {
         if (!IsConfigured) throw new InvalidOperationException("Gmail is not configured.");
         return "https://accounts.google.com/o/oauth2/v2/auth?" + Form(new()
         {
             ["client_id"] = ClientId, ["redirect_uri"] = RedirectUri, ["response_type"] = "code",
-            ["scope"] = "openid email " + ReadScope, ["access_type"] = "offline", ["prompt"] = "consent select_account",
+            ["include_granted_scopes"] = "true", ["scope"] = "openid email " + requestedScope, ["access_type"] = "offline", ["prompt"] = "consent select_account",
             ["state"] = state, ["code_challenge"] = challenge, ["code_challenge_method"] = "S256"
         });
     }
@@ -33,7 +38,7 @@ public sealed class GmailProvider(HttpClient http, IConfiguration config) : IGma
         using var token = await TokenAsync(new() { ["code"] = code, ["code_verifier"] = verifier,
             ["grant_type"] = "authorization_code", ["redirect_uri"] = RedirectUri }, ct);
         var root = token.RootElement;
-        if (!root.TryGetProperty("scope", out var scope) || !(scope.GetString() ?? "").Split(' ').Contains(ReadScope))
+        if (!root.TryGetProperty("scope", out var scope) || !(scope.GetString() ?? "").Split(' ').Any(s => s == ReadScope || s == ModifyScope))
             throw new InvalidOperationException("Gmail read access was not granted.");
         var access = root.GetProperty("access_token").GetString()!;
         var refresh = root.TryGetProperty("refresh_token", out var r) ? r.GetString() : null;
@@ -42,7 +47,7 @@ public sealed class GmailProvider(HttpClient http, IConfiguration config) : IGma
         var i = identity.RootElement;
         if (!i.TryGetProperty("email_verified", out var verified) || !verified.GetBoolean())
             throw new InvalidOperationException("A verified Google email is required.");
-        return new(i.GetProperty("sub").GetString()!, i.GetProperty("email").GetString()!, refresh);
+        return new(i.GetProperty("sub").GetString()!, i.GetProperty("email").GetString()!, refresh, scope.GetString() ?? "");
     }
     public async Task<string> RefreshAsync(string refreshToken, CancellationToken ct)
     {
@@ -102,13 +107,14 @@ public sealed class GmailProvider(HttpClient http, IConfiguration config) : IGma
     }
     public async Task<GmailBatch> HistoryAsync(string token, string historyId, string? pageToken, CancellationToken ct)
     {
-        using var doc = await GetAsync(Api + "history?maxResults=50&historyTypes=messageAdded&startHistoryId="
+        using var doc = await GetAsync(Api + "history?maxResults=50&startHistoryId="
             + Uri.EscapeDataString(historyId) + (pageToken == null ? "" : "&pageToken=" + Uri.EscapeDataString(pageToken)), token, ct);
         var r = doc.RootElement; var ids = new HashSet<string>();
         if (r.TryGetProperty("history", out var h))
             foreach (var entry in h.EnumerateArray())
-                if (entry.TryGetProperty("messagesAdded", out var added))
-                    foreach (var a in added.EnumerateArray()) ids.Add(a.GetProperty("message").GetProperty("id").GetString()!);
+                foreach (var kind in new[] { "messagesAdded", "labelsAdded", "labelsRemoved", "messagesDeleted" })
+                    if (entry.TryGetProperty(kind, out var changed))
+                        foreach (var a in changed.EnumerateArray()) ids.Add(a.GetProperty("message").GetProperty("id").GetString()!);
         return new(ids.ToList(), r.TryGetProperty("nextPageToken", out var p) ? p.GetString() : null, r.GetProperty("historyId").GetString());
     }
     public async Task<GmailFetchedMessage?> ReadAsync(string token, string id, CancellationToken ct)
@@ -120,10 +126,21 @@ public sealed class GmailProvider(HttpClient http, IConfiguration config) : IGma
         {
             var r = doc.RootElement;
             if (r.TryGetProperty("labelIds", out var labels) && labels.EnumerateArray().Any(l => l.GetString() is "SPAM" or "TRASH" or "DRAFT" or "SENT")) return null;
+            return ParseMessage(r);
+        }
+    }
+    private static GmailFetchedMessage ParseMessage(JsonElement r)
+    {
             var payload = r.GetProperty("payload");
             var headers = payload.GetProperty("headers").EnumerateArray().ToList();
             string Header(string name) => headers.FirstOrDefault(h => string.Equals(h.GetProperty("name").GetString(), name, StringComparison.OrdinalIgnoreCase))
                 is var found && found.ValueKind != JsonValueKind.Undefined ? found.GetProperty("value").GetString() ?? "" : "";
+            bool invalidRecipients = false;
+            List<string> RecipientList(string value) {
+                try { return EmailReplyRules.Addresses(value); }
+                catch (Exception e) when (e is FormatException or InvalidOperationException) { invalidRecipients=true; return []; }
+            }
+            var to = RecipientList(Header("To")); var cc = RecipientList(Header("Cc"));
             var from = Header("From");
             try { from = Helpers.EmailWorkspaceRules.NormalizeAddress(from); } catch { from = ""; }
             var text = new StringBuilder(); var html = new StringBuilder(); var attachments = new List<EmailAttachmentInfo>();
@@ -157,10 +174,41 @@ public sealed class GmailProvider(HttpClient http, IConfiguration config) : IGma
             var dmarcFailed = headers.Any(h =>
                 string.Equals(h.GetProperty("name").GetString(), "Authentication-Results", StringComparison.OrdinalIgnoreCase)
                 && (h.GetProperty("value").GetString() ?? "").Contains("dmarc=fail", StringComparison.OrdinalIgnoreCase));
-            return new(id, r.GetProperty("threadId").GetString()!, from, Header("Subject")[..Math.Min(Header("Subject").Length, 1000)],
+            return new(r.GetProperty("id").GetString()!, r.GetProperty("threadId").GetString()!, from, Header("Subject")[..Math.Min(Header("Subject").Length, 1000)],
                 DateTimeOffset.FromUnixTimeMilliseconds(long.Parse(r.GetProperty("internalDate").GetString()!)).UtcDateTime,
-                new(text.ToString(), html.ToString(), attachments.Take(100).ToList()), dmarcFailed);
-        }
+                new(text.ToString(), html.ToString(), attachments.Take(100).ToList()), dmarcFailed,
+                r.TryGetProperty("labelIds", out var statusLabels) ? statusLabels.EnumerateArray().Any(l => l.GetString() == "UNREAD") : null,
+                new(Header("Message-ID"), Header("References"), Header("Reply-To"), to, cc, invalidRecipients));
+    }
+    public async Task<List<GmailFetchedMessage>> ThreadAsync(string token, string threadId, CancellationToken ct)
+    {
+        using var doc = await GetAsync(Api + "threads/" + Uri.EscapeDataString(threadId) + "?format=full", token, ct);
+        return doc.RootElement.GetProperty("messages").EnumerateArray()
+            .Where(m => !m.GetProperty("labelIds").EnumerateArray().Any(l => l.GetString() is "SPAM" or "TRASH" or "DRAFT"))
+            .Select(ParseMessage).OrderBy(m => m.ReceivedAt).ToList();
+    }
+    private async Task<JsonDocument> PostAsync(string path, string token, object value, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, Api + path);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Content = new StringContent(JsonSerializer.Serialize(value), Encoding.UTF8, "application/json");
+        return await SendAsync(request, ct);
+    }
+    public async Task SetUnreadAsync(string token, string id, bool unread, CancellationToken ct)
+    {
+        using var _ = await PostAsync("messages/" + Uri.EscapeDataString(id) + "/modify", token,
+            new { addLabelIds = unread ? new[] { "UNREAD" } : Array.Empty<string>(), removeLabelIds = unread ? Array.Empty<string>() : new[] { "UNREAD" } }, ct);
+    }
+    public async Task<GmailSentMessage> SendReplyAsync(string token, EmailReplyPreview preview, string from, CancellationToken ct)
+    {
+        using var doc = await PostAsync("messages/send", token,
+            new { threadId = preview.ThreadId, raw = Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlEncode(EmailReplyRules.Mime(preview, from)) }, ct);
+        return new(doc.RootElement.GetProperty("id").GetString()!, doc.RootElement.GetProperty("threadId").GetString()!);
+    }
+    public async Task<string?> FindSentReplyAsync(string token, Guid attemptId, CancellationToken ct)
+    {
+        using var doc = await GetAsync(Api + "messages?q=" + Uri.EscapeDataString("in:sent rfc822msgid:" + EmailReplyRules.MessageId(attemptId)), token, ct);
+        return doc.RootElement.TryGetProperty("messages", out var list) && list.GetArrayLength() > 0 ? list[0].GetProperty("id").GetString() : null;
     }
     public async Task<byte[]> AttachmentAsync(string token, string messageId, string attachmentId, CancellationToken ct)
     {

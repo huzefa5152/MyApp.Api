@@ -8,6 +8,7 @@ public class GmailConnection
     [MaxLength(255)] public string GoogleSubject { get; set; } = "";
     [MaxLength(320)] public string EmailAddress { get; set; } = "";
     public string ProtectedRefreshToken { get; set; } = "";
+    [MaxLength(2000)] public string GrantedScopes { get; set; } = "";
     [MaxLength(24)] public string Status { get; set; } = "Connected";
     [MaxLength(200)] public string? LastError { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -27,6 +28,7 @@ public class GmailCompanyLink
     public GmailConnection Connection { get; set; } = null!;
     public int CompanyId { get; set; }
     public bool ShareMatchingEmails { get; set; }
+    public bool AllowCompanyReplies { get; set; }
     public bool IsEnabled { get; set; } = true;
     public string RulesJson { get; set; } = "[]";
 }
@@ -41,6 +43,9 @@ public class GmailMessage
     [MaxLength(1000)] public string Subject { get; set; } = "";
     public DateTime ReceivedAt { get; set; }
     public string ProtectedContent { get; set; } = "";
+    public bool? IsUnread { get; set; }
+    public bool IsRemoved { get; set; }
+    public DateTime? LabelsSyncedAt { get; set; }
     /// <summary>
     /// Gmail's own Authentication-Results said dmarc=fail: the From address is
     /// forged or broken. The owner still sees the message, but a sender rule never
@@ -71,6 +76,7 @@ public class GmailOAuthRequest
     public string ProtectedVerifier { get; set; } = "";
     public DateTime ExpiresAt { get; set; }
     public bool Used { get; set; }
+    public int? UpgradeConnectionId { get; set; }
 }
 public class EmailWorkspaceEvent
 {
@@ -80,4 +86,18 @@ public class EmailWorkspaceEvent
     public int? EnquiryId { get; set; }
     [MaxLength(40)] public string Action { get; set; } = "";
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+}
+
+public class EmailReplyAttempt
+{
+    public Guid Id { get; set; }
+    public int CompanyId { get; set; }
+    public int UserId { get; set; }
+    public int ConnectionId { get; set; }
+    public int MessageId { get; set; }
+    public string ProtectedPreview { get; set; } = "";
+    [MaxLength(20)] public string Status { get; set; } = "Draft";
+    [MaxLength(128)] public string? ProviderMessageId { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? SentAt { get; set; }
 }

@@ -48,26 +48,28 @@ public sealed partial class EmailWorkspaceService(AppDbContext db, ICompanyAcces
             var owner = link.Connection.OwnerUserId == user;
             if (!owner && !canRemove && !await OwnerCanSyncAsync(link.Connection, company)) continue;
             if (!owner && !canRemove && !link.ShareMatchingEmails && !await db.EmailEnquiries.AnyAsync(e => e.CompanyId == company && e.Message.ConnectionId == link.ConnectionId && e.Decision == "Kept")) continue;
-            visible.Add(new { link.Id, link.ConnectionId, link.CompanyId, link.ShareMatchingEmails, link.IsEnabled,
+            visible.Add(new { link.Id, link.ConnectionId, link.CompanyId, link.ShareMatchingEmails, link.AllowCompanyReplies, link.IsEnabled,
                 link.Connection.EmailAddress, link.Connection.Status, link.Connection.LastError, link.Connection.LastSyncedAt,
-                link.Connection.BackfillComplete, IsOwner = owner, Rules = owner ? EmailWorkspaceRules.Read(link.RulesJson) : null });
+                link.Connection.BackfillComplete, NeedsUpgrade = owner && !CanModify(link.Connection), IsOwner = owner, Rules = owner ? EmailWorkspaceRules.Read(link.RulesJson) : null });
         }
         var own = await db.GmailConnections.AsNoTracking().Where(c => c.OwnerUserId == user)
             .Select(c => new { c.Id, c.EmailAddress, c.Status }).ToListAsync();
         return new { Configured = gmail.IsConfigured, Links = visible, OwnConnections = own, CanPermanentlyRemove = canRemove };
     }
-    public async Task<object> StartAsync(int user, int company, CancellationToken ct)
+    public async Task<object> StartAsync(int user, int company, CancellationToken ct, int? upgradeConnectionId = null)
     {
         await AssertWorkspaceAccessAsync(user, company);
         if (!gmail.IsConfigured) throw new EmailWorkspaceException(503, "Gmail setup is not complete. Ask the installation administrator to configure Google OAuth.");
+        if (upgradeConnectionId.HasValue && !await permissions.HasPermissionAsync(user,"email.replies.send") && !await permissions.HasPermissionAsync(user,"email.read.manage")) throw new UnauthorizedAccessException();
+        if (upgradeConnectionId.HasValue && !await db.GmailCompanyLinks.AnyAsync(l => l.CompanyId == company && l.ConnectionId == upgradeConnectionId && l.Connection.OwnerUserId == user && l.IsEnabled, ct)) throw Missing();
         var state = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         var verifier = Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(48));
         var challenge = Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlEncode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
         await db.GmailOAuthRequests.Where(r => r.ExpiresAt < DateTime.UtcNow).ExecuteDeleteAsync(ct);
-        db.GmailOAuthRequests.Add(new() { StateHash = Hash(state), UserId = user, CompanyId = company,
+        db.GmailOAuthRequests.Add(new() { StateHash = Hash(state), UserId = user, CompanyId = company, UpgradeConnectionId = upgradeConnectionId,
             ProtectedVerifier = Protect(verifier), ExpiresAt = DateTime.UtcNow.AddMinutes(10) });
         await db.SaveChangesAsync(ct);
-        return new { AuthorizationUrl = gmail.AuthorizationUrl(state, challenge) };
+        return new { AuthorizationUrl = upgradeConnectionId.HasValue ? gmail.UpgradeAuthorizationUrl(state, challenge) : gmail.AuthorizationUrl(state, challenge) };
     }
     private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
     public async Task<object> CompleteAsync(int user, GmailCompleteDto dto, CancellationToken ct)
@@ -83,6 +85,8 @@ public sealed partial class EmailWorkspaceService(AppDbContext db, ICompanyAcces
         await AssertWorkspaceAccessAsync(user, pending.CompanyId);
         if (!await permissions.HasPermissionAsync(user, "email.connections.manage")) throw new UnauthorizedAccessException("Connection permission was revoked.");
         var connection = await db.GmailConnections.SingleOrDefaultAsync(c => c.OwnerUserId == user && c.GoogleSubject == identity.Subject, ct);
+        if (pending.UpgradeConnectionId.HasValue && (connection == null || connection.Id != pending.UpgradeConnectionId))
+            throw Invalid("Choose the same Gmail account when upgrading permissions.");
         if (connection == null)
         {
             if (await db.GmailConnections.CountAsync(c => c.OwnerUserId == user, ct) >= 20) throw Invalid("A user can connect up to 20 Gmail accounts.");
@@ -90,6 +94,7 @@ public sealed partial class EmailWorkspaceService(AppDbContext db, ICompanyAcces
             db.GmailConnections.Add(connection);
         }
         connection.ProtectedRefreshToken = Protect(identity.RefreshToken);
+        connection.GrantedScopes = identity.GrantedScopes;
         connection.Status = "Connected"; connection.LastError = null; connection.NextSyncAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
         await LinkAsync(user, pending.CompanyId, connection.Id, ct);
@@ -120,7 +125,7 @@ public sealed partial class EmailWorkspaceService(AppDbContext db, ICompanyAcces
             catch (ArgumentException) { throw Invalid("A sender rule contains an invalid email address."); }
             if (rule.ClientId.HasValue && !await db.Clients.AnyAsync(c => c.Id == rule.ClientId && c.CompanyId == company, ct)) throw Invalid("The selected customer does not belong to this company.");
         }
-        link.RulesJson = JsonSerializer.Serialize(dto.Rules); link.ShareMatchingEmails = dto.ShareMatchingEmails;
+        link.RulesJson = JsonSerializer.Serialize(dto.Rules); link.ShareMatchingEmails = dto.ShareMatchingEmails; link.AllowCompanyReplies = dto.AllowCompanyReplies;
         Event(user, company, "GmailRulesUpdated");
         await db.SaveChangesAsync(ct);
     }
@@ -159,6 +164,7 @@ public sealed partial class EmailWorkspaceService(AppDbContext db, ICompanyAcces
         if (link.Connection.SyncLeaseUntil > DateTime.UtcNow)
             throw new EmailWorkspaceException(409, "This mailbox is syncing. Wait for sync to finish before permanently removing its company connection.");
         var enquiries = db.EmailEnquiries.Where(e => e.CompanyId == company && e.Message.ConnectionId == link.ConnectionId);
+        await db.EmailReplyAttempts.Where(a => a.CompanyId == company && a.ConnectionId == link.ConnectionId).ExecuteDeleteAsync(ct);
         await db.EmailWorkspaceEvents.Where(e => e.CompanyId == company && e.EnquiryId != null && enquiries.Select(q => q.Id).Contains(e.EnquiryId.Value)).ExecuteDeleteAsync(ct);
         // Quotations are independent documents; deleting their source enquiries detaches email lineage only.
         await enquiries.ExecuteDeleteAsync(ct);
@@ -224,12 +230,17 @@ public sealed partial class EmailWorkspaceService(AppDbContext db, ICompanyAcces
             }
             foreach (var id in batch.MessageIds.Distinct())
             {
-                if (await db.GmailMessages.AnyAsync(m => m.ConnectionId == connectionId && m.ProviderMessageId == id, deadline.Token)) continue;
+                var cached = await db.GmailMessages.SingleOrDefaultAsync(m => m.ConnectionId == connectionId && m.ProviderMessageId == id, deadline.Token);
                 var fetched = await gmail.ReadAsync(token, id, deadline.Token);
-                if (fetched == null) continue;
+                if (fetched == null) { if (cached != null) cached.IsRemoved = true; continue; }
+                if (cached != null) { cached.IsRemoved = false; cached.IsUnread = fetched.IsUnread; cached.LabelsSyncedAt = DateTime.UtcNow; continue; }
                 db.GmailMessages.Add(new() { ConnectionId = connectionId, ProviderMessageId = fetched.Id, ThreadId = fetched.ThreadId,
                     Sender = fetched.Sender, Subject = fetched.Subject, ReceivedAt = fetched.ReceivedAt, ProtectedContent = Protect(fetched.Content),
-                    SenderUnverified = fetched.SenderUnverified });
+                    SenderUnverified = fetched.SenderUnverified, IsUnread = fetched.IsUnread, LabelsSyncedAt = DateTime.UtcNow });
+            }
+            foreach (var cached in await db.GmailMessages.Where(m => m.ConnectionId == connectionId && m.LabelsSyncedAt == null && !m.IsRemoved).Take(10).ToListAsync(deadline.Token)) {
+                var live = await gmail.ReadAsync(token,cached.ProviderMessageId,deadline.Token);
+                cached.IsRemoved = live == null; cached.IsUnread = live?.IsUnread; cached.LabelsSyncedAt = DateTime.UtcNow;
             }
             access.InvalidateUser(connection.OwnerUserId);
             permissions.InvalidateUser(connection.OwnerUserId);
@@ -278,7 +289,7 @@ public sealed partial class EmailWorkspaceService(AppDbContext db, ICompanyAcces
         var matching = MatchingMessages(company).Where(m => shared.Contains(m.ConnectionId)).Select(m => m.Id);
         var ids = db.EmailEnquiries.Where(e => e.CompanyId == company && e.Decision == "Kept").Select(e => e.MessageId)
             .Union(db.GmailMessages.Where(m => owned.Contains(m.ConnectionId)).Select(m => m.Id)).Union(matching);
-        return db.GmailMessages.AsNoTracking().Where(m => ids.Contains(m.Id));
+        return db.GmailMessages.AsNoTracking().Where(m => !m.IsRemoved && ids.Contains(m.Id));
     }
     private IQueryable<GmailMessage> MatchingMessages(int company) => db.GmailMessages.FromSqlInterpolated($"""
             SELECT m.* FROM GmailMessages m WHERE EXISTS (
@@ -296,11 +307,13 @@ public sealed partial class EmailWorkspaceService(AppDbContext db, ICompanyAcces
         var query = from m in visible
                     join e in db.EmailEnquiries.AsNoTracking().Where(e => e.CompanyId == company) on m.Id equals e.MessageId into enquiries
                     from e in enquiries.DefaultIfEmpty()
-                    select new { m.Id, m.ConnectionId, m.Sender, m.Subject, m.ReceivedAt,
+                    select new { m.Id, m.ConnectionId, m.Sender, m.Subject, m.ReceivedAt, m.IsUnread, m.LabelsSyncedAt,
                         Decision = e == null ? "Unreviewed" : e.Decision, EnquiryId = e == null ? (int?)null : e.Id,
                         SalesQuoteId = e == null ? null : e.SalesQuoteId, SalesQuoteNumber = e == null ? null : e.SalesQuoteNumber,
                         Revision = e == null ? (Guid?)null : e.Revision,
                         IsSuggested = suggested.Contains(m.Id) || m.Subject.ToLower().Contains("quotation") || m.Subject.ToLower().Contains("quote") || m.Subject.ToLower().Contains("rfq") || m.Subject.ToLower().Contains("requirement") || m.Subject.ToLower().Contains("indent") };
+        if (filter == "Unread") query = query.Where(x => x.IsUnread == true);
+        if (filter == "Read") query = query.Where(x => x.IsUnread == false);
         if (filter == "Converted") query = query.Where(x => x.SalesQuoteId != null);
         else if (filter is "Kept" or "Ignored" or "Unreviewed") query = query.Where(x => x.Decision == filter && x.SalesQuoteId == null);
         else query = query.Where(x => x.Decision != "Ignored");
@@ -317,7 +330,7 @@ public sealed partial class EmailWorkspaceService(AppDbContext db, ICompanyAcces
         var m = await MessageAsync(user, company, id, ct);
         var content = Unprotect<EmailContent>(m.ProtectedContent);
         var enquiry = await db.EmailEnquiries.AsNoTracking().SingleOrDefaultAsync(e => e.CompanyId == company && e.MessageId == id, ct);
-        return new { m.Id, m.Subject, m.Sender, m.ReceivedAt, Text = EmailEnquiryExtractor.PlainText(content),
+        return new { m.Id, m.Subject, m.Sender, m.ReceivedAt, m.IsUnread, m.LabelsSyncedAt, Text = EmailEnquiryExtractor.PlainText(content),
             // The sender's HTML, shown in a sandboxed frame. Untrusted: never rendered into the page itself.
             Html = content.Html ?? "", content.Attachments, Decision = enquiry?.Decision ?? "Unreviewed", enquiry?.SalesQuoteId, enquiry?.SalesQuoteNumber,
             enquiry?.Revision,

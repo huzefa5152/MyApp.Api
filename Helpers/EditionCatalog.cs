@@ -186,7 +186,7 @@ namespace MyApp.Api.Helpers
                 .ToList();
 
         public static IReadOnlyList<string> EmailWorkspaceKeys { get; } =
-            PermissionCatalog.All.Where(IsOptionalModule).Select(d => d.Key).ToList();
+            PermissionCatalog.All.Where(d => IsOptionalModule(d) && d.Key != "email.replies.send" && d.Key != "email.read.manage").Select(d => d.Key).ToList();
 
         /// <summary>The seeded roles, in the order they should be listed.</summary>
         public static IReadOnlyList<(string Name, string Description, IReadOnlyList<string> Keys)> All { get; } =

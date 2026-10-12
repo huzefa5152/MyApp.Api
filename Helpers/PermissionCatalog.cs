@@ -432,6 +432,8 @@ namespace MyApp.Api.Helpers
             new("email.inbox.view", "EmailWorkspace", "Inbox", "View", "Read the company email workspace"),
             new("email.inbox.manage", "EmailWorkspace", "Inbox", "Manage", "Keep, ignore and restore enquiries"),
             new("email.enquiries.manage", "EmailWorkspace", "Enquiries", "Manage", "Review email enquiries and prepare quotations"),
+            new("email.replies.send", "EmailWorkspace", "Replies", "Send", "Reply to visible enquiries using an owned or explicitly delegated Gmail mailbox"),
+            new("email.read.manage", "EmailWorkspace", "Inbox", "Gmail read status", "Change visible email read/unread status in an owned or explicitly delegated Gmail mailbox"),
             new("email.connections.manage", "EmailWorkspace", "Connections", "Manage", "Connect your Gmail accounts and configure company sender rules"),
             new("fbr.reference.read",         "FBR", "Reference", "Read",
                 "Read FBR reference catalogs (HS codes, UOMs, provinces, sale types)"),

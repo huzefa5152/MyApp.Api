@@ -59,6 +59,7 @@ namespace MyApp.Api.Helpers
         // or contact info into AuditLogs.
         private static readonly string[] RedactFieldNames = new[]
         {
+            "introduction", "notes", "text", "html", "protectedpreview", "protectedcontent", "protecteddraft",
             "code", "state", "access_token", "refresh_token", "client_secret",
             "password", "currentpassword", "newpassword", "oldpassword",
             "passwordhash", "confirmpassword",
