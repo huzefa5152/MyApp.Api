@@ -950,10 +950,11 @@ export default function InvoicePage({ mode = "invoices" }) {
         <div style={styles.loadingContainer}><div style={styles.spinner} /></div>
       ) : companies.length > 0 ? (
         <>
-          {companies.length > 1 && (<div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <MdBusiness size={20} color={colors.blue} />
+          {companies.length > 1 && (<div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.75rem", padding: "0.85rem 1rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 12, background: "#fff" }}>
+            <label htmlFor="invoice-company" style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 600, color: colors.textSecondary }}><MdBusiness aria-hidden="true" size={20} color={colors.blue} /> Company</label>
             <select
-              style={dropdownStyles.base}
+              id="invoice-company"
+              style={{ ...dropdownStyles.base, flex: "1 1 220px", minWidth: 0, maxWidth: 420, minHeight: 44 }}
               value={selectedCompany?.id || ""}
               onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))}
             >

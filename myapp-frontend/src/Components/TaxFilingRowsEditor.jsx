@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { getTaxFiling, saveTaxFiling } from "../api/invoiceApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { usePermissions } from "../contexts/PermissionsContext";
-import { formStyles } from "../theme";
+import { formStyles, modalSizes } from "../theme";
 import { useConfirm } from "./ConfirmDialog";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import { amount, money, mergeFilingRows, separateFilingRow, filingErrors } from "../utils/taxFilingRows";
@@ -83,12 +83,13 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
   const total = rows.reduce((n, r) => n + amount(r.valueExclTax), 0);
   const difference = data ? amount(data.bill.subtotal) - total : 0;
   return <div style={formStyles.backdrop}>
-    <form id="tax-filing-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="filing-title" className="tax-filing" style={{ ...formStyles.modal, maxWidth: 1160 }} onSubmit={save} onKeyDown={keyDown}>
-      <header className="tf-header"><div><h2 id="filing-title">Tax filing rows {data ? `· Invoice ${data.bill.invoiceNumber}` : ""}</h2><p>Combine selected groups or classify each separately. Original bill quantities, prices and amounts stay unchanged.</p></div><button ref={closeRef} type="button" onClick={close} disabled={saving}>Close</button></header>
-      <div className="tf-body">
+    <form id="tax-filing-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="filing-title" className="tax-filing" style={{ ...formStyles.modal, maxWidth: modalSizes.xxl }} onSubmit={save} onKeyDown={keyDown}>
+      <header className="tf-header" style={formStyles.header}><div><h2 id="filing-title" style={formStyles.title}>Tax filing rows {data ? `· Invoice ${data.bill.invoiceNumber}` : ""}</h2><p>Combine selected groups or classify each separately. Original bill quantities, prices and amounts stay unchanged.</p></div><button ref={closeRef} type="button" aria-label="Close" style={formStyles.closeButton} onClick={close} disabled={saving}>&times;</button></header>
+      <div className="tf-body" style={formStyles.body}>
         {error && <div ref={errorRef} tabIndex={-1} role="alert" className="tf-error">{error}</div>}
         {!data && !error && <p role="status">Loading the bill and filing rows…</p>}
         {data && <>
+          <div className="tf-document-context"><span>Company</span><strong>{data.bill.companyName || "Selected company"}</strong><span>Invoice #{data.bill.invoiceNumber}</span></div>
           <div className="tf-summary" aria-live="polite"><div>Bill subtotal<strong>Rs. {money(data.bill.subtotal)}</strong></div><div>Filing total<strong>Rs. {money(total / 100)}</strong></div><div className={difference ? "tf-mismatch" : "tf-match"}>{difference === 0 ? "Matched" : difference > 0 ? "Amount remaining" : "Amount over bill"}<strong>Rs. {money(Math.abs(difference) / 100)}</strong></div></div>
           {data.requiresReview && <div className="tf-warning">The original bill changed after its last review. Check all current source lines and amounts before saving. Rebuild rows if lines were added or removed.</div>}
           {!editable && !readOnly && <p className="tf-warning">Editing requires invoice classification permission and an invoice that has not started submission.</p>}
@@ -100,7 +101,7 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
               && amount(row.valueExclTax) === sources.reduce((s, i) => s + amount(i.adjustment?.adjustedLineTotal ?? i.lineTotal), 0));
             return <section key={row.sourceLineIds.join("-")} className="tf-row" aria-label={`Filing row ${index + 1}`}>
               <div className="tf-row-head"><label className="tf-select">{editable && <input type="checkbox" checked={selected.includes(index)} disabled={saving} onChange={e => setSelected(e.target.checked ? [...selected, index] : selected.filter(i => i !== index))} />}<b>Filing row {index + 1}</b><span>{row.sourceLineIds.length} original {row.sourceLineIds.length === 1 ? "line" : "lines"}</span></label>{editable && canSeparate && row.sourceLineIds.length > 1 && <button type="button" disabled={saving} onClick={() => separate(index)}>Separate source lines</button>}</div>
-              <div className="tf-fields"><div role="group" aria-label={`Row ${index + 1} HS classification`}><label>HS classification</label>{editable && !saving ? <SearchableItemTypeSelect items={types.filter(t => t.hsCode && t.saleType && !t.isHsCodePartial)} value={row.itemTypeId || ""} placeholder="Search item name or HS code" style={{ width: "100%", minHeight: 44 }} onChange={(id, type) => changeRows(rows.map((r, i) => i === index ? { ...r, itemTypeId: Number(id) || null, hsCode: type?.hsCode, saleType: type?.saleType, uom: type?.uom || "", quantity: canAdjustNumbers && r.uom && type?.uom !== r.uom ? "" : r.quantity, fbrUOMId: type?.fbrUOMId, description: type?.name || "" } : r))} /> : <p>{row.description || "Unclassified"}</p>}<small className={!row.hsCode || !row.uom ? "tf-field-error" : ""}>{row.hsCode || "HS code required"} · {row.uom || "Unit required"}</small><small>{row.saleType || "Sale type required"}</small></div>
+              <div className="tf-fields"><div role="group" aria-label={`Row ${index + 1} HS classification`}><label>HS classification</label>{editable && !saving ? <SearchableItemTypeSelect items={types.filter(t => t.hsCode && t.saleType && !t.isHsCodePartial)} value={row.itemTypeId || ""} placeholder="Search item name or HS code" style={{ ...formStyles.input, width: "100%", minHeight: 44 }} onChange={(id, type) => changeRows(rows.map((r, i) => i === index ? { ...r, itemTypeId: Number(id) || null, hsCode: type?.hsCode, saleType: type?.saleType, uom: type?.uom || "", quantity: canAdjustNumbers && r.uom && type?.uom !== r.uom ? "" : r.quantity, fbrUOMId: type?.fbrUOMId, description: type?.name || "" } : r))} /> : <p>{row.description || "Unclassified"}</p>}<small className={!row.hsCode || !row.uom ? "tf-field-error" : ""}>{row.hsCode || "HS code required"} · {row.uom || "Unit required"}</small><small>{row.saleType || "Sale type required"}</small></div>
                 <label>Filing quantity<input aria-label={`Row ${index + 1} filing quantity`} type="number" min="0.0001" step="0.0001" value={row.quantity} disabled={!editable || !canAdjustNumbers || saving} onChange={e => change(index, "quantity", e.target.value)} /><small>Quantity in the selected filing unit</small></label>
                 <label>Amount excluding tax (Rs.)<input aria-label={`Row ${index + 1} amount excluding tax`} type="number" min="0.01" step="0.01" value={row.valueExclTax} disabled={!editable || !canAdjustNumbers || saving} onChange={e => change(index, "valueExclTax", e.target.value)} /><small>Derived rate: Rs. {money(Number(row.quantity) > 0 ? Number(row.valueExclTax) / Number(row.quantity) : 0)}</small></label>
               </div>
@@ -110,7 +111,7 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
           {!types.some(t => t.hsCode && t.saleType) && editable && <p className="tf-warning">This company has no complete filing classifications yet. Add an item with an HS code, unit and sale type in Item Catalog, then reopen this invoice.</p>}
         </>}
       </div>
-      <footer className="tf-footer"><span aria-live="polite">{data && <b>{difference === 0 ? "Total matched" : `Rs. ${money(Math.abs(difference) / 100)} ${difference > 0 ? "remaining" : "over the bill"}`} · </b>}GST and further tax remain the bill's recorded taxes.</span>{editable && <button type="submit" disabled={saving || difference !== 0}>{saving ? "Saving…" : "Save filing rows & complete review"}</button>}</footer>
+      <footer className="tf-footer" style={formStyles.footer}><span aria-live="polite">{data && <b>{difference === 0 ? "Total matched" : `Rs. ${money(Math.abs(difference) / 100)} ${difference > 0 ? "remaining" : "over the bill"}`} · </b>}GST and further tax remain the bill's recorded taxes.</span><button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={close} disabled={saving}>{readOnly ? "Done" : "Cancel"}</button>{editable && <button type="submit" style={{ ...formStyles.button, ...formStyles.submit }} disabled={saving || difference !== 0}>{saving ? "Saving…" : "Save filing rows & complete review"}</button>}</footer>
     </form>
   </div>;
 }
