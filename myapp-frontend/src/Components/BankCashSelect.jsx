@@ -1,87 +1,86 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { formStyles, colors } from "../theme";
 import SearchableSelect from "./SearchableSelect";
-import { getBankCashAccounts } from "../api/accountApi";
+import CreateBankCashModal from "./CreateBankCashModal";
+import { getBankCashAccounts, getCoaTree } from "../api/accountApi";
+import { usePermissions } from "../contexts/PermissionsContext";
 
-/**
- * Reusable "Received in / Paid from" bank-or-cash account picker. Loads the
- * company's bank/cash accounts and renders them in the standard searchable
- * dropdown ([SearchableSelect]) so a long list (e.g. 30 bank accounts) can be
- * typed-to-filter. Falls back to a free-text box only when the company has no
- * bank/cash accounts yet.
- *
- * Props:
- *   companyId
- *   value            — selected account id ("" when none)
- *   name             — current account name (free-text fallback value / display)
- *   onChange(id,name)— id is null for the free-text fallback / cleared
- *   includeAccount   — {id, name} to guarantee an out-of-list account stays
- *                      selectable (used on edit so a payment's current account
- *                      is never dropped)
- *   autoSelectSingle — auto-pick the only account (create flow)
- *   onLoaded(list)   — fired once with the loaded accounts (parent uses the
- *                      count to decide whether the field is mandatory)
- *   label, labelStyle, style, placeholder
- */
+const flattenGroups = (nodes) => (nodes || []).flatMap(g => [{ id: g.id, name: g.name }, ...flattenGroups(g.children)]);
+
 export default function BankCashSelect({
   companyId, value, name, onChange, includeAccount = null,
-  autoSelectSingle = false, onLoaded, label, labelStyle, style,
-  placeholder = "— Select account —",
+  autoSelectSingle = false, onLoaded, onStatusChange, onCreated,
+  label, labelStyle, style, placeholder = "— Select account —",
 }) {
+  const { has } = usePermissions();
+  const canCreate = has("accounting.coa.manage") && has("accounting.coa.view");
   const [accounts, setAccounts] = useState([]);
-  const [loaded, setLoaded] = useState(false);
+  const [status, setStatus] = useState("loading");
+  const [reload, setReload] = useState(0);
+  const [creating, setCreating] = useState(false);
+  const [groups, setGroups] = useState([]);
+  const [groupError, setGroupError] = useState("");
+  const [loadingGroups, setLoadingGroups] = useState(false);
+  const callbacks = useRef({ onChange, onLoaded, onStatusChange, value, includeAccount });
+  callbacks.current = { onChange, onLoaded, onStatusChange, value, includeAccount };
+  const companyRef = useRef(companyId);
+  companyRef.current = companyId;
 
   useEffect(() => {
     let cancelled = false;
+    setAccounts([]); setStatus("loading"); setCreating(false); setGroupError(""); setLoadingGroups(false);
+    callbacks.current.onStatusChange?.("loading");
     getBankCashAccounts(companyId)
       .then(({ data }) => {
         if (cancelled) return;
-        // Display the account NAME only (no GL code). Code is still searchable.
-        let list = (data || []).map((a) => ({ ...a, label: a.name }));
-        if (includeAccount?.id && !list.some((a) => a.id === includeAccount.id)) {
-          list = [{ id: includeAccount.id, name: includeAccount.name, label: includeAccount.name }, ...list];
+        const cb = callbacks.current;
+        let list = (data || []).map(a => ({ ...a, label: a.name }));
+        if (cb.includeAccount?.id && !list.some(a => a.id === cb.includeAccount.id)) {
+          list = [{ ...cb.includeAccount, label: cb.includeAccount.name }, ...list];
         }
-        setAccounts(list);
-        onLoaded?.(list);
-        if (autoSelectSingle && !value && list.length === 1) onChange?.(list[0].id, list[0].name);
+        setAccounts(list); setStatus("ready"); cb.onLoaded?.(list); cb.onStatusChange?.("ready");
+        if (autoSelectSingle && !cb.value && list.length === 1) cb.onChange?.(list[0].id, list[0].name);
       })
-      .catch(() => { if (!cancelled) { setAccounts([]); onLoaded?.([]); } })
-      .finally(() => { if (!cancelled) setLoaded(true); });
+      .catch(() => {
+        if (!cancelled) { setStatus("error"); callbacks.current.onStatusChange?.("error"); }
+      });
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId]);
+  }, [companyId, reload, autoSelectSingle]);
 
-  const field = accounts.length > 0 ? (
-    <SearchableSelect
-      items={accounts}
-      value={value}
-      onChange={(id, acct) => onChange?.(id || null, acct ? acct.name : null)}
-      labelKey="label"
-      searchKeys={["name", "code", "label"]}
-      placeholder={placeholder}
-      style={style}
-    />
-  ) : (
-    <>
-      <input
-        style={formStyles.input}
-        value={name || ""}
-        onChange={(e) => onChange?.(null, e.target.value)}
-        placeholder="e.g. Meezan A/C 1234, Cash"
-      />
-      {loaded && (
-        <span style={{ fontSize: "0.72rem", color: colors.textSecondary, marginTop: 4, display: "block" }}>
-          Add Bank &amp; Cash accounts in Chart of Accounts to pick from a list.
-        </span>
-      )}
-    </>
-  );
+  const openCreate = async () => {
+    setLoadingGroups(true); setGroupError("");
+    const requestedCompany = companyId;
+    try {
+      const { data } = await getCoaTree(companyId);
+      if (companyRef.current !== requestedCompany) return;
+      setGroups(flattenGroups(data?.balanceSheet)); setCreating(true);
+    } catch {
+      if (companyRef.current === requestedCompany) setGroupError("Could not load account groups. Try creating the account again.");
+    } finally { if (companyRef.current === requestedCompany) setLoadingGroups(false); }
+  };
 
-  if (!label) return field;
-  return (
-    <div style={formStyles.formGroup}>
-      <label style={labelStyle || formStyles.label}>{label}</label>
-      {field}
-    </div>
-  );
+  const field = <>
+    {status === "loading" ? <span role="status">Loading bank/cash accounts…</span> : status === "error" ?
+      <div role="alert">Could not load bank/cash accounts. <button type="button" onClick={() => setReload(n => n + 1)}>Retry</button></div> :
+      accounts.length > 0 ? <SearchableSelect items={accounts} value={value}
+        onChange={(id, acct) => onChange?.(id || null, acct?.name || null)}
+        labelKey="label" searchKeys={["name", "code", "label"]} placeholder={placeholder} style={style} /> :
+      <><input style={formStyles.input} value={name || ""} onChange={e => onChange?.(null, e.target.value)} placeholder="Bank current account or cash account" />
+        <span style={{ display: "block", color: colors.textSecondary, marginTop: 4 }}>No bank/cash accounts configured yet.</span></>}
+    {canCreate && <button type="button" style={{ ...formStyles.button, minHeight: 44, marginTop: 8 }}
+      disabled={loadingGroups || status === "loading"} onClick={openCreate}>
+      {loadingGroups ? "Loading…" : "+ New bank/cash account"}
+    </button>}
+    {groupError && <div role="alert">{groupError}</div>}
+    {creating && canCreate && <CreateBankCashModal companyId={companyId} assetGroups={groups}
+      defaultGroupId={accounts[0]?.accountGroupId || groups.find(g => /bank|cash/i.test(g.name))?.id || groups[0]?.id}
+      onClose={() => setCreating(false)} onCreated={(keepOpen, account) => {
+        if (companyRef.current !== companyId) return;
+        const list = [...accounts, { ...account, label: account.name }];
+        setAccounts(list); setStatus("ready"); onLoaded?.(list); onStatusChange?.("ready");
+        onChange?.(account.id, account.name); onCreated?.(account);
+        if (!keepOpen) setCreating(false);
+      }} />}
+  </>;
+  return label ? <div style={formStyles.formGroup}><label style={labelStyle || formStyles.label}>{label}</label>{field}</div> : field;
 }

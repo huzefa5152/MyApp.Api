@@ -44,7 +44,7 @@ namespace MyApp.Api.Services.Implementations
             var pendingWithdrawals = accounts.ToDictionary(a => a.Id, _ => 0m);
 
             var payments = await _context.Payments.AsNoTracking()
-                .Where(p => p.CompanyId == companyId && !p.IsCancelled && p.ReconciledDate == null)
+                .Where(p => p.CompanyId == companyId && !p.IsCancelled && p.ChequeStatus != ChequeStatus.Bounced && p.ReconciledDate == null)
                 .Select(p => new { p.Direction, p.Amount, p.BankAccountId })
                 .ToListAsync();
             foreach (var p in payments)
@@ -107,6 +107,9 @@ namespace MyApp.Api.Services.Implementations
             if (p == null) return false;
             var acct = p.BankAccountId ?? await DefaultBankIdAsync(p.CompanyId);
             await AssertNotLockedAsync(p.CompanyId, acct, p.Date);
+            if (p.IsCancelled || p.ChequeStatus == ChequeStatus.Bounced)
+                throw new InvalidOperationException("A cancelled or bounced payment cannot be reconciled.");
+            if (p.ChequeStatus != ChequeStatus.None) p.ChequeStatus = cleared ? ChequeStatus.Cleared : ChequeStatus.Pending;
             p.ReconciledDate = cleared ? (clearedDate ?? p.Date) : null;
             await _context.SaveChangesAsync();
             return true;
@@ -135,7 +138,7 @@ namespace MyApp.Api.Services.Implementations
             var rows = new List<ReconcileTxnDto>();
 
             var payments = await _context.Payments.AsNoTracking()
-                .Where(p => p.CompanyId == companyId && !p.IsCancelled)
+                .Where(p => p.CompanyId == companyId && !p.IsCancelled && p.ChequeStatus != ChequeStatus.Bounced)
                 .Select(p => new { p.Id, p.Direction, p.Number, p.Date, p.Description, p.Amount, p.BankAccountId, p.ReconciledDate })
                 .ToListAsync();
             foreach (var p in payments)

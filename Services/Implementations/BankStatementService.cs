@@ -52,7 +52,7 @@ namespace MyApp.Api.Services.Implementations
             // account (same direction, amount, date within a week) and clear it.
             var defaultBankId = await DefaultBankIdAsync(companyId);
             var candidates = await _context.Payments
-                .Where(p => p.CompanyId == companyId && !p.IsCancelled && p.ReconciledDate == null)
+                .Where(p => p.CompanyId == companyId && !p.IsCancelled && p.ChequeStatus != ChequeStatus.Bounced && p.ReconciledDate == null)
                 .ToListAsync();
             candidates = candidates
                 .Where(p => (p.BankAccountId ?? defaultBankId) == bankAccountId)
@@ -75,6 +75,7 @@ namespace MyApp.Api.Services.Implementations
                     used.Add(p.Id);
                     line.PaymentId = p.Id;
                     line.Status = BankStatementLineStatus.Categorized;
+                    if (p.ChequeStatus != ChequeStatus.None) p.ChequeStatus = ChequeStatus.Cleared;
                     p.ReconciledDate = line.Date;   // matched to the statement ⇒ cleared
                     matched++;
                 }

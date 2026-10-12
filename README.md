@@ -308,6 +308,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-10-12
 
+- Improve Trader receipts and payments: create bank/cash accounts from the form, group saved allocations before unpaid documents, preserve cheque status, handle bounced cheques consistently, and enable built-in vouchers.
+
 - **Independent tax filing rows.** Every Trader company can combine selected bill groups under one HS classification, keep groups separate, or separate a group into its original lines. Consultants enter filing quantity and exact amount excluding tax, with a live reconciliation to the bill subtotal. Original bill lines, stock and accounting remain unchanged. Saved filing rows drive tax invoice printing, FBR payloads and tax reports; changed bills require fresh review, concurrent edits are refused, and submission locks stay enforced.
 
 ### 2026-10-10

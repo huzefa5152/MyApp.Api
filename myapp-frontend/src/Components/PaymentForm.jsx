@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useRef, Fragment } from "react";
-import { MdClose } from "react-icons/md";
+import { useState, useEffect, useMemo, useRef, useId, Fragment } from "react";
+import { MdClose, MdExpandMore, MdChevronRight } from "react-icons/md";
 import { formStyles, modalSizes, colors, dropdownStyles } from "../theme";
 import "./PaymentForm.css";
 import SearchableSelect from "./SearchableSelect";
@@ -13,8 +13,8 @@ import useIsNarrow from "../hooks/useIsNarrow";
 import { createPayment, updatePayment } from "../api/paymentApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
-import { getPagedInvoicesByCompany } from "../api/invoiceApi";
-import { getPurchaseBillsByCompanyPaged } from "../api/purchaseBillApi";
+import { getPagedInvoicesByCompany, getInvoiceById } from "../api/invoiceApi";
+import { getPurchaseBillsByCompanyPaged, getPurchaseBillById } from "../api/purchaseBillApi";
 import { getAccountsFlat } from "../api/accountApi";
 
 const METHODS = ["Cash", "Bank Transfer", "Cheque", "Online", "Other"];
@@ -70,6 +70,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   // When none exist yet, fall back to the legacy free-text name so the form
   // stays usable until the operator sets up their accounts.
   const [hasBankAccounts, setHasBankAccounts] = useState(false);
+  const [bankStatus, setBankStatus] = useState("loading");
   const [bankAccountId, setBankAccountId] = useState(editPayment?.bankAccountId ? String(editPayment.bankAccountId) : "");
   const [bankAccountName, setBankAccountName] = useState(editPayment?.bankAccountName || "");
   const [description, setDescription] = useState(editPayment?.description || "");
@@ -84,6 +85,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   // saved payment's first line already says which shape it is.
   const [purpose, setPurpose] = useState(() => {
     const k = editPayment?.allocations?.[0]?.kind;
+    if ((editPayment?.allocations || []).some(a => a.invoiceId || a.purchaseBillId)) return "settle";
     if (k === "Account") return "expense";
     if (k === "OnAccount") return "advance";
     if (editPayment) return "settle";
@@ -109,7 +111,13 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
     return a ? String(a.amount) : "";
   });
 
+  const [remainderAmount, setRemainderAmount] = useState(() =>
+    String((editPayment?.allocations || []).filter(a => a.kind === "OnAccount").reduce((sum, a) => sum + Number(a.amount || 0), 0) || ""));
+  const [chequeStatus, setChequeStatus] = useState(editPayment?.chequeStatus && editPayment.chequeStatus !== "None" ? editPayment.chequeStatus : "Pending");
   const [documentSearch, setDocumentSearch] = useState("");
+  const [showApplied, setShowApplied] = useState(true);
+  const appliedRegionId = useId();
+  const [docsError, setDocsError] = useState("");
   const [contactsLoading, setContactsLoading] = useState(false);
   const [contactsError, setContactsError] = useState("");
   const [docs, setDocs] = useState([]);          // open documents for the contact
@@ -155,6 +163,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
     setContactId("");
     setDocs([]);
     setAlloc({});
+    setRemainderAmount("");
     setError("");
     if (next === "Other") setPurpose((p) => (p === "settle" || p === "advance" ? "expense" : p));
     else if (!((isReceipt && next === "Client") || (!isReceipt && next === "Supplier"))) {
@@ -208,7 +217,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
     if (purpose !== "settle" || !canSettle) { setDocs([]); setAlloc({}); return; }
     if (!contactId) { setDocs([]); setAlloc({}); return; }
     let cancelled = false;
-    setLoadingDocs(true); setDocumentSearch("");
+    setLoadingDocs(true); setDocumentSearch(""); setShowApplied(true); setDocsError(""); setDocs([]); setAlloc({});
     const fetchPage = page => isReceipt
       ? getPagedInvoicesByCompany(companyId, { clientId: contactId, pageSize: 100, page })
       : getPurchaseBillsByCompanyPaged(companyId, { supplierId: contactId, pageSize: 100, page });
@@ -217,6 +226,19 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
       const items = [...(first.data.items || [])];
       for (let page = 2; page <= (first.data.totalPages || 1) && !cancelled; page++) {
         const next = await fetchPage(page); items.push(...(next.data.items || []));
+      }
+      // Retain existing allocations even when their document is outside the party list.
+      if (editPayment && String(editPayment.contactId) === String(contactId) && editPayment.contactType === payeeType) {
+        const existingIds = [...new Set((editPayment.allocations || [])
+          .map(a => isReceipt ? a.invoiceId : a.purchaseBillId).filter(Boolean))];
+        for (const id of existingIds) {
+          if (cancelled) break;
+          if (!items.some(d => d.id === id)) {
+            const result = await (isReceipt ? getInvoiceById(id) : getPurchaseBillById(id));
+            if (!result.data || result.data.companyId !== Number(companyId)) throw new Error("Cannot load allocated document");
+            items.push(result.data);
+          }
+        }
       }
       return { data: { ...first.data, items } };
     })();
@@ -227,7 +249,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
         // free up headroom on the docs it settled — show them (even if now
         // fully paid) with available = balanceDue + own, and pre-fill.
         const ownRaw = {};   // docId -> { cash, adj, adjAccountId }
-        if (editPayment) {
+        if (editPayment && String(editPayment.contactId) === String(contactId) && editPayment.contactType === payeeType) {
           for (const a of editPayment.allocations || []) {
             const docId = isReceipt ? a.invoiceId : a.purchaseBillId;
             if (!docId) continue;
@@ -239,7 +261,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
           }
         }
         let shown = (data.items || [])
-          .filter((d) => !d.isCancelled)
+          .filter((d) => !d.isCancelled || ownRaw[d.id])
           .map((d) => {
             const gross = isReceipt
               ? (d.commercialTotal ?? ((d.grandTotal || 0) + (d.freightCharges || 0)))
@@ -255,6 +277,9 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
               grandTotal: gross,
               balanceDue,
               available: balanceDue + own,   // headroom this payment can settle
+              previouslyApplied: !!ownRaw[d.id],
+              originalCash: ownRaw[d.id]?.cash || 0,
+              originalAdjustment: ownRaw[d.id]?.adj || 0,
             };
           })
           .filter((d) => d.available > 0.001);
@@ -293,10 +318,10 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
           if (target) setAlloc({ [target.id]: { cash: String(target.available), adj: "0", adjMode: "none", adjAccountId: null } });
         }
       })
-      .catch(() => { if (!cancelled) setDocs([]); })
+      .catch(() => { if (!cancelled) { setDocs([]); setAlloc({}); setDocsError("Could not load all documents. Close and reopen this form to retry before saving."); } })
       .finally(() => { if (!cancelled) setLoadingDocs(false); });
     return () => { cancelled = true; };
-  }, [contactId, companyId, isReceipt, purpose, canSettle, preset?.documentId, editPayment?.id]);
+  }, [contactId, companyId, isReceipt, purpose, canSettle, payeeType, preset?.documentId, editPayment?.id]);
 
   const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -329,6 +354,8 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   const setAdjAccount = (docId, id) => patchRow(docId, { adjAccountId: id != null ? Number(id) : null });
 
   // "Max" = settle the whole balance in cash (drops any adjustment).
+  const appliedDocs = docs.filter(d => d.previouslyApplied);
+  const remainingDocs = docs.filter(d => !d.previouslyApplied);
   const visibleDocs = docs.filter(d => String(d.number ?? "").toLowerCase().includes(documentSearch.trim().toLowerCase()));
 
   const fillBalance = (doc) =>
@@ -365,9 +392,9 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
     () => {
       if (purpose === "expense") return expTotal;
       if (purpose === "advance") return advanceNum;
-      return Object.values(alloc).reduce((s, r) => s + (parseFloat(r?.cash) || 0), 0);
+      return Object.values(alloc).reduce((s, r) => s + (parseFloat(r?.cash) || 0), 0) + (parseFloat(remainderAmount) || 0);
     },
-    [alloc, purpose, expTotal, advanceNum]
+    [alloc, purpose, expTotal, advanceNum, remainderAmount]
   );
   const adjTotal = useMemo(
     () => (purpose !== "settle" ? 0
@@ -449,7 +476,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (saving) return;
+    if (saving || (purpose === "settle" && (loadingDocs || docsError))) return;
     setError("");
 
     // Who the money went to / came from.
@@ -503,7 +530,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
         })
         .filter((x) => x.cash > 0 || x.adj > 0);
 
-      if (allocations.length === 0) {
+      if (allocations.length === 0 && !(Number(remainderAmount) > 0)) {
         setError(`Enter an amount against at least one ${docLabel.toLowerCase()}.`);
         return;
       }
@@ -529,6 +556,12 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
         adjustmentAccountId: x.adjMode === "none" ? null : (x.adjAccountId ?? null),
       }));
     }
+    if (purpose === "settle") {
+      const remainder = Number(remainderAmount || 0);
+      if (!Number.isFinite(remainder) || remainder < 0) { setError("Enter a valid on-account remainder."); return; }
+      if (remainder > 0) allocLines.push({ kind: "OnAccount", amount: round2(remainder), adjustmentAmount: 0 });
+    }
+    if (bankStatus !== "ready") { setError("Load bank/cash accounts before saving."); return; }
     if (method === "Cheque" && !chequeNumber.trim()) {
       setError("Enter the cheque number.");
       return;
@@ -555,6 +588,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
         description: description.trim() || null,
         notes: notes.trim() || null,
         chequeNumber: method === "Cheque" ? chequeNumber.trim() : null,
+        chequeStatus: method === "Cheque" ? chequeStatus : "None",
         chequeDate: method === "Cheque" && chequeDate ? new Date(chequeDate).toISOString() : null,
         allocations: allocLines,
       };
@@ -574,6 +608,95 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
       setSaving(false);
     }
   };
+
+  const renderDocumentList = (groupDocs) => groupDocs.length === 0
+    ? <p role="status">No matching {docLabel.toLowerCase()} number in this section.</p>
+    : isNarrow ? (
+                /* Phone (<768px): one card per open document so the amount
+                   input + Max button get full-width tap targets instead of a
+                   5-column table squeezed into ~340px. */
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  {groupDocs.map((d) => {
+                    const c = rowCalc(d);
+                    return (
+                      <div key={d.id} style={allocCard}>
+                        <div style={allocCardHead}>
+                          <strong>#{d.number}</strong>
+                          {d.previouslyApplied && <span style={originalAllocation}>Originally {isReceipt ? "received" : "paid"}: Rs {d.originalCash.toLocaleString()}{d.originalAdjustment > 0 ? ` + Rs ${d.originalAdjustment.toLocaleString()} adjustment` : ""}</span>}
+                          <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</span>
+                        </div>
+                        <div style={allocCardMeta}>
+                          <div><span style={allocMetaLabel}>Total</span><span style={allocMetaValue}>{d.grandTotal.toLocaleString()}</span></div>
+                          <div><span style={allocMetaLabel}>{isEdit ? "Available to allocate" : "Balance due"}</span><span style={allocMetaValue}>{d.available.toLocaleString()}</span></div>
+                        </div>
+                        <div>
+                          <span style={allocMetaLabel}>{isReceipt ? "Received" : "Paid"} (cash)</span>
+                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                            <input
+                              type="number" min="0" step="0.01" style={{ ...formStyles.input, textAlign: "right", flex: 1, minHeight: 44 }}
+                              aria-label={`${isReceipt ? "Received" : "Paid"} for ${docLabel.toLowerCase()} #${d.number}`}
+                              value={c.row.cash ?? ""}
+                              onChange={(e) => setCash(d.id, e.target.value)}
+                            />
+                            <button type="button" style={{ ...fillBtn, minHeight: 44, padding: "0.5rem 0.85rem", boxShadow: "none" }} onClick={() => fillBalance(d)} title="Pay full balance in cash">Max</button>
+                          </div>
+                          {renderAdjust(d, c)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div data-admin-table-region="" style={{ overflowX: "auto" }}>
+                  <table style={tbl}>
+                    <thead>
+                      <tr>
+                        <th style={th}>{docLabel} #</th>
+                        <th style={th}>Date</th>
+                        <th style={{ ...th, textAlign: "right" }}>Total</th>
+                        <th style={{ ...th, textAlign: "right" }}>{isEdit ? "Available to allocate" : "Balance due"}</th>
+                        <th style={{ ...th, textAlign: "right", width: 160 }}>{isReceipt ? "Received" : "Paid"}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {groupDocs.map((d) => {
+                        const c = rowCalc(d);
+                        const adjNode = renderAdjust(d, c);
+                        // Drop the main row's bottom border when an adjustment
+                        // sub-row follows, so the two read as one unit.
+                        const cellTd = adjNode ? { ...td, borderBottom: "none" } : td;
+                        return (
+                          <Fragment key={d.id}>
+                            <tr>
+                              <td style={cellTd}><strong>#{d.number}</strong>
+                          {d.previouslyApplied && <span style={originalAllocation}>Originally {isReceipt ? "received" : "paid"}: Rs {d.originalCash.toLocaleString()}{d.originalAdjustment > 0 ? ` + Rs ${d.originalAdjustment.toLocaleString()} adjustment` : ""}</span>}</td>
+                              <td style={cellTd}>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</td>
+                              <td style={{ ...cellTd, textAlign: "right" }}>{d.grandTotal.toLocaleString()}</td>
+                              <td style={{ ...cellTd, textAlign: "right" }}>{d.available.toLocaleString()}</td>
+                              <td style={{ ...cellTd, textAlign: "right" }}>
+                                <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "flex-end" }}>
+                                  <input
+                                    type="number" min="0" step="0.01" style={{ ...formStyles.input, textAlign: "right", padding: "0.35rem 0.5rem", width: 110 }}
+                                    aria-label={`${isReceipt ? "Received" : "Paid"} for ${docLabel.toLowerCase()} #${d.number}`}
+                              value={c.row.cash ?? ""}
+                                    onChange={(e) => setCash(d.id, e.target.value)}
+                                  />
+                                  <button type="button" style={fillBtn} onClick={() => fillBalance(d)} title="Pay full balance in cash">Max</button>
+                                </div>
+                              </td>
+                            </tr>
+                            {adjNode && (
+                              <tr>
+                                <td colSpan={5} style={{ ...td, paddingTop: 0 }}>{adjNode}</td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              );
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
@@ -672,6 +795,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Date</label>
                 <input type="date" style={formStyles.input} value={date} onChange={(e) => setDate(e.target.value)} max={today} />
+                <span style={payeeHint}>Actual receipt/payment date; entry time is recorded separately.</span>
               </div>
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Method</label>
@@ -685,6 +809,8 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                 name={bankAccountName}
                 onChange={(id, nm) => { setBankAccountId(id ? String(id) : ""); setBankAccountName(nm || ""); }}
                 onLoaded={(list) => setHasBankAccounts(list.length > 0)}
+                  onStatusChange={setBankStatus}
+                  onCreated={() => getAccountsFlat(companyId).then(({ data }) => setAccounts(data || [])).catch(() => {})}
                 includeAccount={editPayment?.bankAccountId ? { id: editPayment.bankAccountId, name: editPayment.bankAccountName } : null}
                 autoSelectSingle={!isEdit}
                 label={isReceipt ? "Received in (bank/cash)" : "Paid from (bank/cash)"}
@@ -704,9 +830,17 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
               </div>
             )}
 
+            {method === "Cheque" && <div data-admin-field="" style={formStyles.formGroup}>
+              <label style={formStyles.label}>Cheque status</label>
+              <select aria-label="Cheque status" style={dropdownStyles.base} value={chequeStatus} onChange={e => setChequeStatus(e.target.value)}>
+                {["Pending", "Deposited", "Cleared", "Bounced"].map(s => <option key={s}>{s}</option>)}
+              </select>
+              <span style={payeeHint}>Pending cheques are not cleared bank funds. A bounced cheque restores the outstanding balance.</span>
+            </div>}
             <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>Description (optional)</label>
               <input style={formStyles.input} value={description} onChange={(e) => setDescription(e.target.value)} />
+              <span style={payeeHint}>Choose your receiving/paying account above. Use the description for the other party's bank or reference details.</span>
             </div>
             <details className="payment-notes"><summary>Notes (optional)</summary><DocumentNotesEditor value={notes} onChange={setNotes} /></details>
 
@@ -782,6 +916,12 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
               </div>
             )}
 
+            {purpose === "settle" && <div data-admin-field="" style={formStyles.formGroup}>
+              <label style={formStyles.label}>Additional amount on account</label>
+              <input aria-label="Additional amount on account" type="number" min="0" step="0.01" style={formStyles.input}
+                value={remainderAmount} onChange={e => setRemainderAmount(e.target.value)} placeholder="0.00" />
+              <span style={payeeHint}>The rest of this receipt/payment, against the selected party's balance. Confirm historical invoices are already covered by their opening balance.</span>
+            </div>}
             {/* Advance / on account — one figure, no document. */}
             {purpose === "advance" && (
               <div data-admin-field="" style={formStyles.formGroup}>
@@ -806,96 +946,39 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
             {/* Allocation against open documents */}
             {purpose === "settle" && (
             <div data-admin-field="" style={formStyles.formGroup}>
-              <label style={formStyles.label}>Apply to open {docLabel.toLowerCase()}s</label>
-              {contactId && !loadingDocs && docs.length > 0 && <div className="payment-doc-search"><label>Search {docLabel.toLowerCase()} number<input type="search" value={documentSearch} onChange={e => setDocumentSearch(e.target.value)} placeholder={`Find ${docLabel.toLowerCase()} #`} style={formStyles.input} /></label><span>{visibleDocs.length} of {docs.length} open {docLabel.toLowerCase()}s</span></div>}
-              {contactId && !loadingDocs && docs.length > 0 && visibleDocs.length === 0 && <p role="status">No matching {docLabel.toLowerCase()} number. Clear search to see all open documents.</p>}
+              <label style={formStyles.label}>Allocate to {docLabel.toLowerCase()}s</label>
+              {contactId && !loadingDocs && docs.length > 0 && <div className="payment-doc-search"><label>Search {docLabel.toLowerCase()} number<input type="search" value={documentSearch} onChange={e => setDocumentSearch(e.target.value)} placeholder={`Find ${docLabel.toLowerCase()} #`} style={formStyles.input} /></label><span>{visibleDocs.length} of {docs.length} available {docLabel.toLowerCase()}s</span></div>}
+              {contactId && !loadingDocs && docs.length > 0 && visibleDocs.length === 0 && <p role="status">No matching {docLabel.toLowerCase()} number. Clear search to see all available documents.</p>}
               {!contactId ? (
                 <div style={hintBox}>Select a {contactLabel.toLowerCase()} to see their unpaid {docLabel.toLowerCase()}s.</div>
               ) : loadingDocs ? (
                 <div style={hintBox}>Loading…</div>
+              ) : docsError ? (
+                <div role="alert" style={hintBox}>{docsError}</div>
               ) : docs.length === 0 ? (
                 <div style={hintBox}>No open {docLabel.toLowerCase()}s with a balance due for this {contactLabel.toLowerCase()}.</div>
-              ) : isNarrow ? (
-                /* Phone (<768px): one card per open document so the amount
-                   input + Max button get full-width tap targets instead of a
-                   5-column table squeezed into ~340px. */
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                  {visibleDocs.map((d) => {
-                    const c = rowCalc(d);
-                    return (
-                      <div key={d.id} style={allocCard}>
-                        <div style={allocCardHead}>
-                          <strong>#{d.number}</strong>
-                          <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</span>
-                        </div>
-                        <div style={allocCardMeta}>
-                          <div><span style={allocMetaLabel}>Total</span><span style={allocMetaValue}>{d.grandTotal.toLocaleString()}</span></div>
-                          <div><span style={allocMetaLabel}>Balance due</span><span style={allocMetaValue}>{d.available.toLocaleString()}</span></div>
-                        </div>
-                        <div>
-                          <span style={allocMetaLabel}>{isReceipt ? "Received" : "Paid"} (cash)</span>
-                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                            <input
-                              type="number" min="0" step="0.01" style={{ ...formStyles.input, textAlign: "right", flex: 1, minHeight: 44 }}
-                              value={c.row.cash ?? ""}
-                              onChange={(e) => setCash(d.id, e.target.value)}
-                            />
-                            <button type="button" style={{ ...fillBtn, minHeight: 44, padding: "0.5rem 0.85rem", boxShadow: "none" }} onClick={() => fillBalance(d)} title="Pay full balance in cash">Max</button>
-                          </div>
-                          {renderAdjust(d, c)}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
               ) : (
-                <div data-admin-table-region="" style={{ overflowX: "auto" }}>
-                  <table style={tbl}>
-                    <thead>
-                      <tr>
-                        <th style={th}>{docLabel} #</th>
-                        <th style={th}>Date</th>
-                        <th style={{ ...th, textAlign: "right" }}>Total</th>
-                        <th style={{ ...th, textAlign: "right" }}>Balance due</th>
-                        <th style={{ ...th, textAlign: "right", width: 160 }}>{isReceipt ? "Received" : "Paid"}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visibleDocs.map((d) => {
-                        const c = rowCalc(d);
-                        const adjNode = renderAdjust(d, c);
-                        // Drop the main row's bottom border when an adjustment
-                        // sub-row follows, so the two read as one unit.
-                        const cellTd = adjNode ? { ...td, borderBottom: "none" } : td;
-                        return (
-                          <Fragment key={d.id}>
-                            <tr>
-                              <td style={cellTd}><strong>#{d.number}</strong></td>
-                              <td style={cellTd}>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</td>
-                              <td style={{ ...cellTd, textAlign: "right" }}>{d.grandTotal.toLocaleString()}</td>
-                              <td style={{ ...cellTd, textAlign: "right" }}>{d.available.toLocaleString()}</td>
-                              <td style={{ ...cellTd, textAlign: "right" }}>
-                                <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "flex-end" }}>
-                                  <input
-                                    type="number" min="0" step="0.01" style={{ ...formStyles.input, textAlign: "right", padding: "0.35rem 0.5rem", width: 110 }}
-                                    value={c.row.cash ?? ""}
-                                    onChange={(e) => setCash(d.id, e.target.value)}
-                                  />
-                                  <button type="button" style={fillBtn} onClick={() => fillBalance(d)} title="Pay full balance in cash">Max</button>
-                                </div>
-                              </td>
-                            </tr>
-                            {adjNode && (
-                              <tr>
-                                <td colSpan={5} style={{ ...td, paddingTop: 0 }}>{adjNode}</td>
-                              </tr>
-                            )}
-                          </Fragment>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                <>
+                  {isEdit && appliedDocs.length > 0 && (
+                    <section className="payment-applied-docs" aria-label={`Already allocated ${docLabel.toLowerCase()}s`}>
+                      <button type="button" className="payment-doc-toggle" aria-expanded={showApplied} aria-controls={appliedRegionId} onClick={() => setShowApplied(value => !value)}>
+                        <span>{showApplied ? <MdExpandMore size={20} aria-hidden="true" /> : <MdChevronRight size={20} aria-hidden="true" />} {docLabel}s already allocated to this {isReceipt ? "receipt" : "payment"} ({appliedDocs.length})</span>
+                        <span>Rs {appliedDocs.reduce((sum, d) => sum + d.originalCash, 0).toLocaleString()} {isReceipt ? "received" : "paid"}</span>
+                      </button>
+                      <div id={appliedRegionId} hidden={!showApplied}>
+                        <p style={payeeHint}>These are the saved allocations, including fully paid documents. Changing an amount updates this {isReceipt ? "receipt" : "payment"}.</p>
+                        {renderDocumentList(visibleDocs.filter(d => d.previouslyApplied))}
+                      </div>
+                    </section>
+                  )}
+                  <section aria-label={`${isEdit ? "Remaining unpaid" : "Unpaid"} ${docLabel.toLowerCase()}s`}>
+                    <h3 style={documentSectionHeading}>{isEdit ? "Remaining unpaid" : "Unpaid"} {docLabel.toLowerCase()}s ({remainingDocs.length})</h3>
+                    {remainingDocs.length === 0
+                      ? <p style={payeeHint}>No remaining unpaid {docLabel.toLowerCase()}s for this {contactLabel.toLowerCase()}.</p>
+                      : renderDocumentList(visibleDocs.filter(d => !d.previouslyApplied))}
+                  </section>
+                </>
+
               )}
             </div>
             )}
@@ -936,7 +1019,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
               const bankMissing = hasBankAccounts && !bankAccountId && cashTotal > 0;
               // Allow submit when there's any settlement — cash and/or a pure
               // write-off adjustment (Σ cash + Σ adjustment > 0).
-              const blocked = saving || (cashTotal + adjTotal) <= 0 || bankMissing;
+              const blocked = saving || (purpose === "settle" && (loadingDocs || !!docsError)) || bankStatus !== "ready" || (cashTotal + adjTotal) <= 0 || bankMissing;
               return (
                 <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: blocked ? 0.6 : 1 }} disabled={blocked}>
                   {saving ? "Saving…" : isEdit ? "Save Changes" : isReceipt ? "Save Receipt" : "Save Payment"}
@@ -950,6 +1033,8 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   );
 }
 
+const originalAllocation = { display: "block", fontSize: "0.78rem", color: colors.textSecondary, fontWeight: 400 };
+const documentSectionHeading = { fontSize: "0.95rem", fontWeight: 700, margin: "1rem 0 0.5rem", color: colors.textPrimary };
 const hintBox = { padding: "0.75rem", background: colors.inputBg, border: `1px dashed ${colors.inputBorder}`, borderRadius: 8, color: colors.textSecondary, fontSize: "0.85rem" };
 const tbl = { width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" };
 const th = { textAlign: "left", padding: "0.4rem 0.5rem", borderBottom: `1px solid ${colors.cardBorder}`, color: colors.textSecondary, fontWeight: 700, whiteSpace: "nowrap" };
@@ -957,7 +1042,7 @@ const td = { padding: "0.4rem 0.5rem", borderBottom: `1px solid ${colors.cardBor
 const fillBtn = { padding: "0.3rem 0.5rem", fontSize: "0.7rem", fontWeight: 700, borderRadius: 6, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, cursor: "pointer" };
 // Mobile (<768px) allocation cards.
 const allocCard = { border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "0.7rem 0.8rem", background: "#fff", display: "flex", flexDirection: "column", gap: "0.5rem" };
-const allocCardHead = { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.5rem" };
+const allocCardHead = { display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: "0.5rem" };
 const allocCardMeta = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(120px, 100%), 1fr))", gap: "0.4rem 1rem" };
 const allocMetaLabel = { display: "block", fontSize: "0.66rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: colors.textSecondary, marginBottom: 2 };
 const allocMetaValue = { fontSize: "0.9rem", fontWeight: 600, color: colors.textPrimary };
@@ -983,7 +1068,7 @@ const adjError = { fontSize: "0.72rem", color: colors.danger, fontWeight: 600 };
 const adjRemainHint = { fontSize: "0.72rem", color: colors.textSecondary };
 // Footer money summary.
 const summaryWrap = { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 };
-const summaryLine = { display: "flex", justifyContent: "flex-end", alignItems: "baseline", gap: "0.5rem" };
+const summaryLine = { display: "flex", justifyContent: "flex-end", alignItems: "baseline", flexWrap: "wrap", gap: "0.5rem" };
 const summaryLabel = { color: colors.textSecondary, fontSize: "0.85rem", fontWeight: 600 };
 // ── Payee / purpose selectors ────────────────────────────────────────────────
 // Wraps instead of scrolling, so three or four choices stack on a phone rather

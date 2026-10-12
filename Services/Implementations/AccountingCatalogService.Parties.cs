@@ -629,7 +629,7 @@ namespace MyApp.Api.Services.Implementations
             var settlements = await (
                 from a in _context.PaymentAllocations.AsNoTracking()
                 join p in _context.Payments.AsNoTracking() on a.PaymentId equals p.Id
-                where p.CompanyId == companyId && !p.IsCancelled
+                where p.CompanyId == companyId && !p.IsCancelled && p.ChequeStatus != ChequeStatus.Bounced
                       && (customers ? a.InvoiceId != null : a.PurchaseBillId != null)
                 select new
                 {
@@ -721,7 +721,7 @@ namespace MyApp.Api.Services.Implementations
             var onAccount = await (
                 from a in _context.PaymentAllocations.AsNoTracking()
                 join p in _context.Payments.AsNoTracking() on a.PaymentId equals p.Id
-                where p.CompanyId == companyId && !p.IsCancelled
+                where p.CompanyId == companyId && !p.IsCancelled && p.ChequeStatus != ChequeStatus.Bounced
                       && a.Kind == AllocationKind.OnAccount
                       && p.ContactType == (customers ? "Client" : "Supplier")
                       && p.ContactId != null

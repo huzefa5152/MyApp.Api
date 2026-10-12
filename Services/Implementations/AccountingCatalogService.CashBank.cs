@@ -578,6 +578,8 @@ namespace MyApp.Api.Services.Implementations
                 .Where(p => p.CompanyId == companyId && p.Direction == direction);
 
             q = wantCancelled ? q.Where(p => p.IsCancelled) : q.Where(p => !p.IsCancelled);
+            if (!wantCancelled && !string.Equals(f.Status, "bounced", StringComparison.OrdinalIgnoreCase))
+                q = q.Where(p => p.ChequeStatus != ChequeStatus.Bounced);
 
             if (window.From.HasValue) q = q.Where(p => p.Date >= window.From!.Value);
             if (window.To.HasValue) q = q.Where(p => p.Date <= window.To!.Value);
@@ -898,7 +900,7 @@ namespace MyApp.Api.Services.Implementations
 
             var q = from a in _context.PaymentAllocations.AsNoTracking()
                     join p in _context.Payments.AsNoTracking() on a.PaymentId equals p.Id
-                    where p.CompanyId == companyId && !p.IsCancelled
+                    where p.CompanyId == companyId && !p.IsCancelled && p.ChequeStatus != ChequeStatus.Bounced
                           && a.Kind == AllocationKind.OnAccount
                     select new { Alloc = a, Payment = p };
 

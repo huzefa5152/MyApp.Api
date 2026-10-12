@@ -71,7 +71,7 @@ namespace MyApp.Api.Services.Implementations
             // Money moved in the period. A voided document keeps its number but
             // moves nothing, so it is left out — as the registers leave it out.
             var periodPayments = await _context.Payments.AsNoTracking()
-                .Where(p => p.CompanyId == companyId && !p.IsCancelled
+                .Where(p => p.CompanyId == companyId && !p.IsCancelled && p.ChequeStatus != ChequeStatus.Bounced
                          && p.Date >= periodFrom && p.Date <= periodTo)
                 .GroupBy(p => p.Direction)
                 .Select(g => new { Direction = g.Key, Count = g.Count(), Total = g.Sum(x => x.Amount) })
@@ -88,7 +88,7 @@ namespace MyApp.Api.Services.Implementations
             // until it clears or bounces, whatever period is on screen.
             var dueSoonEnd = today.AddDays(7);
             var pendingCheques = await _context.Payments.AsNoTracking()
-                .Where(p => p.CompanyId == companyId && !p.IsCancelled
+                .Where(p => p.CompanyId == companyId && !p.IsCancelled && p.ChequeStatus != ChequeStatus.Bounced
                          && (p.ChequeStatus == ChequeStatus.Pending || p.ChequeStatus == ChequeStatus.Deposited))
                 .Select(p => new { p.Direction, p.Amount, p.ChequeDate })
                 .ToListAsync();
@@ -126,7 +126,7 @@ namespace MyApp.Api.Services.Implementations
         {
             var prefix = direction == PaymentDirection.Receipt ? "RCP" : "PMT";
             var rows = await _context.Payments.AsNoTracking()
-                .Where(p => p.CompanyId == companyId && p.Direction == direction && !p.IsCancelled)
+                .Where(p => p.CompanyId == companyId && p.Direction == direction && !p.IsCancelled && p.ChequeStatus != ChequeStatus.Bounced)
                 .OrderByDescending(p => p.Date).ThenByDescending(p => p.Number)
                 .Take(5)
                 .Select(p => new { p.Id, p.Number, p.Date, p.Amount, p.Description, p.ContactType, p.ContactId, p.ContactName })

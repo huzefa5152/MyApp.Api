@@ -104,7 +104,7 @@ export default function PaymentsPage({ mode = "receipts" }) {
   }, [companyId, dir, page, pageSize, search]);
 
   // Reset to page 1 on company / mode switch.
-  useEffect(() => { setPage(1); setSearch(""); }, [companyId, dir]);
+  useEffect(() => { setPage(1); setSearch(""); setShowForm(false); setEditing(null); setViewing(null); }, [companyId, dir]);
   useEffect(() => { fetchRows(page); }, [fetchRows, page]);
 
   const handleDelete = async (p) => {
@@ -151,7 +151,7 @@ export default function PaymentsPage({ mode = "receipts" }) {
   }
 
   // Sum of what's shown on this page — a quick "money on screen" cue.
-  const pageTotal = rows.reduce((s, r) => s + Number(r.amount || 0), 0);
+  const pageTotal = rows.reduce((s, r) => s + (!r.isCancelled && r.chequeStatus !== "Bounced" ? Number(r.amount || 0) : 0), 0);
 
   return (
     <div>
@@ -223,7 +223,7 @@ export default function PaymentsPage({ mode = "receipts" }) {
                   canDelete={canDelete}
                   canEdit={canCreate}
                   canPrint={canPrint}
-                  tplPicker={tplPicker}
+                  tplPicker={{ ...tplPicker, noTemplate: !defaultTpl && tplPicker.noTemplate }}
                   exportingId={exportingId}
                   attachCount={attachCounts[p.id]}
                   onDelete={() => handleDelete(p)}
@@ -360,7 +360,7 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, 
                   size={18}
                   style={{ transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none", color: accent }}
                 />
-                {count} {docNoun}{count !== 1 ? "s" : ""} settled
+                {count} allocation{count !== 1 ? "s" : ""}
               </span>
               {!open && <span style={st.allocToggleHint}>view details</span>}
             </button>

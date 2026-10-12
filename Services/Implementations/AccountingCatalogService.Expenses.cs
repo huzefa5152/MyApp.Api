@@ -730,7 +730,7 @@ namespace MyApp.Api.Services.Implementations
             var q = from a in _context.PaymentAllocations.AsNoTracking()
                     join p in _context.Payments.AsNoTracking() on a.PaymentId equals p.Id
                     join acc in _context.Accounts.AsNoTracking() on a.AccountId equals acc.Id
-                    where p.CompanyId == companyId && !p.IsCancelled
+                    where p.CompanyId == companyId && !p.IsCancelled && p.ChequeStatus != ChequeStatus.Bounced
                           && p.Direction == PaymentDirection.Payment
                           && a.Kind == AllocationKind.Account
                           && acc.AccountType == AccountType.Expense

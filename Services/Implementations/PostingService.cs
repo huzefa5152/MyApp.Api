@@ -385,7 +385,7 @@ namespace MyApp.Api.Services.Implementations
         public async Task PostPaymentAsync(Payment payment)
         {
             if (!await IsEnabledAsync(payment.CompanyId)) return;
-            if (payment.IsCancelled || (payment.Amount == 0m && payment.Allocations.All(a => a.AdjustmentAmount == 0m)))
+            if (payment.IsCancelled || payment.ChequeStatus == ChequeStatus.Bounced || (payment.Amount == 0m && payment.Allocations.All(a => a.AdjustmentAmount == 0m)))
             {
                 await RemoveForSourceAsync(payment.CompanyId, SourceDocType.Payment, payment.Id);
                 return;
@@ -600,7 +600,7 @@ namespace MyApp.Api.Services.Implementations
                 foreach (var p in payments.Where(p => IsOpen(p.Date)))
                 {
                     await PostPaymentAsync(p);
-                    if (!p.IsCancelled && (p.Amount != 0m || p.Allocations.Any(a => a.AdjustmentAmount != 0m))) result.PostedPayments++;
+                    if (!p.IsCancelled && p.ChequeStatus != ChequeStatus.Bounced && (p.Amount != 0m || p.Allocations.Any(a => a.AdjustmentAmount != 0m))) result.PostedPayments++;
                 }
 
                 var transfers = await _context.AccountTransfers.Where(t => t.CompanyId == companyId).ToListAsync();

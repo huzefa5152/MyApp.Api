@@ -31,3 +31,10 @@
 @media (prefers-reduced-motion: reduce) {
   .payment-dialog .payment-party-tabs button { transition: none; }
 }
+
+.payment-applied-docs { border:1px solid #dce5ee; border-radius:8px; padding:8px 12px; margin-top:12px; background:#f7fafc; }
+.payment-doc-toggle { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; width:100%; min-height:44px; padding:6px 0; background:none; border:0; text-align:left; font:inherit; font-weight:700; color:#213247; cursor:pointer; }
+.payment-doc-toggle > span:first-child { display:flex; align-items:center; gap:6px; }
+.payment-doc-toggle svg { flex-shrink:0; }
+.payment-doc-toggle > span:last-child { font-size:0.82rem; }
+.payment-applied-docs [hidden] { display:none; }

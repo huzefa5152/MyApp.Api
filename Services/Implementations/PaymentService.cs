@@ -76,6 +76,7 @@ namespace MyApp.Api.Services.Implementations
         public async Task<PaymentDto> CreateAsync(int companyId, CreatePaymentDto dto)
         {
             var direction = ParseDirection(dto.Direction);
+            var chequeStatus = ParseChequeStatus(dto.ChequeStatus, dto.ChequeNumber);
 
             if (dto.Allocations == null || dto.Allocations.Count == 0)
                 throw new InvalidOperationException("A payment needs at least one allocation line.");
@@ -174,7 +175,7 @@ namespace MyApp.Api.Services.Implementations
                 // so only the reduced balance can be received.
                 var collectible = CommercialTotalCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount, inv.FreightCharges);
                 var newTotal = inv.AmountPaid + grp.Sum(a => a.Amount + a.AdjustmentAmount);
-                if (newTotal > collectible)
+                if (chequeStatus != ChequeStatus.Bounced && newTotal > collectible)
                     throw new InvalidOperationException(
                         $"Receipt would over-pay Invoice #{inv.InvoiceNumber} (balance due is {collectible - inv.AmountPaid:0.00}).");
             }
@@ -184,7 +185,7 @@ namespace MyApp.Api.Services.Implementations
                 var bill = bills.First(b => b.Id == grp.Key);
                 var collectible = WithholdingTaxCalculator.Collectible(bill.GrandTotal, bill.WithholdingTaxAmount);
                 var newTotal = bill.AmountPaid + grp.Sum(a => a.Amount + a.AdjustmentAmount);
-                if (newTotal > collectible)
+                if (chequeStatus != ChequeStatus.Bounced && newTotal > collectible)
                     throw new InvalidOperationException(
                         $"Payment would over-pay Bill #{bill.PurchaseBillNumber} (balance due is {collectible - bill.AmountPaid:0.00}).");
             }
@@ -195,9 +196,7 @@ namespace MyApp.Api.Services.Implementations
                 CompanyId = companyId,
                 Direction = direction,
                 Date = paymentDate,
-                // Cleared-by-default (Manager-style): a new receipt/payment is
-                // reconciled as of its own date; "pending" is the opt-in exception.
-                ReconciledDate = paymentDate,
+                ReconciledDate = chequeStatus is ChequeStatus.None or ChequeStatus.Cleared ? paymentDate : null,
                 ContactType = contact.Type,
                 ContactId = contact.Id,
                 ContactName = contact.Name,
@@ -209,7 +208,7 @@ namespace MyApp.Api.Services.Implementations
                 Amount = dto.Allocations.Sum(a => a.Amount),
                 ChequeNumber = Trimmed(dto.ChequeNumber),
                 ChequeDate = dto.ChequeDate,
-                ChequeStatus = ParseChequeStatus(dto.ChequeStatus, dto.ChequeNumber),
+                ChequeStatus = chequeStatus,
                 Allocations = dto.Allocations.Select(a => new PaymentAllocation
                 {
                     Kind = ParseAllocationKind(a.Kind) ?? AllocationKind.Document,
@@ -274,6 +273,9 @@ namespace MyApp.Api.Services.Implementations
             if (payment == null) return null;
             var companyId = payment.CompanyId;
             var direction = payment.Direction;            // direction is immutable on edit
+            var nextChequeStatus = ParseChequeStatus(dto.ChequeStatus ??
+                (Trimmed(dto.ChequeNumber) == payment.ChequeNumber ? payment.ChequeStatus.ToString() : null), dto.ChequeNumber);
+
 
             if (dto.Allocations == null || dto.Allocations.Count == 0)
                 throw new InvalidOperationException("A payment needs at least one allocation line.");
@@ -344,9 +346,9 @@ namespace MyApp.Api.Services.Implementations
                 var inv = invoices.First(i => i.Id == grp.Key);
                 var collectible = CommercialTotalCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount, inv.FreightCharges);
                 var paidByOthers = await _context.PaymentAllocations
-                    .Where(pa => pa.InvoiceId == grp.Key && pa.PaymentId != id && !pa.Payment.IsCancelled)
+                    .Where(pa => pa.InvoiceId == grp.Key && pa.PaymentId != id && !pa.Payment.IsCancelled && pa.Payment.ChequeStatus != ChequeStatus.Bounced)
                     .SumAsync(pa => (decimal?)(pa.Amount + pa.AdjustmentAmount)) ?? 0m;
-                if (paidByOthers + grp.Sum(a => a.Amount + a.AdjustmentAmount) > collectible)
+                if (nextChequeStatus != ChequeStatus.Bounced && paidByOthers + grp.Sum(a => a.Amount + a.AdjustmentAmount) > collectible)
                     throw new InvalidOperationException(
                         $"Receipt would over-pay Invoice #{inv.InvoiceNumber} (available is {collectible - paidByOthers:0.00}).");
             }
@@ -355,12 +357,16 @@ namespace MyApp.Api.Services.Implementations
                 var bill = bills.First(b => b.Id == grp.Key);
                 var collectible = WithholdingTaxCalculator.Collectible(bill.GrandTotal, bill.WithholdingTaxAmount);
                 var paidByOthers = await _context.PaymentAllocations
-                    .Where(pa => pa.PurchaseBillId == grp.Key && pa.PaymentId != id && !pa.Payment.IsCancelled)
+                    .Where(pa => pa.PurchaseBillId == grp.Key && pa.PaymentId != id && !pa.Payment.IsCancelled && pa.Payment.ChequeStatus != ChequeStatus.Bounced)
                     .SumAsync(pa => (decimal?)(pa.Amount + pa.AdjustmentAmount)) ?? 0m;
-                if (paidByOthers + grp.Sum(a => a.Amount + a.AdjustmentAmount) > collectible)
+                if (nextChequeStatus != ChequeStatus.Bounced && paidByOthers + grp.Sum(a => a.Amount + a.AdjustmentAmount) > collectible)
                     throw new InvalidOperationException(
                         $"Payment would over-pay Bill #{bill.PurchaseBillNumber} (available is {collectible - paidByOthers:0.00}).");
             }
+
+            await AssertReconciliationOpenAsync(payment);
+            if (dto.BankAccountId != payment.BankAccountId || (dto.Date != default && dto.Date != payment.Date))
+                await AssertReconciliationOpenAsync(companyId, dto.BankAccountId, dto.Date == default ? payment.Date : dto.Date);
 
             // Documents this payment used to touch — reflow them too even if the
             // edit dropped them.
@@ -381,13 +387,18 @@ namespace MyApp.Api.Services.Implementations
                 payment.Notes = Trimmed(dto.Notes);
                 payment.ChequeNumber = Trimmed(dto.ChequeNumber);
                 payment.ChequeDate = dto.ChequeDate;
-                payment.ChequeStatus = ParseChequeStatus(dto.ChequeStatus, dto.ChequeNumber);
+                var wasCheque = payment.ChequeStatus != ChequeStatus.None;
+                payment.ChequeStatus = nextChequeStatus;
+                if (nextChequeStatus != ChequeStatus.None)
+                    payment.ReconciledDate = nextChequeStatus == ChequeStatus.Cleared
+                        ? (payment.ReconciledDate ?? payment.Date) : null;
+                else if (wasCheque) payment.ReconciledDate = payment.Date;
                 payment.Amount = dto.Allocations.Sum(a => a.Amount);
 
                 // Replace allocation lines.
                 _context.PaymentAllocations.RemoveRange(payment.Allocations);
                 await _context.SaveChangesAsync();
-                _context.PaymentAllocations.AddRange(dto.Allocations.Select(a => new PaymentAllocation
+                payment.Allocations = dto.Allocations.Select(a => new PaymentAllocation
                 {
                     PaymentId = payment.Id,
                     Kind = ParseAllocationKind(a.Kind) ?? AllocationKind.Document,
@@ -399,7 +410,8 @@ namespace MyApp.Api.Services.Implementations
                     TaxAmount = a.TaxAmount ?? 0m,
                     AdjustmentAmount = a.AdjustmentAmount,
                     AdjustmentAccountId = a.AdjustmentAmount > 0 ? a.AdjustmentAccountId : null,
-                }));
+                }).ToList();
+                _context.PaymentAllocations.AddRange(payment.Allocations);
                 await _context.SaveChangesAsync();
 
                 foreach (var iid in oldInvoiceIds.Union(invoiceIds).Distinct()) await RecomputeInvoiceAsync(iid);
@@ -430,6 +442,8 @@ namespace MyApp.Api.Services.Implementations
 
             // Period-close guard: a locked payment can't be deleted either.
             await _gl.AssertPeriodOpenAsync(payment.CompanyId, payment.Date);
+
+            await AssertReconciliationOpenAsync(payment);
 
             // Capture the documents this payment touched BEFORE the cascade
             // removes the allocation rows, so we can reflow their paid totals.
@@ -471,12 +485,64 @@ namespace MyApp.Api.Services.Implementations
 
             if (string.IsNullOrWhiteSpace(payment.ChequeNumber) && payment.ChequeStatus == ChequeStatus.None)
                 throw new InvalidOperationException("This document is not a cheque payment.");
-            if (!Enum.TryParse<ChequeStatus>(status, true, out var parsed) || parsed == ChequeStatus.None)
+            if (!Enum.TryParse<ChequeStatus>(status, true, out var parsed) || parsed == ChequeStatus.None || !Enum.IsDefined(parsed))
                 throw new InvalidOperationException("Cheque status must be Pending, Deposited, Cleared or Bounced.");
 
-            payment.ChequeStatus = parsed;
-            await _context.SaveChangesAsync();
+            if (payment.IsCancelled) throw new InvalidOperationException("A cancelled payment cannot change cheque status.");
+            if (payment.ChequeStatus == parsed) return await GetByIdAsync(id);
+            await _gl.AssertPeriodOpenAsync(payment.CompanyId, payment.Date);
+            await AssertReconciliationOpenAsync(payment);
+            if (payment.ChequeStatus == ChequeStatus.Bounced && parsed != ChequeStatus.Bounced)
+                await AssertRestoredAllocationsAsync(payment);
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                payment.ChequeStatus = parsed;
+                payment.ReconciledDate = parsed == ChequeStatus.Cleared ? payment.Date : null;
+                await _context.SaveChangesAsync();
+                foreach (var invoiceId in payment.Allocations.Where(a => a.InvoiceId.HasValue).Select(a => a.InvoiceId!.Value).Distinct())
+                    await RecomputeInvoiceAsync(invoiceId);
+                foreach (var billId in payment.Allocations.Where(a => a.PurchaseBillId.HasValue).Select(a => a.PurchaseBillId!.Value).Distinct())
+                    await RecomputePurchaseBillAsync(billId);
+                await _context.SaveChangesAsync();
+                await _posting.PostPaymentAsync(payment);
+                await tx.CommitAsync();
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
             return await GetByIdAsync(id);
+        }
+
+        private Task AssertReconciliationOpenAsync(Payment payment) =>
+            AssertReconciliationOpenAsync(payment.CompanyId, payment.BankAccountId, payment.Date);
+
+        private async Task AssertReconciliationOpenAsync(int companyId, int? bankId, DateTime date)
+        {
+            bankId ??= await _context.Accounts.Where(a => a.CompanyId == companyId && a.ControlType == ControlType.BankCash)
+                .OrderBy(a => a.Id).Select(a => (int?)a.Id).FirstOrDefaultAsync();
+            if (await _context.BankReconciliations.AnyAsync(r => r.CompanyId == companyId
+                && r.BankAccountId == bankId && r.StatementDate >= date))
+                throw new InvalidOperationException("This payment is inside a locked bank reconciliation period.");
+        }
+
+        private async Task AssertRestoredAllocationsAsync(Payment payment)
+        {
+            foreach (var group in payment.Allocations.Where(a => a.InvoiceId.HasValue).GroupBy(a => a.InvoiceId!.Value))
+            {
+                var invoice = await _context.Invoices.SingleAsync(i => i.Id == group.Key && i.CompanyId == payment.CompanyId);
+                var collectible = CommercialTotalCalculator.Collectible(invoice.GrandTotal, invoice.WithholdingTaxAmount, invoice.FreightCharges);
+                if (invoice.AmountPaid + group.Sum(a => a.Amount + a.AdjustmentAmount) > collectible)
+                    throw new InvalidOperationException("Restoring this cheque would over-pay an invoice already settled by another receipt.");
+            }
+            foreach (var group in payment.Allocations.Where(a => a.PurchaseBillId.HasValue).GroupBy(a => a.PurchaseBillId!.Value))
+            {
+                var bill = await _context.PurchaseBills.SingleAsync(b => b.Id == group.Key && b.CompanyId == payment.CompanyId);
+                if (bill.AmountPaid + group.Sum(a => a.Amount + a.AdjustmentAmount) > WithholdingTaxCalculator.Collectible(bill.GrandTotal, bill.WithholdingTaxAmount))
+                    throw new InvalidOperationException("Restoring this cheque would over-pay a bill already settled by another payment.");
+            }
         }
 
         /// <summary>Direct-line allocation accounts (PaymentAllocation.AccountId)
@@ -701,7 +767,7 @@ namespace MyApp.Api.Services.Implementations
         {
             // Settled = cash + settle-remainder adjustment — both clear the invoice.
             var paid = await _context.PaymentAllocations
-                .Where(a => a.InvoiceId == invoiceId && !a.Payment.IsCancelled)
+                .Where(a => a.InvoiceId == invoiceId && !a.Payment.IsCancelled && a.Payment.ChequeStatus != ChequeStatus.Bounced)
                 .SumAsync(a => (decimal?)(a.Amount + a.AdjustmentAmount)) ?? 0m;
             var inv = await _context.Invoices.FirstOrDefaultAsync(i => i.Id == invoiceId);
             if (inv != null) inv.AmountPaid = paid;
@@ -710,7 +776,7 @@ namespace MyApp.Api.Services.Implementations
         private async Task RecomputePurchaseBillAsync(int billId)
         {
             var paid = await _context.PaymentAllocations
-                .Where(a => a.PurchaseBillId == billId && !a.Payment.IsCancelled)
+                .Where(a => a.PurchaseBillId == billId && !a.Payment.IsCancelled && a.Payment.ChequeStatus != ChequeStatus.Bounced)
                 .SumAsync(a => (decimal?)(a.Amount + a.AdjustmentAmount)) ?? 0m;
             var bill = await _context.PurchaseBills.FirstOrDefaultAsync(b => b.Id == billId);
             if (bill != null) bill.AmountPaid = paid;
@@ -859,7 +925,15 @@ namespace MyApp.Api.Services.Implementations
         private static ChequeStatus ParseChequeStatus(string? s, string? chequeNumber)
         {
             if (!string.IsNullOrWhiteSpace(s) && Enum.TryParse<ChequeStatus>(s, true, out var parsed))
+            {
+                if (!Enum.IsDefined(parsed)) throw new InvalidOperationException("Invalid cheque status.");
+                if (string.IsNullOrWhiteSpace(chequeNumber) && parsed != ChequeStatus.None)
+                    throw new InvalidOperationException("Enter a cheque number before setting cheque status.");
+                if (!string.IsNullOrWhiteSpace(chequeNumber) && parsed == ChequeStatus.None)
+                    throw new InvalidOperationException("Choose a status for this cheque.");
                 return parsed;
+            }
+            if (!string.IsNullOrWhiteSpace(s)) throw new InvalidOperationException("Invalid cheque status.");
             // No explicit status: a cheque number implies a pending cheque.
             return string.IsNullOrWhiteSpace(chequeNumber) ? ChequeStatus.None : ChequeStatus.Pending;
         }
@@ -873,7 +947,7 @@ namespace MyApp.Api.Services.Implementations
             if (p == null) return null;
 
             // Contact is a soft ref (ContactType + ContactId), resolve its name.
-            string contactName = "";
+            string contactName = p.ContactName ?? "";
             string? contactAddress = null, contactPhone = null;
             if (p.ContactId.HasValue && p.ContactType == "Client")
             {
@@ -893,13 +967,18 @@ namespace MyApp.Api.Services.Implementations
                 .Where(i => invIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, i => i.InvoiceNumber);
             var billMap = billIds.Count == 0 ? new() : await _context.PurchaseBills.AsNoTracking()
                 .Where(b => billIds.Contains(b.Id)).ToDictionaryAsync(b => b.Id, b => b.PurchaseBillNumber);
+            var allocationAccountIds = p.Allocations.Where(a => a.AccountId.HasValue).Select(a => a.AccountId!.Value).ToList();
+            var allocationAccountNames = await _context.Accounts.AsNoTracking()
+                .Where(a => a.CompanyId == p.CompanyId && allocationAccountIds.Contains(a.Id)).ToDictionaryAsync(a => a.Id, a => a.Name);
+            var resolvedBanks = await ResolveBankAccountsAsync(new[] { p });
             var sNo = 0;
             var allocs = p.Allocations.Select(a => new PrintPaymentAllocationDto
             {
                 SNo = ++sNo,
                 DocumentLabel = a.InvoiceId != null ? $"Invoice #{invMap.GetValueOrDefault(a.InvoiceId.Value)}"
                               : a.PurchaseBillId != null ? $"Bill #{billMap.GetValueOrDefault(a.PurchaseBillId.Value)}"
-                              : "Direct",
+                              : a.Kind == AllocationKind.OnAccount ? "Advance / on account"
+                              : a.AccountId.HasValue ? allocationAccountNames.GetValueOrDefault(a.AccountId.Value) ?? "Direct" : "Direct",
                 Amount = a.Amount,
             }).ToList();
 
@@ -910,14 +989,14 @@ namespace MyApp.Api.Services.Implementations
                 CompanyAddress = p.Company?.FullAddress,
                 CompanyPhone = p.Company?.Phone,
                 Direction = p.Direction.ToString(),
-                Reference = (p.Direction == PaymentDirection.Receipt ? "RCV-" : "PMT-") + p.Number,
+                Reference = $"{(p.Direction == PaymentDirection.Receipt ? "RCP" : "PMT")}-{p.Number:D4}",
                 Date = p.Date,
                 ContactType = p.ContactType,
                 ContactName = contactName,
                 ContactAddress = contactAddress,
                 ContactPhone = contactPhone,
                 Method = p.Method,
-                BankAccountName = p.BankAccountName,
+                BankAccountName = resolvedBanks.TryGetValue(p.Id, out var bank) ? bank.Name : p.BankAccountName,
                 ChequeNumber = p.ChequeNumber,
                 ChequeDate = p.ChequeDate,
                 Description = p.Description,
