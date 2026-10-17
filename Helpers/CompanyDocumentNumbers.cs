@@ -37,6 +37,9 @@ public static class CompanyDocumentNumbers
 
     public static async Task<int> NextAvailableAsync(IQueryable<int> numbers, int start, int current, int maximum)
     {
+        // An empty series may retain a counter from a deleted last document.
+        // Existing series keep the Auto cursor and do not fill deletion gaps.
+        if (!await numbers.AnyAsync()) current = 0;
         long next = Math.Max((long)current + 1, Math.Max(1, start));
         while (next <= maximum)
         {
@@ -77,15 +80,17 @@ public static class CompanyDocumentNumbers
         var number = customNumber ?? await NextAsync(db, company, kind);
         var error = await ErrorAsync(db, companyId, kind, number, clientId: customNumber.HasValue ? clientId : null);
         if (error != null) throw new InvalidOperationException(error);
-        // Custom reserves its number without moving the Auto cursor.
-        if (customNumber.HasValue) return number;
+        // The first Custom document also starts a fresh series. Clear a stale
+        // cursor while the company lock is held; later Custom saves leave it alone.
+        if (customNumber.HasValue && await Numbers(db, companyId, kind).AnyAsync()) return number;
+        var cursor = customNumber.HasValue ? 0 : number;
         var row = db.Companies.Where(c => c.Id == companyId);
         _ = kind switch
         {
-            "quote" => await row.ExecuteUpdateAsync(s => s.SetProperty(c => c.CurrentSalesQuoteNumber, c => c.CurrentSalesQuoteNumber < number ? number : c.CurrentSalesQuoteNumber)),
-            "challan" => await row.ExecuteUpdateAsync(s => s.SetProperty(c => c.CurrentChallanNumber, c => c.CurrentChallanNumber < number ? number : c.CurrentChallanNumber)),
-            "purchase-bill" => await row.ExecuteUpdateAsync(s => s.SetProperty(c => c.CurrentPurchaseBillNumber, c => c.CurrentPurchaseBillNumber < number ? number : c.CurrentPurchaseBillNumber)),
-            "goods-receipt" => await row.ExecuteUpdateAsync(s => s.SetProperty(c => c.CurrentGoodsReceiptNumber, c => c.CurrentGoodsReceiptNumber < number ? number : c.CurrentGoodsReceiptNumber)),
+            "quote" => await row.ExecuteUpdateAsync(s => s.SetProperty(c => c.CurrentSalesQuoteNumber, cursor)),
+            "challan" => await row.ExecuteUpdateAsync(s => s.SetProperty(c => c.CurrentChallanNumber, cursor)),
+            "purchase-bill" => await row.ExecuteUpdateAsync(s => s.SetProperty(c => c.CurrentPurchaseBillNumber, cursor)),
+            "goods-receipt" => await row.ExecuteUpdateAsync(s => s.SetProperty(c => c.CurrentGoodsReceiptNumber, cursor)),
             _ => throw new InvalidOperationException("Unknown document type.")
         };
         return number;

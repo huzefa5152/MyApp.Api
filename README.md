@@ -306,6 +306,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+- **2026-10-17:** Restart empty document series at the configured starting number, including when the first saved document uses Custom numbering. Preserve the Auto cursor for nonempty series.
+
 - **2026-10-12:** Distinguish initial invoice adjustment from consultant re-review. Only filing changes invalidate prior consultant work; freight, notes and supplier costs preserve it. Retain legacy filing history when adjusted source lines are removed.
 
 - **2026-10-12:** Add a supplier-grouped purchase preview to challan creation and editing, with zero GST by default, editable per-supplier GST, bill date and reference, duplicate/stale-preview protection, and purchase source filters. Trader creates descriptive supplier payables without stock movements; Customize retains challan item types and its inventory rules.

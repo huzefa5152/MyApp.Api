@@ -613,6 +613,10 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException(
                     $"Bill #{number} already exists for this company. Pick another number.");
 
+            if (excludeInvoiceId == null && _context.Database.CurrentTransaction != null
+                && !await _context.Invoices.AnyAsync(i => i.CompanyId == companyId && !i.IsDemo && i.NoteKind == 0))
+                company.CurrentInvoiceNumber = 0;
+
             return number;
         }
 
