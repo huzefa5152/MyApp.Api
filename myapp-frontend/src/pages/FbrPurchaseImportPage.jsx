@@ -18,6 +18,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { previewFbrPurchaseImport, commitFbrPurchaseImport } from "../api/fbrPurchaseImportApi";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
+import { csvSafe } from "../utils/csvSafe";
 import "./FbrPurchaseImportPage.css";
 
 const colors = {
@@ -219,18 +220,7 @@ export default function FbrPurchaseImportPage() {
   // criteria — operators want to mine "why did this row not come
   // through?" without re-running the upload.
   //
-  // Audit H-14 (2026-05-13): prefix any string starting with =, +, -, @,
-  // tab or carriage-return with a single quote so Excel doesn't
-  // interpret it as a formula (=WEBSERVICE → SSRF, =HYPERLINK → exfil).
-  const csvSafe = (raw) => {
-    const s = String(raw ?? "");
-    if (!s) return s;
-    const first = s[0];
-    if (first === "=" || first === "+" || first === "-" || first === "@" || first === "\t" || first === "\r") {
-      return "'" + s;
-    }
-    return s;
-  };
+  // Audit H-14: operator strings go through the shared csvSafe.
   const skippedCsvHref = useMemo(() => {
     if (!result?.invoices?.length) return null;
     const lines = [["Invoice", "Supplier NTN", "Supplier", "Date", "Row", "HS Code", "Description", "Quantity", "Decision"].join(",")];

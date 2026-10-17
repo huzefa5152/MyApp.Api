@@ -11,7 +11,7 @@
 // and reconciliation footer stay put. Rows are stacked full-width lines that
 // work on a phone as-is (no wide table). State is mirrored into
 // ?drill=&group= so Back from "Open bill" lands on the same level.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { MdClose, MdWarningAmber, MdChevronRight, MdFileDownload } from "react-icons/md";
 import { colors } from "../../theme";
@@ -71,6 +71,8 @@ export default function KpiDrilldown({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(null);
+  const [exportError, setExportError] = useState("");
+  const panelRef = useRef(null);
   const [isNarrow, setIsNarrow] = useState(
     typeof window !== "undefined" ? window.innerWidth < NARROW : false);
 
@@ -87,6 +89,23 @@ export default function KpiDrilldown({
     setSearchParams((p) => drillToSearch(p, null), { replace: true });
     onClose?.();
   }, [onClose, setSearchParams]);
+
+  // Focus: move into the panel on open, trap Tab inside it, and give focus
+  // back to whatever opened it on close (aria-modal promises all three).
+  useEffect(() => {
+    if (!open) return;
+    const opener = document.activeElement;
+    panelRef.current?.querySelector("button")?.focus();
+    return () => { if (opener && opener.focus) opener.focus(); };
+  }, [open]);
+  const trapTab = (e) => {
+    if (e.key !== "Tab") return;
+    const f = [...panelRef.current.querySelectorAll("button:not([disabled]), a[href]")];
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && (document.activeElement === first || !panelRef.current.contains(document.activeElement))) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  };
 
   // A panel you cannot dismiss is the complaint this codebase already had once.
   useEffect(() => {
@@ -105,7 +124,7 @@ export default function KpiDrilldown({
   useEffect(() => {
     if (!open || !kind || !companyId) return;
     let cancelled = false;
-    setLoading(true); setError(""); setData(null); setExpanded(null);
+    setLoading(true); setError(""); setExportError(""); setData(null); setExpanded(null);
     getDashboardBreakdown(companyId, kind, { period, from, to, groupKey })
       .then((d) => {
         if (cancelled) return;
@@ -134,9 +153,9 @@ export default function KpiDrilldown({
   const ok = truncated || reconciles(rows, headline);
   const title = data?.title || "Breakdown";
 
-  const rowClick = (r) => {
+  const rowClick = (r, key) => {
     if (!level2 && r.groupKey) { setGroupLabel(r.label); setGroupKey(r.groupKey); }
-    else setExpanded((x) => (x === r.id ? null : r.id));
+    else setExpanded((x) => (x === key ? null : key));
   };
   const clickable = (r) => (!level2 && !!r.groupKey) || (!!r.values && Object.keys(r.values).length > 0);
 
@@ -167,6 +186,7 @@ export default function KpiDrilldown({
 
   return (
     <div
+      className="kpi-drill-backdrop"
       style={{
         position: "fixed", inset: 0, zIndex: 1100, display: "flex", justifyContent: "flex-end",
         backgroundColor: "rgba(10,22,40,0.45)",
@@ -175,6 +195,7 @@ export default function KpiDrilldown({
       role="presentation"
     >
       <div
+        ref={panelRef} onKeyDown={trapTab}
         role="dialog" aria-modal="true" aria-label={title}
         onMouseDown={(e) => e.stopPropagation()}
         style={{
@@ -183,6 +204,7 @@ export default function KpiDrilldown({
           boxShadow: "-12px 0 40px rgba(13,71,161,0.18)",
         }}
       >
+        <style>{".kpi-drill-row:focus-visible{outline:2px solid var(--dash-primary,#0d47a1);outline-offset:-2px}"}</style>
         <div style={{
           display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.75rem",
           padding: "0.9rem 1.1rem", borderBottom: `1px solid ${colors.cardBorder}`, flexShrink: 0,
@@ -206,7 +228,7 @@ export default function KpiDrilldown({
           <div style={{ display: "flex", flexShrink: 0 }}>
             {rows.length > 0 && (
               <button type="button" aria-label="Export to Excel" title="Export to Excel"
-                onClick={() => downloadXlsx(data, `${kind}${groupKey ? "-" + groupKey : ""}.xlsx`)}
+                onClick={() => { setExportError(""); downloadXlsx(data, `${kind}${groupKey ? "-" + groupKey : ""}.xlsx`).catch(() => setExportError("Could not create the Excel file.")); }}
                 style={iconBtn}><MdFileDownload size={20} /></button>
             )}
             <button type="button" onClick={closeAndClear} aria-label="Close" style={iconBtn}><MdClose size={20} /></button>
@@ -215,17 +237,19 @@ export default function KpiDrilldown({
 
         <div style={{ overflowY: "auto", flex: 1, minHeight: 0, padding: "0.5rem 1.1rem" }}>
           {loading && <p style={{ color: colors.textSecondary }}>Loading…</p>}
+          {exportError && <p role="alert" style={{ color: colors.danger }}>{exportError}</p>}
           {error && <p role="alert" style={{ color: colors.danger }}>{error}</p>}
           {!loading && !error && data && rows.length === 0 && (
             <p style={{ color: colors.textSecondary }}>Nothing to show for this period.</p>
           )}
           {!loading && !error && rows.map((r, i) => {
-            const isOpen = r.id != null && expanded === r.id;
+            const key = r.id ?? i;
+            const isOpen = expanded === key;
             const canClick = clickable(r);
             return (
-              <div key={r.id ?? i} style={{ borderBottom: `1px solid ${colors.cardBorder}`, background: r.flagged ? colors.dangerLight : undefined }}>
+              <div key={key} style={{ borderBottom: `1px solid ${colors.cardBorder}`, background: r.flagged ? colors.dangerLight : undefined }}>
                 <button
-                  type="button" disabled={!canClick} onClick={() => rowClick(r)}
+                  type="button" className="kpi-drill-row" disabled={!canClick} onClick={() => rowClick(r, key)}
                   aria-expanded={canClick && level2 ? isOpen : undefined}
                   style={{
                     all: "unset", boxSizing: "border-box", width: "100%", minHeight: 44, cursor: canClick ? "pointer" : "default",

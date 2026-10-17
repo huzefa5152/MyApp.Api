@@ -73,7 +73,7 @@ check("reconciles within tolerance", () => {
 check("exportRows neutralises formulas, header included", () => {
   const out = D.exportRows([{ key: "k", label: "=Bad" }], [{ label: "=HYPERLINK(1)", sub: "ok", amount: -5, values: { k: "@x" } }]);
   assert.strictEqual(out[0][3], "'=Bad");
-  assert.deepStrictEqual(out[1], ["'=HYPERLINK(1)", "ok", "'-5", "'@x"]);
+  assert.deepStrictEqual(out[1], ["'=HYPERLINK(1)", "ok", -5, "'@x"]);
 });
 check("drill URL state round-trips", () => {
   assert.deepStrictEqual(D.drillFromSearch(new URLSearchParams("drill=sales&group=2026-09")), { kind: "sales", groupKey: "2026-09" });

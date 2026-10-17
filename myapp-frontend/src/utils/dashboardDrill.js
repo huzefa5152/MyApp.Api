@@ -1,12 +1,5 @@
 // Pure logic for the dashboard drill-down panel (no React, testable under node).
-
-// Same rule as the server's CsvSafe: a leading = + - @ tab or CR makes Excel
-// read the cell as a formula, so prefix it with a quote.
-export function csvSafe(raw) {
-  const s = String(raw ?? "");
-  if (!s) return s;
-  return "=+-@\t\r".includes(s[0]) ? "'" + s : s;
-}
+import { csvSafe } from "./csvSafe.js";
 
 // URL state: ?drill=<kind>&group=<groupKey>.
 export function drillFromSearch(params) {
@@ -37,10 +30,12 @@ export function reconciles(rows, total, tolerance = 0.05) {
 // Header row + one line per row, every string through csvSafe.
 export function exportRows(columns, rows) {
   const cols = columns || [];
-  const head = ["Name", "Detail", "Amount", ...cols.map((c) => c.label)].map(csvSafe);
+  // Only strings can be formulas; a negative NUMBER must stay a number.
+  const safe = (v) => (typeof v === "string" ? csvSafe(v) : (v ?? ""));
+  const head = ["Name", "Detail", "Amount", ...cols.map((c) => c.label)].map(safe);
   const body = (rows || []).map((r) => [
     r.label, r.sub, r.amount, ...cols.map((c) => r.values?.[c.key]),
-  ].map((v) => csvSafe(v ?? "")));
+  ].map(safe));
   return [head, ...body];
 }
 
