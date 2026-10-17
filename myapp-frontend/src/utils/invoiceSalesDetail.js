@@ -51,7 +51,7 @@ export function groupBills(rows = []) {
     if (!b) {
       b = {
         invoiceId: r.invoiceId, first: r, lines: [], cancelled: r.billStatus === "Cancelled",
-        totals: { excl: 0, gst: 0, incl: 0, adv: 0, further: 0, total: 0 },
+        totals: { excl: 0, gst: 0, incl: 0, further: 0, total: 0 },
       };
       byId.set(r.invoiceId, b);
     }
@@ -60,7 +60,6 @@ export function groupBills(rows = []) {
     t.excl = round2(t.excl + Number(r.excludingTax || 0));
     t.gst = round2(t.gst + Number(r.salesTax || 0));
     t.incl = round2(t.incl + Number(r.includingTax || 0));
-    t.adv = round2(t.adv + Number(r.advanceTax || 0));
     t.further = round2(t.further + Number(r.furtherTax || 0));
     t.total = round2(t.total + Number(r.total || 0));
   }
@@ -82,18 +81,17 @@ export function pageOfBills(bills, page, pageSize) {
 
 const TILE_LABELS = {
   invoiceCount: "Bills", submittedCount: "Submitted", notSubmittedCount: "Not submitted",
-  excludingTax: "Excl", salesTax: "G. S. T", advanceTax: "236-G / 236-H", furtherTax: "Further tax",
+  excludingTax: "Excl", salesTax: "G. S. T", furtherTax: "Further tax",
   total: "Total incl taxes",
 };
 
-/** The tiles: counts, then the money; advance and further tax only when charged. */
+/** The tiles: counts, then the money; further tax only when charged. */
 export function totalsFor(report) {
   const totals = {
     invoiceCount: report.invoiceCount, submittedCount: report.submittedCount,
     notSubmittedCount: report.notSubmittedCount, excludingTax: report.excludingTax,
     salesTax: report.salesTax,
   };
-  if (Number(report.advanceTax)) totals.advanceTax = report.advanceTax;
   if (Number(report.furtherTax)) totals.furtherTax = report.furtherTax;
   totals.total = report.total;
   const notes = report.cancelledCount ? { invoiceCount: `${report.cancelledCount} cancelled` } : {};

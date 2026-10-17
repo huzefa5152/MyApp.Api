@@ -80,7 +80,6 @@ public partial class ReportService
                         : totalTaxBase > 0m ? Round2(inv.GSTAmount * taxBases[index] / totalTaxBase) : 0m;
                     allocatedGst += tax;
                     var first = index == 0;
-                    var advance = 0m; // Trader does not charge advance income tax.
                     var freight = first ? inv.FreightCharges : 0m;
                     var further = first ? inv.FurtherTaxAmount : 0m;
                     rows.Add(new InvoiceSalesDetailRowDto
@@ -95,8 +94,8 @@ public partial class ReportService
                         Unit = item?.UOM ?? "", Quantity = item?.Quantity ?? 0m,
                         Rate = item?.UnitPrice ?? 0m, ExcludingTax = amount,
                         TaxRate = inv.GSTRate, SalesTax = tax, IncludingTax = amount + tax,
-                        AdvanceTax = advance, FurtherTax = further,
-                        FreightCharges = freight, Total = amount + tax + advance + further + freight,
+                        FurtherTax = further,
+                        FreightCharges = freight, Total = amount + tax + further + freight,
                         FbrStatus = status, FbrInvoiceNumber = fbrNumber, BillStatus = billStatus,
                     });
                 }
@@ -111,7 +110,6 @@ public partial class ReportService
             report.CancelledCount = listed.Count(i => i.IsCancelled);
             report.ExcludingTax = report.Rows.Sum(r => r.ExcludingTax);
             report.SalesTax = report.Rows.Sum(r => r.SalesTax);
-            report.AdvanceTax = report.Rows.Sum(r => r.AdvanceTax);
             report.FurtherTax = report.Rows.Sum(r => r.FurtherTax);
             report.Total = report.Rows.Sum(r => r.Total);
             return report;
@@ -130,7 +128,7 @@ public partial class ReportService
             var headers = new[] { "S. No", "Date", "Month", "DC", "DC No", "DC #", "Inv Series",
                 "Inv No", "Inv #", "Party Name", "Address", "Ntn", "Hs Code", "Description",
                 "Unit", "Qty", "Rate", "Excl", "Tax Rate", "G. S. T", "Incl",
-                "236-G / 236-H Tax", "Further Tax", "Total", "FBR Status", "FBR Invoice No", "Bill Status" };
+                "Further Tax", "Total", "FBR Status", "FBR Invoice No", "Bill Status" };
             for (var c = 1; c <= headers.Length; c++) ws.Cell(1, c).Value = headers[c - 1];
             var header = ws.Range(1, 1, 1, headers.Length);
             header.Style.Font.Bold = true;
@@ -160,30 +158,28 @@ public partial class ReportService
                 ws.Cell(row, 19).Value = d.TaxRate / 100m;
                 ws.Cell(row, 20).Value = d.SalesTax;
                 ws.Cell(row, 21).Value = d.IncludingTax;
-                ws.Cell(row, 22).Value = d.AdvanceTax;
-                ws.Cell(row, 23).Value = d.FurtherTax;
-                ws.Cell(row, 24).Value = d.Total;
+                ws.Cell(row, 22).Value = d.FurtherTax;
+                ws.Cell(row, 23).Value = d.Total;
                 if (d.FreightCharges != 0m)
-                    ws.Cell(row, 24).CreateComment().AddText($"Includes freight/cartage: {d.FreightCharges:N2}");
-                ws.Cell(row, 25).Value = SpreadsheetFormulaGuard.Neutralise(d.FbrStatus);
-                ws.Cell(row, 26).Value = SpreadsheetFormulaGuard.Neutralise(d.FbrInvoiceNumber);
-                ws.Cell(row, 27).Value = d.BillStatus;
+                    ws.Cell(row, 23).CreateComment().AddText($"Includes freight/cartage: {d.FreightCharges:N2}");
+                ws.Cell(row, 24).Value = SpreadsheetFormulaGuard.Neutralise(d.FbrStatus);
+                ws.Cell(row, 25).Value = SpreadsheetFormulaGuard.Neutralise(d.FbrInvoiceNumber);
+                ws.Cell(row, 26).Value = d.BillStatus;
                 ws.Cell(row, 11).Style.Alignment.WrapText = true;
                 ws.Cell(row, 14).Style.Alignment.WrapText = true;
                 if (d.BuyerAddress.Length > 48 || d.Description.Length > 48)
                     ws.Row(row).Height = 32;
                 ws.Cell(row, 19).Style.NumberFormat.Format = "0.00%";
-                for (var c = 16; c <= 24; c++)
+                for (var c = 16; c <= 23; c++)
                     if (c != 19) ws.Cell(row, c).Style.NumberFormat.Format = "#,##0.00";
                 row++;
             }
             ws.Cell(row, 14).Value = "Total listed bills";
             ws.Cell(row, 18).Value = report.ExcludingTax;
             ws.Cell(row, 20).Value = report.SalesTax;
-            ws.Cell(row, 22).Value = report.AdvanceTax;
-            ws.Cell(row, 23).Value = report.FurtherTax;
-            ws.Cell(row, 24).Value = report.Total;
-            foreach (var c in new[] { 18, 20, 22, 23, 24 })
+            ws.Cell(row, 22).Value = report.FurtherTax;
+            ws.Cell(row, 23).Value = report.Total;
+            foreach (var c in new[] { 18, 20, 22, 23 })
                 ws.Cell(row, c).Style.NumberFormat.Format = "#,##0.00";
             ws.Range(row, 1, row, headers.Length).Style.Font.Bold = true;
             ws.Range(row, 1, row, headers.Length).Style.Fill.BackgroundColor = XLColor.FromHtml("#EAF2FC");

@@ -65,7 +65,7 @@ export default function InvoiceSalesDetailPage() {
   if (!canView) return <p>You don’t have permission to view this report.</p>;
   return <div style={{ minWidth: 0 }}>
     <h1 style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 8px", fontSize: "clamp(1.2rem,3vw,1.6rem)", color: colors.textPrimary }}><MdAssessment color={colors.blue} />Invoice Sales Detail</h1>
-    <p style={{ color: colors.textSecondary, margin: "0 0 16px" }}>Original bill lines, filed with FBR or not. Filters update automatically.</p>
+    <p style={{ color: colors.textSecondary, margin: "0 0 16px" }}>Bill-by-bill sales, tax and filing status. Filters update automatically.</p>
     <div style={styles.filters}>
       {companies.length > 1 && <Field label="Company"><select aria-label="Company" style={styles.input} value={companyId || ""} onChange={e => setSelectedCompany(companies.find(c => String(c.id) === e.target.value))}>{companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}</select></Field>}
       <Field label="Period"><select aria-label="Period" style={styles.input} value={filters.period} onChange={e => change("period", e.target.value)}>{ISD_PERIOD_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></Field>
@@ -90,8 +90,8 @@ export default function InvoiceSalesDetailPage() {
       {report && <>
         <h2 style={{ fontSize: "1.05rem", color: colors.textPrimary }}>{report.companyName} · {report.periodLabel}</h2>
         <div style={styles.tiles}>{Object.entries(tiles.totals).map(([name, value]) => <div key={name} style={styles.tile}><span style={{ color: colors.textSecondary }}>{tiles.totalLabels[name]}</span><strong style={{ color: colors.blue, fontSize: "1.12rem" }}>{name.endsWith("Count") ? value : `Rs ${money(value)}`}</strong></div>)}</div>
-        <p style={{ color: colors.textSecondary, fontSize: "0.85rem" }}>Saved commercial values; consultant grouping does not change these lines. Cancelled bills remain listed and included in totals. Total includes any freight; sales tax does not. Buyer address and NTN are current details.</p>
-        <InvoiceSalesDetailGrid report={report} bills={view.bills} allBillCount={bills.length} loading={loading} emptyText={emptyText(report, filters)} />
+        <details className="isd-notes"><summary>About these figures</summary><p>Totals cover all filtered bills. Saved commercial values are shown; consultant grouping does not change these lines. Cancelled bills remain included. Total includes freight; GST does not. Buyer address and NTN are current details.</p></details>
+        <InvoiceSalesDetailGrid key={companyId} report={report} bills={view.bills} allBillCount={bills.length} loading={loading} emptyText={emptyText(report, filters)} />
         <Pagination page={view.page} totalPages={view.totalPages} total={bills.length} unit="bills" onPage={setPage} pageSize={pageSize} onPageSize={size => { setPageSize(size); setPage(1); }} />
       </>}
     </div>

@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { Fragment, useState, useMemo, useRef, useEffect } from "react";
 import { MdArrowUpward, MdArrowDownward, MdViewColumn, MdSearch } from "react-icons/md";
 import { useUiPreference } from "../hooks/useUiPreference";
 
@@ -26,6 +26,8 @@ import { useUiPreference } from "../hooks/useUiPreference";
  *   storageKey?: string               // when provided, column visibility persists in localStorage
  *   emptyMessage?: string
  *   dense?:      boolean              // tighter row padding for very dense lists
+ *   pageScroll?: boolean              // let the page scroll instead of a capped table region
+ *   renderExpandedRow?: (row) => ReactNode // optional inline detail row; null when closed
  */
 export default function DataTable({
   columns,
@@ -38,6 +40,8 @@ export default function DataTable({
   storageKey,
   emptyMessage = "No records to display.",
   dense = false,
+  pageScroll = false,
+  renderExpandedRow,
 }) {
   const [sort, setSort] = useState({ key: null, dir: "asc" });
   const [quickFilter, setQuickFilter] = useState("");
@@ -127,7 +131,7 @@ export default function DataTable({
   const headPad = dense ? "0.5rem 0.7rem" : "0.65rem 0.85rem";
 
   return (
-    <div style={styles.outer}>
+    <div style={pageScroll ? { ...styles.outer, overflow: "visible" } : styles.outer}>
       {(quickSearchPlaceholder || true) && (
         <div style={styles.toolbar}>
           {quickSearchPlaceholder && (
@@ -184,7 +188,7 @@ export default function DataTable({
         </div>
       )}
 
-      <div data-admin-table-region="" style={styles.tableWrap}>
+      <div data-admin-table-region="" style={pageScroll ? { ...styles.tableWrap, maxHeight: "none", overflow: "visible" } : styles.tableWrap}>
         <table style={styles.table}>
           <thead>
             <tr>
@@ -234,9 +238,10 @@ export default function DataTable({
               </tr>
             ) : filteredRows.map((row, i) => {
               const k = rowKey ? rowKey(row) : (row.id ?? i);
+              const expanded = renderExpandedRow?.(row);
               return (
+                <Fragment key={k}>
                 <tr
-                  key={k}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
                   style={{
                     ...styles.tr,
@@ -270,6 +275,8 @@ export default function DataTable({
                     </td>
                   )}
                 </tr>
+                {expanded != null && <tr><td colSpan={visibleColumns.length + (actions ? 1 : 0)} style={{ padding: 0 }}>{expanded}</td></tr>}
+                </Fragment>
               );
             })}
           </tbody>

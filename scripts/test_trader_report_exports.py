@@ -60,10 +60,11 @@ try:
  for query in [{'period':'allPeriods'},{'period':'invalid'},{'period':'custom','from':'2026-01-02','to':'2026-01-01'},{'period':'custom','from':'2026-01-01'},{'year':2026,'month':13},{'fbrStatus':'unknown'},{'search':'a'*101},{'period':'custom','from':'9999-12-31','to':'9999-12-31'}]:
   call('GET',f'/api/reports/company/{cid}/invoice-sales-detail?'+urlencode(query),expected=(400,));call('GET',f'/api/reports/company/{cid}/invoice-sales-detail/excel?'+urlencode(query),expected=(400,));check('invalid filter refused for JSON and Excel: '+str(query)[:55],True)
  ws=workbook(f'/api/reports/company/{cid}/invoice-sales-detail/excel?search=2mm').active
- headers=['S. No','Date','Month','DC','DC No','DC #','Inv Series','Inv No','Inv #','Party Name','Address','Ntn','Hs Code','Description','Unit','Qty','Rate','Excl','Tax Rate','G. S. T','Incl','236-G / 236-H Tax','Further Tax','Total','FBR Status','FBR Invoice No','Bill Status']
- check('sales workbook retains Importer column order and labels',[c.value for c in ws[1]]==headers)
+ headers=['S. No','Date','Month','DC','DC No','DC #','Inv Series','Inv No','Inv #','Party Name','Address','Ntn','Hs Code','Description','Unit','Qty','Rate','Excl','Tax Rate','G. S. T','Incl','Further Tax','Total','FBR Status','FBR Invoice No','Bill Status']
+ check('sales workbook retains the requested column order without advance income tax',[c.value for c in ws[1]]==headers)
+ check('sales export has Further Tax but no advance income-tax column',ws.cell(1,22).value=='Further Tax' and ws.max_column==26 and not any('236-' in str(c.value) for c in ws[1]))
  check('workbook filters exactly match displayed bill lines',ws.max_row==4 and [ws.cell(i,14).value for i in (2,3)]==['2mm sheet','3mm sheet'])
- check('sales workbook numeric totals equal report totals',ws.cell(4,18).value==filtered['excludingTax'] and ws.cell(4,24).value==filtered['total'] and ws.cell(2,19).number_format=='0.00%')
+ check('sales workbook numeric totals equal report totals',ws.cell(4,18).value==filtered['excludingTax'] and ws.cell(4,23).value==filtered['total'] and ws.cell(2,19).number_format=='0.00%')
  tax=call('GET',f'/api/reports/company/{cid}/tax-sheet?year={date.today().year}');taxrows=[x for x in tax['rows'] if x['invoiceId']==bill['id']]
  check('Tax Sheet screen still groups the existing category',len(taxrows)==1 and taxrows[0]['quantity']==5 and taxrows[0]['itemTypeName']==kind['name'])
  tw=workbook(f'/api/reports/company/{cid}/tax-sheet/excel?year={date.today().year}').active

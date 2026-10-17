@@ -7,8 +7,10 @@ Current filing groups map back to their original source lines; a stale filing
 returns the original lines for review. These are exports only, never imports or
 edits to the underlying bill.
 
-Reports > Invoice Sales Detail retains Importer's grouped bill display and
-27-column workbook format. Trader's company, period, searchable client, FBR
+Reports > Invoice Sales Detail uses the requested 26-column workbook format.
+Its screen uses the shared DataTable as a compact bill register, with inline
+original-item details and phone/tablet cards. The report uses page scrolling
+rather than nested, capped table regions. Trader's company, period, searchable client, FBR
 status and search controls apply immediately, without an Apply button. An
 incomplete or backwards custom range does not fetch; superseded requests are
 aborted and ignored. Changing company clears its client filter and old report.
@@ -18,7 +20,7 @@ references. It lists cancelled bills with an explicit status, matching Importer.
 Saved GST is allocated across the bill's lines with the rounding remainder on
 the final line. Further tax and freight appear once per bill. Total includes
 freight; GST does not. A workbook cell comment identifies included freight.
-Trader has no advance-income-tax charge, so the retained advance column is zero.
+Trader has no advance-income-tax charge, so its screen and workbook omit that column. Further tax remains. The rest of the workbook layout is unchanged.
 Consultant filing groups do not replace these commercial descriptions or rates.
 
 JSON and Excel share one query/filter implementation. Both new endpoints assert
