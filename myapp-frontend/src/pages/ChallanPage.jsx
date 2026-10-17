@@ -32,7 +32,7 @@ import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { mergeTemplate } from "../utils/templateEngine";
 import { defaultChallanTemplate } from "../utils/defaultTemplates";
-import { exportToPdf } from "../utils/exportUtils";
+import { exportToPdf, prepareLetterheadPrint } from "../utils/exportUtils";
 import { saveAs } from "file-saver";
 import { dropdownStyles } from "../theme";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
@@ -292,7 +292,7 @@ export default function ChallanPage() {
       const template = tplPicker.resolveTemplate(challan)?.htmlContent || defaultChallanTemplate;
       const html = mergeTemplate(template, data);
       w.document.open();
-      w.document.write(html);
+      w.document.write(await prepareLetterheadPrint(html));
       w.document.close();
       w.onafterprint = () => w.close();
       printWindowWhenImagesReady(w);

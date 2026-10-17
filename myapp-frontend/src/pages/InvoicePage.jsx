@@ -34,7 +34,7 @@ import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import PaymentStatusBadge from "../Components/PaymentStatusBadge";
 import { mergeTemplate } from "../utils/templateEngine";
 import { defaultBillTemplate, defaultTaxInvoiceTemplate } from "../utils/defaultTemplates";
-import { exportToPdf } from "../utils/exportUtils";
+import { exportToPdf, prepareLetterheadPrint } from "../utils/exportUtils";
 import { saveAs } from "file-saver";
 import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
@@ -429,7 +429,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       const { data } = await getInvoicePrintBill(inv.id);
       const html = mergeTemplate(tplPicker.resolveTemplate(inv)?.htmlContent || defaultBillTemplate, data);
       w.document.open();
-      w.document.write(html);
+      w.document.write(await prepareLetterheadPrint(html));
       w.document.close();
       w.onafterprint = () => w.close();
       printWindowWhenImagesReady(w);
@@ -445,7 +445,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       const { data } = await getInvoicePrintTaxInvoice(inv.id);
       const html = mergeTemplate(tplPicker.resolveTemplate(inv)?.htmlContent || defaultTaxInvoiceTemplate, data);
       w.document.open();
-      w.document.write(html);
+      w.document.write(await prepareLetterheadPrint(html));
       w.document.close();
       w.onafterprint = () => w.close();
       printWindowWhenImagesReady(w);

@@ -18,6 +18,12 @@
  */
 export function writeAndPrint(w, html, { timeoutMs = 5000 } = {}) {
   if (!w || w.closed) return;
+  if (/data-print-letterhead-top\s*=/i.test(html)) {
+    import("./exportUtils").then(({ prepareLetterheadPrint }) => prepareLetterheadPrint(html))
+      .then(prepared => writeAndPrint(w, prepared, { timeoutMs }))
+      .catch(() => { if (!w.closed) w.document.body.textContent = "This document could not fit the letterhead area. Adjust the template or shorten an oversized row and retry."; });
+    return;
+  }
   // Templates that don't define their own @page get a sane print default: a
   // top+bottom page margin (so a multi-page doc doesn't butt page-to-page —
   // page 1 ends with a bottom margin, page 2 starts with a top margin), rows
