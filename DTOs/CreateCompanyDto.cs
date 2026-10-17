@@ -3,6 +3,7 @@ namespace MyApp.Api.DTOs
     public class CreateCompanyDto
     {
         public string Name { get; set; } = string.Empty;
+        public bool AllowNonFbrBills { get; set; }
         public bool DefaultGroupTaxInvoiceByItemType { get; set; }
 
         [System.ComponentModel.DataAnnotations.Range(0, 100)]

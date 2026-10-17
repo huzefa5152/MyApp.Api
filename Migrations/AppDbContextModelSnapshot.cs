@@ -827,6 +827,9 @@ namespace MyApp.Api.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<bool>("AllowNonFbrBills")
+                        .HasColumnType("bit");
+
                     b.Property<string>("BrandName")
                         .HasColumnType("nvarchar(max)");
 
@@ -2342,6 +2345,13 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("TaxFilingRowsJson")
                         .IsConcurrencyToken()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TaxTreatment")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)")
+                        .HasDefaultValue("FBR");
 
                     b.Property<decimal>("WithholdingTaxAmount")
                         .HasPrecision(18, 2)

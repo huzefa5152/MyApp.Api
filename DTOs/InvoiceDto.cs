@@ -23,6 +23,8 @@ namespace MyApp.Api.DTOs
         public int ClientId { get; set; }
         public string ClientName { get; set; } = "";
         public decimal Subtotal { get; set; }
+        public bool AllowNonFbrBills { get; set; }
+        public string TaxTreatment { get; set; } = "FBR";
         public decimal GSTRate { get; set; }
         public decimal GSTAmount { get; set; }
         public decimal GrandTotal { get; set; }
@@ -298,6 +300,7 @@ namespace MyApp.Api.DTOs
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
         public int ClientId { get; set; }
+        public string TaxTreatment { get; set; } = "FBR";
         public decimal GSTRate { get; set; }
         public string? PaymentTerms { get; set; }
         /// <summary>FBR document type: 4 = Sale Invoice (default), 9 = Debit Note, 10 = Credit Note.</summary>
@@ -390,6 +393,7 @@ namespace MyApp.Api.DTOs
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
         public int ClientId { get; set; }
+        public string TaxTreatment { get; set; } = "FBR";
         public decimal GSTRate { get; set; }
         public string? PaymentTerms { get; set; }
         /// <summary>FBR document type: 4 = Sale Invoice (default), 9 = Debit Note, 10 = Credit Note.</summary>
@@ -621,6 +625,7 @@ namespace MyApp.Api.DTOs
         /// today (UTC) before persisting.
         /// </summary>
         public DateTime? Date { get; set; }
+        public string? TaxTreatment { get; set; }
         public decimal GSTRate { get; set; }
         public string? PaymentTerms { get; set; }
         public int? DocumentType { get; set; }

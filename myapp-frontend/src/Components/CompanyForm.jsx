@@ -1,3 +1,4 @@
+import { useAuth } from "../contexts/AuthContext";
 import { useState, useEffect } from "react";
 import { createCompany, updateCompany, uploadCompanyLogo, getCompanyById } from "../api/companyApi";
 import { seedDefaultTemplates } from "../api/printTemplateApi";
@@ -36,9 +37,11 @@ const TABS = [
 ];
 
 export default function CompanyForm({ company, onClose, onSaved }) {
+    const { user: settingUser } = useAuth();
     const [form, setForm] = useState({
         name: "",
         brandName: "",
+        allowNonFbrBills: false,
         defaultGroupTaxInvoiceByItemType: false,
         defaultWithholdingTaxRate: null,
         fullAddress: "",
@@ -128,6 +131,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
             setForm({
                 name: freshCompany.name || "",
                 brandName: freshCompany.brandName || "",
+                allowNonFbrBills: !!freshCompany.allowNonFbrBills,
                 defaultGroupTaxInvoiceByItemType: !!freshCompany.defaultGroupTaxInvoiceByItemType,
                 defaultWithholdingTaxRate: freshCompany.defaultWithholdingTaxRate ?? null,
                 fullAddress: freshCompany.fullAddress || "",
@@ -365,6 +369,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                 <label style={label}>Brand Name (for print header)</label>
                                 <input type="text" name="brandName" value={form.brandName} onChange={handleChange} style={input} placeholder="Name as it should print on documents" />
                             </div>
+                            {settingUser?.isSeedAdmin && <label style={{ display: "block", marginBottom: 16 }}><input type="checkbox" checked={!!form.allowNonFbrBills} onChange={e => setForm(prev => ({ ...prev, allowNonFbrBills: e.target.checked }))} /> Allow SRB / non-FBR bills<small style={{ display: "block" }}>Off by default. Enables SRB / non-FBR billing.</small></label>}
                             <TaxInvoiceGrouping value={form.defaultGroupTaxInvoiceByItemType} onChange={(value) => setForm((prev) => ({ ...prev, defaultGroupTaxInvoiceByItemType: value }))} companyDefault />
                             <div data-admin-field="" style={formGroup}>
                                 <label style={label}>Default withholding tax rate (%)</label>

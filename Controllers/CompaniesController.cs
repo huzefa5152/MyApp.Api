@@ -102,6 +102,7 @@ namespace MyApp.Api.Controllers
                     dto.FbrToken = null;
                 }
 
+                if (dto.AllowNonFbrBills && CurrentUserId != _configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1)) return Forbid();
                 var createdCompany = await _companyService.CreateAsync(dto);
 
                 // Auto-grant the creator access to the company they just made.
@@ -187,6 +188,8 @@ namespace MyApp.Api.Controllers
             // change.
             var existing = await _companyService.GetByIdAsync(id);
             if (existing == null) return NotFound();
+            if (dto.AllowNonFbrBills.HasValue && dto.AllowNonFbrBills.Value != existing.AllowNonFbrBills
+                && CurrentUserId != _configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1)) return Forbid();
 
             // Tenant-isolation flip — only the dedicated perm OR seed admin.
             // null means the caller did not send the field at all (the company

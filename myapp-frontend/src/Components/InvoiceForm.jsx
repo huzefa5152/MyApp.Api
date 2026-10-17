@@ -1,3 +1,4 @@
+import BillTaxTreatmentField from "./BillTaxTreatmentField";
 import { defaultFurtherTaxRate } from "../utils/furtherTax";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { MdCheck, MdInfo, MdLock, MdAdd, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
@@ -116,6 +117,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // the linked challans). PO date reuses commonPoDate below.
   const [poNumber, setPoNumber] = useState("");
   const [gstRate, setGstRate] = useState(18);
+  const [taxTreatment, setTaxTreatment] = useState("FBR");
+  const outsideFbr = taxTreatment !== "FBR";
+  const changeTaxTreatment = value => { setTaxTreatment(value); setGstRate(value === "SRB" ? 15 : value === "NoTax" ? 0 : chosenScenario?.defaultRate ?? 18); setFurtherTaxRate(null); };
   // Further tax follows the buyer/scenario; withholding uses the company preference.
   // The operator can override either value.
   const [furtherTaxRate, setFurtherTaxRate] = useState(null);
@@ -376,12 +380,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // GST rate, item-type filter, AND the client dropdown filter.
   const buyerRegistrationType = clients.find((c) => String(c.id) === String(selectedClientId))?.registrationType;
   useEffect(() => {
-    setFurtherTaxRate(defaultFurtherTaxRate(scenarioCode, buyerRegistrationType));
-  }, [scenarioCode, selectedClientId, buyerRegistrationType]);
+    setFurtherTaxRate(outsideFbr ? null : defaultFurtherTaxRate(scenarioCode, buyerRegistrationType));
+  }, [scenarioCode, selectedClientId, buyerRegistrationType, outsideFbr]);
 
   const chosenScenario = useMemo(
-    () => enrichedScenarios.find((s) => s.code === scenarioCode) || null,
-    [enrichedScenarios, scenarioCode],
+    () => outsideFbr ? { code: taxTreatment, defaultRate: taxTreatment === "SRB" ? 15 : 0, saleType: "", meta: { buyerKind: "either", hint: "Outside FBR" } } : enrichedScenarios.find((s) => s.code === scenarioCode) || null,
+    [enrichedScenarios, scenarioCode, taxTreatment, outsideFbr],
   );
 
   // Item types compatible with the chosen scenario. When no scenario is
@@ -401,8 +405,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // canonical rate. Field is read-only while a scenario is locked — same
   // behaviour as StandaloneInvoiceForm. Switch scenario to change rate.
   useEffect(() => {
-    if (chosenScenario) setGstRate(chosenScenario.defaultRate);
-  }, [chosenScenario]);
+    if (!outsideFbr && chosenScenario) setGstRate(chosenScenario.defaultRate);
+  }, [chosenScenario, outsideFbr]);
 
   // Default to SN001 when applicable. Most operators bill registered
   // B2B at standard rate; opening on SN001 saves a click. We only set
@@ -623,7 +627,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
       // Prepend the chosen scenario tag to paymentTerms so FbrService's
       // auto-detector routes the submission to the right scenarioId. The
       // tag pattern is "[SNxxx]" — see FbrService.PostInvoiceAsync.
-      const paymentTermsToSave = scenarioCode
+      const paymentTermsToSave = !outsideFbr && scenarioCode
         ? `[${scenarioCode}] ${paymentTerms || chosenScenario?.description || ""}`.trim()
         : (paymentTerms || null);
 
@@ -632,6 +636,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         companyId,
         clientId: parseInt(selectedClientId),
         gstRate: parseFloat(gstRate),
+        taxTreatment,
         // null = Auto (server allocates the next number in sequence).
         invoiceNumber: billNumberPayload(billNumberMode, billNumber),
         // null, not 0 — "not selected" and "selected at zero" are different
@@ -728,14 +733,14 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   //   walk-in          → only Unregistered clients (counter sale, rare with challans)
   //   either           → no filter
   const clientsForScenario = useMemo(() => {
-    if (!chosenScenario) return clientsWithChallans;
+    if (outsideFbr || !chosenScenario) return clientsWithChallans;
     const k = chosenScenario.meta.buyerKind;
     if (k === "b2b-registered")
       return clientsWithChallans.filter((c) => (c.registrationType || "").toLowerCase() === "registered");
     if (k === "b2b-unregistered" || k === "walk-in")
       return clientsWithChallans.filter((c) => (c.registrationType || "").toLowerCase() !== "registered");
     return clientsWithChallans;
-  }, [clientsWithChallans, chosenScenario]);
+  }, [clientsWithChallans, chosenScenario, outsideFbr]);
 
   // Re-fetchers for inline creates so the new buyer / item type lands
   // in the dropdowns immediately. Keep the original useEffect for first
@@ -779,6 +784,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         </div>
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0, overflow: "hidden" }}>
           <div data-admin-body="" style={{ ...formStyles.body, overflowY: "auto" }}>
+            <BillTaxTreatmentField enabled={!!company?.allowNonFbrBills} value={taxTreatment} onChange={changeTaxTreatment} rate={gstRate} onRateChange={setGstRate} disabled={saving} />
             {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
             {loading ? (
@@ -819,7 +825,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                     scenario and can expand to switch. Auto-collapses on
                     pick so the form scrolls back into Buyer / Items.
                     Same UX as StandaloneInvoiceForm. */}
-                <div style={{ marginBottom: "1rem" }}>
+                <div style={{ marginBottom: "1rem", display: outsideFbr ? "none" : undefined }}>
                   <button
                     type="button"
                     onClick={() => setScenarioPickerOpen((v) => !v)}
@@ -1009,7 +1015,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                           <span>·</span>
                           <span>{invoiceDate || "—"}</span>
                           <span>·</span>
-                          <span>{gstRate}% GST</span>
+                          <span>{gstRate}% {outsideFbr ? "SRB / non-FBR tax" : "GST"}</span>
                           <span>·</span>
                           <span>{documentType === 4 ? "Sale Invoice" : documentType === 9 ? "Debit Note" : documentType === 10 ? "Credit Note" : "—"}</span>
                           {paymentMode && <><span>·</span><span>{paymentMode}</span></>}
@@ -1040,9 +1046,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                               <label style={styles.label}>Bill Date</label>
                               <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
                             </div>
-                            <div style={{ flex: 1, minWidth: 100 }}>
+                            <div style={{ display: outsideFbr ? "none" : undefined, flex: 1, minWidth: 100 }}>
                               <label style={{ ...styles.label, whiteSpace: "nowrap" }}>
-                                GST Rate (%){chosenScenario && <span style={styles.lockedTag} title={`Locked by ${chosenScenario.code}`}>🔒 locked</span>}
+                                {outsideFbr ? "Tax rate (%)" : "GST Rate (%)"}{chosenScenario && <span style={styles.lockedTag} title={`Locked by ${chosenScenario.code}`}>🔒 locked</span>}
                               </label>
                               <input
                                 type="number"
@@ -1062,7 +1068,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                               <label style={styles.label}>Payment Terms</label>
                               <input type="text" style={styles.input} value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="Optional" />
                             </div>
-                            <div style={{ flex: 1, minWidth: 140 }}>
+                            <div style={{ display: outsideFbr ? "none" : undefined, flex: 1, minWidth: 140 }}>
                               <label style={styles.label}>
                                 Document Type <span style={styles.optionalTag}>FBR</span>
                               </label>
@@ -1074,7 +1080,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                 title="This screen creates Sale Invoices only. Credit / Debit Notes will get their own dedicated screens."
                               />
                             </div>
-                            <div style={{ flex: 1, minWidth: 140 }}>
+                            <div style={{ display: outsideFbr ? "none" : undefined, flex: 1, minWidth: 140 }}>
                               <label style={styles.label}>
                                 Payment Mode <span style={styles.optionalTag}>FBR</span>
                               </label>
@@ -1103,7 +1109,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                         a glance which sale type every item line will end
                         up with. Hidden when no scenario is picked
                         (auto-detect mode). */}
-                    {chosenScenario && (
+                    {!outsideFbr && chosenScenario && (
                       <div style={styles.lockedSaleType}>
                         <span style={styles.lockedSaleTypeIcon}>🔒</span>
                         <span><b>Sale Type locked:</b> {chosenScenario.saleType}</span>
@@ -1573,7 +1579,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                         {/* Totals */}
                         <div style={styles.totalsBox}>
                           <div style={styles.totalRow}><span>Subtotal:</span><span>Rs. {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-                          <div style={styles.totalRow}><span>GST ({gstRate}%):</span><span>Rs. {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+                          <div style={styles.totalRow}><span>{taxTreatment === "SRB" ? "SRB sales tax" : taxTreatment === "NoTax" ? "Tax" : "GST"} ({gstRate}%):</span><span>Rs. {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
                           {billsMode && Number(freightCharges) > 0 && (
                             <div style={styles.totalRow}><span>Freight / cartage:</span><span>Rs. {Number(freightCharges).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
                           )}
@@ -1598,7 +1604,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                           freightCharges={billsMode ? Number(freightCharges || 0) : 0}
                           subtotal={subtotal}
                           gstAmount={gstAmount}
-                          furtherTaxRate={furtherTaxRate}
+                          furtherTaxRate={taxTreatment === "FBR" ? furtherTaxRate : undefined}
                           onFurtherTaxRateChange={setFurtherTaxRate}
                           withholdingTaxRate={withholdingTaxRate}
                           withholdingTaxAmount={withholdingTaxAmount}

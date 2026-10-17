@@ -32,6 +32,7 @@ function fbrStatusBadge(inv, isBillsMode) {
   if (inv.fbrStatus === "Uncertain") {
     return <StatusBadge tone="warning" title="A previous submission timed out — its FBR outcome is unconfirmed. An administrator must verify it at FBR and reset it.">Uncertain</StatusBadge>;
   }
+  if (inv.taxTreatment && inv.taxTreatment !== "FBR") return <StatusBadge tone="info">{inv.taxTreatment === "NoTax" ? "No tax" : "SRB"} · Outside FBR</StatusBadge>;
   if (inv.fbrAdjustmentRequired) return <StatusBadge tone="warning" title="Complete initial HS classification and filing review before FBR validation or submission.">Needs adjustment</StatusBadge>;
   if (inv.fbrReviewRequired) return <StatusBadge tone="warning" title="Next: consultant opens Invoices, reviews every current item and completes review. FBR validation and submission are blocked.">Needs consultant re-review</StatusBadge>;
   if (isBillsMode) {
@@ -350,7 +351,7 @@ export default function InvoiceTable({
             {exportingId === inv.id + "-tax-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />}
           </button>
         )}
-        {!isBillsMode && perms.canFbrPreview && (
+        {!isBillsMode && perms.canFbrPreview && (!inv.taxTreatment || inv.taxTreatment === "FBR") && (
           <button data-label="View FBR payload" data-primary={(isSubmitted) || undefined} style={btn.view} onClick={() => onFbrPreview?.(inv)} title="Preview FBR payload">
             <MdVisibility size={14} />
           </button>
@@ -364,7 +365,7 @@ export default function InvoiceTable({
             <MdRestore size={14} />
           </button>
         )}
-        {!isBillsMode && perms.canFbrAny && selectedCompanyHasFbrToken && inv.fbrReady && !isSubmitted && !isFbrPending && !inv.isCancelled && (
+        {!isBillsMode && perms.canFbrAny && selectedCompanyHasFbrToken && (inv.taxTreatment == null || inv.taxTreatment === "FBR") && inv.fbrReady && !isSubmitted && !isFbrPending && !inv.isCancelled && (
           <>
             {perms.canFbrValidate && (
               <button data-label="Validate with FBR" data-primary
@@ -407,7 +408,7 @@ export default function InvoiceTable({
         )}
         {isBillsMode && perms.canCreateOrderFromBill && inv.canCreateSalesOrder && <button style={btn.edit} disabled={!!creatingOrderFor} onClick={() => onCreateOrderFromBill?.(inv)}>Create sales order</button>}
         {isBillsMode && perms.canViewOrders && inv.salesOrders?.map(o => <button key={o.id} style={btn.edit} onClick={() => navigate(`/sales-orders?viewOrder=${o.id}`)}>Order #{o.number || o.id}</button>)}
-        {perms.canOpenEdit && inv.isEditable && (
+        {perms.canOpenEdit && inv.isEditable && (isBillsMode || !inv.taxTreatment || inv.taxTreatment === "FBR") && (
           <button data-label="Edit" data-primary
             style={btn.edit}
             onClick={() => onEdit?.(inv)}
@@ -416,7 +417,7 @@ export default function InvoiceTable({
             <MdEdit size={14} />
           </button>
         )}
-        {!isBillsMode && perms.canFbrExclude && !isSubmitted && !inv.isCancelled && (
+        {!isBillsMode && (!inv.taxTreatment || inv.taxTreatment === "FBR") && perms.canFbrExclude && !isSubmitted && !inv.isCancelled && (
           <button data-label="Exclude / include in FBR bulk"
             style={{
               ...btn.neutral,

@@ -696,6 +696,9 @@ namespace MyApp.Api.Services.Implementations
                 }
             }
 
+            if (BillTaxTreatment.IsOutsideFbr(invoice.TaxTreatment))
+                return Fail("This bill is outside FBR and cannot be previewed, validated or submitted to FBR.");
+
             if (TaxFilingProjection.NeedsInitialAdjustment(invoice))
                 errors.Add("Needs adjustment: open Invoices and complete the initial tax filing review before FBR validation or submission.");
             if (TaxFilingProjection.NeedsReReview(invoice))
@@ -778,6 +781,9 @@ namespace MyApp.Api.Services.Implementations
             var invoice = await _invoiceRepo.GetByIdAsync(invoiceId);
             if (invoice == null)
                 return Fail("Invoice not found.");
+
+            if (BillTaxTreatment.IsOutsideFbr(invoice.TaxTreatment))
+                return Fail("This bill is outside FBR and cannot be previewed, validated or submitted to FBR.");
 
             if (TaxFilingProjection.NeedsInitialAdjustment(invoice))
                 return Fail("Needs adjustment: open Invoices and complete the initial tax filing review before FBR preview, validation or submission.");

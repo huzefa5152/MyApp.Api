@@ -415,7 +415,7 @@ namespace MyApp.Api.Services.Implementations
                          && i.FbrSubmittedAt == null
                          // Operator marked this bill "skip / exclude from FBR" — it
                          // will never be filed, so it isn't pending classification.
-                         && !i.IsFbrExcluded
+                         && !i.IsFbrExcluded && i.TaxTreatment == "FBR"
                          && (clientId == null || i.ClientId == clientId.Value))
                 .OrderBy(i => i.Date).ThenBy(i => i.InvoiceNumber)
                 .ToListAsync();
@@ -612,7 +612,7 @@ namespace MyApp.Api.Services.Implementations
                          && !i.IsCancelled
                          && !i.IsDemo
                          && i.FbrSubmittedAt == null
-                         && !i.IsFbrExcluded
+                         && !i.IsFbrExcluded && i.TaxTreatment == "FBR"
                          && (clientId == null || i.ClientId == clientId.Value))
                 .ToListAsync();
 

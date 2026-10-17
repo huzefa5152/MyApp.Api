@@ -115,6 +115,7 @@ public partial class InvoiceService
             .Include(i => i.Items).ThenInclude(i => i.ItemType)
             .Include(i => i.DeliveryChallans).AsSplitQuery().FirstOrDefaultAsync();
         if (bill == null) return null;
+        if (BillTaxTreatment.IsOutsideFbr(bill.TaxTreatment)) throw new InvalidOperationException("This bill is outside FBR; edit its commercial bill instead.");
         if (!IsInvoiceEditable(bill) || bill.NoteKind != 0)
             throw new InvalidOperationException("Tax filing rows cannot be changed on a cancelled invoice, note or after submission has started.");
         if (dto.Version != TaxFilingProjection.EditVersion(bill))

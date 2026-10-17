@@ -108,7 +108,7 @@ namespace MyApp.Api.Services.Implementations
                 var outputTax = await ResolveAsync(invoice.CompanyId, accounts, ControlType.OutputTax, "output tax");
                 AddLine(lines, outputTax.Id,
                     debit: isCreditNote ? invoice.GSTAmount : 0m,
-                    credit: isCreditNote ? 0m : invoice.GSTAmount, label);
+                    credit: isCreditNote ? 0m : invoice.GSTAmount, invoice.TaxTreatment == "SRB" ? $"{label} — SRB sales tax" : label);
             }
 
             if (invoice.FurtherTaxAmount != 0m)

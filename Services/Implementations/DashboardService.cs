@@ -524,7 +524,7 @@ namespace MyApp.Api.Services.Implementations
                 // Debit/Credit Notes (DocumentType 9/10) are REVERSALS, not
                 // sales — including them would double-count a reversed sale
                 // instead of netting it. Excluded from every sales KPI.
-                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
+                .Where(i => i.TaxTreatment == "FBR" && i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
                          && i.DocumentType != 9 && i.DocumentType != 10);
             if (period.From.HasValue) q = q.Where(i => i.Date >= period.From.Value);
             if (period.To.HasValue)   q = q.Where(i => i.Date < period.To.Value);

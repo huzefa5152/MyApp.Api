@@ -73,6 +73,7 @@ namespace MyApp.Api.Services.Implementations
             FbrDefaultUOM = c.FbrDefaultUOM,
             FbrDefaultPaymentModeRegistered = c.FbrDefaultPaymentModeRegistered,
             FbrDefaultPaymentModeUnregistered = c.FbrDefaultPaymentModeUnregistered,
+            AllowNonFbrBills = c.AllowNonFbrBills,
             InventoryTrackingEnabled = c.InventoryTrackingEnabled,
             StockGuardHardBlock = c.StockGuardHardBlock,
             StartingPurchaseBillNumber = c.StartingPurchaseBillNumber,
@@ -183,6 +184,7 @@ namespace MyApp.Api.Services.Implementations
                 FbrDefaultUOM = dto.FbrDefaultUOM,
                 FbrDefaultPaymentModeRegistered = dto.FbrDefaultPaymentModeRegistered,
                 FbrDefaultPaymentModeUnregistered = dto.FbrDefaultPaymentModeUnregistered,
+                AllowNonFbrBills = dto.AllowNonFbrBills,
                 InventoryTrackingEnabled = dto.InventoryTrackingEnabled,
                 StockGuardHardBlock = dto.StockGuardHardBlock,
                 StartingPurchaseBillNumber = dto.StartingPurchaseBillNumber,
@@ -254,6 +256,7 @@ namespace MyApp.Api.Services.Implementations
             // Inventory module — flag is freely toggleable; starting numbers
             // only apply if no purchase docs exist yet (same rule as the
             // sales-side starting numbers).
+            if (dto.AllowNonFbrBills.HasValue) company.AllowNonFbrBills = dto.AllowNonFbrBills.Value;
             company.InventoryTrackingEnabled = dto.InventoryTrackingEnabled;
             company.StockGuardHardBlock = dto.StockGuardHardBlock;
             var hasPurchaseBills = await _context.PurchaseBills.AnyAsync(p => p.CompanyId == id);

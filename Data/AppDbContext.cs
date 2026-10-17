@@ -176,6 +176,7 @@ namespace MyApp.Api.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<Invoice>().Property(i => i.TaxTreatment).HasMaxLength(16).HasDefaultValue("FBR");
             ConfigureEmailWorkspace(modelBuilder);
             ConfigureAccountingExpansion(modelBuilder);
             modelBuilder.Entity<DeliveryChallan>().Property(dc => dc.CreatedAt)

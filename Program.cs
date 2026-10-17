@@ -863,6 +863,7 @@ using (var scope = app.Services.CreateScope())
     await MyApp.Api.Data.ChallanSerialNoMergeFieldSeeder.SeedAsync(db);
     await MyApp.Api.Data.WithholdingReceiptMergeFieldSeeder.SeedAsync(db);
     await MyApp.Api.Data.FreightMergeFieldSeeder.SeedAsync(db);
+    await MyApp.Api.Data.BillTaxMergeFieldSeeder.SeedAsync(db);
     await MyApp.Api.Data.DocumentNotesMergeFieldSeeder.SeedAsync(db);        // {{{richText notes}}} on every document type
 
     // ── GL back-post ────────────────────────────────────────────────────

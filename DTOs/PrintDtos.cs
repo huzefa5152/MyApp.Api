@@ -30,6 +30,8 @@ namespace MyApp.Api.DTOs
     // Data for printing a Bill (Invoice)
     public class PrintBillDto
     {
+        public string TaxTreatment { get; set; } = "FBR";
+        public string TaxLabel => MyApp.Api.Helpers.BillTaxTreatment.Label(TaxTreatment);
         public decimal? FurtherTaxRate { get; set; }
         public decimal FurtherTaxAmount { get; set; }
         // Identifies this DTO to the shared renderer, including saved layouts.
@@ -124,6 +126,8 @@ namespace MyApp.Api.DTOs
 
     public class PrintTaxInvoiceDto
     {
+        public string TaxTreatment { get; set; } = "FBR";
+        public string TaxLabel => MyApp.Api.Helpers.BillTaxTreatment.Label(TaxTreatment);
         public decimal? FurtherTaxRate { get; set; }
         public decimal FurtherTaxAmount { get; set; }
         public string? Notes { get; set; }

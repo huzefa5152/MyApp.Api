@@ -1,3 +1,4 @@
+import BillTaxTreatmentField from "./BillTaxTreatmentField";
 import ManualChallanNumberField from "./ManualChallanNumberField";
 import { withTaxUom, taxGroupKey } from "../utils/taxInvoiceGrouping";
 import FreightChargesField from "./FreightChargesField";
@@ -177,6 +178,7 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
   // (decimal allowed for KG/Liter/etc., integer-only for Pcs/SET/etc.).
   const [units, setUnits] = useState([]);
   const [gstRate, setGstRate] = useState(18);
+  const [taxTreatment, setTaxTreatment] = useState("FBR");
   // Optional document taxes, both NONE until added. Only editable in the full
   // bill edit — the Invoices-tab narrow edit must not change what was charged.
   const [furtherTaxRate, setFurtherTaxRate] = useState(null);
@@ -316,6 +318,7 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
         setUnits(unitsRes.data || []);
         setClientId(data.clientId ? String(data.clientId) : "");
         setGstRate(data.gstRate ?? 18);
+        setTaxTreatment(data.taxTreatment || "FBR");
         setFurtherTaxRate(data.furtherTaxRate ?? null);
         setWithholdingTaxRate(data.withholdingTaxRate ?? null);
         setWithholdingTaxAmount(
@@ -1522,6 +1525,7 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
         await updateInvoice(invoiceId, {
           date: billDate || null,
           gstRate: parseFloat(gstRate),
+          taxTreatment,
           // null, not 0 — only null clears the tax.
           furtherTaxRate: furtherTaxRate === null || furtherTaxRate === "" ? null : parseFloat(furtherTaxRate),
           withholdingTaxRate: withholdingTaxRate === null || withholdingTaxRate === "" ? null : parseFloat(withholdingTaxRate),
@@ -1742,7 +1746,8 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                 )}
 
                 {/* Bill-level fields */}
-                <div data-admin-form-row="" style={styles.row}>
+                <BillTaxTreatmentField enabled={!!invoice?.allowNonFbrBills} value={taxTreatment} rate={gstRate} onRateChange={setGstRate} disabled={readOnly || !canFullEdit} onChange={value => { setTaxTreatment(value); setGstRate(value === "SRB" ? 15 : value === "NoTax" ? 0 : 18); setFurtherTaxRate(null); }} />
+<div data-admin-form-row="" style={styles.row}>
                   <div style={{ flex: 1, minWidth: 180 }}>
                     <BillNumberField
                       companyId={invoice?.companyId}
@@ -1799,7 +1804,7 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                       readOnly={lockNonItemType}
                     />
                   </div>
-                  <div style={{ flex: 1, minWidth: 120 }}>
+                  <div style={{ display: taxTreatment !== "FBR" ? "none" : undefined, flex: 1, minWidth: 120 }}>
                     <label style={styles.label}>GST Rate (%)</label>
                     <input
                       type="number"
@@ -2471,7 +2476,7 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                         different numbers, and entering a GST-inclusive figure
                         into a before-GST field would tax it a second time. */}
                     <div style={{ ...styles.totalsRow, fontSize: "0.74rem", color: colors.textSecondary }}>
-                      <span>with GST ({gstRate}%) this bill comes to:</span>
+                      <span>with {taxTreatment === "SRB" ? "SRB sales tax" : taxTreatment === "NoTax" ? "Tax" : "GST"} ({gstRate}%) this bill comes to:</span>
                       <span>Rs. {(currentSubtotal + Math.round(currentSubtotal * (Number(gstRate) || 0)) / 100).toLocaleString("en-PK", { maximumFractionDigits: 2 })}</span>
                     </div>
                     <div style={{ ...styles.totalsRow, borderTop: `1px dashed ${colors.cardBorder}`, paddingTop: "0.4rem", marginTop: "0.4rem" }}>
@@ -2504,7 +2509,7 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                     <strong>Rs. {subtotal.toLocaleString()}</strong>
                   </div>
                   <div style={styles.totalsRow}>
-                    <span>GST ({gstRate}%):</span>
+                    <span>{taxTreatment === "SRB" ? "SRB sales tax" : taxTreatment === "NoTax" ? "Tax" : "GST"} ({gstRate}%):</span>
                     <strong>Rs. {gstAmount.toLocaleString()}</strong>
                   </div>
                   {billsMode && Number(freightCharges) > 0 && (
@@ -2556,7 +2561,7 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                     subtotal={subtotal}
                     freightCharges={Number(freightCharges || 0)}
                     gstAmount={gstAmount}
-                    furtherTaxRate={furtherTaxRate}
+                    furtherTaxRate={taxTreatment === "FBR" ? furtherTaxRate : undefined}
                     onFurtherTaxRateChange={setFurtherTaxRate}
                     withholdingTaxRate={withholdingTaxRate}
                     withholdingTaxAmount={withholdingTaxAmount}

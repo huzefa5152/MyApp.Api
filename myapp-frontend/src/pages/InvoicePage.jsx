@@ -61,6 +61,7 @@ function statusPill(tone, Icon, label, title) {
   );
 }
 function renderFbrPill(inv, isBillsMode) {
+  if (inv.taxTreatment && inv.taxTreatment !== "FBR" && !inv.isCancelled) return statusPill("blue", MdInfo, `${inv.taxTreatment === "NoTax" ? "No tax" : "SRB"} · Outside FBR`, "Commercial bill; not filed with FBR.");
   if (inv.isCancelled) return statusPill("red", MdCancel, "Cancelled", inv.cancelReason ? `Cancelled — ${inv.cancelReason}` : "Cancelled (voided). Its delivery challan(s) were reverted to Pending.");
   if (inv.fbrStatus === "Submitted") return statusPill("green", MdCheckCircle, "Submitted", inv.fbrIRN ? `Submitted to FBR — IRN ${inv.fbrIRN} (locked from edits)` : "Submitted to FBR (locked from edits)");
   if (inv.fbrStatus === "Submitting") return statusPill("blue", MdHourglassEmpty, "Submitting…", "A submission is in progress. Please wait and refresh — do not submit again.");
@@ -640,8 +641,8 @@ export default function InvoicePage({ mode = "invoices" }) {
   // by Validate All / Submit All (bulk actions) but the per-bill buttons still
   // work. So we exclude them from these counts too — the badges are about what
   // the bulk buttons will process.
-  const unsubmittedInvoices = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && inv.fbrReady && !inv.isFbrExcluded);
-  const incompleteCount = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && !inv.fbrReady && !inv.isFbrExcluded).length;
+  const unsubmittedInvoices = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && (inv.taxTreatment == null || inv.taxTreatment === "FBR") && inv.fbrReady && !inv.isFbrExcluded && (!inv.taxTreatment || inv.taxTreatment === "FBR"));
+  const incompleteCount = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && !(inv.taxTreatment == null || inv.taxTreatment === "FBR") && inv.fbrReady && !inv.isFbrExcluded).length;
   const validatedCount = unsubmittedInvoices.filter(inv => fbrValidated.has(inv.id)).length;
   // Documents pending handover on the CURRENT page (drives the handover bulk
   // bar's label + visibility). The bulk action itself re-fetches ALL filtered
@@ -757,10 +758,10 @@ export default function InvoicePage({ mode = "invoices" }) {
     const all = data.items || [];
     if (action === "validate") {
       // Skip FBR-excluded bills — operator explicitly opted them out of bulk actions.
-      return all.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && inv.fbrReady && !inv.isFbrExcluded);
+      return all.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && (inv.taxTreatment == null || inv.taxTreatment === "FBR") && inv.fbrReady && !inv.isFbrExcluded && (!inv.taxTreatment || inv.taxTreatment === "FBR"));
     }
     if (action === "submit") {
-      return all.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && fbrValidated.has(inv.id) && !inv.isFbrExcluded);
+      return all.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && fbrValidated.has(inv.id) && !inv.isFbrExcluded && (!inv.taxTreatment || inv.taxTreatment === "FBR"));
     }
     return all;
   };
@@ -1335,7 +1336,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         exclude — those live on the Invoices tab. The FBR
                         status badge above the buttons still shows in both
                         modes so the operator can see locked rows. */}
-                    {!isBillsMode && canFbrPreview && (
+                    {!isBillsMode && canFbrPreview && (!inv.taxTreatment || inv.taxTreatment === "FBR") && (
                       <button data-primary={(inv.fbrStatus === "Submitted") || undefined}
                         style={{ ...styles.printBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" }}
                         onClick={() => setFbrPreviewId(inv.id)}
@@ -1353,7 +1354,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdRestore size={14} /> Reset FBR
                       </button>
                     )}
-                    {!isBillsMode && canFbrAny && selectedCompany?.hasFbrToken && inv.fbrReady && inv.fbrStatus !== "Submitted" && inv.fbrStatus !== "Submitting" && inv.fbrStatus !== "Uncertain" && !inv.isCancelled && (
+                    {!isBillsMode && canFbrAny && selectedCompany?.hasFbrToken && (inv.taxTreatment == null || inv.taxTreatment === "FBR") && inv.fbrReady && inv.fbrStatus !== "Submitted" && inv.fbrStatus !== "Submitting" && inv.fbrStatus !== "Uncertain" && !inv.isCancelled && (
                       <>
                         {canFbrValidate && (
                           <button data-primary
@@ -1423,7 +1424,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         Type for each line. Everything else (items, prices,
                         qty, dates) is read-only and reflects whatever was
                         last saved on the Bills tab. Hidden once submitted. */}
-                    {!isBillsMode && canEditInThisMode && inv.isEditable && (
+                    {!isBillsMode && canEditInThisMode && inv.isEditable && (!inv.taxTreatment || inv.taxTreatment === "FBR") && (
                       <button data-primary
                         style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
                         onClick={() => setEditingId(inv.id)}
@@ -1432,7 +1433,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdEdit size={14} /> {inv.fbrReviewRequired ? "Review changes" : "Adjust invoice"}
                       </button>
                     )}
-                    {!isBillsMode && canFbrExclude && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
+                    {!isBillsMode && (!inv.taxTreatment || inv.taxTreatment === "FBR") && canFbrExclude && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
                       <button
                         style={{
                           ...styles.printBtn,

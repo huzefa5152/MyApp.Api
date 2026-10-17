@@ -333,6 +333,8 @@ namespace MyApp.Api.Services.Implementations
                 && inv.DeliveryChallans.Any() && inv.DeliveryChallans.All(c => c.SalesOrderId == null),
             SalesOrders = inv.DeliveryChallans.Where(c => c.SalesOrderId != null).GroupBy(c => c.SalesOrderId!.Value)
                 .Select(g => new BillSalesOrderLinkDto { Id=g.Key, Number=g.First().SalesOrder?.SalesOrderNumber ?? 0 }).ToList(),
+            AllowNonFbrBills = inv.Company?.AllowNonFbrBills ?? false,
+            TaxTreatment = inv.TaxTreatment,
             IsFbrExcluded = inv.IsFbrExcluded,
             IsCancelled = inv.IsCancelled,
             CancelledAt = inv.CancelledAt,
@@ -349,9 +351,9 @@ namespace MyApp.Api.Services.Implementations
             NoteReason = inv.NoteReason,
             NoteReasonRemarks = inv.NoteReasonRemarks,
             NoteAffectsStock = inv.NoteAffectsStock,
-            FbrReady = missing.Count == 0 && !adjustmentStale && !TaxFilingProjection.NeedsReReview(inv) && !TaxFilingProjection.NeedsInitialAdjustment(inv),
-            FbrAdjustmentRequired = TaxFilingProjection.NeedsInitialAdjustment(inv),
-            FbrReviewRequired = TaxFilingProjection.NeedsReReview(inv),
+            FbrReady = !BillTaxTreatment.IsOutsideFbr(inv.TaxTreatment) && missing.Count == 0 && !adjustmentStale && !TaxFilingProjection.NeedsReReview(inv) && !TaxFilingProjection.NeedsInitialAdjustment(inv),
+            FbrAdjustmentRequired = !BillTaxTreatment.IsOutsideFbr(inv.TaxTreatment) && TaxFilingProjection.NeedsInitialAdjustment(inv),
+            FbrReviewRequired = !BillTaxTreatment.IsOutsideFbr(inv.TaxTreatment) && TaxFilingProjection.NeedsReReview(inv),
             FbrReviewRequiredAt = inv.FbrReviewRequiredAt,
             FbrReviewedAt = inv.FbrReviewedAt,
             FbrReviewVersion = BillChallanVersion(inv),
@@ -670,6 +672,9 @@ namespace MyApp.Api.Services.Implementations
             var freightCharges = CommercialTotalCalculator.Validate(dto.FreightCharges);
             var company = await _companyRepo.GetByIdAsync(dto.CompanyId);
             if (company == null) throw new KeyNotFoundException("Company not found.");
+            var taxTreatment = BillTaxTreatment.Validate(dto.TaxTreatment, company, dto.GSTRate);
+            if (BillTaxTreatment.IsOutsideFbr(taxTreatment) && dto.FurtherTaxRate.GetValueOrDefault() != 0)
+                throw new InvalidOperationException("Further tax is only available for FBR bills.");
 
             // Cross-tenant link guard: the buyer must belong to the same company
             // as the bill. Without this, a forged dto.ClientId from CompanyB
@@ -1003,6 +1008,7 @@ namespace MyApp.Api.Services.Implementations
                         CompanyId = dto.CompanyId,
                         ClientId = dto.ClientId,
                         Subtotal = subtotal,
+                        TaxTreatment = taxTreatment,
                         GSTRate = dto.GSTRate,
                         GSTAmount = gstAmount,
                         FurtherTaxRate = furtherTaxRate,
@@ -1167,6 +1173,9 @@ namespace MyApp.Api.Services.Implementations
             var freightCharges = CommercialTotalCalculator.Validate(dto.FreightCharges);
             var company = await _companyRepo.GetByIdAsync(dto.CompanyId);
             if (company == null) throw new KeyNotFoundException("Company not found.");
+            var taxTreatment = BillTaxTreatment.Validate(dto.TaxTreatment, company, dto.GSTRate);
+            if (BillTaxTreatment.IsOutsideFbr(taxTreatment) && dto.FurtherTaxRate.GetValueOrDefault() != 0)
+                throw new InvalidOperationException("Further tax is only available for FBR bills.");
 
             var client = await _context.Clients.FindAsync(dto.ClientId);
             if (client == null) throw new KeyNotFoundException("Client not found.");
@@ -1399,6 +1408,7 @@ namespace MyApp.Api.Services.Implementations
                         CompanyId = dto.CompanyId,
                         ClientId = dto.ClientId,
                         Subtotal = subtotal,
+                        TaxTreatment = taxTreatment,
                         GSTRate = dto.GSTRate,
                         GSTAmount = gstAmount,
                         FurtherTaxRate = furtherTaxRate,
@@ -1579,6 +1589,10 @@ namespace MyApp.Api.Services.Implementations
         {
             var invoice = await _invoiceRepo.GetByIdAsync(id);
             if (invoice == null) return null;
+            var taxCompany = await _companyRepo.GetByIdAsync(invoice.CompanyId) ?? throw new KeyNotFoundException("Company not found.");
+            var taxTreatment = BillTaxTreatment.Validate(dto.TaxTreatment, taxCompany, dto.GSTRate, invoice.TaxTreatment);
+            if (BillTaxTreatment.IsOutsideFbr(taxTreatment) && dto.FurtherTaxRate.GetValueOrDefault() != 0)
+                throw new InvalidOperationException("Further tax is only available for FBR bills.");
             var freightCharges = dto.FreightCharges.HasValue
                 ? CommercialTotalCalculator.Validate(dto.FreightCharges.Value) : invoice.FreightCharges;
 
@@ -1693,6 +1707,15 @@ namespace MyApp.Api.Services.Implementations
                         : $"{numberingCompany.InvoiceNumberPrefix}{renumbered}";
                 }
 
+                if (invoice.TaxTreatment != taxTreatment)
+                {
+                    invoice.TaxFilingRowsJson = null;
+                    invoice.FbrReviewedAt = null;
+                    invoice.FbrReviewRequiredAt = null;
+                    invoice.FbrStatus = null;
+                    invoice.FbrErrorMessage = null;
+                }
+                invoice.TaxTreatment = taxTreatment;
                 invoice.GSTRate = dto.GSTRate;
                 // Both taxes are re-stated on every full edit, so clearing the
                 // selection genuinely clears the tax rather than leaving the
@@ -3439,6 +3462,7 @@ namespace MyApp.Api.Services.Implementations
                         CompanyId     = original.CompanyId,
                         ClientId      = original.ClientId,
                         Subtotal      = subtotal,
+                        TaxTreatment = original.TaxTreatment,
                         GSTRate       = gstRate,
                         GSTAmount     = gstAmount,
                         // A note reverses (or adds to) a sale that carried
@@ -3657,6 +3681,7 @@ namespace MyApp.Api.Services.Implementations
                         CompanyId = original.CompanyId,
                         ClientId = original.ClientId,
                         Subtotal = subtotal,
+                        TaxTreatment = original.TaxTreatment,
                         GSTRate = gstRate,
                         GSTAmount = gstAmount,
                         // A supplement bills the delta at the ORIGINAL's rate.
@@ -3795,6 +3820,7 @@ namespace MyApp.Api.Services.Implementations
 
             return new PrintBillDto
             {
+                TaxTreatment = inv.TaxTreatment,
                 FbrStatus = inv.FbrStatus,
                 FbrIRN = submitted ? inv.FbrIRN : null,
                 FbrSubmittedAt = submitted ? inv.FbrSubmittedAt : null,
@@ -3891,6 +3917,7 @@ namespace MyApp.Api.Services.Implementations
 
             var result = new PrintTaxInvoiceDto
             {
+                TaxTreatment = inv.TaxTreatment,
                 Notes = inv.Notes,
                 SupplierName = inv.Company?.BrandName ?? inv.Company?.Name ?? "",
                 SupplierAddress = inv.Company?.FullAddress,
