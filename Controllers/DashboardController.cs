@@ -96,6 +96,29 @@ namespace MyApp.Api.Controllers
             return Ok(response);
         }
 
+        /// <summary>
+        /// GET /api/dashboard/tax-position?companyId=X&amp;period=this-month  (or from/to)
+        /// The Payable to FBR panel. Whole months; company-wide only.
+        /// </summary>
+        [HttpGet("tax-position")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> GetTaxPosition(
+            [FromQuery] int companyId,
+            [FromQuery] string period = "this-month",
+            [FromQuery] string? from = null,
+            [FromQuery] string? to = null)
+        {
+            if (companyId <= 0)
+                return BadRequest(new { error = "companyId is required." });
+            if (!TryParseRange(from, to, out var f, out var t, out var rangeError))
+                return BadRequest(new { error = rangeError });
+
+            var dto = await _dashboard.GetTaxPositionAsync(companyId, period, f, t, User);
+            return dto == null
+                ? StatusCode(403, new { message = "The tax position is company-wide only." })
+                : Ok(dto);
+        }
+
         /// <summary>from/to (yyyy-MM-dd, inclusive) override period; both or neither.</summary>
         private static bool TryParseRange(string? from, string? to,
             out DateTime? f, out DateTime? t, out string error)

@@ -41,14 +41,19 @@ namespace MyApp.Api.Services.Implementations
         private readonly IPermissionService _permissions;
         private readonly IDivisionAccessGuard _divisionAccess;
         private readonly IGeneralLedgerService _gl;
+        private readonly IImportTaxWorksheetService _worksheet;
+        // One request, one walk: the hero and the monthly series share the load.
+        private readonly Dictionary<string, PositionInputs> _inputsCache = new();
 
         public DashboardService(
             AppDbContext context,
             IPermissionService permissions,
             IDivisionAccessGuard divisionAccess,
-            IGeneralLedgerService gl)
+            IGeneralLedgerService gl,
+            IImportTaxWorksheetService worksheet)
         {
             _gl = gl;
+            _worksheet = worksheet;
             _context = context;
             _permissions = permissions;
             _divisionAccess = divisionAccess;
@@ -111,12 +116,174 @@ namespace MyApp.Api.Services.Implementations
             // for the 4-section case anyway. Sequential here for
             // simplicity and to avoid the "second operation started
             // before previous completed" pitfall on AppDbContext.
+            if (canSales)      response.Monthly    = await ComputeMonthlyAsync(companyId, period, divScope);
             if (canSales)      response.Sales      = await ComputeSalesAsync(companyId, period, divScope);
             if (canPurchases)  response.Purchases  = await ComputePurchasesAsync(companyId, period, divScope);
             if (canFbr)        response.Fbr        = await ComputeFbrAsync(companyId, period, divScope);
             if (canInventory)  response.Inventory  = await ComputeInventoryAsync(companyId, divScope);
 
             return response;
+        }
+
+        // ── Monthly series ──────────────────────────────────────────────
+
+        private static DateTime MonthStart(DateTime d) => new(d.Year, d.Month, 1);
+
+        /// <summary>Twelve months ending at the period's end month (never past
+        /// today): net sales and landed cost of sales from the same filter and
+        /// the same stock walk the hero uses, cut at each month.</summary>
+        private async Task<List<DashboardMonthPoint>> ComputeMonthlyAsync(
+            int companyId, DashboardPeriod period, HashSet<int>? divScope)
+        {
+            var todayM = MonthStart(PakistanClock.Today);
+            var last = period.To.HasValue ? MonthStart(period.To.Value.AddDays(-1)) : todayM;
+            if (last > todayM) last = todayM;
+            var first = last.AddMonths(-11);
+            var end = last.AddMonths(1);
+
+            var q = DashboardSalesFilter.SaleDocs(_context.Invoices.AsNoTracking(), companyId, first, end);
+            if (divScope != null)
+                q = q.Where(i => i.DivisionId == null || divScope.Contains(i.DivisionId.Value));
+            var sales = (await q
+                .GroupBy(i => new { i.Date.Year, i.Date.Month })
+                .Select(g => new { g.Key.Year, g.Key.Month, Net = g.Sum(i => (i.DocumentType == 10 ? -1m : 1m) * i.Subtotal) })
+                .ToListAsync())
+                .ToDictionary(x => new DateTime(x.Year, x.Month, 1), x => x.Net);
+
+            var inputs = await LoadPositionInputsAsync(companyId, divScope);
+            var hasStock = inputs.Openings.Count > 0 || inputs.MovementsByItem.Count > 0;
+
+            var points = new List<DashboardMonthPoint>();
+            for (var m = first; m <= last; m = m.AddMonths(1))
+            {
+                var net = Round(sales.GetValueOrDefault(m));
+                var landed = hasStock
+                    ? Round(ItemStockPositions.Compute(inputs.Openings, inputs.MovementsByItem, inputs.Names,
+                        m, m.AddMonths(1), inputs.Costing).Sum(p => p.ConsumedLanded))
+                    : 0m;
+                points.Add(new DashboardMonthPoint
+                {
+                    Month = m.ToString("yyyy-MM", CultureInfo.InvariantCulture),
+                    NetSales = net,
+                    LandedCost = landed,
+                    MarginPct = net != 0m ? Math.Round((net - landed) / net * 100m, 1, MidpointRounding.AwayFromZero) : null,
+                });
+            }
+            return points;
+        }
+
+        // ── Tax position (Payable to FBR) ───────────────────────────────
+
+        public async Task<DashboardTaxPositionDto?> GetTaxPositionAsync(
+            int companyId, string periodCode, DateTime? from, DateTime? to, ClaimsPrincipal user)
+        {
+            // Company-wide only, like the Import Tax Desk: a partial return
+            // would read as the whole one.
+            var userId = ResolveUserId(user) ?? 0;
+            if (await _divisionAccess.GetAccessibleDivisionIdsAsync(userId, companyId) != null)
+                return null;
+
+            // The worksheet is by claim MONTH, so the whole panel is read over
+            // whole months and says which (FromMonth / ToMonth).
+            var period = BuildPeriod(periodCode, from, to);
+            var todayM = MonthStart(PakistanClock.Today);
+            var last = period.To.HasValue ? MonthStart(period.To.Value.AddDays(-1)) : todayM;
+            if (last > todayM) last = todayM;
+            var first = period.From.HasValue ? MonthStart(period.From.Value) : last.AddMonths(-35);
+            if (first > last) first = last;
+            if ((last.Year - first.Year) * 12 + last.Month - first.Month >= 36) first = last.AddMonths(-35);
+            var end = last.AddMonths(1);
+
+            var dto = new DashboardTaxPositionDto
+            {
+                FromMonth = first.ToString("yyyy-MM", CultureInfo.InvariantCulture),
+                ToMonth = last.ToString("yyyy-MM", CultureInfo.InvariantCulture),
+            };
+
+            // Sales-side figures: the common sale filter, notes signed.
+            var docs = await DashboardSalesFilter.SaleDocs(_context.Invoices.AsNoTracking(), companyId, first, end)
+                .Select(i => new
+                {
+                    i.Date.Year, i.Date.Month,
+                    Sign = i.DocumentType == 10 ? -1m : 1m,
+                    i.GSTAmount, i.FurtherTaxAmount, i.AdvanceTaxAmount, i.AdvanceTaxSection,
+                })
+                .ToListAsync();
+            dto.OutputTax = Round(docs.Sum(d => d.Sign * d.GSTAmount));
+            dto.FurtherTax = Round(docs.Sum(d => d.Sign * d.FurtherTaxAmount));
+            dto.Adv236G = Round(docs.Where(d => d.AdvanceTaxSection == "236G").Sum(d => d.Sign * d.AdvanceTaxAmount));
+            dto.Adv236H = Round(docs.Where(d => d.AdvanceTaxSection == "236H").Sum(d => d.Sign * d.AdvanceTaxAmount));
+
+            // GL figures (zero when the ledger is off).
+            dto.LedgerEnabled = await _context.Companies.AsNoTracking()
+                .Where(c => c.Id == companyId).Select(c => c.GlPostingEnabled).FirstOrDefaultAsync();
+            var glLines = new List<(DateTime Month, ControlType Role, decimal Net)>();
+            if (dto.LedgerEnabled)
+            {
+                var roles = new[] { ControlType.InputTax, ControlType.WithholdingPayable };
+                glLines = (await _context.JournalLines.AsNoTracking()
+                    .Where(jl => jl.JournalEntry.CompanyId == companyId && jl.Account.CompanyId == companyId
+                              && jl.JournalEntry.Date >= first && jl.JournalEntry.Date < end
+                              && roles.Contains(jl.Account.ControlType))
+                    .Select(jl => new { jl.JournalEntry.Date, jl.Account.ControlType, jl.Debit, jl.Credit })
+                    .ToListAsync())
+                    .Select(x => (new DateTime(x.Date.Year, x.Date.Month, 1), x.ControlType, x.Debit - x.Credit))
+                    .ToList();
+                dto.WhtPayable = Round(-glLines.Where(l => l.Role == ControlType.WithholdingPayable).Sum(l => l.Net));
+
+                var balances = await _gl.GetAccountBalancesAsync(companyId, end.AddDays(-1));
+                var roleOf = await _context.Accounts.AsNoTracking()
+                    .Where(a => a.CompanyId == companyId
+                             && (a.ControlType == ControlType.AdvanceIncomeTaxOnImports || a.ControlType == ControlType.WithholdingReceivable))
+                    .Select(a => new { a.Id, a.ControlType }).ToListAsync();
+                dto.RecoverableImportAdvanceTax = Round(roleOf.Where(a => a.ControlType == ControlType.AdvanceIncomeTaxOnImports)
+                    .Sum(a => balances.GetValueOrDefault(a.Id)));
+                dto.RecoverableWhtDeducted = Round(roleOf.Where(a => a.ControlType == ControlType.WithholdingReceivable)
+                    .Sum(a => balances.GetValueOrDefault(a.Id)));
+            }
+
+            // Input tax: the Import Tax Desk worksheet on FIFO companies (never
+            // recomputed here); the ledger's InputTax movement otherwise.
+            InputTaxWorksheetDto? sheet = null;
+            if (await StockCostingMethod.IsGdFifoAsync(_context, companyId))
+            {
+                var (error, built) = await _worksheet.BuildAsync(companyId, dto.FromMonth, dto.ToMonth);
+                if (error == null) sheet = built;
+            }
+
+            var inputByMonth = new Dictionary<DateTime, decimal>();
+            if (sheet != null)
+            {
+                dto.InputBasis = "worksheet";
+                foreach (var m in sheet.Months) inputByMonth[MonthStart(m.Month)] = m.InputThisMonth;
+                dto.InputTaxClaimed = Round(sheet.Months.Sum(m => m.InputThisMonth));
+                dto.SalesTaxPayable = Round(sheet.Months.Sum(m => m.Payable));
+            }
+            else
+            {
+                dto.InputBasis = "gl-before-cap";
+                foreach (var g in glLines.Where(l => l.Role == ControlType.InputTax).GroupBy(l => l.Month))
+                    inputByMonth[g.Key] = Round(g.Sum(l => l.Net));
+                dto.InputTaxClaimed = Round(inputByMonth.Values.Sum());
+                dto.SalesTaxPayable = Math.Max(0m, Round(dto.OutputTax + dto.FurtherTax - dto.InputTaxClaimed));
+            }
+
+            dto.TotalPayable = Round(dto.SalesTaxPayable + dto.Adv236G + dto.Adv236H + dto.WhtPayable);
+
+            for (var m = first; m <= last; m = m.AddMonths(1))
+            {
+                var inMonth = docs.Where(d => d.Year == m.Year && d.Month == m.Month).ToList();
+                dto.Months.Add(new DashboardTaxMonth
+                {
+                    Month = m.ToString("yyyy-MM", CultureInfo.InvariantCulture),
+                    OutputTax = Round(inMonth.Sum(d => d.Sign * d.GSTAmount)),
+                    FurtherTax = Round(inMonth.Sum(d => d.Sign * d.FurtherTaxAmount)),
+                    Adv236 = Round(inMonth.Where(d => d.AdvanceTaxSection == "236G" || d.AdvanceTaxSection == "236H")
+                        .Sum(d => d.Sign * d.AdvanceTaxAmount)),
+                    InputTax = Round(inputByMonth.GetValueOrDefault(m)),
+                });
+            }
+            return dto;
         }
 
         // ── Period resolution ───────────────────────────────────────────
@@ -809,6 +976,22 @@ namespace MyApp.Api.Services.Implementations
         private async Task<List<ItemStockPositions.Position>> LoadPositionsAsync(
             int companyId, HashSet<int>? divScope, DateTime? from, DateTime? to)
         {
+            var inputs = await LoadPositionInputsAsync(companyId, divScope);
+            return ItemStockPositions.Compute(inputs.Openings, inputs.MovementsByItem, inputs.Names, from, to, inputs.Costing);
+        }
+
+        private sealed record PositionInputs(
+            Dictionary<int, ItemStockPositions.Opening> Openings,
+            Dictionary<int, List<StockMovement>> MovementsByItem,
+            Dictionary<int, (string Name, string? HsCode)> Names,
+            StockCosting Costing);
+
+        /// <summary>The walk's inputs, loaded once so a monthly series can cut
+        /// the same walk at twelve dates without twelve loads.</summary>
+        private async Task<PositionInputs> LoadPositionInputsAsync(int companyId, HashSet<int>? divScope)
+        {
+            var cacheKey = companyId + ":" + (divScope == null ? "*" : string.Join(",", divScope.OrderBy(x => x)));
+            if (_inputsCache.TryGetValue(cacheKey, out var cached)) return cached;
             var openingRows = await _context.OpeningStockBalances.AsNoTracking()
                 .Where(o => o.CompanyId == companyId)
                 .Select(o => new
@@ -858,7 +1041,7 @@ namespace MyApp.Api.Services.Implementations
                     x => (x.IsDeleted ? x.Name + " (deleted item)" : x.Name, (string?)x.HSCode));
 
             var costing = await StockCosting.LoadAsync(_context, companyId, ids);
-            return ItemStockPositions.Compute(openings, movementsByItem, names, from, to, costing);
+            return _inputsCache[cacheKey] = new PositionInputs(openings, movementsByItem, names, costing);
         }
 
         private async Task<decimal> ComputeStockOnHandValueAsync(int companyId, HashSet<int>? divScope)

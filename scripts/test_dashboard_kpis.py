@@ -10,7 +10,11 @@ Dashboard KPIs, end to end (2026-10-18).
     2. Receivables = the customer balance (net of on-account receipts, equal to the
        accounting summary, 236G/H billed shown apart), received in period.
 
-Later dashboard tasks add suites 3..6 below. Companies are created here and
+    3. Payable to FBR: 236G/H, the total identity, FIFO input = the Import Tax Desk
+       worksheet, weighted-average fallback, division-restricted refusal, and the
+       12-month series.
+
+Later dashboard tasks add suites 4..6 below. Companies are created here and
 deleted at the end.
 
 Usage:
@@ -264,7 +268,114 @@ def main():
             if uid: requests.delete(f"{api}/users/{uid}", headers=h, timeout=60)
             if role_id: requests.delete(f"{api}/roles/{role_id}", headers=h, timeout=60)
 
-        # Suites 3..6 are added by the later dashboard tasks.
+        print("\n-- 3. Payable to FBR (tax position) + monthly series --")
+        tf = company("_dashkpi tax")           # new companies start on FIFO
+        c3 = client(tf, "DashKpi T")
+        thismonth = datetime.now().strftime("%Y-%m")
+        day = datetime.now().strftime("%Y-%m-%d")
+
+        def tbill(cid_, client_id, extra=None, rate=18):
+            body = {"date": f"{day}T00:00:00Z", "companyId": cid_, "clientId": client_id, "gstRate": rate,
+                    "items": [{"description": f"DASHKPI tax {tag}", "quantity": 1000, "uom": "Pcs",
+                               "unitPrice": 100, "itemTypeId": item_type}]}
+            body.update(extra or {})
+            return requests.post(f"{api}/invoices/standalone", headers=h, timeout=60, json=body)
+
+        r1 = tbill(tf, c3)
+        r2 = tbill(tf, c3, {"advanceTaxSection": "236G", "advanceTaxFilerActive": True})
+        r3 = tbill(tf, c3, {"advanceTaxSection": "236H", "advanceTaxFilerActive": False})
+        check("setup: a plain, a 236G and a 236H bill", r1.ok and r2.ok and r3.ok,
+              f"{r1.status_code} {r2.status_code} {r3.status_code} {r3.text[:200]}")
+        a236g = float((r2.json() or {}).get("advanceTaxAmount") or 0) if r2.ok else 0
+        a236h = float((r3.json() or {}).get("advanceTaxAmount") or 0) if r3.ok else 0
+
+        def tax(cid_, hdr=None, **params):
+            return requests.get(f"{api}/dashboard/tax-position", headers=hdr or h, timeout=120,
+                                params={"companyId": cid_, **params})
+
+        rt = tax(tf, period="this-month")
+        check("tax-position answers 200", rt.ok, f"{rt.status_code} {rt.text[:200]}")
+        t = rt.json() if rt.ok else {}
+        check("the months used are reported (this month only)",
+              t.get("fromMonth") == thismonth and t.get("toMonth") == thismonth, f"{t.get('fromMonth')}..{t.get('toMonth')}")
+        check("output tax = 18% of three 100,000 bills", near(t.get("outputTax"), 54000), str(t.get("outputTax")))
+        check("236G = the 236G bill's AdvanceTaxAmount", a236g > 0 and near(t.get("adv236G"), a236g), f"{t.get('adv236G')} vs {a236g}")
+        check("236H = the 236H bill's AdvanceTaxAmount", a236h > 0 and near(t.get("adv236H"), a236h), f"{t.get('adv236H')} vs {a236h}")
+        check("total payable = sales tax payable + 236G + 236H + WHT",
+              near(t.get("totalPayable"), float(t.get("salesTaxPayable") or 0) + float(t.get("adv236G") or 0)
+                   + float(t.get("adv236H") or 0) + float(t.get("whtPayable") or 0)), str(t))
+        check("a FIFO company reads the Import Tax Desk worksheet", t.get("inputBasis") == "worksheet", str(t.get("inputBasis")))
+        ws = requests.get(f"{api}/import-tax/company/{tf}/input-tax", headers=h, timeout=120,
+                          params={"from": thismonth, "to": thismonth})
+        wsm = ws.json().get("months", []) if ws.ok else []
+        check("input tax claimed = the worksheet's input for the same months",
+              ws.ok and near(t.get("inputTaxClaimed"), sum(m.get("inputThisMonth", 0) for m in wsm)),
+              f"{t.get('inputTaxClaimed')} vs {[m.get('inputThisMonth') for m in wsm]}")
+        check("sales tax payable = the worksheet's payable",
+              near(t.get("salesTaxPayable"), sum(m.get("payable", 0) for m in wsm)),
+              f"{t.get('salesTaxPayable')} vs {[m.get('payable') for m in wsm]}")
+        check("GL is off: ledger flag false and GL lines zero",
+              t.get("ledgerEnabled") is False and near(t.get("whtPayable"), 0)
+              and near(t.get("recoverableImportAdvanceTax"), 0) and near(t.get("recoverableWhtDeducted"), 0), str(t))
+        check("one month row carrying the output tax", len(t.get("months", [])) == 1
+              and near(t["months"][0].get("outputTax"), 54000), str(t.get("months")))
+        t12 = tax(tf, period="this-year").json()
+        check("this-year runs January to the current month, one row each",
+              str(t12.get("fromMonth", "")).endswith("-01") and t12.get("toMonth") == thismonth
+              and len(t12.get("months", [])) == int(thismonth[5:]), f"{t12.get('fromMonth')}..{t12.get('toMonth')} {len(t12.get('months', []))}")
+        check("a bad range is refused", tax(tf, **{"from": "2026-09-30"}).status_code == 400)
+
+        wa = company("_dashkpi wavg")
+        rm = requests.put(f"{api}/stock/company/{wa}/costing-method", headers=h, timeout=60, json={"method": "WeightedAverage"})
+        check("setup: a weighted-average company", rm.ok, f"{rm.status_code} {rm.text[:200]}")
+        cw = client(wa, "DashKpi W")
+        tbill(wa, cw)
+        rw = tax(wa, period="this-month")
+        tw = rw.json() if rw.ok else {}
+        check("weighted-average company: 200 with gl-before-cap", rw.ok and tw.get("inputBasis") == "gl-before-cap", f"{rw.status_code} {rw.text[:200]}")
+        check("its payable falls back to output + further - input (no GL = no input)",
+              near(tw.get("salesTaxPayable"), 18000) and near(tw.get("totalPayable"), 18000), str(tw))
+
+        km = kpis(tf, period="this-month").json()
+        mo = km.get("monthly") or []
+        check("monthly series has 12 points ending this month", len(mo) == 12 and mo[-1].get("month") == thismonth, str([m_.get("month") for m_ in mo]))
+        check("this month's net sales = 300,000 and the earlier months are zero",
+              near(mo[-1].get("netSales"), 300000) and all(near(m_.get("netSales"), 0) for m_ in mo[:-1]), str(mo)[:300])
+        check("monthly net sales ties to the hero for the month", near(mo[-1].get("netSales"), (km.get("hero") or {}).get("netSales")),
+              f"{mo[-1].get('netSales')} vs {(km.get('hero') or {}).get('netSales')}")
+        check("monthly points carry landedCost and marginPct", all("landedCost" in m_ and "marginPct" in m_ for m_ in mo))
+        km2 = kpis(tf, **{"from": "2026-03-01", "to": "2026-03-31"}).json().get("monthly") or []
+        check("the series ends at the period's end month", len(km2) == 12 and km2[-1].get("month") == "2026-03", str([m_.get("month") for m_ in km2][-2:]))
+
+        # A division-restricted user is refused the company-wide tax position.
+        rd3 = requests.post(f"{api}/divisions/company/{tf}", headers=h, timeout=60, json={"name": f"DashKpi TDiv {tag}"})
+        d3 = rd3.json().get("id") if rd3.ok else None
+        rl3 = requests.post(f"{api}/roles", headers=h, timeout=60, json={
+            "name": f"DashKpi trole {tag}", "description": "t", "permissionKeys": ["dashboard.view", "dashboard.kpi.sales.view"]})
+        role3 = rl3.json().get("id") if rl3.ok else None
+        ru3 = requests.post(f"{api}/users", headers=h, timeout=60, json={
+            "username": f"dashkpit{tag}", "fullName": "DashKpi TRestricted", "password": "test1234a", "role": "User"})
+        u3 = ru3.json().get("id") if ru3.ok else None
+        try:
+            if d3 and role3 and u3:
+                requests.put(f"{api}/users/{u3}/roles", headers=h, timeout=60, json={"roleIds": [role3]})
+                requests.put(f"{api}/usercompanies/user/{u3}", headers=h, timeout=60, json={"companyIds": [tf]})
+                requests.put(f"{api}/userdivisions/user/{u3}/company/{tf}", headers=h, timeout=60,
+                             json={"restrictToDivisions": True, "divisionIds": [d3]})
+                lt3 = requests.post(f"{api}/auth/login", json={"username": f"dashkpit{tag}", "password": "test1234a"}, timeout=60)
+                uh3 = {"Authorization": f"Bearer {lt3.json().get('token')}"} if lt3.ok else {}
+                rr3 = tax(tf, hdr=uh3, period="this-month")
+                check("division-restricted user: 403 with the company-wide message",
+                      rr3.status_code == 403 and "company-wide only" in rr3.text, f"{rr3.status_code} {rr3.text[:200]}")
+                rk3 = requests.get(f"{api}/dashboard/kpis", headers=uh3, timeout=60, params={"companyId": tf, "period": "this-month"})
+                check("their Overview KPIs are unaffected", rk3.ok, str(rk3.status_code))
+            else:
+                check("setup: division, role and user for the restricted case", False, f"{rd3.status_code} {rl3.status_code} {ru3.status_code}")
+        finally:
+            if u3: requests.delete(f"{api}/users/{u3}", headers=h, timeout=60)
+            if role3: requests.delete(f"{api}/roles/{role3}", headers=h, timeout=60)
+
+        # Suites 4..6 are added by the later dashboard tasks.
     finally:
         if not a.keep:
             for cid_ in made:

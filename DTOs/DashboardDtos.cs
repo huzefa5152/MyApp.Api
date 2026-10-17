@@ -303,6 +303,10 @@ namespace MyApp.Api.DTOs
         public DashboardFbrKpis? Fbr { get; set; }
         public DashboardInventoryKpis? Inventory { get; set; }
 
+        /// <summary>Twelve months ending at the period's end month (never past
+        /// today). Null when the caller cannot see sales.</summary>
+        public List<DashboardMonthPoint>? Monthly { get; set; }
+
         // Tells the page which sections the user CAN see (so it can
         // decide between "show welcome banner" vs "render empty
         // dashboard with all sections hidden"). Mirrors the Hero/Sales/
@@ -322,5 +326,49 @@ namespace MyApp.Api.DTOs
         // "render the dashboard".
         public bool HasAnyKpi =>
             CanViewSales || CanViewPurchases || CanViewFbr || CanViewInventory;
+    }
+
+    public class DashboardMonthPoint
+    {
+        /// <summary>yyyy-MM</summary>
+        public string Month { get; set; } = "";
+        public decimal NetSales { get; set; }
+        /// <summary>Landed cost of what was sold that month (the hero's walk).</summary>
+        public decimal LandedCost { get; set; }
+        /// <summary>(NetSales - LandedCost) / NetSales x 100; null when there were no sales.</summary>
+        public decimal? MarginPct { get; set; }
+    }
+
+    /// <summary>The Payable to FBR panel. Company-wide only.</summary>
+    public class DashboardTaxPositionDto
+    {
+        /// <summary>First and last claim month (yyyy-MM) the worksheet figures cover.</summary>
+        public string FromMonth { get; set; } = "";
+        public string ToMonth { get; set; } = "";
+        /// <summary>"worksheet" (FIFO company, Import Tax Desk) or "gl-before-cap".</summary>
+        public string InputBasis { get; set; } = "worksheet";
+        /// <summary>False when the company's GL is off: the GL-sourced lines are then 0.</summary>
+        public bool LedgerEnabled { get; set; }
+
+        public decimal OutputTax { get; set; }
+        public decimal FurtherTax { get; set; }
+        public decimal InputTaxClaimed { get; set; }
+        public decimal SalesTaxPayable { get; set; }
+        public decimal Adv236G { get; set; }
+        public decimal Adv236H { get; set; }
+        public decimal WhtPayable { get; set; }
+        public decimal TotalPayable { get; set; }
+        public decimal RecoverableImportAdvanceTax { get; set; }
+        public decimal RecoverableWhtDeducted { get; set; }
+        public List<DashboardTaxMonth> Months { get; set; } = new();
+    }
+
+    public class DashboardTaxMonth
+    {
+        public string Month { get; set; } = "";
+        public decimal OutputTax { get; set; }
+        public decimal FurtherTax { get; set; }
+        public decimal Adv236 { get; set; }
+        public decimal InputTax { get; set; }
     }
 }

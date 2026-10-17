@@ -25,5 +25,12 @@ namespace MyApp.Api.Services.Interfaces
         Task<DashboardBreakdownDto> GetBreakdownAsync(
             int companyId, string kind, string periodCode, DateTime? from, DateTime? to,
             string? groupKey, ClaimsPrincipal user);
+
+        /// <summary>
+        /// The Payable to FBR panel, over whole months covering the period.
+        /// Null when the caller is division-restricted (company-wide only).
+        /// </summary>
+        Task<DashboardTaxPositionDto?> GetTaxPositionAsync(
+            int companyId, string periodCode, DateTime? from, DateTime? to, ClaimsPrincipal user);
     }
 }

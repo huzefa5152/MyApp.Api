@@ -483,6 +483,7 @@ builder.Services.AddScoped<IFbrPurchaseImportService, FbrPurchaseImportService>(
 // and IPermissionService — both Scoped — and the queries use the
 // per-request user identity for permission checks.
 builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddScoped<IImportTaxWorksheetService, ImportTaxWorksheetService>();
 
 // Tax-claim helper — drives the in-form HS-stock panel on the
 // Invoices-tab edit screen. Scoped (depends on AppDbContext).
