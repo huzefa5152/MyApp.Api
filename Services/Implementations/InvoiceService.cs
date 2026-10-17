@@ -213,7 +213,8 @@ namespace MyApp.Api.Services.Implementations
         /// A cancelled (voided) bill is locked too — it is kept only as a
         /// numbered record and must never be re-opened for editing.
         /// </summary>
-        private static bool IsInvoiceEditable(Invoice inv) => inv.FbrStatus != "Submitted" && !inv.IsCancelled;
+        private static bool IsInvoiceEditable(Invoice inv) =>
+            (inv.FbrStatus != "Submitted" || inv.FbrFiledManually) && !inv.IsCancelled;
 
         /// <summary>
         /// Computes which per-item FBR fields are missing so the UI can show a
@@ -321,6 +322,7 @@ namespace MyApp.Api.Services.Implementations
             FbrIRN = inv.FbrIRN,
             FbrStatus = inv.FbrStatus,
             FbrSubmittedAt = inv.FbrSubmittedAt,
+            FbrFiledManually = inv.FbrFiledManually,
             FbrErrorMessage = inv.FbrErrorMessage,
             CreatedAt = inv.CreatedAt,
             IsEditable = IsInvoiceEditable(inv),

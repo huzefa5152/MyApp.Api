@@ -25,8 +25,8 @@ function fbrStatusBadge(inv, isBillsMode, fbrEnabled = true) {
   }
   if (inv.fbrStatus === "Submitted") {
     return (
-      <StatusBadge tone="submitted" title={inv.fbrIRN ? `IRN: ${inv.fbrIRN}` : undefined}>
-        {isBillsMode ? "Submitted" : "FBR Submitted"}
+      <StatusBadge tone="submitted" title={inv.fbrIRN ? `IRN: ${inv.fbrIRN}` : inv.fbrFiledManually ? `Filed by hand on the FBR portal as ${inv.fbrInvoiceNumber || "—"}` : undefined}>
+        {inv.fbrFiledManually ? "Filed manually" : isBillsMode ? "Submitted" : "FBR Submitted"}
       </StatusBadge>
     );
   }

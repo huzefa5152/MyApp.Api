@@ -1626,6 +1626,46 @@ else:
     status_check(suite21, "alice GET Beta's PO format by id", s, 404)
 
 
+# ── Suite 22: recording a bill as filed manually at FBR (2026-10-17) ──
+# The reset-submission valve gained a "recordManual" mode. It marks a bill
+# Submitted without an IRN, so it must stay behind the tenant guard: a
+# caller who cannot reach the bill's company never gets to mark it filed.
+suite22 = "FBR recordManual tenant guard"
+s, m_client = request("POST", "/api/clients", token=admin, body={
+    "companyId": beta["id"], "name": "Beta Manual Filing Client", "registrationType": "Unregistered"})
+# Same seeding as suite 13: a bill line needs an item type (Beta tracks no stock).
+s, m_bill = request("POST", "/api/invoices/standalone", token=admin, body={
+    "companyId": beta["id"], "clientId": (m_client or {}).get("id"), "date": "2026-08-24", "gstRate": 18,
+    "items": [{"description": "Manual filing probe", "quantity": 1, "uom": "Numbers, pieces, units", "unitPrice": 100,
+               "itemTypeId": alloc_item_type_id}]})
+if s in (200, 201) and isinstance(m_bill, dict):
+    manual = {"mode": "recordManual", "manualFbrInvoiceNumber": "TI-M-1", "reason": "tenant isolation probe"}
+    s, _ = request("POST", f"/api/fbr/{m_bill['id']}/reset-submission", token=tokens["alice"], body=manual)
+    status_check(suite22, "alice records Beta's bill as filed manually", s, 403)
+    s, got = request("GET", f"/api/invoices/{m_bill['id']}", token=admin)
+    check(suite22, "Beta's bill untouched by the refused call",
+          isinstance(got, dict) and got.get("fbrStatus") != "Submitted" and not got.get("fbrFiledManually"), str(got)[:120])
+    s, _ = request("POST", f"/api/fbr/{m_bill['id']}/reset-submission", token=tokens["bob"], body=manual)
+    status_check(suite22, "bob records his own company's bill as filed manually", s, 200)
+    s, got = request("GET", f"/api/invoices/{m_bill['id']}", token=tokens["bob"])
+    check(suite22, "it reads Submitted, filed manually, no IRN, still editable",
+          isinstance(got, dict) and got.get("fbrStatus") == "Submitted" and got.get("fbrFiledManually")
+          and not got.get("fbrIRN") and got.get("fbrInvoiceNumber") == "TI-M-1" and got.get("isEditable"), str(got)[:160])
+    s, _ = request("POST", f"/api/fbr/{m_bill['id']}/reset-submission", token=tokens["bob"], body=manual)
+    status_check(suite22, "recording it a second time is refused", s, 400)
+    s, sub = request("POST", f"/api/fbr/{m_bill['id']}/submit", token=tokens["bob"], body={})
+    check(suite22, "submitting it to FBR is refused before any POST",
+          isinstance(sub, dict) and sub.get("success") is False and "filed manually" in (sub.get("errorMessage") or ""), str(sub)[:160])
+    # Re-open it so the bill (and with it Beta) can be deleted in cleanup.
+    request("POST", f"/api/fbr/{m_bill['id']}/reset-submission", token=admin,
+            body={"mode": "retry", "reason": "tenant isolation cleanup"})
+    request("DELETE", f"/api/invoices/{m_bill['id']}", token=admin)
+else:
+    check(suite22, "a Beta bill to probe", False, f"status {s} {str(m_bill)[:120]}")
+if isinstance(m_client, dict) and m_client.get("id"):
+    request("DELETE", f"/api/clients/{m_client['id']}", token=admin)
+
+
 # ── Cleanup (test fails → keep rows for inspection) ──────────
 print("\n=== Results ===")
 fails = [r for r in results if not r[2].startswith(PASS)]

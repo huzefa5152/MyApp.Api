@@ -84,6 +84,13 @@ namespace MyApp.Api.Models
         public string? FbrIRN { get; set; }
         public string? FbrStatus { get; set; }
         public DateTime? FbrSubmittedAt { get; set; }
+        /// <summary>Filed by the operator directly on the FBR portal, outside this
+        /// software, and recorded here afterwards (2026-10-17). FbrStatus is
+        /// Submitted so nothing ever sends it again, FbrIRN is empty, and
+        /// FbrInvoiceNumber carries the number used at FBR. Unlike a bill we
+        /// filed, it stays editable: our copy was typed from the consultant's
+        /// sheet and may need its date or lines corrected.</summary>
+        public bool FbrFiledManually { get; set; }
         public string? FbrErrorMessage { get; set; }
 
         /// <summary>

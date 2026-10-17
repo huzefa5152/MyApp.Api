@@ -2677,6 +2677,9 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("FbrErrorMessage")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<bool>("FbrFiledManually")
+                        .HasColumnType("bit");
+
                     b.Property<string>("FbrIRN")
                         .HasColumnType("nvarchar(max)");
 

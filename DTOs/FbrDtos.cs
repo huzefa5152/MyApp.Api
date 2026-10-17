@@ -225,11 +225,17 @@ namespace MyApp.Api.DTOs
         ///                    again (the only safe way to re-open a locked bill).
         /// "recordExisting" — operator FOUND the invoice at FBR; record its IRN so
         ///                    our books match FBR without POSTing again.
+        /// "recordManual"   — the bill was filed by hand on the FBR portal and has
+        ///                    no IRN; record the number used there and mark it
+        ///                    Submitted so it is never sent again.
         /// </summary>
         public string Mode { get; set; } = "";
 
         /// <summary>The IRN found at FBR. Required for mode "recordExisting".</summary>
         public string? Irn { get; set; }
+
+        /// <summary>The invoice number used on the FBR portal. Required for mode "recordManual".</summary>
+        public string? ManualFbrInvoiceNumber { get; set; }
 
         /// <summary>Why the reset is being done — required, written to the audit log.</summary>
         public string Reason { get; set; } = "";

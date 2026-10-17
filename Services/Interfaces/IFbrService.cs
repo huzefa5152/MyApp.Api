@@ -20,7 +20,8 @@ namespace MyApp.Api.Services.Interfaces
         /// FBR ("recordExisting"). Audited. Never POSTs to FBR.
         /// </summary>
         Task<FbrResetResult> ResetSubmissionAsync(
-            int invoiceId, string mode, string? irn, string reason, string? actorUserName);
+            int invoiceId, string mode, string? irn, string reason, string? actorUserName,
+            string? manualFbrInvoiceNumber = null);
 
         // Reference APIs v1 (V1.12 §5.1–§5.6)
         Task<List<FbrProvinceDto>> GetProvincesAsync(int companyId);

@@ -125,6 +125,7 @@
         public string? FbrIRN { get; set; }
         public string? FbrStatus { get; set; }
         public DateTime? FbrSubmittedAt { get; set; }
+        public bool FbrFiledManually { get; set; }
         public string? FbrErrorMessage { get; set; }
         public DateTime CreatedAt { get; set; }
         public bool IsEditable { get; set; }

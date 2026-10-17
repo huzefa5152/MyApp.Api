@@ -903,6 +903,17 @@ namespace MyApp.Api.Services.Implementations
                                        "If you believe the original submission did not reach FBR, an administrator can reset it.",
                     };
                 }
+                // Filed by hand on the FBR portal: Submitted with no IRN, so the
+                // IRN check above lets it through. The claim below refuses it
+                // too; this just says why.
+                if (invoice.FbrFiledManually)
+                    return new FbrSubmissionResult
+                    {
+                        Success = false,
+                        AlreadyInProgress = true,
+                        ErrorMessage = $"This bill was filed manually on the FBR portal as {invoice.FbrInvoiceNumber}. " +
+                                       "It must not be sent again.",
+                    };
                 if (string.Equals(invoice.FbrStatus, FbrSubmissionStatus.Submitting, StringComparison.OrdinalIgnoreCase))
                     return new FbrSubmissionResult
                     {
@@ -1713,7 +1724,8 @@ namespace MyApp.Api.Services.Implementations
         /// Every call is audited with the before/after state and the operator's reason.
         /// </summary>
         public async Task<FbrResetResult> ResetSubmissionAsync(
-            int invoiceId, string mode, string? irn, string reason, string? actorUserName)
+            int invoiceId, string mode, string? irn, string reason, string? actorUserName,
+            string? manualFbrInvoiceNumber = null)
         {
             var invoice = await _invoiceRepo.GetByIdAsync(invoiceId);
             if (invoice == null)
@@ -1728,6 +1740,7 @@ namespace MyApp.Api.Services.Implementations
                 invoice.FbrIRN = null;
                 invoice.FbrErrorMessage = null;
                 invoice.FbrSubmittedAt = null;
+                invoice.FbrFiledManually = false;
                 // FbrInvoiceNumber is deliberately NOT cleared. It is assigned
                 // when the document is created (Company.InvoiceNumberPrefix +
                 // the number), not when it is filed, so clearing it here threw
@@ -1751,10 +1764,29 @@ namespace MyApp.Api.Services.Implementations
                 invoice.FbrInvoiceNumber ??= await BuildFbrInvoiceNumberAsync(invoice);
                 invoice.FbrErrorMessage = null;
                 invoice.FbrSubmittedAt = DateTime.UtcNow;
+                invoice.FbrFiledManually = false;
+            }
+            else if (string.Equals(mode, "recordManual", StringComparison.OrdinalIgnoreCase))
+            {
+                // Filed by hand on the FBR portal, so there is no IRN to record.
+                // Only from a state where nothing of ours is at FBR: a bill that is
+                // Submitting or Uncertain may already be filed under OUR number.
+                if (!FbrSubmissionStatus.IsSubmittable(invoice.FbrStatus))
+                    return new FbrResetResult { Success = false, Message = "Only a bill that has not been sent to FBR can be recorded as filed manually." };
+                if (string.IsNullOrWhiteSpace(manualFbrInvoiceNumber))
+                    return new FbrResetResult { Success = false, Message = "The invoice number used on the FBR portal is required." };
+                var manualNo = manualFbrInvoiceNumber.Trim();
+                if (manualNo.Length > 100) manualNo = manualNo[..100];
+                invoice.FbrStatus = FbrSubmissionStatus.Submitted;
+                invoice.FbrIRN = null;
+                invoice.FbrInvoiceNumber = manualNo;
+                invoice.FbrErrorMessage = null;
+                invoice.FbrSubmittedAt = DateTime.UtcNow;
+                invoice.FbrFiledManually = true;
             }
             else
             {
-                return new FbrResetResult { Success = false, Message = "Unknown reset mode. Use 'retry' or 'recordExisting'." };
+                return new FbrResetResult { Success = false, Message = "Unknown reset mode. Use 'retry', 'recordExisting' or 'recordManual'." };
             }
 
             await _invoiceRepo.UpdateAsync(invoice);
@@ -1788,7 +1820,9 @@ namespace MyApp.Api.Services.Implementations
                 FbrIRN = invoice.FbrIRN,
                 Message = string.Equals(mode, "retry", StringComparison.OrdinalIgnoreCase)
                     ? "FBR state cleared. The bill can be submitted again."
-                    : "IRN recorded. The bill is now marked Submitted.",
+                    : invoice.FbrFiledManually
+                        ? "Recorded as filed manually at FBR. The bill will not be sent again."
+                        : "IRN recorded. The bill is now marked Submitted.",
             };
         }
 
