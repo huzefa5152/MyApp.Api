@@ -40,7 +40,6 @@ namespace MyApp.Api.DTOs
         // Period values
         public decimal TotalSales { get; set; }
         public decimal TotalPurchases { get; set; }
-        public decimal Net { get; set; }              // Sales − Purchases
         public decimal GstOutput { get; set; }        // tax we collected (sales)
         public decimal GstInput { get; set; }         // tax we paid (purchases)
         public decimal GstNet { get; set; }           // Output − Input (what we owe)
@@ -50,7 +49,6 @@ namespace MyApp.Api.DTOs
         // when these are null.
         public decimal? TotalSalesPrev { get; set; }
         public decimal? TotalPurchasesPrev { get; set; }
-        public decimal? NetPrev { get; set; }
         public decimal? GstNetPrev { get; set; }
 
         // ── Importer-oriented figures (2026-09-17) ─────────────────────────
@@ -80,22 +78,22 @@ namespace MyApp.Api.DTOs
         /// goods sold, kept apart so gross margin stays honest.</summary>
         public decimal InventoryAdjustments { get; set; }
 
-        /// <summary><see cref="TotalSalesExcludingTax"/> − <see cref="CostOfGoodsSold"/>.
-        /// Reads near zero for a company that invoices at declared customs
-        /// value; that is the honest declared-basis picture, not a fault.</summary>
-        public decimal GrossProfit { get; set; }
-
-        /// <summary>Gross profit as a percentage of ex-tax sales; null when
-        /// there were no sales to divide by.</summary>
-        public decimal? GrossMarginPercent { get; set; }
-
         /// <summary>What the goods on hand are worth right now (declared
         /// basis). Not period-scoped — stock is a position, not a flow.</summary>
         public decimal StockOnHandValue { get; set; }
 
-        /// <summary>Outstanding receivables, and the overdue slice of them.</summary>
+        /// <summary>The customer balance: GetAgedReceivablesAsync().Total, equal to
+        /// the accounting summary's receivables total. Net of receipts on account.</summary>
         public decimal ReceivablesTotal { get; set; }
+        /// <summary>The non-current slice of <see cref="ReceivablesTotal"/>.</summary>
         public decimal ReceivablesOverdue { get; set; }
+        /// <summary>236G/H advance tax billed in the period on top of the invoices
+        /// (not part of <see cref="ReceivablesTotal"/>).</summary>
+        public decimal ReceivablesAdvanceTaxBilled { get; set; }
+        /// <summary>Receipts (not voided) dated in the period.</summary>
+        public decimal ReceivedInPeriod { get; set; }
+        /// <summary>Items sold in the period whose landed cost is zero — their margin is overstated.</summary>
+        public int UncostedItemCount { get; set; }
 
         /// <summary>Everything owed, not just trade creditors: an importer has
         /// no suppliers on the books, so an AccountsPayable-only figure reads
@@ -149,9 +147,9 @@ namespace MyApp.Api.DTOs
         /// <summary>Cost of the goods sold at ACTUAL landed cost rather than
         /// declared. Declared-basis gross profit reads ~0 for a company that
         /// invoices at customs value; this is what it really earned.</summary>
-        public decimal CostOfGoodsSoldLanded { get; set; }
-        public decimal RealMargin { get; set; }
-        public decimal? RealMarginPercent { get; set; }
+        public decimal LandedCostOfSales { get; set; }
+        public decimal GrossMarginLanded { get; set; }
+        public decimal? GrossMarginLandedPct { get; set; }
 
         /// <summary>Declared value that has converted to sales, and what share
         /// of everything ever held that represents. Deliberately NOT expressed

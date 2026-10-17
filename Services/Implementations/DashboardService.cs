@@ -40,12 +40,15 @@ namespace MyApp.Api.Services.Implementations
         private readonly AppDbContext _context;
         private readonly IPermissionService _permissions;
         private readonly IDivisionAccessGuard _divisionAccess;
+        private readonly IGeneralLedgerService _gl;
 
         public DashboardService(
             AppDbContext context,
             IPermissionService permissions,
-            IDivisionAccessGuard divisionAccess)
+            IDivisionAccessGuard divisionAccess,
+            IGeneralLedgerService gl)
         {
+            _gl = gl;
             _context = context;
             _permissions = permissions;
             _divisionAccess = divisionAccess;
@@ -261,11 +264,9 @@ namespace MyApp.Api.Services.Implementations
                 }
             }
 
-            hero.Net = hero.TotalSales - hero.TotalPurchases;
             hero.GstNet = hero.GstOutput - hero.GstInput;
             if (hero.TotalSalesPrev.HasValue || hero.TotalPurchasesPrev.HasValue)
             {
-                hero.NetPrev = (hero.TotalSalesPrev ?? 0m) - (hero.TotalPurchasesPrev ?? 0m);
                 // GstNetPrev only meaningful when we computed both prev
                 // sums — leave null when we computed only one side.
                 if (canSales && canPurchases)
@@ -296,40 +297,8 @@ namespace MyApp.Api.Services.Implementations
         private async Task FillImporterKpisAsync(
             DashboardHeroKpis hero, int companyId, DashboardPeriod period, HashSet<int>? divScope)
         {
-            // ── Cost of goods sold, and what stock is left ─────────────────
-            // Both come out of ONE walk. The cost of a sale is the weighted
-            // average standing at that moment, so the walk has to see the whole
-            // history even when the dashboard is showing one week of it.
-            var openingRows = await _context.OpeningStockBalances.AsNoTracking()
-                .Where(o => o.CompanyId == companyId)
-                .Select(o => new
-                {
-                    o.ItemTypeId, o.Quantity, o.ValueExcludingTax,
-                    o.ActualCostExcludingTax, o.SalesTaxRate,
-                })
-                .ToListAsync();
-
-            var movementQuery = _context.StockMovements.AsNoTracking()
-                .Where(m => m.CompanyId == companyId);
-            if (divScope != null)
-                movementQuery = movementQuery.Where(m =>
-                    m.DivisionId == null || divScope.Contains(m.DivisionId.Value));
-            var movements = await movementQuery.ToListAsync();
-
-            var openings = openingRows
-                .GroupBy(o => o.ItemTypeId)
-                .ToDictionary(
-                    g => g.Key,
-                    g => new InventoryPeriodConsumption.Opening(
-                        g.Sum(x => x.Quantity),
-                        g.Sum(x => x.ValueExcludingTax),
-                        g.Sum(x => x.ActualCostExcludingTax),
-                        g.Max(x => x.SalesTaxRate)));
-
-            var movementsByItem = movements
-                .GroupBy(m => m.ItemTypeId)
-                .ToDictionary(g => g.Key, g => g.ToList());
-
+            // Cost of goods sold, and what stock is left, from ONE walk over the
+            // whole history (see LoadPositionsAsync).
             var positions = await LoadPositionsAsync(companyId, divScope, period.From, period.To);
             hero.HasStock = positions.Count > 0;
 
@@ -338,7 +307,8 @@ namespace MyApp.Api.Services.Implementations
                 // Period figures: what left, and what it cost on each basis.
                 hero.CostOfGoodsSold = Round(positions.Sum(p => p.ConsumedDeclared));
                 hero.InventoryAdjustments = Round(positions.Sum(p => p.AdjustmentsDeclared));
-                hero.CostOfGoodsSoldLanded = Round(positions.Sum(p => p.ConsumedLanded));
+                hero.LandedCostOfSales = Round(positions.Sum(p => p.ConsumedLanded));
+                hero.UncostedItemCount = positions.Count(p => p.SoldQuantity > 0m && p.ConsumedLanded == 0m);
 
                 // Positions, never period-scoped: "what is in the warehouse"
                 // has no date range.
@@ -374,45 +344,34 @@ namespace MyApp.Api.Services.Implementations
                 hero.StockAgeOver90 = Aged(d => d >= 90);
             }
 
-            // Real margin: what the goods actually cost, not what customs
-            // declared them at. Declared-basis gross profit reads ~0 for a
-            // company that invoices at declared value, so this is the only
-            // number on the screen that says whether it made money.
-            hero.RealMargin = Round(hero.TotalSalesExcludingTax - hero.CostOfGoodsSoldLanded);
-            hero.RealMarginPercent = hero.TotalSalesExcludingTax != 0m
-                ? Math.Round(hero.RealMargin / hero.TotalSalesExcludingTax * 100m, 1, MidpointRounding.AwayFromZero)
+            // Margin on landed cost: what the goods actually cost, not what
+            // customs declared them at (declared-basis profit reads ~0).
+            hero.GrossMarginLanded = Round(hero.TotalSalesExcludingTax - hero.LandedCostOfSales);
+            hero.GrossMarginLandedPct = hero.TotalSalesExcludingTax != 0m
+                ? Math.Round(hero.GrossMarginLanded / hero.TotalSalesExcludingTax * 100m, 1, MidpointRounding.AwayFromZero)
                 : null;
 
-            hero.GrossProfit = Math.Round(
-                hero.TotalSalesExcludingTax - hero.CostOfGoodsSold, 2, MidpointRounding.AwayFromZero);
-            hero.GrossMarginPercent = hero.TotalSalesExcludingTax != 0m
-                ? Math.Round(hero.GrossProfit / hero.TotalSalesExcludingTax * 100m, 1, MidpointRounding.AwayFromZero)
-                : null;
+            // ── Receivables = the customer balance ─────────────────────────
+            // The same aged-receivables result the accounting summary reports,
+            // so the two screens cannot disagree (subledger: works with the GL
+            // off). A position, so deliberately not date-filtered. Receipts
+            // taken on account reduce it; 236G/H is billed on top, shown apart.
+            var aged = await _gl.GetAgedReceivablesAsync(companyId);
+            hero.ReceivablesTotal = aged.Total;
+            hero.ReceivablesOverdue = aged.Total - aged.Current;
 
-            // ── Receivables ────────────────────────────────────────────────
-            // Outstanding is a POSITION too — what is owed now, not what was
-            // invoiced in the period — so it is deliberately unfiltered by date.
-            var today = PakistanClock.Today;
-            var receivableQuery = _context.Invoices.AsNoTracking()
-                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
-                         && i.DocumentType != 9 && i.DocumentType != 10
-                         && i.GrandTotal > i.AmountPaid);
+            var advQ = DashboardSalesFilter.SaleDocs(_context.Invoices.AsNoTracking(), companyId, period.From, period.To);
             if (divScope != null)
-                receivableQuery = receivableQuery.Where(i =>
-                    i.DivisionId == null || divScope.Contains(i.DivisionId.Value));
+                advQ = advQ.Where(i => i.DivisionId == null || divScope.Contains(i.DivisionId.Value));
+            hero.ReceivablesAdvanceTaxBilled = Round(await advQ.SumAsync(i => (decimal?)i.AdvanceTaxAmount) ?? 0m);
 
-            var receivables = await receivableQuery
-                .GroupBy(_ => 1)
-                .Select(g => new
-                {
-                    Total = g.Sum(i => i.GrandTotal - i.AmountPaid),
-                    Overdue = g.Sum(i => i.DueDate != null && i.DueDate < today
-                        ? i.GrandTotal - i.AmountPaid
-                        : 0m),
-                })
-                .FirstOrDefaultAsync();
-            hero.ReceivablesTotal = receivables?.Total ?? 0m;
-            hero.ReceivablesOverdue = receivables?.Overdue ?? 0m;
+            var recQ = _context.Payments.AsNoTracking()
+                .Where(p => p.CompanyId == companyId && p.Direction == PaymentDirection.Receipt && !p.IsCancelled);
+            if (period.From.HasValue) recQ = recQ.Where(p => p.Date >= period.From.Value);
+            if (period.To.HasValue) recQ = recQ.Where(p => p.Date < period.To.Value);
+            if (divScope != null)
+                recQ = recQ.Where(p => p.DivisionId == null || divScope.Contains(p.DivisionId.Value));
+            hero.ReceivedInPeriod = Round(await recQ.SumAsync(p => (decimal?)p.Amount) ?? 0m);
 
             // ── Everything owed, and everything recoverable ────────────────
             // Read from the ledger rather than recomputed, so these agree with
@@ -1334,31 +1293,6 @@ namespace MyApp.Api.Services.Implementations
             foreach (var o in openingsByItem)
                 onHandByItem[o.Key] = onHandByItem.GetValueOrDefault(o.Key) + o.Value;
 
-            // Average cost per item — pull from PurchaseItems for items
-            // that have purchases. Items without any purchases get cost=0
-            // (stock value contribution = 0 — fine, they're typically
-            // pre-existing inventory adjustments).
-            var costsQ = _context.PurchaseItems
-                .AsNoTracking()
-                .Where(pi => pi.PurchaseBill.CompanyId == companyId && pi.ItemTypeId.HasValue && pi.Quantity > 0);
-            // Cost basis rides on the parent bill's division tag — scope it
-            // the same way so a restricted user's stock value derives only
-            // from bills they can see.
-            if (divScope != null)
-                costsQ = costsQ.Where(pi => pi.PurchaseBill.DivisionId == null || divScope.Contains(pi.PurchaseBill.DivisionId.Value));
-            var perItemCosts = await costsQ
-                .GroupBy(pi => pi.ItemTypeId!.Value)
-                .Select(g => new
-                {
-                    ItemTypeId = g.Key,
-                    TotalCost = g.Sum(pi => pi.LineTotal),
-                    TotalQty  = g.Sum(pi => pi.Quantity),
-                })
-                .ToListAsync();
-
-            var costMap = perItemCosts.ToDictionary(x => x.ItemTypeId,
-                x => x.TotalQty > 0 ? x.TotalCost / x.TotalQty : 0m);
-
             // Valued by the same walk as the hero's Stock on Hand card, so the
             // two figures on one screen cannot contradict each other.
             decimal totalStockValue = await ComputeStockOnHandValueAsync(companyId, divScope);
@@ -1369,7 +1303,6 @@ namespace MyApp.Api.Services.Implementations
                 var onHand = kv.Value;
                 trackedItemCount++;
                 if (onHand <= 0) lowStockCount++;
-                _ = costMap;   // retained for the low-stock/cost drill-downs below
             }
 
             // Top 5 items by movement volume in the last 30 days — most

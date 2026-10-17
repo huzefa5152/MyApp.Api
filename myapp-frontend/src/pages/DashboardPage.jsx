@@ -403,7 +403,6 @@ function HeroBand({ data, companyId, period }) {
   const hasPurchases = hero.hasPurchases !== false;
   const showSales = flags.canViewSales;
   const showPurchases = flags.canViewPurchases && hasPurchases;
-  const showNet = showSales && flags.canViewPurchases && hasPurchases;
   const showGstNet = showSales && flags.canViewPurchases;
 
   const money = (v) => `Rs. ${formatPkrCompact(v)}`;
@@ -470,17 +469,6 @@ function HeroBand({ data, companyId, period }) {
           title="Sum of GrandTotal across all purchase bills in the selected period"
         />
       )}
-      {showNet && (
-        <KpiCard
-          label="Net (Sales − Purchases)"
-          value={hero.net}
-          prevValue={hero.netPrev}
-          accent="#37474f"
-          format={(v) => `Rs. ${formatPkrCompact(v)}`}
-          icon={<MdTrendingUp size={16} />}
-          title="What's left after subtracting purchases from sales — a rough cash-flow signal"
-        />
-      )}
       {showGstNet && (
         <KpiCard
           label="GST Net (Output − Input)"
@@ -514,22 +502,6 @@ function HeroBand({ data, companyId, period }) {
               : null
           }
           title="Declared value of the goods that left stock in this period, at weighted average — the same figure the ledger relieves Inventory by. Breakage and revaluations are shown separately, not counted as cost of sales."
-        />
-      )}
-
-      {showCogs && (
-        <KpiCard
-          label="Gross Profit"
-          value={hero.grossProfit}
-          accent={accents.profit}
-          format={money}
-          icon={<MdTrendingUp size={16} />}
-          subValue={
-            hero.grossMarginPercent == null
-              ? "no sales in this period"
-              : `margin  ${Number(hero.grossMarginPercent).toFixed(1)}%  ·  on ex-tax sales`
-          }
-          title="Sales excluding tax minus cost of goods sold. A company that invoices at its declared customs value will read close to zero here — that is the honest declared-basis picture, not an error."
         />
       )}
 
@@ -626,21 +598,21 @@ function HeroBand({ data, companyId, period }) {
         />
       )}
 
-      {showCogs && (hero.costOfGoodsSoldLanded || 0) > 0 && (
+      {showCogs && (hero.landedCostOfSales || 0) > 0 && (
         <KpiCard
           label="Margin on Landed Cost"
-          value={hero.realMargin}
+          value={hero.grossMarginLanded}
           accent={accents.recoverable}
           format={money}
           icon={<MdSavings size={16} />}
           subValue={
-            (hero.realMarginPercent == null
+            (hero.grossMarginLandedPct == null
               ? "landed basis"
-              : `margin ${Number(hero.realMarginPercent).toFixed(1)}%`)
-            + `  ·  cost ${exact(hero.costOfGoodsSoldLanded)}`
+              : `margin ${Number(hero.grossMarginLandedPct).toFixed(1)}%`)
+            + `  ·  cost ${exact(hero.landedCostOfSales)}`
           }
           title="Sales excluding tax less what the goods ACTUALLY cost, rather than their declared customs value. Declared-basis gross profit reads near zero by construction; this is what the business really earned."
-          onDrillDown={openDrill("real-margin", hero.realMargin)}
+          onDrillDown={openDrill("real-margin", hero.grossMarginLanded)}
         />
       )}
 

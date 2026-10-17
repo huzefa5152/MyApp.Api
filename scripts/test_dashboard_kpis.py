@@ -7,7 +7,10 @@ Dashboard KPIs, end to end (2026-10-18).
        a bill cancelled at the FBR portal leaves net sales (needs --db), and the
        sales breakdown ties to the hero figure.
 
-Later dashboard tasks add suites 2..6 below. Companies are created here and
+    2. Receivables = the customer balance (net of on-account receipts, equal to the
+       accounting summary, 236G/H billed shown apart), received in period.
+
+Later dashboard tasks add suites 3..6 below. Companies are created here and
 deleted at the end.
 
 Usage:
@@ -193,7 +196,43 @@ def main():
         else:
             skip("a bill cancelled at FBR leaves net sales", "needs --db")
 
-        # Suites 2..6 are added by the later dashboard tasks.
+        print("\n-- 2. Receivables as customer balance --")
+        today = datetime.now().strftime("%Y-%m-%d")
+        rc = company("_dashkpi recv")
+        c2 = client(rc, "DashKpi R")
+
+        def gst_bill(extra=None):
+            body = {"date": f"{today}T00:00:00Z", "companyId": rc, "clientId": c2, "gstRate": 18,
+                    "items": [{"description": f"DASHKPI recv {tag}", "quantity": 1000, "uom": "Pcs",
+                               "unitPrice": 100, "itemTypeId": item_type}]}
+            body.update(extra or {})
+            return requests.post(f"{api}/invoices/standalone", headers=h, timeout=60, json=body)
+
+        r1 = gst_bill()
+        r2 = gst_bill({"advanceTaxSection": "236G", "advanceTaxFilerActive": True})
+        check("setup: two 118,000 bills, one with 236G", r1.ok and r2.ok, f"{r1.status_code} {r2.status_code} {r2.text[:200]}")
+        rr = requests.post(f"{api}/payments/receipts/company/{rc}", headers=h, timeout=60, json={
+            "direction": "Receipt", "date": f"{today}T00:00:00Z", "contactType": "Client", "contactId": c2,
+            "method": "Cash", "amount": 50000, "allocations": [{"kind": "OnAccount", "amount": 50000}]})
+        check("setup: a 50,000 on-account receipt", rr.ok, f"{rr.status_code} {rr.text[:200]}")
+
+        hr = hero(rc, period="all-time")
+        check("receivables = invoices less the on-account receipt (236,000 - 50,000)",
+              near(hr.get("receivablesTotal"), 186000), str(hr.get("receivablesTotal")))
+        s_ = requests.get(f"{api}/accounting/summary/company/{rc}", headers=h, timeout=60)
+        acct = ((s_.json().get("receivables") or {}).get("total")) if s_.ok else None
+        check("it equals the accounting summary's receivables total", s_.ok and near(hr.get("receivablesTotal"), acct),
+              f"{hr.get('receivablesTotal')} vs {acct} ({s_.status_code})")
+        check("236G billed (0.1% of 118,000) is shown apart, not in the balance",
+              near(hr.get("receivablesAdvanceTaxBilled"), 118), str(hr.get("receivablesAdvanceTaxBilled")))
+        check("received in period = 50,000", near(hr.get("receivedInPeriod"), 50000), str(hr.get("receivedInPeriod")))
+        h_old = hero(rc, **{"from": "2020-01-01", "to": "2020-01-31"})
+        check("a period with no receipts reads zero received", near(h_old.get("receivedInPeriod"), 0), str(h_old.get("receivedInPeriod")))
+        check("the declared gross profit and Sales-Purchases fields are gone",
+              "grossProfit" not in hr and "net" not in hr, str(sorted(hr))[:200])
+        check("landed margin fields are present", all(f in hr for f in ("landedCostOfSales", "grossMarginLanded", "uncostedItemCount")), str(sorted(hr))[:200])
+
+        # Suites 3..6 are added by the later dashboard tasks.
     finally:
         if not a.keep:
             for cid_ in made:
