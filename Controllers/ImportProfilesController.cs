@@ -68,8 +68,11 @@ namespace MyApp.Api.Controllers
             return null;
         }
 
+        // The import screens pick a layout from this list, so whoever may run
+        // an import may read it. Editing layouts stays on profiles.manage.
         [HttpGet]
-        [HasPermission("spreadsheetimport.profiles.view")]
+        [HasAnyPermission("spreadsheetimport.profiles.view",
+            "spreadsheetimport.stock.run", "spreadsheetimport.ledger.run", "importcosting.sheet.run")]
         public async Task<ActionResult<List<ImportProfileDto>>> List(
             [FromQuery] string? kind, [FromQuery] int? companyId)
         {

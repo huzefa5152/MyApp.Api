@@ -1676,6 +1676,26 @@ s, _ = request("GET", f"/api/invoices/company/{beta['id']}/for-receipt?clientId=
 status_check(suite23, "bob lists his own company's bills for a receipt", s, 200)
 
 
+# ── Suite 24: endpoints opened to a form's audience (2026-10-18) ──
+# Each was widened so a role that can open a form can fill it (purchase-bill,
+# challan and bill pickers, bank & cash, stock items, tax-rate hints, import
+# layouts). Widening the permission must not widen the company.
+suite24 = "form-audience endpoints tenant guard"
+for path in [
+    f"/api/purchasebills/company/{beta['id']}/paged",
+    f"/api/deliverychallans/company/{beta['id']}",
+    f"/api/invoices/company/{beta['id']}",
+    f"/api/invoices/company/{beta['id']}/imported-tax-rates?billRate=18",
+    f"/api/invoices/company/{beta['id']}/imported-tax-rates/items?rate=18",
+    f"/api/stock/company/{beta['id']}/onhand",
+    f"/api/stock/company/{beta['id']}/tracked-itemtypes",
+    f"/api/accounts/company/{beta['id']}/bank-cash",
+    f"/api/import-profiles?companyId={beta['id']}",
+]:
+    s, _ = request("GET", path, token=tokens["alice"])
+    status_check(suite24, f"alice GET {path.split('?')[0]}", s, 403)
+
+
 # ── Cleanup (test fails → keep rows for inspection) ──────────
 print("\n=== Results ===")
 fails = [r for r in results if not r[2].startswith(PASS)]

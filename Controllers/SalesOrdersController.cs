@@ -115,8 +115,9 @@ namespace MyApp.Api.Controllers
             return Ok(result);
         }
 
+        // Also the challan form, which loads the order picked from the open-order list.
         [HttpGet("{id}")]
-        [HasPermission("salesorders.list.view")]
+        [HasAnyPermission("salesorders.list.view", "challans.manage.create")]
         public async Task<ActionResult<SalesOrderDto>> GetById(int id)
         {
             var order = await _service.GetByIdAsync(id);

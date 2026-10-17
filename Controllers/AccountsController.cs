@@ -62,7 +62,9 @@ namespace MyApp.Api.Controllers
         /// Paid from" picker. Gated so anyone who can record a receipt/payment
         /// (or view the CoA) can populate it.</summary>
         [HttpGet("company/{companyId}/bank-cash")]
-        [HasAnyPermission("accounting.coa.view", "accounting.receipts.create", "accounting.payments.create", "accounting.receipts.view", "accounting.payments.view")]
+        [HasAnyPermission("accounting.coa.view", "accounting.receipts.create", "accounting.payments.create", "accounting.receipts.view", "accounting.payments.view",
+            "accounting.transfers.create", "accounting.transfers.view",
+            "accounting.reconciliation.view", "accounting.reconciliation.manage")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<AccountDto>>> GetBankCash(int companyId, [FromQuery] bool includeInactive = false)
             => Ok(await _service.GetBankCashAccountsAsync(companyId, includeInactive));

@@ -58,8 +58,13 @@ namespace MyApp.Api.Controllers
             return Ok(await _service.GetCountsBySupplierAsync(companyId, divScope));
         }
 
+        // Also the bill picker of the Goods Receipt form and the supplier
+        // payment form (a picker, not the screen): those roles settle or
+        // receive against these bills. Company and division scope unchanged.
         [HttpGet("company/{companyId}/paged")]
-        [HasPermission("purchasebills.list.view")]
+        [HasAnyPermission("purchasebills.list.view",
+            "goodsreceipts.manage.create", "goodsreceipts.manage.update",
+            "accounting.payments.create", "accounting.payments.view")]
         [AuthorizeCompany]
         public async Task<ActionResult<PagedResult<PurchaseBillDto>>> GetPagedByCompany(
             int companyId,

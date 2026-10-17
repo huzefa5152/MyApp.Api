@@ -62,6 +62,7 @@ namespace MyApp.Api.Helpers
             "bills.manage.create", "bills.manage.create.standalone", "bills.manage.update",
             "purchasebills.manage.create", "purchasebills.manage.update",
             "accounting.receipts.create", "accounting.payments.create",
+            "accounting.reconciliation.manage",   // statement import categorises lines to accounts
         };
 
         // The print-template picker appears on every document print screen.

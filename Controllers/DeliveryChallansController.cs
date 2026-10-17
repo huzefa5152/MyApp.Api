@@ -58,8 +58,9 @@ namespace MyApp.Api.Controllers
             return Ok(total);
         }
 
+        // Also the purchase-bill form's "From challan" picker.
         [HttpGet("company/{companyId}")]
-        [HasPermission("challans.list.view")]
+        [HasAnyPermission("challans.list.view", "purchasebills.manage.create")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<DeliveryChallanDto>>> GetByCompany(int companyId)
         {

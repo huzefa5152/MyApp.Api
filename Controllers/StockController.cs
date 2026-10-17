@@ -62,8 +62,10 @@ namespace MyApp.Api.Controllers
         /// company has any data for (movements OR opening balance), sorted
         /// by item name.
         /// </summary>
+        // Also the Adjust and Opening dialogs on the stock screen, which list
+        // the items and their on-hand to adjust from.
         [HttpGet("company/{companyId}/onhand")]
-        [HasPermission("stock.dashboard.view")]
+        [HasAnyPermission("stock.dashboard.view", "stock.adjust.create", "stock.opening.manage")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<StockOnHandRowDto>>> GetOnHand(int companyId)
         {
@@ -2649,7 +2651,7 @@ namespace MyApp.Api.Controllers
         /// policy-management one.
         /// </summary>
         [HttpGet("company/{companyId}/tracked-itemtypes")]
-        [HasPermission("stock.dashboard.view")]
+        [HasAnyPermission("stock.dashboard.view", "stock.adjust.create", "stock.opening.manage")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<int>>> GetTrackedItemTypes(int companyId)
         {

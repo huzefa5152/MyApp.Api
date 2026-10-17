@@ -65,8 +65,9 @@ namespace MyApp.Api.Controllers
             return Ok(byCompany);
         }
 
+        // Also the credit/debit note screen, which picks the bill to reverse.
         [HttpGet("company/{companyId}")]
-        [HasAnyPermission("bills.list.view", "invoices.list.view")]
+        [HasAnyPermission("bills.list.view", "invoices.list.view", "invoices.note.create")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<InvoiceDto>>> GetByCompany(int companyId)
         {
@@ -256,7 +257,7 @@ namespace MyApp.Api.Controllers
         /// carry none, so the scenario an operator must use offered nothing to bill.
         /// </summary>
         [HttpGet("company/{companyId}/imported-tax-rates/items")]
-        [HasAnyPermission("bills.manage.create", "bills.manage.update",
+        [HasAnyPermission("bills.manage.create", "bills.manage.create.standalone", "bills.manage.update",
             "invoices.manage.update.itemtype", "invoices.manage.update.itemtype.qty")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<int>>> GetItemsImportedAt(int companyId, [FromQuery] decimal rate)
@@ -286,7 +287,7 @@ namespace MyApp.Api.Controllers
         /// sets the item a line carries.
         /// </summary>
         [HttpGet("company/{companyId}/imported-tax-rates")]
-        [HasAnyPermission("bills.manage.create", "bills.manage.update",
+        [HasAnyPermission("bills.manage.create", "bills.manage.create.standalone", "bills.manage.update",
             "invoices.manage.update.itemtype", "invoices.manage.update.itemtype.qty")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<ImportedTaxRateDto>>> GetImportedTaxRates(

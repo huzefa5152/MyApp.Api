@@ -87,11 +87,12 @@ namespace MyApp.Api.Controllers
         };
 
         [HttpPost("identify")]
-        // Static gate: identifying a workbook is matching it against saved
-        // layouts, so reading layouts is a genuine prerequisite. The per-KIND
-        // run permission is then checked below — an OR over two keys cannot be
-        // expressed with the attribute, which ANDs.
-        [HasPermission("spreadsheetimport.profiles.view")]
+        // Static gate: anyone who may run an import, or read layouts. A role
+        // that can run an import but not read layouts used to stop here at
+        // step 2. The per-KIND run permission is still checked below, so a
+        // stock importer cannot identify a ledger workbook.
+        [HasAnyPermission("spreadsheetimport.profiles.view",
+            "spreadsheetimport.stock.run", "spreadsheetimport.ledger.run", "importcosting.sheet.run")]
         [RequestSizeLimit(ExcelUploadValidator.MaxBytes)]
         public async Task<ActionResult<ImportIdentifyResultDto>> Identify(
             [FromForm] IFormFile file,
