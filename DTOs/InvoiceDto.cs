@@ -8,6 +8,8 @@ namespace MyApp.Api.DTOs
 
     public class InvoiceDto
     {
+        [System.ComponentModel.DataAnnotations.MaxLength(100)]
+        public string? ManualChallanNumber { get; set; }
         public bool HasTaxFilingRows { get; set; }
         public bool CanCreateSalesOrder { get; set; }
         public List<BillSalesOrderLinkDto> SalesOrders { get; set; } = new();
@@ -369,6 +371,8 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class CreateStandaloneInvoiceDto
     {
+        [System.ComponentModel.DataAnnotations.MaxLength(100)]
+        public string? ManualChallanNumber { get; set; }
         public decimal FreightCharges { get; set; }
         public bool? GroupTaxInvoiceByItemType { get; set; }
         // ── Document taxes — both optional, both default to NONE ──
@@ -595,6 +599,8 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class UpdateInvoiceDto
     {
+        [System.ComponentModel.DataAnnotations.MaxLength(100)]
+        public string? ManualChallanNumber { get; set; }
         public decimal? FreightCharges { get; set; }
         public bool? GroupTaxInvoiceByItemType { get; set; }
         // ── Document taxes — both optional, both default to NONE ──

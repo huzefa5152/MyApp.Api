@@ -2293,6 +2293,10 @@ namespace MyApp.Api.Migrations
                     b.Property<bool>("IsFbrExcluded")
                         .HasColumnType("bit");
 
+                    b.Property<string>("ManualChallanNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<bool?>("NoteAffectsStock")
                         .HasColumnType("bit");
 

@@ -48,7 +48,13 @@ namespace MyApp.Api.DTOs
         public string? CompanySTRN { get; set; }
         public int InvoiceNumber { get; set; }
         public DateTime Date { get; set; }
+        public string? ManualChallanNumber { get; set; }
+        [System.Text.Json.Serialization.JsonIgnore]
         public List<int> ChallanNumbers { get; set; } = new();
+        [System.Text.Json.Serialization.JsonPropertyName("challanNumbers")]
+        public List<object> PrintableChallanNumbers => ChallanNumbers.Count > 0
+            ? ChallanNumbers.Cast<object>().ToList()
+            : string.IsNullOrWhiteSpace(ManualChallanNumber) ? new() : new() { ManualChallanNumber };
         public List<DateTime?> ChallanDates { get; set; } = new();
         public string PoNumber { get; set; } = "";
         public string Site { get; set; } = "";
@@ -153,7 +159,13 @@ namespace MyApp.Api.DTOs
 
         public int InvoiceNumber { get; set; }
         public DateTime Date { get; set; }
+        public string? ManualChallanNumber { get; set; }
+        [System.Text.Json.Serialization.JsonIgnore]
         public List<int> ChallanNumbers { get; set; } = new();
+        [System.Text.Json.Serialization.JsonPropertyName("challanNumbers")]
+        public List<object> PrintableChallanNumbers => ChallanNumbers.Count > 0
+            ? ChallanNumbers.Cast<object>().ToList()
+            : string.IsNullOrWhiteSpace(ManualChallanNumber) ? new() : new() { ManualChallanNumber };
         public string PoNumber { get; set; } = "";
         public string Site { get; set; } = "";
         public decimal Subtotal { get; set; }

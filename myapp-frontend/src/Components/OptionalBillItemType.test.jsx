@@ -33,6 +33,7 @@ it('creates a challan bill without selecting any item type', async () => {
 });
 it('creates a standalone bill with a description and no item type', async () => {
  const saved=show(StandaloneInvoiceForm);
+ fireEvent.change(await screen.findByLabelText('Delivery challan number (optional)'),{target:{value:'DC-0212'}});
  fireEvent.click(await screen.findByRole('button',{name:'— Choose a buyer —',exact:true}));
  fireEvent.mouseDown(screen.getByText('Sample Buyer (Registered)',{exact:true}));
  fireEvent.change(await screen.findByPlaceholderText('Description'),{target:{value:'Sample service'}});
@@ -42,5 +43,6 @@ it('creates a standalone bill with a description and no item type', async () => 
  fireEvent.click(screen.getByRole('button',{name:/^Create Bill/}));
  await vi.waitFor(() => expect(saved).toHaveBeenCalledOnce());
  const request=http.post.mock.calls.find(([url])=>url==='/invoices/standalone')[1];
+ expect(request.manualChallanNumber).toBe('DC-0212');
  expect(request.items[0]).toMatchObject({itemTypeId:null,description:'Sample service',quantity:2,unitPrice:100});
 });

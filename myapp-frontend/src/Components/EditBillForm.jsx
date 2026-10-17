@@ -1,3 +1,4 @@
+import ManualChallanNumberField from "./ManualChallanNumberField";
 import { withTaxUom, taxGroupKey } from "../utils/taxInvoiceGrouping";
 import FreightChargesField from "./FreightChargesField";
 import BillChallansEditor from "./BillChallansEditor";
@@ -188,6 +189,7 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
   const [billNumber, setBillNumber] = useState("");
   const [billNumberOk, setBillNumberOk] = useState(true);
   const [paymentTerms, setPaymentTerms] = useState("");
+  const [manualChallanNumber, setManualChallanNumber] = useState("");
   const [notes, setNotes] = useState("");
   const [freightCharges, setFreightCharges] = useState(0);
   const [paymentMode, setPaymentMode] = useState("");
@@ -329,6 +331,7 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
         setBillNumber(data.invoiceNumber != null ? String(data.invoiceNumber) : "");
         const pt = data.paymentTerms ?? "";
         setPaymentTerms(pt);
+        setManualChallanNumber(data.manualChallanNumber || "");
         setNotes(data.notes || "");
         setFreightCharges(data.freightCharges ?? 0);
         setPaymentMode(data.paymentMode ?? "");
@@ -1525,6 +1528,7 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
           withholdingTaxAmount: withholdingTaxAmount === null || withholdingTaxAmount === "" ? null : parseFloat(withholdingTaxAmount),
           groupTaxInvoiceByItemType: invoice.groupTaxInvoiceByItemType,
           paymentTerms: ptToSave,
+          manualChallanNumber: isChallanLinked ? undefined : manualChallanNumber.trim(),
           notes: notes.trim() || null,
           ...(billsMode ? { freightCharges: Number(freightCharges || 0) } : {}),
           documentType: documentType || null,
@@ -2490,6 +2494,7 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                   </div>
                 )}
 
+                {billsMode && !isChallanLinked && <ManualChallanNumberField value={manualChallanNumber} onChange={setManualChallanNumber} readOnly={lockNonItemType || !invoice?.isEditable} />}
                 {billsMode && <FreightChargesField value={freightCharges} onChange={setFreightCharges} disabled={lockNonItemType || !invoice?.isEditable} />}
 
                 {/* Totals */}

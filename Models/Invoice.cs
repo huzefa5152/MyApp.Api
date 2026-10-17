@@ -196,6 +196,8 @@ namespace MyApp.Api.Models
         // directly from a Sales Order — has no challan to carry the PO, so it
         // is stored here and set at bill time. Null for challan-linked bills
         // (their DTO PoNumber still derives from the challans).
+        [System.ComponentModel.DataAnnotations.MaxLength(100)]
+        public string? ManualChallanNumber { get; set; }
         public string? PoNumber { get; set; }
         public DateTime? PoDate { get; set; }
 

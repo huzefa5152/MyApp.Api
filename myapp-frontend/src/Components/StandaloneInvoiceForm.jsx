@@ -1,3 +1,4 @@
+import ManualChallanNumberField from "./ManualChallanNumberField";
 import DocumentCopyPicker from "./DocumentCopyPicker";
 import { copyLine } from "../utils/documentCopy";
 import { defaultFurtherTaxRate } from "../utils/furtherTax";
@@ -180,6 +181,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const canUseOrders = has("salesorders.list.view");
   const [billableOrders, setBillableOrders] = useState([]);
   const [salesOrderId, setSalesOrderId] = useState("");
+  const [manualChallanNumber, setManualChallanNumber] = useState("");
   const [poNumber, setPoNumber] = useState("");
   const [poDate, setPoDate] = useState("");
 
@@ -539,6 +541,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         paymentMode: paymentMode || null,
         // A standalone bill has no challan to carry the PO — store it here when
         // the operator sets one (bill mode only).
+        manualChallanNumber: billsMode ? manualChallanNumber.trim() || null : null,
         poNumber: billsMode ? (poNumber.trim() || null) : null,
         poDate: billsMode && poDate ? new Date(poDate).toISOString() : null,
         items: rows.map((r) => ({
@@ -645,6 +648,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary }}>PO Date</label>
                       <input type="date" value={poDate} onChange={(e) => setPoDate(e.target.value)} style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: "#fff", color: colors.textPrimary, outline: "none", boxSizing: "border-box" }} />
                     </div>
+                    <div style={{ flex: "1 1 220px", minWidth: 0 }}><ManualChallanNumberField value={manualChallanNumber} onChange={setManualChallanNumber} /></div>
                     {/* Copy joins the order / PO row instead of a row of its own;
                         opened, its panel takes the full width of the row. */}
                     <div className="doc-header-row__copy">

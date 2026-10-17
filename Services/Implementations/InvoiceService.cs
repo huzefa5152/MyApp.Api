@@ -423,6 +423,7 @@ namespace MyApp.Api.Services.Implementations
                     UpdatedAt = ii.Adjustment.UpdatedAt,
                 },
             }).ToList(),
+            ManualChallanNumber = inv.ManualChallanNumber,
             ChallanNumbers = inv.DeliveryChallans.Select(dc => dc.ChallanNumber).ToList(),
             // Aggregate Site / IndentNo / PoNumber from linked challans
             // — joined with "; " when distinct values exist (covers
@@ -1414,6 +1415,7 @@ namespace MyApp.Api.Services.Implementations
                         PaymentMode = effectivePaymentMode,
                         // Standalone bill has no challan to carry the PO — store it
                         // on the invoice when set at bill time (e.g. from a Sales Order).
+                        ManualChallanNumber = string.IsNullOrWhiteSpace(dto.ManualChallanNumber) ? null : dto.ManualChallanNumber.Trim(),
                         PoNumber = string.IsNullOrWhiteSpace(dto.PoNumber) ? null : dto.PoNumber.Trim(),
                         PoDate = dto.PoDate,
                         FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
@@ -1705,6 +1707,12 @@ namespace MyApp.Api.Services.Implementations
                 if (dto.GroupTaxInvoiceByItemType.HasValue)
                     invoice.GroupTaxInvoiceByItemType = dto.GroupTaxInvoiceByItemType.Value;
                 invoice.PaymentTerms = dto.PaymentTerms;
+                if (dto.ManualChallanNumber != null)
+                {
+                    if (invoice.DeliveryChallans.Count > 0 && !string.IsNullOrWhiteSpace(dto.ManualChallanNumber))
+                        throw new InvalidOperationException("Manual challan references are only available on bills without linked challans.");
+                    invoice.ManualChallanNumber = string.IsNullOrWhiteSpace(dto.ManualChallanNumber) ? null : dto.ManualChallanNumber.Trim();
+                }
                 invoice.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
                 invoice.DocumentType = dto.DocumentType ?? invoice.DocumentType;
                 invoice.PaymentMode = dto.PaymentMode;
@@ -3800,6 +3808,7 @@ namespace MyApp.Api.Services.Implementations
                 CompanySTRN = inv.Company?.STRN,
                 InvoiceNumber = inv.InvoiceNumber,
                 Date = inv.Date,
+                ManualChallanNumber = inv.ManualChallanNumber,
                 ChallanNumbers = inv.DeliveryChallans.Select(dc => dc.ChallanNumber).ToList(),
                 ChallanDates = inv.DeliveryChallans.Select(dc => dc.DeliveryDate).ToList(),
                 PoNumber = string.Join(", ", poNumbers),
@@ -3906,6 +3915,7 @@ namespace MyApp.Api.Services.Implementations
                 BuyerSTRN = inv.Client?.STRN,
                 InvoiceNumber = inv.InvoiceNumber,
                 Date = inv.Date,
+                ManualChallanNumber = inv.ManualChallanNumber,
                 ChallanNumbers = inv.DeliveryChallans.Select(dc => dc.ChallanNumber).ToList(),
                 PoNumber = string.Join(", ", poNumbers),
                 Site = string.Join(", ", inv.DeliveryChallans.OrderBy(c => c.ChallanNumber).ThenBy(c => c.Id)

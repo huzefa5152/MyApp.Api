@@ -53,7 +53,8 @@ Expressions below come from this branch's `MERGE_FIELDS`. Fields beginning with 
 | `{{companySTRN}}` | Company STRN |
 | `{{invoiceNumber}}` | Invoice/Bill Number |
 | `{{fmtDate date}}` | Invoice Date |
-| `{{join challanNumbers}}` | Challan Numbers |
+| `{{join challanNumbers}}` | Linked challan numbers, or the standalone bill manual reference |
+| `{{manualChallanNumber}}` | Manual delivery challan reference (standalone bills only) |
 | `{{joinDates challanDates}}` | Challan Dates |
 | `{{poNumber}}` | PO Number |
 | `{{fmtDate poDate}}` | PO Date |
@@ -92,7 +93,8 @@ Expressions below come from this branch's `MERGE_FIELDS`. Fields beginning with 
 | `{{buyerSTRN}}` | Buyer STRN |
 | `{{invoiceNumber}}` | Invoice Number |
 | `{{fmtDate date}}` | Invoice Date |
-| `{{join challanNumbers}}` | Challan Numbers |
+| `{{join challanNumbers}}` | Linked challan numbers, or the standalone bill manual reference |
+| `{{manualChallanNumber}}` | Manual delivery challan reference (standalone bills only) |
 | `{{poNumber}}` | PO Number |
 | `{{gstRate}}` | GST Rate % |
 | `{{fmtDec subtotal}}` | Subtotal |
