@@ -146,6 +146,16 @@ SALES, MCPA, MCPW, TADMIN = sysr["Sales Edition"], sysr["MCP Access"], sysr["MCP
 uids, tok = {}, {}
 
 
+def grant_test_access(user_id, writes):
+    status, catalog = http("GET", f"/api/mcp/catalog/{user_id}", admin)
+    assert status == 200, (status, catalog)
+    tools = [t["name"] for t in catalog["tools"] if t["configurable"] and t["eligible"] and (writes or not t["write"])]
+    status, result = http("PUT", f"/api/mcp/catalog/{user_id}", admin, {
+        "revision": catalog["revision"], "accessGranted": True, "accessEnabled": True,
+        "writesGranted": writes, "writesEnabled": writes, "grantedTools": tools, "selectedTools": tools})
+    assert status == 200, (status, result)
+
+
 def make(creator, uname, role_ids, cids, role_string="User"):
     s, u = http("POST", "/api/users", creator, {"username": uname, "password": PW, "fullName": uname, "role": role_string})
     assert s in (200, 201), f"{uname}: {s} {u}"
@@ -154,6 +164,7 @@ def make(creator, uname, role_ids, cids, role_string="User"):
     assert s == 200, f"roles {uname}: {s} {d}"
     s, d = http("PUT", f"/api/usercompanies/user/{u['id']}", creator, {"companyIds": cids})
     assert s == 200, f"companies {uname}: {s} {d}"
+    grant_test_access(u["id"], MCPW in role_ids or uname == "mcpw_c")
     tok[uname] = login(uname, PW)
 
 
@@ -161,7 +172,7 @@ make(admin, "mcpw_w", [SALES, MCPA, MCPW], [A["id"], B["id"]])          # may wr
 make(admin, "mcpw_r", [SALES, MCPA], [A["id"]])                          # MCP Access but no MCP Write
 make(admin, "mcpw_ta", [TADMIN, SALES, MCPA, MCPW], [A["id"]], "Administrator")
 s, r = http("POST", "/api/roles", tok["mcpw_ta"], {"name": "mcpw-clients-only", "description": "t",
-            "permissionKeys": ["mcp.access.use", "mcp.write.use", "clients.manage.view", "clients.manage.create", "clients.manage.update"]})
+            "permissionKeys": ["clients.manage.view", "clients.manage.create", "clients.manage.update"]})
 assert s in (200, 201), f"tenant role: {s} {r}"
 make(tok["mcpw_ta"], "mcpw_c", [r["id"]], [A["id"]])                     # may create clients, not quotations
 W, R, C = tok["mcpw_w"], tok["mcpw_r"], tok["mcpw_c"]
@@ -174,14 +185,14 @@ def make_token(owner_token, name, cids, scopes, days=30):
 # ── scopes are offered only to those entitled to them ────────────────
 print("\n== who may be granted write scopes ==")
 s, st = http("GET", "/api/mcp/me/status", W)
-check("MCP Write + permissions -> implemented write and explicit print-read scopes offered", set(st["scopesAvailable"]) == {"read", "templates.read", "documents.read", "clients.write", "quotes.write", "challans.write", "bills.write"}, st["scopesAvailable"])
+check("MCP Write + permissions -> implemented write and explicit print-read scopes offered", set(st["scopesAvailable"]) == {"read", "templates.read", "templates.write", "documents.read", "clients.write", "quotes.write", "challans.write", "bills.write"}, st["scopesAvailable"])
 s, st = http("GET", "/api/mcp/me/status", R)
 check("MCP Access without MCP Write -> permitted read scopes, no write scopes", set(st["scopesAvailable"]) == {"read", "templates.read", "documents.read"}, st["scopesAvailable"])
 s, st = http("GET", "/api/mcp/me/status", C)
 check("MCP Write but no quotation permission -> clients.write, not quotes.write", "clients.write" in st["scopesAvailable"] and "quotes.write" not in st["scopesAvailable"], st["scopesAvailable"])
 check("clients-only permissions never offer print-content or other write scopes", set(st["scopesAvailable"]) == {"read", "clients.write"}, st["scopesAvailable"])
 s, d = make_token(R, "x", [A["id"]], ["read", "quotes.write"])
-check("a user without MCP Write cannot create a write token", s == 400 and "MCP Write" in d["message"], f"{s} {d}")
+check("a user without MCP Write cannot create a write token", s == 400 and "write access is not enabled" in d["message"].lower(), f"{s} {d}")
 s, d = make_token(C, "x", [A["id"]], ["read", "quotes.write"])
 check("a token cannot carry a scope its owner's permissions do not cover", s == 400, f"{s} {d}")
 s, d = make_token(W, "x", [A["id"]], ["read", "invoices.write"])
@@ -335,11 +346,11 @@ check("nothing was created by any refused prepare", quote_total_count() == n0, (
 # ── gates re-checked at commit ───────────────────────────────────────
 print("\n== gates re-checked at commit ==")
 err, pg = tool(TW, "prepare_quote", Q)
-http("PUT", f"/api/users/{uids['mcpw_w']}/roles", admin, {"roleIds": [SALES, MCPA]})     # MCP Write withdrawn
+grant_test_access(uids["mcpw_w"], False)
 err, m = tool(TW, "commit_action", {"planId": pg["planId"]})
 check("MCP Write withdrawn after prepare -> commit refused", err, m)
 check("…and nothing was created", quote_total_count() == n0)
-http("PUT", f"/api/users/{uids['mcpw_w']}/roles", admin, {"roleIds": [SALES, MCPA, MCPW]})
+grant_test_access(uids["mcpw_w"], True)
 err, pr = tool(TW, "prepare_quote", Q)
 http("PUT", f"/api/usercompanies/user/{uids['mcpw_w']}", admin, {"companyIds": [B["id"]]})  # company A access withdrawn
 err, m = tool(TW, "commit_action", {"planId": pr["planId"]})
