@@ -269,7 +269,8 @@ namespace MyApp.Api.Data
 
         private static async Task EnsureAdministratorRoleAsync(AppDbContext db, int seedAdminUserId)
         {
-            var optionalKeys = EditionCatalog.EmailWorkspaceKeys;
+            var optionalKeys = PermissionCatalog.All.Where(EditionCatalog.IsOptionalModule)
+                .Select(p => p.Key).ToList();
             var allPermissionIds = await db.Permissions.Where(p => !optionalKeys.Contains(p.Key)).Select(p => p.Id).ToListAsync();
 
             var adminRole = await db.Roles
