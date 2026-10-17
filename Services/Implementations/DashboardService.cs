@@ -52,7 +52,7 @@ namespace MyApp.Api.Services.Implementations
         }
 
         public async Task<DashboardKpisResponse> GetKpisAsync(
-            int companyId, string periodCode, ClaimsPrincipal user)
+            int companyId, string periodCode, DateTime? from, DateTime? to, ClaimsPrincipal user)
         {
             var userId = ResolveUserId(user);
             // Pull the whole permission set once. `GetUserPermissionsAsync`
@@ -75,7 +75,7 @@ namespace MyApp.Api.Services.Implementations
                 ? await _divisionAccess.GetAccessibleDivisionIdsAsync(userId.Value, companyId)
                 : null;
 
-            var period = BuildPeriod(periodCode);
+            var period = BuildPeriod(periodCode, from, to);
             var company = await _context.Companies
                 .Where(c => c.Id == companyId)
                 .Select(c => new { c.Id, c.Name })
@@ -118,21 +118,33 @@ namespace MyApp.Api.Services.Implementations
 
         // ── Period resolution ───────────────────────────────────────────
 
-        private static DashboardPeriod BuildPeriod(string code)
+        private static DashboardPeriod BuildPeriod(string code, DateTime? customFrom = null, DateTime? customTo = null)
         {
             // Reference "now" in local time (server-side wall clock).
             // We don't try to honour the operator's timezone here — the
             // tax calendar is calendar-month based on Pakistan time and
             // the server runs there. If you ever multi-region this,
             // pull tz from Company.
-            var now = DateTime.Now;
-            var today = now.Date;
+            var today = PakistanClock.Today;
 
             DateTime? from = null, to = null, prevFrom = null, prevTo = null;
             string label = "All Time";
             var c = (code ?? "").ToLowerInvariant();
-
-            switch (c)
+            if (customFrom.HasValue && customTo.HasValue)
+            {
+                // Custom range: dates are inclusive on the wire, To is stored
+                // exclusive like every other period. The previous period is
+                // the same number of days immediately before it.
+                c = "custom";
+                from = customFrom.Value.Date;
+                to = customTo.Value.Date.AddDays(1);
+                var span = to.Value - from.Value;
+                prevFrom = from.Value - span;
+                prevTo = from;
+                label = from.Value.ToString("dd MMM yyyy") + " – " + customTo.Value.ToString("dd MMM yyyy");
+                c = "custom";
+            }
+            else switch (c)
             {
                 case "this-week":
                 {
@@ -228,6 +240,8 @@ namespace MyApp.Api.Services.Implementations
                 hero.TotalSales = totalSales;
                 hero.GstOutput = gstOutput;
                 hero.TotalSalesExcludingTax = salesExTax;
+                hero.NetSales = salesExTax;
+                hero.SalesInclTax = totalSales;
                 if (period.PreviousFrom.HasValue)
                 {
                     var (prevSales, _, _) = await SumInvoicesAsync(companyId, period.PreviousFrom, period.PreviousTo, divScope);
@@ -350,7 +364,7 @@ namespace MyApp.Api.Services.Implementations
                     : null;
 
                 // Ageing of what is still held, by last movement.
-                var ageAsOf = DateTime.Now.Date;
+                var ageAsOf = PakistanClock.Today;
                 decimal Aged(Func<int, bool> test) => Round(positions
                     .Where(p => p.ClosingDeclared > 0m)
                     .Where(p => test((ageAsOf - (p.LastMovement?.Date ?? ageAsOf)).Days))
@@ -378,7 +392,7 @@ namespace MyApp.Api.Services.Implementations
             // ── Receivables ────────────────────────────────────────────────
             // Outstanding is a POSITION too — what is owed now, not what was
             // invoiced in the period — so it is deliberately unfiltered by date.
-            var today = DateTime.Now.Date;
+            var today = PakistanClock.Today;
             var receivableQuery = _context.Invoices.AsNoTracking()
                 .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
                          && i.DocumentType != 9 && i.DocumentType != 10
@@ -484,13 +498,14 @@ namespace MyApp.Api.Services.Implementations
         /// worse than none at all.
         /// </summary>
         public async Task<DashboardBreakdownDto> GetBreakdownAsync(
-            int companyId, string kind, string periodCode, ClaimsPrincipal user)
+            int companyId, string kind, string periodCode, DateTime? from, DateTime? to,
+            string? groupKey, ClaimsPrincipal user)
         {
             var userId = ResolveUserId(user);
             var divScope = userId.HasValue
                 ? await _divisionAccess.GetAccessibleDivisionIdsAsync(userId.Value, companyId)
                 : null;
-            var period = BuildPeriod(periodCode);
+            var period = BuildPeriod(periodCode, from, to);
             var k = (kind ?? "").Trim().ToLowerInvariant();
 
             var result = new DashboardBreakdownDto { Kind = k, AmountLabel = "Amount" };
@@ -501,7 +516,7 @@ namespace MyApp.Api.Services.Implementations
                   or "unrealised-margin" or "inventory-adjustments")
             {
                 var positions = await LoadPositionsAsync(companyId, divScope, period.From, period.To);
-                var ageAsOf = DateTime.Now.Date;
+                var ageAsOf = PakistanClock.Today;
                 int DaysIdle(ItemStockPositions.Position p) =>
                     (ageAsOf - (p.LastMovement?.Date ?? ageAsOf)).Days;
 
@@ -516,7 +531,7 @@ namespace MyApp.Api.Services.Implementations
                     var lineQuery = _context.InvoiceItems.AsNoTracking()
                         .Where(ii => ii.Invoice!.CompanyId == companyId
                                   && !ii.Invoice.IsDemo && !ii.Invoice.IsCancelled
-                                  && ii.Invoice.DocumentType != 9 && ii.Invoice.DocumentType != 10);
+                                  && ii.Invoice.FbrCancelledAt == null);
                     if (divScope != null)
                         lineQuery = lineQuery.Where(ii => ii.Invoice!.DivisionId == null
                             || divScope.Contains(ii.Invoice.DivisionId!.Value));
@@ -526,7 +541,7 @@ namespace MyApp.Api.Services.Implementations
                         lineQuery = lineQuery.Where(ii => ii.Invoice!.Date < period.To.Value);
 
                     var lines = await lineQuery
-                        .Select(ii => new { ii.ItemTypeId, ii.LineTotal })
+                        .Select(ii => new { ii.ItemTypeId, LineTotal = (ii.Invoice!.DocumentType == 10 ? -1m : 1m) * ii.LineTotal })
                         .ToListAsync();
                     revenueByItem = lines.Where(l => l.ItemTypeId != null)
                         .GroupBy(l => l.ItemTypeId!.Value)
@@ -671,7 +686,7 @@ namespace MyApp.Api.Services.Implementations
             {
                 case "receivables":
                 {
-                    var today = DateTime.Now.Date;
+                    var today = PakistanClock.Today;
                     var q = _context.Invoices.AsNoTracking()
                         .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
                                  && i.DocumentType != 9 && i.DocumentType != 10
@@ -699,24 +714,22 @@ namespace MyApp.Api.Services.Implementations
 
                 case "sales":
                 {
-                    var q = _context.Invoices.AsNoTracking()
-                        .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
-                                 && i.DocumentType != 9 && i.DocumentType != 10);
+                    var q = DashboardSalesFilter.SaleDocs(
+                        _context.Invoices.AsNoTracking(), companyId, period.From, period.To);
                     if (divScope != null)
                         q = q.Where(i => i.DivisionId == null || divScope.Contains(i.DivisionId.Value));
-                    if (period.From.HasValue) q = q.Where(i => i.Date >= period.From.Value);
-                    if (period.To.HasValue) q = q.Where(i => i.Date < period.To.Value);
                     result.Title = "Sales, by invoice";
-                    result.Note = "Tax-inclusive grand total. The second figure is the same sale excluding tax.";
+                    result.Note = "Tax-inclusive grand total; credit notes are negative. The second figure is the same document excluding tax.";
                     result.Rows = await q
-                        .OrderByDescending(i => i.GrandTotal)
+                        .OrderByDescending(i => (i.DocumentType == 10 ? -1m : 1m) * i.GrandTotal)
                         .Select(i => new DashboardBreakdownRowDto
                         {
                             Id = i.Id,
                             Label = i.Client!.Name ?? "(unknown)",
-                            Sub = "#" + i.InvoiceNumber + " · " + i.Date.ToString("dd MMM yyyy"),
-                            Amount = i.GrandTotal,
-                            Secondary = i.Subtotal,
+                            Sub = "#" + i.InvoiceNumber + " · " + i.Date.ToString("dd MMM yyyy")
+                                + (i.DocumentType == 10 ? " · credit note" : i.DocumentType == 9 ? " · debit note" : ""),
+                            Amount = (i.DocumentType == 10 ? -1m : 1m) * i.GrandTotal,
+                            Secondary = (i.DocumentType == 10 ? -1m : 1m) * i.Subtotal,
                             SecondaryLabel = "Excl. tax",
                         })
                         .ToListAsync();
@@ -932,26 +945,18 @@ namespace MyApp.Api.Services.Implementations
         private async Task<(decimal TotalGross, decimal GstAmount, decimal Subtotal)> SumInvoicesAsync(
             int companyId, DateTime? from, DateTime? to, HashSet<int>? divScope)
         {
-            var q = _context.Invoices
-                .AsNoTracking()
-                // Debit/Credit Notes (DocumentType 9/10) are REVERSALS, not
-                // sales — including them would double-count a reversed sale
-                // instead of netting it. Excluded from every sales KPI.
-                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
-                         && i.DocumentType != 9 && i.DocumentType != 10);
+            // One definition of a sale (Helpers/DashboardSalesFilter); credit
+            // notes subtract, debit notes add.
+            var q = DashboardSalesFilter.SaleDocs(_context.Invoices.AsNoTracking(), companyId, from, to);
             if (divScope != null)
                 q = q.Where(i => i.DivisionId == null || divScope.Contains(i.DivisionId.Value));
-            if (from.HasValue) q = q.Where(i => i.Date >= from.Value);
-            if (to.HasValue)   q = q.Where(i => i.Date < to.Value);
             var agg = await q
                 .GroupBy(_ => 1)
                 .Select(g => new
                 {
-                    TotalGross = g.Sum(i => i.GrandTotal),
-                    GstAmount  = g.Sum(i => i.GSTAmount),
-                    // Ex-tax, so the dashboard can show the figure a stock
-                    // sheet is actually comparable to.
-                    Subtotal   = g.Sum(i => i.Subtotal),
+                    TotalGross = g.Sum(i => (i.DocumentType == 10 ? -1m : 1m) * i.GrandTotal),
+                    GstAmount  = g.Sum(i => (i.DocumentType == 10 ? -1m : 1m) * i.GSTAmount),
+                    Subtotal   = g.Sum(i => (i.DocumentType == 10 ? -1m : 1m) * i.Subtotal),
                 })
                 .FirstOrDefaultAsync();
             return (agg?.TotalGross ?? 0m, agg?.GstAmount ?? 0m, agg?.Subtotal ?? 0m);
@@ -983,26 +988,20 @@ namespace MyApp.Api.Services.Implementations
         private async Task<DashboardSalesKpis> ComputeSalesAsync(
             int companyId, DashboardPeriod period, HashSet<int>? divScope)
         {
-            var q = _context.Invoices
-                .AsNoTracking()
-                // Debit/Credit Notes (DocumentType 9/10) are REVERSALS, not
-                // sales — including them would double-count a reversed sale
-                // instead of netting it. Excluded from every sales KPI.
-                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
-                         && i.DocumentType != 9 && i.DocumentType != 10);
+            var q = DashboardSalesFilter.SaleDocs(
+                _context.Invoices.AsNoTracking(), companyId, period.From, period.To);
             // Division-RBAC scope (null = unrestricted); company-level rows
-            // (DivisionId == null) stay visible — policy D1.
+            // (DivisionId == null) stay visible - policy D1.
             if (divScope != null)
                 q = q.Where(i => i.DivisionId == null || divScope.Contains(i.DivisionId.Value));
-            if (period.From.HasValue) q = q.Where(i => i.Date >= period.From.Value);
-            if (period.To.HasValue)   q = q.Where(i => i.Date < period.To.Value);
 
             var aggregate = await q
                 .GroupBy(_ => 1)
                 .Select(g => new
                 {
-                    Total = g.Sum(i => i.GrandTotal),
-                    Count = g.Count(),
+                    Total = g.Sum(i => (i.DocumentType == 10 ? -1m : 1m) * i.GrandTotal),
+                    // Notes adjust the total but are not extra invoices.
+                    Count = g.Count(i => i.DocumentType != 9 && i.DocumentType != 10),
                 })
                 .FirstOrDefaultAsync();
 
@@ -1034,8 +1033,8 @@ namespace MyApp.Api.Services.Implementations
                     // master Name (group sync keeps them aligned). Max
                     // is just a deterministic picker.
                     Name = g.Max(x => x.Client!.Name) ?? "(unknown)",
-                    Value = g.Sum(i => i.GrandTotal),
-                    Count = g.Count(),
+                    Value = g.Sum(i => (i.DocumentType == 10 ? -1m : 1m) * i.GrandTotal),
+                    Count = g.Count(i => i.DocumentType != 9 && i.DocumentType != 10),
                 })
                 .OrderByDescending(x => x.Value)
                 // Bumped from 5 → 20 — the dashboard donut groups
@@ -1046,6 +1045,7 @@ namespace MyApp.Api.Services.Implementations
 
             // Recent 5 within the period (most recent first).
             var recent = await q
+                .Where(i => i.DocumentType != 9 && i.DocumentType != 10)
                 .OrderByDescending(i => i.Date)
                 .Take(5)
                 .Select(i => new DashboardRecentBill
@@ -1076,15 +1076,12 @@ namespace MyApp.Api.Services.Implementations
         private async Task<List<DashboardTrendPoint>> Trend12mInvoicesAsync(
             int companyId, HashSet<int>? divScope)
         {
-            var now = DateTime.Now;
+            var now = PakistanClock.Now;
             var anchor = new DateTime(now.Year, now.Month, 1);
             var earliest = anchor.AddMonths(-11);  // 12 buckets total
 
-            var q = _context.Invoices
-                .AsNoTracking()
-                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
-                         && i.DocumentType != 9 && i.DocumentType != 10
-                         && i.Date >= earliest && i.Date < anchor.AddMonths(1));
+            var q = DashboardSalesFilter.SaleDocs(
+                _context.Invoices.AsNoTracking(), companyId, earliest, anchor.AddMonths(1));
             if (divScope != null)
                 q = q.Where(i => i.DivisionId == null || divScope.Contains(i.DivisionId.Value));
 
@@ -1094,7 +1091,7 @@ namespace MyApp.Api.Services.Implementations
                 {
                     g.Key.Year,
                     g.Key.Month,
-                    Value = g.Sum(i => i.GrandTotal),
+                    Value = g.Sum(i => (i.DocumentType == 10 ? -1m : 1m) * i.GrandTotal),
                 })
                 .ToListAsync();
 
@@ -1175,7 +1172,7 @@ namespace MyApp.Api.Services.Implementations
         private async Task<List<DashboardTrendPoint>> Trend12mPurchasesAsync(
             int companyId, HashSet<int>? divScope)
         {
-            var now = DateTime.Now;
+            var now = PakistanClock.Now;
             var anchor = new DateTime(now.Year, now.Month, 1);
             var earliest = anchor.AddMonths(-11);
 
@@ -1379,7 +1376,7 @@ namespace MyApp.Api.Services.Implementations
             // useful "what's actually moving" signal. SourceType doesn't
             // matter here (purchases or sales — anything that moves
             // stock counts as movement).
-            var thirty = DateTime.Now.AddDays(-30);
+            var thirty = PakistanClock.Now.AddDays(-30);
             var topItems = await movementsQ
                 .Where(sm => sm.MovementDate >= thirty)
                 .GroupBy(sm => new { sm.ItemTypeId, sm.ItemType!.Name })

@@ -45,12 +45,16 @@ namespace MyApp.Api.Controllers
         [AuthorizeCompany]
         public async Task<IActionResult> GetKpis(
             [FromQuery] int companyId,
-            [FromQuery] string period = "this-month")
+            [FromQuery] string period = "this-month",
+            [FromQuery] string? from = null,
+            [FromQuery] string? to = null)
         {
             if (companyId <= 0)
                 return BadRequest(new { error = "companyId is required." });
+            if (!TryParseRange(from, to, out var f, out var t, out var rangeError))
+                return BadRequest(new { error = rangeError });
 
-            var response = await _dashboard.GetKpisAsync(companyId, period, User);
+            var response = await _dashboard.GetKpisAsync(companyId, period, f, t, User);
             return Ok(response);
         }
 
@@ -76,15 +80,38 @@ namespace MyApp.Api.Controllers
         public async Task<IActionResult> GetBreakdown(
             [FromQuery] int companyId,
             [FromQuery] string kind,
-            [FromQuery] string period = "this-month")
+            [FromQuery] string period = "this-month",
+            [FromQuery] string? from = null,
+            [FromQuery] string? to = null,
+            [FromQuery] string? groupKey = null)
         {
             if (companyId <= 0)
                 return BadRequest(new { error = "companyId is required." });
             if (string.IsNullOrWhiteSpace(kind))
                 return BadRequest(new { error = "kind is required." });
+            if (!TryParseRange(from, to, out var f, out var t, out var rangeError))
+                return BadRequest(new { error = rangeError });
 
-            var response = await _dashboard.GetBreakdownAsync(companyId, kind, period, User);
+            var response = await _dashboard.GetBreakdownAsync(companyId, kind, period, f, t, groupKey, User);
             return Ok(response);
+        }
+
+        /// <summary>from/to (yyyy-MM-dd, inclusive) override period; both or neither.</summary>
+        private static bool TryParseRange(string? from, string? to,
+            out DateTime? f, out DateTime? t, out string error)
+        {
+            f = t = null; error = "";
+            if (string.IsNullOrWhiteSpace(from) && string.IsNullOrWhiteSpace(to)) return true;
+            if (string.IsNullOrWhiteSpace(from) || string.IsNullOrWhiteSpace(to))
+            { error = "from and to must be given together."; return false; }
+            if (!DateTime.TryParseExact(from, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out var pf)
+                || !DateTime.TryParseExact(to, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out var pt))
+            { error = "from and to must be yyyy-MM-dd."; return false; }
+            if (pt < pf) { error = "to must not be before from."; return false; }
+            f = pf; t = pt;
+            return true;
         }
     }
 }

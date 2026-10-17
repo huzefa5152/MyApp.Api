@@ -66,6 +66,12 @@ namespace MyApp.Api.DTOs
         /// against an ex-tax stock sheet and find a gap nothing explained.</summary>
         public decimal TotalSalesExcludingTax { get; set; }
 
+        /// <summary>Net sales excluding tax: sale invoices + debit notes - credit notes (DashboardSalesFilter). Same figure as TotalSalesExcludingTax.</summary>
+        public decimal NetSales { get; set; }
+
+        /// <summary>The same documents, tax-inclusive, signed. Same figure as TotalSales.</summary>
+        public decimal SalesInclTax { get; set; }
+
         /// <summary>Cost of the goods sold in the period, declared basis,
         /// from the same walk the ledger's monthly relief entries use.</summary>
         public decimal CostOfGoodsSold { get; set; }

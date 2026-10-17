@@ -14,6 +14,8 @@ namespace MyApp.Api.Services.Interfaces
         Task<DashboardKpisResponse> GetKpisAsync(
             int companyId,
             string periodCode,
+            DateTime? from,
+            DateTime? to,
             ClaimsPrincipal user);
 
         /// <summary>
@@ -21,6 +23,7 @@ namespace MyApp.Api.Services.Interfaces
         /// Computed from the same source the card is, so the two cannot drift.
         /// </summary>
         Task<DashboardBreakdownDto> GetBreakdownAsync(
-            int companyId, string kind, string periodCode, ClaimsPrincipal user);
+            int companyId, string kind, string periodCode, DateTime? from, DateTime? to,
+            string? groupKey, ClaimsPrincipal user);
     }
 }
