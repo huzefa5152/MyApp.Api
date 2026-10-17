@@ -785,12 +785,12 @@ namespace MyApp.Api.Services.Implementations
             if (BillTaxTreatment.IsOutsideFbr(invoice.TaxTreatment))
                 return Fail("This bill is outside FBR and cannot be previewed, validated or submitted to FBR.");
 
-            if (TaxFilingProjection.NeedsInitialAdjustment(invoice))
-                return Fail("Needs adjustment: open Invoices and complete the initial tax filing review before FBR preview, validation or submission.");
+            if (!dryRun && TaxFilingProjection.NeedsInitialAdjustment(invoice))
+                return Fail("Needs adjustment: open Invoices and complete the initial tax filing review before FBR validation or submission.");
             if (TaxFilingProjection.NeedsReReview(invoice))
-                return Fail("Needs consultant re-review: open Invoices and complete review of the changed bill before FBR validation, preview or submission.");
+                return Fail("Needs consultant re-review: open Invoices and complete review of the changed bill before FBR validation or submission.");
             if (invoice.TaxFilingRowsJson != null && TaxFilingProjection.IsStale(invoice))
-                return Fail("The bill changed after its filing rows were reviewed. Review the current bill before FBR preview, validation or submission.");
+                return Fail("The bill changed after its filing rows were reviewed. Review the current bill before FBR validation or submission.");
 
             // A voided bill is a non-document — never validate, submit, or
             // even preview it against FBR.
@@ -1206,6 +1206,7 @@ namespace MyApp.Api.Services.Implementations
                     Success = true,
                     Preview = new FbrPayloadPreview
                     {
+                        ReviewRequired = TaxFilingProjection.NeedsInitialAdjustment(invoice) || TaxFilingProjection.NeedsReReview(invoice),
                         Json = json,
                         Url = url,
                         ItemCount = fbrRequest.Items.Count,

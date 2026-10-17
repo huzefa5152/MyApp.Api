@@ -25,6 +25,7 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [payload, setPayload] = useState(null);
+  const [reviewRequired, setReviewRequired] = useState(false);
   const [origLineCount, setOrigLineCount] = useState(0);
   const [itemCount, setItemCount] = useState(0);
   const [url, setUrl] = useState("");
@@ -47,6 +48,7 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
         const json = data.preview?.json;
         const parsed = json ? JSON.parse(json) : null;
         setPayload(parsed);
+        setReviewRequired(!!data.preview?.reviewRequired);
         setOrigLineCount(data.preview?.originalLineCount ?? 0);
         setItemCount(data.preview?.itemCount ?? 0);
         setUrl(data.preview?.url ?? "");
@@ -135,6 +137,7 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
                   `minWidth: 0` on the text column is the standard fix for
                   flex-child overflow — without it, long unbreakable tokens
                   (the FBR URL) push the parent past the modal width. */}
+              {reviewRequired && <p role="status" style={{ padding: 12, background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 8, color: "#9a3412", fontSize: 13 }}>Draft preview · Complete the tax filing adjustment / review before validating or submitting to FBR. Missing classification fields are shown as —.</p>}
               <div style={s.summaryBanner}>
                 <MdInfo size={18} color="#0d47a1" style={{ flexShrink: 0, marginTop: 2 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>

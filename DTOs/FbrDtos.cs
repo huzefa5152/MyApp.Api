@@ -200,6 +200,7 @@ namespace MyApp.Api.DTOs
 
     public class FbrPayloadPreview
     {
+        public bool ReviewRequired { get; set; }
         /// <summary>The exact request JSON that would be POSTed to FBR.</summary>
         public string Json { get; set; } = "";
         /// <summary>Endpoint URL we would have POSTed to (sandbox vs prod).</summary>
