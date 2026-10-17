@@ -122,6 +122,7 @@ namespace MyApp.Api.Services.Implementations
             if (canFbr)        response.Fbr        = await ComputeFbrAsync(companyId, period, divScope);
             if (canInventory)  response.Inventory  = await ComputeInventoryAsync(companyId, divScope);
 
+            response.Health = await ComputeHealthAsync(companyId, period, canSales, response.Hero, divScope);
             return response;
         }
 
@@ -674,6 +675,8 @@ namespace MyApp.Api.Services.Implementations
 
             // Every other kind has one level, so a group key is meaningless there.
             if (key != null) return (null, 400, InvalidGroup);
+            if (k.StartsWith("health-", StringComparison.Ordinal))
+                return await HealthBreakdownAsync(companyId, k, period, divScope, userId);
             return (await SingleLevelBreakdownAsync(companyId, k, kind ?? "", period, divScope), 200, null);
         }
 
@@ -1025,7 +1028,8 @@ namespace MyApp.Api.Services.Implementations
         }
 
         private static bool TryMonthKey(string s, out DateTime month) =>
-            DateTime.TryParseExact(s, "yyyy-MM", Inv, DateTimeStyles.None, out month);
+            DateTime.TryParseExact(s, "yyyy-MM", Inv, DateTimeStyles.None, out month)
+            && month.Year is >= 2000 and <= 2100;
 
         private static bool TryIdKey(string s, char prefix, out int id)
         {
@@ -1256,8 +1260,10 @@ namespace MyApp.Api.Services.Implementations
             if (divScope != null)
                 sales = sales.Where(i => i.DivisionId == null || divScope.Contains(i.DivisionId.Value));
             var saleIds = sales.Select(i => i.Id);
-            var lines = await _context.InvoiceItems.AsNoTracking()
-                .Where(ii => saleIds.Contains(ii.InvoiceId))
+            var lineQ = _context.InvoiceItems.AsNoTracking().Where(ii => saleIds.Contains(ii.InvoiceId));
+            if (key != null)
+                lineQ = itemId == 0 ? lineQ.Where(ii => ii.ItemTypeId == null) : lineQ.Where(ii => ii.ItemTypeId == itemId);
+            var lines = await lineQ
                 .Select(ii => new { ii.ItemTypeId, ii.InvoiceId, Net = (ii.Invoice!.DocumentType == 10 ? -1m : 1m) * ii.LineTotal })
                 .ToListAsync();
             var inputs = await LoadPositionInputsAsync(companyId, divScope);
@@ -1265,7 +1271,8 @@ namespace MyApp.Api.Services.Implementations
 
             if (key == null)
             {
-                var positions = await LoadPositionsAsync(companyId, divScope, period.From, period.To);
+                var positions = ItemStockPositions.Compute(inputs.Openings, inputs.MovementsByItem, inputs.Names,
+                    period.From, period.To, inputs.Costing);
                 var (_, _, netSales) = await SumInvoicesAsync(companyId, period.From, period.To, divScope);
                 var revenue = lines.Where(l => l.ItemTypeId != null)
                     .GroupBy(l => l.ItemTypeId!.Value).ToDictionary(g => g.Key, g => g.Sum(x => x.Net));
@@ -1288,7 +1295,7 @@ namespace MyApp.Api.Services.Implementations
                     var name = inputs.Names.TryGetValue(id, out var n) ? n.Name
                         : otherNames.GetValueOrDefault(id) ?? "(item " + id.ToString(Inv) + ")";
                     var row = GroupRow("i:" + id.ToString(Inv), name, rev - cost,
-                        ("revenue", Round(rev)), ("landed", cost), ("margin", Round(rev - cost)));
+                        ("revenue", Round(rev)), ("landed", Round(cost)), ("margin", Round(rev - cost)));
                     row.Sub = p?.HsCode;
                     row.Flagged = rev < cost;
                     return row;
@@ -1303,12 +1310,21 @@ namespace MyApp.Api.Services.Implementations
                     result.Rows.Add(row);
                 }
                 // Bills with no line detail (migrated history) still count in net sales.
-                var noLines = netSales - lines.Sum(l => l.Net);
+                var noLines = await sales.Where(i => !i.Items.Any())
+                    .SumAsync(i => (decimal?)((i.DocumentType == 10 ? -1m : 1m) * i.Subtotal)) ?? 0m;
                 if (Math.Abs(noLines) >= 0.005m)
                 {
                     var row = GroupRow(null, "Sales with no line detail", noLines,
                         ("revenue", Round(noLines)), ("landed", 0m), ("margin", Round(noLines)));
                     row.Sub = "Bills recorded without item lines: revenue with nothing to cost";
+                    result.Rows.Add(row);
+                }
+                var differs = netSales - lines.Sum(l => l.Net) - noLines;
+                if (Math.Abs(differs) >= 0.005m)
+                {
+                    var row = GroupRow(null, "Rounding / line totals differ from bill subtotal", differs,
+                        ("revenue", Round(differs)), ("landed", 0m), ("margin", Round(differs)));
+                    row.Sub = "Bills whose item lines do not add up to their subtotal";
                     result.Rows.Add(row);
                 }
                 // The card's own formula: net sales less the walk's landed cost.
@@ -1540,6 +1556,156 @@ namespace MyApp.Api.Services.Implementations
             var total = adv.Where(x => x.Year == month.Year && x.Month == month.Month && x.AdvanceTaxSection == section)
                 .Sum(x => x.Sign * x.AdvanceTaxAmount);
             return FillLevel2(result, Newest(list).Select(r => InvoiceRow(r, r.Sign * r.Adv)), total);
+        }
+
+        // ── Health warnings (data gaps worth a look) ─────────────────────
+
+        private static readonly string[] HealthKinds =
+            { "health-no-receipts", "health-uncosted", "health-missing-236", "health-missing-ft", "health-no-claim-month", "health-unfiled" };
+
+        /// <summary>Sale documents (common filter, division-scoped) that match one invoice-shaped warning.</summary>
+        private async Task<IQueryable<Invoice>> HealthInvoicesAsync(
+            string kind, int companyId, DashboardPeriod period, HashSet<int>? divScope)
+        {
+            var q = DashboardSalesFilter.SaleDocs(_context.Invoices.AsNoTracking(), companyId, period.From, period.To);
+            if (divScope != null)
+                q = q.Where(i => i.DivisionId == null || divScope.Contains(i.DivisionId.Value));
+            switch (kind)
+            {
+                // Sections apply to sales, so notes are left out.
+                case "health-missing-236":
+                    return q.Where(i => i.DocumentType != 9 && i.DocumentType != 10
+                        && i.Client!.RegistrationType == "Registered"
+                        && (i.AdvanceTaxSection == null || i.AdvanceTaxSection == ""));
+                case "health-missing-ft":
+                    return q.Where(i => i.DocumentType != 9 && i.DocumentType != 10
+                        && i.Client!.RegistrationType == "Unregistered" && i.FurtherTaxAmount == 0m);
+                case "health-unfiled":
+                    var fbr = await _context.Companies.Where(c => c.Id == companyId).Select(c => c.FbrEnabled).FirstOrDefaultAsync();
+                    return fbr ? q.Where(i => i.FbrStatus != "Submitted" && !i.FbrFiledManually) : q.Where(i => false);
+                case "health-no-receipts":
+                    // No receipt in the period at all: every sale of the period is listed.
+                    var recQ = _context.Payments.AsNoTracking()
+                        .Where(p => p.CompanyId == companyId && p.Direction == PaymentDirection.Receipt && !p.IsCancelled);
+                    if (period.From.HasValue) recQ = recQ.Where(p => p.Date >= period.From.Value);
+                    if (period.To.HasValue) recQ = recQ.Where(p => p.Date < period.To.Value);
+                    if (divScope != null)
+                        recQ = recQ.Where(p => p.DivisionId == null || divScope.Contains(p.DivisionId.Value));
+                    return await recQ.AnyAsync() ? q.Where(i => false) : q;
+                default:
+                    return q.Where(i => false);
+            }
+        }
+
+        private async Task<List<GdRegisterLineDto>> GdLinesWithoutClaimMonthAsync(int companyId) =>
+            await StockCostingMethod.IsGdFifoAsync(_context, companyId)
+                ? (await _worksheet.CostingLinesAsync(companyId)).Where(l => l.InputTax > 0m && l.ClaimMonth == null).ToList()
+                : new List<GdRegisterLineDto>();
+
+        private async Task<List<DashboardHealthItem>> ComputeHealthAsync(
+            int companyId, DashboardPeriod period, bool canSales, DashboardHeroKpis? hero, HashSet<int>? divScope)
+        {
+            var items = new List<DashboardHealthItem>();
+            void Add(string key, string severity, int count, decimal? amount, string message)
+            {
+                if (count > 0) items.Add(new DashboardHealthItem { Key = key, Severity = severity, Count = count, Amount = amount, Message = message });
+            }
+
+            if (hero != null && hero.UncostedItemCount > 0)
+            {
+                var unc = (await LoadPositionsAsync(companyId, divScope, period.From, period.To))
+                    .Where(p => p.SoldQuantity > 0m && p.ConsumedLanded == 0m).ToList();
+                Add("health-uncosted", "warn", unc.Count, Round(unc.Sum(p => p.ConsumedDeclared)),
+                    unc.Count + " item(s) sold with no landed cost, so their margin is overstated.");
+            }
+            if (!canSales) return items;
+
+            async Task Invoices(string kind, string severity, string message)
+            {
+                var q = await HealthInvoicesAsync(kind, companyId, period, divScope);
+                var n = await q.CountAsync();
+                if (n == 0) return;
+                var net = await q.SumAsync(i => (decimal?)((i.DocumentType == 10 ? -1m : 1m) * i.Subtotal)) ?? 0m;
+                Add(kind, severity, n, Round(net), n + " " + message);
+            }
+            await Invoices("health-no-receipts", "info", "bill(s) in this period and no receipt taken in it.");
+            await Invoices("health-missing-236", "warn", "bill(s) to registered buyers have no 236G/H section.");
+            await Invoices("health-missing-ft", "warn", "bill(s) to unregistered buyers carry no further tax.");
+            await Invoices("health-unfiled", "warn", "bill(s) not yet filed with FBR.");
+
+            // GD input tax is company-wide: withheld from a division-restricted user.
+            if (divScope == null)
+            {
+                var gd = await GdLinesWithoutClaimMonthAsync(companyId);
+                Add("health-no-claim-month", "warn", gd.Count, Round(gd.Sum(l => l.SalesTax + l.ValueAddedTax + l.OtherTax)),
+                    gd.Count + " GD line(s) have no claim month, so their input tax is not claimed.");
+            }
+            return items;
+        }
+
+        private async Task<(DashboardBreakdownDto? Dto, int Status, string? Error)> HealthBreakdownAsync(
+            int companyId, string k, DashboardPeriod period, HashSet<int>? divScope, int? userId)
+        {
+            if (!HealthKinds.Contains(k)) return (null, 400, "Unknown breakdown kind.");
+            var perms = userId.HasValue
+                ? await _permissions.GetUserPermissionsAsync(userId.Value)
+                : (IReadOnlyCollection<string>)Array.Empty<string>();
+            var allowed = perms.Contains("dashboard.kpi.sales.view")
+                || (k == "health-uncosted" && perms.Contains("dashboard.kpi.purchases.view"));
+            if (!allowed) return (null, 403, "You do not have access to these figures.");
+
+            var result = new DashboardBreakdownDto { Kind = k, AmountLabel = "Amount" };
+            if (k == "health-uncosted")
+            {
+                var unc = (await LoadPositionsAsync(companyId, divScope, period.From, period.To))
+                    .Where(p => p.SoldQuantity > 0m && p.ConsumedLanded == 0m)
+                    .OrderByDescending(p => p.ConsumedDeclared).ToList();
+                result.Title = "Items sold with no landed cost";
+                result.Note = "Declared value of what left stock for items whose goods have no landed cost on file.";
+                result.Columns = Cols(("qty", "Qty sold", "number"), ("declared", "Declared value", "money"));
+                result.Rows = unc.Select(p =>
+                {
+                    var row = GroupRow(null, p.Name, p.ConsumedDeclared, ("qty", p.SoldQuantity), ("declared", Round(p.ConsumedDeclared)));
+                    row.Sub = p.HsCode;
+                    row.Flagged = true;
+                    return row;
+                }).ToList();
+                result.Total = Round(unc.Sum(p => p.ConsumedDeclared));
+                return (result, 200, null);
+            }
+            if (k == "health-no-claim-month")
+            {
+                if (divScope != null) return (null, 403, "GD input tax is company-wide only.");
+                var gd = await GdLinesWithoutClaimMonthAsync(companyId);
+                result.Title = "GD lines with no claim month";
+                result.Note = "All time. Without a claim month the line's input tax is not claimed in any return.";
+                result.Columns = Cols(("gdNumber", "GD", "text"), ("gdDate", "GD date", "date"), ("description", "Description", "text"),
+                    ("hsCode", "HS code", "text"), ("inputTax", "Input tax", "money"));
+                result.Rows = gd.OrderByDescending(l => l.GdDate).Select(l =>
+                {
+                    var input = l.SalesTax + l.ValueAddedTax + l.OtherTax;
+                    var row = GroupRow(null, l.GdNumber + " · " + l.Description, input,
+                        ("gdNumber", l.GdNumber), ("gdDate", l.GdDate), ("description", l.Description),
+                        ("hsCode", l.HsCode), ("inputTax", Round(input)));
+                    row.Flagged = true;
+                    return row;
+                }).ToList();
+                result.Total = Round(gd.Sum(l => l.SalesTax + l.ValueAddedTax + l.OtherTax));
+                return (result, 200, null);
+            }
+
+            var list = await InvRows(await HealthInvoicesAsync(k, companyId, period, divScope)).ToListAsync();
+            result.Title = k switch
+            {
+                "health-no-receipts" => "Bills in a period with no receipts",
+                "health-missing-236" => "Bills to registered buyers with no 236G/H",
+                "health-missing-ft" => "Bills to unregistered buyers with no further tax",
+                _ => "Bills not filed with FBR",
+            };
+            result.Columns = Cols(InvoiceCols);
+            // Total is the whole set; FillLevel2 only caps the rows.
+            return (FillLevel2(result, Newest(list).Select(r => InvoiceRow(r, r.Sign * r.Subtotal)),
+                list.Sum(r => r.Sign * r.Subtotal)), 200, null);
         }
 
         private static decimal Round(decimal v) =>

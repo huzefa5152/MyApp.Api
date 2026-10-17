@@ -1,4 +1,4 @@
-﻿namespace MyApp.Api.DTOs
+namespace MyApp.Api.DTOs
 {
     // ── Dashboard KPI DTOs ─────────────────────────────────────────────
     //
@@ -333,6 +333,10 @@
         public DashboardFbrKpis? Fbr { get; set; }
         public DashboardInventoryKpis? Inventory { get; set; }
 
+        /// <summary>Data gaps worth a look (empty items are omitted). Each key is
+        /// also a breakdown kind that lists what it counts.</summary>
+        public List<DashboardHealthItem> Health { get; set; } = new();
+
         /// <summary>Twelve months ending at the period's end month (never past
         /// today). Null when the caller cannot see sales.</summary>
         public List<DashboardMonthPoint>? Monthly { get; set; }
@@ -342,6 +346,18 @@
         // dashboard with all sections hidden"). Mirrors the Hero/Sales/
         // ... nullability above but is easier for the frontend to read.
         public DashboardPermissionFlags Permissions { get; set; } = new();
+    }
+
+    public class DashboardHealthItem
+    {
+        /// <summary>health-no-receipts, health-uncosted, health-missing-236, health-missing-ft,
+        /// health-no-claim-month or health-unfiled.</summary>
+        public string Key { get; set; } = "";
+        /// <summary>"warn" or "info".</summary>
+        public string Severity { get; set; } = "warn";
+        public int Count { get; set; }
+        public decimal? Amount { get; set; }
+        public string Message { get; set; } = "";
     }
 
     public class DashboardPermissionFlags

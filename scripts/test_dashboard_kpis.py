@@ -20,7 +20,11 @@ Dashboard KPIs, end to end (2026-10-18).
        invoices sum to their row (sales, receivables, margin-landed, tax-payable,
        adv-tax-236), bad and foreign group keys, division refusal.
 
-Later dashboard tasks add suite 6 below. Companies are created here and
+    6. Health warnings: registered buyer with no 236 / unregistered buyer with no further
+       tax are flagged, their breakdowns list the bills, the flag clears once fixed, a
+       section-less role sees none, and a month key past 2100 is a 400.
+
+Later dashboard tasks add suite 7 below. Companies are created here and
 deleted at the end.
 
 Usage:
@@ -30,6 +34,7 @@ Usage:
 import argparse
 import subprocess
 import sys
+import time
 from datetime import datetime
 
 try:
@@ -96,6 +101,18 @@ def main():
     tag = datetime.now().strftime("%m%d%H%M%S")
     made = []
 
+    def login_as(username, password="test1234a"):
+        """Sign in; one retry after 60s when the login limiter answers 429.
+        Returns (ok, headers) -- headers never fall back to the admin's."""
+        for attempt in (1, 2):
+            lr = requests.post(f"{api}/auth/login", json={"username": username, "password": password}, timeout=60)
+            if lr.status_code != 429 or attempt == 2:
+                break
+            time.sleep(61)
+        if lr.ok:
+            return True, {"Authorization": f"Bearer {lr.json().get('token')}"}
+        return False, {"Authorization": "Bearer none"}
+
     def company(name, stock=False):
         r = requests.post(f"{api}/companies", headers=h, timeout=60, json={
             "name": f"{name} {tag}", "brandName": "DASHKPI", "fullAddress": "1 Test Street",
@@ -108,10 +125,10 @@ def main():
         made.append(r.json()["id"])
         return r.json()["id"]
 
-    def client(cid, name):
+    def client(cid, name, reg="Registered"):
         r = requests.post(f"{api}/clients", headers=h, timeout=60, json={
             "name": f"{name} {tag}", "address": "1 Road", "phone": "021-1", "companyId": cid,
-            "registrationType": "Registered", "ntn": "1234567", "fbrProvinceCode": 8})
+            "registrationType": reg, "ntn": "1234567", "fbrProvinceCode": 8})
         r.raise_for_status()
         return r.json()["id"]
 
@@ -265,8 +282,8 @@ def main():
                 rs = requests.put(f"{api}/userdivisions/user/{uid}/company/{rc}", headers=h, timeout=60,
                                   json={"restrictToDivisions": True, "divisionIds": [div_id]})
                 check("setup: user restricted to one division", rs.ok, f"{rs.status_code} {rs.text[:200]}")
-                lt = requests.post(f"{api}/auth/login", json={"username": f"dashkpi{tag}", "password": "test1234a"}, timeout=60)
-                uh = {"Authorization": f"Bearer {lt.json().get('token')}"} if lt.ok else {}
+                lt_ok, uh = login_as(f"dashkpi{tag}")
+                check("setup: the restricted user signs in", lt_ok)
                 rk = requests.get(f"{api}/dashboard/kpis", headers=uh, timeout=60, params={"companyId": rc, "period": "all-time"})
                 hu = (rk.json().get("hero") or {}) if rk.ok else {}
                 check("restricted user: receivablesTotal is null", rk.ok and hu.get("receivablesTotal") is None, f"{rk.status_code} {hu.get('receivablesTotal')}")
@@ -426,14 +443,14 @@ def main():
             if rv and uv:
                 requests.put(f"{api}/users/{uv}/roles", headers=h, timeout=60, json={"roleIds": [rv]})
                 requests.put(f"{api}/usercompanies/user/{uv}", headers=h, timeout=60, json={"companyIds": [tf]})
-                lv = requests.post(f"{api}/auth/login", json={"username": f"dashkpiv{tag}", "password": "test1234a"}, timeout=60)
-                vh = {"Authorization": f"Bearer {lv.json().get('token')}"} if lv.ok else {}
+                lv_ok, vh = login_as(f"dashkpiv{tag}")
+                check("setup: the view-only user signs in", lv_ok)
                 r_no = tax(tf, hdr=vh, period="this-month")
                 check("dashboard.view only: tax position is 403", r_no.status_code == 403 and "outputTax" not in r_no.text, f"{r_no.status_code} {r_no.text[:120]}")
                 requests.put(f"{api}/roles/{rv}", headers=h, timeout=60, json={
                     "name": f"DashKpi vrole {tag}", "description": "t", "permissionKeys": ["dashboard.view", "dashboard.kpi.sales.view"]})
-                lv2 = requests.post(f"{api}/auth/login", json={"username": f"dashkpiv{tag}", "password": "test1234a"}, timeout=60)
-                vh2 = {"Authorization": f"Bearer {lv2.json().get('token')}"} if lv2.ok else {}
+                lv2_ok, vh2 = login_as(f"dashkpiv{tag}")
+                check("setup: the view-only user signs in again with the sales permission", lv2_ok)
                 r_yes = tax(tf, hdr=vh2, period="this-month")
                 check("with dashboard.kpi.sales.view: 200", r_yes.status_code == 200, f"{r_yes.status_code} {r_yes.text[:120]}")
             else:
@@ -457,8 +474,8 @@ def main():
                 requests.put(f"{api}/usercompanies/user/{u3}", headers=h, timeout=60, json={"companyIds": [tf]})
                 requests.put(f"{api}/userdivisions/user/{u3}/company/{tf}", headers=h, timeout=60,
                              json={"restrictToDivisions": True, "divisionIds": [d3]})
-                lt3 = requests.post(f"{api}/auth/login", json={"username": f"dashkpit{tag}", "password": "test1234a"}, timeout=60)
-                uh3 = {"Authorization": f"Bearer {lt3.json().get('token')}"} if lt3.ok else {}
+                lt3_ok, uh3 = login_as(f"dashkpit{tag}")
+                check("setup: the division-restricted user signs in", lt3_ok)
                 rr3 = tax(tf, hdr=uh3, period="this-month")
                 check("division-restricted user: 403 with the company-wide message",
                       rr3.status_code == 403 and "company-wide only" in rr3.text, f"{rr3.status_code} {rr3.text[:200]}")
@@ -657,9 +674,8 @@ def main():
                 requests.put(f"{api}/usercompanies/user/{u5}", headers=h, timeout=60, json={"companyIds": [tf]})
                 requests.put(f"{api}/userdivisions/user/{u5}/company/{tf}", headers=h, timeout=60,
                              json={"restrictToDivisions": True, "divisionIds": [d5]})
-                lt5 = requests.post(f"{api}/auth/login", json={"username": f"dashkpib{tag}", "password": "test1234a"}, timeout=60)
-                check("setup: the restricted user signs in (429 = runs less than a minute apart)", lt5.ok, str(lt5.status_code))
-                uh5 = {"Authorization": f"Bearer {lt5.json().get('token')}"} if lt5.ok else {"Authorization": "Bearer none"}
+                lt5_ok, uh5 = login_as(f"dashkpib{tag}")
+                check("setup: the restricted user signs in", lt5_ok)
                 for kind_ in ("tax-payable", "adv-tax-236", "receivables"):
                     rr5 = brk(tf, kind_, hdr=uh5, period="this-month")
                     check(f"division-restricted user: {kind_} is 403 company-wide only",
@@ -671,6 +687,90 @@ def main():
         finally:
             if u5: requests.delete(f"{api}/users/{u5}", headers=h, timeout=60)
             if role5: requests.delete(f"{api}/roles/{role5}", headers=h, timeout=60)
+
+        print("\n-- 6. Health warnings --")
+        hc = company("_dashkpi health")
+        reg = client(hc, "DashKpi HReg", "Registered")
+        unreg = client(hc, "DashKpi HUnreg", "Unregistered")
+        hday = datetime.now().strftime("%Y-%m-%d")
+
+        def hbill(cid_, client_id, extra=None):
+            body = {"date": f"{hday}T00:00:00Z", "companyId": cid_, "clientId": client_id, "gstRate": 18,
+                    "items": [{"description": f"DASHKPI health {tag}", "quantity": 10, "uom": "Pcs",
+                               "unitPrice": 1000, "itemTypeId": item_type}]}
+            body.update(extra or {})
+            return requests.post(f"{api}/invoices/standalone", headers=h, timeout=60, json=body)
+
+        def health(cid_, hdr=None, **params):
+            rk_ = requests.get(f"{api}/dashboard/kpis", headers=hdr or h, timeout=60,
+                               params={"companyId": cid_, "period": "this-month", **params})
+            return {x["key"]: x for x in (rk_.json().get("health") or [])} if rk_.ok else None
+
+        def hbrk(cid_, kind_, hdr=None, **params):
+            return requests.get(f"{api}/dashboard/breakdown", headers=hdr or h, timeout=60,
+                                params={"companyId": cid_, "kind": kind_, "period": "this-month", **params})
+
+        rg = hbill(hc, reg)
+        ru_ = hbill(hc, unreg)
+        check("setup: a bill to a registered and one to an unregistered buyer, no 236 or further tax",
+              rg.ok and ru_.ok, f"{rg.status_code} {ru_.status_code} {rg.text[:150]}")
+        hl = health(hc)
+        check("health is returned", hl is not None)
+        m236 = (hl or {}).get("health-missing-236") or {}
+        check("registered buyer without 236: health-missing-236 count 1", m236.get("count") == 1, str(m236))
+        check("it carries a warn severity and the bill's net as amount", m236.get("severity") == "warn" and near(m236.get("amount"), 10000), str(m236))
+        mft = (hl or {}).get("health-missing-ft") or {}
+        check("unregistered buyer without further tax: health-missing-ft count 1", mft.get("count") == 1, str(mft))
+        b236 = hbrk(hc, "health-missing-236")
+        ids236 = [r_.get("invoiceId") for r_ in (b236.json().get("rows") or [])] if b236.ok else []
+        check("its breakdown lists that invoice", b236.ok and ids236 == [rg.json().get("id")], f"{b236.status_code} {ids236}")
+        check("and its total ties to the card amount", b236.ok and near(b236.json().get("total"), m236.get("amount")), str(b236.text[:150]))
+        bft = hbrk(hc, "health-missing-ft")
+        check("the further-tax breakdown lists the unregistered buyer's bill",
+              bft.ok and [r_.get("invoiceId") for r_ in bft.json().get("rows", [])] == [ru_.json().get("id")], str(bft.text[:150]))
+        check("no receipts taken: health-no-receipts counts both bills", ((hl or {}).get("health-no-receipts") or {}).get("count") == 2, str((hl or {}).get("health-no-receipts")))
+        check("FBR is off: nothing is 'unfiled'", "health-unfiled" not in (hl or {}), str(list(hl or {})))
+        check("items with a zero count are omitted (no GD lines, no uncosted stock)",
+              all(x.get("count", 0) > 0 for x in (hl or {}).values()) and "health-no-claim-month" not in (hl or {}), str(list(hl or {})))
+
+        hc2 = company("_dashkpi health fixed")
+        reg2 = client(hc2, "DashKpi HReg2", "Registered")
+        un2 = client(hc2, "DashKpi HUnreg2", "Unregistered")
+        hbill(hc2, reg2, {"advanceTaxSection": "236G", "advanceTaxFilerActive": True})
+        hbill(hc2, un2, {"furtherTaxRate": 4})
+        hl2 = health(hc2)
+        check("with 236 on the registered bill, health-missing-236 disappears", "health-missing-236" not in (hl2 or {"x": 1}), str(hl2))
+        check("with further tax on the unregistered bill, health-missing-ft disappears", "health-missing-ft" not in (hl2 or {"x": 1}), str(hl2))
+        check("a health kind with a group key is refused", hbrk(hc, "health-missing-236", groupKey="x").status_code == 400)
+        check("an unknown health kind is refused", hbrk(hc, "health-nope").status_code == 400)
+        rx = requests.get(f"{api}/dashboard/breakdown", headers=h, timeout=60,
+                          params={"companyId": hc, "kind": "sales", "period": "this-month", "groupKey": "9999-12"})
+        check("a month key past 2100 is a 400, not a 500", rx.status_code == 400, str(rx.status_code))
+        rx2 = requests.get(f"{api}/dashboard/breakdown", headers=h, timeout=60,
+                           params={"companyId": hc, "kind": "adv-tax-236", "period": "this-month", "groupKey": "9999-12:236G"})
+        check("and so is an advance-tax key past 2100", rx2.status_code in (400, 403), str(rx2.status_code))
+
+        # A role without the sales permission sees no health; a restricted one sees its own division only.
+        rl6 = requests.post(f"{api}/roles", headers=h, timeout=60, json={
+            "name": f"DashKpi hrole {tag}", "description": "t", "permissionKeys": ["dashboard.view", "dashboard.kpi.inventory.view"]})
+        role6 = rl6.json().get("id") if rl6.ok else None
+        ru6 = requests.post(f"{api}/users", headers=h, timeout=60, json={
+            "username": f"dashkpih{tag}", "fullName": "DashKpi HealthUser", "password": "test1234a", "role": "User"})
+        u6 = ru6.json().get("id") if ru6.ok else None
+        try:
+            if role6 and u6:
+                requests.put(f"{api}/users/{u6}/roles", headers=h, timeout=60, json={"roleIds": [role6]})
+                requests.put(f"{api}/usercompanies/user/{u6}", headers=h, timeout=60, json={"companyIds": [hc]})
+                ok6, hh6 = login_as(f"dashkpih{tag}")
+                check("setup: the inventory-only user signs in", ok6)
+                check("a user without the sales permission gets no sales-derived health",
+                      health(hc, hdr=hh6) == {}, str(health(hc, hdr=hh6)))
+                check("and the breakdown is 403", hbrk(hc, "health-missing-236", hdr=hh6).status_code == 403)
+            else:
+                check("setup: role and user for the health case", False, f"{rl6.status_code} {ru6.status_code}")
+        finally:
+            if u6: requests.delete(f"{api}/users/{u6}", headers=h, timeout=60)
+            if role6: requests.delete(f"{api}/roles/{role6}", headers=h, timeout=60)
     finally:
         if not a.keep:
             for cid_ in made:
