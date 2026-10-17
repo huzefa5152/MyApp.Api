@@ -63,5 +63,32 @@ check("recoverables are not drillable; gl-before-cap relabels input", () => {
   assert.match(rows.find((r) => r.key === "input").label, /before 8B cap/);
 });
 
+console.log("\n=== drill-down ===");
+const D = await import(new URL("../myapp-frontend/src/utils/dashboardDrill.js", import.meta.url).href);
+check("reconciles within tolerance", () => {
+  assert.strictEqual(D.reconciles([{ amount: 1 }, { amount: 2.04 }], 3), true);
+  assert.strictEqual(D.reconciles([{ amount: 1 }, { amount: 2.04 }], 3.1), false);
+  assert.strictEqual(D.reconciles([{ amount: 1 }], null), true);
+});
+check("exportRows neutralises formulas, header included", () => {
+  const out = D.exportRows([{ key: "k", label: "=Bad" }], [{ label: "=HYPERLINK(1)", sub: "ok", amount: -5, values: { k: "@x" } }]);
+  assert.strictEqual(out[0][3], "'=Bad");
+  assert.deepStrictEqual(out[1], ["'=HYPERLINK(1)", "ok", "'-5", "'@x"]);
+});
+check("drill URL state round-trips", () => {
+  assert.deepStrictEqual(D.drillFromSearch(new URLSearchParams("drill=sales&group=2026-09")), { kind: "sales", groupKey: "2026-09" });
+  assert.deepStrictEqual(D.drillFromSearch(new URLSearchParams("drill=cogs")), { kind: "cogs", groupKey: null });
+  assert.strictEqual(D.drillFromSearch(new URLSearchParams("x=1")), null);
+  const p = D.drillToSearch(new URLSearchParams("a=1&drill=old&group=g"), { kind: "sales", groupKey: "k" });
+  assert.strictEqual(p.toString(), "a=1&drill=sales&group=k");
+  assert.strictEqual(D.drillToSearch(p, null).toString(), "a=1");
+});
+check("invoice breakdown + bill link", () => {
+  const rows = D.invoiceBreakdown({ net: 100, gst: 18, adv236: 0.1, advSection: "236G", fbrStatus: "Submitted" }, (s) => s);
+  assert.strictEqual(rows.length, 7);
+  assert.match(rows[3].label, /236G/);
+  assert.strictEqual(D.openBillPath(1234), "/bills?search=1234");
+});
+
 console.log(`\n${pass} passed, ${failures.length} failed`);
 process.exit(failures.length ? 1 : 0);

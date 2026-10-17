@@ -17,3 +17,15 @@
 export function isFbrInFlight(inv) {
   return inv?.fbrStatus === "Submitting" || inv?.fbrStatus === "Uncertain";
 }
+
+// The words the bill table uses for each filing state (InvoiceTable's badge).
+// Anything else (null, Validated, …) is not a filing outcome, so it reads "—".
+export function fbrStatusLabel(status) {
+  switch (status) {
+    case "Submitted": return "Submitted";
+    case "Submitting": return "Submitting…";
+    case "Uncertain": return "Uncertain";
+    case "Failed": return "FBR Failed";
+    default: return "—";
+  }
+}

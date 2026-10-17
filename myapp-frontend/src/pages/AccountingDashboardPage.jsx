@@ -41,7 +41,6 @@ import { notify } from "../utils/notify";
 import { colors, dropdownStyles } from "../theme";
 import { MdChevronRight } from "react-icons/md";
 import { getAccountingSummary, getGlStatus, enableGl, rebuildGl } from "../api/accountingApi";
-import { getDashboardBreakdown } from "../api/dashboardApi";
 import KpiDrilldown from "../Components/dashboard/KpiDrilldown";
 import usePersistentFilter from "../hooks/usePersistentFilter";
 
@@ -105,26 +104,7 @@ export default function AccountingDashboardPage() {
   // KPI drill-downs. The rows come from the same computation as the card, so
   // they add up to it — see Components/dashboard/KpiDrilldown.jsx.
   const [drill, setDrill] = useState(null);
-  const [drillData, setDrillData] = useState(null);
-  const [drillLoading, setDrillLoading] = useState(false);
-  const [drillError, setDrillError] = useState("");
   const openDrill = (kind, cardValue) => setDrill({ kind, cardValue });
-
-  useEffect(() => {
-    if (!drill || !companyId) return;
-    let cancelled = false;
-    setDrillLoading(true);
-    setDrillError("");
-    setDrillData(null);
-    // All-time: these cards are POSITIONS (stock held, owed, imported), not
-    // period flows, so scoping their rows to the date filter above would make
-    // the breakdown disagree with the card it opened from.
-    getDashboardBreakdown(companyId, drill.kind, "all-time")
-      .then((d) => { if (!cancelled) setDrillData(d); })
-      .catch(() => { if (!cancelled) setDrillError("Could not load the breakdown."); })
-      .finally(() => { if (!cancelled) setDrillLoading(false); });
-    return () => { cancelled = true; };
-  }, [drill, companyId]);
   const [rebuilding, setRebuilding] = useState(false);
   // GlEnableResultDto from the last enable/rebuild — shown as a banner.
   const [glResult, setGlResult] = useState(null);
@@ -562,9 +542,10 @@ export default function AccountingDashboardPage() {
       <KpiDrilldown
         open={!!drill}
         onClose={() => setDrill(null)}
-        loading={drillLoading}
-        error={drillError}
-        data={drillData}
+        kind={drill?.kind}
+        // All-time: these cards are POSITIONS, not period flows.
+        period="all-time"
+        companyId={companyId}
         cardValue={drill?.cardValue}
       />
     </div>

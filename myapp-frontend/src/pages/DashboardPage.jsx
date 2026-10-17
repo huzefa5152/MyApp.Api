@@ -36,7 +36,7 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
-import { getDashboardKpis, getDashboardBreakdown } from "../api/dashboardApi";
+import { getDashboardKpis } from "../api/dashboardApi";
 import KpiCard from "../Components/dashboard/KpiCard";
 import KpiDrilldown from "../Components/dashboard/KpiDrilldown";
 import Sparkline from "../Components/dashboard/Sparkline";
@@ -368,22 +368,6 @@ function HeroBand({ data, companyId, period }) {
   // Drill-down state. One panel serves every card; the `kind` decides which
   // rows the server returns, and those rows add up to the card that opened it.
   const [drill, setDrill] = useState(null);       // { kind, cardValue }
-  const [drillData, setDrillData] = useState(null);
-  const [drillLoading, setDrillLoading] = useState(false);
-  const [drillError, setDrillError] = useState("");
-
-  useEffect(() => {
-    if (!drill || !companyId) return;
-    let cancelled = false;
-    setDrillLoading(true);
-    setDrillError("");
-    setDrillData(null);
-    getDashboardBreakdown(companyId, drill.kind, period)
-      .then((d) => { if (!cancelled) setDrillData(d); })
-      .catch(() => { if (!cancelled) setDrillError("Could not load the breakdown."); })
-      .finally(() => { if (!cancelled) setDrillLoading(false); });
-    return () => { cancelled = true; };
-  }, [drill, companyId, period]);
 
   const openDrill = (kind, cardValue) => () => setDrill({ kind, cardValue });
   const sales = data.sales;
@@ -443,7 +427,7 @@ function HeroBand({ data, companyId, period }) {
         <KpiCard
           label="Total Sales"
           value={hero.totalSales}
-          onDrillDown={openDrill("sales", hero.totalSales)}
+          onDrillDown={openDrill("sales", hero.totalSalesExcludingTax)}
           prevValue={hero.totalSalesPrev}
           accent={accents.sales}
           format={money}
@@ -652,9 +636,9 @@ function HeroBand({ data, companyId, period }) {
       <KpiDrilldown
         open={!!drill}
         onClose={() => setDrill(null)}
-        loading={drillLoading}
-        error={drillError}
-        data={drillData}
+        kind={drill?.kind}
+        period={period}
+        companyId={companyId}
         cardValue={drill?.cardValue}
       />
     </section>
