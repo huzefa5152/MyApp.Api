@@ -86,6 +86,7 @@ export const ROUTE_PERMISSIONS = {
   // sources whose own list permission the operator holds (see lineSources),
   // and every list endpoint it calls is permission-gated on the server.
   "/reports/document-lines": PUBLIC_TO_SIGNED_IN,
+  "/reports/invoice-sales-detail": "reports.invoicedetail.view",
   "/reports/tax-sheet": "reports.taxsheet.view",
   "/reports/outstanding": "reports.outstanding.view",
 

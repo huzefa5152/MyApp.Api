@@ -34,6 +34,7 @@ const FbrPurchaseImportPage = lazy(() => import("./pages/FbrPurchaseImportPage")
 const OnboardingImportPage = lazy(() => import("./pages/OnboardingImportPage"));
 const SalesReportPage = lazy(() => import("./pages/SalesReportPage"));
 const DocumentLinesPage = lazy(() => import("./pages/DocumentLinesPage"));
+const InvoiceSalesDetailPage = lazy(() => import("./pages/InvoiceSalesDetailPage"));
 const TaxSheetPage = lazy(() => import("./pages/TaxSheetPage"));
 const OutstandingLedgerPage = lazy(() => import("./pages/OutstandingLedgerPage"));
 const ClientsPage = lazy(() => import("./pages/ClientsPage"));
@@ -156,6 +157,7 @@ export default function App() {
             {/* Reports */}
             <Route path="/reports/sales" element={<SalesReportPage />} />
             <Route path="/reports/document-lines" element={<DocumentLinesPage />} />
+            <Route path="/reports/invoice-sales-detail" element={<InvoiceSalesDetailPage />} />
             <Route path="/reports/tax-sheet" element={<TaxSheetPage />} />
             <Route path="/reports/outstanding" element={<OutstandingLedgerPage />} />
             <Route path="/profile" element={<ProfilePage />} />

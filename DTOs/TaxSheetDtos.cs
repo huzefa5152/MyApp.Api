@@ -23,6 +23,7 @@ namespace MyApp.Api.DTOs
         public decimal Quantity { get; set; }
         /// <summary>Un-classified item-type name — shown under the "HS Code" column.</summary>
         public string ItemTypeName { get; set; } = "";
+        public string Description { get; set; } = "";
         public decimal ExcludingAmount { get; set; }
         public decimal SalesTax { get; set; }
         public decimal Total { get; set; }

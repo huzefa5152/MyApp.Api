@@ -14,7 +14,7 @@ namespace MyApp.Api.Services.Implementations
     /// Read-only reporting queries. Every method is company-scoped; the
     /// controller asserts tenant access before calling in.
     /// </summary>
-    public class ReportService : IReportService
+    public partial class ReportService : IReportService
     {
         private readonly AppDbContext _context;
         private readonly decimal _adjustmentTolerancePkr;
@@ -370,8 +370,12 @@ namespace MyApp.Api.Services.Implementations
         }
 
         // ── Tax Sheet — invoice lines still missing a valid HS code ──────
-        public async Task<TaxSheetReportDto> GetTaxSheetAsync(int companyId, int? year, int? month,
+        public Task<TaxSheetReportDto> GetTaxSheetAsync(int companyId, int? year, int? month,
             DateTime? dateFrom = null, DateTime? dateTo = null, int? clientId = null)
+            => BuildTaxSheetAsync(companyId, year, month, dateFrom, dateTo, clientId, false);
+
+        private async Task<TaxSheetReportDto> BuildTaxSheetAsync(int companyId, int? year, int? month,
+            DateTime? dateFrom, DateTime? dateTo, int? clientId, bool originalLines)
         {
             var company = await _context.Companies.AsNoTracking()
                 .FirstOrDefaultAsync(c => c.Id == companyId);
@@ -440,19 +444,27 @@ namespace MyApp.Api.Services.Implementations
                 // (physical line, dual-book overlay, or item type) OR the whole
                 // invoice's overlay is out of date.
                 var order = new List<string>();
-                var groups = new Dictionary<string, (decimal qty, decimal amount, decimal tax, string uom)>();
-                foreach (var item in inv.TaxFilingRowsJson == null || outOfDate ? inv.Items : TaxFilingProjection.Lines(inv))
+                var groups = new Dictionary<string, (decimal qty, decimal amount, decimal tax, string uom, string category, string description)>();
+                var plan = originalLines && !outOfDate ? TaxFilingProjection.Plan(inv) : null;
+                var pendingSources = plan?.Rows.Where(r => string.IsNullOrWhiteSpace(r.HSCode))
+                    .SelectMany(r => r.SourceLineIds).ToHashSet();
+                var lines = originalLines ? inv.Items
+                    : inv.TaxFilingRowsJson == null || outOfDate ? inv.Items : TaxFilingProjection.Lines(inv);
+                foreach (var item in lines)
                 {
-                    if (!outOfDate && !string.IsNullOrWhiteSpace(EffectiveHs(item)))
+                    if (pendingSources != null ? !pendingSources.Contains(item.Id)
+                        : !outOfDate && !string.IsNullOrWhiteSpace(EffectiveHs(item)))
                         continue; // classified + current — not our concern
                     var name = !string.IsNullOrWhiteSpace(item.ItemTypeName) ? item.ItemTypeName
                              : (!string.IsNullOrWhiteSpace(item.ItemType?.Name) ? item.ItemType!.Name : item.Description);
                     if (string.IsNullOrWhiteSpace(name)) name = "(unnamed)";
                     var tax = ComputeLineTax(item.SaleType, item.LineTotal, item.FixedNotifiedValueOrRetailPrice, inv.GSTRate);
-                    if (!groups.ContainsKey(name)) { groups[name] = (0m, 0m, 0m, item.UOM ?? ""); order.Add(name); }
-                    var g = groups[name];
-                    groups[name] = (g.qty + item.Quantity, g.amount + item.LineTotal, g.tax + tax,
-                        string.IsNullOrWhiteSpace(g.uom) ? (item.UOM ?? "") : g.uom);
+                    // The screen keeps category groups; Excel needs each original bill description.
+                    var key = originalLines ? item.Id.ToString() : name;
+                    if (!groups.ContainsKey(key)) { groups[key] = (0m, 0m, 0m, item.UOM ?? "", name, item.Description); order.Add(key); }
+                    var g = groups[key];
+                    groups[key] = (g.qty + item.Quantity, g.amount + item.LineTotal, g.tax + tax,
+                        string.IsNullOrWhiteSpace(g.uom) ? (item.UOM ?? "") : g.uom, g.category, g.description);
                 }
                 if (groups.Count == 0) continue; // invoice fully classified + current — skip
 
@@ -471,7 +483,8 @@ namespace MyApp.Api.Services.Implementations
                         DocumentDate = inv.Date.Date,
                         Quantity = g.qty,
                         QuantityLabel = FormatQty(g.qty, g.uom),
-                        ItemTypeName = name,
+                        ItemTypeName = g.category,
+                        Description = g.description,
                         ExcludingAmount = Round2(g.amount),
                         SalesTax = g.tax,
                         Total = Round2(g.amount) + g.tax,
@@ -490,20 +503,21 @@ namespace MyApp.Api.Services.Implementations
         public async Task<byte[]> GetTaxSheetExcelAsync(int companyId, int? year, int? month,
             DateTime? dateFrom = null, DateTime? dateTo = null, int? clientId = null)
         {
-            var report = await GetTaxSheetAsync(companyId, year, month, dateFrom, dateTo, clientId);
+            var report = await BuildTaxSheetAsync(companyId, year, month, dateFrom, dateTo, clientId, true);
 
-            const int COLS = 9;
+            const int COLS = 11;
             const string MONEY = "#,##0.00";
             var grey = XLColor.FromHtml("#EBEBEB");
             var headers = new[] { "NTN Number", "Party Name", "Inv Number", "Inv Date",
-                "Item Total QTY", "HS Code", "Excluding Amount", "Sales Tax", "Total" };
-            var moneyCols = new[] { 7, 8, 9 };
+                "Item Total QTY", "Category for Hscode", "Description", "Hscode", "Excluding Amount", "Sales Tax", "Total" };
+            var moneyCols = new[] { 9, 10, 11 };
 
             using var wb = new XLWorkbook();
             var ws = wb.Worksheets.Add("Tax Sheet");
             ws.Column(1).Width = 14; ws.Column(2).Width = 28; ws.Column(3).Width = 12;
             ws.Column(4).Width = 13; ws.Column(5).Width = 15; ws.Column(6).Width = 20;
-            ws.Column(7).Width = 16; ws.Column(8).Width = 13; ws.Column(9).Width = 15;
+            ws.Column(7).Width = 40; ws.Column(8).Width = 16; ws.Column(9).Width = 16;
+            ws.Column(10).Width = 13; ws.Column(11).Width = 15;
 
             int r = 1;
             ws.Cell(r, 1).Value = report.CompanyName;
@@ -535,26 +549,30 @@ namespace MyApp.Api.Services.Implementations
 
             foreach (var row in report.Rows)
             {
-                ws.Cell(r, 1).Value = row.Ntn;
-                ws.Cell(r, 2).Value = row.PartyName;
-                ws.Cell(r, 3).Value = row.DocumentNumber;
+                ws.Cell(r, 1).Value = SpreadsheetFormulaGuard.Neutralise(row.Ntn);
+                ws.Cell(r, 2).Value = SpreadsheetFormulaGuard.Neutralise(row.PartyName);
+                ws.Cell(r, 3).Value = SpreadsheetFormulaGuard.Neutralise(row.DocumentNumber);
                 ws.Cell(r, 4).Value = row.DocumentDate; ws.Cell(r, 4).Style.DateFormat.Format = "dd-MM-yyyy";
-                ws.Cell(r, 5).Value = row.QuantityLabel;
-                ws.Cell(r, 6).Value = row.ItemTypeName;
-                ws.Cell(r, 7).Value = row.ExcludingAmount;
-                ws.Cell(r, 8).Value = row.SalesTax;
-                ws.Cell(r, 9).Value = row.Total;
+                ws.Cell(r, 5).Value = SpreadsheetFormulaGuard.Neutralise(row.QuantityLabel);
+                ws.Cell(r, 6).Value = SpreadsheetFormulaGuard.Neutralise(row.ItemTypeName);
+                ws.Cell(r, 7).Value = SpreadsheetFormulaGuard.Neutralise(row.Description);
+                ws.Cell(r, 7).Style.Alignment.WrapText = true;
+                // Column 8 is intentionally empty for the consultant's HS code.
+                ws.Cell(r, 8).Style.NumberFormat.Format = "@";
+                ws.Cell(r, 9).Value = row.ExcludingAmount;
+                ws.Cell(r, 10).Value = row.SalesTax;
+                ws.Cell(r, 11).Value = row.Total;
                 foreach (var c in moneyCols) ws.Cell(r, c).Style.NumberFormat.Format = MONEY;
                 r++;
             }
 
             ws.Cell(r, 1).Value = "TOTAL:";
-            var totalLabel = ws.Range(r, 1, r, 6).Merge();
+            var totalLabel = ws.Range(r, 1, r, 8).Merge();
             totalLabel.Style.Font.Bold = true;
             totalLabel.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
-            ws.Cell(r, 7).Value = report.GrandExcluding;
-            ws.Cell(r, 8).Value = report.GrandTax;
-            ws.Cell(r, 9).Value = report.GrandTotal;
+            ws.Cell(r, 9).Value = report.GrandExcluding;
+            ws.Cell(r, 10).Value = report.GrandTax;
+            ws.Cell(r, 11).Value = report.GrandTotal;
             foreach (var c in moneyCols) ws.Cell(r, c).Style.NumberFormat.Format = MONEY;
             var totalRow = ws.Range(r, 1, r, COLS);
             totalRow.Style.Font.Bold = true;

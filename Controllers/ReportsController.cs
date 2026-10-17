@@ -52,6 +52,31 @@ namespace MyApp.Api.Controllers
             return Ok(report);
         }
 
+        [HttpGet("company/{companyId}/invoice-sales-detail")]
+        [HasPermission("reports.invoicedetail.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<InvoiceSalesDetailReportDto>> GetInvoiceSalesDetail(
+            int companyId, [FromQuery] InvoiceSalesDetailQueryDto query)
+        {
+            if (InvoiceSalesDetailFilter.Validate(query) is { } err)
+                return BadRequest(new { message = err });
+            return Ok(await _reports.GetInvoiceSalesDetailAsync(companyId, query));
+        }
+
+        [HttpGet("company/{companyId}/invoice-sales-detail/excel")]
+        [HasPermission("reports.invoicedetail.export")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> GetInvoiceSalesDetailExcel(
+            int companyId, [FromQuery] InvoiceSalesDetailQueryDto query)
+        {
+            if (InvoiceSalesDetailFilter.Validate(query) is { } err)
+                return BadRequest(new { message = err });
+            var bytes = await _reports.GetInvoiceSalesDetailExcelAsync(companyId, query);
+            var window = InvoiceSalesDetailFilter.ResolveWindow(query);
+            return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                InvoiceSalesDetailFilter.ExcelFileName(window.From!.Value, window.To!.Value));
+        }
+
         // Shared period validation for both the JSON and Excel endpoints.
         // Returns an error message, or null when the period is valid.
         private static string? ValidatePeriod(int? year, int? month, DateTime? dateFrom, DateTime? dateTo)

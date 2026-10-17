@@ -9,6 +9,12 @@ export const getSalesReport = (companyId, params = {}) =>
 export const getSalesReportExcel = (companyId, params = {}) =>
   http.get(`/reports/company/${companyId}/sales/excel`, { params, responseType: "blob" });
 
+// Original bill lines; identical filters for JSON and workbook output.
+export const getInvoiceSalesDetail = (companyId, params = {}, config = {}) =>
+  http.get(`/reports/company/${companyId}/invoice-sales-detail`, { ...config, params });
+export const getInvoiceSalesDetailExcel = (companyId, params = {}) =>
+  http.get(`/reports/company/${companyId}/invoice-sales-detail/excel`, { params, responseType: "blob" });
+
 // Tax Sheet — invoice lines still missing a valid HS code.
 // params: { year, month?, dateFrom?, dateTo?, clientId? }
 export const getTaxSheet = (companyId, params = {}) =>
