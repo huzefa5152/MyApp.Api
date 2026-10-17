@@ -48,6 +48,12 @@ export default function KpiCard({
   // behind it come from the same computation as the figure above, so they add
   // up to it -- see Components/dashboard/KpiDrilldown.jsx.
   onDrillDown = null,
+  // How the figure is worked out -- appended to the card's tooltip.
+  howCalculated = null,
+  // Extra small line (e.g. a basis note) under subValue.
+  secondLine = null,
+  // Small pill beside the label (e.g. "FBR", "est.").
+  badge = null,
 }) {
   // Compute % delta vs previous when both numbers are available.
   let deltaPct = null;
@@ -93,9 +99,7 @@ export default function KpiCard({
         boxShadow: "0 1px 2px rgba(12, 24, 48, 0.04), 0 10px 28px -18px rgba(12, 24, 48, 0.18)",
         cursor: onDrillDown ? "pointer" : undefined,
       }}
-      title={onDrillDown ? `${title}
-
-Click to see the breakdown.` : title}
+      title={[title, howCalculated, onDrillDown ? "Click to see the breakdown." : null].filter(Boolean).join("\n\n")}
       onClick={onDrillDown || undefined}
       onKeyDown={onDrillDown ? (e) => {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onDrillDown(); }
@@ -132,6 +136,7 @@ Click to see the breakdown.` : title}
           }}>{icon}</span>
         )}
         <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+        {badge && <span style={{ marginLeft: "auto", fontSize: "0.62rem", padding: "1px 6px", borderRadius: 999, border: `1px solid ${accent}55`, color: accent, letterSpacing: 0 }}>{badge}</span>}
       </div>
 
       <div className="dash-kpi-card__value" style={{
@@ -163,6 +168,10 @@ Click to see the breakdown.` : title}
         }}>
           {subValue}
         </div>
+      )}
+
+      {secondLine != null && secondLine !== "" && (
+        <div className="dash-kpi-card__second" style={{ marginTop: "-0.3rem", color: "#69788f", fontSize: "0.72rem", lineHeight: 1.35, overflowWrap: "anywhere" }}>{secondLine}</div>
       )}
 
       {(deltaPct != null) && (

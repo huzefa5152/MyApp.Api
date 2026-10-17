@@ -1,8 +1,8 @@
 // App.jsx
+import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import DashboardLayout from "./layouts/DashboardLayout";
 import PublicLayout from "./layouts/PublicLayout";
-import DashboardPage from "./pages/DashboardPage";
 import CompanyPage from "./pages/CompanyPage";
 import DivisionsPage from "./pages/DivisionsPage";
 import ChallansPage from "./pages/ChallanPage";
@@ -17,7 +17,6 @@ import UserGuidePage from "./pages/UserGuidePage";
 import BankCashAccountsPage from "./pages/BankCashAccountsPage";
 import JournalEntriesPage from "./pages/JournalEntriesPage";
 import TransfersPage from "./pages/TransfersPage";
-import AccountingDashboardPage from "./pages/AccountingDashboardPage";
 import AccountingReportsPage from "./pages/AccountingReportsPage";
 import DataMigrationPage from "./pages/DataMigrationPage";
 import ManagerImportPage from "./pages/ManagerImportPage";
@@ -66,6 +65,16 @@ import ProtectedRoute from "./Components/ProtectedRoute";
 import RequirePermission from "./Components/RequirePermission";
 import "./App.css";
 
+// Lazy so Recharts (used only by these two pages) stays out of the main chunk.
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const AccountingDashboardPage = lazy(() => import("./pages/AccountingDashboardPage"));
+
+const pageFallback = (
+  <div className="d-flex justify-content-center align-items-center vh-100">
+    <div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div>
+  </div>
+);
+
 export default function App() {
   return (
     <Routes>
@@ -91,7 +100,7 @@ export default function App() {
       {/* Protected app routes – auth guard + DashboardLayout */}
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
-          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/dashboard" element={<Suspense fallback={pageFallback}><DashboardPage /></Suspense>} />
           <Route path="/companies/*" element={<RequirePermission anyPrefix="companies."><CompanyPage /></RequirePermission>} />
           <Route path="/configuration/divisions" element={<RequirePermission anyPrefix="divisions."><DivisionsPage /></RequirePermission>} />
           <Route path="/Clients/*" element={<RequirePermission anyPrefix="clients."><ClientsPage /></RequirePermission>} />
@@ -147,7 +156,7 @@ export default function App() {
               the accounting dashboard + reports read the live ledger. */}
           <Route path="/transfers" element={<RequirePermission anyPrefix="accounting.transfers"><TransfersPage /></RequirePermission>} />
           <Route path="/journal-entries" element={<RequirePermission anyPrefix="accounting.journal"><JournalEntriesPage /></RequirePermission>} />
-          <Route path="/accounting/dashboard" element={<RequirePermission anyPrefix="accounting.dashboard"><AccountingDashboardPage /></RequirePermission>} />
+          <Route path="/accounting/dashboard" element={<RequirePermission anyPrefix="accounting.dashboard"><Suspense fallback={pageFallback}><AccountingDashboardPage /></Suspense></RequirePermission>} />
           {/* Accounting reports: the bare path is the categorised index, and
               /:reportId opens one report. A separate route rather than an
               optional param — react-router v7 dropped optional-param syntax. */}

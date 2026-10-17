@@ -12,6 +12,26 @@
   --color-button-bg-light: #f5f5f5;
   --radius: 12px;
   --transition: 0.3s ease;
+  /* Dashboard chart tokens (read by Components/dashboard/chartTheme.js) */
+  --dash-primary: #0d47a1;
+  --dash-secondary: #00897b;
+  --dash-positive: #15803d;
+  --dash-negative: #c62828;
+  --dash-warn: #b45309;
+  --dash-grid: #e6ecf4;
+  --dash-text: #5f6d7e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --dash-primary: #64b5f6;
+    --dash-secondary: #4db6ac;
+    --dash-positive: #66bb6a;
+    --dash-negative: #ef5350;
+    --dash-warn: #ffb74d;
+    --dash-grid: #37474f;
+    --dash-text: #b0bec5;
+  }
 }
 
 * {
