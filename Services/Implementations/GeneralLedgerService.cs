@@ -813,7 +813,6 @@ namespace MyApp.Api.Services.Implementations
             summary.PaymentsTotal = pm?.Total ?? 0m;
 
             // 12-month series ending at the month of `to`.
-            summary.LedgerEnabled = glEnabled;
             var lastMonth = new DateTime(periodTo.Year, periodTo.Month, 1);
             var firstMonth = lastMonth.AddMonths(-11);
             var seriesEnd = lastMonth.AddMonths(1);

@@ -472,11 +472,11 @@ def main():
         mo = sm.get("monthly") or []
         check("monthly has 12 points", len(mo) == 12, str(len(mo)))
         check("monthly ends at the current month", bool(mo) and mo[-1].get("month") == thismonth, str(mo[-1:] ))
-        check("ledgerEnabled true for the GL company", sm.get("ledgerEnabled") is True)
+        check("glEnabled true for the GL company", sm.get("glEnabled") is True)
         check("monthly net = income - expense", all(near(x["netProfit"], x["income"] - x["expense"]) for x in mo))
         rs2 = acct(tf)
         s2 = rs2.json() if rs2.ok else {}
-        check("GL-off company: 200 and ledgerEnabled false", rs2.ok and s2.get("ledgerEnabled") is False,
+        check("GL-off company: 200 and glEnabled false", rs2.ok and s2.get("glEnabled") is False,
               f"{rs2.status_code} {rs2.text[:120]}")
         m2 = s2.get("monthly") or []
         check("GL-off: 12 points, income/expense zero", len(m2) == 12
