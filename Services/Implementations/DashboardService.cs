@@ -1582,7 +1582,10 @@ namespace MyApp.Api.Services.Implementations
                         && i.Client!.RegistrationType == "Unregistered" && i.FurtherTaxAmount == 0m);
                 case "health-unfiled":
                     var fbr = await _context.Companies.Where(c => c.Id == companyId).Select(c => c.FbrEnabled).FirstOrDefaultAsync();
-                    return fbr ? q.Where(i => i.FbrStatus != "Submitted" && !i.FbrFiledManually) : q.Where(i => false);
+                    return fbr ? q.Where(i => !i.FbrFiledManually
+                        // FbrSubmissionStatus.IsSubmittable inlined (EF cannot translate the call):
+                        // Submitting / Uncertain may already be at FBR, so they are NOT "unfiled".
+                        && (i.FbrStatus == null || i.FbrStatus == "" || i.FbrStatus == "Failed" || i.FbrStatus == "Validated")) : q.Where(i => false);
                 case "health-no-receipts":
                     // No receipt in the period at all: every sale of the period is listed.
                     var recQ = _context.Payments.AsNoTracking()

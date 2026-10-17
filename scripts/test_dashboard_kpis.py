@@ -102,7 +102,7 @@ def main():
     made = []
 
     def login_as(username, password="test1234a"):
-        """Sign in; one retry after 60s when the login limiter answers 429.
+        """Sign in; one retry after 61s (past the limiter's 60s window) when the login limiter answers 429.
         Returns (ok, headers) -- headers never fall back to the admin's."""
         for attempt in (1, 2):
             lr = requests.post(f"{api}/auth/login", json={"username": username, "password": password}, timeout=60)
@@ -113,13 +113,13 @@ def main():
             return True, {"Authorization": f"Bearer {lr.json().get('token')}"}
         return False, {"Authorization": "Bearer none"}
 
-    def company(name, stock=False):
+    def company(name, stock=False, fbr=False):
         r = requests.post(f"{api}/companies", headers=h, timeout=60, json={
             "name": f"{name} {tag}", "brandName": "DASHKPI", "fullAddress": "1 Test Street",
             "phone": "021-0000000", "ntn": "1234567-8", "startingChallanNumber": 1, "startingInvoiceNumber": 1,
             "startingPurchaseBillNumber": 1, "startingGoodsReceiptNumber": 1,
             "startingSalesQuoteNumber": 1, "startingSalesOrderNumber": 1,
-            "fbrEnabled": False, "inventoryTrackingEnabled": stock, "enableGl": False,
+            "fbrEnabled": fbr, "inventoryTrackingEnabled": stock, "enableGl": False,
             **({"inventoryFlowVersion": 2} if stock else {})})
         r.raise_for_status()
         made.append(r.json()["id"])
@@ -749,6 +749,26 @@ def main():
         rx2 = requests.get(f"{api}/dashboard/breakdown", headers=h, timeout=60,
                            params={"companyId": hc, "kind": "adv-tax-236", "period": "this-month", "groupKey": "9999-12:236G"})
         check("and so is an advance-tax key past 2100", rx2.status_code in (400, 403), str(rx2.status_code))
+
+        # health-unfiled: FBR on, a bill that has not left; an Uncertain one may be at FBR already.
+        hf = company("_dashkpi health fbr", fbr=True)
+        fcl = client(hf, "DashKpi HFbr", "Registered")
+        fb = hbill(hf, fcl)
+        check("setup: a bill in an FBR-enabled company", fb.ok, f"{fb.status_code} {fb.text[:150]}")
+        fb_id = fb.json().get("id") if fb.ok else None
+        uf = (health(hf) or {}).get("health-unfiled") or {}
+        check("FBR on, bill not filed: health-unfiled count 1", uf.get("count") == 1, str(uf))
+        bu = hbrk(hf, "health-unfiled")
+        check("its breakdown lists that bill and ties to the card",
+              bu.ok and [r_.get("invoiceId") for r_ in bu.json().get("rows", [])] == [fb_id]
+              and near(bu.json().get("total"), uf.get("amount")), str(bu.text[:150]))
+        if a.db and fb_id:
+            sql(a.db, f"UPDATE Invoices SET FbrStatus='Uncertain' WHERE Id={fb_id}")
+            check("an Uncertain bill is not reported as unfiled", "health-unfiled" not in (health(hf) or {"x": 1}), str(health(hf)))
+            sql(a.db, f"UPDATE Invoices SET FbrStatus='Submitting' WHERE Id={fb_id}")
+            check("nor is a Submitting one", "health-unfiled" not in (health(hf) or {"x": 1}), str(health(hf)))
+        else:
+            skip("Uncertain / Submitting bills are not 'unfiled'", "needs --db")
 
         # A role without the sales permission sees no health; a restricted one sees its own division only.
         rl6 = requests.post(f"{api}/roles", headers=h, timeout=60, json={
