@@ -3975,6 +3975,7 @@ namespace MyApp.Api.Services.Implementations
                             ii.SroScheduleNo, ii.SroItemSerialNo,
                             HSCode = ii.Adjustment?.AdjustedHSCode ?? ii.HSCode,
                             SaleType = ii.Adjustment?.AdjustedSaleType ?? ii.SaleType,
+                            UOM = TaxInvoiceGrouping.Uom(ii, string.IsNullOrWhiteSpace(inv.FbrIRN) && inv.FbrSubmittedAt == null),
                             ii.RateId,
                             Singleton = !(ii.Adjustment?.AdjustedItemTypeId ?? ii.ItemTypeId).HasValue || string.IsNullOrWhiteSpace(ii.Adjustment?.AdjustedItemTypeName ?? ii.ItemTypeName) ? ii.Id : 0
                         })
@@ -3989,7 +3990,7 @@ namespace MyApp.Api.Services.Implementations
                                 ItemTypeName = g.Key.ItemTypeName,
                                 Quantity = totalQty,
                                 UnitPrice = totalQty != 0 ? Math.Round(totalValue / totalQty, 2) : 0m,
-                                UOM = TaxInvoiceGrouping.Uom(g.First(), string.IsNullOrWhiteSpace(inv.FbrIRN) && inv.FbrSubmittedAt == null),
+                                UOM = g.Key.UOM,
                                 Description = g.Key.ItemTypeName,
                                 ValueExclTax = totalValue,
                                 GSTRate = inv.GSTRate,
@@ -4006,15 +4007,15 @@ namespace MyApp.Api.Services.Implementations
                         }).ToList()
                     : inv.Items.Select(ii =>
                         {
-                            var lineTotal = ii.LineTotal;
-                            var qty       = ii.Quantity;
+                            var lineTotal = EffectivePrintLineTotal(ii);
+                            var qty       = ii.Adjustment?.AdjustedQuantity ?? ii.Quantity;
                             var gstAmt = Math.Round(lineTotal * inv.GSTRate / 100, 2);
                             return AddPrintChoices(new PrintTaxItemDto
                             {
                                 ItemTypeName = ii.Adjustment?.AdjustedItemTypeName ?? ii.ItemTypeName,
                                 Quantity = qty,
                                 UnitPrice = qty != 0 ? Math.Round(lineTotal / qty, 2) : 0m,
-                                UOM = ii.UOM,
+                                UOM = TaxInvoiceGrouping.Uom(ii, string.IsNullOrWhiteSpace(inv.FbrIRN) && inv.FbrSubmittedAt == null),
                                 Description = ii.Description,
                                 ValueExclTax = lineTotal,
                                 GSTRate = inv.GSTRate,
