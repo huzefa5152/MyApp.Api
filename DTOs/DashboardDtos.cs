@@ -356,6 +356,8 @@ namespace MyApp.Api.DTOs
         public decimal SalesTaxPayable { get; set; }
         public decimal Adv236G { get; set; }
         public decimal Adv236H { get; set; }
+        /// <summary>Net accrued in the period's months: credits less debits on the
+        /// WithholdingPayable accounts (a payment of it reduces the figure).</summary>
         public decimal WhtPayable { get; set; }
         public decimal TotalPayable { get; set; }
         public decimal RecoverableImportAdvanceTax { get; set; }

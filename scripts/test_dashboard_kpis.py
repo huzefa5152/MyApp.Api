@@ -347,6 +347,90 @@ def main():
         km2 = kpis(tf, **{"from": "2026-03-01", "to": "2026-03-31"}).json().get("monthly") or []
         check("the series ends at the period's end month", len(km2) == 12 and km2[-1].get("month") == "2026-03", str([m_.get("month") for m_ in km2][-2:]))
 
+        km_h = km.get("hero") or {}
+        check("monthly landed cost = the hero's landed cost of sales (this month)",
+              near(mo[-1].get("landedCost"), km_h.get("landedCostOfSales")), f"{mo[-1].get('landedCost')} vs {km_h.get('landedCostOfSales')}")
+
+        # A GL-enabled weighted-average company: WHT, input-tax fallback, recoverables.
+        gw = company("_dashkpi gl")
+        requests.put(f"{api}/stock/company/{gw}/costing-method", headers=h, timeout=60, json={"method": "WeightedAverage"})
+        en = requests.post(f"{api}/accounting/gl/company/{gw}/enable", headers=h, timeout=180)
+        check("setup: the GL is switched on", en.ok, f"{en.status_code} {en.text[:200]}")
+        cg = client(gw, "DashKpi G")
+        sg = requests.post(f"{api}/suppliers", headers=h, timeout=60, json={
+            "name": f"DashKpi Sup {tag}", "companyId": gw, "ntn": "7654321", "registrationType": "Registered", "fbrProvinceCode": 8})
+        sup = sg.json().get("id") if sg.ok else None
+        sale = tbill(gw, cg, {"withholdingTaxRate": 5.5})
+        sale_j = sale.json() if sale.ok else {}
+        sale_wht = float(sale_j.get("withholdingTaxAmount") or 0)
+        pb = requests.post(f"{api}/purchasebills", headers=h, timeout=60, json={
+            "date": f"{day}T00:00:00Z", "companyId": gw, "supplierId": sup, "gstRate": 18, "withholdingTaxRate": 10,
+            "items": [{"itemTypeId": item_type, "description": f"DASHKPI pb {tag}", "quantity": 500, "uom": "Pcs", "unitPrice": 100}]})
+        pb_j = pb.json() if pb.ok else {}
+        pb_wht = float(pb_j.get("withholdingTaxAmount") or 0)
+        pb_gst = float(pb_j.get("gstAmount") or 0)
+        check("setup: a sale with WHT and a purchase bill with WHT + GST on the GL company",
+              sale.ok and pb.ok and sale_wht > 0 and pb_wht > 0 and pb_gst > 0,
+              f"{sale.status_code} {pb.status_code} {sale_wht} {pb_wht} {pb_gst} {pb.text[:150]}")
+        tg = tax(gw, period="this-month").json()
+        check("GL company: ledgerEnabled is true", tg.get("ledgerEnabled") is True, str(tg.get("ledgerEnabled")))
+        check("whtPayable = the purchase bill's WHT (a sale's WHT is not payable)", near(tg.get("whtPayable"), pb_wht), f"{tg.get('whtPayable')} vs {pb_wht}")
+        check("recoverableWhtDeducted = the sale's WHT (receivable)", near(tg.get("recoverableWhtDeducted"), sale_wht), f"{tg.get('recoverableWhtDeducted')} vs {sale_wht}")
+        check("the GL input fallback = the purchase bill's GST", tg.get("inputBasis") == "gl-before-cap" and near(tg.get("inputTaxClaimed"), pb_gst),
+              f"{tg.get('inputBasis')} {tg.get('inputTaxClaimed')} vs {pb_gst}")
+        check("salesTaxPayable = max(0, output + further - input)",
+              near(tg.get("salesTaxPayable"), max(0.0, float(tg.get("outputTax") or 0) + float(tg.get("furtherTax") or 0) - pb_gst)), str(tg))
+        check("total payable still = sales tax + 236G + 236H + WHT",
+              near(tg.get("totalPayable"), float(tg.get("salesTaxPayable")) + float(tg.get("adv236G")) + float(tg.get("adv236H")) + float(tg.get("whtPayable"))), str(tg))
+
+        tree = requests.get(f"{api}/accounts/company/{gw}/tree", headers=h, timeout=60).json()
+        coa = {}
+
+        def walk(n):
+            if isinstance(n, dict):
+                if "controlType" in n and "balance" in n:
+                    coa[n["controlType"]] = coa.get(n["controlType"], 0) + n["balance"]
+                for v in n.values():
+                    walk(v)
+            elif isinstance(n, list):
+                for v in n:
+                    walk(v)
+        walk(tree)
+        check("recoverable WHT = the CoA balance of WithholdingReceivable", near(tg.get("recoverableWhtDeducted"), coa.get("WithholdingReceivable", 0)),
+              f"{tg.get('recoverableWhtDeducted')} vs {coa.get('WithholdingReceivable')}")
+        check("recoverable import advance tax = the CoA balance of AdvanceIncomeTaxOnImports",
+              near(tg.get("recoverableImportAdvanceTax"), coa.get("AdvanceIncomeTaxOnImports", 0)),
+              f"{tg.get('recoverableImportAdvanceTax')} vs {coa.get('AdvanceIncomeTaxOnImports')}")
+        check("whtPayable = minus the CoA balance of WithholdingPayable", near(tg.get("whtPayable"), -coa.get("WithholdingPayable", 0)),
+              f"{tg.get('whtPayable')} vs {coa.get('WithholdingPayable')}")
+
+        # dashboard.view alone is not enough; the sales KPI permission is.
+        role_v = requests.post(f"{api}/roles", headers=h, timeout=60, json={
+            "name": f"DashKpi vrole {tag}", "description": "t", "permissionKeys": ["dashboard.view"]})
+        rv = role_v.json().get("id") if role_v.ok else None
+        ru_v = requests.post(f"{api}/users", headers=h, timeout=60, json={
+            "username": f"dashkpiv{tag}", "fullName": "DashKpi ViewOnly", "password": "test1234a", "role": "User"})
+        uv = ru_v.json().get("id") if ru_v.ok else None
+        try:
+            if rv and uv:
+                requests.put(f"{api}/users/{uv}/roles", headers=h, timeout=60, json={"roleIds": [rv]})
+                requests.put(f"{api}/usercompanies/user/{uv}", headers=h, timeout=60, json={"companyIds": [tf]})
+                lv = requests.post(f"{api}/auth/login", json={"username": f"dashkpiv{tag}", "password": "test1234a"}, timeout=60)
+                vh = {"Authorization": f"Bearer {lv.json().get('token')}"} if lv.ok else {}
+                r_no = tax(tf, hdr=vh, period="this-month")
+                check("dashboard.view only: tax position is 403", r_no.status_code == 403 and "outputTax" not in r_no.text, f"{r_no.status_code} {r_no.text[:120]}")
+                requests.put(f"{api}/roles/{rv}", headers=h, timeout=60, json={
+                    "name": f"DashKpi vrole {tag}", "description": "t", "permissionKeys": ["dashboard.view", "dashboard.kpi.sales.view"]})
+                lv2 = requests.post(f"{api}/auth/login", json={"username": f"dashkpiv{tag}", "password": "test1234a"}, timeout=60)
+                vh2 = {"Authorization": f"Bearer {lv2.json().get('token')}"} if lv2.ok else {}
+                r_yes = tax(tf, hdr=vh2, period="this-month")
+                check("with dashboard.kpi.sales.view: 200", r_yes.status_code == 200, f"{r_yes.status_code} {r_yes.text[:120]}")
+            else:
+                check("setup: view-only role and user", False, f"{role_v.status_code} {ru_v.status_code}")
+        finally:
+            if uv: requests.delete(f"{api}/users/{uv}", headers=h, timeout=60)
+            if rv: requests.delete(f"{api}/roles/{rv}", headers=h, timeout=60)
+
         # A division-restricted user is refused the company-wide tax position.
         rd3 = requests.post(f"{api}/divisions/company/{tf}", headers=h, timeout=60, json={"name": f"DashKpi TDiv {tag}"})
         d3 = rd3.json().get("id") if rd3.ok else None

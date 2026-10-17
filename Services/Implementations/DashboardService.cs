@@ -174,14 +174,20 @@ namespace MyApp.Api.Services.Implementations
 
         // ── Tax position (Payable to FBR) ───────────────────────────────
 
-        public async Task<DashboardTaxPositionDto?> GetTaxPositionAsync(
+        public async Task<(DashboardTaxPositionDto? Dto, string? Refusal)> GetTaxPositionAsync(
             int companyId, string periodCode, DateTime? from, DateTime? to, ClaimsPrincipal user)
         {
+            // Same gate as the Sales section of the Overview: output tax, further
+            // tax and 236G/H are sales figures, so dashboard.view alone is not enough.
+            var userId = ResolveUserId(user) ?? 0;
+            var perms = await _permissions.GetUserPermissionsAsync(userId);
+            if (!perms.Contains("dashboard.kpi.sales.view"))
+                return (null, "You do not have access to the tax position.");
+
             // Company-wide only, like the Import Tax Desk: a partial return
             // would read as the whole one.
-            var userId = ResolveUserId(user) ?? 0;
             if (await _divisionAccess.GetAccessibleDivisionIdsAsync(userId, companyId) != null)
-                return null;
+                return (null, "The tax position is company-wide only.");
 
             // The worksheet is by claim MONTH, so the whole panel is read over
             // whole months and says which (FromMonth / ToMonth).
@@ -200,7 +206,9 @@ namespace MyApp.Api.Services.Implementations
                 ToMonth = last.ToString("yyyy-MM", CultureInfo.InvariantCulture),
             };
 
-            // Sales-side figures: the common sale filter, notes signed.
+            // Sales-side figures: the common sale filter, notes signed. (Credit
+            // notes are DocumentType 10 here; the worksheet tests NoteKind == 2
+            // for the same documents.)
             var docs = await DashboardSalesFilter.SaleDocs(_context.Invoices.AsNoTracking(), companyId, first, end)
                 .Select(i => new
                 {
@@ -220,6 +228,8 @@ namespace MyApp.Api.Services.Implementations
             var glLines = new List<(DateTime Month, ControlType Role, decimal Net)>();
             if (dto.LedgerEnabled)
             {
+                // Journal entries have no void / posted state, so (like
+                // GeneralLedgerService.GetAccountBalancesAsync) every line counts.
                 var roles = new[] { ControlType.InputTax, ControlType.WithholdingPayable };
                 glLines = (await _context.JournalLines.AsNoTracking()
                     .Where(jl => jl.JournalEntry.CompanyId == companyId && jl.Account.CompanyId == companyId
@@ -283,7 +293,7 @@ namespace MyApp.Api.Services.Implementations
                     InputTax = Round(inputByMonth.GetValueOrDefault(m)),
                 });
             }
-            return dto;
+            return (dto, null);
         }
 
         // ── Period resolution ───────────────────────────────────────────

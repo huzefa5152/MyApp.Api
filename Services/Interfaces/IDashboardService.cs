@@ -28,9 +28,10 @@ namespace MyApp.Api.Services.Interfaces
 
         /// <summary>
         /// The Payable to FBR panel, over whole months covering the period.
-        /// Null when the caller is division-restricted (company-wide only).
+        /// Refusal is set (and Dto null) when the caller lacks
+        /// dashboard.kpi.sales.view or is division-restricted.
         /// </summary>
-        Task<DashboardTaxPositionDto?> GetTaxPositionAsync(
+        Task<(DashboardTaxPositionDto? Dto, string? Refusal)> GetTaxPositionAsync(
             int companyId, string periodCode, DateTime? from, DateTime? to, ClaimsPrincipal user);
     }
 }

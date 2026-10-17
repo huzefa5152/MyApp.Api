@@ -113,10 +113,8 @@ namespace MyApp.Api.Controllers
             if (!TryParseRange(from, to, out var f, out var t, out var rangeError))
                 return BadRequest(new { error = rangeError });
 
-            var dto = await _dashboard.GetTaxPositionAsync(companyId, period, f, t, User);
-            return dto == null
-                ? StatusCode(403, new { message = "The tax position is company-wide only." })
-                : Ok(dto);
+            var (dto, refusal) = await _dashboard.GetTaxPositionAsync(companyId, period, f, t, User);
+            return dto == null ? StatusCode(403, new { message = refusal }) : Ok(dto);
         }
 
         /// <summary>from/to (yyyy-MM-dd, inclusive) override period; both or neither.</summary>
