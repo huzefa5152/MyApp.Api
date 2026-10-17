@@ -24,6 +24,9 @@
 .tf-select { display: flex; align-items: center; gap: 10px; min-height: 44px; flex-wrap: wrap; }
 .tf-select input { width: 22px; height: 22px; margin: 0; }
 .tf-select span { color: #4e6074; font-size: 14px; }
+.tf-source-preview { margin: 0 0 14px; overflow-wrap: anywhere; }
+.tf-source-preview span { display: block; margin-top: 4px; font-size: 14px; color: #4e6074; }
+.tf-grouping-help { color: #174579; line-height: 1.6; }
 .tf-fields { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.4fr); gap: 16px; }
 .tf-fields label { display: block; font-size: .85rem; font-weight: 600; color: #5f6d7e; margin-bottom: 6px; }
 .tf-fields > * { min-width: 0; }

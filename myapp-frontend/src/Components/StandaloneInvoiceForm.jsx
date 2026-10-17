@@ -120,13 +120,8 @@ const blankRow = () => ({
 });
 
 export default function StandaloneInvoiceForm({ companyId, company, onClose, onSaved, billsMode = false }) {
-  // billsMode: true when this form is mounted from the Bills tab. Hides
-  // every FBR-classification control: Item Type column + picker, "+ New
-  // Item Type" button, bulk-apply, FBR scenario picker, HS Code column.
-  // Description becomes a LookupAutocomplete (challan-style) bound to
-  // /lookup/items, so operators can pick from previously-entered values
-  // or type free-text. Item-Type classification happens on the Invoices
-  // tab — the bill saves with itemTypeId=null in Bills mode.
+  // Commercial bills may leave product families unclassified for the consultant.
+  // Selected item types suggest filing groups without changing commercial lines.
   const { has } = usePermissions();
   const canCreateClient   = has("clients.manage.create");
   const canCreateItemType = has("itemtypes.manage.create");
@@ -489,9 +484,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 
   const rowErrors = (r) => {
     const errs = [];
-    // Item Type is required on every bill (both tabs) so the invoice can
-    // always group its lines by Item Type — the same shape sent to FBR.
-    if (!r.itemTypeId) errs.push("itemType");
+    if (!billsMode && !r.itemTypeId) errs.push("itemType");
     // Bills mode still carries a free-text description column alongside it.
     if (billsMode && !r.description?.trim()) errs.push("description");
     const q = parseFloat(r.quantity);
@@ -617,8 +610,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
           <h5 style={formStyles.title}>Create Bill (No Challan)</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
-        <form onSubmit={handleSubmit}>
-          <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0, overflow: "hidden" }}>
+          <div data-admin-body="" style={{ ...formStyles.body, overflowY: "auto" }}>
             {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
             {loading ? (
@@ -997,7 +990,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                           and wants to start over. Only shown once there
                           are 2+ rows since both actions have no value at
                           row count = 1. Shown in both tabs now that Item
-                          Type is required on every bill. */}
+                          Type is optional on a commercial bill. */}
                       {rows.length > 1 && (
                         <div style={styles.bulkApplyBar}>
                           <span style={{ fontSize: "0.82rem", color: colors.textPrimary, fontWeight: 500 }}>
@@ -1048,12 +1041,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       items={filteredItemTypes}
                                       value={r.itemTypeId}
                                       onChange={(id, picked) => handleItemTypePick(r.localId, picked || null)}
-                                      placeholder="Pick item… *"
-                                      style={{ ...styles.input, padding: "0.45rem 0.55rem", fontSize: "0.85rem", ...(r.itemTypeId ? {} : { borderColor: colors.warn }) }}
+                                      placeholder={billsMode ? "Item type (optional)…" : "Pick item… *"}
+                                      style={{ ...styles.input, padding: "0.45rem 0.55rem", fontSize: "0.85rem" }}
                                     />
-                                    {!r.itemTypeId && (
-                                      <div style={{ marginTop: 2, fontSize: "0.62rem", color: colors.warn, fontWeight: 700 }}>Required</div>
-                                    )}
+
                                   </div>
                                   <CopyLineButton onClick={() => setRows(prev => [...prev,{...r,localId:crypto.randomUUID()}])} />
                                   <button
@@ -1150,8 +1141,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                         <table style={styles.unifiedTable}>
                           <thead>
                             <tr style={styles.unifiedThead}>
-                              {/* Item Type required on every bill (both tabs). */}
-                              <th style={{ ...styles.unifiedTh, width: showMRP || showSRO ? "22%" : "26%" }}>Item Type *</th>
+                              {/* Item Type is optional for commercial bills. */}
+                              <th style={{ ...styles.unifiedTh, width: showMRP || showSRO ? "22%" : "26%" }}>Item Type {billsMode ? "(optional)" : "*"}</th>
                               <th style={{ ...styles.unifiedTh, width: showMRP || showSRO ? "16%" : "20%" }}>Description{billsMode ? " *" : ""}</th>
                               <th style={{ ...styles.unifiedTh, width: "7%" }}>Qty *</th>
                               <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
@@ -1181,12 +1172,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       items={filteredItemTypes}
                                       value={r.itemTypeId}
                                       onChange={(id, picked) => handleItemTypePick(r.localId, picked || null)}
-                                      placeholder="Pick item… *"
-                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", ...(r.itemTypeId ? {} : { borderColor: colors.warn }) }}
+                                      placeholder={billsMode ? "Item type (optional)…" : "Pick item… *"}
+                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
                                     />
-                                    {!r.itemTypeId && (
-                                      <div style={{ marginTop: 2, fontSize: "0.62rem", color: colors.warn, fontWeight: 700 }}>Required</div>
-                                    )}
+
                                   </td>
                                   {/* Description: in Invoices mode it stays locked to the
                                       picked item type's name (text display). In Bills mode
@@ -1380,6 +1369,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
               furtherTaxRate={furtherTaxRate} onFurtherTaxRateChange={setFurtherTaxRate}
               withholdingTaxRate={withholdingTaxRate} withholdingTaxAmount={withholdingTaxAmount}
               onWithholdingChange={({ rate, amount }) => { setWithholdingTaxRate(rate); setWithholdingTaxAmount(amount); }} />
+            <p style={{ color: colors.textSecondary, fontSize: "0.85rem", lineHeight: 1.5 }}>Item Type is optional on bills. Selected types suggest filing groups; unclassified lines stay separate. The tax consultant can combine or separate them in Adjust invoice.</p>
             <TaxInvoiceGrouping value={groupTaxInvoiceByItemType} onChange={setGroupTaxInvoiceByItemType} />
             <DocumentNotesEditor value={notes} onChange={setNotes} />
             <div style={{ marginTop: "1rem" }}>

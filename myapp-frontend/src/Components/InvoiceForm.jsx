@@ -86,14 +86,8 @@ const SCENARIO_META = {
 };
 
 export default function InvoiceForm({ companyId, company, onClose, onSaved, prefillChallanId, prefillSalesOrderId, billsMode = false }) {
-  // billsMode: true when this form is mounted from the Bills tab. Hides
-  // every FBR-classification control — Item Type column + picker, "+ New
-  // Item Type" button, bulk-apply toolbar, HS Code column, Sale Type
-  // column, FBR scenario picker. The challan items still flow through and
-  // their auto-detected FBR fields (HSCode/UOM/SaleType inherited from
-  // the catalog) are sent to the API; they're just not editable here.
-  // Item-Type classification happens on the Invoices tab. Description
-  // stays the existing challan-style SmartItemAutocomplete.
+  // Commercial bills may leave product families unclassified for the consultant.
+  // Selected item types suggest filing groups without changing commercial lines.
   const { has } = usePermissions();
   const canCreateClient   = has("clients.manage.create");
   const canCreateItemType = has("itemtypes.manage.create");
@@ -552,10 +546,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const grandTotal = subtotal + gstAmount + furtherTaxAmount;
   const commercialTotal = grandTotal + (billsMode ? Number(freightCharges || 0) : 0);
 
+  const allItemTypesValid = billsMode || allItems.every(i => !!itemTypeIds[i.id]);
   const allPricesValid = allItems.length > 0 && allItems.every((i) => itemPrices[i.id] && parseFloat(itemPrices[i.id]) > 0);
-  // Item Type is required on every line so the invoice can always group by
-  // it (5 hardware + 5 chemical lines → 2 grouped rows on the invoice).
-  const allItemTypesValid = allItems.length > 0 && allItems.every((i) => !!itemTypeIds[i.id]);
 
   // Drives the "Apply same Item Type to all" picker's displayed value so it
   // RETAINS the applied selection (was hardcoded "" → snapped back to the
@@ -624,11 +616,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     const missingPrices = allItems.filter((i) => !itemPrices[i.id] || parseFloat(itemPrices[i.id]) <= 0);
     if (missingPrices.length > 0) return setError("Enter unit price for all items.");
 
-    const missingItemTypes = allItems.filter((i) => !itemTypeIds[i.id]);
-    if (missingItemTypes.length > 0) return setError(
-      `Select an Item Type for every item — ${missingItemTypes.length} still missing. ` +
-      `Use "Apply same Item Type to all" to classify in bulk.`
-    );
+    if (!allItemTypesValid) return setError("Select an Item Type for each invoice line.");
 
     setSaving(true);
     try {
@@ -789,8 +777,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           <h5 style={formStyles.title}>Create Bill</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
-        <form onSubmit={handleSubmit}>
-          <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "70vh", overflowY: "auto" }}>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0, overflow: "hidden" }}>
+          <div data-admin-body="" style={{ ...formStyles.body, overflowY: "auto" }}>
             {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
             {loading ? (
@@ -1184,7 +1172,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             same catalog row across all lines. Saves 20+
                             picks when every item on the bill is the same
                             FBR category. Shown in both modes now that Item
-                            Type is required on every bill. */}
+                            Type is optional on a commercial bill. */}
                         {allItems.length > 1 && (
                           <div style={{
                             display: "flex", alignItems: "center", gap: "0.65rem",
@@ -1258,12 +1246,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                             setItemSaleTypes((p) => ({ ...p, [item.id]: "" }));
                                           }
                                         }}
-                                        placeholder="Pick item… *"
-                                        style={{ padding: "0.4rem 0.55rem", fontSize: "0.82rem", ...(itemTypeIds[item.id] ? {} : { borderColor: colors.warn }) }}
+                                        placeholder={billsMode ? "Item type (optional)…" : "Pick item… *"}
+                                        style={{ padding: "0.4rem 0.55rem", fontSize: "0.82rem" }}
                                       />
-                                      {!itemTypeIds[item.id] && (
-                                        <div style={{ marginTop: 2, fontSize: "0.62rem", color: colors.warn, fontWeight: 700 }}>Required</div>
-                                      )}
                                     </div>
                                   </div>
                                   <div style={{ marginBottom: "0.4rem" }}>
@@ -1362,10 +1347,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             <thead>
                               <tr style={styles.unifiedThead}>
                                 <th style={{ ...styles.unifiedTh, width: "4%" }}>DC#</th>
-                                {/* Item Type is required on every bill so the
+                                {/* Optional Item Type helps the
                                     invoice can group by it — shown in both
                                     Bills and Invoices modes. */}
-                                <th style={{ ...styles.unifiedTh, width: "14%" }}>Item Type (FBR) *</th>
+                                <th style={{ ...styles.unifiedTh, width: "14%" }}>Item Type {billsMode ? "(optional)" : "*"}</th>
                                 <th style={{ ...styles.unifiedTh, width: "16%" }}>Description</th>
                                 <th style={{ ...styles.unifiedTh, width: "9%" }}>Qty</th>
                                 <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
@@ -1423,12 +1408,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                             setItemSaleTypes((p) => ({ ...p, [item.id]: "" }));
                                           }
                                         }}
-                                        placeholder="Pick item… *"
-                                        style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem", ...(itemTypeIds[item.id] ? {} : { borderColor: colors.warn }) }}
+                                        placeholder={billsMode ? "Item type (optional)…" : "Pick item… *"}
+                                        style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
                                       />
-                                      {!itemTypeIds[item.id] && (
-                                        <div style={{ marginTop: 2, fontSize: "0.62rem", color: colors.warn, fontWeight: 700 }}>Required</div>
-                                      )}
                                     </td>
                                     <td style={styles.unifiedTd}>
                                       {/* Description stays the challan line's own product
@@ -1625,6 +1607,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             setWithholdingTaxAmount(amount);
                           }}
                         />
+            <p style={{ color: colors.textSecondary, fontSize: "0.85rem", lineHeight: 1.5 }}>Item Type is optional on bills. Selected types suggest filing groups; unclassified lines stay separate. The tax consultant can combine or separate them in Adjust invoice.</p>
             <TaxInvoiceGrouping value={groupTaxInvoiceByItemType} onChange={setGroupTaxInvoiceByItemType} />
             <DocumentNotesEditor value={notes} onChange={setNotes} />
             <div style={{ marginTop: "1rem" }}>
@@ -1635,11 +1618,6 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
             {allItems.length > 0 && !allPricesValid && (
               <span style={{ fontSize: "0.8rem", color: colors.danger, marginRight: "auto" }}>
                 All items must have a unit price greater than 0.
-              </span>
-            )}
-            {allItems.length > 0 && allPricesValid && !allItemTypesValid && (
-              <span style={{ fontSize: "0.8rem", color: colors.warn, marginRight: "auto" }}>
-                Select an Item Type for every item (required for FBR grouping).
               </span>
             )}
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
