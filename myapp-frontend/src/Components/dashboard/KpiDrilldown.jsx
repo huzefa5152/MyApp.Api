@@ -73,6 +73,7 @@ export default function KpiDrilldown({
   const [expanded, setExpanded] = useState(null);
   const [exportError, setExportError] = useState("");
   const panelRef = useRef(null);
+  const closeRef = useRef(null);
   const [isNarrow, setIsNarrow] = useState(
     typeof window !== "undefined" ? window.innerWidth < NARROW : false);
 
@@ -95,7 +96,7 @@ export default function KpiDrilldown({
   useEffect(() => {
     if (!open) return;
     const opener = document.activeElement;
-    panelRef.current?.querySelector("button")?.focus();
+    closeRef.current?.focus();
     return () => { if (opener && opener.focus) opener.focus(); };
   }, [open]);
   const trapTab = (e) => {
@@ -231,7 +232,7 @@ export default function KpiDrilldown({
                 onClick={() => { setExportError(""); downloadXlsx(data, `${kind}${groupKey ? "-" + groupKey : ""}.xlsx`).catch(() => setExportError("Could not create the Excel file.")); }}
                 style={iconBtn}><MdFileDownload size={20} /></button>
             )}
-            <button type="button" onClick={closeAndClear} aria-label="Close" style={iconBtn}><MdClose size={20} /></button>
+            <button type="button" ref={closeRef} onClick={closeAndClear} aria-label="Close" style={iconBtn}><MdClose size={20} /></button>
           </div>
         </div>
 
@@ -252,7 +253,7 @@ export default function KpiDrilldown({
                   type="button" className="kpi-drill-row" disabled={!canClick} onClick={() => rowClick(r, key)}
                   aria-expanded={canClick && level2 ? isOpen : undefined}
                   style={{
-                    all: "unset", boxSizing: "border-box", width: "100%", minHeight: 44, cursor: canClick ? "pointer" : "default",
+                    background: "none", border: "none", margin: 0, font: "inherit", color: "inherit", textAlign: "left", boxShadow: "none", boxSizing: "border-box", width: "100%", minHeight: 44, cursor: canClick ? "pointer" : "default",
                     display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", padding: "0.5rem 0.25rem",
                   }}
                 >
