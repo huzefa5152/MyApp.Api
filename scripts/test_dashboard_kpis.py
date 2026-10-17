@@ -232,6 +232,38 @@ def main():
               "grossProfit" not in hr and "net" not in hr, str(sorted(hr))[:200])
         check("landed margin fields are present", all(f in hr for f in ("landedCostOfSales", "grossMarginLanded", "uncostedItemCount")), str(sorted(hr))[:200])
 
+        # A division-restricted user must not see the company-wide balance.
+        rd = requests.post(f"{api}/divisions/company/{rc}", headers=h, timeout=60, json={"name": f"DashKpi Div {tag}"})
+        div_id = rd.json().get("id") if rd.ok else None
+        rl = requests.post(f"{api}/roles", headers=h, timeout=60, json={
+            "name": f"DashKpi role {tag}", "description": "t",
+            "permissionKeys": ["dashboard.view", "dashboard.kpi.sales.view"]})
+        role_id = rl.json().get("id") if rl.ok else None
+        ru = requests.post(f"{api}/users", headers=h, timeout=60, json={
+            "username": f"dashkpi{tag}", "fullName": "DashKpi Restricted", "password": "test1234a", "role": "User"})
+        uid = ru.json().get("id") if ru.ok else None
+        check("setup: division, role and user are created", bool(div_id and role_id and uid), f"{rd.status_code} {rl.status_code} {ru.status_code}")
+        try:
+            if div_id and role_id and uid:
+                requests.put(f"{api}/users/{uid}/roles", headers=h, timeout=60, json={"roleIds": [role_id]})
+                requests.put(f"{api}/usercompanies/user/{uid}", headers=h, timeout=60, json={"companyIds": [rc]})
+                rs = requests.put(f"{api}/userdivisions/user/{uid}/company/{rc}", headers=h, timeout=60,
+                                  json={"restrictToDivisions": True, "divisionIds": [div_id]})
+                check("setup: user restricted to one division", rs.ok, f"{rs.status_code} {rs.text[:200]}")
+                lt = requests.post(f"{api}/auth/login", json={"username": f"dashkpi{tag}", "password": "test1234a"}, timeout=60)
+                uh = {"Authorization": f"Bearer {lt.json().get('token')}"} if lt.ok else {}
+                rk = requests.get(f"{api}/dashboard/kpis", headers=uh, timeout=60, params={"companyId": rc, "period": "all-time"})
+                hu = (rk.json().get("hero") or {}) if rk.ok else {}
+                check("restricted user: receivablesTotal is null", rk.ok and hu.get("receivablesTotal") is None, f"{rk.status_code} {hu.get('receivablesTotal')}")
+                check("restricted user: receivablesScopeRestricted is true", hu.get("receivablesScopeRestricted") is True, str(hu.get("receivablesScopeRestricted")))
+                ha = hero(rc, period="all-time")
+                check("admin still gets the number and the flag is false",
+                      near(ha.get("receivablesTotal"), 186000) and ha.get("receivablesScopeRestricted") is False,
+                      f"{ha.get('receivablesTotal')} {ha.get('receivablesScopeRestricted')}")
+        finally:
+            if uid: requests.delete(f"{api}/users/{uid}", headers=h, timeout=60)
+            if role_id: requests.delete(f"{api}/roles/{role_id}", headers=h, timeout=60)
+
         # Suites 3..6 are added by the later dashboard tasks.
     finally:
         if not a.keep:

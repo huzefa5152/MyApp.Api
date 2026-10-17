@@ -411,7 +411,7 @@ function HeroBand({ data, companyId, period }) {
 
   const showStock = showSales && hero.hasStock;
   const showCogs = showSales && hero.hasStock;
-  const showReceivables = showSales && (hero.receivablesTotal || 0) !== 0;
+  const showReceivables = showSales && (hero.receivablesScopeRestricted || (hero.receivablesTotal || 0) !== 0);
   const showPayables = showSales && (hero.payablesTotal || 0) !== 0;
   const showRecoverable = showSales && (hero.recoverableTaxTotal || 0) !== 0;
 
@@ -521,14 +521,16 @@ function HeroBand({ data, companyId, period }) {
       {showReceivables && (
         <KpiCard
           label="Receivables"
-          value={hero.receivablesTotal}
-          onDrillDown={openDrill("receivables", hero.receivablesTotal)}
+          value={hero.receivablesScopeRestricted ? null : hero.receivablesTotal}
+          onDrillDown={hero.receivablesScopeRestricted ? undefined : openDrill("receivables", hero.receivablesTotal)}
           accent={accents.receivables}
-          format={money}
+          format={hero.receivablesScopeRestricted ? () => "—" : money}
           icon={<MdRequestQuote size={16} />}
           higherIsBetter={false}
           subValue={
-            (hero.receivablesOverdue || 0) > 0
+            hero.receivablesScopeRestricted
+              ? "Company-wide figure — not available for division-restricted access"
+              : (hero.receivablesOverdue || 0) > 0
               ? `overdue  Rs. ${exact(hero.receivablesOverdue)}`
               : "none overdue"
           }

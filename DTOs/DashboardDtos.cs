@@ -84,9 +84,13 @@ namespace MyApp.Api.DTOs
 
         /// <summary>The customer balance: GetAgedReceivablesAsync().Total, equal to
         /// the accounting summary's receivables total. Net of receipts on account.</summary>
-        public decimal ReceivablesTotal { get; set; }
+        public decimal? ReceivablesTotal { get; set; }
         /// <summary>The non-current slice of <see cref="ReceivablesTotal"/>.</summary>
-        public decimal ReceivablesOverdue { get; set; }
+        public decimal? ReceivablesOverdue { get; set; }
+        /// <summary>True for a division-restricted user: the customer balance is a
+        /// company-wide ledger figure with no division scope, so it is withheld
+        /// (null) rather than widened.</summary>
+        public bool ReceivablesScopeRestricted { get; set; }
         /// <summary>236G/H advance tax billed in the period on top of the invoices
         /// (not part of <see cref="ReceivablesTotal"/>).</summary>
         public decimal ReceivablesAdvanceTaxBilled { get; set; }

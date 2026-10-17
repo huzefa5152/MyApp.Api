@@ -356,9 +356,18 @@ namespace MyApp.Api.Services.Implementations
             // so the two screens cannot disagree (subledger: works with the GL
             // off). A position, so deliberately not date-filtered. Receipts
             // taken on account reduce it; 236G/H is billed on top, shown apart.
-            var aged = await _gl.GetAgedReceivablesAsync(companyId);
-            hero.ReceivablesTotal = aged.Total;
-            hero.ReceivablesOverdue = aged.Total - aged.Current;
+            // Aging has no division scope, so a division-restricted user gets
+            // no figure rather than the company-wide balance.
+            if (divScope != null)
+            {
+                hero.ReceivablesScopeRestricted = true;
+            }
+            else
+            {
+                var aged = await _gl.GetAgedReceivablesAsync(companyId);
+                hero.ReceivablesTotal = aged.Total;
+                hero.ReceivablesOverdue = aged.Total - aged.Current;
+            }
 
             var advQ = DashboardSalesFilter.SaleDocs(_context.Invoices.AsNoTracking(), companyId, period.From, period.To);
             if (divScope != null)
