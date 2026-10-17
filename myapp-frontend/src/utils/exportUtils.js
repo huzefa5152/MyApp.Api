@@ -159,7 +159,7 @@ export function safeCut(bands, from, proposed) {
   let cut = proposed;
   // Nested boxes mean lifting the cut above one band can drop it inside an
   // outer one, so keep sweeping until a pass changes nothing.
-  for (let pass = 0; pass < 8; pass++) {
+  for (let pass = 0; pass <= bands.length; pass++) {
     let moved = false;
     for (const b of bands) {
       if (b.start < cut && b.end > cut) {
@@ -170,6 +170,35 @@ export function safeCut(bands, from, proposed) {
     if (!moved) break;
   }
   return cut > from ? cut : proposed;
+}
+
+// Copy only the column headings, never the table footer or signature. Coordinates
+// refer to the original raster, so the repeated headings retain column widths,
+// fonts and colours without a second layout/render of the document.
+function tableHeaderBands(root, pxRatio, pageHeightPx) {
+  const origin = root.getBoundingClientRect();
+  return Array.from(root.querySelectorAll("table")).flatMap((table) => {
+    const head = table.tHead;
+    const rows = Array.from(table.tBodies).flatMap((body) => Array.from(body.rows));
+    if (!head || !rows.length) return [];
+    const rect = head.getBoundingClientRect();
+    if (rect.height <= 0) return [];
+    const height = Math.ceil(rect.height * pxRatio);
+    if (height >= pageHeightPx || rows.some((row) => row.getBoundingClientRect().height * pxRatio > pageHeightPx - height)) {
+      throw new Error("A table heading or item row is taller than a PDF page. Shorten the row or adjust the template before exporting.");
+    }
+    return [{
+      start: Math.floor((rect.top - origin.top) * pxRatio),
+      end: (rect.bottom - origin.top) * pxRatio,
+      left: Math.max(0, Math.floor((rect.left - origin.left) * pxRatio)),
+      width: Math.ceil(rect.width * pxRatio),
+      height,
+      rows: rows.map((row) => {
+        const bounds = row.getBoundingClientRect();
+        return { start: (bounds.top - origin.top) * pxRatio, end: (bounds.bottom - origin.top) * pxRatio };
+      }),
+    }];
+  });
 }
 
 /**
@@ -224,7 +253,9 @@ function paginateOntoPdf(pdf, canvas, content) {
   const layout = {
     mode: "", pages: 1, scale: 1, cuts: [],
     heightPx: canvas.height, heightMm: imgH, oneFitScale,
-    pxRatio: content.offsetHeight > 0 ? canvas.height / content.offsetHeight : 1,
+    // Width is fixed and unrounded. offsetHeight rounds fractional CSS pixels,
+    // which otherwise accumulates a cut-position error on very long documents.
+    pxRatio: canvas.width / content.getBoundingClientRect().width,
   };
 
   {
@@ -251,24 +282,44 @@ function paginateOntoPdf(pdf, canvas, content) {
       // row, an image, a line of text or the FBR box.
       const usableMm = PAGE_H_MM - MULTIPAGE_MARGIN_MM * 2;
       const maxSlicePx = (canvas.width * usableMm) / PAGE_W_MM;
-      const pxRatio = content.offsetHeight > 0 ? canvas.height / content.offsetHeight : 1;
+      const pxRatio = layout.pxRatio;
+      const headers = tableHeaderBands(content, pxRatio, maxSlicePx);
       const bands = collectAtomicBands(content, pxRatio, maxSlicePx * MAX_ATOMIC_SHARE);
+      // Long wrapped rows can exceed half a page and still fit intact. Keep
+      // these whole too, rather than letting the generic container cap split them.
+      content.querySelectorAll("tr,img").forEach((element) => {
+        const rect = element.getBoundingClientRect();
+        if (rect.height * pxRatio <= maxSlicePx) {
+          const top = content.getBoundingClientRect().top;
+          bands.push({ start: (rect.top - top) * pxRatio, end: (rect.bottom - top) * pxRatio });
+        }
+      });
+      layout.pageSlices = [];
 
       let y = 0;
       let pageNum = 0;
       while (y < canvas.height) {
         if (pageNum > 0) pdf.addPage();
-        const proposed = Math.min(y + maxSlicePx, canvas.height);
+        const header = headers.find((head) => head.end <= y + 1 && head.rows.some((row) => row.end > y + 1));
+        const headerHeight = header?.height || 0;
+        const proposed = Math.min(y + maxSlicePx - headerHeight, canvas.height);
         const end = proposed >= canvas.height ? canvas.height : safeCut(bands, y, proposed);
+        if (end <= y || bands.some((band) => band.start < end - 1 && band.end > end + 1)) {
+          throw new Error("PDF content cannot fit intact on a page. Shorten the content or adjust the template before exporting.");
+        }
         const sliceH = end - y;
 
         const page = document.createElement("canvas");
         page.width = canvas.width;
-        page.height = Math.ceil(sliceH);
+        page.height = Math.ceil(sliceH + headerHeight);
         const ctx = page.getContext("2d");
         ctx.fillStyle = "#fff";
         ctx.fillRect(0, 0, page.width, page.height);
-        ctx.drawImage(canvas, 0, -y);
+        if (header) {
+          ctx.drawImage(canvas, header.left, header.start, header.width, header.height,
+            header.left, 0, header.width, header.height);
+        }
+        ctx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, headerHeight, canvas.width, sliceH);
 
         pdf.addImage(
           page.toDataURL("image/jpeg", 0.98), "JPEG",
@@ -277,6 +328,9 @@ function paginateOntoPdf(pdf, canvas, content) {
         y = end;
         pageNum++;
         layout.cuts.push(end);
+        layout.pageSlices.push({ start: y - sliceH, end, repeatedHeader: header ? {
+          start: header.start, left: header.left, width: header.width, height: header.height,
+        } : null });
       }
       layout.mode = "multipage";
       layout.pages = pageNum;
