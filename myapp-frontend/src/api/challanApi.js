@@ -58,3 +58,6 @@ export const getChallanPrintData = (challanId) =>
 
 export const getDeliveryChallansCount = (companyId) =>
   httpClient.get("/deliverychallans/count", { params: companyId ? { companyId } : {} });
+
+export const getBilledChallanEdit = (id) => httpClient.get(`/deliverychallans/${id}/bill-edit`);
+export const updateBilledChallanEdit = (id, payload) => httpClient.put(`/deliverychallans/${id}/bill-edit`, payload);

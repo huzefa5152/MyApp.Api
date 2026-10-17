@@ -19,6 +19,7 @@
         public int? SupplierId { get; set; }
         public string? SupplierName { get; set; }
         public decimal? SellingUnitPrice { get; set; }
+        public decimal? BillUnitPrice { get; set; }
         public decimal? UnitProfit { get; set; }
         public decimal? TotalProfit { get; set; }
     }

@@ -1,12 +1,13 @@
 import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { renderRichTextHtml } from "../utils/richText";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { MdDescription, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdUploadFile } from "react-icons/md";
 import ChallanList from "../Components/ChallanList";
 import ChallanTable from "../Components/ChallanTable";
 import ChallanForm from "../Components/ChallanForm";
 import ChallanEditForm from "../Components/ChallanEditForm";
+import BilledChallanEditForm from "../Components/BilledChallanEditForm";
 import ChallanCostEditForm from "../Components/ChallanCostEditForm";
 import POImportForm from "../Components/POImportForm";
 import InvoiceForm from "../Components/InvoiceForm";
@@ -55,6 +56,8 @@ const colors = {
 };
 
 export default function ChallanPage() {
+  const navigate = useNavigate();
+  const [deliveryEdit, setDeliveryEdit] = useState(null);
   const confirm = useConfirm();
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
   const tplPicker = usePrintTemplates("Challan");
@@ -550,6 +553,7 @@ export default function ChallanPage() {
               onDelete={handleDelete}
               onPrint={handlePrint}
               onEditItems={handleEditItems}
+              onEditDelivery={setDeliveryEdit}
               onExportPdf={handleExportPdf}
               onExportExcel={hasExcelTpl ? handleExportExcel : null}
               onGenerateBill={(c) => setGenerateBillChallanId(c.id)}
@@ -569,6 +573,7 @@ export default function ChallanPage() {
               onDelete={handleDelete}
               onPrint={handlePrint}
               onEditItems={handleEditItems}
+              onEditDelivery={setDeliveryEdit}
               onExportPdf={handleExportPdf}
               onExportExcel={hasExcelTpl ? handleExportExcel : null}
               onGenerateBill={(c) => setGenerateBillChallanId(c.id)}
@@ -612,6 +617,9 @@ export default function ChallanPage() {
         />
       )}
 
+      {deliveryEdit && <BilledChallanEditForm challan={deliveryEdit} onClose={() => setDeliveryEdit(null)}
+        onSaved={() => { setDeliveryEdit(null); fetchChallans(selectedCompany.id, page); }}
+        onOpenBill={has("bills.list.view") ? bill => { setDeliveryEdit(null); navigate(`/bills?search=${bill.invoiceNumber}`); } : undefined} />}
       {editChallan && (
         <ChallanEditor
           challan={editChallan}

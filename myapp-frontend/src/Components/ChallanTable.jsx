@@ -1,3 +1,4 @@
+import { canEditBilledDelivery } from "../utils/billedChallanEdit";
 import { isBillableChallan } from "../utils/challanBilling";
 import CardActions from "./CardActions";
 import { useState } from "react";
@@ -30,6 +31,7 @@ export default function ChallanTable({
   onDelete,
   onPrint,
   onEditItems,
+  onEditDelivery,
   onExportPdf,
   onExportExcel,
   onGenerateBill,
@@ -178,6 +180,9 @@ export default function ChallanTable({
             <MdEdit size={14} />
           </button>
         )}
+        {onEditDelivery && canEditBilledDelivery(c, has) && <button
+          data-label="Edit delivery & update bill" data-primary style={{ ...btnStyles.edit, minHeight: 44 }}
+          title="Edit delivery & update bill" onClick={() => onEditDelivery(c)}><MdEdit size={14} /></button>}
         {flags.canDuplicate && onDuplicate && (
           <button data-label="Duplicate"
             style={{

@@ -4,6 +4,7 @@ namespace MyApp.Api.DTOs;
 
 public class BillChallanOptionDto
 {
+    public bool HasAutoPurchaseBills { get; set; }
     public int Id { get; set; }
     public int ChallanNumber { get; set; }
     public string PoNumber { get; set; } = "";

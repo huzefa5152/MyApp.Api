@@ -60,9 +60,12 @@ public partial class InvoiceService
         }
         var available = await query.Include(c => c.SalesOrder).Include(c => c.Items).OrderByDescending(c => c.DeliveryDate)
             .ThenByDescending(c => c.Id).Take(101).ToListAsync();
+        var deliveryIds = linked.Select(c => c.Id).Concat(available.Select(c => c.Id)).ToList();
+        var purchasedIds = await _context.PurchaseBills.Where(p => p.SourceDeliveryChallanId != null && deliveryIds.Contains(p.SourceDeliveryChallanId.Value))
+            .Select(p => p.SourceDeliveryChallanId!.Value).Distinct().ToListAsync();
         BillChallanOptionDto Map(DeliveryChallan c) => new()
         {
-            Id = c.Id, ChallanNumber = c.ChallanNumber, PoNumber = c.PoNumber,
+            Id = c.Id, ChallanNumber = c.ChallanNumber, PoNumber = c.PoNumber, HasAutoPurchaseBills = purchasedIds.Contains(c.Id),
             SalesOrderId = c.SalesOrderId, SalesOrderNumber = c.SalesOrder?.SalesOrderNumber,
             DeliveryDate = c.DeliveryDate, Version = ChallanVersion(c),
             Items = c.Items.OrderBy(i => i.Id).Select(i => new BillChallanItemDto
@@ -263,10 +266,12 @@ public partial class InvoiceService
         result.StockWarnings = warnings;
         return result;
     }
-    public async Task AssertCommercialBillMutationAsync(int id)
+    public async Task AssertCommercialBillMutationAsync(int id, string? expectedVersion = null)
     {
         var bill = await _invoiceRepo.GetByIdAsync(id) ?? throw new InvalidOperationException("Linked bill not found.");
         await AssertBillSnapshotCurrentAsync(bill);
+        if (expectedVersion != null && expectedVersion != BillChallanVersion(bill))
+            throw new InvalidOperationException("The linked bill changed after you opened this editor. Reload before saving.");
         if (await _context.Invoices.AnyAsync(i => i.OriginalInvoiceId == id && !i.IsCancelled))
             throw new InvalidOperationException("Resolve the bill's active credit or debit note before changing its delivery.");
         var locked = await _context.Companies.Where(c => c.Id == bill.CompanyId).Select(c => c.GlLockDate).SingleAsync();

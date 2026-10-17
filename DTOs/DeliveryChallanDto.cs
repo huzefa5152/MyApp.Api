@@ -3,6 +3,8 @@ namespace MyApp.Api.DTOs
     public class DeliveryChallanDto
     {
         public string? Version { get; set; }
+        public string? BillEditVersion { get; set; }
+        public List<StockWarningDto>? StockWarnings { get; set; }
         public int Id { get; set; }
         public int ChallanNumber { get; set; }
         public int? CustomNumber { get; set; }

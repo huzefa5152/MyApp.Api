@@ -1,3 +1,4 @@
+import { canEditBilledDelivery } from "../utils/billedChallanEdit";
 import { isBillableChallan } from "../utils/challanBilling";
 import CardActions from "./CardActions";
 import { useState, useRef, useCallback } from "react";
@@ -60,7 +61,7 @@ function WarningTooltip({ warnings }) {
   );
 }
 
-export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, onLinkOrder, exportingId, duplicatingId, printDisabled = false, printDisabledReason = "", attachCounts = {}, onAttach }) {
+export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onEditDelivery, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, onLinkOrder, exportingId, duplicatingId, printDisabled = false, printDisabledReason = "", attachCounts = {}, onAttach }) {
   const { has } = usePermissions();
   const permUpdate = has("challans.manage.update");
   const permDelete = has("challans.manage.delete");
@@ -253,6 +254,9 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       <MdEdit size={14} /> {c.invoiceId || c.status === "Invoiced" ? "Supplier & cost" : "Edit"}
                     </button>
                   )}
+                  {onEditDelivery && canEditBilledDelivery(c, has) && <button data-primary
+                    style={{ ...styles.actionBtn, ...styles.editBtn, minHeight: 44 }}
+                    onClick={() => onEditDelivery(c)}><MdEdit size={14} /> Edit delivery & update bill</button>}
                   {canDuplicate && onDuplicate && (
                     <button
                       style={{

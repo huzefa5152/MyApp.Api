@@ -39,7 +39,7 @@ namespace MyApp.Api.Services.Interfaces
         /// </summary>
         Task<NextInvoiceNumberDto> GetNextInvoiceNumberAsync(int companyId, int? check);
         Task<InvoiceDto?> UpdateAsync(int id, UpdateInvoiceDto dto);
-        Task AssertCommercialBillMutationAsync(int id);
+        Task AssertCommercialBillMutationAsync(int id, string? expectedVersion = null);
         Task ReconcileChallanBillAsync(int id, string previousFilingSource, bool hadConsultantWork);
         Task RemoveBilledChallanAsync(int challanId, bool delete);
         Task<BillChallanOptionsDto?> GetBillChallanOptionsAsync(int id, string? search);

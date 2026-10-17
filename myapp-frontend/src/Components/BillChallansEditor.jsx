@@ -1,3 +1,5 @@
+import { createPortal } from "react-dom";
+import BilledChallanEditForm from "./BilledChallanEditForm";
 import { useEffect, useRef, useState } from "react";
 import { getBillChallans, updateBillChallans } from "../api/invoiceApi";
 import { notify } from "../utils/notify";
@@ -7,6 +9,7 @@ const amount = (n) => Number(n).toLocaleString("en-PK", { minimumFractionDigits:
 const button = { minHeight: 44, padding: "0.5rem 0.8rem", border: "1px solid #ccd6e2", borderRadius: 6, background: "#fff", color: "#183c68", cursor: "pointer" };
 
 export default function BillChallansEditor({ invoice, onClose, onSaved, canAttachToOrder = false }) {
+  const [deliveryEdit, setDeliveryEdit] = useState(null);
   const [snapshot, setSnapshot] = useState(null);
   const [attachAdded, setAttachAdded] = useState(canAttachToOrder);
   const [options, setOptions] = useState([]);
@@ -120,6 +123,8 @@ export default function BillChallansEditor({ invoice, onClose, onSaved, canAttac
               {selected.has(c.id) ? "Remove" : linked.has(c.id) ? "Keep" : "Add"}
             </button>
           </div>
+          {canAttachToOrder && linked.has(c.id) && !c.hasAutoPurchaseBills && <button type="button" style={{ ...button, marginTop: 8 }} disabled={saving || loading || changed}
+            onClick={() => setDeliveryEdit({ id: c.id, companyId: bill.companyId, challanNumber: c.challanNumber })}>Edit delivery & update bill</button>}
           {selected.has(c.id) && !linked.has(c.id) && c.items.map(i => <label key={i.id} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: 8, alignItems: "center", borderTop: "1px solid #d8e1eb", marginTop: 10, paddingTop: 10 }}>
             <span style={{ overflowWrap: "anywhere" }}>{i.description}<br /><small>{i.quantity} {i.unit}</small></span>
             <span>Unit rate excluding GST
@@ -145,6 +150,8 @@ export default function BillChallansEditor({ invoice, onClose, onSaved, canAttac
           {!hasItems && <p role="alert">Keep at least one item. To remove the final challan, replace it or void the bill.</p>}
         </div>}
       </div>
+      {deliveryEdit && createPortal(<BilledChallanEditForm challan={deliveryEdit} onClose={() => setDeliveryEdit(null)}
+        onSaved={() => { setDeliveryEdit(null); onSaved(bill); }} />, document.body)}
       <div style={{ ...formStyles.footer, display: "flex", flexWrap: "wrap", gap: 8 }}>
         <button data-admin-close="" type="button" style={button} disabled={saving} onClick={onClose}>Cancel</button>
         <button type="submit" style={{ ...button, background: "#0d47a1", color: "white" }} disabled={!snapshot || loading || saving || !changed || !validRates || !hasItems}>

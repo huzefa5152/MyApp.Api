@@ -159,6 +159,38 @@ namespace MyApp.Api.Controllers
             }
         }
 
+        [HttpGet("{id}/bill-edit")]
+        [HasPermission("challans.manage.update")]
+        public async Task<ActionResult<BilledChallanEditContextDto>> GetBillEdit(int id)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            if (!await _permissions.HasPermissionAsync(CurrentUserId, "bills.manage.update")) return Forbid();
+            try
+            {
+                var result = await _service.GetBilledEditContextAsync(id);
+                return result == null ? NotFound() : Ok(result);
+            }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
+        [HttpPut("{id}/bill-edit")]
+        [HasPermission("challans.manage.update")]
+        public async Task<ActionResult<DeliveryChallanDto>> UpdateBillEdit(int id, [FromBody] BilledChallanEditDto dto)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            if (!await _permissions.HasPermissionAsync(CurrentUserId, "bills.manage.update")) return Forbid();
+            try
+            {
+                var result = await _service.UpdateBilledItemsAsync(id, dto);
+                return result == null ? NotFound() : Ok(result);
+            }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
         [HttpPut("{id}/items")]
         [HasPermission("challans.manage.update")]
         public async Task<ActionResult<DeliveryChallanDto>> UpdateItems(int id, [FromBody] List<DeliveryItemDto> items)
