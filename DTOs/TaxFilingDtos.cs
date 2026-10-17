@@ -9,6 +9,8 @@ public class TaxFilingRowDto
     public string UOM { get; set; } = "";
     public int? FbrUOMId { get; set; }
     public string? SaleType { get; set; }
+    public int? SelectedFbrUOMId { get; set; }
+    public string? SelectedSaleType { get; set; }
     public int? RateId { get; set; }
     public string? SroScheduleNo { get; set; }
     public string? SroItemSerialNo { get; set; }

@@ -46,7 +46,7 @@ namespace MyApp.Api.Controllers
         /// </summary>
         [HttpGet("uoms-for-hs")]
         [HasAnyPermission(
-            "itemtypes.manage.view",
+            "itemtypes.manage.view", "itemtypes.manage.create", "itemtypes.manage.update",
             "challans.list.view", "challans.manage.create", "challans.manage.update",
             "salesquotes.list.view", "salesquotes.manage.create", "salesquotes.manage.update",
             "salesorders.list.view", "salesorders.manage.create", "salesorders.manage.update",
@@ -82,7 +82,7 @@ namespace MyApp.Api.Controllers
         /// </summary>
         [HttpGet("fbr-hints")]
         [HasAnyPermission(
-            "itemtypes.manage.view",
+            "itemtypes.manage.view", "itemtypes.manage.create", "itemtypes.manage.update",
             "challans.list.view", "challans.manage.create", "challans.manage.update",
             "salesquotes.list.view", "salesquotes.manage.create", "salesquotes.manage.update",
             "salesorders.list.view", "salesorders.manage.create", "salesorders.manage.update",

@@ -1931,9 +1931,19 @@ namespace MyApp.Api.Services.Implementations
             return HsCodeFormat.IsMatch(normalised);
         }
 
-        public async Task<List<FbrHSCodeDto>> GetHSCodesAsync(int companyId, string? search = null, string? saleType = null)
+        public async Task<List<FbrHSCodeDto>> GetHSCodesAsync(int companyId, string? search = null, string? saleType = null,
+            bool excludeSaved = false, string? includeHsCode = null)
         {
             var all = await GetHsCodeCatalogAsync(companyId);
+
+            if (excludeSaved)
+            {
+                var saved = (await _db.ItemTypes.AsNoTracking()
+                    .Where(i => i.CompanyId == companyId && !i.IsDeleted && i.HSCode != null)
+                    .Select(i => i.HSCode!.Trim()).ToListAsync()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                saved.Remove(includeHsCode?.Trim() ?? "");
+                all = all.Where(h => !saved.Contains(h.HS_CODE.Trim())).ToList();
+            }
 
             // Apply sale-type filter BEFORE the text search so the cap
             // (50 / 100) operates on the already-narrowed list.

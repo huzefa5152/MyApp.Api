@@ -29,7 +29,8 @@ namespace MyApp.Api.Services.Interfaces
         // HS-prefix heuristic maps to that sale type — used by the inline
         // New-Item-Type modal so its typeahead only suggests codes that
         // are valid under the parent bill's locked scenario.
-        Task<List<FbrHSCodeDto>> GetHSCodesAsync(int companyId, string? search = null, string? saleType = null);
+        Task<List<FbrHSCodeDto>> GetHSCodesAsync(int companyId, string? search = null, string? saleType = null,
+            bool excludeSaved = false, string? includeHsCode = null);
 
         /// <summary>
         /// Validate an HS code against the cached FBR catalog. Returns

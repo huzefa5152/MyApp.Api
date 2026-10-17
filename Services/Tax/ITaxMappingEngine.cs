@@ -73,7 +73,8 @@ namespace MyApp.Api.Services.Tax
         // queried PRAL. Lets the UI tell "FBR returned no UOM restriction for
         // this code" (empty + ran) apart from "couldn't ask FBR" (empty + no
         // token). Optional/defaulted so existing callers/tests still compile.
-        bool UomLookupRan = false
+        bool UomLookupRan = false,
+        List<string>? SaleTypes = null
     );
 
     public record RateOption(

@@ -85,8 +85,16 @@ export default function ItemTypesPage() {
   };
 
   useEffect(() => {
-    if (selectedCompany?.id) fetchAll();
-    else setItemTypes([]);
+    let active = true;
+    setItemTypes([]); setShowForm(false); setEditItem(null);
+    if (!selectedCompany?.id) { setLoading(false); return; }
+    setLoading(true);
+    getItemTypes(selectedCompany.id).then(({ data }) => {
+      if (active) setItemTypes(data);
+    }).catch(() => {
+      if (active) notify("Failed to load item types.", "error");
+    }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, [selectedCompany?.id]);
 
   const openAdd = () => {

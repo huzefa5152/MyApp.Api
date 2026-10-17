@@ -36,7 +36,8 @@ export function filingErrors(rows, bill) {
   const issues = [];
   rows.forEach((r, i) => {
     const prefix = `Row ${i + 1}: `;
-    if (!r.itemTypeId || !r.hsCode || !r.saleType || !r.uom) issues.push(prefix + "choose an HS classification with a unit and sale type.");
+    if (!r.hsCode || !r.saleType || !r.uom) issues.push(prefix + "choose an HS classification with a unit and sale type.");
+    if (!r.itemTypeId && !r.description?.trim()) issues.push(prefix + "enter a name for the new company classification.");
     if (!(Number(r.quantity) > 0) || !Number.isFinite(Number(r.quantity))) issues.push(prefix + "enter a positive filing quantity.");
     if (!(Number(r.valueExclTax) > 0) || !Number.isFinite(Number(r.valueExclTax))) issues.push(prefix + "enter a positive amount excluding tax.");
   });

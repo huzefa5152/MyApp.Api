@@ -4,6 +4,7 @@ Creates its own fixtures; never calls FBR validate or submit. --keep supports UI
 import argparse
 import copy
 import json
+import re as regex
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,8 +22,8 @@ def main():
     args = parser.parse_args()
     if urlparse(args.base).hostname not in ('localhost', '127.0.0.1', '::1'):
         raise SystemExit('This suite only runs on localhost.')
-    if args.db and args.db != 'MyApp_Trader_Local':
-        raise SystemExit('The SQL lock cases require the Trader LOCAL database.')
+    if args.db and args.db != 'MyApp_Trader_Local' and not regex.fullmatch(r'MyApp_Trader_Test_[A-Za-z0-9_]+', args.db):
+        raise SystemExit('The SQL lock cases require the Trader LOCAL database or a MyApp_Trader_Test_ scratch database.')
     passed = 0
     success = False
     created = {'companies': [], 'users': [], 'roles': []}

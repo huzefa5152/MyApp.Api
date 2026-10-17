@@ -49,6 +49,8 @@ namespace MyApp.Api.Services.Implementations
         // falling back to the company default.
         private readonly ITaxMappingEngine _taxEngine;
         private readonly ILogger<InvoiceService> _logger;
+        private readonly IItemTypeService _itemTypes;
+        private readonly IFbrService _filingFbr;
 
         public InvoiceService(
             IInvoiceRepository invoiceRepo,
@@ -61,7 +63,9 @@ namespace MyApp.Api.Services.Implementations
             IStockService stock,
             ITaxMappingEngine taxEngine,
             IPostingService posting,
-            ILogger<InvoiceService> logger)
+            ILogger<InvoiceService> logger,
+            IItemTypeService itemTypes,
+            IFbrService filingFbr)
         {
             _invoiceRepo = invoiceRepo;
             _challanRepo = challanRepo;
@@ -75,6 +79,8 @@ namespace MyApp.Api.Services.Implementations
             _stock = stock;
             _taxEngine = taxEngine;
             _posting = posting;
+            _itemTypes = itemTypes;
+            _filingFbr = filingFbr;
         }
 
         /// <summary>

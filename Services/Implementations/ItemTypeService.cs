@@ -48,6 +48,7 @@ namespace MyApp.Api.Services.Implementations
             FbrUOMId = it.FbrUOMId,
             SaleType = it.SaleType,
             FbrDescription = it.FbrDescription,
+            IsHsCodePartial = it.IsHsCodePartial,
             IsFavorite = it.IsFavorite,
             UsageCount = it.UsageCount,
         };

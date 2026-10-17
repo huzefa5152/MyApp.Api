@@ -357,7 +357,8 @@ namespace MyApp.Api.Services.Tax
                 // token; an empty list then means FBR genuinely has no UOM
                 // restriction for this code (common for many codes), NOT a
                 // failure. Without a token the lookup never ran.
-                UomLookupRan: !string.IsNullOrEmpty(company?.FbrToken)
+                UomLookupRan: !string.IsNullOrEmpty(company?.FbrToken),
+                SaleTypes: TaxScenarios.All.Select(s => s.SaleType).Distinct().ToList()
             );
         }
     }

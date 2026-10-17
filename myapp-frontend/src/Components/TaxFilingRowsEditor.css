@@ -29,6 +29,7 @@
 .tf-fields > * { min-width: 0; }
 .tf-fields input { width: 100%; box-sizing: border-box; min-height: 44px; padding: 10px; border: 1px solid #bccbdd; border-radius: 8px; font-size: 16px; color: #1a2332; background: #f8f9fb; }
 .tf-fields input:disabled { opacity: 1; background: #f1f4f8; color: #5f6d7e; }
+.tf-fields select { width: 100%; min-height: 44px; padding: 10px; border: 1px solid #bccbdd; border-radius: 8px; font-size: 16px; background: #f8f9fb; color: #1a2332; }
 .tf-fields small { display: block; color: #4e6074; font-size: 13px; line-height: 1.5; font-weight: 400; margin-top: 6px; overflow-wrap: anywhere; }
 .tf-fields p { overflow-wrap: anywhere; }
 .tf-row summary { min-height: 44px; cursor: pointer; display: list-item; align-content: center; color: #174579; }

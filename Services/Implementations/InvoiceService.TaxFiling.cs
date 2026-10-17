@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
 using MyApp.Api.Models;
+using MyApp.Api.Services.Tax;
 
 namespace MyApp.Api.Services.Implementations;
 
@@ -58,6 +59,51 @@ public partial class InvoiceService
         return bill == null ? null : FilingEditor(bill);
     }
 
+    private async Task<ItemType> ResolveNewFilingClassificationAsync(TaxFilingRowDto row, int companyId)
+    {
+        var code = row.HSCode?.Trim();
+        if (string.IsNullOrWhiteSpace(code))
+            throw new InvalidOperationException("Choose an FBR HS code for every filing row.");
+        var existing = await _context.ItemTypes.AsNoTracking()
+            .Where(i => i.CompanyId == companyId && !i.IsDeleted && !i.IsHsCodePartial && i.HSCode == code)
+            .OrderBy(i => i.Id).FirstOrDefaultAsync();
+        if (existing != null)
+        {
+            row.ItemTypeId = existing.Id;
+            return existing;
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(row.Description) || row.Description.Trim().Length > 500)
+                throw new InvalidOperationException("Enter an item name within 500 characters for the new HS classification.");
+            var official = (await _filingFbr.GetHSCodesAsync(companyId, code))
+                .FirstOrDefault(h => h.HS_CODE.Trim() == code);
+            if (official == null)
+                throw new InvalidOperationException("This HS code could not be verified with FBR. Search the FBR catalog and select a result, then retry.");
+            var hints = await _taxEngine.GetHsCodeHintsAsync(companyId, code);
+            var uom = hints.Uoms.FirstOrDefault(u => u.UOM_ID == row.FbrUOMId
+                && string.Equals(u.Description, row.UOM, StringComparison.OrdinalIgnoreCase));
+            if (uom == null)
+                throw new InvalidOperationException("Select a valid FBR unit for the new HS classification. Retry the lookup if no units are available.");
+            var saleType = row.SelectedSaleType == null ? hints.DefaultSaleType : CanonicalFilingSaleType(row.SelectedSaleType);
+            if (string.IsNullOrWhiteSpace(saleType))
+                throw new InvalidOperationException("Choose a valid tax scenario on the bill before classifying a new HS code.");
+            var created = await _itemTypes.CreateAsync(new ItemTypeDto {
+                CompanyId = companyId, Name = row.Description.Trim(), HSCode = code,
+                UOM = uom.Description, FbrUOMId = uom.UOM_ID, SaleType = saleType,
+                FbrDescription = official.Description, IsFavorite = true
+            }, companyId);
+            row.ItemTypeId = created.Id;
+            return new ItemType { Id = created.Id, CompanyId = companyId,
+                Name = created.Name, HSCode = created.HSCode, UOM = created.UOM,
+                FbrUOMId = created.FbrUOMId, SaleType = created.SaleType };
+        }
+    }
+
+    private static string CanonicalFilingSaleType(string saleType) => TaxScenarios.All
+        .Select(s => s.SaleType).FirstOrDefault(s => string.Equals(s, saleType.Trim(), StringComparison.OrdinalIgnoreCase))
+        ?? throw new InvalidOperationException("Choose a valid FBR sale type for this filing row.");
+
     public async Task<TaxFilingEditorDto?> SaveTaxFilingAsync(int id, SaveTaxFilingDto dto, int actorId, string actorName, bool allowNumericalChanges)
     {
         // Lock the header before reading lines; bill edits/submission update the same header.
@@ -98,13 +144,31 @@ public partial class InvoiceService
         var units = await _context.Units.AsNoTracking().Where(u => u.CompanyId == bill.CompanyId)
             .ToListAsync();
         foreach (var row in dto.Rows) {
+            if (row.ItemTypeId == null)
+            {
+                var resolved = await ResolveNewFilingClassificationAsync(row, bill.CompanyId);
+                types[resolved.Id] = resolved;
+            }
             if (row.ItemTypeId == null || !types.TryGetValue(row.ItemTypeId.Value, out var type))
                 throw new InvalidOperationException("Choose a classification from this company's item catalog for every filing row.");
-            if (string.IsNullOrWhiteSpace(type.HSCode) || type.IsHsCodePartial || string.IsNullOrWhiteSpace(type.SaleType))
+            if (string.IsNullOrWhiteSpace(type.HSCode) || type.IsHsCodePartial)
                 throw new InvalidOperationException("Every filing row needs a complete HS code and sale type. Complete the selected catalog classification first.");
-            // Metadata is server-owned; a forged HS code or tax treatment is never accepted.
-            row.HSCode = type.HSCode; row.SaleType = type.SaleType;
-            row.UOM = type.UOM ?? ""; row.FbrUOMId = type.FbrUOMId;
+            var previous = TaxFilingProjection.Plan(bill)?.Rows.FirstOrDefault(r => r.ItemTypeId == type.Id && r.HSCode == type.HSCode
+                && r.SourceLineIds.Order().SequenceEqual(row.SourceLineIds.Order()));
+            row.HSCode = type.HSCode; row.SaleType = previous?.SaleType ?? type.SaleType;
+            row.UOM = previous?.UOM ?? type.UOM ?? ""; row.FbrUOMId = previous?.FbrUOMId ?? type.FbrUOMId;
+            if (row.SelectedFbrUOMId.HasValue && row.SelectedFbrUOMId != row.FbrUOMId)
+            {
+                var hints = await _taxEngine.GetHsCodeHintsAsync(bill.CompanyId, type.HSCode);
+                var selectedUnit = hints.Uoms.FirstOrDefault(u => u.UOM_ID == row.SelectedFbrUOMId);
+                if (selectedUnit == null)
+                    throw new InvalidOperationException("Choose one of FBR's valid units for this HS code.");
+                row.UOM = selectedUnit.Description; row.FbrUOMId = selectedUnit.UOM_ID;
+            }
+            if (row.SelectedSaleType != null) row.SaleType = CanonicalFilingSaleType(row.SelectedSaleType);
+            if (string.IsNullOrWhiteSpace(row.SaleType))
+                throw new InvalidOperationException("Choose a sale type for every filing row.");
+            row.SelectedFbrUOMId = null; row.SelectedSaleType = null;
             row.Description = string.IsNullOrWhiteSpace(row.Description) ? type.Name : row.Description.Trim();
             if (row.Description.Length > 500 || string.IsNullOrWhiteSpace(row.UOM))
                 throw new InvalidOperationException("Choose a classification with a unit and keep the description within 500 characters.");
@@ -116,7 +180,7 @@ public partial class InvoiceService
             row.SroScheduleNo = sources[0].SroScheduleNo;
             row.SroItemSerialNo = sources[0].SroItemSerialNo;
             row.RetailPrice = sources.Sum(i => i.FixedNotifiedValueOrRetailPrice ?? 0m);
-            if (type.SaleType.Contains("3rd", StringComparison.OrdinalIgnoreCase) && row.RetailPrice <= 0)
+            if (row.SaleType.Contains("3rd", StringComparison.OrdinalIgnoreCase) && row.RetailPrice <= 0)
                 throw new InvalidOperationException("Third-schedule goods need the original retail tax base. Keep this row separate and complete the bill's retail details first.");
         }
         var taxBase = dto.Rows.Sum(r => r.SaleType!.Contains("3rd", StringComparison.OrdinalIgnoreCase)

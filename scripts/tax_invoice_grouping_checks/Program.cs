@@ -27,7 +27,7 @@ var invoice = new Invoice {
 };
 var repo = DispatchProxy.Create<IInvoiceRepository, InvoiceProxy>();
 ((InvoiceProxy)(object)repo).Invoice = invoice;
-var service = new InvoiceService(repo, null!, null!, null!, null!, new ConfigurationBuilder().Build(), null!, null!, null!, null!, NullLogger<InvoiceService>.Instance);
+var service = new InvoiceService(repo, null!, null!, null!, null!, new ConfigurationBuilder().Build(), null!, null!, null!, null!, NullLogger<InvoiceService>.Instance, null!, null!);
 Check(!invoice.GroupTaxInvoiceByItemType && !invoice.Company.DefaultGroupTaxInvoiceByItemType, "Existing documents and companies default to individual.");
 var individual = (await service.GetPrintTaxInvoiceAsync(1))!;
 Check(individual.Items.Count == 2 && individual.BillItems.Count == 2, "Individual output keeps each source line in both template loops.");

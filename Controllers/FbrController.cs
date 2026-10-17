@@ -192,9 +192,11 @@ namespace MyApp.Api.Controllers
 
         [HttpGet("hscodes/{companyId}")]
         [AuthorizeCompany]
-        [HasPermission("fbr.reference.read")]
-        public async Task<IActionResult> GetHSCodes(int companyId, [FromQuery] string? search, [FromQuery] string? saleType)
-            => Ok(await _fbrService.GetHSCodesAsync(companyId, search, saleType));
+        [HasAnyPermission("fbr.reference.read", "itemtypes.manage.view", "itemtypes.manage.create",
+            "itemtypes.manage.update", "invoices.manage.update.itemtype", "invoices.manage.update.itemtype.qty")]
+        public async Task<IActionResult> GetHSCodes(int companyId, [FromQuery] string? search, [FromQuery] string? saleType,
+            [FromQuery] bool excludeSaved = false, [FromQuery] string? includeHsCode = null)
+            => Ok(await _fbrService.GetHSCodesAsync(companyId, search, saleType, excludeSaved, includeHsCode));
 
         [HttpGet("uom/{companyId}")]
         [AuthorizeCompany]
