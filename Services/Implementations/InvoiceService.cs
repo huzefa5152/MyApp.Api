@@ -302,6 +302,8 @@ namespace MyApp.Api.Services.Implementations
             }
             return new InvoiceDto
         {
+            CostingLineCount = inv.Items.Count,
+            CostedLineCount = inv.Items.Count(i => (i.DeliveryItemId.HasValue ? i.DeliveryItem?.ActualUnitCost : i.ActualUnitCost).HasValue),
             Id = inv.Id,
             HasTaxFilingRows = inv.TaxFilingRowsJson != null,
             InvoiceNumber = inv.InvoiceNumber,
@@ -500,10 +502,10 @@ namespace MyApp.Api.Services.Implementations
             int companyId, int page, int pageSize,
             string? search = null, int? clientId = null,
             DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? noteType = null, string? fbrFilter = null, string? handoverFilter = null)
+            int? noteType = null, string? fbrFilter = null, string? handoverFilter = null, string? costingStatus = null)
         {
             var (items, totalCount) = await _invoiceRepo.GetPagedByCompanyAsync(
-                companyId, page, pageSize, search, clientId, dateFrom, dateTo, noteType, fbrFilter, handoverFilter);
+                companyId, page, pageSize, search, clientId, dateFrom, dateTo, noteType, fbrFilter, handoverFilter, costingStatus);
 
             // Gate the Delete button client-side — only the highest-numbered
             // bill for this company is deletable. Earlier bills must be edited.
@@ -986,6 +988,8 @@ namespace MyApp.Api.Services.Implementations
                     // invoice INSERT touches Invoices/InvoiceItems and nothing else.
                     var itemsForAttempt = invoiceItems.Select(src => new InvoiceItem
                     {
+                        ActualUnitCost = src.ActualUnitCost,
+                        SupplierId = src.SupplierId,
                         DeliveryItemId = src.DeliveryItemId,
                         ItemTypeId = src.ItemTypeId,
                         ItemTypeName = src.ItemTypeName,
@@ -1260,6 +1264,8 @@ namespace MyApp.Api.Services.Implementations
 
                 invoiceItems.Add(new InvoiceItem
                 {
+                    ActualUnitCost = itemDto.ActualUnitCost,
+                    SupplierId = itemDto.SupplierId,
                     DeliveryItemId = null,            // standalone — no source line
                     ItemTypeId = itemType?.Id,
                     ItemTypeName = itemType?.Name ?? "",
@@ -1287,6 +1293,9 @@ namespace MyApp.Api.Services.Implementations
                     _context.ItemTypes.Update(itemType);
                 }
             }
+
+            await new CommercialCostService(_context, _posting).ValidateAsync(dto.CompanyId,
+                dto.Items.Select(i => new ChallanPrivateCostLineDto { SupplierId = i.SupplierId, ActualUnitCost = i.ActualUnitCost }));
 
             // Bill-header defaults — identical to CreateAsync.
             const int SeededDefaultDocType = 4;
@@ -1386,6 +1395,8 @@ namespace MyApp.Api.Services.Implementations
                     // Fresh, navigation-free line clones per attempt (see CreateAsync).
                     var itemsForAttempt = invoiceItems.Select(src => new InvoiceItem
                     {
+                        ActualUnitCost = src.ActualUnitCost,
+                        SupplierId = src.SupplierId,
                         DeliveryItemId = src.DeliveryItemId,
                         ItemTypeId = src.ItemTypeId,
                         ItemTypeName = src.ItemTypeName,
@@ -2984,6 +2995,10 @@ namespace MyApp.Api.Services.Implementations
         {
             var invoice = await _invoiceRepo.GetByIdAsync(id);
             if (invoice == null) return false;
+
+            if (await _context.PurchaseItems.AnyAsync(p => p.LocalInvoiceItemId.HasValue && p.LocalInvoiceItemId.Value > 0 &&
+                _context.InvoiceItems.Any(i => i.Id == p.LocalInvoiceItemId && i.InvoiceId == id)))
+                throw new InvalidOperationException("This bill has supplier purchases. Void the bill to preserve the supplier ledger.");
 
             // A refused delete leaves no trace: the controller catches the
             // InvalidOperationException and returns 400, and GlobalException-

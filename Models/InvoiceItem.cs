@@ -4,6 +4,8 @@ namespace MyApp.Api.Models
     {
         public int Id { get; set; }
         public int InvoiceId { get; set; }
+        public decimal? ActualUnitCost { get; set; }
+        public int? SupplierId { get; set; }
         public int? DeliveryItemId { get; set; }
 
         /// <summary>

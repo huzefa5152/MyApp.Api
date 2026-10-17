@@ -31,7 +31,7 @@ const colors = {
 // purchase-bill form: header + a line grid where each line optionally carries an
 // Item Type (reduces on-hand when the company tracks it) and/or a GL Account
 // (else the engine derives it). Value-only lines (no item/account) are allowed.
-export default function PurchaseDebitNoteForm({ companyId, company = null, noteId, onClose, onSaved, readOnly = false }) {
+export default function PurchaseDebitNoteForm({ companyId, company = null, noteId, onClose, onSaved, readOnly = false, preset = null }) {
   const isEdit = !!noteId;
   const { has } = usePermissions();
   const canReadPurchaseBills = has("purchasebills.list.view");
@@ -42,10 +42,10 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
   const glOn = accounts.length > 0;
   const [units, setUnits] = useState([]);
 
-  const [supplierId, setSupplierId] = useState("");
+  const [supplierId, setSupplierId] = useState(preset?.supplierId ? String(preset.supplierId) : "");
   // Optional purchase invoice reference: the selected supplier's
-  // purchase bills; picking one prefills the lines + GST. The link isn't
-  // persisted — it's an entry convenience that copies the bill onto the note.
+  // purchase bills; picking one prefills the lines + GST. The link is
+  // persisted so the credit reduces the selected purchase balance.
   const [purchaseBills, setPurchaseBills] = useState([]);
   const [billId, setBillId] = useState("");
   const [prefilling, setPrefilling] = useState(false);
@@ -91,7 +91,8 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
   // against another's invoice). Cleared when no supplier is chosen.
   useEffect(() => {
     if (!canReadPurchaseBills || !companyId || !supplierId) { setPurchaseBills([]); return; }
-    getPurchaseBillsByCompanyPaged(companyId, { supplierId: parseInt(supplierId), pageSize: 100 })
+    getPurchaseBillsByCompanyPaged(companyId, { supplierId: parseInt(supplierId),
+        pageSize: 100 })
       .then(({ data }) => setPurchaseBills(data?.items || data?.data || []))
       .catch(() => setPurchaseBills([]));
   }, [companyId, supplierId, canReadPurchaseBills]);
@@ -122,12 +123,15 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
     }
   };
 
+  useEffect(() => { if (!isEdit && preset?.purchaseBillId) prefillFromBill(String(preset.purchaseBillId)); }, [preset?.purchaseBillId]);
+
   useEffect(() => {
     if (!isEdit) return;
     (async () => {
       try {
         const { data } = await getPurchaseDebitNoteById(noteId);
         setSupplierId(String(data.supplierId));
+        setBillId(data.purchaseBillId ? String(data.purchaseBillId) : "");
         setDate(data.date.slice(0, 10));
         setGstRate(data.gstRate ?? 0);
         setSupplierRef(data.supplierRef || "");
@@ -200,6 +204,7 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
         date,
         companyId,
         supplierId: parseInt(supplierId),
+        purchaseBillId: billId ? Number(billId) : null,
         supplierRef: supplierRef || null,
         notes: notes || null,
         gstRate: parseFloat(gstRate) || 0,

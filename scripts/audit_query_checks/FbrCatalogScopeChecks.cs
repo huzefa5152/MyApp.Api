@@ -14,7 +14,7 @@ public static class FbrCatalogScopeChecks
   var foreign=new ItemType{Name="Sample foreign HS",CompanyId=a.Id,HSCode=prefix};db.Add(foreign);await db.SaveChangesAsync();
   var own=new ItemType{Name="Sample own HS",CompanyId=b.Id,HSCode=prefix};var supplier=new Supplier{Name="Sample scoped supplier",CompanyId=b.Id};var foreignSupplier=new Supplier{Name="Sample foreign supplier",CompanyId=a.Id};db.AddRange(own,supplier,foreignSupplier);await db.SaveChangesAsync();
   var stock=new StockService(db,NullLogger<StockService>.Instance);
-  var committer=new FbrPurchaseImportCommitter(db,null!,stock,NullLogger<FbrPurchaseImportCommitter>.Instance);
+  var committer=new FbrPurchaseImportCommitter(db,null!,stock,new PostingService(db,new GeneralLedgerService(db),NullLogger<PostingService>.Instance),NullLogger<FbrPurchaseImportCommitter>.Instance);
   FbrImportPreviewInvoiceDto Invoice(string hs,int supplierId)=>new() {InvoiceNo="SAMPLE-"+Guid.NewGuid().ToString("N"),FbrInvoiceRefNo="SAMPLE-"+Guid.NewGuid().ToString("N"),MatchedSupplierId=supplierId,SupplierName=supplier.Name,InvoiceDate=new DateTime(2000,1,1),Lines=[new FbrImportPreviewLineDto {SourceRowNumber=2,HsCode=hs,Description="Sample imported item",Quantity=2.5m,ValueExclTax=25,GstRate=18,GstAmount=4.5m,Decision=ImportDecision.WillImport}]};
   try {
    var invoice=Invoice(prefix,supplier.Id);

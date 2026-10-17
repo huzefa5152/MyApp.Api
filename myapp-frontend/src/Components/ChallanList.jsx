@@ -1,3 +1,4 @@
+import CostingStatus from "./CostingStatus";
 import { canEditBilledDelivery } from "../utils/billedChallanEdit";
 import { isBillableChallan } from "../utils/challanBilling";
 import CardActions from "./CardActions";
@@ -61,7 +62,7 @@ function WarningTooltip({ warnings }) {
   );
 }
 
-export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onEditDelivery, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, onLinkOrder, exportingId, duplicatingId, printDisabled = false, printDisabledReason = "", attachCounts = {}, onAttach }) {
+export default function ChallanList({ challans, onCancel, onDelete, onPrint, onCosts, onEditItems, onEditDelivery, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, onLinkOrder, exportingId, duplicatingId, printDisabled = false, printDisabledReason = "", attachCounts = {}, onAttach }) {
   const { has } = usePermissions();
   const permUpdate = has("challans.manage.update");
   const permDelete = has("challans.manage.delete");
@@ -152,6 +153,7 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                     </div>
                   </div>
 
+                  {onCosts && <div style={{ margin: "8px 0" }}><CostingStatus document={c} onOpen={() => onCosts(c)} /></div>}
                   {isDuplicate && c.duplicatedFromChallanNumber && (
                     <p style={{
                       ...cardStyles.text,
@@ -245,7 +247,8 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       {exportingId === c.id + "-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Excel
                     </button>
                   )}
-                  {permUpdate && (isEditable || (c.status === "Invoiced" && !c.hasAutoPurchaseBills)) && (
+                  {onCosts && <button style={styles.actionBtn} onClick={() => onCosts(c)}>Costs & suppliers</button>}
+                  {permUpdate && isEditable && !c.invoiceId && (
                     <button
                       style={{ ...styles.actionBtn, ...styles.editBtn }}
                       onClick={() => onEditItems?.(c)}

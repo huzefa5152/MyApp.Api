@@ -183,7 +183,7 @@ namespace MyApp.Api.Services.Implementations
                          .GroupBy(a => a.PurchaseBillId!.Value))
             {
                 var bill = bills.First(b => b.Id == grp.Key);
-                var collectible = WithholdingTaxCalculator.Collectible(bill.GrandTotal, bill.WithholdingTaxAmount);
+                var collectible = Math.Max(0m, WithholdingTaxCalculator.Collectible(bill.GrandTotal, bill.WithholdingTaxAmount) - bill.AmountCredited);
                 var newTotal = bill.AmountPaid + grp.Sum(a => a.Amount + a.AdjustmentAmount);
                 if (chequeStatus != ChequeStatus.Bounced && newTotal > collectible)
                     throw new InvalidOperationException(
@@ -345,9 +345,7 @@ namespace MyApp.Api.Services.Implementations
             {
                 var inv = invoices.First(i => i.Id == grp.Key);
                 var collectible = CommercialTotalCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount, inv.FreightCharges);
-                var paidByOthers = await _context.PaymentAllocations
-                    .Where(pa => pa.InvoiceId == grp.Key && pa.PaymentId != id && !pa.Payment.IsCancelled && pa.Payment.ChequeStatus != ChequeStatus.Bounced)
-                    .SumAsync(pa => (decimal?)(pa.Amount + pa.AdjustmentAmount)) ?? 0m;
+                var paidByOthers = await SettledAmountAsync(grp.Key, true, id);
                 if (nextChequeStatus != ChequeStatus.Bounced && paidByOthers + grp.Sum(a => a.Amount + a.AdjustmentAmount) > collectible)
                     throw new InvalidOperationException(
                         $"Receipt would over-pay Invoice #{inv.InvoiceNumber} (available is {collectible - paidByOthers:0.00}).");
@@ -355,10 +353,8 @@ namespace MyApp.Api.Services.Implementations
             foreach (var grp in dto.Allocations.Where(a => a.PurchaseBillId.HasValue).GroupBy(a => a.PurchaseBillId!.Value))
             {
                 var bill = bills.First(b => b.Id == grp.Key);
-                var collectible = WithholdingTaxCalculator.Collectible(bill.GrandTotal, bill.WithholdingTaxAmount);
-                var paidByOthers = await _context.PaymentAllocations
-                    .Where(pa => pa.PurchaseBillId == grp.Key && pa.PaymentId != id && !pa.Payment.IsCancelled && pa.Payment.ChequeStatus != ChequeStatus.Bounced)
-                    .SumAsync(pa => (decimal?)(pa.Amount + pa.AdjustmentAmount)) ?? 0m;
+                var collectible = Math.Max(0m, WithholdingTaxCalculator.Collectible(bill.GrandTotal, bill.WithholdingTaxAmount) - bill.AmountCredited);
+                var paidByOthers = await SettledAmountAsync(grp.Key, false, id);
                 if (nextChequeStatus != ChequeStatus.Bounced && paidByOthers + grp.Sum(a => a.Amount + a.AdjustmentAmount) > collectible)
                     throw new InvalidOperationException(
                         $"Payment would over-pay Bill #{bill.PurchaseBillNumber} (available is {collectible - paidByOthers:0.00}).");
@@ -540,7 +536,7 @@ namespace MyApp.Api.Services.Implementations
             foreach (var group in payment.Allocations.Where(a => a.PurchaseBillId.HasValue).GroupBy(a => a.PurchaseBillId!.Value))
             {
                 var bill = await _context.PurchaseBills.SingleAsync(b => b.Id == group.Key && b.CompanyId == payment.CompanyId);
-                if (bill.AmountPaid + group.Sum(a => a.Amount + a.AdjustmentAmount) > WithholdingTaxCalculator.Collectible(bill.GrandTotal, bill.WithholdingTaxAmount))
+                if (bill.AmountPaid + group.Sum(a => a.Amount + a.AdjustmentAmount) > Math.Max(0m, WithholdingTaxCalculator.Collectible(bill.GrandTotal, bill.WithholdingTaxAmount) - bill.AmountCredited))
                     throw new InvalidOperationException("Restoring this cheque would over-pay a bill already settled by another payment.");
             }
         }
@@ -763,21 +759,41 @@ namespace MyApp.Api.Services.Implementations
         // AmountPaid = Σ allocation amounts from NON-cancelled payments. Run
         // after the allocation rows are persisted so the query sees them.
 
+        // A scan here can read allocations held by an unrelated payment and
+        // deadlock against its balance recalculation. Seek both existing indexes
+        // even on small tables, where SQL otherwise prefers a clustered scan.
+        private async Task<decimal> SettledAmountAsync(int documentId, bool invoice, int excludedPaymentId = 0)
+        {
+            var bounced = (int)ChequeStatus.Bounced;
+            var query = invoice
+                ? _context.Database.SqlQuery<decimal>($"""
+                    SELECT COALESCE(SUM(a.Amount + a.AdjustmentAmount), 0.0) AS [Value]
+                    FROM dbo.PaymentAllocations a WITH (FORCESEEK (IX_PaymentAllocations_InvoiceId (InvoiceId)))
+                    INNER JOIN dbo.Payments p WITH (FORCESEEK) ON p.Id = a.PaymentId
+                    WHERE a.InvoiceId = {documentId} AND a.PaymentId <> {excludedPaymentId}
+                      AND p.IsCancelled = 0 AND p.ChequeStatus <> {bounced}
+                    """)
+                : _context.Database.SqlQuery<decimal>($"""
+                    SELECT COALESCE(SUM(a.Amount + a.AdjustmentAmount), 0.0) AS [Value]
+                    FROM dbo.PaymentAllocations a WITH (FORCESEEK (IX_PaymentAllocations_PurchaseBillId (PurchaseBillId)))
+                    INNER JOIN dbo.Payments p WITH (FORCESEEK) ON p.Id = a.PaymentId
+                    WHERE a.PurchaseBillId = {documentId} AND a.PaymentId <> {excludedPaymentId}
+                      AND p.IsCancelled = 0 AND p.ChequeStatus <> {bounced}
+                    """);
+            return await query.SingleAsync();
+        }
+
         private async Task RecomputeInvoiceAsync(int invoiceId)
         {
             // Settled = cash + settle-remainder adjustment — both clear the invoice.
-            var paid = await _context.PaymentAllocations
-                .Where(a => a.InvoiceId == invoiceId && !a.Payment.IsCancelled && a.Payment.ChequeStatus != ChequeStatus.Bounced)
-                .SumAsync(a => (decimal?)(a.Amount + a.AdjustmentAmount)) ?? 0m;
+            var paid = await SettledAmountAsync(invoiceId, true);
             var inv = await _context.Invoices.FirstOrDefaultAsync(i => i.Id == invoiceId);
             if (inv != null) inv.AmountPaid = paid;
         }
 
         private async Task RecomputePurchaseBillAsync(int billId)
         {
-            var paid = await _context.PaymentAllocations
-                .Where(a => a.PurchaseBillId == billId && !a.Payment.IsCancelled && a.Payment.ChequeStatus != ChequeStatus.Bounced)
-                .SumAsync(a => (decimal?)(a.Amount + a.AdjustmentAmount)) ?? 0m;
+            var paid = await SettledAmountAsync(billId, false);
             var bill = await _context.PurchaseBills.FirstOrDefaultAsync(b => b.Id == billId);
             if (bill != null) bill.AmountPaid = paid;
         }

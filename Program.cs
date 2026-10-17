@@ -426,6 +426,8 @@ builder.Services.AddScoped<ISupplierService, SupplierService>();
 // tenants. Existing per-company SupplierService flows keep working
 // unchanged; this is purely additive.
 builder.Services.AddScoped<ISupplierGroupService, SupplierGroupService>();
+builder.Services.AddScoped<CommercialCostService>();
+builder.Services.AddScoped<SupplierPayablesService>();
 builder.Services.AddScoped<IPurchaseBillService, PurchaseBillService>();
 builder.Services.AddScoped<IGoodsReceiptService, GoodsReceiptService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();

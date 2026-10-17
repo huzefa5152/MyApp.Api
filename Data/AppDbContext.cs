@@ -84,6 +84,7 @@ namespace MyApp.Api.Data
 
         public DbSet<Company> Companies { get; set; }
         public DbSet<DeliveryChallan> DeliveryChallans { get; set; }
+        public DbSet<PrivateCostChange> PrivateCostChanges { get; set; }
         public DbSet<DeliveryItem> DeliveryItems { get; set; }
 
         public DbSet<Client> Clients { get; set; } // ✅ add this
@@ -1202,6 +1203,15 @@ namespace MyApp.Api.Data
             // PurchaseItems and InvoiceItems. Composite PK; both sides
             // cascade so cleanup is automatic when either parent is
             // removed.
+            modelBuilder.Entity<PurchaseItem>().HasOne<DeliveryItem>().WithMany().HasForeignKey(i => i.LocalDeliveryItemId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PurchaseItem>().HasOne<InvoiceItem>().WithMany().HasForeignKey(i => i.LocalInvoiceItemId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PurchaseBill>().Property(p => p.AmountCredited).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseDebitNote>().HasOne<PurchaseBill>().WithMany().HasForeignKey(n => n.PurchaseBillId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<InvoiceItem>().Property(i => i.ActualUnitCost).HasPrecision(18, 4);
+            modelBuilder.Entity<PurchaseBill>().Property(i => i.PurchaseCategory).HasMaxLength(24);
+            modelBuilder.Entity<PurchaseItem>().HasIndex(i => i.LocalDeliveryItemId).IsUnique().HasFilter("[LocalDeliveryItemId] IS NOT NULL");
+            modelBuilder.Entity<PurchaseItem>().HasIndex(i => i.LocalInvoiceItemId).IsUnique().HasFilter("[LocalInvoiceItemId] IS NOT NULL");
+            modelBuilder.Entity<PrivateCostChange>().HasIndex(i => new { i.CompanyId, i.Target, i.TargetId });
             modelBuilder.Entity<PurchaseItemSourceLine>()
                 .HasKey(x => new { x.PurchaseItemId, x.InvoiceItemId });
             modelBuilder.Entity<PurchaseItemSourceLine>()

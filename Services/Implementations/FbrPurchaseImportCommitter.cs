@@ -52,17 +52,20 @@ namespace MyApp.Api.Services.Implementations
         private readonly AppDbContext _context;
         private readonly ISupplierGroupService _supplierGroups;
         private readonly IStockService _stock;
+        private readonly IPostingService _posting;
         private readonly ILogger<FbrPurchaseImportCommitter> _logger;
 
         public FbrPurchaseImportCommitter(
             AppDbContext context,
             ISupplierGroupService supplierGroups,
             IStockService stock,
+            IPostingService posting,
             ILogger<FbrPurchaseImportCommitter> logger)
         {
             _context = context;
             _supplierGroups = supplierGroups;
             _stock = stock;
+            _posting = posting;
             _logger = logger;
         }
 
@@ -225,6 +228,7 @@ namespace MyApp.Api.Services.Implementations
 
                 await _stock.RecordMovementsAsync(companyId, inMovements);
 
+                await _posting.PostPurchaseBillAsync(bill);
                 await tx.CommitAsync();
                 result.Outcome = "imported";
                 result.CreatedPurchaseBillId = bill.Id;

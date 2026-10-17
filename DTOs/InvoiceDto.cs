@@ -15,6 +15,8 @@ namespace MyApp.Api.DTOs
         public List<BillSalesOrderLinkDto> SalesOrders { get; set; } = new();
         public bool GroupTaxInvoiceByItemType { get; set; }
         public string? Notes { get; set; }
+        public int CostedLineCount { get; set; }
+        public int CostingLineCount { get; set; }
         public int Id { get; set; }
         public int InvoiceNumber { get; set; }
         public DateTime Date { get; set; }
@@ -425,6 +427,8 @@ namespace MyApp.Api.DTOs
 
     public class CreateStandaloneInvoiceItemDto
     {
+        public decimal? ActualUnitCost { get; set; }
+        public int? SupplierId { get; set; }
         /// <summary>Free-text item description (typed by operator or picked from autocomplete).</summary>
         public string Description { get; set; } = "";
         /// <summary>Quantity. Server-side decimal-quantity validation applies based on the picked UOM.</summary>

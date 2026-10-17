@@ -34,6 +34,7 @@ const colors = {
 export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, prefillFromInvoiceId = null, readOnly = false }) {
   const isEdit = !!billId;
   const [isNonStock, setIsNonStock] = useState(false);
+  const [isGeneratedLocal, setIsGeneratedLocal] = useState(false);
   const isAgainstSale = !!prefillFromInvoiceId;
   const [suppliers, setSuppliers] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
@@ -135,6 +136,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
       try {
         const { data } = await getPurchaseBillById(billId);
         setIsNonStock(!!data.isNonStockSupplierPurchase);
+        setIsGeneratedLocal(data.source === "local-direct");
         setCurrentNumber(data.purchaseBillNumber);
         setCustomNumber(String(data.purchaseBillNumber));
         setSupplierId(String(data.supplierId));
@@ -256,6 +258,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
     setSaving(true);
     try {
       const payload = {
+        purchaseCategory: isNonStock ? "LocalDirect" : "Inventory",
         date,
         companyId,
         customNumber: billNumberPayload(isEdit ? "custom" : numberMode, customNumber),
@@ -312,6 +315,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               sit inside the scroll region (never clipped) yet outside the
               disabled fieldset (so view-mode preview/download stay clickable). */}
           <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
+          {isGeneratedLocal && <p>This purchase preserves the supplier payable recorded from its source document. Correct private costs from Costs &amp; suppliers; record a supplier credit to adjust the booked payable.</p>}
           <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
             {/* Number and the copy shortcut share one row; the copy panel takes
@@ -327,6 +331,12 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               </div>}
             </div>
 
+            {!isEdit && !isAgainstSale && <label style={{ display: "block", marginBottom: 16 }}>Purchase category
+              <select style={formStyles.input} value={isNonStock ? "LocalDirect" : "Inventory"} onChange={e => {
+                setIsNonStock(e.target.value === "LocalDirect");
+                if (e.target.value === "LocalDirect") setItems(rows => rows.map(i => ({ ...i, itemTypeId: "", hsCode: "", sourceInvoiceItemIds: [] })));
+              }}><option value="Inventory">Inventory purchase</option><option value="LocalDirect">Local direct purchase (no inventory)</option></select>
+            </label>}
             {sourceBill && (
               <div style={{
                 display: "flex", alignItems: "flex-start", gap: "0.65rem",

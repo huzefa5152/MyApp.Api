@@ -5,6 +5,8 @@ namespace MyApp.Api.DTOs
         public string? Version { get; set; }
         public string? BillEditVersion { get; set; }
         public List<StockWarningDto>? StockWarnings { get; set; }
+        public int CostedLineCount { get; set; }
+        public int CostingLineCount { get; set; }
         public int Id { get; set; }
         public int ChallanNumber { get; set; }
         public int? CustomNumber { get; set; }

@@ -1,3 +1,4 @@
+import CostingStatus from "./CostingStatus";
 import { canEditBilledDelivery } from "../utils/billedChallanEdit";
 import { isBillableChallan } from "../utils/challanBilling";
 import CardActions from "./CardActions";
@@ -30,6 +31,7 @@ export default function ChallanTable({
   onCancel,
   onDelete,
   onPrint,
+  onCosts,
   onEditItems,
   onEditDelivery,
   onExportPdf,
@@ -55,6 +57,7 @@ export default function ChallanTable({
   const [selectedChallan, setSelectedChallan] = useState(null);
 
   const columns = [
+    ...(onCosts ? [{ key: "costing", header: "Actual costing", render: (c) => <CostingStatus document={c} onOpen={() => onCosts(c)} /> }] : []),
     {
       key: "challanNumber",
       header: "DC #",
@@ -175,7 +178,8 @@ export default function ChallanTable({
             {exportingId === c.id + "-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />}
           </button>
         )}
-        {perms.permUpdate && (flags.isEditable || (c.status === "Invoiced" && !c.hasAutoPurchaseBills)) && (
+        {onCosts && <button data-label="Costs & suppliers" style={btnStyles.edit} onClick={() => onCosts(c)} title="Costs & suppliers"><MdEdit size={14} /></button>}
+          {perms.permUpdate && flags.isEditable && !c.invoiceId && (
           <button data-label={c.invoiceId || c.status === "Invoiced" ? "Supplier & cost" : "Edit items"} data-primary={(!flags.canGenerateBill) || undefined} style={btnStyles.edit} onClick={() => onEditItems?.(c)} title={c.invoiceId || c.status === "Invoiced" ? "Edit supplier & cost" : "Edit items"}>
             <MdEdit size={14} />
           </button>

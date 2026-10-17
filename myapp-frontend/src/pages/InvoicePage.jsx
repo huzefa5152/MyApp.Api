@@ -1,7 +1,9 @@
+import CostingStatus from "../Components/CostingStatus";
+import CommercialCostDialog from "../Components/CommercialCostDialog";
 import { createSalesOrderFromBill } from "../api/salesOrderApi";
 import CardActions from "../Components/CardActions";
 import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdUndo, MdPostAdd, MdLocalShipping, MdAssignmentTurnedIn } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
@@ -123,6 +125,7 @@ export default function InvoicePage({ mode = "invoices" }) {
   // per-card FBR Validate / Submit / Exclude buttons. The FBR-submitted
   // status badge still renders in both modes so the operator can see at
   // a glance which rows are locked. `invoices` mode keeps everything.
+  const [costTarget, setCostTarget] = useState(null);
   const isBillsMode = mode === "bills";
   // Note tabs: `creditnotes` (returns / reversals, DocumentType 10) and
   // `debitnotes` (upward adjustments, DocumentType 9). Each lists ONLY its
@@ -251,6 +254,7 @@ export default function InvoicePage({ mode = "invoices" }) {
   const [viewingId, setViewingId] = useState(null);
   useEffect(() => { const id = Number(new URLSearchParams(window.location.search).get("viewBill")); if (id > 0) setViewingId(id); }, []);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const listRequest = useRef(0);
 
   const navigate = useNavigate();
   // ?search=<bill-number> deep-link support — let a Bill card on the
@@ -302,6 +306,7 @@ export default function InvoicePage({ mode = "invoices" }) {
   const [handoverBulkBusy, setHandoverBulkBusy] = useState(false);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [costingStatus, setCostingStatus] = useState("");
   const [hasExcelBill, setHasExcelBill] = useState(false);
   const [hasExcelTax, setHasExcelTax] = useState(false);
   const [exportingId, setExportingId] = useState(null);
@@ -319,6 +324,7 @@ export default function InvoicePage({ mode = "invoices" }) {
 
   const fetchInvoices = useCallback(async (companyId, pg) => {
     if (!companyId) return;
+    const requestId = ++listRequest.current;
     setLoadingInvoices(true);
     try {
       const params = { page: pg || page };
@@ -329,10 +335,12 @@ export default function InvoicePage({ mode = "invoices" }) {
       if (handoverFilter) params.handoverFilter = handoverFilter;
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
+      if (costingStatus) params.costingStatus = costingStatus;
       // Note tabs list ONLY their own type; other tabs get sale bills
       // only (server-side split — the three groups never mix).
       if (isNotesMode) params.type = noteDocType === 10 ? "creditnotes" : "debitnotes";
       const { data } = await getPagedInvoicesByCompany(companyId, params);
+      if (requestId !== listRequest.current) return;
       setInvoices(data.items);
       setTotalCount(data.totalCount);
       setTotalPages(data.totalPages);
@@ -354,9 +362,10 @@ export default function InvoicePage({ mode = "invoices" }) {
         }
         return next;
       });
-    } catch { setInvoices([]); setTotalCount(0); setTotalPages(0); }
-    finally { setLoadingInvoices(false); }
-  }, [page, pageSize, search, clientFilter, fbrFilter, handoverFilter, dateFrom, dateTo]);
+    } catch {
+      if (requestId !== listRequest.current) return; setInvoices([]); setTotalCount(0); setTotalPages(0); }
+    finally { if (requestId === listRequest.current) setLoadingInvoices(false); }
+  }, [page, pageSize, search, clientFilter, fbrFilter, handoverFilter, dateFrom, dateTo, costingStatus]);
 
   useEffect(() => {
     if (selectedCompany) {
@@ -383,10 +392,10 @@ export default function InvoicePage({ mode = "invoices" }) {
 
   useEffect(() => {
     if (selectedCompany) fetchInvoices(selectedCompany.id, page);
-  }, [page, pageSize, search, clientFilter, fbrFilter, handoverFilter, dateFrom, dateTo]);
+  }, [page, pageSize, search, clientFilter, fbrFilter, handoverFilter, dateFrom, dateTo, costingStatus]);
 
   const resetFilters = () => {
-    setSearch(""); setClientFilter(""); setFbrFilter(""); setHandoverFilter(""); setDateFrom(""); setDateTo(""); setPage(1);
+    setSearch(""); setClientFilter(""); setFbrFilter(""); setHandoverFilter(""); setDateFrom(""); setDateTo(""); setCostingStatus(""); setPage(1);
   };
 
   const handleFilterChange = (setter) => (e) => { setter(e.target.value); setPage(1); };
@@ -716,6 +725,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       if (clientFilter) params.clientId = clientFilter;
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
+      if (costingStatus) params.costingStatus = costingStatus;
       if (isNotesMode) params.type = noteDocType === 10 ? "creditnotes" : "debitnotes";
       const { data } = await getPagedInvoicesByCompany(selectedCompany.id, params);
       const ids = (data.items || []).map((i) => i.id);
@@ -753,6 +763,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     if (clientFilter) params.clientId = clientFilter;
     if (dateFrom) params.dateFrom = dateFrom;
     if (dateTo) params.dateTo = dateTo;
+      if (costingStatus) params.costingStatus = costingStatus;
     if (isNotesMode) params.type = noteDocType === 10 ? "creditnotes" : "debitnotes";
     const { data } = await getPagedInvoicesByCompany(selectedCompany.id, params);
     const all = data.items || [];
@@ -890,7 +901,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     setBulkResults({ open: true, action: "submit", items: results });
   };
 
-  const hasFilters = search || clientFilter || fbrFilter || handoverFilter || dateFrom || dateTo;
+  const hasFilters = costingStatus || search || clientFilter || fbrFilter || handoverFilter || dateFrom || dateTo;
 
   return (
     <DocumentLinesNavigation type={isBillsMode ? "bill" : mode === "creditnotes" ? "creditNote" : mode === "debitnotes" ? "debitNote" : "taxInvoice"}>
@@ -1107,6 +1118,9 @@ export default function InvoicePage({ mode = "invoices" }) {
               <div className="filter-date-group">
                 <input type="date" className="filter-date-input" value={dateFrom} onChange={handleFilterChange(setDateFrom)} title="From date" />
                 <span className="filter-date-sep">–</span>
+              {!isNotesMode && has("bills.costs.view") && <select aria-label="Costing status" className="filter-select" value={costingStatus} onChange={handleFilterChange(setCostingStatus)}>
+                <option value="">All costing statuses</option><option value="not-costed">Not costed</option><option value="partial">Partially costed</option><option value="full">Fully costed</option>
+              </select>}
                 <input type="date" className="filter-date-input" value={dateTo} onChange={handleFilterChange(setDateTo)} title="To date" />
               </div>
               {hasFilters && (
@@ -1146,6 +1160,7 @@ export default function InvoicePage({ mode = "invoices" }) {
         <>
           {viewMode === "table" ? (
             <InvoiceTable
+              onCosts={has("bills.costs.view") && !isNotesMode ? inv => setCostTarget(inv) : null}
               invoices={invoices}
               attachCounts={attachCounts}
               onAttach={(inv) => setAttachTarget(inv)}
@@ -1235,6 +1250,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                       {inv.indentNo && <div><span style={cardStyles.metaLabel}>Indent</span><span style={cardStyles.metaValue}>{inv.indentNo}</span></div>}
                       {inv.site && <div><span style={cardStyles.metaLabel}>Site</span><span style={cardStyles.metaValue}>{inv.site}</span></div>}
                       <div><span style={cardStyles.metaLabel}>Date</span><span style={cardStyles.metaValue}>{new Date(inv.date).toLocaleDateString()}</span></div>
+                      {!isNotesMode && has("bills.costs.view") && <div><CostingStatus document={inv} onOpen={() => setCostTarget(inv)} /></div>}
                       <div><span style={cardStyles.metaLabel}>Lines</span><span style={cardStyles.metaValue}>{inv.items?.length || 0} item{inv.items?.length === 1 ? "" : "s"}</span></div>
                       {inv.challanNumbers?.length > 0 && <div><span style={cardStyles.metaLabel}>Challan</span><span style={cardStyles.metaValue}>#{inv.challanNumbers.join(", #")}</span></div>}
                     </div>
@@ -1258,6 +1274,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                     </div>
                   </div>
                   <CardActions style={cardStyles.buttonGroup}>
+                    {!isNotesMode && has("bills.costs.view") && <button style={{ ...cardStyles.button, minHeight: 44 }} onClick={() => setCostTarget(inv)}>Costs & suppliers</button>}
                     {/* Bills card: View, Print Bill, Bill PDF, Bill XLS, Edit, Delete.
                         Invoices card: View, Tax Print, Tax PDF, Tax XLS, View FBR, Validate, Submit. */}
                     {/* Read-only View — shown on BOTH tabs. On the Invoices tab
@@ -1565,6 +1582,7 @@ export default function InvoicePage({ mode = "invoices" }) {
         />
       )}
 
+      {costTarget && <CommercialCostDialog id={costTarget.id} companyId={costTarget.companyId} onClose={() => { setCostTarget(null); fetchInvoices(selectedCompany.id, page); }} />}
       {showStandaloneForm && selectedCompany && (
         <StandaloneInvoiceForm
           companyId={selectedCompany.id}

@@ -98,11 +98,12 @@ namespace MyApp.Api.Controllers
             [FromQuery] int? supplierId = null,
             [FromQuery] DateTime? dateFrom = null,
             [FromQuery] DateTime? dateTo = null,
-            [FromQuery] bool? fromChallan = null)
+            [FromQuery] bool? fromChallan = null,
+            [FromQuery] string? purchaseCategory = null, [FromQuery] string? entrySource = null)
         {
             var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
             var clampedPage = PaginationHelper.ClampPage(page);
-            var result = await _service.GetPagedByCompanyAsync(companyId, clampedPage, size, search, supplierId, dateFrom, dateTo, fromChallan);
+            var result = await _service.GetPagedByCompanyAsync(companyId, clampedPage, size, search, supplierId, dateFrom, dateTo, fromChallan, purchaseCategory, entrySource);
             await ScrubPaymentIfDenied(result.Items);
             return Ok(result);
         }

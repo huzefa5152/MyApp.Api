@@ -205,7 +205,7 @@ namespace MyApp.Api.Controllers
         /// </summary>
         [HttpGet("company/{companyId}")]
         [HasAnyPermission(
-            "suppliers.manage.view",
+            "suppliers.manage.view", "bills.costs.view", "bills.costs.update", "bills.manage.create.standalone",
             "purchasebills.list.view", "purchasebills.manage.create", "purchasebills.manage.update",
             "goodsreceipts.list.view", "goodsreceipts.manage.create", "goodsreceipts.manage.update",
             "accounting.payments.view", "accounting.payments.create",

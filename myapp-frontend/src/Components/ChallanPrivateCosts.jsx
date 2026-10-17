@@ -23,7 +23,7 @@ export function useChallanSuppliers(companyId) {
   return suppliers;
 }
 
-export default function ChallanPrivateCosts({ items = [], onItemsChange, suppliers = [], readOnly = false, companyId }) {
+export default function ChallanPrivateCosts({ items = [], onItemsChange, suppliers = [], readOnly = false, companyId, getActualLineTotal, showPurchaseValidation = false }) {
   const { has } = usePermissions();
   const [addedSuppliers, setAddedSuppliers] = useState([]);
   const [supplierTarget, setSupplierTarget] = useState(null);
@@ -69,18 +69,20 @@ export default function ChallanPrivateCosts({ items = [], onItemsChange, supplie
       <div className="challan-private-supplier">
         <span className="challan-private-mobile-label">Supplier</span>
         {readOnly ? <span>{item.supplierName || choices.find((s) => s.id === item.supplierId)?.name || "—"}</span> : <SearchableSelect items={choices} value={item.supplierId ?? ""} onChange={(id) => updateLine(index, { supplierId: id ? Number(id) : null })} placeholder="Optional supplier" style={field} />}
+        {showPurchaseValidation && !item.purchaseRecorded && !item.supplierId && <span className="commercial-field-error">Choose a supplier to record this payable.</span>}
         {canCreate && <button className="challan-private-add-supplier" type="button" disabled={openingSupplier} onClick={() => addSupplier(index)} aria-label={`Add supplier for line ${index + 1}`}>+ Add supplier</button>}
       </div>
       <label className="challan-private-cost">
         <span className="challan-private-mobile-label">Actual unit price (PKR)</span>
-        {readOnly ? <span>{item.actualUnitCost == null ? "—" : Number(item.actualUnitCost).toLocaleString(undefined, { maximumFractionDigits: 12 })}</span> : <input aria-label={`Actual cost per unit for line ${index + 1}`} style={field} type="number" inputMode="decimal" min="0" step="any" placeholder="Optional" value={item.actualUnitCost ?? ""} onChange={(e) => updateLine(index, { actualUnitCost: e.target.value === "" ? null : e.target.value })} />}
+        {readOnly ? <span>{item.actualUnitCost == null ? "—" : Number(item.actualUnitCost).toLocaleString(undefined, { maximumFractionDigits: 12 })}</span> : <input aria-invalid={showPurchaseValidation && !item.purchaseRecorded && (item.actualUnitCost == null || item.actualUnitCost === "" || Number(item.actualUnitCost) < 0) || undefined} aria-describedby={showPurchaseValidation && !item.purchaseRecorded ? `cost-help-${index}` : undefined} aria-label={`Actual cost per unit for line ${index + 1}`} style={field} type="number" inputMode="decimal" min="0" step="any" placeholder="Optional" value={item.actualUnitCost ?? ""} onChange={(e) => updateLine(index, { actualUnitCost: e.target.value === "" ? null : e.target.value })} />}
+        {showPurchaseValidation && !item.purchaseRecorded && <span id={`cost-help-${index}`} className="commercial-field-error">{item.actualUnitCost == null || item.actualUnitCost === "" ? "Add the actual unit cost. Enter 0 only if there is no cost." : Number(item.actualUnitCost) < 0 ? "Actual cost must be zero or more." : ""}</span>}
       </label>
       <div className="challan-private-total">
         <span className="challan-private-mobile-label">Actual line total (PKR)</span>
         <output aria-label={`Actual line total for line ${index + 1}`}>
           {item.actualUnitCost == null || item.actualUnitCost === "" || item.quantity == null || item.quantity === "" ||
             !Number.isFinite(Number(item.quantity) * Number(item.actualUnitCost)) || Number(item.quantity) < 0 || Number(item.actualUnitCost) < 0
-            ? "—" : (Number(item.quantity) * Number(item.actualUnitCost)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            ? "—" : (getActualLineTotal ? getActualLineTotal(item) : Number(item.quantity) * Number(item.actualUnitCost)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </output>
       </div>
     </div>)}

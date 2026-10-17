@@ -19,6 +19,9 @@ namespace MyApp.Api.DTOs
         public string CompanyName { get; set; } = "";
         public int SupplierId { get; set; }
         public int? SourceDeliveryChallanId { get; set; }
+        public string PurchaseCategory { get; set; } = "Inventory";
+        public string Source { get; set; } = "manual";
+        public int? SourceInvoiceId { get; set; }
         public bool IsNonStockSupplierPurchase { get; set; }
         public string SupplierName { get; set; } = "";
         public string? SupplierBillNumber { get; set; }
@@ -89,6 +92,7 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class CreatePurchaseBillDto
     {
+        public string PurchaseCategory { get; set; } = "Inventory";
         public int? CustomNumber { get; set; }
         // ── Withholding income tax (s.153) — optional, defaults to none ──
         /// <summary>Rate %. Null with an amount means fixed-amount mode; null

@@ -22,7 +22,7 @@ namespace MyApp.Api.Services.Implementations
             if (request.Items == null || request.Items.Any(i => i == null || i.Quantity < 0))
                 throw new InvalidOperationException("Enter valid purchase quantities.");
             var nonStock = request.BillId.HasValue && await _context.PurchaseBills.AnyAsync(b =>
-                b.Id == request.BillId.Value && b.CompanyId == request.CompanyId && b.Source == "challan-supplier");
+                b.Id == request.BillId.Value && b.CompanyId == request.CompanyId && (b.Source == "challan-supplier" || b.PurchaseCategory == "LocalDirect"));
             var posted = request.BillId.HasValue
                 ? await _context.StockMovements.Where(m => m.CompanyId == request.CompanyId
                     && m.SourceType == StockMovementSourceType.PurchaseBill && m.SourceId == request.BillId)
@@ -71,7 +71,7 @@ namespace MyApp.Api.Services.Implementations
         /// the grand total on every bill that withholds nothing, which is all of
         /// them until an operator says otherwise.</summary>
         private static decimal Collectible(PurchaseBill pb) =>
-            WithholdingTaxCalculator.Collectible(pb.GrandTotal, pb.WithholdingTaxAmount);
+            Math.Max(0m, WithholdingTaxCalculator.Collectible(pb.GrandTotal, pb.WithholdingTaxAmount) - pb.AmountCredited);
 
         private static PurchaseBillDto ToDto(PurchaseBill pb) => new()
         {
@@ -82,7 +82,10 @@ namespace MyApp.Api.Services.Implementations
             CompanyName = pb.Company?.Name ?? "",
             SupplierId = pb.SupplierId,
             SourceDeliveryChallanId = pb.SourceDeliveryChallanId,
-            IsNonStockSupplierPurchase = pb.Source == "challan-supplier",
+            SourceInvoiceId = pb.SourceInvoiceId,
+            PurchaseCategory = pb.Source == "challan-supplier" ? "LocalDirect" : pb.PurchaseCategory,
+            Source = pb.Source ?? "manual",
+            IsNonStockSupplierPurchase = (pb.Source == "challan-supplier" || pb.PurchaseCategory == "LocalDirect"),
             SupplierName = pb.Supplier?.Name ?? "",
             SupplierBillNumber = pb.SupplierBillNumber,
             SupplierIRN = pb.SupplierIRN,
@@ -141,7 +144,7 @@ namespace MyApp.Api.Services.Implementations
         public async Task<PagedResult<PurchaseBillDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, int? supplierId = null,
-            DateTime? dateFrom = null, DateTime? dateTo = null, bool? fromChallan = null)
+            DateTime? dateFrom = null, DateTime? dateTo = null, bool? fromChallan = null, string? purchaseCategory = null, string? entrySource = null)
         {
             var q = _context.PurchaseBills
                 .Include(pb => pb.Supplier)
@@ -154,6 +157,10 @@ namespace MyApp.Api.Services.Implementations
                 .Where(pb => pb.CompanyId == companyId);
             if (fromChallan.HasValue)
                 q = q.Where(pb => pb.SourceDeliveryChallanId.HasValue == fromChallan.Value);
+            if (!string.IsNullOrWhiteSpace(purchaseCategory))
+                q = q.Where(pb => pb.PurchaseCategory == purchaseCategory);
+            if (entrySource == "fbr-import") q = q.Where(pb => pb.Source == "fbr-import");
+            else if (entrySource == "manual") q = q.Where(pb => pb.Source != "fbr-import");
             if (supplierId.HasValue)
                 q = q.Where(pb => pb.SupplierId == supplierId.Value);
             if (dateFrom.HasValue)
@@ -206,7 +213,7 @@ namespace MyApp.Api.Services.Implementations
 
         private async Task<string?> SupplierLockedReasonAsync(PurchaseBill bill)
         {
-            if (bill.SourceDeliveryChallanId.HasValue || bill.Source == "challan-supplier")
+            if (bill.SourceDeliveryChallanId.HasValue || (bill.Source == "challan-supplier" || bill.PurchaseCategory == "LocalDirect"))
                 return "Supplier is fixed by the source challan.";
             if (bill.Source == "fbr-import")
                 return "Supplier is fixed by the imported supplier invoice.";
@@ -346,6 +353,11 @@ namespace MyApp.Api.Services.Implementations
             // sales-side InvoiceNumber sequence.
             var nextNumber = await CompanyDocumentNumbers.AllocateAsync(_context, dto.CompanyId, "purchase-bill", dto.CustomNumber);
 
+            if (dto.PurchaseCategory != "Inventory" && dto.PurchaseCategory != "LocalDirect")
+                throw new InvalidOperationException("Choose inventory or local direct purchase.");
+            if (dto.PurchaseCategory == "LocalDirect" && dto.Items.Any(i => i.ItemTypeId.HasValue || !string.IsNullOrWhiteSpace(i.HSCode) || (i.SourceInvoiceItemIds?.Count ?? 0) > 0))
+                throw new InvalidOperationException("Local direct purchases cannot carry inventory classifications.");
+
             // Validate "Purchase Against Sale Bill" lines BEFORE we touch
             // anything. Any line with SourceInvoiceItemIds:
             //   • must carry an ItemTypeId (we group sale lines by it)
@@ -438,6 +450,7 @@ namespace MyApp.Api.Services.Implementations
 
             var bill = new PurchaseBill
             {
+                PurchaseCategory = dto.PurchaseCategory,
                 PurchaseBillNumber = nextNumber,
                 Date = dto.Date.Date,
                 CompanyId = dto.CompanyId,
@@ -619,7 +632,7 @@ namespace MyApp.Api.Services.Implementations
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
             // Keep the whole supplier batch atomic.
-            await using var tx = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            await using var tx = await _context.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
             try
             {
                 var challan = await _context.DeliveryChallans
@@ -680,6 +693,7 @@ namespace MyApp.Api.Services.Implementations
                     {
                         return new PurchaseItem
                         {
+                            LocalDeliveryItemId = i.Id,
                             ItemTypeId = null,
                             ItemTypeName = "",
                             Description = i.Description,
@@ -703,6 +717,7 @@ namespace MyApp.Api.Services.Implementations
                         SupplierId = group.Key,
                         SourceDeliveryChallanId = challan.Id,
                         Source = "challan-supplier",
+                        PurchaseCategory = "LocalDirect",
                         PurchaseBillNumber = number,
                         Date = request?.Date.Date ?? (challan.DeliveryDate ?? DateTime.UtcNow).Date,
                         Subtotal = total,
@@ -762,13 +777,16 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<PurchaseBillDto?> UpdateAsync(int id, UpdatePurchaseBillDto dto)
         {
-            await using var tx = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            await using var tx = await _context.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
             try
             {
             var bill = await _context.PurchaseBills
+                .FromSqlInterpolated($"SELECT * FROM PurchaseBills WITH (UPDLOCK, HOLDLOCK, FORCESEEK) WHERE Id = {id}")
                 .Include(p => p.Items)
                 .FirstOrDefaultAsync(p => p.Id == id);
             if (bill == null) return null;
+            if (bill.Source == "local-direct")
+                throw new InvalidOperationException("Generated local purchases retain their source lines. Correct private costing separately; use supplier credit notes for liability adjustments.");
             var targetSupplierId = dto.SupplierId ?? bill.SupplierId;
             var supplierChanged = targetSupplierId != bill.SupplierId;
             if (supplierChanged)
@@ -787,7 +805,7 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException("Every line needs a description.");
             if (dto.Items.Any(i => i.Quantity <= 0 || i.UnitPrice < 0))
                 throw new InvalidOperationException("Quantity must be positive and unit price cannot be negative.");
-            if (bill.Source == "challan-supplier" && dto.Items.Any(i => i.ItemTypeId.HasValue || !string.IsNullOrWhiteSpace(i.HSCode) || (i.SourceInvoiceItemIds?.Count ?? 0) > 0))
+            if ((bill.Source == "challan-supplier" || bill.PurchaseCategory == "LocalDirect") && dto.Items.Any(i => i.ItemTypeId.HasValue || !string.IsNullOrWhiteSpace(i.HSCode) || (i.SourceInvoiceItemIds?.Count ?? 0) > 0))
                 throw new InvalidOperationException("Challan supplier purchases are non-stock. Record inventory purchases separately.");
 
 
@@ -835,6 +853,7 @@ namespace MyApp.Api.Services.Implementations
                 bill.ReconciliationStatus = "Pending";
 
             // Replace items wholesale (simpler than a diff, fine for v1)
+            var localSources = bill.Items.ToDictionary(i => i.Id, i => i.LocalDeliveryItemId);
             _context.PurchaseItems.RemoveRange(bill.Items);
             bill.Items.Clear();
 
@@ -846,6 +865,7 @@ namespace MyApp.Api.Services.Implementations
                     : null;
                 var ni = new PurchaseItem
                 {
+                    LocalDeliveryItemId = localSources.GetValueOrDefault(i.Id),
                     ItemTypeId = i.ItemTypeId,
                     ItemTypeName = itemType?.Name ?? "",
                     Description = i.Description?.Trim() ?? "",
@@ -1011,6 +1031,11 @@ namespace MyApp.Api.Services.Implementations
                 .Include(p => p.Items)
                 .FirstOrDefaultAsync(p => p.Id == id);
             if (bill == null) return false;
+
+            if (await _context.PurchaseDebitNotes.AnyAsync(n => n.PurchaseBillId == id))
+                throw new InvalidOperationException("This purchase has linked supplier credits. Preserve it for the supplier ledger.");
+            if (await _context.PaymentAllocations.AnyAsync(a => a.PurchaseBillId == id))
+                throw new InvalidOperationException("This purchase has payment history. Use a supplier credit or settlement adjustment to preserve the ledger.");
 
             // Reverse the bill's actual posted stock before deleting its rows.
             // Compensating OUT entries are written rather than the IN rows

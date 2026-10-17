@@ -36,6 +36,7 @@ namespace MyApp.Api.Services.Implementations
 
 
             SupplierId = d.SupplierId,
+            PurchaseBillId = d.PurchaseBillId,
             SupplierName = d.Supplier?.Name ?? "",
             SupplierRef = d.SupplierRef,
             Notes = d.Notes,
@@ -181,6 +182,7 @@ namespace MyApp.Api.Services.Implementations
                         CompanyId = dto.CompanyId,
 
                         SupplierId = dto.SupplierId,
+                        PurchaseBillId = dto.PurchaseBillId,
                         SupplierRef = dto.SupplierRef?.Trim(),
                         Notes = dto.Notes?.Trim(),
                         Subtotal = subtotal,
@@ -190,8 +192,10 @@ namespace MyApp.Api.Services.Implementations
                         Items = items,
                         CreatedAt = DateTime.UtcNow,
                     };
+                    await ValidatePurchaseLinkAsync(note.CompanyId, note.SupplierId, note.PurchaseBillId, note.GrandTotal, null, dto.Items);
                     _context.PurchaseDebitNotes.Add(note);
                     await _context.SaveChangesAsync();
+                    await RecomputeCreditsAsync(note.PurchaseBillId);
                     await RecordStockOutAsync(note, items, supplier.Name);
                     await _posting.PostPurchaseDebitNoteAsync(note);
 
@@ -243,6 +247,8 @@ namespace MyApp.Api.Services.Implementations
 
                 if (dto.Date.HasValue) note.Date = dto.Date.Value.Date;
                 await _gl.AssertPeriodOpenAsync(note.CompanyId, note.Date);
+                var previousPurchaseBillId = note.PurchaseBillId;
+                note.PurchaseBillId = dto.PurchaseBillId;
                 note.SupplierId = dto.SupplierId;
                 note.SupplierRef = dto.SupplierRef?.Trim();
                 note.Notes = dto.Notes?.Trim();
@@ -256,6 +262,9 @@ namespace MyApp.Api.Services.Implementations
                 note.GSTAmount = Math.Round(note.Subtotal * dto.GSTRate / 100m, 2);
                 note.GrandTotal = note.Subtotal + note.GSTAmount;
                 await _context.SaveChangesAsync();
+                await ValidatePurchaseLinkAsync(note.CompanyId, note.SupplierId, note.PurchaseBillId, note.GrandTotal, note.Id, dto.Items);
+                await RecomputeCreditsAsync(previousPurchaseBillId);
+                await RecomputeCreditsAsync(note.PurchaseBillId);
                 await ReconcileStockToLinesAsync(note, newItems);
                 await _posting.PostPurchaseDebitNoteAsync(note);
 
@@ -283,8 +292,10 @@ namespace MyApp.Api.Services.Implementations
                 await ReverseStockAsync(note, note.Date, $"Reversal — Debit Note #{note.DebitNoteNumber} deleted");
                 await _posting.RemoveForSourceAsync(note.CompanyId, SourceDocType.PurchaseDebitNote, note.Id);
 
+                var purchaseBillId = note.PurchaseBillId;
                 _context.PurchaseDebitNotes.Remove(note);   // items cascade
                 await _context.SaveChangesAsync();
+                await RecomputeCreditsAsync(purchaseBillId);
                 await tx.CommitAsync();
                 return true;
             }
@@ -295,6 +306,30 @@ namespace MyApp.Api.Services.Implementations
                 throw;
             }
         }
+        private async Task RecomputeCreditsAsync(int? purchaseBillId)
+        {
+            if (!purchaseBillId.HasValue) return;
+            var bill = await _context.PurchaseBills.SingleAsync(p => p.Id == purchaseBillId);
+            bill.AmountCredited = await _context.PurchaseDebitNotes.Where(n => n.PurchaseBillId == purchaseBillId)
+                .SumAsync(n => (decimal?)n.GrandTotal) ?? 0m;
+            await _context.SaveChangesAsync();
+        }
+
+        private async Task ValidatePurchaseLinkAsync(int companyId, int supplierId, int? purchaseBillId, decimal amount, int? exceptId,
+            List<CreatePurchaseDebitNoteItemDto> lines)
+        {
+            if (!purchaseBillId.HasValue) return;
+            var bill = await _context.PurchaseBills.FromSqlInterpolated($"SELECT * FROM PurchaseBills WITH (UPDLOCK, HOLDLOCK) WHERE Id = {purchaseBillId.Value}")
+                .SingleOrDefaultAsync(p => p.CompanyId == companyId && p.SupplierId == supplierId);
+            if (bill == null) throw new InvalidOperationException("The purchase must belong to this company and supplier.");
+            if ((bill.PurchaseCategory == "LocalDirect" || bill.Source == "challan-supplier") && lines.Any(i => i.ItemTypeId.HasValue || !string.IsNullOrWhiteSpace(i.HSCode)))
+                throw new InvalidOperationException("A local supplier credit cannot move inventory.");
+            var existing = await _context.PurchaseDebitNotes.Where(n => n.PurchaseBillId == purchaseBillId && (!exceptId.HasValue || n.Id != exceptId.Value))
+                .SumAsync(n => (decimal?)n.GrandTotal) ?? 0m;
+            if (existing + amount > bill.GrandTotal)
+                throw new InvalidOperationException("Supplier credits cannot exceed the original purchase total.");
+        }
+
         private async Task<List<Models.PurchaseDebitNoteItem>> BuildItemsAsync(
             int companyId, List<CreatePurchaseDebitNoteItemDto> lines)
         {

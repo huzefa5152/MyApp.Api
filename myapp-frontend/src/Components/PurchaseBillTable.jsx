@@ -24,7 +24,7 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
       render: (b) => (
         <>
           {b.supplierName || "—"}
-          {b.sourceDeliveryChallanId && <span style={{ marginLeft: 6, padding: "1px 6px", borderRadius: 6, fontSize: "0.7rem", fontWeight: 600, background: "#e0f2f1", color: "#00695c" }}>Challan supplier purchase</span>}
+          {b.isNonStockSupplierPurchase && <span style={{ marginLeft: 6, padding: "1px 6px", borderRadius: 6, fontSize: "0.7rem", fontWeight: 600, background: "#e0f2f1", color: "#00695c" }}>Local direct purchase</span>}
         </>
       ),
     },
@@ -84,7 +84,7 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
       <button style={btn.view} onClick={() => onView?.(b)} title="View">
         <MdVisibility size={14} />
       </button>
-      {perms.canUpdate && (
+      {perms.canUpdate && b.source !== "local-direct" && (
         <button style={btn.edit} onClick={() => onEdit?.(b)} title="Edit">
           <MdEdit size={14} />
         </button>

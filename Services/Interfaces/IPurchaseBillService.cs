@@ -8,7 +8,7 @@ namespace MyApp.Api.Services.Interfaces
         Task<PagedResult<PurchaseBillDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, int? supplierId = null,
-            DateTime? dateFrom = null, DateTime? dateTo = null, bool? fromChallan = null);
+            DateTime? dateFrom = null, DateTime? dateTo = null, bool? fromChallan = null, string? purchaseCategory = null, string? entrySource = null);
         Task<PurchaseBillDto?> GetByIdAsync(int id);
         /// <summary>Set/clear the bill's AP payment due date (drives the
         /// Overdue / Coming-due status). Returns the updated bill or null.</summary>

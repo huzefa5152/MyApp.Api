@@ -9,6 +9,7 @@ namespace MyApp.Api.DTOs
 
 
         public int SupplierId { get; set; }
+        public int? PurchaseBillId { get; set; }
         public string SupplierName { get; set; } = "";
         public string? SupplierRef { get; set; }
         public string? Notes { get; set; }
@@ -39,6 +40,7 @@ namespace MyApp.Api.DTOs
         public int CompanyId { get; set; }
 
         public int SupplierId { get; set; }
+        public int? PurchaseBillId { get; set; }
         public string? SupplierRef { get; set; }
         public string? Notes { get; set; }
         public decimal GSTRate { get; set; }
@@ -48,6 +50,7 @@ namespace MyApp.Api.DTOs
     {
         public DateTime? Date { get; set; }
         public int SupplierId { get; set; }
+        public int? PurchaseBillId { get; set; }
         public string? SupplierRef { get; set; }
         public string? Notes { get; set; }
         public decimal GSTRate { get; set; }

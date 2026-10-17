@@ -700,7 +700,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
-      <div className="payment-dialog" data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" aria-label={isEdit ? "Edit payment" : isReceipt ? "Record receipt" : "Record payment"} className="payment-dialog" data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? `Edit ${editPayment.reference || (isReceipt ? "Receipt" : "Payment")}` : (isReceipt ? "Record Receipt" : "Record Payment")}</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
@@ -926,7 +926,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
             {purpose === "advance" && (
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Advance amount</label>
-                <input
+                <input aria-label="Advance amount"
                   type="number" min="0" step="0.01"
                   style={formStyles.input}
                   value={advanceAmount}

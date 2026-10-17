@@ -2393,6 +2393,10 @@ namespace MyApp.Api.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<decimal?>("ActualUnitCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
                     b.Property<int?>("DeliveryItemId")
                         .HasColumnType("int");
 
@@ -2438,6 +2442,9 @@ namespace MyApp.Api.Migrations
 
                     b.Property<string>("SroScheduleNo")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("SupplierId")
+                        .HasColumnType("int");
 
                     b.Property<string>("UOM")
                         .IsRequired()
@@ -4373,6 +4380,47 @@ namespace MyApp.Api.Migrations
                     b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
+            modelBuilder.Entity("MyApp.Api.Models.PrivateCostChange", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ActorId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("AfterJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("BeforeJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Target")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("TargetId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId", "Target", "TargetId");
+
+                    b.ToTable("PrivateCostChanges");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
             modelBuilder.Entity("MyApp.Api.Models.PurchaseBill", b =>
                 {
                     b.Property<int>("Id")
@@ -4380,6 +4428,10 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("AmountCredited")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("AmountInWords")
                         .IsRequired()
@@ -4428,6 +4480,11 @@ namespace MyApp.Api.Migrations
                     b.Property<int>("PurchaseBillNumber")
                         .HasColumnType("int");
 
+                    b.Property<string>("PurchaseCategory")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
                     b.Property<string>("ReconciliationStatus")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -4440,6 +4497,9 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("nvarchar(20)");
 
                     b.Property<int?>("SourceDeliveryChallanId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SourceInvoiceId")
                         .HasColumnType("int");
 
                     b.Property<decimal>("Subtotal")
@@ -4520,6 +4580,9 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("Notes")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("PurchaseBillId")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("Subtotal")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -4531,6 +4594,8 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("PurchaseBillId");
 
                     b.HasIndex("SupplierId");
 
@@ -4637,6 +4702,12 @@ namespace MyApp.Api.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<int?>("LocalDeliveryItemId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("LocalInvoiceItemId")
+                        .HasColumnType("int");
+
                     b.Property<int>("PurchaseBillId")
                         .HasColumnType("int");
 
@@ -4673,6 +4744,14 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("GoodsReceiptItemId");
 
                     b.HasIndex("ItemTypeId");
+
+                    b.HasIndex("LocalDeliveryItemId")
+                        .IsUnique()
+                        .HasFilter("[LocalDeliveryItemId] IS NOT NULL");
+
+                    b.HasIndex("LocalInvoiceItemId")
+                        .IsUnique()
+                        .HasFilter("[LocalInvoiceItemId] IS NOT NULL");
 
                     b.HasIndex("PurchaseBillId");
 
@@ -6067,6 +6146,11 @@ namespace MyApp.Api.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
+                    b.HasOne("MyApp.Api.Models.PurchaseBill", null)
+                        .WithMany()
+                        .HasForeignKey("PurchaseBillId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("MyApp.Api.Models.Supplier", "Supplier")
                         .WithMany()
                         .HasForeignKey("SupplierId")
@@ -6114,6 +6198,16 @@ namespace MyApp.Api.Migrations
                         .WithMany()
                         .HasForeignKey("ItemTypeId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MyApp.Api.Models.DeliveryItem", null)
+                        .WithMany()
+                        .HasForeignKey("LocalDeliveryItemId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("MyApp.Api.Models.InvoiceItem", null)
+                        .WithMany()
+                        .HasForeignKey("LocalInvoiceItemId")
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("MyApp.Api.Models.PurchaseBill", "PurchaseBill")
                         .WithMany("Items")

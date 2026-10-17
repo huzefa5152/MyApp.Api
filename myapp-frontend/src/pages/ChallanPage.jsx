@@ -1,5 +1,6 @@
+import CommercialCostDialog from "../Components/CommercialCostDialog";
 import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { renderRichTextHtml } from "../utils/richText";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { MdDescription, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdUploadFile } from "react-icons/md";
@@ -78,6 +79,7 @@ export default function ChallanPage() {
   const [showImport, setShowImport] = useState(false);
   const [editChallan, setEditChallan] = useState(null);
   const [loadingChallans, setLoadingChallans] = useState(false);
+  const listRequest = useRef(0);
   // Generate-Bill shortcut: holds the challanId to prefill into InvoiceForm
   // when the user clicks the per-card button.
   const [generateBillChallanId, setGenerateBillChallanId] = useState(null);
@@ -98,6 +100,7 @@ export default function ChallanPage() {
   const [clientFilter, setClientFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [costingStatus, setCostingStatus] = useState("");
   // Sales Order filter — driven by the searchable dropdown and by the
   // ?salesOrderId= query param (the "View Challans" shortcut from the SO page).
   const [searchParams, setSearchParams] = useSearchParams();
@@ -131,6 +134,7 @@ export default function ChallanPage() {
 
   const fetchChallans = useCallback(async (companyId, pg) => {
     if (!companyId) return;
+    const requestId = ++listRequest.current;
     setLoadingChallans(true);
     try {
       const params = { page: pg || page };
@@ -140,20 +144,23 @@ export default function ChallanPage() {
       if (clientFilter) params.clientId = clientFilter;
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
+      if (costingStatus) params.costingStatus = costingStatus;
       if (salesOrderFilter) params.salesOrderId = salesOrderFilter;
       const { data } = await getPagedChallansByCompany(companyId, params);
+      if (requestId !== listRequest.current) return;
       setChallans(data.items);
       setTotalCount(data.totalCount);
       setTotalPages(data.totalPages);
       setPageSize(data.pageSize);
     } catch {
+      if (requestId !== listRequest.current) return;
       setChallans([]);
       setTotalCount(0);
       setTotalPages(0);
     } finally {
-      setLoadingChallans(false);
+      if (requestId === listRequest.current) setLoadingChallans(false);
     }
-  }, [page, userPageSize, search, statusFilter, clientFilter, dateFrom, dateTo, salesOrderFilter]);
+  }, [page, userPageSize, search, statusFilter, clientFilter, dateFrom, dateTo, costingStatus, salesOrderFilter]);
 
   useEffect(() => {
     if (selectedCompany) {
@@ -181,14 +188,14 @@ export default function ChallanPage() {
   // Re-fetch when filters or page change
   useEffect(() => {
     if (selectedCompany) fetchChallans(selectedCompany.id, page);
-  }, [page, userPageSize, search, statusFilter, clientFilter, dateFrom, dateTo, salesOrderFilter]);
+  }, [page, userPageSize, search, statusFilter, clientFilter, dateFrom, dateTo, costingStatus, salesOrderFilter]);
 
   const resetFilters = () => {
     setSearch("");
     setStatusFilter("");
     setClientFilter("");
     setDateFrom("");
-    setDateTo("");
+    setDateTo(""); setCostingStatus("");
     setSalesOrderFilter("");
     if (searchParams.get("salesOrderId")) setSearchParams({}, { replace: true });
     setPage(1);
@@ -305,7 +312,9 @@ export default function ChallanPage() {
     }
   };
 
-  const ChallanEditor = editChallan?.invoiceId || editChallan?.status === "Invoiced" ? ChallanCostEditForm : ChallanEditForm;
+  const [costTarget, setCostTarget] = useState(null);
+  const CostEditor = ({ challan, onSaved }) => <CommercialCostDialog kind="challan" id={challan.id} companyId={challan.companyId} onClose={onSaved} />;
+  const ChallanEditor = editChallan?.invoiceId || editChallan?.status === "Invoiced" ? CostEditor : ChallanEditForm;
   const handleEditItems = (challan) => setEditChallan(challan);
   const handleEditSaved = () => {
     setEditChallan(null);
@@ -389,7 +398,7 @@ export default function ChallanPage() {
     }
   };
 
-  const hasFilters = search || statusFilter || clientFilter || dateFrom || dateTo || salesOrderFilter;
+  const hasFilters = costingStatus || search || statusFilter || clientFilter || dateFrom || dateTo || salesOrderFilter;
 
   // SO dropdown respects the client filter: all clients → every SO; a client
   // selected → only that client's SOs.
@@ -481,6 +490,9 @@ export default function ChallanPage() {
                   onChange={handleFilterChange(setSearch)}
                 />
               </div>
+              {has("bills.costs.view") && <select aria-label="Costing status" className="filter-select" value={costingStatus} onChange={handleFilterChange(setCostingStatus)}>
+                <option value="">All costing statuses</option><option value="not-costed">Not costed</option><option value="partial">Partially costed</option><option value="full">Fully costed</option>
+              </select>}
               <select className="filter-select" value={statusFilter} onChange={handleFilterChange(setStatusFilter)}>
                 <option value="">All Status</option>
                 <option value="Pending">Pending</option>
@@ -552,6 +564,7 @@ export default function ChallanPage() {
               onCancel={handleCancel}
               onDelete={handleDelete}
               onPrint={handlePrint}
+              onCosts={has("bills.costs.view") ? c => setCostTarget(c) : null}
               onEditItems={handleEditItems}
               onEditDelivery={setDeliveryEdit}
               onExportPdf={handleExportPdf}
@@ -572,6 +585,7 @@ export default function ChallanPage() {
               onCancel={handleCancel}
               onDelete={handleDelete}
               onPrint={handlePrint}
+              onCosts={has("bills.costs.view") ? c => setCostTarget(c) : null}
               onEditItems={handleEditItems}
               onEditDelivery={setDeliveryEdit}
               onExportPdf={handleExportPdf}
@@ -620,6 +634,7 @@ export default function ChallanPage() {
       {deliveryEdit && <BilledChallanEditForm challan={deliveryEdit} onClose={() => setDeliveryEdit(null)}
         onSaved={() => { setDeliveryEdit(null); fetchChallans(selectedCompany.id, page); }}
         onOpenBill={has("bills.list.view") ? bill => { setDeliveryEdit(null); navigate(`/bills?search=${bill.invoiceNumber}`); } : undefined} />}
+      {costTarget && <CommercialCostDialog kind="challan" id={costTarget.id} companyId={costTarget.companyId} onClose={() => { setCostTarget(null); fetchChallans(selectedCompany.id, page); }} />}
       {editChallan && (
         <ChallanEditor
           challan={editChallan}

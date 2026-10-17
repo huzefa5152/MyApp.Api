@@ -1,3 +1,4 @@
+import ChallanPrivateCosts, { useChallanSuppliers } from "./ChallanPrivateCosts";
 import BillTaxTreatmentField from "./BillTaxTreatmentField";
 import ManualChallanNumberField from "./ManualChallanNumberField";
 import DocumentCopyPicker from "./DocumentCopyPicker";
@@ -362,6 +363,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     company?.fbrDefaultPaymentModeUnregistered,
   ]);
 
+  const costSuppliers = useChallanSuppliers(companyId);
   // Per-row helpers
   const updateRow = (localId, patch) =>
     setRows((prev) => prev.map((r) => (r.localId === localId ? { ...r, ...patch } : r)));
@@ -550,6 +552,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         poNumber: billsMode ? (poNumber.trim() || null) : null,
         poDate: billsMode && poDate ? new Date(poDate).toISOString() : null,
         items: rows.map((r) => ({
+          actualUnitCost: r.actualUnitCost === "" || r.actualUnitCost == null ? null : Number(r.actualUnitCost),
+          supplierId: r.supplierId ? Number(r.supplierId) : null,
           itemTypeId: r.itemTypeId ? parseInt(r.itemTypeId) : null,
           // Description in Invoices mode is the item type's name (locked).
           // In Bills mode the operator types it directly into r.description
@@ -1375,6 +1379,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
               </>
             )}
 
+            <details><summary>Supplier and actual costs (optional)</summary>
+              <ChallanPrivateCosts companyId={companyId} suppliers={costSuppliers} items={rows.map(r => ({ ...r, unit: r.uom }))} onItemsChange={setRows} />
+            </details>
             {billsMode && <FreightChargesField value={freightCharges} onChange={setFreightCharges} />}
             <DocumentTaxFields freightCharges={billsMode ? Number(freightCharges || 0) : 0} subtotal={subtotal} gstAmount={gstAmount}
               furtherTaxRate={taxTreatment === "FBR" ? furtherTaxRate : undefined} onFurtherTaxRateChange={setFurtherTaxRate}

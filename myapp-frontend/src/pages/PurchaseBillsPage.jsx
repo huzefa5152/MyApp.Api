@@ -84,7 +84,9 @@ export default function PurchaseBillsPage() {
       if (pageSize) params.pageSize = pageSize;
       if (search) params.search = search;
       if (supplierFilter) params.supplierId = supplierFilter;
-      if (sourceFilter) params.fromChallan = sourceFilter === "challan";
+      if (sourceFilter) params.purchaseCategory = sourceFilter === "challan" ? "LocalDirect" : "Inventory";
+      if (sourceFilter === "other") params.entrySource = "manual";
+      if (sourceFilter === "fbr") params.entrySource = "fbr-import";
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
       const { data } = await getPurchaseBillsByCompanyPaged(selectedCompany.id, params);
@@ -228,7 +230,7 @@ export default function PurchaseBillsPage() {
                 <span className="filter-date-sep">–</span>
                 <input type="date" className="filter-date-input" value={dateTo} onChange={onFilterChange(setDateTo)} title="To" />
               </div>
-              <select className="filter-select" aria-label="Purchase source" value={sourceFilter} onChange={onFilterChange(setSourceFilter)}><option value="">All purchase sources</option><option value="challan">Challan supplier purchases</option><option value="other">Other purchases</option></select>
+              <select className="filter-select" aria-label="Purchase source" value={sourceFilter} onChange={onFilterChange(setSourceFilter)}><option value="">All purchase sources</option><option value="challan">Local direct purchases</option><option value="other">Inventory purchases (manual)</option><option value="fbr">FBR imported purchases</option></select>
               {hasFilters && <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>}
               <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 {canPrint && <PrintTemplateSelect picker={tplPicker} />}
@@ -282,7 +284,7 @@ export default function PurchaseBillsPage() {
                           <AttachmentBadge count={attachCounts[b.id]} onClick={() => setAttachTarget(b)} />
                         </div>
                         <p style={cardStyles.text}><strong>Supplier:</strong> {b.supplierName}</p>
-                        {b.sourceDeliveryChallanId && <p style={cardStyles.text}><strong>Source:</strong> Challan supplier purchase</p>}
+                        {<p style={cardStyles.text}><strong>Source:</strong> {b.purchaseCategory === "LocalDirect" ? "Local direct purchase" : b.source === "fbr-import" ? "FBR import" : "Inventory purchase"}</p>}
                         <p style={cardStyles.text}><strong>Date:</strong> {new Date(b.date).toLocaleDateString()}</p>
                         <p style={cardStyles.text}><strong>Grand Total:</strong> Rs. {b.grandTotal?.toLocaleString()}</p>
                         {b.supplierIRN && (
@@ -303,7 +305,7 @@ export default function PurchaseBillsPage() {
                         <button style={btnView} onClick={() => { setEditingId(b.id); setViewOnly(true); setShowForm(true); }}>
                           <MdVisibility size={14} /> View
                         </button>
-                        {canUpdate && (
+                        {canUpdate && b.source !== "local-direct" && (
                           <button style={btnEdit} onClick={() => { setEditingId(b.id); setViewOnly(false); setShowForm(true); }}>
                             <MdEdit size={14} /> Edit
                           </button>

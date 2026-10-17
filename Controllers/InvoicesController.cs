@@ -179,8 +179,11 @@ namespace MyApp.Api.Controllers
             [FromQuery] string? fbrFilter = null,
             // Customer document-handover status filter: "pending" | "delivered"
             // | "all"/null. Applied server-side (see InvoiceRepository).
-            [FromQuery] string? handoverFilter = null)
+            [FromQuery] string? handoverFilter = null,
+            [FromQuery] string? costingStatus = null)
         {
+            if (costingStatus != null && costingStatus != "" && costingStatus != "not-costed" && costingStatus != "partial" && costingStatus != "full")
+                return BadRequest(new { error = "Choose a valid costing status." });
             var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
             var clampedPage = PaginationHelper.ClampPage(page);
             // type=debitnotes → Debit Notes only; type=creditnotes → Credit
@@ -190,7 +193,7 @@ namespace MyApp.Api.Controllers
                           : string.Equals(type, "creditnotes", StringComparison.OrdinalIgnoreCase) ? 10
                           : null;
             var result = await _service.GetPagedByCompanyAsync(
-                companyId, clampedPage, size, search, clientId, dateFrom, dateTo, noteType, fbrFilter, handoverFilter);
+                companyId, clampedPage, size, search, clientId, dateFrom, dateTo, noteType, fbrFilter, handoverFilter, costingStatus);
             await ScrubPaymentIfDenied(result.Items);
             return Ok(result);
         }

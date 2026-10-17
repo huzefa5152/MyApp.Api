@@ -40,7 +40,7 @@ namespace MyApp.Api.Repositories.Implementations
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? salesOrderId = null)
+            int? salesOrderId = null, string? costingStatus = null)
         {
             var query = _context.DeliveryChallans
                 .AsSplitQuery()
@@ -80,6 +80,10 @@ namespace MyApp.Api.Repositories.Implementations
                     dc.Items.Any(item => item.Description.ToLower().Contains(term) ||
                                           (item.ItemType != null && item.ItemType.Name.ToLower().Contains(term))));
             }
+
+            if (costingStatus == "not-costed") query = query.Where(dc => !dc.Items.Any(i => i.ActualUnitCost.HasValue));
+            else if (costingStatus == "partial") query = query.Where(dc => dc.Items.Any(i => i.ActualUnitCost.HasValue) && dc.Items.Any(i => !i.ActualUnitCost.HasValue));
+            else if (costingStatus == "full") query = query.Where(dc => dc.Items.Any() && !dc.Items.Any(i => !i.ActualUnitCost.HasValue));
 
             var totalCount = await query.CountAsync();
             var items = await query

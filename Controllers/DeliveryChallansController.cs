@@ -74,12 +74,15 @@ namespace MyApp.Api.Controllers
             [FromQuery] int? clientId = null,
             [FromQuery] DateTime? dateFrom = null,
             [FromQuery] DateTime? dateTo = null,
-            [FromQuery] int? salesOrderId = null)
+            [FromQuery] int? salesOrderId = null,
+            [FromQuery] string? costingStatus = null)
         {
+            if (costingStatus != null && costingStatus != "" && costingStatus != "not-costed" && costingStatus != "partial" && costingStatus != "full")
+                return BadRequest(new { error = "Choose a valid costing status." });
             var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
             var clampedPage = PaginationHelper.ClampPage(page);
             var result = await _service.GetPagedByCompanyAsync(
-                companyId, clampedPage, size, search, status, clientId, dateFrom, dateTo, salesOrderId);
+                companyId, clampedPage, size, search, status, clientId, dateFrom, dateTo, salesOrderId, costingStatus);
             return Ok(result);
         }
 

@@ -18,7 +18,7 @@ namespace MyApp.Api.Services.Interfaces
             int companyId, int page, int pageSize,
             string? search = null, int? clientId = null,
             DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? noteType = null, string? fbrFilter = null, string? handoverFilter = null);
+            int? noteType = null, string? fbrFilter = null, string? handoverFilter = null, string? costingStatus = null);
         Task<InvoiceDto?> GetByIdAsync(int id);
         Task<InvoiceDto> CreateAsync(CreateInvoiceDto dto);
         /// <summary>

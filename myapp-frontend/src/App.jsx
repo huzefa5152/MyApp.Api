@@ -27,6 +27,7 @@ const CustomerPortalsPage = lazy(() => import("./pages/CustomerPortalsPage"));
 const NavigationMenuPage = lazy(() => import("./pages/NavigationMenuPage"));
 const CreditDebitNotePage = lazy(() => import("./pages/CreditDebitNotePage"));
 const ItemRateHistoryPage = lazy(() => import("./pages/ItemRateHistoryPage"));
+const SupplierPayablesPage = lazy(() => import("./pages/SupplierPayablesPage"));
 const PurchaseBillsPage = lazy(() => import("./pages/PurchaseBillsPage"));
 const GoodsReceiptsPage = lazy(() => import("./pages/GoodsReceiptsPage"));
 const StockDashboardPage = lazy(() => import("./pages/StockDashboardPage"));
@@ -149,6 +150,7 @@ export default function App() {
             <Route path="/debit-notes" element={<InvoicePage key="debitnotes" mode="debitnotes" />} />
             <Route path="/credit-debit-notes" element={<CreditDebitNotePage />} />
             <Route path="/item-rate-history" element={<ItemRateHistoryPage />} />
+            <Route path="/supplier-payables" element={<SupplierPayablesPage />} />
             <Route path="/purchase-bills" element={<PurchaseBillsPage />} />
             <Route path="/goods-receipts" element={<GoodsReceiptsPage />} />
             <Route path="/stock" element={<StockDashboardPage />} />

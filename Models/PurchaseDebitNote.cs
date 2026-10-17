@@ -10,6 +10,7 @@ namespace MyApp.Api.Models
         public int CompanyId { get; set; }
 
         public int SupplierId { get; set; }
+        public int? PurchaseBillId { get; set; }
         public string? SupplierRef { get; set; }
         public string? Notes { get; set; }
 

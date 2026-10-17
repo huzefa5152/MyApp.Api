@@ -398,6 +398,14 @@ namespace MyApp.Api.Services.Implementations
                     await _context.Payments.Where(p => p.CompanyId == id).ExecuteDeleteAsync();
                 }
 
+                // Local purchase lines restrict source-line deletion. The whole
+                // company is being removed, so release only its own source links.
+                await _context.PurchaseItems.Where(pi => pi.PurchaseBill.CompanyId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(pi => pi.LocalInvoiceItemId, (int?)null)
+                        .SetProperty(pi => pi.LocalDeliveryItemId, (int?)null));
+
+                await _context.PrivateCostChanges.Where(change => change.CompanyId == id).ExecuteDeleteAsync();
+
                 // 2. Delete invoice items, then invoices
                 var invoiceIds = await _context.Invoices.Where(i => i.CompanyId == id).Select(i => i.Id).ToListAsync();
                 if (invoiceIds.Count > 0)

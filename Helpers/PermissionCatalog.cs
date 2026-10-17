@@ -20,6 +20,9 @@ namespace MyApp.Api.Helpers
             // .kpi.* perms gate which sections of the page render. A user
             // with dashboard.view but no kpi.* perms sees only the welcome
             // banner — no money numbers leak.
+            new("bills.costs.view", "Bills", "Costs", "View", "View private actual costs and commercial profit"),
+            new("bills.costs.update", "Bills", "Costs", "Update", "Correct private costs including filed bills"),
+            new("purchasebills.payables.view", "PurchaseBills", "Payables", "View", "View supplier payables and supplier ledger"),
             new("dashboard.view",                "Dashboard", "Page",          "View", "Access the Dashboard page"),
             new("dashboard.kpi.sales.view",      "Dashboard", "Sales KPI",     "View", "See sales KPIs (Total Sales, top clients, recent invoices, sales trend)"),
             new("dashboard.kpi.purchases.view",  "Dashboard", "Purchase KPI",  "View", "See purchase KPIs (Total Purchases, top suppliers, recent purchase bills, purchase trend)"),

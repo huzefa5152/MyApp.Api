@@ -51,6 +51,7 @@ export const ROUTE_PERMISSIONS = {
   "/item-rate-history": "itemratehistory.view",
 
   // Purchases
+  "/supplier-payables": "purchasebills.payables.view",
   "/purchase-bills": "purchasebills.list.view",
   "/purchase-debit-notes": "purchasedebitnotes.list.view",
   "/goods-receipts": "goodsreceipts.list.view",

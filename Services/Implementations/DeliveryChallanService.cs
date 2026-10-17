@@ -99,7 +99,7 @@ namespace MyApp.Api.Services.Implementations
         /// </summary>
         private async Task AssertNoAutoPurchaseBillsAsync(int challanId)
         {
-            if (await _context.PurchaseBills.AsNoTracking().AnyAsync(p => p.SourceDeliveryChallanId == challanId))
+            if (await _context.PurchaseBills.AsNoTracking().AnyAsync(p => p.SourceDeliveryChallanId == challanId || p.Items.Any(i => i.LocalDeliveryItemId.HasValue && _context.DeliveryItems.Any(d => d.Id == i.LocalDeliveryItemId && d.DeliveryChallanId == challanId))))
                 throw new InvalidOperationException("Purchase bills already exist for this challan. Remove those bills before changing its delivery lines or cancelling it.");
         }
 
@@ -116,7 +116,7 @@ namespace MyApp.Api.Services.Implementations
                 dto.Items.Select(i => i.Id).Distinct().Count() != dto.Items.Count ||
                 dto.Items.Any(i => !dc.Items.Any(line => line.Id == i.Id)))
                 throw new InvalidOperationException("Costs must reference the existing lines of this challan.");
-            await AssertNoAutoPurchaseBillsAsync(challanId);
+
             await ValidatePrivateCostsAsync(dc.CompanyId, dto.Items.Select(i => new DeliveryItemDto
             {
                 SupplierId = i.SupplierId, ActualUnitCost = i.ActualUnitCost
@@ -150,6 +150,8 @@ namespace MyApp.Api.Services.Implementations
         {
             var dto = new DeliveryChallanDto
             {
+                CostingLineCount = dc.Items.Count,
+                CostedLineCount = dc.Items.Count(i => i.ActualUnitCost.HasValue),
                 Id = dc.Id,
                 ChallanNumber = dc.ChallanNumber,
                 CompanyId = dc.CompanyId,
@@ -280,13 +282,13 @@ namespace MyApp.Api.Services.Implementations
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? salesOrderId = null)
+            int? salesOrderId = null, string? costingStatus = null)
         {
             // Auto-clear "Setup Required" challans where FBR is now ready (runs once per page load)
             await ReEvaluateSetupRequiredAsync(companyId);
 
             var (items, totalCount) = await _repository.GetPagedByCompanyAsync(
-                companyId, page, pageSize, search, status, clientId, dateFrom, dateTo, salesOrderId);
+                companyId, page, pageSize, search, status, clientId, dateFrom, dateTo, salesOrderId, costingStatus);
 
             // Gate the Delete button client-side — only the highest-numbered
             // challan for this company is deletable.
@@ -614,7 +616,7 @@ namespace MyApp.Api.Services.Implementations
         {
             // Lines that already produced automatic purchase bills are frozen:
             // any change to them (including supplier / actual cost) is refused.
-            if (await _context.PurchaseBills.AsNoTracking().AnyAsync(p => p.SourceDeliveryChallanId == dc.Id))
+            if (await _context.PurchaseBills.AsNoTracking().AnyAsync(p => p.SourceDeliveryChallanId == dc.Id || p.Items.Any(i => i.LocalDeliveryItemId.HasValue && _context.DeliveryItems.Any(d => d.Id == i.LocalDeliveryItemId && d.DeliveryChallanId == dc.Id))))
             {
                 var incomingIds = items.Where(i => i.Id > 0).Select(i => i.Id).ToHashSet();
                 var changed = incomingIds.Count != dc.Items.Count ||

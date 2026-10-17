@@ -302,7 +302,9 @@ namespace MyApp.Api.Services.Implementations
 
             var accounts = await LoadAccountsAsync(bill.CompanyId);
             var ap = await ResolveAsync(bill.CompanyId, accounts, ControlType.AccountsPayable, "accounts payable");
-            var purchases = await ResolvePurchasesAsync(bill.CompanyId, accounts);
+            var purchases = bill.PurchaseCategory == "LocalDirect" || bill.Source == "challan-supplier"
+                ? ResolveCogs(accounts) ?? await SuspenseAsync(bill.CompanyId, accounts)
+                : await ResolvePurchasesAsync(bill.CompanyId, accounts);
 
             var label = $"Bill #{bill.PurchaseBillNumber}";
             // No further tax on the purchase side: a supplier's further tax
@@ -351,7 +353,10 @@ namespace MyApp.Api.Services.Implementations
 
             var accounts = await LoadAccountsAsync(note.CompanyId);
             var ap = await ResolveAsync(note.CompanyId, accounts, ControlType.AccountsPayable, "accounts payable");
-            var purchases = await ResolvePurchasesAsync(note.CompanyId, accounts);
+            var isLocal = note.PurchaseBillId.HasValue && await _context.PurchaseBills.AnyAsync(p => p.Id == note.PurchaseBillId &&
+                p.CompanyId == note.CompanyId && (p.PurchaseCategory == "LocalDirect" || p.Source == "challan-supplier"));
+            var purchases = isLocal ? ResolveCogs(accounts) ?? await SuspenseAsync(note.CompanyId, accounts)
+                : await ResolvePurchasesAsync(note.CompanyId, accounts);
             var inputTax = note.GSTAmount != 0m
                 ? await ResolveAsync(note.CompanyId, accounts, ControlType.InputTax, "input tax")
                 : null;

@@ -1,3 +1,4 @@
+import CostingStatus from "./CostingStatus";
 import { useNavigate } from "react-router-dom";
 import CardActions from "./CardActions";
 import {
@@ -88,6 +89,7 @@ export default function InvoiceTable({
   // Gates the payment-status (AR) column — driven by accounting.paymentstatus.view.
   showPaymentStatus = false,
   // handlers (parent owns them; we just call them)
+  onCosts,
   onView,
   onPrintBill,
   onPrintTax,
@@ -112,6 +114,7 @@ export default function InvoiceTable({
   const navigate = useNavigate();
 
   const columns = [
+    ...(onCosts ? [{ key: "costing", header: "Actual costing", render: (i) => <CostingStatus document={i} onOpen={() => onCosts(i)} /> }] : []),
     {
       key: "invoiceNumber",
       header: isReturnsMode ? (noteDocType === 10 ? "Credit Note #" : "Debit Note #") : isBillsMode ? "Bill #" : "Invoice #",
@@ -277,6 +280,7 @@ export default function InvoiceTable({
     const canReset = !!perms?.canFbrReset && isFbrPending;
     return (
       <CardActions nowrap label={`More actions for ${inv.invoiceNumber}`}>
+        {onCosts && <button data-label="Costs & suppliers" style={btn.view} onClick={() => onCosts(inv)} title="Costs & suppliers"><MdDescription size={14} /></button>}
         {isBillsMode && (
           <button data-label="View" data-primary={(isBillsMode) || undefined} style={btn.view} onClick={() => onView?.(inv)} title="View bill">
             <MdVisibility size={14} />
