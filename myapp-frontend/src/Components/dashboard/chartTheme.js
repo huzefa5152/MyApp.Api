@@ -2,6 +2,7 @@
 export const PALETTE_FALLBACK = {
   primary: "#0d47a1", secondary: "#00897b", positive: "#15803d",
   negative: "#c62828", warn: "#b45309", grid: "#e6ecf4", text: "#5f6d7e",
+  card: "#ffffff", ink: "#0c1830",
 };
 
 // Reads --dash-<key> from :root; a blank/missing variable (or no DOM) falls back.

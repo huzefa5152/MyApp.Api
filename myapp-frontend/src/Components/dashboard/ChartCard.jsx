@@ -12,8 +12,8 @@ export default function ChartCard({ title, subtitle, loading, error, onRetry, em
   } else if (empty) body = <Msg height={height}>{emptyText}</Msg>;
   else body = <div style={{ width: "100%", height }}>{children}</div>;
   return (
-    <section style={{ background: "#fff", border: "1px solid var(--dash-grid)", borderRadius: 16, padding: "1rem 1.1rem", boxShadow: "0 1px 2px rgba(12,24,48,0.04), 0 10px 28px -18px rgba(12,24,48,0.18)", minWidth: 0 }}>
-      <h3 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 600, color: "#0c1830", overflowWrap: "anywhere" }}>{title}</h3>
+    <section style={{ background: "var(--dash-card)", border: "1px solid var(--dash-grid)", borderRadius: 16, padding: "1rem 1.1rem", boxShadow: "0 1px 2px rgba(12,24,48,0.04), 0 10px 28px -18px rgba(12,24,48,0.18)", minWidth: 0 }}>
+      <h3 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 600, color: "var(--dash-ink)", overflowWrap: "anywhere" }}>{title}</h3>
       {subtitle && <div style={{ fontSize: "0.76rem", color: "var(--dash-text)", marginBottom: "0.5rem" }}>{subtitle}</div>}
       {body}
     </section>

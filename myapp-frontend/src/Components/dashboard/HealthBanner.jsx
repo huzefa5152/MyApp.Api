@@ -8,7 +8,7 @@ export default function HealthBanner({ items, onDrill }) {
         const c = it.severity === "warn" ? "var(--dash-warn)" : "var(--dash-primary)";
         return (
           <button key={it.key} type="button" onClick={() => onDrill?.(it.key)}
-            style={{ minHeight: 44, textAlign: "left", padding: "0.5rem 0.9rem", borderRadius: 10, border: `1px solid ${c}`, borderLeftWidth: 4, background: "#fff", color: "#0c1830", cursor: "pointer", fontSize: "0.85rem", overflowWrap: "anywhere" }}>
+            style={{ minHeight: 44, textAlign: "left", padding: "0.5rem 0.9rem", borderRadius: 10, border: `1px solid ${c}`, borderLeftWidth: 4, background: "var(--dash-card)", color: "var(--dash-ink)", cursor: "pointer", fontSize: "0.85rem", overflowWrap: "anywhere" }}>
             <strong style={{ color: c }}>{it.count}</strong> {it.message}
           </button>
         );

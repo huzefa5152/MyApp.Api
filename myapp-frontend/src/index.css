@@ -20,18 +20,9 @@
   --dash-warn: #b45309;
   --dash-grid: #e6ecf4;
   --dash-text: #5f6d7e;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --dash-primary: #64b5f6;
-    --dash-secondary: #4db6ac;
-    --dash-positive: #66bb6a;
-    --dash-negative: #ef5350;
-    --dash-warn: #ffb74d;
-    --dash-grid: #37474f;
-    --dash-text: #b0bec5;
-  }
+  /* Content cards are white under every OS scheme, so no dark overrides. */
+  --dash-card: #ffffff;
+  --dash-ink: #0c1830;
 }
 
 * {
