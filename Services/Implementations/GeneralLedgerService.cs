@@ -779,7 +779,6 @@ namespace MyApp.Api.Services.Implementations
 
                 // Where the working capital sits.
                 summary.CapitalInStock = summary.InventoryOnHand;
-                summary.CapitalOwedByCustomers = summary.Receivables.Total;
                 summary.CapitalCollected = summary.CashAndBankTotal;
             }
 
@@ -790,6 +789,8 @@ namespace MyApp.Api.Services.Implementations
                 Total = ar.Total, Current = ar.Current, Days1To30 = ar.Days1To30,
                 Days31To60 = ar.Days31To60, Days61To90 = ar.Days61To90, Over90 = ar.Over90,
             };
+            // Assigned here, after Receivables is filled (it was read before, so always 0).
+            if (glEnabled) summary.CapitalOwedByCustomers = summary.Receivables.Total;
             var ap = await GetAgedPayablesAsync(companyId);
             summary.Payables = new AgingBucketsDto
             {
@@ -810,6 +811,43 @@ namespace MyApp.Api.Services.Implementations
             summary.ReceiptsTotal = rc?.Total ?? 0m;
             summary.PaymentCount = pm?.Count ?? 0;
             summary.PaymentsTotal = pm?.Total ?? 0m;
+
+            // 12-month series ending at the month of `to`.
+            summary.LedgerEnabled = glEnabled;
+            var lastMonth = new DateTime(periodTo.Year, periodTo.Month, 1);
+            var firstMonth = lastMonth.AddMonths(-11);
+            var seriesEnd = lastMonth.AddMonths(1);
+            var cash = await _context.Payments.AsNoTracking()
+                .Where(p => p.CompanyId == companyId && !p.IsCancelled
+                         && p.Date >= firstMonth && p.Date < seriesEnd)
+                .GroupBy(p => new { p.Date.Year, p.Date.Month, p.Direction })
+                .Select(g => new { g.Key.Year, g.Key.Month, g.Key.Direction, Total = g.Sum(x => x.Amount) })
+                .ToListAsync();
+            var plMonthly = glEnabled
+                ? await _context.JournalLines.AsNoTracking()
+                    .Where(l => l.JournalEntry.CompanyId == companyId
+                             && l.JournalEntry.Date >= firstMonth && l.JournalEntry.Date < seriesEnd
+                             && (l.Account.AccountType == AccountType.Income || l.Account.AccountType == AccountType.Expense))
+                    .GroupBy(l => new { l.JournalEntry.Date.Year, l.JournalEntry.Date.Month, l.Account.AccountType })
+                    .Select(g => new { g.Key.Year, g.Key.Month, g.Key.AccountType, Net = g.Sum(x => x.Debit - x.Credit) })
+                    .ToListAsync()
+                : null;
+            for (var m = firstMonth; m <= lastMonth; m = m.AddMonths(1))
+            {
+                var pt = new AccountingMonthPoint
+                {
+                    Month = m.ToString("yyyy-MM"),
+                    CashIn = cash.Where(x => x.Year == m.Year && x.Month == m.Month && x.Direction == PaymentDirection.Receipt).Sum(x => x.Total),
+                    CashOut = cash.Where(x => x.Year == m.Year && x.Month == m.Month && x.Direction == PaymentDirection.Payment).Sum(x => x.Total),
+                };
+                if (plMonthly != null)
+                {
+                    pt.Income = -plMonthly.Where(x => x.Year == m.Year && x.Month == m.Month && x.AccountType == AccountType.Income).Sum(x => x.Net);
+                    pt.Expense = plMonthly.Where(x => x.Year == m.Year && x.Month == m.Month && x.AccountType == AccountType.Expense).Sum(x => x.Net);
+                    pt.NetProfit = pt.Income - pt.Expense;
+                }
+                summary.Monthly.Add(pt);
+            }
 
             // Pending / post-dated cheques (all-time outstanding).
             var dueSoonEnd = today.AddDays(7);

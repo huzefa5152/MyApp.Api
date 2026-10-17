@@ -459,7 +459,30 @@ def main():
             if u3: requests.delete(f"{api}/users/{u3}", headers=h, timeout=60)
             if role3: requests.delete(f"{api}/roles/{role3}", headers=h, timeout=60)
 
-        # Suites 4..6 are added by the later dashboard tasks.
+        print("\n-- 4. Accounting summary: owed-by-customers + monthly series --")
+        def acct(c):
+            return requests.get(f"{api}/accounting/summary/company/{c}", headers=h, timeout=120)
+        rs = acct(gw)
+        check("GL company: summary answers 200", rs.ok, f"{rs.status_code} {rs.text[:200]}")
+        sm = rs.json() if rs.ok else {}
+        rec = float((sm.get("receivables") or {}).get("total") or 0)
+        check("GL company has receivables to compare", rec > 0, str(rec))
+        check("capitalOwedByCustomers == receivables.total", near(sm.get("capitalOwedByCustomers"), rec),
+              f"{sm.get('capitalOwedByCustomers')} vs {rec}")
+        mo = sm.get("monthly") or []
+        check("monthly has 12 points", len(mo) == 12, str(len(mo)))
+        check("monthly ends at the current month", bool(mo) and mo[-1].get("month") == thismonth, str(mo[-1:] ))
+        check("ledgerEnabled true for the GL company", sm.get("ledgerEnabled") is True)
+        check("monthly net = income - expense", all(near(x["netProfit"], x["income"] - x["expense"]) for x in mo))
+        rs2 = acct(tf)
+        s2 = rs2.json() if rs2.ok else {}
+        check("GL-off company: 200 and ledgerEnabled false", rs2.ok and s2.get("ledgerEnabled") is False,
+              f"{rs2.status_code} {rs2.text[:120]}")
+        m2 = s2.get("monthly") or []
+        check("GL-off: 12 points, income/expense zero", len(m2) == 12
+              and all(near(x["income"], 0) and near(x["expense"], 0) and near(x["netProfit"], 0) for x in m2))
+
+        # Suites 5..6 are added by the later dashboard tasks.
     finally:
         if not a.keep:
             for cid_ in made:

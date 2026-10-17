@@ -161,11 +161,25 @@ namespace MyApp.Api.DTOs
         public string? Description { get; set; }
     }
 
+    public class AccountingMonthPoint
+    {
+        public string Month { get; set; } = "";
+        public decimal CashIn { get; set; }
+        public decimal CashOut { get; set; }
+        public decimal Income { get; set; }
+        public decimal Expense { get; set; }
+        public decimal NetProfit { get; set; }
+    }
+
     public class AccountingSummaryDto
     {
         public DateTime From { get; set; }
         public DateTime To { get; set; }
         public bool GlEnabled { get; set; }
+        /// <summary>Same value as <see cref="GlEnabled"/>, named for the dashboard.</summary>
+        public bool LedgerEnabled { get; set; }
+        /// <summary>12 months ending at the month of <see cref="To"/>.</summary>
+        public List<AccountingMonthPoint> Monthly { get; set; } = new();
 
         // Cash & liquidity (GL balances; zero/empty until GL is enabled)
         public decimal CashAndBankTotal { get; set; }
