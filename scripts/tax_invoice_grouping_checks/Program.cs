@@ -70,6 +70,18 @@ invoice.Items.First().Adjustment = new InvoiceItemAdjustment { AdjustedQuantity 
 grouped = (await service.GetPrintTaxInvoiceAsync(1))!;
 Check(grouped.Items[0].Quantity == 7m && grouped.BillItems[0].Quantity == 5m, "Tax output respects overlays while bill-choice quantities remain original.");
 Check(grouped.Items[0].ValueExclTax == 800m, "Overlay grouping preserves exact line values.");
+invoice.Company.TaxInvoiceUseOriginalBillLines = true;
+var originalPrint = (await service.GetPrintTaxInvoiceAsync(1))!;
+Check(originalPrint.Items.Count == 2 && originalPrint.BillItems.Count == 2, "Company policy keeps original lines even when filing is grouped.");
+Check(originalPrint.Items[0].Quantity == 2m && originalPrint.Items[1].Quantity == 3m, "Company policy prints original quantities, never overlay quantities.");
+Check(originalPrint.Items[0].Description == "First line" && originalPrint.Items[1].Description == "Second line", "Company policy preserves each bill description.");
+Check(originalPrint.Items[0].UnitPrice == 100m && originalPrint.Items[1].UnitPrice == 200m, "Company policy preserves bill unit prices.");
+Check(originalPrint.Items[0].InvoiceQuantity == 2m && originalPrint.Items[0].InvoiceUnitPrice == 100m, "Legacy display aliases cannot leak adjusted quantities into original-line prints.");
+Check(originalPrint.Items.Sum(i => i.ValueExclTax) == 800m && originalPrint.Items.Sum(i => i.GSTAmount) == 144m, "Original lines reconcile to document totals.");
+Check(invoice.Items.First().Adjustment!.AdjustedQuantity == 4m, "Printing never changes the filing adjustment.");
+invoice.Company.TaxInvoiceUseOriginalBillLines = false;
+Check((await service.GetPrintTaxInvoiceAsync(1))!.Items.Count == 1, "Turning policy off preserves existing grouped invoice behavior.");
+
 invoice.GroupTaxInvoiceByItemType = false;
 individual = (await service.GetPrintTaxInvoiceAsync(1))!;
 Check(individual.Items.Count == 2 && individual.Items[0].Quantity == 4m && individual.BillItems[0].Quantity == 2m, "Individual tax output also respects overlays.");

@@ -4,6 +4,9 @@ namespace MyApp.Api.DTOs
     {
         public string Name { get; set; } = string.Empty;
         public bool? AllowNonFbrBills { get; set; }
+        public bool? TaxInvoiceUseOriginalBillLines { get; set; }
+        public bool? FbrOmitProductDescription { get; set; }
+
         public bool? DefaultGroupTaxInvoiceByItemType { get; set; }
 
         private decimal? _defaultWithholdingTaxRate;

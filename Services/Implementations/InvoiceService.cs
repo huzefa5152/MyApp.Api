@@ -4156,6 +4156,19 @@ namespace MyApp.Api.Services.Implementations
                 }).ToList();
             }
             else ReconcilePrintTaxes(result.Items, inv.GSTRate);
+            if (inv.Company?.TaxInvoiceUseOriginalBillLines == true)
+            {
+                result.Items = inv.Items.Select(ii => PrintItemChoices.Apply(new PrintTaxItemDto
+                {
+                    ItemTypeName = ii.ItemTypeName, Description = ii.Description,
+                    Quantity = ii.Quantity, UnitPrice = ii.UnitPrice,
+                    UOM = ii.UOM, HSCode = ii.HSCode, ValueExclTax = ii.LineTotal,
+                    GSTRate = inv.GSTRate, GSTAmount = Math.Round(ii.LineTotal * inv.GSTRate / 100, 2),
+                    TotalInclTax = ii.LineTotal + Math.Round(ii.LineTotal * inv.GSTRate / 100, 2)
+                }, new[] { new PrintItemSource(ii.Quantity, ii.Quantity, ii.ItemTypeName, ii.ItemTypeName, ii.UOM, ii.UOM, ii.LineTotal) }, inv.GSTRate)).ToList();
+                result.BillItems = result.Items;
+                ReconcilePrintTaxes(result.Items, inv.GSTRate);
+            }
             ReconcilePrintTaxes(result.BillItems, inv.GSTRate);
             return result;
         }

@@ -5,6 +5,9 @@ namespace MyApp.Api.Models
         public int Id { get; set; }
         public string Name { get; set; } = "";
         public bool AllowNonFbrBills { get; set; }
+        public bool TaxInvoiceUseOriginalBillLines { get; set; }
+        public bool FbrOmitProductDescription { get; set; }
+
         public bool DefaultGroupTaxInvoiceByItemType { get; set; }
 
         public decimal? DefaultWithholdingTaxRate { get; set; }

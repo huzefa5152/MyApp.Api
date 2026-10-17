@@ -1165,7 +1165,7 @@ namespace MyApp.Api.Services.Implementations
                 fbrRequest.Items.Add(new FbrInvoiceItemRequest
                 {
                     HsCode = item.HSCode ?? "",
-                    ProductDescription = SanitizeForFbr(item.Description),
+                    ProductDescription = company.FbrOmitProductDescription ? "" : SanitizeForFbr(item.Description),
                     // Exempt goods carry the literal rate "Exempt", not a
                     // percentage — FBR rejects "0%" for an exempt sale type
                     // with [0046]. Every other sale type uses the numeric rate.

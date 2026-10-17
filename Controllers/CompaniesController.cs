@@ -102,7 +102,7 @@ namespace MyApp.Api.Controllers
                     dto.FbrToken = null;
                 }
 
-                if (dto.AllowNonFbrBills && CurrentUserId != _configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1)) return Forbid();
+                if ((dto.AllowNonFbrBills || dto.TaxInvoiceUseOriginalBillLines || dto.FbrOmitProductDescription) && CurrentUserId != _configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1)) return Forbid();
                 var createdCompany = await _companyService.CreateAsync(dto);
 
                 // Auto-grant the creator access to the company they just made.
@@ -189,6 +189,10 @@ namespace MyApp.Api.Controllers
             var existing = await _companyService.GetByIdAsync(id);
             if (existing == null) return NotFound();
             if (dto.AllowNonFbrBills.HasValue && dto.AllowNonFbrBills.Value != existing.AllowNonFbrBills
+                && CurrentUserId != _configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1)) return Forbid();
+
+            if (((dto.TaxInvoiceUseOriginalBillLines.HasValue && dto.TaxInvoiceUseOriginalBillLines != existing.TaxInvoiceUseOriginalBillLines)
+                || (dto.FbrOmitProductDescription.HasValue && dto.FbrOmitProductDescription != existing.FbrOmitProductDescription))
                 && CurrentUserId != _configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1)) return Forbid();
 
             // Tenant-isolation flip — only the dedicated perm OR seed admin.

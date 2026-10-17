@@ -894,6 +894,9 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("FbrEnvironment")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<bool>("FbrOmitProductDescription")
+                        .HasColumnType("bit");
+
                     b.Property<int?>("FbrProvinceCode")
                         .HasColumnType("int");
 
@@ -965,6 +968,9 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("int");
 
                     b.Property<bool>("StockGuardHardBlock")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("TaxInvoiceUseOriginalBillLines")
                         .HasColumnType("bit");
 
                     b.HasKey("Id");

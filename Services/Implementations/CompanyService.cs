@@ -74,6 +74,9 @@ namespace MyApp.Api.Services.Implementations
             FbrDefaultPaymentModeRegistered = c.FbrDefaultPaymentModeRegistered,
             FbrDefaultPaymentModeUnregistered = c.FbrDefaultPaymentModeUnregistered,
             AllowNonFbrBills = c.AllowNonFbrBills,
+            TaxInvoiceUseOriginalBillLines = c.TaxInvoiceUseOriginalBillLines,
+            FbrOmitProductDescription = c.FbrOmitProductDescription,
+
             InventoryTrackingEnabled = c.InventoryTrackingEnabled,
             StockGuardHardBlock = c.StockGuardHardBlock,
             StartingPurchaseBillNumber = c.StartingPurchaseBillNumber,
@@ -185,6 +188,9 @@ namespace MyApp.Api.Services.Implementations
                 FbrDefaultPaymentModeRegistered = dto.FbrDefaultPaymentModeRegistered,
                 FbrDefaultPaymentModeUnregistered = dto.FbrDefaultPaymentModeUnregistered,
                 AllowNonFbrBills = dto.AllowNonFbrBills,
+                TaxInvoiceUseOriginalBillLines = dto.TaxInvoiceUseOriginalBillLines,
+                FbrOmitProductDescription = dto.FbrOmitProductDescription,
+
                 InventoryTrackingEnabled = dto.InventoryTrackingEnabled,
                 StockGuardHardBlock = dto.StockGuardHardBlock,
                 StartingPurchaseBillNumber = dto.StartingPurchaseBillNumber,
@@ -257,6 +263,9 @@ namespace MyApp.Api.Services.Implementations
             // only apply if no purchase docs exist yet (same rule as the
             // sales-side starting numbers).
             if (dto.AllowNonFbrBills.HasValue) company.AllowNonFbrBills = dto.AllowNonFbrBills.Value;
+            if (dto.TaxInvoiceUseOriginalBillLines.HasValue) company.TaxInvoiceUseOriginalBillLines = dto.TaxInvoiceUseOriginalBillLines.Value;
+            if (dto.FbrOmitProductDescription.HasValue) company.FbrOmitProductDescription = dto.FbrOmitProductDescription.Value;
+
             company.InventoryTrackingEnabled = dto.InventoryTrackingEnabled;
             company.StockGuardHardBlock = dto.StockGuardHardBlock;
             var hasPurchaseBills = await _context.PurchaseBills.AnyAsync(p => p.CompanyId == id);
