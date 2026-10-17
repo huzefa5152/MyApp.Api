@@ -119,6 +119,32 @@ namespace MyApp.Api.Controllers
             return Ok(result);
         }
 
+        /// <summary>
+        /// One client's bills, as the Record Receipt form needs them to settle
+        /// money against: number, date and what is still owed. A picker, not a
+        /// screen — gated on the receipt audience so a cashier without the
+        /// Bills screen can still apply a payment. A client is REQUIRED, so this
+        /// never lists the company's bills wholesale, and the company and
+        /// division scope are the same as the Bills list.
+        /// </summary>
+        [HttpGet("company/{companyId}/for-receipt")]
+        [HasAnyPermission("accounting.receipts.create", "accounting.receipts.view")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> GetForReceipt(int companyId, [FromQuery] int clientId)
+        {
+            if (clientId <= 0) return BadRequest(new { error = "Select a client." });
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            var result = await _service.GetPagedByCompanyAsync(
+                companyId, 1, PaginationHelper.Clamp(100, _defaultPageSize), null, clientId, null, null, null, null, divScope);
+            return Ok(new
+            {
+                items = result.Items.Select(i => new
+                {
+                    i.Id, i.InvoiceNumber, i.Date, i.GrandTotal, i.AmountPaid, i.BalanceDue, i.IsCancelled,
+                }),
+            });
+        }
+
         [HttpGet("{id}")]
         [HasAnyPermission("bills.list.view", "invoices.list.view")]
         public async Task<ActionResult<InvoiceDto>> GetById(int id)

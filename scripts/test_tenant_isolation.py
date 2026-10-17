@@ -1666,6 +1666,16 @@ if isinstance(m_client, dict) and m_client.get("id"):
     request("DELETE", f"/api/clients/{m_client['id']}", token=admin)
 
 
+# ── Suite 23: the receipt form's bill list (2026-10-18) ──
+# GET /invoices/company/{id}/for-receipt opens a client's bills to the receipt
+# audience (no Bills-screen key needed). The company is still asserted.
+suite23 = "receipt-form bill list tenant guard"
+s, _ = request("GET", f"/api/invoices/company/{beta['id']}/for-receipt?clientId=1", token=tokens["alice"])
+status_check(suite23, "alice lists Beta's bills for a receipt", s, 403)
+s, _ = request("GET", f"/api/invoices/company/{beta['id']}/for-receipt?clientId=1", token=tokens["bob"])
+status_check(suite23, "bob lists his own company's bills for a receipt", s, 200)
+
+
 # ── Cleanup (test fails → keep rows for inspection) ──────────
 print("\n=== Results ===")
 fails = [r for r in results if not r[2].startswith(PASS)]

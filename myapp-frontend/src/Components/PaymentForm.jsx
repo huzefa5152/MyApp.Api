@@ -11,7 +11,7 @@ import useIsNarrow from "../hooks/useIsNarrow";
 import { createPayment, updatePayment, getAllocationPlan } from "../api/paymentApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
-import { getPagedInvoicesByCompany } from "../api/invoiceApi";
+import { getInvoicesForReceipt } from "../api/invoiceApi";
 import { getPurchaseBillsByCompanyPaged } from "../api/purchaseBillApi";
 import { getAccountsFlat } from "../api/accountApi";
 
@@ -262,6 +262,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   // back to the original contact correctly restores the original pre-fill.
   useEffect(() => {
     setAlloc({});
+    handAllocRef.current = false;   // a new client starts from the automatic spread again
     setDocsLoadFailed(false);
     if (purpose !== "settle" || !canSettle || !contactId) {
       setDocs([]);
@@ -275,7 +276,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
     let cancelled = false;
     setLoadingDocs(true);
     const fetcher = isReceipt
-      ? getPagedInvoicesByCompany(companyId, { clientId: contactId, pageSize: 100 })
+      ? getInvoicesForReceipt(companyId, contactId)
       : getPurchaseBillsByCompanyPaged(companyId, { supplierId: contactId, pageSize: 100 });
     fetcher
       .then(({ data }) => {
@@ -380,26 +381,36 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
     () => expLines.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0), [expLines]);
   const advanceNum = parseFloat(advanceAmount) || 0;
 
-  const patchRow = (docId, patch) =>
+  // Set once the operator types into an invoice row by hand: from then on the
+  // amount box stops re-spreading over their figures (the button still does).
+  const handAllocRef = useRef(false);
+
+  const patchRow = (docId, patch) => {
+    handAllocRef.current = true;
     setAlloc((prev) => ({ ...prev, [docId]: { ...(prev[docId] || EMPTY_ROW), ...patch } }));
+  };
 
   const setCash = (docId, value) => patchRow(docId, { cash: value });
   const setAdjAmount = (docId, value) => patchRow(docId, { adj: value });
   const setAdjAccount = (docId, id) => patchRow(docId, { adjAccountId: id != null ? Number(id) : null });
 
   // "Max" = settle the whole balance in cash (drops any adjustment).
-  const fillBalance = (doc) =>
+  const fillBalance = (doc) => {
+    handAllocRef.current = true;
     setAlloc((prev) => ({ ...prev, [doc.id]: { cash: String(doc.available), adj: "0", adjMode: "none", adjAccountId: null } }));
+  };
 
   // Clicking a quick-pick sets the mode, auto-fills the gap and (for
   // Discount/Write-off) the resolved control account; "Other" starts with no
   // account so the operator picks one via AccountSelect.
-  const applyAdjPick = (doc, pick) =>
-    setAlloc((prev) => {
+  const applyAdjPick = (doc, pick) => {
+    handAllocRef.current = true;
+    return setAlloc((prev) => {
       const row = prev[doc.id] || EMPTY_ROW;
       const gap = Math.max(0, round2(doc.available - (parseFloat(row.cash) || 0)));
       return { ...prev, [doc.id]: { ...row, adjMode: pick.mode, adj: String(gap), adjAccountId: pick.accId } };
     });
+  };
 
   const clearAdj = (doc) => patchRow(doc.id, { adj: "0", adjMode: "none", adjAccountId: null });
 
@@ -460,12 +471,23 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   const canAutoAllocate = isReceipt && !isEdit && purpose === "settle"
     && payeeType === "Client" && !!contactId && docs.length > 0;
 
-  const runAutoAllocate = async () => {
+  // Only the latest request may fill the boxes: typing 50000 sends 5, 50, 500…
+  // and an older answer arriving last must not win.
+  const planSeqRef = useRef(0);
+
+  const runAutoAllocate = async ({ silent = false } = {}) => {
     setAutoError("");
-    if (amountNum <= 0) { setAutoError("Enter the amount received first."); return; }
+    if (!silent) handAllocRef.current = false;   // the button hands control back to the amount box
+    if (amountNum <= 0) {
+      if (silent) setAlloc({});
+      else setAutoError("Enter the amount received first.");
+      return;
+    }
+    const seq = ++planSeqRef.current;
     setAutoBusy(true);
     try {
       const { data } = await getAllocationPlan(companyId, contactId, amountNum);
+      if (seq !== planSeqRef.current || (silent && handAllocRef.current)) return;
       const next = {};
       for (const line of data?.lines || []) {
         next[line.invoiceId] = {
@@ -477,11 +499,23 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
         setAutoError("Nothing outstanding to apply this to — it will all be an advance.");
       }
     } catch (e) {
-      setAutoError(e?.response?.data?.error || "Could not work out the allocation.");
+      if (seq === planSeqRef.current)
+        setAutoError(e?.response?.data?.error || "Could not work out the allocation.");
     } finally {
-      setAutoBusy(false);
+      if (seq === planSeqRef.current) setAutoBusy(false);
     }
   };
+
+  // Typing the amount spreads it oldest-invoice-first on its own, a moment
+  // after the operator stops typing. Not when the form was opened from one
+  // invoice (that invoice is the point), and not once they have adjusted a row
+  // themselves.
+  useEffect(() => {
+    if (!canAutoAllocate || preset?.documentId || handAllocRef.current) return;
+    const t = setTimeout(() => runAutoAllocate({ silent: true }), 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [amountNum, canAutoAllocate, contactId, docs]);
 
   // Settle-remainder affordance for one document row (shared desktop + mobile).
   // Nothing shows until the operator receives less cash than the balance due.
@@ -992,7 +1026,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                       <button
                         type="button"
                         data-testid="auto-allocate"
-                        onClick={runAutoAllocate}
+                        onClick={() => runAutoAllocate()}
                         disabled={autoBusy}
                         style={{
                           padding: "10px 14px", minHeight: 44, borderRadius: 8,
@@ -1005,8 +1039,9 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                         {autoBusy ? "Working…" : "Spread oldest first"}
                       </button>
                       <span style={{ color: colors.textSecondary, fontSize: 13 }}>
-                        Fills the boxes below from the oldest invoice onward. Change
-                        anything you like before saving.
+                        The amount spreads from the oldest invoice onward as you type
+                        it. Change anything you like before saving; this button
+                        spreads it again.
                       </span>
                       {autoError && (
                         <span style={{ color: colors.danger, fontSize: 13, width: "100%" }}>

@@ -6,6 +6,11 @@ export const getInvoicesByCompany = (companyId) =>
 export const getPagedInvoicesByCompany = (companyId, params = {}) =>
   httpClient.get(`/invoices/company/${companyId}/paged`, { params });
 
+// One client's bills for the Record Receipt form — needs only a receipt
+// permission, not the Bills screen.
+export const getInvoicesForReceipt = (companyId, clientId) =>
+  httpClient.get(`/invoices/company/${companyId}/for-receipt`, { params: { clientId } });
+
 // Sales-invoice count per client (clientId -> count) for the Clients page chip.
 export const getInvoiceCountsByClient = (companyId) =>
   httpClient.get(`/invoices/company/${companyId}/counts-by-client`);
