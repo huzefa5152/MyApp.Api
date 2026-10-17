@@ -1696,6 +1696,38 @@ for path in [
     status_check(suite24, f"alice GET {path.split('?')[0]}", s, 403)
 
 
+# ── Suite 25: dashboard breakdown (2026-10-18) ──
+# The drill-down names customers and invoices. A foreign companyId is 403; a
+# group key naming another company's client is answered with no rows, because
+# every level-2 query is filtered by the route's company.
+suite25 = "dashboard breakdown tenant guard"
+s, d_client = request("POST", "/api/clients", token=admin, body={
+    "companyId": beta["id"], "name": "Beta Dashboard Client", "registrationType": "Unregistered"})
+s, d_bill = request("POST", "/api/invoices/standalone", token=admin, body={
+    "companyId": beta["id"], "clientId": (d_client or {}).get("id"), "date": "2026-08-24", "gstRate": 18,
+    "items": [{"description": "Dashboard probe", "quantity": 1, "uom": "Numbers, pieces, units", "unitPrice": 100,
+               "itemTypeId": alloc_item_type_id}]})
+check(suite25, "setup: a Beta bill to drill into", s in (200, 201) and isinstance(d_bill, dict), f"status {s} {str(d_bill)[:120]}")
+bc = (d_client or {}).get("id")
+for kind in ("sales", "receivables", "tax-payable"):
+    s, _ = request("GET", f"/api/dashboard/breakdown?companyId={beta['id']}&kind={kind}&period=all-time", token=tokens["alice"])
+    status_check(suite25, f"alice drills Beta's {kind}", s, 403)
+for kind, key in (("receivables", f"c:{bc}"), ("sales", f"c:-{bc}")):
+    s, body = request("GET", f"/api/dashboard/breakdown?companyId={alpha['id']}&kind={kind}&period=all-time&groupKey={key}",
+                      token=tokens["alice"])
+    check(suite25, f"alice: Beta's client as a {kind} group under Alpha has no rows",
+          s == 200 and isinstance(body, dict) and body.get("rows") == [], f"status {s} {str(body)[:120]}")
+s, body = request("GET", f"/api/dashboard/breakdown?companyId={beta['id']}&kind=receivables&period=all-time&groupKey=c:{bc}",
+                  token=tokens["bob"])
+check(suite25, "bob: the same group under Beta lists the bill",
+      s == 200 and isinstance(body, dict) and any(r.get("invoiceId") == (d_bill or {}).get("id") for r in body.get("rows", [])),
+      f"status {s} {str(body)[:160]}")
+if isinstance(d_bill, dict) and d_bill.get("id"):
+    request("DELETE", f"/api/invoices/{d_bill['id']}", token=admin)
+if bc:
+    request("DELETE", f"/api/clients/{bc}", token=admin)
+
+
 # ── Cleanup (test fails → keep rows for inspection) ──────────
 print("\n=== Results ===")
 fails = [r for r in results if not r[2].startswith(PASS)]

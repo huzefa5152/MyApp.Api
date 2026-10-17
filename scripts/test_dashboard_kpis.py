@@ -14,7 +14,13 @@ Dashboard KPIs, end to end (2026-10-18).
        worksheet, weighted-average fallback, division-restricted refusal, and the
        12-month series.
 
-Later dashboard tasks add suites 4..6 below. Companies are created here and
+    4. Accounting summary: owed-by-customers and the monthly series.
+
+    5. Two-level breakdown: every level-1 list sums to its card, every group's
+       invoices sum to their row (sales, receivables, margin-landed, tax-payable,
+       adv-tax-236), bad and foreign group keys, division refusal.
+
+Later dashboard tasks add suite 6 below. Companies are created here and
 deleted at the end.
 
 Usage:
@@ -90,13 +96,14 @@ def main():
     tag = datetime.now().strftime("%m%d%H%M%S")
     made = []
 
-    def company(name):
+    def company(name, stock=False):
         r = requests.post(f"{api}/companies", headers=h, timeout=60, json={
             "name": f"{name} {tag}", "brandName": "DASHKPI", "fullAddress": "1 Test Street",
             "phone": "021-0000000", "ntn": "1234567-8", "startingChallanNumber": 1, "startingInvoiceNumber": 1,
             "startingPurchaseBillNumber": 1, "startingGoodsReceiptNumber": 1,
             "startingSalesQuoteNumber": 1, "startingSalesOrderNumber": 1,
-            "fbrEnabled": False, "inventoryTrackingEnabled": False, "enableGl": False})
+            "fbrEnabled": False, "inventoryTrackingEnabled": stock, "enableGl": False,
+            **({"inventoryFlowVersion": 2} if stock else {})})
         r.raise_for_status()
         made.append(r.json()["id"])
         return r.json()["id"]
@@ -167,11 +174,15 @@ def main():
         h_all = hero(cid, period="all-time")
         check("all time = every range together", near(h_all.get("netSales"), 130000 + 15000 + 7000), str(h_all.get("netSales")))
 
-        bd = requests.get(f"{api}/dashboard/breakdown", headers=h, timeout=60,
-                          params={"companyId": cid, "kind": "sales", "from": "2026-09-01", "to": "2026-09-30"}).json()
-        check("the sales breakdown carries the credit note as a negative row",
-              any(near(r_.get("amount"), -20000) for r_ in bd.get("rows", [])), str(bd.get("rows"))[:200])
-        check("the breakdown total ties to the hero figure", near(bd.get("total"), h_sep.get("salesInclTax")), f"{bd.get('total')} vs {h_sep.get('salesInclTax')}")
+        # The sales breakdown is two-level since Task 5 (groups, then invoices)
+        # and ties to NET sales; the credit note shows at the invoice level.
+        sp = {"companyId": cid, "kind": "sales", "from": "2026-09-01", "to": "2026-09-30"}
+        bd = requests.get(f"{api}/dashboard/breakdown", headers=h, timeout=60, params=sp).json()
+        gk = (bd.get("rows") or [{}])[0].get("groupKey")
+        bd2 = requests.get(f"{api}/dashboard/breakdown", headers=h, timeout=60, params={**sp, "groupKey": gk}).json() if gk else {}
+        check("the sales breakdown carries the credit note as a negative invoice row",
+              any(near(r_.get("amount"), -20000) for r_ in bd2.get("rows", [])), str(bd2.get("rows"))[:200])
+        check("the breakdown total ties to the hero figure", near(bd.get("total"), h_sep.get("netSales")), f"{bd.get('total')} vs {h_sep.get('netSales')}")
 
         r = kpis(cid, **{"from": "2026-09-01"})
         check("from without to is refused", r.status_code == 400, str(r.status_code))
@@ -482,7 +493,184 @@ def main():
         check("GL-off: 12 points, income/expense zero", len(m2) == 12
               and all(near(x["income"], 0) and near(x["expense"], 0) and near(x["netProfit"], 0) for x in m2))
 
-        # Suites 5..6 are added by the later dashboard tasks.
+        print("\n-- 5. Two-level breakdown --")
+        INV_KEYS = {"date", "customer", "net", "gst", "furtherTax", "advSection", "adv236", "wht", "grandTotal", "fbrStatus"}
+
+        def brk(cid_, kind, hdr=None, **params):
+            return requests.get(f"{api}/dashboard/breakdown", headers=hdr or h, timeout=120,
+                                params={"companyId": cid_, "kind": kind, **params})
+
+        def rows_sum(b):
+            return round(sum(float(r_.get("amount") or 0) for r_ in b.get("rows", [])), 2)
+
+        def ties(label, cid_, kind, card, **params):
+            """Level 1 sums to the card; every drillable group's level 2 sums to its row."""
+            r_ = brk(cid_, kind, **params)
+            b1 = r_.json() if r_.ok else {}
+            check(f"{label}: level 1 is 200 with level=1", r_.ok and b1.get("level") == 1, f"{r_.status_code} {r_.text[:200]}")
+            check(f"{label}: level-1 rows sum to the card ({card})", near(rows_sum(b1), card, 0.05) and near(b1.get("total"), card, 0.05),
+                  f"rows {rows_sum(b1)} total {b1.get('total')} card {card}")
+            check(f"{label}: level 1 declares its columns", isinstance(b1.get("columns"), list)
+                  and all({"key", "label", "kind"} <= set(c_) and c_["kind"] in ("money", "number", "text", "date", "status")
+                          for c_ in b1.get("columns", [])), str(b1.get("columns"))[:200])
+            level2 = {}
+            for row in b1.get("rows", []):
+                gk = row.get("groupKey")
+                if not gk:
+                    continue
+                r2 = brk(cid_, kind, groupKey=gk, **params)
+                b2 = r2.json() if r2.ok else {}
+                level2[gk] = b2
+                check(f"{label}: group {gk} level 2 sums to its row ({row.get('amount')})",
+                      r2.ok and b2.get("level") == 2 and b2.get("groupKey") == gk
+                      and near(rows_sum(b2), row.get("amount"), 0.05) and near(b2.get("total"), row.get("amount"), 0.05),
+                      f"{r2.status_code} rows {rows_sum(b2)} total {b2.get('total')} {r2.text[:150]}")
+            return b1, level2
+
+        # sales: all time groups by month; the September customer drill shows the credit note.
+        h_all = hero(cid, period="all-time")
+        b1, l2 = ties("sales all-time", cid, "sales", h_all.get("netSales"), period="all-time")
+        check("sales all-time groups by month (yyyy-MM)", {r_.get("groupKey") for r_ in b1.get("rows", [])} >= {"2026-09", "2026-08"},
+              str([r_.get("groupKey") for r_ in b1.get("rows", [])]))
+        sep = l2.get("2026-09", {})
+        inv_rows = [r_ for r_ in sep.get("rows", []) if r_.get("invoiceId")]
+        check("an invoice row carries invoiceId, invoiceNumber and exactly the invoice values",
+              bool(inv_rows) and all(r_.get("invoiceNumber") is not None and set(r_.get("values", {})) == INV_KEYS for r_ in inv_rows),
+              str(inv_rows[:1])[:300])
+        check("level-2 columns are the invoice columns", {c_["key"] for c_ in sep.get("columns", [])} == INV_KEYS,
+              str([c_.get("key") for c_ in sep.get("columns", [])]))
+        check("the credit note is a negative level-2 row", any(near(r_.get("amount"), -20000) for r_ in inv_rows), str(inv_rows)[:300])
+        check("level 2 is newest first", [r_["values"]["date"] for r_ in inv_rows] == sorted([r_["values"]["date"] for r_ in inv_rows], reverse=True))
+        check("level 2 is not truncated", sep.get("truncated") is False, str(sep.get("truncated")))
+        b1c, l2c = ties("sales September (by customer)", cid, "sales", h_sep.get("netSales"), **{"from": "2026-09-01", "to": "2026-09-30"})
+        check("a month-sized period groups by customer (c:...)", bool(b1c.get("rows")) and all(str(r_.get("groupKey", "")).startswith("c:") for r_ in b1c.get("rows", [])),
+              str([r_.get("groupKey") for r_ in b1c.get("rows", [])]))
+        if a.db:
+            jul = brk(cid, "sales", period="all-time", groupKey="2026-07").json()
+            check("the FBR-cancelled bill is not in the sales drill", all(r_.get("invoiceId") != i4["id"] for r_ in jul.get("rows", [])),
+                  str(jul.get("rows"))[:200])
+        else:
+            skip("the FBR-cancelled bill is not in the sales drill", "needs --db")
+
+        # receivables: customers from the aged report, then their open invoices + on-account.
+        hr = hero(rc, period="all-time")
+        rb1, rl2 = ties("receivables", rc, "receivables", hr.get("receivablesTotal"), period="all-time")
+        cust = next((r_ for r_ in rb1.get("rows", []) if r_.get("groupKey") == f"c:{c2}"), {})
+        v = cust.get("values") or {}
+        check("receivables row: invoiced 236,000, receipts 0, on account -50,000, balance 186,000",
+              near(v.get("invoiced"), 236000) and near(v.get("receipts"), 0) and near(v.get("onAccount"), -50000)
+              and near(v.get("balance"), 186000) and near(v.get("wht"), 0), str(v))
+        check("receivables row: 236G billed shown apart (118)", near(v.get("adv236Billed"), 118), str(v))
+        check("receivables columns are invoiced, wht, receipts, onAccount, balance, adv236Billed",
+              [c_["key"] for c_ in rb1.get("columns", [])] == ["invoiced", "wht", "receipts", "onAccount", "balance", "adv236Billed"],
+              str(rb1.get("columns")))
+        rl = rl2.get(f"c:{c2}", {})
+        check("its level 2 lists the two open bills and the on-account money",
+              len([r_ for r_ in rl.get("rows", []) if r_.get("invoiceId")]) == 2
+              and any(not r_.get("invoiceId") and near(r_.get("amount"), -50000) for r_ in rl.get("rows", [])), str(rl.get("rows"))[:300])
+        rx = brk(cid, "receivables", period="all-time", groupKey=f"c:{c2}")
+        check("another company's client as groupKey: 200 and no rows", rx.ok and rx.json().get("rows") == [], f"{rx.status_code} {rx.text[:150]}")
+
+        # margin-landed: a stock company, FIFO opening at a landed cost of 60 a unit.
+        mc = company("_dashkpi margin", stock=True)
+        cm = client(mc, "DashKpi M")
+        mi = requests.post(f"{api}/itemtypes", headers=h, timeout=60, params={"companyId": mc},
+                           json={"name": f"DashKpi margin item {tag}", "uom": "Pcs", "companyId": mc, "isFavorite": True})
+        m_item = mi.json().get("id") if mi.ok else None
+        so = requests.post(f"{api}/stock/opening", headers=h, timeout=60, json={
+            "companyId": mc, "itemTypeId": m_item, "quantity": 100, "valueExcludingTax": 10000,
+            "actualCostExcludingTax": 6000, "salesTaxRate": 0, "asOfDate": "2026-07-01", "notes": "dashkpi"})
+        check("setup: a margin item with opening stock at landed 6,000", mi.ok and so.ok, f"{mi.status_code} {so.status_code} {so.text[:150]}")
+
+        def mbill(qty):
+            return requests.post(f"{api}/invoices/standalone", headers=h, timeout=60, json={
+                "date": f"{day}T00:00:00Z", "companyId": mc, "clientId": cm, "gstRate": 0,
+                "items": [{"description": f"DASHKPI margin {tag}", "quantity": qty, "uom": "Pcs", "unitPrice": 150, "itemTypeId": m_item}]})
+        mb1, mb2 = mbill(10), mbill(20)
+        check("setup: two bills of the margin item", mb1.ok and mb2.ok, f"{mb1.status_code} {mb2.text[:150]}")
+        hm = hero(mc, period="this-month")
+        check("setup: the stock walk costs the sales (landed 1,800)", near(hm.get("landedCostOfSales"), 1800), str(hm.get("landedCostOfSales")))
+        _, ml2 = ties("margin-landed", mc, "margin-landed", hm.get("grossMarginLanded"), period="this-month")
+        ml = ml2.get(f"i:{m_item}", {})
+        landed = sorted(float((r_.get("values") or {}).get("itemLanded") or 0) for r_ in ml.get("rows", []) if r_.get("invoiceId"))
+        check("each invoice carries its own landed cost from the walk (600, 1,200)", len(landed) == 2 and near(landed[0], 600) and near(landed[1], 1200), str(landed))
+
+        # A GD claimed this month on the FIFO stock company, so the worksheet input is not zero.
+        gd_line = {"gdNumber": f"KAPE-HC-9{tag[-5:]}", "gdDate": day, "description": f"DASHKPI GD {tag}", "hsCode": "8481.2000",
+                   "quantity": 10, "unit": "Pcs", "assessedValue": 100000, "customsDuty": 0, "acd": 0, "regulatoryDuty": 0,
+                   "others": 0, "salesTaxRate": 18, "astRate": 3, "incomeTaxRate": 6, "addOnProfit": 0, "sellingValue": None,
+                   "claimMonth": f"{thismonth}-01"}
+        pv = requests.post(f"{api}/spreadsheet-import/gd-costing/preview-manual", headers=h, timeout=120,
+                           params={"companyId": mc, "mode": "new-arrivals"}, json={"lines": [gd_line]})
+        pvj = pv.json() if pv.ok else {}
+        gc = requests.post(f"{api}/spreadsheet-import/gd-costing/commit", headers=h, timeout=300, json={
+            "companyId": mc, "fileSha256": pvj.get("fileSha256"), "fileName": pvj.get("fileName"),
+            "fileSizeBytes": pvj.get("fileSizeBytes"), "lines": pvj.get("lines"), "createMissingStock": True,
+            "mode": "new-arrivals"})
+        check("setup: a GD claimed this month comes in", pv.ok and gc.ok, f"{pv.status_code} {gc.status_code} {gc.text[:200]}")
+        tpm = tax(mc, period="this-month").json()
+        check("setup: the worksheet reads input tax for it", tpm.get("inputBasis") == "worksheet" and float(tpm.get("inputTaxClaimed") or 0) > 0, str(tpm)[:200])
+        _, gl2 = ties("tax-payable worksheet input", mc, "tax-payable", tpm.get("totalPayable"), period="this-month")
+        gd_rows = (gl2.get("input") or {}).get("rows", [])
+        check("the input drill lists the GD line with its input tax",
+              any((r_.get("values") or {}).get("gdNumber") == gd_line["gdNumber"] and near((r_.get("values") or {}).get("inputTax"), tpm.get("inputTaxClaimed"))
+                  for r_ in gd_rows), str(gd_rows)[:300])
+
+        # tax-payable and adv-tax-236 tie to the tax position (FIFO worksheet and GL fallback).
+        for label, cid_ in (("FIFO", tf), ("GL", gw)):
+            tp = tax(cid_, period="this-month").json()
+            tb1, _ = ties(f"tax-payable {label}", cid_, "tax-payable", tp.get("totalPayable"), period="this-month")
+            byk = {r_.get("groupKey"): float(r_.get("amount") or 0) for r_ in tb1.get("rows", []) if r_.get("groupKey")}
+            check(f"tax-payable {label}: lines are the panel's figures",
+                  near(byk.get("output"), tp.get("outputTax")) and near(byk.get("further", 0), tp.get("furtherTax"))
+                  and near(byk.get("input", 0), -float(tp.get("inputTaxClaimed") or 0)) and near(byk.get("236G", 0), tp.get("adv236G"))
+                  and near(byk.get("236H", 0), tp.get("adv236H")) and near(byk.get("wht", 0), tp.get("whtPayable")), f"{byk} vs {tp}")
+        tp = tax(tf, period="this-month").json()
+        ab1, _ = ties("adv-tax-236", tf, "adv-tax-236", float(tp.get("adv236G") or 0) + float(tp.get("adv236H") or 0), period="this-month")
+        check("adv-tax-236 groups are month:section", {r_.get("groupKey") for r_ in ab1.get("rows", [])} == {f"{thismonth}:236G", f"{thismonth}:236H"},
+              str([r_.get("groupKey") for r_ in ab1.get("rows", [])]))
+
+        # Bad and foreign keys; existing kinds unchanged.
+        for kind_, key in (("sales", "garbage"), ("receivables", "c:abc"), ("margin-landed", "x:1"), ("tax-payable", "vat"),
+                           ("adv-tax-236", "2026-13:236G"), ("cogs", "i:1")):
+            rg = brk(cid, kind_, period="all-time", groupKey=key)
+            check(f"{kind_} groupKey={key!r}: 400 Invalid group.", rg.status_code == 400 and rg.json().get("error") == "Invalid group.",
+                  f"{rg.status_code} {rg.text[:120]}")
+        rf = brk(cid, "sales", period="all-time", groupKey=f"c:-{c2}")
+        check("sales groupKey of another company's client: no rows", rf.ok and rf.json().get("rows") == [], f"{rf.status_code} {rf.text[:120]}")
+        rcg = brk(mc, "cogs", period="this-month")
+        check("an existing kind (cogs) still answers at level 1", rcg.ok and rcg.json().get("level") == 1 and len(rcg.json().get("rows", [])) == 1,
+              f"{rcg.status_code} {rcg.text[:150]}")
+
+        # A division-restricted user: tax lines and receivables are company-wide only.
+        rd5 = requests.post(f"{api}/divisions/company/{tf}", headers=h, timeout=60, json={"name": f"DashKpi BDiv {tag}"})
+        d5 = rd5.json().get("id") if rd5.ok else None
+        rl5 = requests.post(f"{api}/roles", headers=h, timeout=60, json={
+            "name": f"DashKpi brole {tag}", "description": "t", "permissionKeys": ["dashboard.view", "dashboard.kpi.sales.view"]})
+        role5 = rl5.json().get("id") if rl5.ok else None
+        ru5 = requests.post(f"{api}/users", headers=h, timeout=60, json={
+            "username": f"dashkpib{tag}", "fullName": "DashKpi BRestricted", "password": "test1234a", "role": "User"})
+        u5 = ru5.json().get("id") if ru5.ok else None
+        try:
+            if d5 and role5 and u5:
+                requests.put(f"{api}/users/{u5}/roles", headers=h, timeout=60, json={"roleIds": [role5]})
+                requests.put(f"{api}/usercompanies/user/{u5}", headers=h, timeout=60, json={"companyIds": [tf]})
+                requests.put(f"{api}/userdivisions/user/{u5}/company/{tf}", headers=h, timeout=60,
+                             json={"restrictToDivisions": True, "divisionIds": [d5]})
+                lt5 = requests.post(f"{api}/auth/login", json={"username": f"dashkpib{tag}", "password": "test1234a"}, timeout=60)
+                check("setup: the restricted user signs in (429 = runs less than a minute apart)", lt5.ok, str(lt5.status_code))
+                uh5 = {"Authorization": f"Bearer {lt5.json().get('token')}"} if lt5.ok else {"Authorization": "Bearer none"}
+                for kind_ in ("tax-payable", "adv-tax-236", "receivables"):
+                    rr5 = brk(tf, kind_, hdr=uh5, period="this-month")
+                    check(f"division-restricted user: {kind_} is 403 company-wide only",
+                          rr5.status_code == 403 and "company-wide only" in rr5.text, f"{rr5.status_code} {rr5.text[:150]}")
+                rs5 = brk(tf, "sales", hdr=uh5, period="this-month")
+                check("division-restricted user: sales still answers (division-scoped)", rs5.ok, f"{rs5.status_code} {rs5.text[:150]}")
+            else:
+                check("setup: division, role and user for the breakdown case", False, f"{rd5.status_code} {rl5.status_code} {ru5.status_code}")
+        finally:
+            if u5: requests.delete(f"{api}/users/{u5}", headers=h, timeout=60)
+            if role5: requests.delete(f"{api}/roles/{role5}", headers=h, timeout=60)
     finally:
         if not a.keep:
             for cid_ in made:

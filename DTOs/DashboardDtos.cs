@@ -1,4 +1,4 @@
-namespace MyApp.Api.DTOs
+﻿namespace MyApp.Api.DTOs
 {
     // ── Dashboard KPI DTOs ─────────────────────────────────────────────
     //
@@ -190,14 +190,44 @@ namespace MyApp.Api.DTOs
         public string? SecondaryLabel { get; set; }
         /// <summary>Set when the row deserves attention — overdue, never sold.</summary>
         public bool Flagged { get; set; }
+        /// <summary>Figures keyed by <see cref="DashboardBreakdownDto.Columns"/>.
+        /// Invoice rows carry date, customer, net, gst, furtherTax, advSection,
+        /// adv236, wht, grandTotal, fbrStatus (money signed like Amount: a
+        /// credit note reads negative).</summary>
+        public Dictionary<string, object?> Values { get; set; } = new();
+        /// <summary>Pass back as groupKey to open this row's level 2; null when
+        /// the row has no level below it.</summary>
+        public string? GroupKey { get; set; }
+        public int? InvoiceId { get; set; }
+        public int? InvoiceNumber { get; set; }
+    }
+
+    /// <summary>One column of a breakdown level. Kind: money | number | text | date | status.</summary>
+    public class DashboardColumn
+    {
+        public string Key { get; set; } = "";
+        public string Label { get; set; } = "";
+        public string Kind { get; set; } = "money";
     }
 
     public class DashboardBreakdownDto
     {
         public string Kind { get; set; } = "";
         public string Title { get; set; } = "";
-        /// <summary>What the card shows. Rows sum to this.</summary>
+        /// <summary>
+        /// Level 1: what the card shows. Level 2: the parent row's figure.
+        /// Always the FULL figure: when <see cref="Truncated"/> is set only the
+        /// newest 500 rows are sent, so the rows sum to less than Total and the
+        /// panel's reconcile check shows the cap rather than hiding it.
+        /// </summary>
         public decimal Total { get; set; }
+        /// <summary>1 = groups (or the single level of a one-level kind), 2 = the rows behind one group.</summary>
+        public int Level { get; set; } = 1;
+        /// <summary>The group this level-2 answer opened; null at level 1.</summary>
+        public string? GroupKey { get; set; }
+        /// <summary>Level 2 hit the 500-row cap.</summary>
+        public bool Truncated { get; set; }
+        public List<DashboardColumn> Columns { get; set; } = new();
         public string? AmountLabel { get; set; }
         /// <summary>Plain-English note on what the rows mean.</summary>
         public string? Note { get; set; }

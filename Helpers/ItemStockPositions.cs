@@ -69,13 +69,18 @@ namespace MyApp.Api.Helpers
         /// counted, never which are walked. Null means all time.
         /// </param>
         /// <param name="to">Exclusive end, matching the dashboard's own filters.</param>
+        /// <param name="landedByInvoice">When given, receives each counted sale
+        /// movement's landed cost keyed by its invoice id (SourceId), unrounded,
+        /// summed across every item walked. A FIFO settlement has no invoice and
+        /// is not in it, so it can sum to less than ConsumedLanded.</param>
         public static List<Position> Compute(
             IReadOnlyDictionary<int, Opening> openings,
             IReadOnlyDictionary<int, List<StockMovement>> movementsByItem,
             IReadOnlyDictionary<int, (string Name, string? HsCode)> names,
             DateTime? from = null,
             DateTime? to = null,
-            StockCosting? costing = null)
+            StockCosting? costing = null,
+            Dictionary<int, decimal>? landedByInvoice = null)
         {
             costing ??= StockCosting.None;
             var result = new List<Position>();
@@ -119,6 +124,8 @@ namespace MyApp.Api.Helpers
                         case StockMovementSourceType.Invoice:
                             consumedDeclared += declaredOut;
                             consumedLanded += landedOut;
+                            if (landedByInvoice != null && m.SourceId is int invId)
+                                landedByInvoice[invId] = landedByInvoice.GetValueOrDefault(invId) + landedOut;
                             if (m.Direction == StockMovementDirection.Out) soldQty += m.Quantity;
                             else soldQty -= m.Quantity;   // a return is not a sale
                             break;

@@ -21,8 +21,9 @@ namespace MyApp.Api.Services.Interfaces
         /// <summary>
         /// The rows behind one KPI, totalling to exactly what that card shows.
         /// Computed from the same source the card is, so the two cannot drift.
+        /// Status is 200, or 400 / 403 with Error and a null Dto.
         /// </summary>
-        Task<DashboardBreakdownDto> GetBreakdownAsync(
+        Task<(DashboardBreakdownDto? Dto, int Status, string? Error)> GetBreakdownAsync(
             int companyId, string kind, string periodCode, DateTime? from, DateTime? to,
             string? groupKey, ClaimsPrincipal user);
 

@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.Middleware;
 using MyApp.Api.Services.Interfaces;
@@ -70,9 +70,13 @@ namespace MyApp.Api.Controllers
         /// companyId would hand another tenant's book to anyone who could sign
         /// in (the defect found on the KPI endpoint on 2026-09-14).
         ///
-        /// Kinds: sales, cogs, cogs-landed, real-margin, stock-on-hand,
-        /// dead-stock, stock-converted, stock-ageing, unrealised-margin,
-        /// inventory-adjustments, receivables, payables, recoverable-tax,
+        /// Two-level kinds (groupKey opens level 2; malformed key -> 400 "Invalid
+        /// group.", a key outside the company -> no rows): sales (yyyy-MM or
+        /// c:{clientGroupKey}), receivables (c:{clientId}), margin-landed
+        /// (i:{itemTypeId}), tax-payable (output|further|input|236G|236H|wht),
+        /// adv-tax-236 (yyyy-MM:236G|236H). One level: cogs, cogs-landed,
+        /// real-margin, stock-on-hand, dead-stock, stock-converted, stock-ageing,
+        /// unrealised-margin, inventory-adjustments, payables, recoverable-tax,
         /// import-book, duty-burden.
         /// </summary>
         [HttpGet("breakdown")]
@@ -92,8 +96,13 @@ namespace MyApp.Api.Controllers
             if (!TryParseRange(from, to, out var f, out var t, out var rangeError))
                 return BadRequest(new { error = rangeError });
 
-            var response = await _dashboard.GetBreakdownAsync(companyId, kind, period, f, t, groupKey, User);
-            return Ok(response);
+            var (dto, status, error) = await _dashboard.GetBreakdownAsync(companyId, kind, period, f, t, groupKey, User);
+            return status switch
+            {
+                200 => Ok(dto),
+                403 => StatusCode(403, new { message = error }),
+                _ => BadRequest(new { error }),
+            };
         }
 
         /// <summary>

@@ -177,6 +177,29 @@ namespace MyApp.Api.Services.Implementations
         public async Task<(DashboardTaxPositionDto? Dto, string? Refusal)> GetTaxPositionAsync(
             int companyId, string periodCode, DateTime? from, DateTime? to, ClaimsPrincipal user)
         {
+            var (ctx, refusal) = await LoadTaxPositionAsync(companyId, periodCode, from, to, user);
+            return (ctx?.Dto, refusal);
+        }
+
+        private sealed record TaxDoc(int Year, int Month, decimal Sign, decimal GSTAmount,
+            decimal FurtherTaxAmount, decimal AdvanceTaxAmount, string? AdvanceTaxSection);
+
+        /// <summary>The panel plus what it was built from, so the tax drill-downs
+        /// read the same window and documents rather than recomputing them.</summary>
+        private sealed record TaxContext(DashboardTaxPositionDto Dto, DateTime First, DateTime End, List<TaxDoc> Docs);
+
+        private static readonly ControlType[] TaxGlRoles = { ControlType.InputTax, ControlType.WithholdingPayable };
+
+        /// <summary>The journal lines the panel's GL figures come from.</summary>
+        private IQueryable<JournalLine> TaxGlLines(int companyId, DateTime first, DateTime end, ControlType[] roles) =>
+            _context.JournalLines.AsNoTracking()
+                .Where(jl => jl.JournalEntry.CompanyId == companyId && jl.Account.CompanyId == companyId
+                          && jl.JournalEntry.Date >= first && jl.JournalEntry.Date < end
+                          && roles.Contains(jl.Account.ControlType));
+
+        private async Task<(TaxContext? Ctx, string? Refusal)> LoadTaxPositionAsync(
+            int companyId, string periodCode, DateTime? from, DateTime? to, ClaimsPrincipal user)
+        {
             // Same gate as the Sales section of the Overview: output tax, further
             // tax and 236G/H are sales figures, so dashboard.view alone is not enough.
             var userId = ResolveUserId(user) ?? 0;
@@ -210,12 +233,8 @@ namespace MyApp.Api.Services.Implementations
             // notes are DocumentType 10 here; the worksheet tests NoteKind == 2
             // for the same documents.)
             var docs = await DashboardSalesFilter.SaleDocs(_context.Invoices.AsNoTracking(), companyId, first, end)
-                .Select(i => new
-                {
-                    i.Date.Year, i.Date.Month,
-                    Sign = i.DocumentType == 10 ? -1m : 1m,
-                    i.GSTAmount, i.FurtherTaxAmount, i.AdvanceTaxAmount, i.AdvanceTaxSection,
-                })
+                .Select(i => new TaxDoc(i.Date.Year, i.Date.Month, i.DocumentType == 10 ? -1m : 1m,
+                    i.GSTAmount, i.FurtherTaxAmount, i.AdvanceTaxAmount, i.AdvanceTaxSection))
                 .ToListAsync();
             dto.OutputTax = Round(docs.Sum(d => d.Sign * d.GSTAmount));
             dto.FurtherTax = Round(docs.Sum(d => d.Sign * d.FurtherTaxAmount));
@@ -230,11 +249,7 @@ namespace MyApp.Api.Services.Implementations
             {
                 // Journal entries have no void / posted state, so (like
                 // GeneralLedgerService.GetAccountBalancesAsync) every line counts.
-                var roles = new[] { ControlType.InputTax, ControlType.WithholdingPayable };
-                glLines = (await _context.JournalLines.AsNoTracking()
-                    .Where(jl => jl.JournalEntry.CompanyId == companyId && jl.Account.CompanyId == companyId
-                              && jl.JournalEntry.Date >= first && jl.JournalEntry.Date < end
-                              && roles.Contains(jl.Account.ControlType))
+                glLines = (await TaxGlLines(companyId, first, end, TaxGlRoles)
                     .Select(jl => new { jl.JournalEntry.Date, jl.Account.ControlType, jl.Debit, jl.Credit })
                     .ToListAsync())
                     .Select(x => (new DateTime(x.Date.Year, x.Date.Month, 1), x.ControlType, x.Debit - x.Credit))
@@ -293,7 +308,7 @@ namespace MyApp.Api.Services.Implementations
                     InputTax = Round(inputByMonth.GetValueOrDefault(m)),
                 });
             }
-            return (dto, null);
+            return (new TaxContext(dto, first, end, docs), null);
         }
 
         // ── Period resolution ───────────────────────────────────────────
@@ -642,7 +657,7 @@ namespace MyApp.Api.Services.Implementations
         /// drill-down that disagreed with the number it opened from would be
         /// worse than none at all.
         /// </summary>
-        public async Task<DashboardBreakdownDto> GetBreakdownAsync(
+        public async Task<(DashboardBreakdownDto? Dto, int Status, string? Error)> GetBreakdownAsync(
             int companyId, string kind, string periodCode, DateTime? from, DateTime? to,
             string? groupKey, ClaimsPrincipal user)
         {
@@ -652,7 +667,19 @@ namespace MyApp.Api.Services.Implementations
                 : null;
             var period = BuildPeriod(periodCode, from, to);
             var k = (kind ?? "").Trim().ToLowerInvariant();
+            var key = string.IsNullOrWhiteSpace(groupKey) ? null : groupKey.Trim();
 
+            if (k is "sales" or "receivables" or "margin-landed" or "tax-payable" or "adv-tax-236")
+                return await TwoLevelBreakdownAsync(companyId, k, periodCode, from, to, key, user, userId, divScope, period);
+
+            // Every other kind has one level, so a group key is meaningless there.
+            if (key != null) return (null, 400, InvalidGroup);
+            return (await SingleLevelBreakdownAsync(companyId, k, kind ?? "", period, divScope), 200, null);
+        }
+
+        private async Task<DashboardBreakdownDto> SingleLevelBreakdownAsync(
+            int companyId, string k, string kind, DashboardPeriod period, HashSet<int>? divScope)
+        {
             var result = new DashboardBreakdownDto { Kind = k, AmountLabel = "Amount" };
 
             // Item-derived kinds share one walk.
@@ -829,59 +856,6 @@ namespace MyApp.Api.Services.Implementations
 
             switch (k)
             {
-                case "receivables":
-                {
-                    var today = PakistanClock.Today;
-                    var q = _context.Invoices.AsNoTracking()
-                        .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
-                                 && i.DocumentType != 9 && i.DocumentType != 10
-                                 && i.GrandTotal > i.AmountPaid);
-                    if (divScope != null)
-                        q = q.Where(i => i.DivisionId == null || divScope.Contains(i.DivisionId.Value));
-                    result.Title = "Receivables, by invoice";
-                    result.Note = "Invoiced and not yet collected. Flagged rows are past their due date.";
-                    result.Rows = await q
-                        .OrderByDescending(i => i.GrandTotal - i.AmountPaid)
-                        .Select(i => new DashboardBreakdownRowDto
-                        {
-                            Id = i.Id,
-                            Label = i.Client!.Name ?? "(unknown)",
-                            Sub = "#" + i.InvoiceNumber + " · " + i.Date.ToString("dd MMM yyyy"),
-                            Amount = i.GrandTotal - i.AmountPaid,
-                            Secondary = i.GrandTotal,
-                            SecondaryLabel = "Invoiced",
-                            Flagged = i.DueDate != null && i.DueDate < today,
-                        })
-                        .ToListAsync();
-                    result.Total = Round(result.Rows.Sum(r => r.Amount));
-                    return result;
-                }
-
-                case "sales":
-                {
-                    var q = DashboardSalesFilter.SaleDocs(
-                        _context.Invoices.AsNoTracking(), companyId, period.From, period.To);
-                    if (divScope != null)
-                        q = q.Where(i => i.DivisionId == null || divScope.Contains(i.DivisionId.Value));
-                    result.Title = "Sales, by invoice";
-                    result.Note = "Tax-inclusive grand total; credit notes are negative. The second figure is the same document excluding tax.";
-                    result.Rows = await q
-                        .OrderByDescending(i => (i.DocumentType == 10 ? -1m : 1m) * i.GrandTotal)
-                        .Select(i => new DashboardBreakdownRowDto
-                        {
-                            Id = i.Id,
-                            Label = i.Client!.Name ?? "(unknown)",
-                            Sub = "#" + i.InvoiceNumber + " · " + i.Date.ToString("dd MMM yyyy")
-                                + (i.DocumentType == 10 ? " · credit note" : i.DocumentType == 9 ? " · debit note" : ""),
-                            Amount = (i.DocumentType == 10 ? -1m : 1m) * i.GrandTotal,
-                            Secondary = (i.DocumentType == 10 ? -1m : 1m) * i.Subtotal,
-                            SecondaryLabel = "Excl. tax",
-                        })
-                        .ToListAsync();
-                    result.Total = Round(result.Rows.Sum(r => r.Amount));
-                    return result;
-                }
-
                 case "payables":
                 case "recoverable-tax":
                 {
@@ -972,6 +946,600 @@ namespace MyApp.Api.Services.Implementations
                     result.Note = "No drill-down is defined for '" + kind + "'.";
                     return result;
             }
+        }
+
+        // ── Two-level drill-downs (2026-10-18) ──────────────────────────────
+        //
+        // Level 1 (no groupKey) lists groups that sum to the card; level 2 lists
+        // what is behind one group, newest first, capped at 500. Every query is
+        // filtered by the route's company, so a well-formed key naming another
+        // company's client or item answers with no rows. Each kind reads the SAME
+        // source as its card: the sale filter, the aged receivables report, the
+        // stock walk, the tax position.
+
+        private const string InvalidGroup = "Invalid group.";
+        private const int Level2Cap = 500;
+        private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+        private static readonly string[] TaxLines = { "output", "further", "input", "236G", "236H", "wht" };
+
+        private static readonly (string Key, string Label, string Kind)[] InvoiceCols =
+        {
+            ("date", "Date", "date"), ("customer", "Customer", "text"), ("net", "Net", "money"),
+            ("gst", "Sales tax", "money"), ("furtherTax", "Further tax", "money"),
+            ("advSection", "236 section", "text"), ("adv236", "236G/H", "money"),
+            ("wht", "WHT", "money"), ("grandTotal", "Grand total", "money"), ("fbrStatus", "FBR", "status"),
+        };
+
+        private static List<DashboardColumn> Cols(params (string Key, string Label, string Kind)[] c) =>
+            c.Select(x => new DashboardColumn { Key = x.Key, Label = x.Label, Kind = x.Kind }).ToList();
+
+        private static DashboardBreakdownRowDto GroupRow(string? key, string label, decimal amount,
+            params (string Key, object? Value)[] values)
+        {
+            var row = new DashboardBreakdownRowDto { GroupKey = key, Label = label, Amount = Round(amount) };
+            foreach (var (k, v) in values) row.Values[k] = v;
+            return row;
+        }
+
+        private sealed record InvRow(int Id, int Number, DateTime Date, string? Customer, int? DocType, decimal Sign,
+            decimal Subtotal, decimal Gst, decimal Further, string? AdvSection, decimal Adv, decimal Wht,
+            decimal GrandTotal, decimal AmountPaid, string? FbrStatus);
+
+        private static IQueryable<InvRow> InvRows(IQueryable<Invoice> q) => q.Select(i => new InvRow(
+            i.Id, i.InvoiceNumber, i.Date, i.Client!.Name, i.DocumentType, i.DocumentType == 10 ? -1m : 1m,
+            i.Subtotal, i.GSTAmount, i.FurtherTaxAmount, i.AdvanceTaxSection, i.AdvanceTaxAmount,
+            i.WithholdingTaxAmount, i.GrandTotal, i.AmountPaid, i.FbrStatus));
+
+        /// <summary>An invoice row: money signed like Amount (a credit note reads negative).</summary>
+        private static DashboardBreakdownRowDto InvoiceRow(InvRow r, decimal amount) => new()
+        {
+            Id = r.Id,
+            InvoiceId = r.Id,
+            InvoiceNumber = r.Number,
+            Label = r.Customer ?? "(unknown)",
+            Sub = "#" + r.Number + " · " + r.Date.ToString("dd MMM yyyy", Inv)
+                + (r.DocType == 10 ? " · credit note" : r.DocType == 9 ? " · debit note" : ""),
+            Amount = Round(amount),
+            Values = new()
+            {
+                ["date"] = r.Date, ["customer"] = r.Customer, ["net"] = Round(r.Sign * r.Subtotal),
+                ["gst"] = Round(r.Sign * r.Gst), ["furtherTax"] = Round(r.Sign * r.Further),
+                ["advSection"] = r.AdvSection, ["adv236"] = Round(r.Sign * r.Adv),
+                ["wht"] = Round(r.Sign * r.Wht), ["grandTotal"] = Round(r.Sign * r.GrandTotal),
+                ["fbrStatus"] = r.FbrStatus,
+            },
+        };
+
+        private static IEnumerable<InvRow> Newest(IEnumerable<InvRow> rows) =>
+            rows.OrderByDescending(r => r.Date).ThenByDescending(r => r.Id);
+
+        /// <summary>Caps an already-ordered level 2. Total stays the whole group's figure.</summary>
+        private static DashboardBreakdownDto FillLevel2(DashboardBreakdownDto result,
+            IEnumerable<DashboardBreakdownRowDto> ordered, decimal total)
+        {
+            var all = ordered.ToList();
+            result.Truncated = all.Count > Level2Cap;
+            result.Rows = all.Take(Level2Cap).ToList();
+            result.Total = Round(total);
+            return result;
+        }
+
+        private static bool TryMonthKey(string s, out DateTime month) =>
+            DateTime.TryParseExact(s, "yyyy-MM", Inv, DateTimeStyles.None, out month);
+
+        private static bool TryIdKey(string s, char prefix, out int id)
+        {
+            id = 0;
+            return s.Length > 2 && s[0] == prefix && s[1] == ':'
+                && int.TryParse(s.AsSpan(2), NumberStyles.AllowLeadingSign, Inv, out id);
+        }
+
+        private static bool TryAdvKey(string s, out DateTime month, out string section)
+        {
+            month = default;
+            section = "";
+            var parts = s.Split(':');
+            if (parts.Length != 2 || parts[1] is not ("236G" or "236H") || !TryMonthKey(parts[0], out month)) return false;
+            section = parts[1];
+            return true;
+        }
+
+        private async Task<(DashboardBreakdownDto? Dto, int Status, string? Error)> TwoLevelBreakdownAsync(
+            int companyId, string k, string periodCode, DateTime? from, DateTime? to, string? key,
+            ClaimsPrincipal user, int? userId, HashSet<int>? divScope, DashboardPeriod period)
+        {
+            var result = new DashboardBreakdownDto
+            {
+                Kind = k, Level = key == null ? 1 : 2, GroupKey = key, AmountLabel = "Amount",
+            };
+
+            if (k is "tax-payable" or "adv-tax-236")
+            {
+                if (key != null && !(k == "tax-payable" ? TaxLines.Contains(key) : TryAdvKey(key, out _, out _)))
+                    return (null, 400, InvalidGroup);
+                // The panel's own gate (sales KPI permission, company-wide only)
+                // and its own window and figures.
+                var (ctx, refusal) = await LoadTaxPositionAsync(companyId, periodCode, from, to, user);
+                if (ctx == null) return (null, 403, refusal);
+                return (k == "tax-payable"
+                    ? await TaxPayableBreakdownAsync(companyId, ctx, key, result)
+                    : await AdvTaxBreakdownAsync(companyId, ctx, key, result), 200, null);
+            }
+
+            // Sales figures: the same permission the Overview's sales cards need.
+            var perms = userId.HasValue
+                ? await _permissions.GetUserPermissionsAsync(userId.Value)
+                : (IReadOnlyCollection<string>)Array.Empty<string>();
+            if (!perms.Contains("dashboard.kpi.sales.view"))
+                return (null, 403, "You do not have access to these figures.");
+
+            DashboardBreakdownDto? dto;
+            switch (k)
+            {
+                case "sales":
+                    dto = await SalesBreakdownAsync(companyId, period, divScope, key, result);
+                    break;
+                case "receivables":
+                    // The aged report has no division scope; the card is withheld
+                    // from a division-restricted user, so is its drill.
+                    if (divScope != null) return (null, 403, "Receivables are company-wide only.");
+                    dto = await ReceivablesBreakdownAsync(companyId, key, result);
+                    break;
+                default:
+                    dto = await MarginBreakdownAsync(companyId, period, divScope, key, result);
+                    break;
+            }
+            return dto == null ? (null, 400, InvalidGroup) : (dto, 200, null);
+        }
+
+        // sales: level 1 by month (a year or more) or by customer group; level 2 invoices.
+        private async Task<DashboardBreakdownDto?> SalesBreakdownAsync(
+            int companyId, DashboardPeriod period, HashSet<int>? divScope, string? key, DashboardBreakdownDto result)
+        {
+            var q = DashboardSalesFilter.SaleDocs(_context.Invoices.AsNoTracking(), companyId, period.From, period.To);
+            if (divScope != null)
+                q = q.Where(i => i.DivisionId == null || divScope.Contains(i.DivisionId.Value));
+            result.AmountLabel = "Net sales";
+
+            if (key == null)
+            {
+                var byMonth = period.From == null || period.To == null
+                    || period.Code is "this-year" or "last-year"
+                    || (period.To.Value - period.From.Value).TotalDays >= 365;
+                result.Columns = Cols(("invoices", "Documents", "number"), ("net", "Net", "money"),
+                    ("gst", "Sales tax", "money"), ("grandTotal", "Grand total", "money"));
+                result.Note = "Excluding tax; credit notes subtract and debit notes add. Open a row for its documents.";
+                if (byMonth)
+                {
+                    result.Title = "Net sales, by month";
+                    var months = await q.GroupBy(i => new { i.Date.Year, i.Date.Month })
+                        .Select(g => new
+                        {
+                            g.Key.Year, g.Key.Month, Count = g.Count(),
+                            Net = g.Sum(i => (i.DocumentType == 10 ? -1m : 1m) * i.Subtotal),
+                            Gst = g.Sum(i => (i.DocumentType == 10 ? -1m : 1m) * i.GSTAmount),
+                            Grand = g.Sum(i => (i.DocumentType == 10 ? -1m : 1m) * i.GrandTotal),
+                        })
+                        .ToListAsync();
+                    result.Rows = months.OrderByDescending(x => x.Year).ThenByDescending(x => x.Month).Select(x =>
+                    {
+                        var m = new DateTime(x.Year, x.Month, 1);
+                        return GroupRow(m.ToString("yyyy-MM", Inv), m.ToString("MMM yyyy", Inv), x.Net,
+                            ("invoices", x.Count), ("net", Round(x.Net)), ("gst", Round(x.Gst)), ("grandTotal", Round(x.Grand)));
+                    }).ToList();
+                }
+                else
+                {
+                    // CLAUDE.md §5: one legal entity kept under several client records reads as one customer.
+                    result.Title = "Net sales, by customer";
+                    var groups = await q.GroupBy(i => i.Client!.ClientGroupId ?? -i.ClientId)
+                        .Select(g => new
+                        {
+                            g.Key, Count = g.Count(),
+                            Name = g.Max(i => i.Client!.ClientGroup != null ? i.Client.ClientGroup.DisplayName : i.Client.Name),
+                            Net = g.Sum(i => (i.DocumentType == 10 ? -1m : 1m) * i.Subtotal),
+                            Gst = g.Sum(i => (i.DocumentType == 10 ? -1m : 1m) * i.GSTAmount),
+                            Grand = g.Sum(i => (i.DocumentType == 10 ? -1m : 1m) * i.GrandTotal),
+                        })
+                        .ToListAsync();
+                    result.Rows = groups.OrderByDescending(x => x.Net).Select(x =>
+                        GroupRow("c:" + x.Key.ToString(Inv), x.Name ?? "(unknown)", x.Net,
+                            ("invoices", x.Count), ("net", Round(x.Net)), ("gst", Round(x.Gst)), ("grandTotal", Round(x.Grand))))
+                        .ToList();
+                }
+                result.Total = Round(result.Rows.Sum(r => r.Amount));
+                return result;
+            }
+
+            IQueryable<Invoice> g;
+            if (TryMonthKey(key, out var month))
+            {
+                var next = month.AddMonths(1);
+                g = q.Where(i => i.Date >= month && i.Date < next);
+                result.Title = "Sales in " + month.ToString("MMMM yyyy", Inv);
+            }
+            else if (TryIdKey(key, 'c', out var gid) && gid != 0)
+            {
+                var clientId = -gid;
+                g = gid > 0
+                    ? q.Where(i => i.Client!.ClientGroupId == gid)
+                    : q.Where(i => i.ClientId == clientId && i.Client!.ClientGroupId == null);
+                result.Title = "Sales to one customer";
+            }
+            else return null;
+
+            result.Note = "Net is the figure the card adds up; credit notes read negative.";
+            result.Columns = Cols(InvoiceCols);
+            var list = await InvRows(g).ToListAsync();
+            return FillLevel2(result, Newest(list).Select(r => InvoiceRow(r, r.Sign * r.Subtotal)),
+                list.Sum(r => r.Sign * r.Subtotal));
+        }
+
+        // receivables: level 1 = the aged report's customers; level 2 = their open bills + on-account.
+        private async Task<DashboardBreakdownDto?> ReceivablesBreakdownAsync(
+            int companyId, string? key, DashboardBreakdownDto result)
+        {
+            var clientId = 0;
+            if (key != null && !(TryIdKey(key, 'c', out clientId) && clientId > 0)) return null;
+
+            var aged = await _gl.GetAgedReceivablesAsync(companyId);
+            // GeneralLedgerService.BuildAgingAsync's own open-document test (as of now).
+            var open = _context.Invoices.AsNoTracking()
+                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
+                         && i.DocumentType != 9 && i.DocumentType != 10
+                         && i.GrandTotal - i.WithholdingTaxAmount - i.AmountPaid > 0m);
+            result.AmountLabel = "Balance";
+
+            if (key == null)
+            {
+                var docs = await open.GroupBy(i => i.ClientId)
+                    .Select(g => new
+                    {
+                        ClientId = g.Key,
+                        Invoiced = g.Sum(i => i.GrandTotal),
+                        Wht = g.Sum(i => i.WithholdingTaxAmount),
+                        Receipts = g.Sum(i => i.AmountPaid),
+                        Adv = g.Sum(i => i.AdvanceTaxAmount),
+                    })
+                    .ToDictionaryAsync(x => x.ClientId);
+                result.Title = "Receivables, by customer";
+                result.Note = "The customer balance from the aged receivables report: open bills, less WHT and what was "
+                    + "received against them, plus money held on account (negative). 236G/H billed on those bills is shown apart. "
+                    + "Flagged customers have money past due.";
+                result.Columns = Cols(("invoiced", "Invoiced", "money"), ("wht", "WHT", "money"),
+                    ("receipts", "Receipts", "money"), ("onAccount", "On account", "money"),
+                    ("balance", "Balance", "money"), ("adv236Billed", "236G/H billed", "money"));
+                result.Rows = aged.Rows.Select(a =>
+                {
+                    docs.TryGetValue(a.PartyId, out var d);
+                    var invoiced = d?.Invoiced ?? 0m;
+                    var wht = d?.Wht ?? 0m;
+                    var receipts = d?.Receipts ?? 0m;
+                    var row = GroupRow("c:" + a.PartyId.ToString(Inv), a.Name, a.Total,
+                        ("invoiced", Round(invoiced)), ("wht", Round(wht)), ("receipts", Round(receipts)),
+                        ("onAccount", Round(a.Total - (invoiced - wht - receipts))), ("balance", Round(a.Total)),
+                        ("adv236Billed", Round(d?.Adv ?? 0m)));
+                    row.Sub = a.OpenDocuments + " open bill" + (a.OpenDocuments == 1 ? "" : "s");
+                    row.Flagged = a.Total - a.Current > 0m;
+                    return row;
+                }).ToList();
+                result.Total = Round(aged.Total);
+                return result;
+            }
+
+            var party = aged.Rows.FirstOrDefault(r => r.PartyId == clientId);
+            var list = await InvRows(open.Where(i => i.ClientId == clientId)).ToListAsync();
+            result.Title = "Open bills for " + (party?.Name ?? "this customer");
+            result.Note = "What is still due on each bill (grand total less WHT and receipts applied), plus money held on account.";
+            result.Columns = Cols(InvoiceCols);
+            var rows = new List<DashboardBreakdownRowDto>();
+            var onAccount = (party?.Total ?? 0m) - list.Sum(r => r.GrandTotal - r.Wht - r.AmountPaid);
+            if (Math.Abs(onAccount) >= 0.005m)
+                rows.Add(new DashboardBreakdownRowDto
+                {
+                    Label = "On account",
+                    Sub = "Received and not applied to a bill (negative: held for the customer)",
+                    Amount = Round(onAccount),
+                });
+            rows.AddRange(Newest(list).Select(r => InvoiceRow(r, r.GrandTotal - r.Wht - r.AmountPaid)));
+            return FillLevel2(result, rows, party?.Total ?? 0m);
+        }
+
+        // margin-landed: level 1 = item types from the stock walk; level 2 = the invoices carrying that item.
+        private async Task<DashboardBreakdownDto?> MarginBreakdownAsync(
+            int companyId, DashboardPeriod period, HashSet<int>? divScope, string? key, DashboardBreakdownDto result)
+        {
+            var itemId = 0;
+            if (key != null && !(TryIdKey(key, 'i', out itemId) && itemId >= 0)) return null;
+
+            var sales = DashboardSalesFilter.SaleDocs(_context.Invoices.AsNoTracking(), companyId, period.From, period.To);
+            if (divScope != null)
+                sales = sales.Where(i => i.DivisionId == null || divScope.Contains(i.DivisionId.Value));
+            var saleIds = sales.Select(i => i.Id);
+            var lines = await _context.InvoiceItems.AsNoTracking()
+                .Where(ii => saleIds.Contains(ii.InvoiceId))
+                .Select(ii => new { ii.ItemTypeId, ii.InvoiceId, Net = (ii.Invoice!.DocumentType == 10 ? -1m : 1m) * ii.LineTotal })
+                .ToListAsync();
+            var inputs = await LoadPositionInputsAsync(companyId, divScope);
+            result.AmountLabel = "Margin";
+
+            if (key == null)
+            {
+                var positions = await LoadPositionsAsync(companyId, divScope, period.From, period.To);
+                var (_, _, netSales) = await SumInvoicesAsync(companyId, period.From, period.To, divScope);
+                var revenue = lines.Where(l => l.ItemTypeId != null)
+                    .GroupBy(l => l.ItemTypeId!.Value).ToDictionary(g => g.Key, g => g.Sum(x => x.Net));
+                var byItem = positions.ToDictionary(p => p.ItemTypeId);
+                var ids = revenue.Keys.Union(positions.Where(p => p.ConsumedLanded != 0m).Select(p => p.ItemTypeId)).ToList();
+                var missing = ids.Where(id => !inputs.Names.ContainsKey(id)).ToList();
+                var otherNames = missing.Count == 0
+                    ? new Dictionary<int, string>()
+                    : await _context.ItemTypes.AsNoTracking().Where(it => missing.Contains(it.Id))
+                        .ToDictionaryAsync(it => it.Id, it => it.Name);
+
+                result.Title = "Margin on landed cost, by item";
+                result.Note = "Net sales of each item less what those goods actually cost (the stock walk behind Landed cost of sales). Flagged items sold below cost.";
+                result.Columns = Cols(("revenue", "Net sales", "money"), ("landed", "Landed cost", "money"), ("margin", "Margin", "money"));
+                result.Rows = ids.Select(id =>
+                {
+                    var rev = revenue.GetValueOrDefault(id);
+                    byItem.TryGetValue(id, out var p);
+                    var cost = p?.ConsumedLanded ?? 0m;
+                    var name = inputs.Names.TryGetValue(id, out var n) ? n.Name
+                        : otherNames.GetValueOrDefault(id) ?? "(item " + id.ToString(Inv) + ")";
+                    var row = GroupRow("i:" + id.ToString(Inv), name, rev - cost,
+                        ("revenue", Round(rev)), ("landed", cost), ("margin", Round(rev - cost)));
+                    row.Sub = p?.HsCode;
+                    row.Flagged = rev < cost;
+                    return row;
+                }).OrderByDescending(r => Math.Abs(r.Amount)).ToList();
+
+                var unclassified = lines.Where(l => l.ItemTypeId == null).Sum(l => l.Net);
+                if (unclassified != 0m)
+                {
+                    var row = GroupRow("i:0", "(lines with no item type)", unclassified,
+                        ("revenue", Round(unclassified)), ("landed", 0m), ("margin", Round(unclassified)));
+                    row.Sub = "Earned revenue but relieved no stock";
+                    result.Rows.Add(row);
+                }
+                // Bills with no line detail (migrated history) still count in net sales.
+                var noLines = netSales - lines.Sum(l => l.Net);
+                if (Math.Abs(noLines) >= 0.005m)
+                {
+                    var row = GroupRow(null, "Sales with no line detail", noLines,
+                        ("revenue", Round(noLines)), ("landed", 0m), ("margin", Round(noLines)));
+                    row.Sub = "Bills recorded without item lines: revenue with nothing to cost";
+                    result.Rows.Add(row);
+                }
+                // The card's own formula: net sales less the walk's landed cost.
+                result.Total = Round(netSales - Round(positions.Sum(p => p.ConsumedLanded)));
+                return result;
+            }
+
+            // Level 2: the invoices carrying the item, each with its own landed
+            // share from the walk (per sale movement), not an average.
+            var revByInv = lines.Where(l => itemId == 0 ? l.ItemTypeId == null : l.ItemTypeId == itemId)
+                .GroupBy(l => l.InvoiceId).ToDictionary(g => g.Key, g => g.Sum(x => x.Net));
+            var landedByInv = new Dictionary<int, decimal>();
+            var itemLanded = 0m;
+            if (itemId != 0 && inputs.Names.TryGetValue(itemId, out var meta))
+            {
+                var one = new Dictionary<int, (string Name, string? HsCode)> { [itemId] = meta };
+                itemLanded = ItemStockPositions.Compute(inputs.Openings, inputs.MovementsByItem, one,
+                    period.From, period.To, inputs.Costing, landedByInv).Sum(p => p.ConsumedLanded);
+            }
+            var total = revByInv.Values.Sum() - itemLanded;
+
+            var invIds = revByInv.Keys.Union(landedByInv.Keys).ToList();
+            var list = invIds.Count == 0 ? new List<InvRow>()
+                : await InvRows(sales.Where(i => invIds.Contains(i.Id))).ToListAsync();
+            result.Title = itemId == 0 ? "Bills with lines that carry no item type"
+                : "Bills carrying " + (inputs.Names.TryGetValue(itemId, out var nm) ? nm.Name : "this item");
+            result.Note = "Each bill's margin is that item's net on the bill less the landed cost the stock walk took for that sale.";
+            result.Columns = Cols(InvoiceCols.Concat(new[] { ("itemNet", "Item net", "money"), ("itemLanded", "Item landed cost", "money") }).ToArray());
+            var rows = Newest(list).Select(r =>
+            {
+                var net = Round(revByInv.GetValueOrDefault(r.Id));
+                var cost = Round(landedByInv.GetValueOrDefault(r.Id));
+                var row = InvoiceRow(r, net - cost);
+                row.Values["itemNet"] = net;
+                row.Values["itemLanded"] = cost;
+                row.Flagged = net < cost;
+                return row;
+            }).ToList();
+            // Cost with no listed bill: a FIFO settlement booked on a later
+            // purchase (CLAUDE.md §5b-17), or a sale outside the filter.
+            var rest = Round(total) - rows.Sum(r => r.Amount);
+            if (Math.Abs(rest) >= 0.005m)
+                rows.Insert(0, new DashboardBreakdownRowDto
+                {
+                    Label = "Cost not tied to a listed bill",
+                    Sub = "FIFO settlement by a later purchase, or rounding",
+                    Amount = rest,
+                });
+            return FillLevel2(result, rows, total);
+        }
+
+        // tax-payable: level 1 = the panel's lines; level 2 = invoices, GD lines or journal entries.
+        private async Task<DashboardBreakdownDto> TaxPayableBreakdownAsync(
+            int companyId, TaxContext ctx, string? key, DashboardBreakdownDto result)
+        {
+            var d = ctx.Dto;
+            var months = d.FromMonth == d.ToMonth ? d.FromMonth : d.FromMonth + " to " + d.ToMonth;
+            var worksheet = d.InputBasis == "worksheet";
+            if (key == null)
+            {
+                result.Title = "Payable to FBR, by line";
+                result.Note = "Whole months " + months + ", as the return is filed. Input tax reduces what is payable, so it reads negative. "
+                    + (worksheet ? "Input comes from the Import Tax Desk worksheet." : "Input comes from the ledger, before the 8B cap.");
+                result.Rows = new List<DashboardBreakdownRowDto>
+                {
+                    GroupRow("output", "Output sales tax", d.OutputTax),
+                    GroupRow("further", "Further tax", d.FurtherTax),
+                    GroupRow("input", "Input sales tax claimed", -d.InputTaxClaimed),
+                };
+                // Whatever turns output - input into the payable the panel shows.
+                var adjust = d.SalesTaxPayable - (d.OutputTax + d.FurtherTax - d.InputTaxClaimed);
+                if (adjust != 0m)
+                {
+                    var row = GroupRow(null, worksheet ? "Carry-forward and 8B cap" : "Input above output (nothing payable)", adjust);
+                    row.Sub = worksheet ? "As the Import Tax Desk worksheet applies them" : "Sales tax payable cannot go below zero";
+                    result.Rows.Add(row);
+                }
+                result.Rows.Add(GroupRow("236G", "236G collected", d.Adv236G));
+                result.Rows.Add(GroupRow("236H", "236H collected", d.Adv236H));
+                result.Rows.Add(GroupRow("wht", "WHT payable (s.153, deducted by us)", d.WhtPayable));
+                result.Total = d.TotalPayable;
+                return result;
+            }
+
+            var docs = DashboardSalesFilter.SaleDocs(_context.Invoices.AsNoTracking(), companyId, ctx.First, ctx.End);
+            result.Note = "Whole months " + months + ".";
+            switch (key)
+            {
+                case "output":
+                case "further":
+                case "236G":
+                case "236H":
+                {
+                    IQueryable<Invoice> q = key switch
+                    {
+                        "output" => docs.Where(i => i.GSTAmount != 0m),
+                        "further" => docs.Where(i => i.FurtherTaxAmount != 0m),
+                        _ => docs.Where(i => i.AdvanceTaxSection == key && i.AdvanceTaxAmount != 0m),
+                    };
+                    Func<InvRow, decimal> amount = key switch
+                    {
+                        "output" => r => r.Sign * r.Gst,
+                        "further" => r => r.Sign * r.Further,
+                        _ => r => r.Sign * r.Adv,
+                    };
+                    result.Title = key switch
+                    {
+                        "output" => "Output sales tax, by bill",
+                        "further" => "Further tax, by bill",
+                        _ => key + " collected, by bill",
+                    };
+                    result.AmountLabel = "Tax";
+                    result.Columns = Cols(InvoiceCols);
+                    var list = await InvRows(q).ToListAsync();
+                    var total = key switch
+                    {
+                        "output" => d.OutputTax, "further" => d.FurtherTax, "236G" => d.Adv236G, _ => d.Adv236H,
+                    };
+                    return FillLevel2(result, Newest(list).Select(r => InvoiceRow(r, amount(r))), total);
+                }
+                case "wht":
+                    result.Title = "WHT payable, by journal entry";
+                    result.AmountLabel = "WHT";
+                    return await JournalLevelAsync(companyId, ctx, ControlType.WithholdingPayable, result, d.WhtPayable);
+                default: // input
+                    result.AmountLabel = "Input tax";
+                    if (!worksheet)
+                    {
+                        result.Title = "Input tax, by journal entry";
+                        return await JournalLevelAsync(companyId, ctx, ControlType.InputTax, result, -d.InputTaxClaimed);
+                    }
+                    return await WorksheetInputAsync(companyId, ctx, result);
+            }
+        }
+
+        /// <summary>Journal entries behind a GL tax line, signed as the panel reads them
+        /// (credit-natural WHT payable positive, input tax negative).</summary>
+        private async Task<DashboardBreakdownDto> JournalLevelAsync(
+            int companyId, TaxContext ctx, ControlType role, DashboardBreakdownDto result, decimal total)
+        {
+            result.Columns = Cols(("date", "Date", "date"), ("entryNo", "Entry", "number"),
+                ("narration", "Narration", "text"), ("amount", "Amount", "money"));
+            if (!ctx.Dto.LedgerEnabled) return FillLevel2(result, Array.Empty<DashboardBreakdownRowDto>(), total);
+            var entries = await TaxGlLines(companyId, ctx.First, ctx.End, new[] { role })
+                .GroupBy(jl => new { jl.JournalEntryId, jl.JournalEntry.EntryNo, jl.JournalEntry.Date, jl.JournalEntry.Narration })
+                .Select(g => new { g.Key.JournalEntryId, g.Key.EntryNo, g.Key.Date, g.Key.Narration, Net = g.Sum(jl => jl.Debit - jl.Credit) })
+                .ToListAsync();
+            var rows = entries.Where(x => x.Net != 0m)
+                .OrderByDescending(x => x.Date).ThenByDescending(x => x.JournalEntryId)
+                .Select(x => GroupRow(null, string.IsNullOrWhiteSpace(x.Narration) ? "Journal entry " + x.EntryNo : x.Narration!, -x.Net,
+                    ("date", x.Date), ("entryNo", x.EntryNo), ("narration", x.Narration), ("amount", Round(-x.Net))));
+            return FillLevel2(result, rows, total);
+        }
+
+        /// <summary>The Import Tax Desk worksheet's input for the panel's months: GD
+        /// lines claimed in them (sales tax + value-added tax + other, as the
+        /// worksheet adds them) and purchase bills less purchase debit notes.</summary>
+        private async Task<DashboardBreakdownDto> WorksheetInputAsync(int companyId, TaxContext ctx, DashboardBreakdownDto result)
+        {
+            result.Title = "Input tax claimed, by GD line and purchase";
+            result.Columns = Cols(("date", "Date", "date"), ("gdNumber", "GD", "text"), ("description", "Description", "text"),
+                ("hsCode", "HS code", "text"), ("claimMonth", "Claim month", "text"), ("salesTax", "Sales tax", "money"),
+                ("valueAddedTax", "Value-added tax", "money"), ("otherTax", "Other", "money"), ("inputTax", "Input tax", "money"));
+            var rows = new List<(DateTime Date, DashboardBreakdownRowDto Row)>();
+            foreach (var l in await _worksheet.CostingLinesAsync(companyId))
+            {
+                if (l.InputTax <= 0m || l.ClaimMonth is not DateTime c) continue;
+                var cm = new DateTime(c.Year, c.Month, 1);
+                if (cm < ctx.First || cm >= ctx.End) continue;
+                var input = l.SalesTax + l.ValueAddedTax + l.OtherTax;
+                var row = GroupRow(null, l.GdNumber + " · " + l.Description, -input,
+                    ("date", l.GdDate), ("gdNumber", l.GdNumber), ("description", l.Description), ("hsCode", l.HsCode),
+                    ("claimMonth", cm.ToString("yyyy-MM", Inv)), ("salesTax", Round(l.SalesTax)),
+                    ("valueAddedTax", Round(l.ValueAddedTax)), ("otherTax", Round(l.OtherTax)), ("inputTax", Round(input)));
+                row.Sub = "Claimed " + cm.ToString("MMM yyyy", Inv);
+                rows.Add((l.GdDate ?? cm, row));
+            }
+            var bills = await _context.PurchaseBills.AsNoTracking()
+                .Where(b => b.CompanyId == companyId && b.Date >= ctx.First && b.Date < ctx.End && b.GSTAmount != 0m)
+                .Select(b => new { b.Date, b.PurchaseBillNumber, b.GSTAmount }).ToListAsync();
+            foreach (var b in bills)
+                rows.Add((b.Date, GroupRow(null, "Purchase bill #" + b.PurchaseBillNumber, -b.GSTAmount,
+                    ("date", b.Date), ("description", "Purchase bill #" + b.PurchaseBillNumber), ("inputTax", Round(b.GSTAmount)))));
+            var notes = await _context.PurchaseDebitNotes.AsNoTracking()
+                .Where(n => n.CompanyId == companyId && n.Date >= ctx.First && n.Date < ctx.End && n.GSTAmount != 0m)
+                .Select(n => new { n.Date, n.DebitNoteNumber, n.GSTAmount }).ToListAsync();
+            foreach (var n in notes)
+                rows.Add((n.Date, GroupRow(null, "Purchase debit note #" + n.DebitNoteNumber, n.GSTAmount,
+                    ("date", n.Date), ("description", "Purchase debit note #" + n.DebitNoteNumber), ("inputTax", Round(-n.GSTAmount)))));
+            return FillLevel2(result, rows.OrderByDescending(x => x.Date).Select(x => x.Row), -ctx.Dto.InputTaxClaimed);
+        }
+
+        // adv-tax-236: level 1 = month x section from the panel's documents; level 2 = the bills.
+        private async Task<DashboardBreakdownDto> AdvTaxBreakdownAsync(
+            int companyId, TaxContext ctx, string? key, DashboardBreakdownDto result)
+        {
+            var d = ctx.Dto;
+            result.AmountLabel = "Advance tax";
+            var adv = ctx.Docs.Where(x => x.AdvanceTaxSection is "236G" or "236H").ToList();
+            if (key == null)
+            {
+                result.Title = "236G / 236H collected, by month";
+                result.Note = "Advance income tax charged on bills, whole months " + d.FromMonth + " to " + d.ToMonth
+                    + ". It is collected on top of the bill and paid over to FBR.";
+                result.Columns = Cols(("invoices", "Documents", "number"));
+                result.Rows = adv.GroupBy(x => (x.Year, x.Month, Section: x.AdvanceTaxSection!))
+                    .Select(g =>
+                    {
+                        var m = new DateTime(g.Key.Year, g.Key.Month, 1);
+                        return GroupRow(m.ToString("yyyy-MM", Inv) + ":" + g.Key.Section,
+                            m.ToString("MMM yyyy", Inv) + " · " + g.Key.Section, g.Sum(x => x.Sign * x.AdvanceTaxAmount),
+                            ("invoices", g.Count()));
+                    })
+                    .Where(r => r.Amount != 0m)
+                    .OrderByDescending(r => r.GroupKey, StringComparer.Ordinal)
+                    .ToList();
+                result.Total = Round(d.Adv236G + d.Adv236H);
+                return result;
+            }
+
+            TryAdvKey(key, out var month, out var section);
+            var next = month.AddMonths(1);
+            result.Title = section + " collected in " + month.ToString("MMMM yyyy", Inv);
+            result.Columns = Cols(InvoiceCols);
+            if (month < ctx.First || month >= ctx.End)
+                return FillLevel2(result, Array.Empty<DashboardBreakdownRowDto>(), 0m);
+            var list = await InvRows(DashboardSalesFilter.SaleDocs(_context.Invoices.AsNoTracking(), companyId, month, next)
+                .Where(i => i.AdvanceTaxSection == section && i.AdvanceTaxAmount != 0m)).ToListAsync();
+            var total = adv.Where(x => x.Year == month.Year && x.Month == month.Month && x.AdvanceTaxSection == section)
+                .Sum(x => x.Sign * x.AdvanceTaxAmount);
+            return FillLevel2(result, Newest(list).Select(r => InvoiceRow(r, r.Sign * r.Adv)), total);
         }
 
         private static decimal Round(decimal v) =>
