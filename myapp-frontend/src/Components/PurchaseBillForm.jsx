@@ -1,7 +1,7 @@
 import DocumentCopyPicker from "./DocumentCopyPicker";
 import { appendCopiedLines, copyLine } from "../utils/documentCopy";
 import { useState, useEffect, useMemo, useRef } from "react";
-import { MdAdd, MdDelete, MdReceipt } from "react-icons/md";
+import { MdAdd, MdDelete, MdReceipt, MdInventory2, MdLocalShipping, MdArrowForward, MdCheckCircle } from "react-icons/md";
 import { createPurchaseBill, updatePurchaseBill, getPurchaseBillById, previewPurchaseStock } from "../api/purchaseBillApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getItemTypes } from "../api/itemTypeApi";
@@ -20,6 +20,7 @@ import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import CopyLineButton from "./CopyLineButton";
 import SearchableSelect from "./SearchableSelect";
 import { purchaseBillTotals } from "../utils/purchaseBillTotals.mjs";
+import "./PurchaseBillFlow.css";
 
 const colors = {
   blue: "#0d47a1",
@@ -36,6 +37,10 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const [isNonStock, setIsNonStock] = useState(false);
   const [isGeneratedLocal, setIsGeneratedLocal] = useState(false);
   const isAgainstSale = !!prefillFromInvoiceId;
+  const [choosingCategory, setChoosingCategory] = useState(!billId && !prefillFromInvoiceId);
+  const [categoryChoice, setCategoryChoice] = useState("");
+  const [categoryConfirmed, setCategoryConfirmed] = useState(false);
+  const detailHeading = useRef(null);
   const [suppliers, setSuppliers] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
   // Units list — gates each row's quantity input on the picked UOM
@@ -237,14 +242,17 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (saving || !numberValid) return;
+    if (choosingCategory) { continueCategory(); return; }
+    if (saving) return;
     if (readOnly) return;
     setError("");
+    if (!numberValid) return setError("Enter a valid purchase bill number or choose Auto.");
     if (!supplierId) return setError("Select a supplier.");
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00`))) return setError("Choose a valid bill date.");
     if (items.length === 0) return setError("Add at least one item.");
     if (items.some(i => !i.description?.trim())) return setError("Every line needs a description.");
-    if (items.some(i => !(parseFloat(i.quantity) > 0))) return setError("Quantity must be greater than zero on every line.");
-    if (items.some(i => !Number.isFinite(parseFloat(i.unitPrice)) || parseFloat(i.unitPrice) < 0)) return setError("Enter a non-negative unit price on every line.");
+    if (items.some(i => !Number.isFinite(Number(i.quantity)) || !(Number(i.quantity) > 0))) return setError("Quantity must be greater than zero on every line.");
+    if (items.some(i => i.unitPrice === "" || i.unitPrice == null || !Number.isFinite(Number(i.unitPrice)) || Number(i.unitPrice) < 0)) return setError("Enter a non-negative unit price on every line.");
     if (!Number.isFinite(parseFloat(gstRate)) || parseFloat(gstRate) < 0 || parseFloat(gstRate) > 100) return setError("GST rate must be between 0 and 100.");
     if (isAgainstSale) {
       // In the "Purchase Against Sale" flow every row MUST have an
@@ -303,21 +311,39 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
     }
   };
 
+  const continueCategory = () => {
+    if (!categoryChoice) { setError("Choose a purchase category to continue."); return; }
+    const local = categoryChoice === "LocalDirect";
+    if (local !== isNonStock) setItems(rows => rows.map(i => ({ ...i, itemTypeId: "", hsCode: "", saleType: "", sourceInvoiceItemIds: [] })));
+    if (!categoryConfirmed) setGstRate(local ? 0 : 18);
+    setIsNonStock(local); setCategoryConfirmed(true); setChoosingCategory(false); setError("");
+    requestAnimationFrame(() => detailHeading.current?.focus());
+  };
+
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: 1200, width: "96vw" }}>
+      <div data-admin-dialog="" className="purchase-bill-flow" style={{ ...formStyles.modal, maxWidth: choosingCategory ? 760 : 1200, width: "96vw" }}>
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{readOnly ? "View Purchase Bill" : (isEdit ? "Edit Purchase Bill" : "New Purchase Bill")}</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           {/* Scrollable body WRAPS the fieldset so the Attachments section can
               sit inside the scroll region (never clipped) yet outside the
               disabled fieldset (so view-mode preview/download stay clickable). */}
           <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
+          {!isEdit && !isAgainstSale && <ol className="purchase-flow-steps" aria-label="Purchase creation progress"><li aria-current={choosingCategory ? "step" : undefined}><span>{choosingCategory ? "1" : <MdCheckCircle aria-hidden="true" />}</span>Purchase category</li><li aria-current={!choosingCategory ? "step" : undefined}><span>2</span>Bill details</li></ol>}
+          {error && <div ref={errRef} role="alert" tabIndex={-1} style={formStyles.error}>{error}</div>}
+          {choosingCategory ? <section className="purchase-category-step" aria-labelledby="purchase-category-title">
+            <h3 id="purchase-category-title">What are you purchasing?</h3><p>Choose how this purchase should be recorded.</p>
+            <fieldset className="purchase-category-options"><legend>Purchase category</legend>
+              {[{value:"LocalDirect", title:"Local direct purchase", description:"Record supplier costs and payables. No inventory movement.", icon:MdLocalShipping}, {value:"Inventory", title:"Inventory purchase", description:"Buy stock using catalog items and inventory controls.", icon:MdInventory2}].map(({value,title,description,icon:Icon}) => <label className={`purchase-category-option${categoryChoice === value ? " is-selected" : ""}`} key={value}><input type="radio" name="purchase-category" value={value} checked={categoryChoice === value} onChange={() => { setCategoryChoice(value); setError(""); }} /><Icon className="purchase-category-icon" aria-hidden="true" /><span><strong>{title}</strong><small>{description}</small></span></label>)}
+            </fieldset>
+            {categoryConfirmed && (categoryChoice === "LocalDirect") !== isNonStock && <p className="purchase-category-warning" role="status">Changing category clears item classifications and source links. Descriptions, quantities and prices are kept.</p>}
+          </section> : <>
+          {!isEdit && <div className="purchase-category-selected"><div><strong ref={detailHeading} tabIndex={-1}>{isNonStock ? "Local direct purchase" : "Inventory purchase"}</strong><small>{isNonStock ? "Supplier payable only · No stock movement" : isAgainstSale ? "Linked to a customer sale bill" : "Catalog items · Inventory controls apply"}</small></div>{!isAgainstSale && <button type="button" onClick={() => { setCategoryChoice(isNonStock ? "LocalDirect" : "Inventory"); setChoosingCategory(true); setError(""); }}>Change category</button>}</div>}
           {isGeneratedLocal && <p>This purchase preserves the supplier payable recorded from its source document. Correct private costs from Costs &amp; suppliers; record a supplier credit to adjust the booked payable.</p>}
           <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
-            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
             {/* Number and the copy shortcut share one row; the copy panel takes
                 the full row once it is opened. */}
             <div className="doc-header-row">
@@ -331,12 +357,6 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               </div>}
             </div>
 
-            {!isEdit && !isAgainstSale && <label style={{ display: "block", marginBottom: 16 }}>Purchase category
-              <select style={formStyles.input} value={isNonStock ? "LocalDirect" : "Inventory"} onChange={e => {
-                setIsNonStock(e.target.value === "LocalDirect");
-                if (e.target.value === "LocalDirect") setItems(rows => rows.map(i => ({ ...i, itemTypeId: "", hsCode: "", sourceInvoiceItemIds: [] })));
-              }}><option value="Inventory">Inventory purchase</option><option value="LocalDirect">Local direct purchase (no inventory)</option></select>
-            </label>}
             {sourceBill && (
               <div style={{
                 display: "flex", alignItems: "flex-start", gap: "0.65rem",
@@ -368,11 +388,13 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               </div>
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Bill Date *</label>
-                <input type="date" style={formStyles.input} value={date} onChange={e => setDate(e.target.value)} />
+                <input aria-label="Bill date" aria-invalid={!date || undefined} type="date" style={formStyles.input} value={date} onChange={e => { setDate(e.target.value); if (error === "Choose a valid bill date.") setError(""); }} />
+                {!date && <small className="purchase-field-error">Choose a bill date.</small>}
               </div>
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>GST Rate (%)</label>
-                <input aria-label="GST rate" type="number" min={0} max={100} step={0.01} style={formStyles.input} value={gstRate} onChange={e => setGstRate(e.target.value)} />
+                <input aria-label="GST rate" aria-invalid={gstRate === "" || !Number.isFinite(Number(gstRate)) || Number(gstRate) < 0 || Number(gstRate) > 100 || undefined} type="number" min={0} max={100} step={0.01} style={formStyles.input} value={gstRate} onChange={e => { setGstRate(e.target.value); if (error === "GST rate must be between 0 and 100.") setError(""); }} />
+                {(gstRate === "" || Number(gstRate) < 0 || Number(gstRate) > 100) && <small className="purchase-field-error">Enter GST from 0 to 100. Use 0 for no GST.</small>}
               </div>
             </div>
 
@@ -387,6 +409,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               </div>
             </div>
 
+            <details className="purchase-extra-details" open={readOnly || undefined}><summary>Payment terms &amp; notes (optional)</summary>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Payment Mode</label>
@@ -406,6 +429,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
             </div>
 
             <DocumentNotesEditor value={notes} onChange={setNotes} readOnly={readOnly} />
+            </details>
             <div style={{ marginTop: "0.75rem", padding: "0.75rem", borderRadius: 10, border: `1px solid ${colors.cardBorder}`, backgroundColor: colors.inputBg }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
                 <strong style={{ color: colors.textPrimary }}>Items ({items.length})</strong>
@@ -600,10 +624,11 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               mode={readOnly ? "view" : "edit"}
             />
           </div>
+          </>}
           </div>
           <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>{readOnly ? "Close" : "Cancel"}</button>
-            {!readOnly && (
+            {choosingCategory ? <button type="submit" style={{ ...formStyles.button, ...formStyles.submit }}>Continue <MdArrowForward aria-hidden="true" /></button> : !readOnly && (
               <button type="submit" disabled={saving || !numberValid || !stockPreviewReady} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving || !stockPreviewReady ? 0.6 : 1 }}>
                 {saving ? "Saving..." : (isEdit ? "Update" : "Create")}
               </button>

@@ -16,6 +16,50 @@ vi.mock('../utils/notify',()=>({notify:vi.fn()}));
 const bill={id:19,purchaseBillNumber:19,supplierId:7,date:'2026-08-08',gstRate:18,withholdingTaxRate:null,withholdingTaxAmount:0,items:[{id:11,itemTypeId:4,itemTypeName:'Sample catalog item',description:'Sample valve',quantity:2,unitPrice:100,uom:'Pcs',hsCode:'8414.5910',sourceInvoiceItemIds:[55]}]};
 beforeEach(()=>{vi.clearAllMocks();previewPurchaseStock.mockResolvedValue({data:{trackingEnabled:true,items:[]}});Object.defineProperty(window,'innerWidth',{configurable:true,value:1280});getPurchaseBillById.mockResolvedValue({data:bill});createPurchaseBill.mockResolvedValue({data:{id:20}});updatePurchaseBill.mockResolvedValue({data:{id:19}});});
 afterEach(cleanup);
+it('requires a category before revealing or submitting bill details',async()=>{
+ const {container}=render(<PurchaseBillForm companyId={1} onClose={()=>{}}/>);
+ expect(screen.queryByLabelText('Description for item 1')).toBeNull();
+ fireEvent.submit(container.querySelector('form'));
+ await screen.findByRole('alert');expect(screen.getByRole('alert').textContent).toContain('Choose a purchase category');
+ expect(createPurchaseBill).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('radio',{name:/Local direct purchase/}));
+ fireEvent.click(screen.getByRole('button',{name:'Continue'}));
+ await screen.findByLabelText('Description for item 1');
+ expect(screen.getByLabelText('GST rate').value).toBe('0');
+ expect(screen.queryByRole('button',{name:'Choose item type'})).toBeNull();
+});
+it('creates a local direct purchase after category selection without inventory fields',async()=>{
+ render(<PurchaseBillForm companyId={1} onClose={()=>{}}/>);
+ fireEvent.click(screen.getByRole('radio',{name:/Local direct purchase/}));fireEvent.click(screen.getByRole('button',{name:'Continue'}));
+ fireEvent.click(await screen.findByRole('button',{name:/Search supplier/}));fireEvent.mouseDown(await screen.findByText('Sample supplier'));
+ fireEvent.change(screen.getByLabelText('Description for item 1'),{target:{value:'Sample direct cost'}});
+ fireEvent.change(screen.getByLabelText('Unit price for item 1'),{target:{value:'25'}});
+ fireEvent.click(screen.getByRole('button',{name:'Create',exact:true}));
+ await waitFor(()=>expect(createPurchaseBill).toHaveBeenCalled());
+ expect(createPurchaseBill.mock.calls[0][0]).toEqual(expect.objectContaining({purchaseCategory:'LocalDirect',gstRate:0,items:[expect.objectContaining({description:'Sample direct cost',unitPrice:25,itemTypeId:null,hsCode:null})]}));
+ expect(previewPurchaseStock).not.toHaveBeenCalled();
+});
+it('keeps entered prices and descriptions when changing category and clears catalog binding',async()=>{
+ render(<PurchaseBillForm companyId={1} onClose={()=>{}}/>);
+ fireEvent.click(screen.getByRole('radio',{name:/Inventory purchase/}));fireEvent.click(screen.getByRole('button',{name:'Continue'}));
+ fireEvent.change(await screen.findByLabelText('Description for item 1'),{target:{value:'Sample preserved line'}});
+ fireEvent.change(screen.getByLabelText('Unit price for item 1'),{target:{value:'35'}});
+ fireEvent.click(screen.getByRole('button',{name:'Choose item type'}));
+ fireEvent.click(screen.getByRole('button',{name:'Change category'}));
+ fireEvent.click(screen.getByRole('radio',{name:/Local direct purchase/}));
+ expect(screen.getByRole('status').textContent).toContain('clears item classifications');
+ fireEvent.click(screen.getByRole('button',{name:'Continue'}));
+ expect(screen.getByLabelText('Description for item 1').value).toBe('Sample preserved line');
+ expect(screen.getByLabelText('Unit price for item 1').value).toBe('35');
+ expect(screen.queryByRole('button',{name:'Choose item type'})).toBeNull();
+});
+it('refuses a blank date before saving',async()=>{
+ const {container}=render(<PurchaseBillForm companyId={1} billId={19} onClose={()=>{}}/>);
+ await screen.findByDisplayValue('Sample valve');
+ fireEvent.change(screen.getByLabelText('Bill date'),{target:{value:''}});
+ fireEvent.submit(container.querySelector('form'));
+ await screen.findByText('Choose a valid bill date.');expect(updatePurchaseBill).not.toHaveBeenCalled();
+});
 it.each([375,768,1280])('view at %ipx hides all line/document/tax mutation controls',async width=>{
  Object.defineProperty(window,'innerWidth',{configurable:true,value:width});
  const {container}=render(<PurchaseBillForm companyId={1} billId={19} readOnly onClose={()=>{}}/>);
@@ -43,6 +87,7 @@ it('edit can copy a line without reusing its id or sale links and save correctly
 });
 it('create exposes line actions and requires a supplier before writing',async()=>{
  const {container}=render(<PurchaseBillForm companyId={1} onClose={()=>{}}/>);
+ fireEvent.click(screen.getByRole('radio',{name:/Inventory purchase/}));fireEvent.click(screen.getByRole('button',{name:'Continue'}));
  await waitFor(()=>expect(screen.getByRole('button',{name:/Search supplier/})).toBeTruthy());
  expect(screen.getByRole('button',{name:'Add line'})).toBeTruthy();
  expect(screen.getByRole('button',{name:'Copy line'})).toBeTruthy();
@@ -62,6 +107,7 @@ it('non-stock supplier purchase edit preserves the non-stock classification',asy
 });
 it.each([0,18])('creates a priced purchase with GST %i and correct preview',async rate=>{
  render(<PurchaseBillForm companyId={1} onClose={()=>{}}/>);
+ fireEvent.click(screen.getByRole('radio',{name:/Inventory purchase/}));fireEvent.click(screen.getByRole('button',{name:'Continue'}));
  await waitFor(()=>expect(screen.getByRole('button',{name:/Search supplier/})).toBeTruthy());
  fireEvent.click(screen.getByRole('button',{name:/Search supplier/})); fireEvent.mouseDown(await screen.findByText('Sample supplier')); 
  fireEvent.change(screen.getByLabelText('Description for item 1'),{target:{value:'Sample purchase'}});
