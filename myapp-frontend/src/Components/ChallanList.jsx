@@ -246,7 +246,7 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                     </button>
                   )}
                   {permUpdate && (isEditable || (c.status === "Invoiced" && !c.hasAutoPurchaseBills)) && (
-                    <button data-primary={(!canGenerateBill) || undefined}
+                    <button
                       style={{ ...styles.actionBtn, ...styles.editBtn }}
                       onClick={() => onEditItems?.(c)}
                       title={c.invoiceId || c.status === "Invoiced" ? "Edit supplier & cost" : "Edit items"}
@@ -254,7 +254,7 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       <MdEdit size={14} /> {c.invoiceId || c.status === "Invoiced" ? "Supplier & cost" : "Edit"}
                     </button>
                   )}
-                  {onEditDelivery && canEditBilledDelivery(c, has) && <button data-primary
+                  {onEditDelivery && canEditBilledDelivery(c, has) && <button
                     style={{ ...styles.actionBtn, ...styles.editBtn, minHeight: 44 }}
                     onClick={() => onEditDelivery(c)}><MdEdit size={14} /> Edit delivery & update bill</button>}
                   {canDuplicate && onDuplicate && (
