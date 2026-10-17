@@ -62,6 +62,7 @@ public static class McpToolAccessCatalog
 
         new("list_print_templates", "Print templates", "List print designs", new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead),
         new("get_print_template", "Print templates", "Read print design content", new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead),
+        new("prepare_print_template_update", "Print templates", "Prepare print design changes", new[] { "printtemplates.manage.view", "printtemplates.manage.update" }, McpScopes.TemplatesWrite, Write: true, RequireAll: true),
         new("get_print_contract", "Print templates", "Read supported print fields", new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead),
         new("get_document_print_data", "Print templates", "Read actual document print data", new[]
         {

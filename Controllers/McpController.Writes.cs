@@ -22,11 +22,12 @@ namespace MyApp.Api.Controllers
         private string _resultRef = "";
         private string _resultSummary = "";
 
-        private static readonly string[] WriteToolNameList = { "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "prepare_email_decision", "prepare_email_quotation", "commit_action", "cancel_action" };
+        private static readonly string[] WriteToolNameList = { "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "prepare_email_decision", "prepare_email_quotation", "prepare_print_template_update", "commit_action", "cancel_action" };
         private static bool IsWriteTool(string name) => WriteToolNameList.Contains(name, StringComparer.Ordinal);
 
         private static string PrepareToolFor(string kind) => kind switch
         {
+            "template.update" => "prepare_print_template_update",
             "client.create" or "client.update" => "prepare_client",
             "quote.create" => "prepare_quote",
             "email.decision" => "prepare_email_decision",
@@ -201,6 +202,7 @@ namespace MyApp.Api.Controllers
             await PinCompanyAsync(prior.CompanyId);
             await RequireWriterAsync(ScopeFor(prior.Kind));
             await Need(PermissionFor(prior.Kind));
+            if (prior.Kind == "template.update") await Need("printtemplates.manage.view");
             if (!await _permissions.HasMcpToolAccessAsync(CurrentUserId, PrepareToolFor(prior.Kind)))
                 throw new ToolError("Resource unavailable or access denied.");
             if (prior.CommittedAt != null)
@@ -365,6 +367,7 @@ namespace MyApp.Api.Controllers
 
         private static string ScopeFor(string kind) => kind switch
         {
+            "template.update" => McpScopes.TemplatesWrite,
             "client.create" or "client.update" => McpScopes.Clients,
             "challan.create" => McpScopes.Challans,
             "bill.create" or "bill.standalone" => McpScopes.Bills,
@@ -376,6 +379,7 @@ namespace MyApp.Api.Controllers
 
         private static string PermissionFor(string kind) => kind switch
         {
+            "template.update" => "printtemplates.manage.update",
             "client.create" => "clients.manage.create",
             "client.update" => "clients.manage.update",
             "challan.create" => "challans.manage.create",
@@ -420,6 +424,7 @@ namespace MyApp.Api.Controllers
             if (plan.ExpiresAt <= DateTime.UtcNow) throw new ToolError("That plan has expired. Prepare it again.");
             await PinCompanyAsync(plan.CompanyId);
             await Need(PermissionFor(plan.Kind));
+            if (plan.Kind == "template.update") await Need("printtemplates.manage.view");
             if (plan.Kind is "email.quote" or "email.decision")
                 await ValidateEmailPlanAsync(plan);
             await EnforceHourlyCapAsync(agent, plan.Kind);
@@ -437,6 +442,11 @@ namespace MyApp.Api.Controllers
                 var p = JsonSerializer.Deserialize<JsonElement>(plan.Payload);
                 switch (plan.Kind)
                 {
+                    case "template.update":
+                    {
+                        (resultRef, resultSummary) = await CommitPrintTemplateAsync(plan, p);
+                        break;
+                    }
                     case "email.decision":
                     case "email.quote":
                     {
@@ -486,7 +496,7 @@ namespace MyApp.Api.Controllers
                     default: throw new ToolError("Unknown plan type.");
                 }
             }
-            catch (Exception ex) when (ex is InvalidOperationException or KeyNotFoundException || (plan.Kind.StartsWith("email.") && ex is ToolError))
+            catch (Exception ex) when (ex is InvalidOperationException or KeyNotFoundException || ((plan.Kind.StartsWith("email.") || plan.Kind == "template.update") && ex is ToolError))
             {
                 // Service rules are operator-facing messages (name clash, unknown client...).
                 await _context.McpPendingActions.Where(a => a.Id == plan.Id).ExecuteUpdateAsync(s => s.SetProperty(a => a.ResultRef, "FAILED").SetProperty(a => a.ResultSummary, "The action was refused or may be incomplete. Check the affected records."));

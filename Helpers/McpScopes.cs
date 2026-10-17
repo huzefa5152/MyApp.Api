@@ -17,15 +17,17 @@ public static class McpScopes
     public const string Challans = "challans.write";
     public const string Bills = "bills.write";
     public const string TemplatesRead = "templates.read";
+    public const string TemplatesWrite = "templates.write";
     public const string DocumentsRead = "documents.read";
 
     /// <summary>Write scopes that have tools behind them today. Others are refused, not pre-granted.</summary>
-    public static readonly string[] Write = { Clients, Quotes, Challans, Bills, Email };
-    public static readonly string[] Implemented = { Read, TemplatesRead, DocumentsRead, Clients, Quotes, Challans, Bills, Email };
+    public static readonly string[] Write = { Clients, Quotes, Challans, Bills, Email, TemplatesWrite };
+    public static readonly string[] Implemented = { Read, TemplatesRead, DocumentsRead, Clients, Quotes, Challans, Bills, Email, TemplatesWrite };
 
     // Permissions the owner must hold: ALL of "All", and at least one of "Any" (when listed).
     private static readonly Dictionary<string, (string[] All, string[] Any)> Needs = new()
     {
+        [TemplatesWrite] = (new[] { "printtemplates.manage.view", "printtemplates.manage.update" }, Array.Empty<string>()),
         [Clients] = (new[] { "clients.manage.create", "clients.manage.update" }, Array.Empty<string>()),
         [Quotes] = (new[] { "salesquotes.manage.create" }, Array.Empty<string>()),
         [Email] = (new[] { "email.workspace.use", "email.inbox.view", "email.inbox.manage" }, Array.Empty<string>()),

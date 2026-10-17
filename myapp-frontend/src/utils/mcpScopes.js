@@ -3,6 +3,7 @@
 export const SCOPE_INFO = {
   read: { label: "Look things up", help: "Companies, clients, invoices, stock, quotations, challans and reports (sales, receivables, tax sheet, item rates): read only." },
   "templates.read": { label: "Read print designs", help: "Read the selected companies' saved designs and merge-field contracts. Does not change a design." },
+  "templates.write": { label: "Edit print designs", help: "Prepare changes to existing print templates in your selected companies. Each change needs approval; changed designs must be read again before saving. Default and stamp assignments stay unchanged." },
   "documents.read": { label: "Read print details", help: "Read document print data, including business details printed on the document, only where your print permissions allow it." },
   "clients.write": { label: "Create and update clients", help: "Each change is shown to you first and saved only after you approve it." },
   "quotes.write": { label: "Create quotations", help: "Sales quotations only, never bills or FBR invoices. Each one is shown to you first." },

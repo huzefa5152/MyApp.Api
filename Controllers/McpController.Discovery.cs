@@ -97,7 +97,7 @@ public partial class McpController
             "get_mcp_capabilities" => await GetCapabilitiesAsync(),
             "get_action_status" => await GetActionStatusAsync(args),
             "search_email_enquiries" or "get_email_enquiry" or "prepare_email_decision" or "prepare_email_quotation" => await CallEmailToolAsync(name, args),
-            "list_print_templates" or "get_print_template" or "get_print_contract" => await CallPrintToolAsync(name, args),
+            "list_print_templates" or "get_print_template" or "get_print_contract" or "prepare_print_template_update" => await CallPrintToolAsync(name, args),
             "get_document_print_data" => await CallDocumentPrintToolAsync(name, args),
             "get_onboarding_schema" or "get_company_onboarding_status" => await CallOnboardingToolAsync(name, args),
             _ => await CallOperationsToolAsync(name, args)
@@ -140,6 +140,14 @@ public partial class McpController
     {
         var plan = await OwnPlanAsync(OptText(args, "planId", 64));
         await PinCompanyAsync(plan.CompanyId);
+        if (plan.Kind == "template.update")
+        {
+            await RequireWriterAsync(McpScopes.TemplatesWrite);
+            await Need("printtemplates.manage.view");
+            await Need("printtemplates.manage.update");
+            if (!await _permissions.HasMcpToolAccessAsync(CurrentUserId, "prepare_print_template_update"))
+                throw new ToolError("Resource unavailable or access denied.");
+        }
         if (plan.Kind is "email.quote" or "email.decision")
         {
             var tool = PrepareToolFor(plan.Kind);

@@ -32,10 +32,29 @@ names and `get_action_status` after an uncertain action result.
 | `email.enquiries.write` | `prepare_email_decision` | Email Workspace, inbox view and inbox management |
 | `challans.write` | `prepare_challan` | `challans.manage.create`, `challans.list.view` |
 | `bills.write` | `prepare_bill` (from challans, or standalone) | `bills.manage.create` and/or `bills.manage.create.standalone`, `challans.list.view` |
+| `templates.write` | `prepare_print_template_update` | Both `printtemplates.manage.view` and `printtemplates.manage.update` |
 
 Writes are two steps. `prepare_*` validates and prices a plan and saves **nothing**;
 `commit_action(planId)` then runs it once, through the same service the web screen uses,
 only after a person approved it. `cancel_action` discards a plan.
+
+### Editing existing print designs
+
+Grant `templates.read` and `templates.write` explicitly on a new or renewed connection;
+existing credentials gain no new scope automatically. Use `list_print_templates` to select
+the company and document type, then `get_print_template` to read the saved HTML and revision.
+`prepare_print_template_update` takes `companyId`, `templateId`, `documentType`, `revision`,
+`htmlContent` and an optional `name` or `idempotencyKey`. All supported document types can be
+edited, within the caller's assigned companies and template permissions.
+
+Review the returned sanitized HTML before `commit_action`. The commit rechecks company,
+record ownership, permissions, tool grants and revision while locking the saved row. A
+concurrent template or assignment change refuses the plan. Saves preserve the default,
+stamp and Excel settings, switch to code mode, and clear stale visual-editor project data.
+The tool updates existing designs only; it does not create, delete or activate templates,
+upload assets, submit documents to FBR, or change financial data. Large designs exceeding
+the bounded plan size must be edited in the application. Re-read the saved template and
+verify print/PDF with the existing renderer after committing.
 
 ### Email enquiries from ChatGPT
 

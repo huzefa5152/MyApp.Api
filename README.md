@@ -306,6 +306,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+- **2026-10-17:** Add reviewed MCP edits for existing print templates, with explicit write scopes, company and permission checks, sanitized previews and stale-edit protection.
+
 - **2026-10-17:** Restart empty document series at the configured starting number, including when the first saved document uses Custom numbering. Preserve the Auto cursor for nonempty series.
 
 - **2026-10-12:** Distinguish initial invoice adjustment from consultant re-review. Only filing changes invalidate prior consultant work; freight, notes and supplier costs preserve it. Retain legacy filing history when adjusted source lines are removed.

@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Helpers;
 using MyApp.Api.Repositories.Interfaces;
@@ -24,6 +25,14 @@ public partial class McpController
             new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead));
         tools.Add(new("get_print_contract", "Merge fields and supported helpers for a document type; no business data. Reuse the existing print renderer.",
             ExpandedSchema(new { documentType = type }, "documentType"), new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead));
+        tools.Add(new("prepare_print_template_update", "Prepare edits to an existing company's print template of any supported document type. Read its revision first. Nothing is saved until commit_action after human approval. Sanitized HTML is shown in the plan; saving switches to code mode and clears stale visual project data. Default, stamp and Excel assignments are preserved. Existing tokens need explicit templates.write authorization.",
+            ExpandedSchema(new { companyId = company, templateId = id, documentType = type,
+                revision = new { type = "string", minLength = 64, maxLength = 64 },
+                htmlContent = new { type = "string", minLength = 1, maxLength = 24000 },
+                name = new { type = "string", minLength = 1, maxLength = 200 },
+                idempotencyKey = new { type = "string", maxLength = 100 } },
+                "companyId", "templateId", "documentType", "revision", "htmlContent"),
+            new[] { "printtemplates.manage.update" }, McpScopes.TemplatesWrite, Writes: true));
     }
 
     private static string PrintRevision(PrintTemplate t) =>
@@ -57,6 +66,7 @@ public partial class McpController
 
     private async Task<object> CallPrintToolAsync(string name, JsonElement args)
     {
+        if (name == "prepare_print_template_update") return await PreparePrintTemplateAsync(args);
         if (name == "get_print_contract")
         {
             var type = PrintTypeArg(args);
@@ -96,5 +106,64 @@ public partial class McpController
                 nextOffset = (long)offset + count < text.Length ? (int?)(offset + count) : null };
         }
         throw new ToolError("Unknown tool.");
+    }
+
+    private async Task<object> PreparePrintTemplateAsync(JsonElement args)
+    {
+        var agent = await RequireWriterAsync(McpScopes.TemplatesWrite);
+        await Need("printtemplates.manage.view");
+        await Need("printtemplates.manage.update");
+        var companyId = await CompanyArg(args);
+        var id = IntArg(args, "templateId") is { } n and > 0 ? n : throw new ToolError("templateId must be positive.");
+        var type = PrintTypeArg(args);
+        var revision = OptText(args, "revision", 64);
+        if (revision?.Length != 64 || revision.Any(c => !Uri.IsHexDigit(c))) throw new ToolError("A saved template revision is required.");
+        var key = IdemKey(args);
+        if (await PriorForKeyAsync(agent, key, companyId, McpScopes.TemplatesWrite) is { } prior) return prior;
+        var template = await _context.PrintTemplates.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id && t.CompanyId == companyId);
+        if (template == null || template.TemplateType != type) throw new ToolError("Resource unavailable or access denied.");
+        if (PrintRevision(template) != revision) throw new ToolError("The template changed. Read it again and prepare a new plan.");
+        var html = OptText(args, "htmlContent", 24000);
+        if (string.IsNullOrWhiteSpace(html)) throw new ToolError("htmlContent is required.");
+        html = TemplateHtmlSafety.Strip(html)!;
+        if (string.IsNullOrWhiteSpace(html)) throw new ToolError("htmlContent must contain printable content.");
+        var name = OptText(args, "name", 200) ?? template.Name;
+        if (string.IsNullOrWhiteSpace(name)) throw new ToolError("name must not be blank.");
+        var payload = new { templateId = id, documentType = type, revision, name, htmlContent = html,
+            editorMode = "code", templateJson = (string?)null, isDefault = template.IsDefault,
+            stampId = template.StampId, clearsVisualProject = template.TemplateJson != null };
+        if (Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(payload, Json)) > 40000)
+            throw new ToolError("The printable content is too large for one reviewed MCP plan. Use the template editor for this design.");
+        return await StorePlanAsync(agent, "template.update", companyId, payload,
+            $"Update {type} print template #{id} \"{name}\" in company #{companyId}; preserve default, stamp and Excel settings; save in code mode", key);
+    }
+
+    private async Task<(string Ref, string Summary)> CommitPrintTemplateAsync(McpPendingAction plan, JsonElement payload)
+    {
+        await Need("printtemplates.manage.view");
+        await Need("printtemplates.manage.update");
+        await PinCompanyAsync(plan.CompanyId);
+        var id = payload.GetProperty("templateId").GetInt32();
+        // The update lock closes the gap between checking the revision and saving.
+        // Ordinary template saves acquire the same row's write lock.
+        await using var tx = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var template = await _context.PrintTemplates.FromSqlInterpolated(
+            $"SELECT * FROM PrintTemplates WITH (UPDLOCK, ROWLOCK) WHERE Id = {id} AND CompanyId = {plan.CompanyId}")
+            .AsNoTracking().SingleOrDefaultAsync();
+        if (template == null || template.TemplateType != payload.GetProperty("documentType").GetString())
+            throw new ToolError("Resource unavailable or access denied.");
+        if (PrintRevision(template) != payload.GetProperty("revision").GetString())
+            throw new ToolError("The template changed. Read it again and prepare a new plan.");
+        var repo = HttpContext.RequestServices.GetRequiredService<IPrintTemplateRepository>();
+        var updated = await repo.UpdateContentAsync(id, payload.GetProperty("name").GetString()!,
+            payload.GetProperty("htmlContent").GetString()!, null, "code")
+            ?? throw new ToolError("Resource unavailable or access denied.");
+        _context.AuditLogs.Add(new AuditLog { Timestamp = DateTime.UtcNow, Level = "Information",
+            UserName = User.Identity?.Name, CompanyId = plan.CompanyId, HttpMethod = "POST", RequestPath = "/mcp",
+            StatusCode = 200, ExceptionType = "PrintTemplateUpdated",
+            Message = $"MCP updated {updated.TemplateType} template #{id} by user #{CurrentUserId}" });
+        await _context.SaveChangesAsync();
+        await tx.CommitAsync();
+        return ($"PrintTemplate:{id}", $"Updated {updated.TemplateType} print template #{id} \"{updated.Name}\"");
     }
 }
