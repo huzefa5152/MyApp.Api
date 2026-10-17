@@ -17,6 +17,7 @@ def main():
     args = ap.parse_args()
     token, co, client = setup(args.base, 'admin', 'admin123')
     cid = co['id']
+    other_company = None
 
     def call(method, path, body=None, expected=(200, 201, 204)):
         status, data = http(method, path, args.base, token=token, body=body)
@@ -34,6 +35,7 @@ def main():
         return d
 
     try:
+        other_company = call('POST', '/api/companies', {'name': f'Sample ledger switch {cid}', 'startingInvoiceNumber': 1, 'startingChallanNumber': 1, 'fbrSellerRegistrationNo': '9999999'})
         with sync_playwright() as pw:
             browser = pw.chromium.launch()
             for width in [375, 768, 1280]:
@@ -171,6 +173,12 @@ def main():
                 expect(page.get_by_text(re.compile('Showing 1 of 2 purchases'))).to_be_visible()
                 page.get_by_label('Find bill', exact=True).fill('')
                 assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+                page.get_by_label('Company', exact=True).select_option(str(other_company['id']))
+                expect(page.get_by_text('No suppliers yet. Add a supplier to start recording purchases and payments.', exact=True)).to_be_visible()
+                expect(page.get_by_role('heading', name='Bill-wise outstanding', exact=True)).to_have_count(0)
+                expect(page.locator('.supplier-metric').filter(has=page.get_by_text('Total payable', exact=True)).locator('strong')).to_have_text('Rs. 0.00')
+                page.get_by_label('Company', exact=True).select_option(str(cid))
+                page.get_by_label('Find supplier', exact=True).wait_for()
                 # Draft preview stays available in both invoice layouts; no filing action is called.
                 page.goto(args.ui + '/invoices')
                 for mode in ['Cards', 'Table']:
@@ -190,6 +198,8 @@ def main():
                 page.close()
             browser.close()
     finally:
+        if other_company:
+            call('DELETE', f'/api/companies/{other_company["id"]}')
         call('DELETE', f'/api/companies/{cid}')
 
 

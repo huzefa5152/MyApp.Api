@@ -9,6 +9,7 @@ import PurchaseBillForm from "../Components/PurchaseBillForm";
 import PaymentForm from "../Components/PaymentForm";
 import { formStyles } from "../theme";
 import { todayYmd } from "../utils/dateInput";
+import { MdMenuBook, MdPayments, MdShoppingCart, MdAccountBalanceWallet } from "react-icons/md";
 import "../Components/CommercialCosts.css";
 import "./SupplierPayablesPage.css";
 
@@ -18,7 +19,7 @@ const stateFor = p => p.outstanding <= 0 ? "paid" : p.cashPaid + p.creditAmount 
 const stateLabel = { paid: "Settled", partial: "Partially settled", unpaid: "Unpaid" };
 
 export default function SupplierPayablesPage() {
-  const { selectedCompany } = useCompany();
+  const { selectedCompany, companies, setSelectedCompany } = useCompany();
   const { has } = usePermissions();
   const [summary, setSummary] = useState([]);
   const [ledger, setLedger] = useState(null);
@@ -47,7 +48,7 @@ export default function SupplierPayablesPage() {
   const history = useRef(null);
   const paymentDialog = useRef(null);
   useEffect(() => {
-    setNotice(""); setSupplierId(""); setLedger(null); setSummary([]); setBill(null); setChallanCost(null); setPurchase(null); setPayment(null); setCredit(null); setPaymentDetail(null); setCreditDetail(null); setTransactionPurchase(null);
+    setNotice(""); setSearch(""); setFrom(""); setOpeningPayment(false); setSupplierId(""); setLedger(null); setSummary([]); setBill(null); setChallanCost(null); setPurchase(null); setPayment(null); setCredit(null); setPaymentDetail(null); setCreditDetail(null); setTransactionPurchase(null);
   }, [selectedCompany?.id]);
   useEffect(() => { setCategory(""); setSettlement(""); setDocumentSearch(""); setTransactionPurchase(null); }, [supplierId]);
   useEffect(() => {
@@ -115,10 +116,11 @@ export default function SupplierPayablesPage() {
     return <span>{row.reference}</span>;
   };
   return <main className="supplier-payables">
-    <header className="supplier-page-heading"><div><h1>Supplier payables</h1><p>{selectedCompany?.name || "Select a company"} · Balances through {asOf || todayYmd()}</p></div>
+    <header className="supplier-page-heading supplier-hero"><div className="supplier-hero-title"><span className="supplier-hero-icon"><MdMenuBook aria-hidden="true" /></span><div><h1>Supplier payables</h1><p>{selectedCompany?.name || "Select a company"} · Balances through {asOf || todayYmd()}</p></div></div>
       {supplierId && <button className="supplier-button" onClick={() => setSupplierId("")}>All suppliers</button>}
     </header>
     <div className="commercial-toolbar supplier-toolbar">
+      {companies.length > 1 && <label>Company<select aria-label="Company" value={selectedCompany?.id || ""} onChange={e => setSelectedCompany(companies.find(c => c.id === Number(e.target.value)))}>{companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}</select></label>}
       {!supplierId && <label>Find supplier<input placeholder="Search by supplier name" value={search} onChange={e => setSearch(e.target.value)} /></label>}
       {supplierId && <label>Transactions from<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>}
       <label>Balance as of<input type="date" value={asOf} onChange={e => setAsOf(e.target.value)} /></label>
@@ -134,14 +136,15 @@ export default function SupplierPayablesPage() {
         <Metric label="Total purchases" value={sum(summary, "purchases")} note="Payable value after withholding" />
         <Metric label="Supplier credit balances" value={summary.reduce((s, r) => s + Math.max(0, -r.netBalance), 0)} note="Balances in your favour; kept separate" />
       </div>
-      <p className="supplier-hint">Totals cover all suppliers in this company. Search only narrows the list below. Net payable includes credits, advances and manual journal changes; open a supplier for the breakdown.</p>
-      <p>{rows.length} of {summary.length} suppliers</p>
+      <section className="supplier-panel" aria-labelledby="supplier-list-title"><div className="supplier-panel-heading"><h2 id="supplier-list-title">Suppliers</h2><span>{rows.length} of {summary.length} suppliers</span></div>
+      <p className="supplier-hint">Totals cover all suppliers. Search narrows this list; open a ledger for purchases, payments and adjustments.</p>
       <table className="commercial-ledger-table supplier-table"><thead><tr><th>Supplier</th><th>Purchases</th><th>Paid</th><th>Credits / adjustments</th><th>Still payable</th><th /></tr></thead><tbody>{rows.map(s => <tr key={s.supplierId}><td><strong>{s.supplierName}</strong>{s.unappliedAdvances > 0 && <small>Advance balance Rs. {money(s.unappliedAdvances)}</small>}</td><td className="supplier-number">{money(s.purchases)}</td><td className="supplier-number">{money(s.cashPaid)}</td><td className="supplier-number">{money(s.totalCredits + s.otherSettlement)}</td><td className="supplier-number"><strong>{s.netBalance >= 0 ? `Rs. ${money(s.netBalance)}` : `Credit Rs. ${money(-s.netBalance)}`}</strong></td><td><button className="supplier-button" onClick={() => setSupplierId(s.supplierId)}>Open ledger</button></td></tr>)}</tbody></table>
       <div className="commercial-ledger-mobile supplier-mobile-list">{rows.map(s => <article key={s.supplierId}><h2>{s.supplierName}</h2><dl><Pair label="Purchases" value={s.purchases} /><Pair label="Paid" value={s.cashPaid} /><Pair label={s.netBalance >= 0 ? "Still payable" : "Credit balance"} value={Math.abs(s.netBalance)} /></dl><button className="supplier-button" onClick={() => setSupplierId(s.supplierId)}>Open ledger</button></article>)}</div>
       {!rows.length && <p role="status">{search ? "No suppliers match your search." : "No suppliers yet. Add a supplier to start recording purchases and payments."}</p>}
+      </section>
     </>}
     {!loading && !error && ledger && <>
-      <div className="supplier-page-heading"><div><h2>{ledger.supplierName}</h2><p>Purchases, payments and settlements through {asOf || todayYmd()}. The start date only filters transaction history.</p></div>
+      <div className="supplier-page-heading supplier-account-header"><div><span className="supplier-eyebrow">SUPPLIER ACCOUNT</span><h2>{ledger.supplierName}</h2><p>Purchases, payments and settlements through {asOf || todayYmd()}. The start date only filters transaction history.</p></div>
         {has("accounting.payments.create") && <button className="supplier-primary" onClick={() => setPayment({ contactType: "Supplier", contactId: ledger.supplierId })}>Record payment / advance</button>}
       </div>
       <div className="supplier-metrics">
@@ -154,7 +157,7 @@ export default function SupplierPayablesPage() {
         <Pair label="Purchase bills outstanding" value={outstanding} /><Pair label="Unallocated advances, credits & journal changes" value={unallocatedChange} /><Pair label="Net supplier balance" value={ledger.netBalance} />
       </dl><p>Bill balances are reduced only by payments and credits linked to those bills. Advances and unallocated credits reduce the supplier balance separately.</p>
       <p>Unallocated advances: Rs. {money(ledger.unappliedAdvances)} · Unallocated credits: Rs. {money(ledger.unallocatedCredits)}</p></details>
-      <section aria-labelledby="supplier-purchase-title"><h3 id="supplier-purchase-title">Bill-wise outstanding</h3><p className="supplier-hint">Each row is a supplier purchase. Customer bill and challan links show where that purchase was used.</p>
+      <section className="supplier-panel" aria-labelledby="supplier-purchase-title"><h3 id="supplier-purchase-title">Bill-wise outstanding</h3><p className="supplier-hint">Purchase amounts, payments and outstanding balances. Open source links for the customer bill or challan.</p>
         <div className="commercial-toolbar supplier-toolbar">
           <label>Find bill<input placeholder="Purchase, supplier reference, bill or challan no." value={documentSearch} onChange={e => setDocumentSearch(e.target.value)} /></label>
           <label>Settlement status<select aria-label="Settlement status" value={settlement} onChange={e => setSettlement(e.target.value)}><option value="">All purchases</option><option value="unpaid">Unpaid</option><option value="partial">Partially settled</option><option value="paid">Settled</option></select></label>
@@ -168,7 +171,7 @@ export default function SupplierPayablesPage() {
         <div className="commercial-ledger-mobile supplier-mobile-list">{purchases.map(p => <article key={p.id}><div className="supplier-page-heading"><strong>Purchase #{p.number}</strong><span className={`supplier-settlement supplier-settlement--${stateFor(p)}`}>{stateLabel[stateFor(p)]}</span></div><small>{p.date.slice(0, 10)} · {p.category === "LocalDirect" ? "Local direct" : "Inventory"}{p.supplierBillNumber ? ` · Supplier ref: ${p.supplierBillNumber}` : ""}</small>{sourceLinks(p)}<dl><Pair label="Purchase amount" value={p.liability} /><Pair label="Paid" value={p.cashPaid} /><Pair label="Credits / settlement" value={p.creditAmount + p.adjustment} /><Pair label="Outstanding" value={p.outstanding} /></dl>{p.costChanged && <p className="supplier-cost-change">Costing changed; booked payable stays unchanged.</p>}{actions(p)}</article>)}</div>
         {!purchases.length && <p role="status">No purchases match these filters.</p>}
       </section>
-      <section ref={history} tabIndex={-1} className="supplier-history" aria-labelledby="supplier-history-title"><div className="supplier-page-heading"><h3 id="supplier-history-title">{transactionPurchase ? `Transactions for Purchase #${transactionPurchase.number}` : "Complete transaction ledger"}</h3>{transactionPurchase && <button className="supplier-button" onClick={() => setTransactionPurchase(null)}>Show complete ledger</button>}</div>
+      <section ref={history} tabIndex={-1} className="supplier-history supplier-panel" aria-labelledby="supplier-history-title"><div className="supplier-page-heading"><h3 id="supplier-history-title">{transactionPurchase ? `Transactions for Purchase #${transactionPurchase.number}` : "Complete transaction ledger"}</h3>{transactionPurchase && <button className="supplier-button" onClick={() => setTransactionPurchase(null)}>Show complete ledger</button>}</div>
         <p>Opening balance{from ? ` before ${from}` : ""}: <strong>Rs. {money(ledger.openingBalance)}</strong>. Running balances show the whole supplier account{transactionPurchase ? "; this view only includes linked transactions. Payment amounts are whole-payment totals; open a payment to see its allocation to this purchase" : ""}.</p>
         <table className="commercial-ledger-table supplier-table"><thead><tr><th>Date</th><th>Transaction</th><th>Purchases / increases</th><th>Paid</th><th>Credits / settlement</th><th>Running balance</th></tr></thead><tbody>{transactionRows.map((r, index) => <tr key={index}><td>{r.date.slice(0, 10)}</td><td>{reference(r)}</td><td className="supplier-number">{money(r.increase)}</td><td className="supplier-number">{money(r.cashPaid)}</td><td className="supplier-number">{money(r.adjustment)}</td><td className="supplier-number"><strong>{money(r.balance)}</strong></td></tr>)}</tbody></table>
         <div className="commercial-ledger-mobile supplier-mobile-list">{transactionRows.map((r, index) => <article key={index}><small>{r.date.slice(0, 10)}</small><div>{reference(r)}</div><dl><Pair label="Purchases / increases" value={r.increase} /><Pair label="Paid" value={r.cashPaid} /><Pair label="Credits / settlement" value={r.adjustment} /><Pair label="Running supplier balance" value={r.balance} /></dl></article>)}</div>
@@ -192,5 +195,5 @@ export default function SupplierPayablesPage() {
   </main>;
 }
 
-function Metric({ label, value, note, primary }) { return <div className={primary ? "supplier-metric supplier-metric--primary" : "supplier-metric"}><span>{label}</span><strong>Rs. {money(value)}</strong><small>{note}</small></div>; }
+function Metric({ label, value, note, primary }) { const Icon = label.toLowerCase().includes("paid") ? MdPayments : label.toLowerCase().includes("purchase") ? MdShoppingCart : MdAccountBalanceWallet; return <div className={primary ? "supplier-metric supplier-metric--primary" : "supplier-metric"}><span className="supplier-metric-icon"><Icon aria-hidden="true" /></span><span>{label}</span><strong>Rs. {money(value)}</strong><small>{note}</small></div>; }
 function Pair({ label, value }) { return <div><dt>{label}</dt><dd>Rs. {money(value)}</dd></div>; }
