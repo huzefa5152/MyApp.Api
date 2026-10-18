@@ -324,9 +324,17 @@ export default function StockDashboardPage() {
     { key: "source", label: "Source" },
     { key: "notes", label: "Notes" },
   ]);
+  // Cells after the item cell. In / Out share one cell, and so do Actual /
+  // Margin, so each pair counts once while either half is visible.
+  const invFlowCell = showInvCol("valuein") || showInvCol("valueout");
+  const invCostCell = canViewActualCost && (showInvCol("actual") || showInvCol("margin"));
   const inventoryTracked = ["instock", "available", "committed", "todeliver", "delivered", "incoming",
-    "valuein", "valueout", "excl", "tax", "incl", ...(canViewActualCost ? ["actual", "margin"] : [])]
-    .filter(showInvCol).length;
+    "excl", "tax", "incl"].filter(showInvCol).length + (invFlowCell ? 1 : 0) + (invCostCell ? 1 : 0);
+  const invItemCell = showInvCol("item") || showInvCol("hs");
+  // Opening balances: GD chips and notes sit under the item name; actual cost
+  // and margin share a cell.
+  const openItemCell = showOpenCol("item") || showOpenCol("gd") || showOpenCol("notes");
+  const openCostCell = canViewActualCost && (showOpenCol("actual") || showOpenCol("margin"));
 
   // Switch the selected company between V1 (legacy HS-gated) and V2 (standard
   // inventory). ONE-WAY and audited server-side. Refresh the company list so
@@ -970,22 +978,22 @@ export default function StockDashboardPage() {
                         <thead>
                           <tr>
                             <th style={{ width: 28 }} aria-label="Expand item details"></th>
-                            {showOnhandCol("item") && <th>Item</th>}
-                            {showOnhandCol("gd") && <th>GD No</th>}
+                            {(showOnhandCol("item") || showOnhandCol("gd")) && <th>{showOnhandCol("item") ? "Item" : "GD No"}</th>}
                             {showOnhandCol("onhand") && <th className="num">On-Hand</th>}
                             {showOnhandCol("excl") && <th className="num">Excluding</th>}
                             {showOnhandCol("tax") && <th className="num">Sales Tax</th>}
                             {showOnhandCol("incl") && <th className="num">Including</th>}
                             {canViewActualCost && showOnhandCol("actual") && <th className="num">Actual Cost</th>}
                             {canViewActualCost && showOnhandCol("margin") && <th className="num">Margin</th>}
-                            {(canAdjust || canViewActualCost) && <th aria-label="Actions"></th>}
+                            {(canAdjust || canViewActualCost) && <th style={{ width: 60 }} aria-label="Actions"></th>}
                           </tr>
                         </thead>
                         <tbody>
                           {onhandPageRows.map((r) => {
                             const isOpen = expandedId === r.itemTypeId;
                             const colCount = 1
-                              + ["gd", "item", "onhand", "excl", "tax", "incl"].filter(showOnhandCol).length
+                              + ((showOnhandCol("item") || showOnhandCol("gd")) ? 1 : 0)
+                              + ["onhand", "excl", "tax", "incl"].filter(showOnhandCol).length
                               + (canViewActualCost ? ["actual", "margin"].filter(showOnhandCol).length : 0)
                               + ((canAdjust || canViewActualCost) ? 1 : 0);
                             return (
@@ -998,26 +1006,29 @@ export default function StockDashboardPage() {
                               onKeyDown={(e) => rowKey(e, r.itemTypeId)}
                             >
                               <td><span className="stk-chev">{isOpen ? <MdExpandMore size={18} /> : <MdChevronRight size={18} />}</span></td>
-                              {showOnhandCol("item") && (
+                              {(showOnhandCol("item") || showOnhandCol("gd")) && (
                               <td>
                                 {/* Clamped, never ellipsised on one line: two
                                     item names sharing a prefix must stay
                                     distinguishable (dashboard incident
-                                    2026-05-13). */}
-                                <div className="stk-name">{r.itemTypeName}</div>
-                                <div className="stk-meta">
-                                  <span className="stk-mono">{r.hsCode || "no HS code"}</span>
-                                  {r.uom && <span>{r.uom}</span>}
-                                  <span>
-                                    {r.lastMovementAt
-                                      ? `moved ${new Date(r.lastMovementAt).toLocaleDateString()}`
-                                      : "no movements"}
-                                  </span>
-                                </div>
+                                    2026-05-13). The GD chips sit under the
+                                    name so the table needs no GD column. */}
+                                {showOnhandCol("item") && (
+                                  <>
+                                    <div className="stk-name">{r.itemTypeName}</div>
+                                    <div className="stk-meta">
+                                      <span className="stk-mono">{r.hsCode || "no HS code"}</span>
+                                      {r.uom && <span>{r.uom}</span>}
+                                      <span>
+                                        {r.lastMovementAt
+                                          ? `moved ${new Date(r.lastMovementAt).toLocaleDateString()}`
+                                          : "no movements"}
+                                      </span>
+                                    </div>
+                                  </>
+                                )}
+                                {showOnhandCol("gd") && <div className="stk-sub-gds"><GdList gds={r.gdNumbers} /></div>}
                               </td>
-                              )}
-                              {showOnhandCol("gd") && (
-                                <td><GdList gds={r.gdNumbers} /></td>
                               )}
                               {showOnhandCol("onhand") && (
                               <td className="num">
@@ -1104,7 +1115,7 @@ export default function StockDashboardPage() {
                         {/* The whole filtered set, like the tiles above -- not just this page. */}
                         <tfoot>
                           <tr>
-                            <td colSpan={1 + ["item", "gd"].filter(showOnhandCol).length}>
+                            <td colSpan={1 + ((showOnhandCol("item") || showOnhandCol("gd")) ? 1 : 0)}>
                               Total · {filteredOnhand.length} items
                             </td>
                             {showOnhandCol("onhand") && <td className="num">{num(onhandTotals.qty)}</td>}
@@ -1279,10 +1290,10 @@ export default function StockDashboardPage() {
                           // Two-tier header: the figures are grouped by what they
                           // answer, so a dozen numeric columns read as four ideas.
                           const qty = ["instock", "available", "committed", "todeliver", "delivered", "incoming"].filter(showInvCol);
-                          const flow = ["valuein", "valueout"].filter(showInvCol);
+                          const flow = invFlowCell ? 1 : 0;
                           const hand = ["excl", "tax", "incl"].filter(showInvCol);
-                          const cost = canViewActualCost ? ["actual", "margin"].filter(showInvCol) : [];
-                          const lead = 1 + ["item", "hs"].filter(showInvCol).length;
+                          const cost = invCostCell ? 1 : 0;
+                          const lead = 1 + (invItemCell ? 1 : 0);
                           const band = (n, label, tint) => n > 0 && (
                             <th colSpan={n} className="band" style={{ background: tint }}>{label}</th>
                           );
@@ -1291,27 +1302,32 @@ export default function StockDashboardPage() {
                               <tr>
                                 <th colSpan={lead} />
                                 {band(qty.length, "Quantity", "var(--dash-band-qty)")}
-                                {band(flow.length, "Value movement", "var(--dash-band-flow)")}
+                                {band(flow, "Value movement", "var(--dash-band-flow)")}
                                 {band(hand.length, "In hand", "var(--dash-primary)")}
-                                {band(cost.length, "Cost & margin", "var(--dash-positive)")}
+                                {band(cost, "Cost & margin", "var(--dash-positive)")}
                               </tr>
                               <tr>
                                 <th style={{ width: 28 }} aria-label="Expand stock ledger"></th>
-                                {showInvCol("item") && <th>Item</th>}
-                                {showInvCol("hs") && <th>HS Code</th>}
+                                {invItemCell && <th>{showInvCol("item") ? "Item" : "HS Code"}</th>}
                                 {showInvCol("instock") && <th className="num" title="Physical stock in hand">In Stock</th>}
                                 {showInvCol("available") && <th className="num" title="Free to sell = In Stock - Committed">Available</th>}
                                 {showInvCol("committed") && <th className="num" title="Reserved to customers = To Deliver + Delivered">Committed</th>}
                                 {showInvCol("todeliver") && <th className="num" title="Ordered, not yet delivered">To Deliver</th>}
                                 {showInvCol("delivered") && <th className="num" title="Delivered on a challan, not yet billed">Delivered</th>}
                                 {showInvCol("incoming") && <th className="num" title="On un-billed goods receipts">Incoming</th>}
-                                {showInvCol("valuein") && <th className="num" title="Value that came in: opening / GD stock plus purchases, excluding tax">In</th>}
-                                {showInvCol("valueout") && <th className="num" title="Value that went out on invoices and other stock out, excluding tax">Out</th>}
+                                {invFlowCell && (
+                                  <th className="num" title="In: value that came in (opening / GD stock plus purchases). Out: value that went out on invoices and other stock out. Both excluding tax.">
+                                    {[showInvCol("valuein") && "In", showInvCol("valueout") && "Out"].filter(Boolean).join(" / ")}
+                                  </th>
+                                )}
                                 {showInvCol("excl") && <th className="num" title="Value of the stock in hand, excluding tax">Excl.</th>}
                                 {showInvCol("tax") && <th className="num" title="Sales tax on the stock in hand">S.Tax</th>}
                                 {showInvCol("incl") && <th className="num" title="Value including sales tax">Incl.</th>}
-                                {canViewActualCost && showInvCol("actual") && <th className="num" title="Landed cost of the stock in hand">Actual</th>}
-                                {canViewActualCost && showInvCol("margin") && <th className="num" title="Excluding value less actual cost">Margin</th>}
+                                {invCostCell && (
+                                  <th className="num" title="Landed: cost of the stock in hand. Margin: excluding value less landed cost.">
+                                    {[showInvCol("actual") && "Landed", showInvCol("margin") && "Margin"].filter(Boolean).join(" / ")}
+                                  </th>
+                                )}
                               </tr>
                             </>
                           );
@@ -1320,7 +1336,7 @@ export default function StockDashboardPage() {
                       <tbody>
                         {filteredSummary.map((r) => {
                           const isOpen = expandedId === r.itemTypeId;
-                          const colCount = 1 + ["item", "hs"].filter(showInvCol).length + inventoryTracked;
+                          const colCount = 1 + (invItemCell ? 1 : 0) + inventoryTracked;
                           return (
                           <Fragment key={r.itemTypeId}>
                           <tr
@@ -1331,26 +1347,22 @@ export default function StockDashboardPage() {
                             onKeyDown={(e) => rowKey(e, r.itemTypeId)}
                           >
                             <td><span className="stk-chev">{isOpen ? <MdExpandMore size={18} /> : <MdChevronRight size={18} />}</span></td>
-                            {showInvCol("item") && (
+                            {invItemCell && (
                             <td>
-                              <div className="stk-name">{r.itemTypeName}</div>
-                              {(!r.tracked || (r.reorderLevel != null && r.available <= r.reorderLevel)) && (
+                              {showInvCol("item") && <div className="stk-name">{r.itemTypeName}</div>}
+                              {(showInvCol("hs") || (showInvCol("item") && (!r.tracked || (r.reorderLevel != null && r.available <= r.reorderLevel)))) && (
                                 <div className="stk-meta">
-                                  {!r.tracked && (
+                                  {showInvCol("hs") && <span className="stk-mono">{r.hsCode || "—"}</span>}
+                                  {showInvCol("hs") && r.uom && <span>{r.uom}</span>}
+                                  {showInvCol("item") && !r.tracked && (
                                     <span className="stk-badge" title="FBR-reporting item — not tracked as inventory">FBR-only</span>
                                   )}
-                                  {r.reorderLevel != null && r.available <= r.reorderLevel && (
+                                  {showInvCol("item") && r.reorderLevel != null && r.available <= r.reorderLevel && (
                                     <span className="stk-badge low" title={`At/below reorder level ${r.reorderLevel}`}>Low</span>
                                   )}
                                 </div>
                               )}
                             </td>
-                            )}
-                            {showInvCol("hs") && (
-                              <td>
-                                <span className="stk-mono">{r.hsCode || "—"}</span>
-                                {r.uom && <div className="stk-meta">{r.uom}</div>}
-                              </td>
                             )}
                             {r.tracked ? (
                               <>
@@ -1503,45 +1515,51 @@ export default function StockDashboardPage() {
                       <table className="stk-table">
                         <thead>
                           <tr>
-                            {showOpenCol("gd") && <th>GD No</th>}
-                            {showOpenCol("item") && <th>Item</th>}
+                            {openItemCell && <th>{showOpenCol("item") ? "Item" : showOpenCol("gd") ? "GD No" : "Notes"}</th>}
                             {showOpenCol("qty") && <th className="num">Quantity</th>}
                             {showOpenCol("excl") && <th className="num">Excluding</th>}
                             {showOpenCol("rate") && !showOpenCol("tax") && <th className="num">S.Tax %</th>}
                             {showOpenCol("tax") && <th className="num">Sales Tax</th>}
                             {showOpenCol("incl") && <th className="num">Including</th>}
-                            {canViewActualCost && showOpenCol("actual") && <th className="num">Actual Cost</th>}
-                            {canViewActualCost && showOpenCol("margin") && <th className="num">Margin</th>}
+                            {openCostCell && <th className="num">{[showOpenCol("actual") && "Actual cost", showOpenCol("margin") && "Margin"].filter(Boolean).join(" / ")}</th>}
                             {showOpenCol("asof") && !showOpenCol("item") && <th>As Of</th>}
-                            {showOpenCol("notes") && <th>Notes</th>}
                             <th style={{ width: 64 }} aria-label="Actions"></th>
                           </tr>
                         </thead>
                         <tbody>
                           {filteredOpenings.map((o) => (
                             <tr key={o.id}>
-                              {showOpenCol("gd") && <td><GdList gds={gdByItem.get(o.itemTypeId)} /></td>}
-                              {showOpenCol("item") && <td><div className="stk-name">{o.itemTypeName}</div>{showOpenCol("asof") && <div className="stk-meta">as of {new Date(o.asOfDate).toLocaleDateString()}</div>}</td>}
+                              {openItemCell && (
+                                <td>
+                                  {showOpenCol("item") && <div className="stk-name">{o.itemTypeName}</div>}
+                                  {showOpenCol("item") && showOpenCol("asof") && <div className="stk-meta">as of {new Date(o.asOfDate).toLocaleDateString()}</div>}
+                                  {showOpenCol("gd") && <div className="stk-sub-gds"><GdList gds={gdByItem.get(o.itemTypeId)} /></div>}
+                                  {showOpenCol("notes") && o.notes && <div className="stk-note" title={o.notes}>{o.notes}</div>}
+                                </td>
+                              )}
                               {showOpenCol("qty") && <td className="num" style={{ fontWeight: 600 }}>{o.quantity.toLocaleString()}</td>}
                               {showOpenCol("excl") && <td className="num">{money(o.valueExcludingTax)}</td>}
                               {showOpenCol("rate") && !showOpenCol("tax") && <td className="num" style={{ color: "var(--dash-text)" }}>{o.salesTaxRate ? `${num(o.salesTaxRate)}%` : "—"}</td>}
                               {showOpenCol("tax") && <td className="num">{money(o.salesTax)}{showOpenCol("rate") && <div className="stk-rate">{o.salesTaxRate ? `${num(o.salesTaxRate)}%` : "no rate"}</div>}</td>}
                               {showOpenCol("incl") && <td className="num" style={{ fontWeight: 600 }}>{money(o.valueIncludingTax)}</td>}
-                              {canViewActualCost && showOpenCol("actual") && (
-                                <td className="num" style={{ color: "var(--dash-text)" }}>
-                                  {o.actualCostExcludingTax ? money(o.actualCostExcludingTax) : "—"}
-                                </td>
-                              )}
-                              {canViewActualCost && showOpenCol("margin") && (
-                                <td className={`num${o.margin < 0 ? " neg" : ""}`} style={{ fontWeight: 600 }}>
-                                  {money(o.margin)}
-                                  <div className="stk-rate">
-                                    {o.marginPercent != null ? `${num(o.marginPercent)}%` : "—"}
-                                  </div>
+                              {openCostCell && (
+                                <td className="num">
+                                  {showOpenCol("actual") && (
+                                    <div style={{ color: "var(--dash-text)" }} title="Actual cost">
+                                      {o.actualCostExcludingTax ? money(o.actualCostExcludingTax) : "—"}
+                                    </div>
+                                  )}
+                                  {showOpenCol("margin") && (
+                                    <>
+                                      <div className={o.margin < 0 ? "neg" : undefined} style={{ fontWeight: 600 }} title="Margin">{money(o.margin)}</div>
+                                      {o.marginPercent != null
+                                        ? <span className={`stk-pct${o.margin < 0 ? " neg" : ""}`}>{num(o.marginPercent)}%</span>
+                                        : <div className="stk-rate">—</div>}
+                                    </>
+                                  )}
                                 </td>
                               )}
                               {showOpenCol("asof") && !showOpenCol("item") && <td style={{ whiteSpace: "nowrap" }}>{new Date(o.asOfDate).toLocaleDateString()}</td>}
-                              {showOpenCol("notes") && <td><div className="stk-note" title={o.notes || undefined}>{o.notes || "—"}</div></td>}
                               <td className="stk-acts">
                                 <button type="button" className="stk-ib" title="Restate this opening balance"
                                   aria-label={`Edit opening balance for ${o.itemTypeName}`} onClick={() => startEditOpening(o)}>
@@ -1632,25 +1650,32 @@ export default function StockDashboardPage() {
                         <thead>
                           <tr>
                             {showMovCol("date") && <th>Date</th>}
-                            {showMovCol("item") && <th>Item</th>}
-                            {showMovCol("direction") && <th>Direction</th>}
-                            {showMovCol("qty") && <th className="num">Qty</th>}
+                            {(showMovCol("item") || showMovCol("notes")) && <th>{showMovCol("item") ? "Item" : "Notes"}</th>}
+                            {(showMovCol("qty") || showMovCol("direction")) && <th className="num">{showMovCol("qty") ? "Qty" : "Direction"}</th>}
                             {showMovCol("unitcost") && <th className="num">Unit Cost</th>}
                             {showMovCol("value") && <th className="num">Value</th>}
                             {showMovCol("balance") && <th className="num">Balance</th>}
                             {showMovCol("source") && <th>Source</th>}
-                            {showMovCol("notes") && <th>Notes</th>}
                           </tr>
                         </thead>
                         <tbody>
                           {movements.map((m) => (
                             <tr key={m.id}>
                               {showMovCol("date") && <td style={{ whiteSpace: "nowrap" }}>{new Date(m.movementDate).toLocaleDateString()}</td>}
-                              {showMovCol("item") && <td><div className="stk-name">{m.itemTypeName}</div></td>}
-                              {showMovCol("direction") && <td className={m.direction === "In" ? "pos" : "neg"} style={{ fontWeight: 600 }}>{m.direction}</td>}
-                              {showMovCol("qty") && (
-                              <td className="num" style={{ fontWeight: 600 }}>
-                                {m.sourceType === "Revaluation" ? "—" : m.quantity.toLocaleString()}
+                              {(showMovCol("item") || showMovCol("notes")) && (
+                                <td>
+                                  {showMovCol("item") && <div className="stk-name">{m.itemTypeName}</div>}
+                                  {showMovCol("notes") && m.notes && <div className="stk-note" title={m.notes}>{m.notes}</div>}
+                                </td>
+                              )}
+                              {(showMovCol("qty") || showMovCol("direction")) && (
+                              <td className={`num ${m.direction === "In" ? "pos" : "neg"}`} style={{ fontWeight: 600 }}>
+                                {/* Signed quantity with the direction beside it; a
+                                    revaluation moves money, not goods, so it keeps "—". */}
+                                {showMovCol("qty") && (m.sourceType === "Revaluation"
+                                  ? <span style={{ color: "var(--dash-text)" }}>—</span>
+                                  : `${m.direction === "In" ? "+" : "−"}${m.quantity.toLocaleString()}`)}
+                                {showMovCol("direction") && <span className="stk-dir"> {m.direction}</span>}
                               </td>
                               )}
                               {showMovCol("unitcost") && (
@@ -1663,9 +1688,13 @@ export default function StockDashboardPage() {
                                 {m.direction === "In" ? "+" : "−"}{money(m.value)}
                               </td>
                               )}
-                              {showMovCol("balance") && <td className="num">{num(m.runningQuantity)} · {money(m.runningValue)}</td>}
+                              {showMovCol("balance") && (
+                                <td className="num">
+                                  <div>{num(m.runningQuantity)}</div>
+                                  <div className="stk-rate">{money(m.runningValue)}</div>
+                                </td>
+                              )}
                               {showMovCol("source") && <td style={{ fontSize: 11.5 }}>{m.sourceType}{m.sourceDocNumber ? ` #${m.sourceDocNumber}` : ""}</td>}
-                              {showMovCol("notes") && <td><div className="stk-note" title={m.notes || undefined}>{m.notes || "—"}</div></td>}
                             </tr>
                           ))}
                         </tbody>
@@ -2155,16 +2184,26 @@ function InventoryValueCells({ o, show, canViewActualCost }) {
   const margin = o?.margin;
   return (
     <>
-      {show("valuein") && <td style={{ ...td, color: "var(--dash-positive)", fontWeight: 600 }}>{o ? money(valueIn) : "—"}</td>}
-      {show("valueout") && <td style={{ ...td, color: "var(--dash-negative)", fontWeight: 600 }}>{o ? money(o.valueOut) : "—"}</td>}
+      {(show("valuein") || show("valueout")) && (
+        <td style={{ ...td, fontWeight: 600 }}>
+          {show("valuein") && <div style={{ color: "var(--dash-positive)" }} title="Value in, excluding tax">{o ? money(valueIn) : "—"}</div>}
+          {show("valueout") && <div style={{ color: "var(--dash-negative)" }} title="Value out, excluding tax">{o ? money(o.valueOut) : "—"}</div>}
+        </td>
+      )}
       {show("excl") && <td style={{ ...td, fontWeight: 700, color: "var(--dash-primary)" }}>{o ? money(o.valueExcludingTax) : "—"}</td>}
       {show("tax") && <td style={td}>{o ? money(o.salesTax) : "—"}</td>}
       {show("incl") && <td style={{ ...td, fontWeight: 600 }}>{o ? money(o.valueIncludingTax) : "—"}</td>}
-      {canViewActualCost && show("actual") && <td style={td}>{o?.actualCostExcludingTax != null ? money(o.actualCostExcludingTax) : "—"}</td>}
-      {canViewActualCost && show("margin") && (
-        <td style={{ ...td, fontWeight: 600, color: margin < 0 ? "var(--dash-negative)" : "var(--dash-positive)" }}>
-          {margin != null ? money(margin) : "—"}
-          {o?.marginPercent != null && <div style={{ fontSize: "0.68rem", fontWeight: 500, color: "var(--dash-text)" }}>{Number(o.marginPercent).toFixed(1)}%</div>}
+      {canViewActualCost && (show("actual") || show("margin")) && (
+        <td style={td}>
+          {show("actual") && <div title="Landed cost">{o?.actualCostExcludingTax != null ? money(o.actualCostExcludingTax) : "—"}</div>}
+          {show("margin") && (
+            <>
+              <div style={{ fontWeight: 600, color: margin < 0 ? "var(--dash-negative)" : "var(--dash-positive)" }} title="Margin">
+                {margin != null ? money(margin) : "—"}
+              </div>
+              {o?.marginPercent != null && <span className={`stk-pct${margin < 0 ? " neg" : ""}`}>{Number(o.marginPercent).toFixed(1)}%</span>}
+            </>
+          )}
         </td>
       )}
     </>
