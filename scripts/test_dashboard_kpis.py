@@ -578,6 +578,10 @@ def main():
         check("top customers carry netValue + a c: groupKey, ranked by net",
               bool(tops) and all(str(t_.get("groupKey", "")).startswith("c:") and t_.get("netValue") is not None for t_ in tops)
               and [t_["netValue"] for t_ in tops] == sorted([t_["netValue"] for t_ in tops], reverse=True), str(tops)[:300])
+        sep_labels = {r_.get("groupKey"): r_.get("label") for r_ in b1c.get("rows", [])}
+        check("each top customer is named as the sales drill names its key",
+              bool(tops) and all(t_.get("name") == sep_labels[t_["groupKey"]] for t_ in tops if t_.get("groupKey") in sep_labels),
+              str([(t_.get("groupKey"), t_.get("name"), sep_labels.get(t_.get("groupKey"))) for t_ in tops])[:300])
         for t_ in tops[:2]:
             rt = brk(cid, "sales", period="all-time", groupKey=t_.get("groupKey"))
             bt = rt.json() if rt.ok else {}

@@ -1901,10 +1901,9 @@ namespace MyApp.Api.Services.Implementations
                 {
                     g.Key,
                     Id = g.Min(x => x.ClientId),
-                    // Every row in a real ClientGroup carries the same
-                    // master Name (group sync keeps them aligned). Max
-                    // is just a deterministic picker.
-                    Name = g.Max(x => x.Client!.Name),
+                    // The same label the sales drill gives this customer key:
+                    // the group's display name, else the client's own.
+                    Name = g.Max(x => x.Client!.ClientGroup != null ? x.Client.ClientGroup.DisplayName : x.Client.Name),
                     Value = g.Sum(i => (i.DocumentType == 10 ? -1m : 1m) * i.GrandTotal),
                     NetValue = g.Sum(i => (i.DocumentType == 10 ? -1m : 1m) * i.Subtotal),
                     Count = g.Count(i => i.DocumentType != 9 && i.DocumentType != 10),
