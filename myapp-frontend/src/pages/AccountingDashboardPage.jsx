@@ -1,7 +1,7 @@
 // src/pages/AccountingDashboardPage.jsx
 //
 // Accounting dashboard (spec 2026-10-18 §6): cash & liquidity, working capital,
-// the stock & tax position, the Payable to FBR panel, the import book, where
+// the stock & tax position, the Payable to FBR panel, the import book (hidden when the ledger is off), where
 // the capital sits, profitability, three charts, then cheques and recent money.
 //
 // Data:
@@ -50,6 +50,7 @@ import { presetRange, accountingCardValue, topBalances, cashSeries, profitSeries
 import usePersistentFilter from "../hooks/usePersistentFilter";
 import "./DashboardPage.css";
 
+const PERIOD_IDS = ["this-week", "last-week", "this-month", "last-month", "this-year", "last-year", "all-time", "custom"];
 const LEDGER_OFF = "Ledger not enabled for this company";
 
 /** "Rs. 1,234" — negatives in parens: "(Rs. 1,234)". */
@@ -76,16 +77,21 @@ export default function AccountingDashboardPage() {
   const canViewGlStatus = has("accounting.coa.view");
   const canOpenReports = has("accounting.reports.view");
   const canViewTax = has("dashboard.kpi.sales.view");
+  // Drills read /api/dashboard/breakdown (dashboard.view); receivables also need the sales key.
+  const canDrill = has("dashboard.view");
+  const can = (kind) => canDrill && (kind !== "receivables" || canViewTax);
 
   const companyId = selectedCompany?.id;
   const [sel, setSel] = usePersistentFilter("accountingDashboard", "range", { period: "this-month", from: "", to: "" });
-  const range = presetRange(sel.period, todayPakistanYmd(), sel);
+  const period = PERIOD_IDS.includes(sel.period) ? sel.period : "this-month";
+  const range = presetRange(period, todayPakistanYmd(), sel);
   const rangeKey = range ? `${range.from}|${range.to}` : "";
 
   const [summary, setSummary] = useState(null);
   const [glStatus, setGlStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [summaryDenied, setSummaryDenied] = useState(false);
   const [asOf, setAsOf] = useState("");
   const [reload, setReload] = useState(0);
   const [enabling, setEnabling] = useState(false);
@@ -104,7 +110,7 @@ export default function AccountingDashboardPage() {
     const [from, to] = rangeKey.split("|");
     let cancelled = false;
     // A new company or period must never show the old one's figures under its header.
-    setLoading(true); setError(null); setSummary(null);
+    setLoading(true); setError(null); setSummary(null); setSummaryDenied(false);
     Promise.all([
       getAccountingSummary(companyId, { from, to }),
       // Status is optional decoration — its failure must not blank the page.
@@ -119,6 +125,7 @@ export default function AccountingDashboardPage() {
       .catch((err) => {
         if (cancelled) return;
         const body = err.response?.data;
+        setSummaryDenied(err.response?.status === 403);
         setError(body?.message || body?.error || "Failed to load the accounting summary.");
         setGlStatus(null);
       })
@@ -147,7 +154,7 @@ export default function AccountingDashboardPage() {
   // Customer balances for the top-10 chart: the receivables drill's level 1, so a
   // bar opens rows that add up to it. A position, so it does not follow the period.
   useEffect(() => {
-    if (!companyId || !canView) { setBalances({ rows: [], loading: false, error: null }); return; }
+    if (!companyId || !canView || !summary || !canViewTax) { setBalances({ rows: [], loading: false, error: null }); return; }
     let cancelled = false;
     setBalances({ rows: [], loading: true, error: null });
     getDashboardBreakdown(companyId, "receivables", { period: "all-time" })
@@ -161,7 +168,7 @@ export default function AccountingDashboardPage() {
           : "Could not load customer balances." });
       });
     return () => { cancelled = true; };
-  }, [companyId, canView, balancesReload, reload]);
+  }, [companyId, canView, canViewTax, !!summary, balancesReload, reload]);
 
   // Stale enable/rebuild results belong to the previous company.
   useEffect(() => { setGlResult(null); }, [companyId]);
@@ -215,19 +222,19 @@ export default function AccountingDashboardPage() {
         company={selectedCompany}
         companies={companies}
         onCompanyChange={(id) => { const c = companies.find((cc) => cc.id === id); if (c) setSelectedCompany(c); }}
-        period={sel.period} from={sel.from} to={sel.to}
+        period={period} from={sel.from} to={sel.to}
         onChange={(r) => setSel({ period: r.period, from: r.from || "", to: r.to || "" })}
         asOf={summary ? asOf : ""}
       />
 
       {!companyId && <Notice>Select a company to view its accounting summary.</Notice>}
       {companyId && !range && <Notice>Pick a From and a To date for the custom range.</Notice>}
-      {error && <ChartCard title="Accounting summary" error={error} onRetry={() => setReload((n) => n + 1)} height={120} />}
+      {error && <ChartCard title="Accounting summary" error={error} onRetry={summaryDenied ? null : () => setReload((n) => n + 1)} height={120} />}
       {loading && !summary && <LoadingShimmer />}
 
       {summary && (
         <Body
-          s={summary} tax={tax} canViewTax={canViewTax} onTaxRetry={() => setTaxReload((n) => n + 1)}
+          can={can} s={summary} tax={tax} canViewTax={canViewTax} onTaxRetry={() => setTaxReload((n) => n + 1)}
           balances={balances} onBalancesRetry={() => setBalancesReload((n) => n + 1)}
           report={report} drillTo={drillTo} navigate={navigate}
           glResult={glResult} onDismissResult={() => setGlResult(null)}
@@ -258,7 +265,7 @@ export default function AccountingDashboardPage() {
 
 // ── The page body ───────────────────────────────────────────────────
 
-function Body({ s, tax, canViewTax, onTaxRetry, balances, onBalancesRetry, report, drillTo, navigate, glResult, onDismissResult, canManageGl, enabling, onEnable }) {
+function Body({ can, s, tax, canViewTax, onTaxRetry, balances, onBalancesRetry, report, drillTo, navigate, glResult, onDismissResult, canManageGl, enabling, onEnable }) {
   const p = chartPalette();
   const gl = !!s.glEnabled;
   const netCashFlow = Number(s.receiptsTotal || 0) - Number(s.paymentsTotal || 0);
@@ -312,7 +319,7 @@ function Body({ s, tax, canViewTax, onTaxRetry, balances, onBalancesRetry, repor
           icon={<MdCallReceived size={16} />} higherIsBetter={false}
           secondLine={receivables <= 0 ? "Nothing outstanding from customers" : "A balance as of today, not a period"}
           howCalculated="Customer balances from the aged receivables report, net of receipts on account."
-          onDrillDown={receivables !== 0 ? () => drillTo("receivables") : null}
+          onDrillDown={receivables !== 0 && can("receivables") ? () => drillTo("receivables") : null}
         />
         <KpiCard
           label="Supplier payables" value={s.payables?.total} format={fmtMoney} accent={p.warn}
@@ -358,7 +365,7 @@ function Body({ s, tax, canViewTax, onTaxRetry, balances, onBalancesRetry, repor
               label="Recoverable from FBR" value={s.recoverableTax} format={fmtMoney} accent={p.secondary}
               icon={<MdCallReceived size={16} />} secondLine="Input tax and advance income tax on imports"
               howCalculated="Input sales tax and advance income tax paid at import — credited back, not owed."
-              onDrillDown={() => drillTo("recoverable-tax")}
+              onDrillDown={can("recoverable-tax") ? () => drillTo("recoverable-tax") : null}
             />
           )}
           {!!s.unrealisedMargin && (
@@ -366,7 +373,7 @@ function Body({ s, tax, canViewTax, onTaxRetry, balances, onBalancesRetry, repor
               label="Unrealised margin" value={s.unrealisedMargin} format={fmtMoney} accent={p.positive}
               icon={<MdTrendingUp size={16} />} secondLine="Declared less landed cost on stock still held"
               howCalculated="Profit locked up in unsold stock: declared value less landed cost on what is still held."
-              onDrillDown={() => drillTo("unrealised-margin")}
+              onDrillDown={can("unrealised-margin") ? () => drillTo("unrealised-margin") : null}
             />
           )}
         </KpiGroup>
@@ -377,7 +384,7 @@ function Body({ s, tax, canViewTax, onTaxRetry, balances, onBalancesRetry, repor
           <h3 style={st.groupTitle}>Payable to FBR</h3>
           <div style={st.chartGrid}>
             {tax.data
-              ? <TaxPositionPanel data={tax.data} onDrill={(line) => drillTo("tax-payable", line)} />
+              ? <TaxPositionPanel data={tax.data} onDrill={can("tax-payable") ? (line) => drillTo("tax-payable", line) : null} />
               : <ChartCard title="Tax position" loading={tax.loading} error={tax.error} onRetry={tax.denied ? null : onTaxRetry} height={200} />}
           </div>
         </section>
@@ -394,14 +401,14 @@ function Body({ s, tax, canViewTax, onTaxRetry, balances, onBalancesRetry, repor
             label="Landed cost imported" value={s.importLandedCost} format={fmtMoney} accent={p.warn}
             icon={<MdInventory2 size={16} />} secondLine="Total cost of goods cleared"
             howCalculated="Sum of every GD's cost excluding tax."
-            onDrillDown={() => drillTo("import-book")}
+            onDrillDown={can("import-book") ? () => drillTo("import-book") : null}
           />
           <KpiCard
             label="Duty & tax at import" value={dutyAndTax} format={fmtMoney} accent={p.negative}
             icon={<MdAccountBalance size={16} />} higherIsBetter={false}
             secondLine={s.importDutyBurdenPercent != null ? `${Number(s.importDutyBurdenPercent).toFixed(1)}% of landed cost` : "Input tax and advance income tax"}
             howCalculated="Input sales tax plus advance income tax paid at clearance."
-            onDrillDown={() => drillTo("duty-burden")}
+            onDrillDown={can("duty-burden") ? () => drillTo("duty-burden") : null}
           />
           {!!s.importOutstanding && (
             <KpiCard
@@ -424,7 +431,7 @@ function Body({ s, tax, canViewTax, onTaxRetry, balances, onBalancesRetry, repor
             label="Owed by customers" value={s.capitalOwedByCustomers} format={fmtMoney} accent={p.secondary}
             icon={<MdCallReceived size={16} />} secondLine="Invoiced, not collected"
             howCalculated="The receivables balance, from the aged receivables report."
-            onDrillDown={s.capitalOwedByCustomers ? () => drillTo("receivables") : null}
+            onDrillDown={s.capitalOwedByCustomers && can("receivables") ? () => drillTo("receivables") : null}
           />
           <KpiCard
             label="Collected" value={s.capitalCollected} format={fmtMoney} accent={p.positive}
@@ -454,7 +461,7 @@ function Body({ s, tax, canViewTax, onTaxRetry, balances, onBalancesRetry, repor
       ) : <LedgerOffGroup title="Profitability (period)" />}
 
       <div style={{ ...st.chartGrid, marginBottom: "1.25rem" }}>
-        <ChartCard
+        {canViewTax && <ChartCard
           title="Top 10 customer balances" subtitle="What each customer owes, as of today. Click a customer for their open bills."
           loading={balances.loading} error={balances.error} onRetry={balances.denied ? null : onBalancesRetry}
           empty={topCustomers.length === 0} emptyText="Nothing outstanding from customers."
@@ -462,9 +469,9 @@ function Body({ s, tax, canViewTax, onTaxRetry, balances, onBalancesRetry, repor
         >
           <HBarChart
             data={topCustomers} ariaLabel="Top 10 customer balances" valueLabel="Balance"
-            onBarClick={(d) => d?.groupKey && drillTo("receivables", d.groupKey)}
+            onBarClick={can("receivables") ? (d) => d?.groupKey && drillTo("receivables", d.groupKey) : undefined}
           />
-        </ChartCard>
+        </ChartCard>}
         <ChartCard
           title="Cash in vs cash out" subtitle="Receipts and payments by month, 12 months to the end of the period."
           empty={!hasAny(cash, ["cashIn", "cashOut"])} emptyText="No receipts or payments in these 12 months." height={280}

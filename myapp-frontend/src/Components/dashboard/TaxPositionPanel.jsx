@@ -19,8 +19,8 @@ export default function TaxPositionPanel({ data, onDrill }) {
     const st = { ...row, fontWeight: bold ? 700 : 400 };
     return (
       <div key={r.key}>
-        {r.drill
-          ? <button type="button" onClick={() => onDrill?.(r.drill)} style={{ ...st, cursor: "pointer" }}>{cell(r)}</button>
+        {r.drill && onDrill
+          ? <button type="button" onClick={() => onDrill(r.drill)} style={{ ...st, cursor: "pointer" }}>{cell(r)}</button>
           : <div style={st}>{cell(r)}</div>}
         {r.note && <div style={{ fontSize: "0.72rem", color: "var(--dash-text)", marginTop: 2 }}>{r.note}</div>}
       </div>

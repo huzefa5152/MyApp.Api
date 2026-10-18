@@ -186,7 +186,10 @@ function Overview({ data, tax, onTaxRetry, has, openDrill }) {
   const showPayables = showSales && (hero.payablesTotal || 0) !== 0;
   const showReceivables = showSales && (hero.receivablesScopeRestricted || (hero.receivablesTotal || 0) !== 0);
   const showRecoverable = showSales && (hero.recoverableTaxTotal || 0) !== 0;
-  const drillTo = (kind, opts) => () => openDrill(kind, opts);
+  // Every drill reads /api/dashboard/breakdown (dashboard.view); no key, no clickable figure.
+  const canDrill = has("dashboard.view");
+  const drillTo = (kind, opts) => (canDrill ? () => openDrill(kind, opts) : null);
+  const onBar = (fn) => (canDrill ? fn : undefined);
 
   if (hero.hasAnyActivity === false) {
     return (
@@ -209,7 +212,7 @@ function Overview({ data, tax, onTaxRetry, has, openDrill }) {
 
   return (
     <>
-      <HealthBanner items={data.health} onDrill={(key) => openDrill(key)} />
+      <HealthBanner items={data.health} onDrill={canDrill ? (key) => openDrill(key) : null} />
 
       {showSales && (
         <KpiGroup title="Sales & margin">
@@ -308,7 +311,7 @@ function Overview({ data, tax, onTaxRetry, has, openDrill }) {
           <h3 style={styles.groupTitle}>Payable to FBR</h3>
           <div style={styles.chartGrid}>
             {tax.data
-              ? <TaxPositionPanel data={tax.data} onDrill={(line) => openDrill("tax-payable", { groupKey: line })} />
+              ? <TaxPositionPanel data={tax.data} onDrill={canDrill ? (line) => openDrill("tax-payable", { groupKey: line }) : null} />
               : <ChartCard title="Tax position" loading={tax.loading} error={tax.error} onRetry={tax.denied ? null : onTaxRetry} height={200} />}
             {!tax.denied && (
               <ChartCard
@@ -324,7 +327,7 @@ function Overview({ data, tax, onTaxRetry, has, openDrill }) {
                     { key: "adv236", label: "236G/H", colorKey: "warn" },
                     { key: "input", label: "Input tax claimed", colorKey: "negative" },
                   ]}
-                  onBarClick={(d) => { const r = monthRange(d?.month); if (r) openDrill("tax-payable", { period: "custom", ...r }); }}
+                  onBarClick={onBar((d) => { const r = monthRange(d?.month); if (r) openDrill("tax-payable", { period: "custom", ...r }); })}
                 />
               </ChartCard>
             )}
@@ -372,7 +375,7 @@ function Overview({ data, tax, onTaxRetry, has, openDrill }) {
                   { key: "landedCost", label: "Landed cost", colorKey: "secondary" },
                   { key: "marginPct", label: "Margin %", colorKey: "warn", type: "line", axis: "right", format: pct },
                 ]}
-                onBarClick={(d) => d?.month && openDrill("sales", { groupKey: d.month, period: "all-time" })}
+                onBarClick={onBar((d) => d?.month && openDrill("sales", { groupKey: d.month, period: "all-time" }))}
               />
             </ChartCard>
           )}
@@ -383,7 +386,7 @@ function Overview({ data, tax, onTaxRetry, has, openDrill }) {
               height={Math.max(240, customers.length * 34)}
             >
               <HBarChart data={customers} ariaLabel="Top 10 customers by net sales" valueLabel="Net sales"
-                onBarClick={(d) => openDrill("sales", { groupKey: d?.groupKey || null })} />
+                onBarClick={onBar((d) => openDrill("sales", { groupKey: d?.groupKey || null }))} />
             </ChartCard>
           )}
           {showStock && (
@@ -398,7 +401,7 @@ function Overview({ data, tax, onTaxRetry, has, openDrill }) {
                   { key: "d30to90", label: "30–90 days", colorKey: "warn" },
                   { key: "over90", label: "90+ days", colorKey: "negative" },
                 ]}
-                onBarClick={() => openDrill("stock-ageing")}
+                onBarClick={onBar(() => openDrill("stock-ageing"))}
               />
             </ChartCard>
           )}
