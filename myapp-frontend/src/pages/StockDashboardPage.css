@@ -62,13 +62,13 @@
 /* ---------- KPI strip ---------- */
 .stk-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
 @media (min-width: 640px) { .stk-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (min-width: 1000px) { .stk-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+@media (min-width: 1400px) { .stk-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
 .stk-kpi { background: var(--dash-card); border-radius: 10px; box-shadow: var(--dash-shadow); padding: 10px 12px; border-top: 3px solid var(--dash-primary); min-width: 0; }
 .stk-kpi.t { border-top-color: var(--dash-secondary); }
 .stk-kpi.g { border-top-color: var(--dash-positive); }
 .stk-kpi.o { border-top-color: var(--dash-warn); }
 .stk-kpi .l { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dash-muted); font-weight: 600; }
-.stk-kpi .v { font-size: 16px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.stk-kpi .v { font-size: 16px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: clip; }
 .stk-kpi .s { font-size: 11px; color: var(--dash-text); margin-top: 2px; }
 
 /* ---------- card, tabs, toolbar ---------- */
