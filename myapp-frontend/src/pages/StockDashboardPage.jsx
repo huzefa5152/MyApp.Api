@@ -12,6 +12,7 @@ import { todayYmd } from "../utils/dateInput";
 import { isDecimalUnit } from "../utils/formatQuantity";
 import SearchableItemTypeSelect from "../Components/SearchableItemTypeSelect";
 import Pagination from "../Components/Pagination";
+import StockEntryHistory from "../Components/StockEntryHistory";
 
 const colors = {
   blue: "#0d47a1",
@@ -312,7 +313,11 @@ export default function StockDashboardPage() {
             <TabBtn active={tab === "onhand"} onClick={() => setTab("onhand")}>On-Hand ({onhand.length})</TabBtn>
             {canManageOpening && <TabBtn active={tab === "opening"} onClick={() => setTab("opening")}>Opening Balances ({openings.length})</TabBtn>}
             {canViewMovements && <TabBtn active={tab === "movements"} onClick={() => setTab("movements")}>Movements ({movTotal})</TabBtn>}
+            {(canManageOpening || canAdjust) && <TabBtn active={tab === "entries"} onClick={() => setTab("entries")}>Opening stock & adjustments</TabBtn>}
           </div>
+
+          {tab === "entries" && selectedCompany && (canManageOpening || canAdjust) &&
+            <StockEntryHistory companyId={selectedCompany.id} onChanged={fetchAll}/>}
 
           {tab === "onhand" && (
             <>
