@@ -812,8 +812,10 @@ namespace MyApp.Api.Services.Implementations
             summary.PaymentCount = pm?.Count ?? 0;
             summary.PaymentsTotal = pm?.Total ?? 0m;
 
-            // 12-month series ending at the month of `to`.
-            var lastMonth = new DateTime(periodTo.Year, periodTo.Month, 1);
+            // 12-month series ending at the month of `to`, never past today: a
+            // "this year" period would otherwise end on empty future months.
+            var seriesTo = periodTo > today ? today : periodTo;
+            var lastMonth = new DateTime(seriesTo.Year, seriesTo.Month, 1);
             var firstMonth = lastMonth.AddMonths(-11);
             var seriesEnd = lastMonth.AddMonths(1);
             var cash = await _context.Payments.AsNoTracking()

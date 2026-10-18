@@ -46,13 +46,15 @@ export function accountingCardValue(drill, { summary, tax, range } = {}) {
   return byKind[drill.kind] ?? null;
 }
 
-export function agingSeries(buckets) {
-  const b = buckets || {};
-  return [{
-    label: "Receivables",
-    current: Number(b.current) || 0, d1to30: Number(b.days1To30) || 0, d31to60: Number(b.days31To60) || 0,
-    d61to90: Number(b.days61To90) || 0, over90: Number(b.over90) || 0,
-  }];
+// The largest customer balances from the receivables breakdown's level 1 (the
+// aged report's customers). Money held on account (negative) is not a balance owed.
+// No age buckets: receipts are taken on account, so buckets misread (CLAUDE.md 5b-8).
+export function topBalances(rows, n = 10) {
+  return (rows || [])
+    .map((r) => ({ label: r.label || "(unknown)", value: Number(r.amount) || 0, groupKey: r.groupKey || null }))
+    .filter((r) => r.value > 0)
+    .sort((a, b) => b.value - a.value)
+    .slice(0, n);
 }
 
 export function cashSeries(monthly) {

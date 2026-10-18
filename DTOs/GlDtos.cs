@@ -176,7 +176,7 @@ namespace MyApp.Api.DTOs
         public DateTime From { get; set; }
         public DateTime To { get; set; }
         public bool GlEnabled { get; set; }
-        /// <summary>12 months ending at the month of <see cref="To"/>.</summary>
+        /// <summary>12 months ending at the month of <see cref="To"/> or today, whichever is earlier.</summary>
         public List<AccountingMonthPoint> Monthly { get; set; } = new();
 
         // Cash & liquidity (GL balances; zero/empty until GL is enabled)

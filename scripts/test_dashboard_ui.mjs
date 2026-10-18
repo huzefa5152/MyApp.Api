@@ -145,8 +145,11 @@ check("accounting drill figures are the tile's own, and only for its window", ()
   assert.strictEqual(A.accountingCardValue({ kind: "receivables", from: "2026-08-01", to: "2026-08-31" }, { summary, range }), null);
 });
 check("accounting chart series", () => {
-  assert.deepStrictEqual(A.agingSeries({ current: 1, days1To30: 2, days31To60: 3, days61To90: 4, over90: 5 })[0],
-    { label: "Receivables", current: 1, d1to30: 2, d31to60: 3, d61to90: 4, over90: 5 });
+  const rows = Array.from({ length: 14 }, (_, i) => ({ label: "C" + i, amount: i - 2, groupKey: "c:" + i }));
+  const top = A.topBalances(rows);
+  assert.strictEqual(top.length, 10);
+  assert.deepStrictEqual(top[0], { label: "C13", value: 11, groupKey: "c:13" }); // largest first, with its drill key
+  assert.ok(top.every((r) => r.value > 0)); // money on account is not a balance owed
   assert.deepStrictEqual(A.cashSeries([{ month: "2026-09", cashIn: 10, cashOut: 4 }])[0], { month: "2026-09", label: "Sep 26", cashIn: 10, cashOut: 4 });
   assert.strictEqual(A.profitSeries([{ month: "2026-09", income: 10, expense: 12, netProfit: -2 }])[0].netProfit, -2);
 });

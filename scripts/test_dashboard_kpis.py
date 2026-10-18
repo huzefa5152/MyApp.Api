@@ -501,6 +501,12 @@ def main():
         check("monthly has 12 points", len(mo) == 12, str(len(mo)))
         check("monthly ends at the current month", bool(mo) and mo[-1].get("month") == thismonth, str(mo[-1:] ))
         check("glEnabled true for the GL company", sm.get("glEnabled") is True)
+        yr = thismonth[:4]
+        rsy = requests.get(f"{api}/accounting/summary/company/{gw}", headers=h, timeout=120,
+                           params={"from": f"{yr}-01-01", "to": f"{yr}-12-31"})
+        my = (rsy.json() if rsy.ok else {}).get("monthly") or []
+        check("this year: monthly ends at the current month, not December",
+              bool(my) and my[-1].get("month") == thismonth, str(my[-1:]))
         check("monthly net = income - expense", all(near(x["netProfit"], x["income"] - x["expense"]) for x in mo))
         rs2 = acct(tf)
         s2 = rs2.json() if rs2.ok else {}

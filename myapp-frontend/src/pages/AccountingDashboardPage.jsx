@@ -14,7 +14,8 @@
 //
 // Ledger off: the GL figures (cash & bank, stock & tax position, import book,
 // capital, profitability, income vs expense) say so instead of showing zeros;
-// the subledger ones (receipts, payments, aging, cheques) still render.
+// the subledger ones (receipts, payments, receivables, cheques) still render.
+// No receivable age buckets anywhere: receipts are taken on account (CLAUDE.md 5b-8).
 //
 // Drills: only a tile whose breakdown totals exactly its own figure opens one
 // (accountingData.accountingCardValue); every drill reads the page's own
@@ -33,7 +34,7 @@ import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
 import { todayPakistanYmd } from "../utils/dateInput";
 import { getAccountingSummary, getGlStatus, enableGl, rebuildGl } from "../api/accountingApi";
-import { getDashboardTaxPosition } from "../api/dashboardApi";
+import { getDashboardTaxPosition, getDashboardBreakdown } from "../api/dashboardApi";
 import KpiCard from "../Components/dashboard/KpiCard";
 import KpiGroup from "../Components/dashboard/KpiGroup";
 import KpiDrilldown from "../Components/dashboard/KpiDrilldown";
@@ -42,10 +43,10 @@ import DashboardHeader from "../Components/dashboard/DashboardHeader";
 import ChartCard from "../Components/dashboard/ChartCard";
 import TaxPositionPanel from "../Components/dashboard/TaxPositionPanel";
 import BarLineChart from "../Components/dashboard/charts/BarLineChart";
-import StackedBarChart from "../Components/dashboard/charts/StackedBarChart";
+import HBarChart from "../Components/dashboard/charts/HBarChart";
 import { chartPalette } from "../Components/dashboard/chartTheme";
 import { hasAny } from "../Components/dashboard/overviewData";
-import { presetRange, accountingCardValue, agingSeries, cashSeries, profitSeries } from "../Components/dashboard/accountingData";
+import { presetRange, accountingCardValue, topBalances, cashSeries, profitSeries } from "../Components/dashboard/accountingData";
 import usePersistentFilter from "../hooks/usePersistentFilter";
 import "./DashboardPage.css";
 
@@ -93,6 +94,8 @@ export default function AccountingDashboardPage() {
   const [glResult, setGlResult] = useState(null);
   const [tax, setTax] = useState({ data: null, loading: false, error: null });
   const [taxReload, setTaxReload] = useState(0);
+  const [balances, setBalances] = useState({ rows: [], loading: false, error: null });
+  const [balancesReload, setBalancesReload] = useState(0);
 
   const { drill, openDrill, closeDrill } = useDrillState();
 
@@ -140,6 +143,25 @@ export default function AccountingDashboardPage() {
       });
     return () => { cancelled = true; };
   }, [canViewTax, companyId, rangeKey, taxReload]);
+
+  // Customer balances for the top-10 chart: the receivables drill's level 1, so a
+  // bar opens rows that add up to it. A position, so it does not follow the period.
+  useEffect(() => {
+    if (!companyId || !canView) { setBalances({ rows: [], loading: false, error: null }); return; }
+    let cancelled = false;
+    setBalances({ rows: [], loading: true, error: null });
+    getDashboardBreakdown(companyId, "receivables", { period: "all-time" })
+      .then((d) => { if (!cancelled) setBalances({ rows: d?.rows || [], loading: false, error: null }); })
+      .catch((e) => {
+        if (cancelled) return;
+        const body = e?.response?.data;
+        const denied = e?.response?.status === 403;
+        setBalances({ rows: [], loading: false, denied, error: denied
+          ? (body?.message || body?.error || "You do not have access to customer balances.")
+          : "Could not load customer balances." });
+      });
+    return () => { cancelled = true; };
+  }, [companyId, canView, balancesReload, reload]);
 
   // Stale enable/rebuild results belong to the previous company.
   useEffect(() => { setGlResult(null); }, [companyId]);
@@ -206,6 +228,7 @@ export default function AccountingDashboardPage() {
       {summary && (
         <Body
           s={summary} tax={tax} canViewTax={canViewTax} onTaxRetry={() => setTaxReload((n) => n + 1)}
+          balances={balances} onBalancesRetry={() => setBalancesReload((n) => n + 1)}
           report={report} drillTo={drillTo} navigate={navigate}
           glResult={glResult} onDismissResult={() => setGlResult(null)}
           canManageGl={canManageGl} enabling={enabling} onEnable={() => runGl("enabled")}
@@ -235,7 +258,7 @@ export default function AccountingDashboardPage() {
 
 // ── The page body ───────────────────────────────────────────────────
 
-function Body({ s, tax, canViewTax, onTaxRetry, report, drillTo, navigate, glResult, onDismissResult, canManageGl, enabling, onEnable }) {
+function Body({ s, tax, canViewTax, onTaxRetry, balances, onBalancesRetry, report, drillTo, navigate, glResult, onDismissResult, canManageGl, enabling, onEnable }) {
   const p = chartPalette();
   const gl = !!s.glEnabled;
   const netCashFlow = Number(s.receiptsTotal || 0) - Number(s.paymentsTotal || 0);
@@ -243,7 +266,7 @@ function Body({ s, tax, canViewTax, onTaxRetry, report, drillTo, navigate, glRes
   const receivables = Number(s.receivables?.total || 0);
   const dutyAndTax = Number(s.importInputTax || 0) + Number(s.importIncomeTax || 0);
   const hasStockTax = !!(s.inventoryOnHand || s.taxPayable || s.importClearing || s.recoverableTax || s.unrealisedMargin);
-  const aging = agingSeries(s.receivables);
+  const topCustomers = topBalances(balances.rows);
   const cash = cashSeries(s.monthly);
   const profit = profitSeries(s.monthly);
   const reportCard = (id) => { const go = report(id); return go ? { onDrillDown: go, clickHint: "Click to open the report." } : {}; };
@@ -432,19 +455,14 @@ function Body({ s, tax, canViewTax, onTaxRetry, report, drillTo, navigate, glRes
 
       <div style={{ ...st.chartGrid, marginBottom: "1.25rem" }}>
         <ChartCard
-          title="Receivables by age" subtitle="Customer balances by days since invoice, as of today. Click for the customers."
-          empty={receivables === 0} emptyText="Nothing outstanding from customers." height={240}
+          title="Top 10 customer balances" subtitle="What each customer owes, as of today. Click a customer for their open bills."
+          loading={balances.loading} error={balances.error} onRetry={balances.denied ? null : onBalancesRetry}
+          empty={topCustomers.length === 0} emptyText="Nothing outstanding from customers."
+          height={Math.max(240, topCustomers.length * 34)}
         >
-          <StackedBarChart
-            data={aging} ariaLabel="Receivables by age: current, 1 to 30, 31 to 60, 61 to 90 and over 90 days"
-            series={[
-              { key: "current", label: "Current", colorKey: "positive" },
-              { key: "d1to30", label: "1–30 days", colorKey: "secondary" },
-              { key: "d31to60", label: "31–60 days", colorKey: "primary" },
-              { key: "d61to90", label: "61–90 days", colorKey: "warn" },
-              { key: "over90", label: "90+ days", colorKey: "negative" },
-            ]}
-            onBarClick={() => drillTo("receivables")}
+          <HBarChart
+            data={topCustomers} ariaLabel="Top 10 customer balances" valueLabel="Balance"
+            onBarClick={(d) => d?.groupKey && drillTo("receivables", d.groupKey)}
           />
         </ChartCard>
         <ChartCard
