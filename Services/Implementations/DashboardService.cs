@@ -561,7 +561,6 @@ namespace MyApp.Api.Services.Implementations
             {
                 var aged = await _gl.GetAgedReceivablesAsync(companyId);
                 hero.ReceivablesTotal = aged.Total;
-                hero.ReceivablesOverdue = aged.Total - aged.Current;
             }
 
             var advQ = DashboardSalesFilter.SaleDocs(_context.Invoices.AsNoTracking(), companyId, period.From, period.To);
@@ -1210,8 +1209,7 @@ namespace MyApp.Api.Services.Implementations
                     .ToDictionaryAsync(x => x.ClientId);
                 result.Title = "Receivables, by customer";
                 result.Note = "The customer balance from the aged receivables report: open bills, less WHT and what was "
-                    + "received against them, plus money held on account (negative). 236G/H billed on those bills is shown apart. "
-                    + "Flagged customers have money past due.";
+                    + "received against them, plus money held on account (negative). 236G/H billed on those bills is shown apart.";
                 result.Columns = Cols(("invoiced", "Invoiced", "money"), ("wht", "WHT", "money"),
                     ("receipts", "Receipts", "money"), ("onAccount", "On account", "money"),
                     ("balance", "Balance", "money"), ("adv236Billed", "236G/H billed", "money"));
@@ -1226,7 +1224,6 @@ namespace MyApp.Api.Services.Implementations
                         ("onAccount", Round(a.Total - (invoiced - wht - receipts))), ("balance", Round(a.Total)),
                         ("adv236Billed", Round(d?.Adv ?? 0m)));
                     row.Sub = a.OpenDocuments + " open bill" + (a.OpenDocuments == 1 ? "" : "s");
-                    row.Flagged = a.Total - a.Current > 0m;
                     return row;
                 }).ToList();
                 result.Total = Round(aged.Total);

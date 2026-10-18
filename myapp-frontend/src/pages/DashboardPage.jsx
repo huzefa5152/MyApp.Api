@@ -259,7 +259,7 @@ function Overview({ data, tax, onTaxRetry, has, openDrill }) {
             accent={p.primary} icon={<MdRequestQuote size={16} />} higherIsBetter={false}
             subValue={hero.receivablesScopeRestricted
               ? "Company-wide figure — not available for division-restricted access"
-              : (hero.receivablesOverdue || 0) !== 0 ? `Past current bucket ${money(hero.receivablesOverdue)}` : "All in the current bucket"}
+              : null}
             secondLine={hero.receivablesScopeRestricted ? null : `236G/H billed in period ${money(hero.receivablesAdvanceTaxBilled)}`}
             howCalculated="Customer balances from the aged receivables report, all time, net of receipts on account. 236G/H advance tax is shown separately."
             onDrillDown={hero.receivablesScopeRestricted ? null : drillTo("receivables")}
