@@ -76,9 +76,10 @@ export default function AccountingDashboardPage() {
   // /gl/status is gated by accounting.coa.view — don't call it without that key.
   const canViewGlStatus = has("accounting.coa.view");
   const canOpenReports = has("accounting.reports.view");
-  const canViewTax = has("dashboard.kpi.sales.view");
   // Drills read /api/dashboard/breakdown (dashboard.view); receivables also need the sales key.
   const canDrill = has("dashboard.view");
+  // The tax panel and the customer balances come from /api/dashboard too, so they need both keys.
+  const canViewTax = canDrill && has("dashboard.kpi.sales.view");
   const can = (kind) => canDrill && (kind !== "receivables" || canViewTax);
 
   const companyId = selectedCompany?.id;
