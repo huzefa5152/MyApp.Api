@@ -111,6 +111,11 @@ check("chart series: months labelled, input tax below the line, top 10", () => {
   const t = O.taxMonthSeries([{ month: "2026-02", outputTax: 18, furtherTax: 4, adv236: 1, inputTax: 5 }]);
   assert.strictEqual(t[0].input, -5);
   assert.strictEqual(O.topCustomers(Array.from({ length: 20 }, (_, i) => ({ id: i, name: "C" + i, value: i }))).length, 10);
+  assert.deepStrictEqual(O.topCustomers([{ id: 1, name: "A", value: 118, netValue: 100, groupKey: "c:-1" }])[0],
+    { id: 1, label: "A", value: 100, groupKey: "c:-1" }); // net, with the drill key
+  assert.deepStrictEqual(O.monthRange("2024-02"), { from: "2024-02-01", to: "2024-02-29" });
+  assert.deepStrictEqual(O.monthRange("2026-12"), { from: "2026-12-01", to: "2026-12-31" });
+  assert.strictEqual(O.monthRange("x"), null);
   assert.strictEqual(O.hasAny(t, ["output"]), true);
   assert.strictEqual(O.hasAny([{ output: 0 }], ["output"]), false);
 });

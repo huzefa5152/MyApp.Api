@@ -69,6 +69,8 @@ namespace MyApp.Api.DTOs
 
         /// <summary>The same documents, tax-inclusive, signed. Same figure as TotalSales.</summary>
         public decimal SalesInclTax { get; set; }
+        /// <summary>NetSales over the previous period; null when there is none (all-time).</summary>
+        public decimal? NetSalesPrev { get; set; }
 
         /// <summary>Cost of the goods sold in the period, declared basis,
         /// from the same walk the ledger's monthly relief entries use.</summary>
@@ -81,6 +83,8 @@ namespace MyApp.Api.DTOs
         /// <summary>What the goods on hand are worth right now (declared
         /// basis). Not period-scoped — stock is a position, not a flow.</summary>
         public decimal StockOnHandValue { get; set; }
+        /// <summary>The same goods at landed cost (ClosingLanded of the same walk).</summary>
+        public decimal StockOnHandLanded { get; set; }
 
         /// <summary>The customer balance: GetAgedReceivablesAsync().Total, equal to
         /// the accounting summary's receivables total. Net of receipts on account.</summary>
@@ -247,6 +251,10 @@ namespace MyApp.Api.DTOs
         public string Name { get; set; } = "";
         public decimal Value { get; set; }            // money or count, depends on context
         public int Count { get; set; }
+        /// <summary>Top customers only: net sales excl. tax, notes signed (DashboardSalesFilter).</summary>
+        public decimal? NetValue { get; set; }
+        /// <summary>Top customers only: the sales drill's customer key, "c:{ClientGroupId ?? -ClientId}".</summary>
+        public string? GroupKey { get; set; }
     }
 
     public class DashboardRecentBill

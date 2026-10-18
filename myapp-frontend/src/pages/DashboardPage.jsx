@@ -39,7 +39,7 @@ import StackedBarChart from "../Components/dashboard/charts/StackedBarChart";
 import HBarChart from "../Components/dashboard/charts/HBarChart";
 import { chartPalette, formatMoneyShort } from "../Components/dashboard/chartTheme";
 import {
-  drillCardValue, monthlySeries, taxMonthSeries, topCustomers, ageingSeries, ageingTotal, hasAny,
+  drillCardValue, monthlySeries, taxMonthSeries, topCustomers, ageingSeries, ageingTotal, hasAny, monthRange,
 } from "../Components/dashboard/overviewData";
 import { drillToSearch } from "../utils/dashboardDrill";
 import "./DashboardPage.css";
@@ -80,7 +80,7 @@ export default function DashboardPage() {
   // Resume a drill from the URL (Back from "Open bill" lands here).
   const [drill, setDrill] = useState(() => {
     const s = drillFromSearch(searchParams);
-    return s ? { ...s, period: searchParams.get("dperiod") || null } : null;
+    return s ? { ...s, period: searchParams.get("dperiod") || null, from: searchParams.get("dfrom") || null, to: searchParams.get("dto") || null } : null;
   });
 
   const canViewPage = has?.("dashboard.view") ?? false;
@@ -97,7 +97,8 @@ export default function DashboardPage() {
   useEffect(() => {
     if (permsLoading || !canViewPage || !companyId || !ready) return;
     let cancelled = false;
-    setLoading(true); setError(null);
+    // A new company or period must never show the old one's figures under its header.
+    setLoading(true); setError(null); setData(null);
     getDashboardKpis(companyId, range)
       .then((res) => { if (!cancelled) { setData(res); setAsOf(new Date().toLocaleString("en-PK", { dateStyle: "medium", timeStyle: "short" })); } })
       .catch(() => { if (!cancelled) setError("Could not load the dashboard."); })
@@ -123,22 +124,29 @@ export default function DashboardPage() {
     return () => { cancelled = true; };
   }, [canSales, companyId, range, ready, taxReload]);
 
-  // opts.period: a chart month outside the page's period opens on its own window.
+  // opts.period (+ from/to for "custom"): a chart month opens on its own window.
   const openDrill = useCallback((kind, opts = {}) => {
-    const next = { kind, groupKey: opts.groupKey || null, period: opts.period || null };
-    setDrill(next);
+    setDrill({ kind, groupKey: opts.groupKey || null, period: opts.period || null, from: opts.from || null, to: opts.to || null });
+  }, []);
+
+  // The URL write happens here, not in the click: setSearchParams' updater sees
+  // the params of the last render, so KpiDrilldown's own mirror (same commit,
+  // child effects first) would drop d* keys written earlier. Writing the whole
+  // state last keeps every key.
+  useEffect(() => {
+    if (!drill) return;
     setSearchParams((p) => {
-      const n = drillToSearch(p, next);
-      if (next.period) n.set("dperiod", next.period); else n.delete("dperiod");
+      const n = drillToSearch(p, { kind: drill.kind, groupKey: drill.groupKey });
+      for (const [k, v] of [["dperiod", drill.period], ["dfrom", drill.from], ["dto", drill.to]]) { if (v) n.set(k, v); else n.delete(k); }
       return n;
     }, { replace: true });
-  }, [setSearchParams]);
+  }, [drill, setSearchParams]);
 
-  // Clears all three keys in one update: KpiDrilldown clears drill/group too, and
+  // Clears every drill key in one update: KpiDrilldown clears drill/group too, and
   // two updates from one tick would otherwise overwrite each other.
   const closeDrill = useCallback(() => {
     setDrill(null);
-    setSearchParams((p) => { const n = drillToSearch(p, null); n.delete("dperiod"); return n; }, { replace: true });
+    setSearchParams((p) => { const n = drillToSearch(p, null); ["dperiod", "dfrom", "dto"].forEach((k) => n.delete(k)); return n; }, { replace: true });
   }, [setSearchParams]);
 
   if (permsLoading) return <Shell><LoadingShimmer /></Shell>;
@@ -184,8 +192,8 @@ export default function DashboardPage() {
           kind={drill?.kind}
           initialGroupKey={drill?.groupKey || null}
           period={drillPeriod}
-          from={drill?.period ? undefined : range.from}
-          to={drill?.period ? undefined : range.to}
+          from={drill?.period ? drill.from || undefined : range.from}
+          to={drill?.period ? drill.to || undefined : range.to}
           companyId={companyId}
           cardValue={drillCardValue(drill, { hero: data.hero, health: data.health, tax: tax.data })}
         />
@@ -205,6 +213,7 @@ function Overview({ data, tax, onTaxRetry, has, openDrill }) {
   const showSales = !!flags.canViewSales;
   const showStock = showSales && hero.hasStock;
   const showPayables = showSales && (hero.payablesTotal || 0) !== 0;
+  const showReceivables = showSales && (hero.receivablesScopeRestricted || (hero.receivablesTotal || 0) !== 0);
   const showRecoverable = showSales && (hero.recoverableTaxTotal || 0) !== 0;
   const drillTo = (kind, opts) => () => openDrill(kind, opts);
 
@@ -234,7 +243,7 @@ function Overview({ data, tax, onTaxRetry, has, openDrill }) {
       {showSales && (
         <KpiGroup title="Sales & margin">
           <KpiCard
-            label="Net sales" value={hero.netSales} format={money} accent={p.primary}
+            label="Net sales" value={hero.netSales} prevValue={hero.netSalesPrev} format={money} accent={p.primary}
             icon={<MdAttachMoney size={16} />}
             trend={monthly.length ? monthly.map((m) => ({ value: m.netSales })) : null}
             secondLine={`Incl. tax ${money(hero.salesInclTax)}`}
@@ -269,7 +278,7 @@ function Overview({ data, tax, onTaxRetry, has, openDrill }) {
 
       {showSales && (
         <KpiGroup title="Cash & balances">
-          <KpiCard
+          {showReceivables && <KpiCard
             label="Receivables"
             value={hero.receivablesScopeRestricted ? null : hero.receivablesTotal}
             format={hero.receivablesScopeRestricted ? () => "—" : money}
@@ -280,7 +289,7 @@ function Overview({ data, tax, onTaxRetry, has, openDrill }) {
             secondLine={hero.receivablesScopeRestricted ? null : `236G/H billed in period ${money(hero.receivablesAdvanceTaxBilled)}`}
             howCalculated="Customer balances from the aged receivables report, all time, net of receipts on account. 236G/H advance tax is shown separately."
             onDrillDown={hero.receivablesScopeRestricted ? null : drillTo("receivables")}
-          />
+          />}
           <KpiCard
             label="Received in period" value={hero.receivedInPeriod} format={money} accent={p.positive}
             icon={<MdPayments size={16} />}
@@ -303,8 +312,8 @@ function Overview({ data, tax, onTaxRetry, has, openDrill }) {
             <KpiCard
               label="Stock on hand" value={hero.stockOnHandValue} format={money} accent={p.warn}
               icon={<MdWarehouse size={16} />}
-              secondLine="Declared value · a position, not a period"
-              howCalculated="Declared value of the goods in the warehouse now, from the stock walk."
+              secondLine={`Landed ${money(hero.stockOnHandLanded)} · a position, not a period`}
+              howCalculated="Declared value of the goods in the warehouse now, from the stock walk; the second line is the same goods at landed cost. The breakdown is declared."
               onDrillDown={drillTo("stock-on-hand")}
             />
           )}
@@ -344,7 +353,7 @@ function Overview({ data, tax, onTaxRetry, has, openDrill }) {
                     { key: "adv236", label: "236G/H", colorKey: "warn" },
                     { key: "input", label: "Input tax claimed", colorKey: "negative" },
                   ]}
-                  onBarClick={() => openDrill("tax-payable")}
+                  onBarClick={(d) => { const r = monthRange(d?.month); if (r) openDrill("tax-payable", { period: "custom", ...r }); }}
                 />
               </ChartCard>
             )}
@@ -398,12 +407,12 @@ function Overview({ data, tax, onTaxRetry, has, openDrill }) {
           )}
           {showSales && (
             <ChartCard
-              title="Top 10 customers" subtitle="Period sales including tax. Click for net sales by customer or month."
+              title="Top 10 customers" subtitle="Net sales excluding tax in the period. Click a customer for their invoices."
               empty={customers.length === 0} emptyText="No invoiced customers in this period."
               height={Math.max(240, customers.length * 34)}
             >
-              <HBarChart data={customers} ariaLabel="Top 10 customers by sales including tax" valueLabel="Sales incl. tax"
-                onBarClick={() => openDrill("sales")} />
+              <HBarChart data={customers} ariaLabel="Top 10 customers by net sales" valueLabel="Net sales"
+                onBarClick={(d) => openDrill("sales", { groupKey: d?.groupKey || null })} />
             </ChartCard>
           )}
           {showStock && (

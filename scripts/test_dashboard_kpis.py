@@ -562,6 +562,17 @@ def main():
         b1c, l2c = ties("sales September (by customer)", cid, "sales", h_sep.get("netSales"), **{"from": "2026-09-01", "to": "2026-09-30"})
         check("a month-sized period groups by customer (c:...)", bool(b1c.get("rows")) and all(str(r_.get("groupKey", "")).startswith("c:") for r_ in b1c.get("rows", [])),
               str([r_.get("groupKey") for r_ in b1c.get("rows", [])]))
+        # Top customers: ranked by net, and each one's key opens its invoices in ANY period (all-time is by month).
+        tops = ((kpis(cid, period="all-time").json().get("sales") or {}).get("topClients") or [])
+        check("top customers carry netValue + a c: groupKey, ranked by net",
+              bool(tops) and all(str(t_.get("groupKey", "")).startswith("c:") and t_.get("netValue") is not None for t_ in tops)
+              and [t_["netValue"] for t_ in tops] == sorted([t_["netValue"] for t_ in tops], reverse=True), str(tops)[:300])
+        for t_ in tops[:2]:
+            rt = brk(cid, "sales", period="all-time", groupKey=t_.get("groupKey"))
+            bt = rt.json() if rt.ok else {}
+            check(f"top customer {t_.get('groupKey')} opens its invoices at level 2, summing to its net",
+                  rt.ok and bt.get("level") == 2 and near(rows_sum(bt), t_.get("netValue")) and near(bt.get("total"), t_.get("netValue")),
+                  f"{rt.status_code} rows={rows_sum(bt) if bt else None} total={bt.get('total')} net={t_.get('netValue')}")
         if a.db:
             jul = brk(cid, "sales", period="all-time", groupKey="2026-07").json()
             check("the FBR-cancelled bill is not in the sales drill", all(r_.get("invoiceId") != i4["id"] for r_ in jul.get("rows", [])),

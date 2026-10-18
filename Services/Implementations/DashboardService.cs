@@ -440,8 +440,9 @@ namespace MyApp.Api.Services.Implementations
                 hero.SalesInclTax = totalSales;
                 if (period.PreviousFrom.HasValue)
                 {
-                    var (prevSales, _, _) = await SumInvoicesAsync(companyId, period.PreviousFrom, period.PreviousTo, divScope);
+                    var (prevSales, _, prevNet) = await SumInvoicesAsync(companyId, period.PreviousFrom, period.PreviousTo, divScope);
                     hero.TotalSalesPrev = prevSales;
+                    hero.NetSalesPrev = prevNet;
                 }
             }
 
@@ -506,6 +507,7 @@ namespace MyApp.Api.Services.Implementations
                 // Positions, never period-scoped: "what is in the warehouse"
                 // has no date range.
                 hero.StockOnHandValue = Round(positions.Sum(p => p.ClosingDeclared));
+                hero.StockOnHandLanded = Round(positions.Sum(p => p.ClosingLanded));
 
                 // Dead stock — bought and never sold. The most actionable
                 // number here: on this line it reaches 82% of stock.
@@ -1922,24 +1924,34 @@ namespace MyApp.Api.Services.Implementations
             // Fallback: legacy rows still nullable on ClientGroupId use
             // -ClientId as the partition key (negative space never
             // collides with positive group ids).
-            var topClients = await q
+            // Ranked by NET sales (excl. tax, notes signed) — the figure the
+            // sales drill adds up; GroupKey is that drill's customer key.
+            var topClients = (await q
                 .GroupBy(i => i.Client!.ClientGroupId ?? -i.ClientId)
-                .Select(g => new DashboardTopEntity
+                .Select(g => new
                 {
+                    g.Key,
                     Id = g.Min(x => x.ClientId),
                     // Every row in a real ClientGroup carries the same
                     // master Name (group sync keeps them aligned). Max
                     // is just a deterministic picker.
-                    Name = g.Max(x => x.Client!.Name) ?? "(unknown)",
+                    Name = g.Max(x => x.Client!.Name),
                     Value = g.Sum(i => (i.DocumentType == 10 ? -1m : 1m) * i.GrandTotal),
+                    NetValue = g.Sum(i => (i.DocumentType == 10 ? -1m : 1m) * i.Subtotal),
                     Count = g.Count(i => i.DocumentType != 9 && i.DocumentType != 10),
                 })
-                .OrderByDescending(x => x.Value)
+                .OrderByDescending(x => x.NetValue)
                 // Bumped from 5 → 20 — the dashboard donut groups
                 // anything beyond the top 8 into "Others" but the
                 // detail list shows all 20 with exact numbers.
                 .Take(20)
-                .ToListAsync();
+                .ToListAsync())
+                .Select(x => new DashboardTopEntity
+                {
+                    Id = x.Id, Name = x.Name ?? "(unknown)", Value = x.Value, NetValue = x.NetValue, Count = x.Count,
+                    GroupKey = "c:" + x.Key.ToString(CultureInfo.InvariantCulture),
+                })
+                .ToList();
 
             // Recent 5 within the period (most recent first).
             var recent = await q

@@ -53,8 +53,20 @@ export function taxMonthSeries(months) {
   }));
 }
 
+// Net sales (excl. tax) — the figure the sales drill adds up; groupKey opens that customer.
 export function topCustomers(topClients, n = 10) {
-  return (topClients || []).slice(0, n).map((c) => ({ id: c.id, label: c.name || "(unknown)", value: Number(c.value) || 0 }));
+  return (topClients || []).slice(0, n).map((c) => ({
+    id: c.id, label: c.name || "(unknown)", value: Number(c.netValue ?? c.value) || 0, groupKey: c.groupKey || null,
+  }));
+}
+
+// "2026-05" -> { from: "2026-05-01", to: "2026-05-31" } (inclusive, as the API takes it).
+export function monthRange(ym) {
+  const [y, m] = String(ym || "").split("-").map(Number);
+  if (!y || !m) return null;
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const mm = String(m).padStart(2, "0");
+  return { from: `${y}-${mm}-01`, to: `${y}-${mm}-${String(last).padStart(2, "0")}` };
 }
 
 export function ageingSeries(hero) {
