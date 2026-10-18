@@ -14,13 +14,19 @@ export function taxPanelRows(d) {
     rows[3].note = "After 8B cap / carry-forward (Import Tax Desk)";
   }
   rows.push(
-    { key: "236G", label: "Advance tax 236G", value: d.adv236G, kind: "payable", drill: "236G" },
-    { key: "236H", label: "Advance tax 236H", value: d.adv236H, kind: "payable", drill: "236H" },
+    // Billed, not collected: receipts are taken on account, so nothing says which bill's 236 was paid.
+    { key: "236G", label: "236G billed", value: d.adv236G, kind: "payable", drill: "236G" },
+    { key: "236H", label: "236H billed", value: d.adv236H, kind: "payable", drill: "236H" },
     { key: "wht", label: "WHT payable", value: d.whtPayable, kind: "payable", drill: "wht", gl: true },
     { key: "total", label: "Total payable", value: r2(d.salesTaxPayable + d.adv236G + d.adv236H + d.whtPayable), kind: "total", drill: null },
     { key: "recImport", label: "Advance tax on imports", value: d.recoverableImportAdvanceTax, kind: "recoverable", drill: null, gl: true },
     { key: "recWht", label: "Withholding deducted by customers", value: d.recoverableWhtDeducted, kind: "recoverable", drill: null, gl: true },
   );
   // Only WHT payable and the two recoverables are ledger lines; 236G/H come from invoices.
-  return rows.map((x) => (x.gl && !d.ledgerEnabled ? { ...x, value: null, unavailable: "Ledger not enabled" } : x));
+  // Input on a non-FIFO company is the ledger's InputTax too: with the ledger off there is none.
+  return rows.map((x) => {
+    if (x.key === "input" && d.inputBasis === "gl-before-cap" && !d.ledgerEnabled)
+      return { ...x, label: "Input tax claimed", value: null, unavailable: "Not available (ledger off)", drill: null };
+    return x.gl && !d.ledgerEnabled ? { ...x, value: null, unavailable: "Ledger not enabled" } : x;
+  });
 }

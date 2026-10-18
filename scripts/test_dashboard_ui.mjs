@@ -56,6 +56,14 @@ check("ledger off gates only WHT and recoverables, not 236G/H", () => {
   const by = Object.fromEntries(taxPanelRows({ ...sample, ledgerEnabled: false }).map((r) => [r.key, r]));
   assert.strictEqual(by["236G"].value, 10);
   for (const k of ["wht", "recImport", "recWht"]) assert.strictEqual(by[k].unavailable, "Ledger not enabled");
+  assert.strictEqual(by.input.unavailable, undefined, "worksheet input does not need the ledger");
+});
+check("236 lines say billed; ledger-off GL input reads not available", () => {
+  const by = Object.fromEntries(taxPanelRows({ ...sample, ledgerEnabled: false, inputBasis: "gl-before-cap" }).map((r) => [r.key, r]));
+  assert.strictEqual(by["236G"].label, "236G billed");
+  assert.strictEqual(by["236H"].label, "236H billed");
+  assert.strictEqual(by.input.unavailable, "Not available (ledger off)");
+  assert.strictEqual(by.input.drill, null);
 });
 check("recoverables are not drillable; gl-before-cap relabels input", () => {
   const rows = taxPanelRows({ ...sample, inputBasis: "gl-before-cap" });

@@ -42,6 +42,7 @@ namespace MyApp.Api.Services.Implementations
         private readonly IDivisionAccessGuard _divisionAccess;
         private readonly IGeneralLedgerService _gl;
         private readonly IImportTaxWorksheetService _worksheet;
+        private readonly ILogger<DashboardService> _logger;
         // One request, one walk: the hero, the monthly series, the health list
         // and the inventory section all read the same cached walk.
         private readonly Dictionary<string, PositionInputs> _inputsCache = new();
@@ -52,8 +53,10 @@ namespace MyApp.Api.Services.Implementations
             IPermissionService permissions,
             IDivisionAccessGuard divisionAccess,
             IGeneralLedgerService gl,
-            IImportTaxWorksheetService worksheet)
+            IImportTaxWorksheetService worksheet,
+            ILogger<DashboardService> logger)
         {
+            _logger = logger;
             _gl = gl;
             _worksheet = worksheet;
             _context = context;
@@ -274,6 +277,9 @@ namespace MyApp.Api.Services.Implementations
             {
                 var (error, built) = await _worksheet.BuildAsync(companyId, dto.FromMonth, dto.ToMonth);
                 if (error == null) sheet = built;
+                else _logger.LogWarning(
+                    "Tax position for FIFO company {CompanyId} ({From}..{To}): the input-tax worksheet could not be built ({Error}); falling back to the ledger's input tax.",
+                    companyId, dto.FromMonth, dto.ToMonth, error);
             }
 
             var inputByMonth = new Dictionary<DateTime, decimal>();
