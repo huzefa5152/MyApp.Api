@@ -781,8 +781,9 @@ def main():
         hbill(hc2, reg2, {"advanceTaxSection": "236G", "advanceTaxFilerActive": True})
         hbill(hc2, un2, {"furtherTaxRate": 4})
         hl2 = health(hc2)
-        check("with 236 on the registered bill, health-missing-236 disappears", "health-missing-236" not in (hl2 or {"x": 1}), str(hl2))
-        check("with further tax on the unregistered bill, health-missing-ft disappears", "health-missing-ft" not in (hl2 or {"x": 1}), str(hl2))
+        check("the fixed company's kpis call succeeds", hl2 is not None)
+        check("with 236 on the registered bill, health-missing-236 disappears", hl2 is not None and "health-missing-236" not in hl2, str(hl2))
+        check("with further tax on the unregistered bill, health-missing-ft disappears", hl2 is not None and "health-missing-ft" not in hl2, str(hl2))
         check("a health kind with a group key is refused", hbrk(hc, "health-missing-236", groupKey="x").status_code == 400)
         check("an unknown health kind is refused", hbrk(hc, "health-nope").status_code == 400)
         rx = requests.get(f"{api}/dashboard/breakdown", headers=h, timeout=60,
@@ -806,9 +807,11 @@ def main():
               and near(bu.json().get("total"), uf.get("amount")), str(bu.text[:150]))
         if a.db and fb_id:
             sql(a.db, f"UPDATE Invoices SET FbrStatus='Uncertain' WHERE Id={fb_id}")
-            check("an Uncertain bill is not reported as unfiled", "health-unfiled" not in (health(hf) or {"x": 1}), str(health(hf)))
+            hu = health(hf)
+            check("an Uncertain bill is not reported as unfiled", hu is not None and "health-unfiled" not in hu, str(hu))
             sql(a.db, f"UPDATE Invoices SET FbrStatus='Submitting' WHERE Id={fb_id}")
-            check("nor is a Submitting one", "health-unfiled" not in (health(hf) or {"x": 1}), str(health(hf)))
+            hs = health(hf)
+            check("nor is a Submitting one", hs is not None and "health-unfiled" not in hs, str(hs))
         else:
             skip("Uncertain / Submitting bills are not 'unfiled'", "needs --db")
 

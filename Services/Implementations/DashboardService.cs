@@ -336,7 +336,6 @@ namespace MyApp.Api.Services.Implementations
                 // Custom range: dates are inclusive on the wire, To is stored
                 // exclusive like every other period. The previous period is
                 // the same number of days immediately before it.
-                c = "custom";
                 from = customFrom.Value.Date;
                 to = customTo.Value.Date.AddDays(1);
                 var span = to.Value - from.Value;
