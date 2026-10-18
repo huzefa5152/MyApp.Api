@@ -183,6 +183,10 @@ def main():
                 "items": [{"description": split_items[index]["description"], "quantity": qty, "uom": "Pcs", "unitPrice": price,
                     "localDeliveryItemId": split_items[index]["id"]} for index, qty, price in allocations]})
         split_a_first = local_bill(supplier["id"], [(0, 2, 11), (1, 2, 21)], "SPLIT-A-1")
+        partial_costs = costs("challan", split["id"])
+        check("a line-linked bill leaves the challan's other lines open in costing",
+            [x["remainingQuantity"] for x in partial_costs["items"]] == [2, 1, 2]
+            and not partial_costs["items"][2]["purchaseRecorded"] and partial_costs["items"][2]["purchasedAmount"] == 0)
         split_b = local_bill(supplier_b["id"], [(2, 2, 31)], "SPLIT-B")
         check("one supplier can purchase multiple selected challan items", len(split_a_first["items"]) == 2 and split_a_first["sourceDeliveryChallanId"] == split["id"])
         check("another supplier can purchase a different item from the same challan", len(split_b["items"]) == 1 and split_b["supplierId"] == supplier_b["id"])

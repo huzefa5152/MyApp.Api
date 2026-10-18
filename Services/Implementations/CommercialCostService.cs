@@ -73,7 +73,10 @@ public class CommercialCostService(AppDbContext db, IPostingService posting)
              (p.LocalInvoiceItemId.HasValue && invoiceIds.Contains(p.LocalInvoiceItemId.Value))))
             .GroupBy(p => new { p.LocalDeliveryItemId, p.LocalInvoiceItemId })
             .Select(g => new { g.Key.LocalDeliveryItemId, g.Key.LocalInvoiceItemId, Quantity = g.Sum(p => p.Quantity), Amount = g.Sum(p => p.LineTotal) }).ToListAsync();
-        var legacyChallans = await db.PurchaseBills.AsNoTracking().Where(p => p.CompanyId == result.CompanyId && p.SourceDeliveryChallanId.HasValue)
+        // Legacy = a challan bill from before line links existed. A bill that
+        // links any line is allocation-tracked and never implies the others.
+        var legacyChallans = await db.PurchaseBills.AsNoTracking().Where(p => p.CompanyId == result.CompanyId && p.SourceDeliveryChallanId.HasValue
+                && !p.Items.Any(i => i.LocalDeliveryItemId.HasValue))
             .Select(p => p.SourceDeliveryChallanId!.Value).ToListAsync();
         var legacyItems = await db.DeliveryItems.AsNoTracking().Where(i => deliveryIds.Contains(i.Id) && legacyChallans.Contains(i.DeliveryChallanId))
             .Select(i => i.Id).ToListAsync();
