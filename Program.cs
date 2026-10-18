@@ -478,6 +478,7 @@ builder.Services.AddScoped<IFbrLookupService, FbrLookupService>();
 // All write operations are no-ops when Company.InventoryTrackingEnabled
 // is false, so existing tenants keep working unchanged.
 builder.Services.AddScoped<IStockService, StockService>();
+builder.Services.AddScoped<StockEntryService>();
 // Reporting module (read-only, company-scoped reports for the Reports navbar).
 builder.Services.AddScoped<IReportService, ReportService>();
 // Tax mapping engine: single source of truth for HS_UOM, SaleTypeToRate

@@ -3,6 +3,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
+using MyApp.Api.Helpers;
 using MyApp.Api.DTOs;
 using MyApp.Api.Models;
 using MyApp.Api.Services.Interfaces;
@@ -600,20 +601,8 @@ namespace MyApp.Api.Services.Implementations
             // that have purchases. Items without any purchases get cost=0
             // (stock value contribution = 0 — fine, they're typically
             // pre-existing inventory adjustments).
-            var perItemCosts = await _context.PurchaseItems
-                .AsNoTracking()
-                .Where(pi => pi.PurchaseBill.CompanyId == companyId && pi.ItemTypeId.HasValue && pi.Quantity > 0)
-                .GroupBy(pi => pi.ItemTypeId!.Value)
-                .Select(g => new
-                {
-                    ItemTypeId = g.Key,
-                    TotalCost = g.Sum(pi => pi.LineTotal),
-                    TotalQty  = g.Sum(pi => pi.Quantity),
-                })
-                .ToListAsync();
-
-            var costMap = perItemCosts.ToDictionary(x => x.ItemTypeId,
-                x => x.TotalQty > 0 ? x.TotalCost / x.TotalQty : 0m);
+            var costRows = await InventoryCostBasis.LoadAsync(_context, companyId);
+            var costMap = costRows.GroupBy(r => r.ItemTypeId).ToDictionary(g => g.Key, g => InventoryCostBasis.Average(g));
 
             decimal totalStockValue = 0m;
             int trackedItemCount = 0;

@@ -3,6 +3,7 @@ import React from 'react';
 import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import {render,screen,fireEvent,cleanup,waitFor} from '@testing-library/react';
 import PurchaseBillForm from './PurchaseBillForm';
+vi.mock('../contexts/PermissionsContext',()=>({usePermissions:()=>({has:()=>true})}));
 import {getPurchaseBillById,createPurchaseBill,updatePurchaseBill,previewPurchaseStock} from '../api/purchaseBillApi';
 vi.mock('../api/purchaseBillApi',()=>({getPurchaseBillById:vi.fn(),createPurchaseBill:vi.fn(),updatePurchaseBill:vi.fn(),previewPurchaseStock:vi.fn(async()=>({data:{trackingEnabled:true,items:[]}}))}));
 vi.mock('../api/supplierApi',()=>({getSuppliersByCompany:()=>Promise.resolve({data:[{id:7,name:'Sample supplier'},{id:8,name:'Second supplier',ntn:'1234567'}]})}));
@@ -13,6 +14,7 @@ vi.mock('./BillNumberField',()=>({default:()=> <div>Purchase number</div>,billNu
 vi.mock('./DocumentCopyPicker',()=>({default:()=> <button type="button">Copy document</button>}));
 vi.mock('./SearchableItemTypeSelect',()=>({default:({onChange})=> <button type="button" onClick={()=>onChange(5,{name:'Sample non-stock item',hsCode:null,uom:'Pcs'})}>Choose item type</button>}));
 vi.mock('../utils/notify',()=>({notify:vi.fn()}));
+vi.mock('./StockEntryForm',()=>({default:({onBack})=><section aria-label="Stock entry form"><button onClick={onBack}>Back to categories</button></section>}));
 const bill={id:19,purchaseBillNumber:19,supplierId:7,date:'2026-08-08',gstRate:18,withholdingTaxRate:null,withholdingTaxAmount:0,items:[{id:11,itemTypeId:4,itemTypeName:'Sample catalog item',description:'Sample valve',quantity:2,unitPrice:100,uom:'Pcs',hsCode:'8414.5910',sourceInvoiceItemIds:[55]}]};
 beforeEach(()=>{vi.clearAllMocks();previewPurchaseStock.mockResolvedValue({data:{trackingEnabled:true,items:[]}});Object.defineProperty(window,'innerWidth',{configurable:true,value:1280});getPurchaseBillById.mockResolvedValue({data:bill});createPurchaseBill.mockResolvedValue({data:{id:20}});updatePurchaseBill.mockResolvedValue({data:{id:19}});});
 afterEach(cleanup);
@@ -41,7 +43,7 @@ it('creates a local direct purchase after category selection without inventory f
 });
 it('keeps entered prices and descriptions when changing category and clears catalog binding',async()=>{
  render(<PurchaseBillForm companyId={1} onClose={()=>{}}/>);
- fireEvent.click(screen.getByRole('radio',{name:/Inventory purchase/}));fireEvent.click(screen.getByRole('button',{name:'Continue'}));
+ fireEvent.click(screen.getByRole('radio',{name:/Stock purchase/}));fireEvent.click(screen.getByRole('button',{name:'Continue'}));
  fireEvent.change(await screen.findByLabelText('Description for item 1'),{target:{value:'Sample preserved line'}});
  fireEvent.change(screen.getByLabelText('Unit price for item 1'),{target:{value:'35'}});
  fireEvent.click(screen.getByRole('button',{name:'Choose item type'}));
@@ -87,7 +89,7 @@ it('edit can copy a line without reusing its id or sale links and save correctly
 });
 it('create exposes line actions and requires a supplier before writing',async()=>{
  const {container}=render(<PurchaseBillForm companyId={1} onClose={()=>{}}/>);
- fireEvent.click(screen.getByRole('radio',{name:/Inventory purchase/}));fireEvent.click(screen.getByRole('button',{name:'Continue'}));
+ fireEvent.click(screen.getByRole('radio',{name:/Stock purchase/}));fireEvent.click(screen.getByRole('button',{name:'Continue'}));
  await waitFor(()=>expect(screen.getByRole('button',{name:/Search supplier/})).toBeTruthy());
  expect(screen.getByRole('button',{name:'Add line'})).toBeTruthy();
  expect(screen.getByRole('button',{name:'Copy line'})).toBeTruthy();
@@ -107,7 +109,7 @@ it('non-stock supplier purchase edit preserves the non-stock classification',asy
 });
 it.each([0,18])('creates a priced purchase with GST %i and correct preview',async rate=>{
  render(<PurchaseBillForm companyId={1} onClose={()=>{}}/>);
- fireEvent.click(screen.getByRole('radio',{name:/Inventory purchase/}));fireEvent.click(screen.getByRole('button',{name:'Continue'}));
+ fireEvent.click(screen.getByRole('radio',{name:/Stock purchase/}));fireEvent.click(screen.getByRole('button',{name:'Continue'}));
  await waitFor(()=>expect(screen.getByRole('button',{name:/Search supplier/})).toBeTruthy());
  fireEvent.click(screen.getByRole('button',{name:/Search supplier/})); fireEvent.mouseDown(await screen.findByText('Sample supplier')); 
  fireEvent.change(screen.getByLabelText('Description for item 1'),{target:{value:'Sample purchase'}});
@@ -210,7 +212,7 @@ it('switching to a no-HS item clears the previous HS code before saving',async()
 
 it.each(['LocalDirect','Inventory'])('shows inventory impact only for %s inventory category',async category=>{
  render(<PurchaseBillForm companyId={1} onClose={()=>{}}/>);
- fireEvent.click(screen.getByRole('radio',{name:category==='Inventory'?/Inventory purchase/:/Local direct purchase/}));
+ fireEvent.click(screen.getByRole('radio',{name:category==='Inventory'?/Stock purchase/:/Local direct purchase/}));
  fireEvent.click(screen.getByRole('button',{name:'Continue'}));
  await screen.findByLabelText('Description for item 1');
  expect(screen.queryByRole('region',{name:'Inventory impact'} )!==null).toBe(category==='Inventory');
@@ -221,4 +223,14 @@ it('hides inventory impact on local purchase edit',async()=>{
  await screen.findByDisplayValue('Sample valve');
  expect(screen.queryByRole('region',{name:'Inventory impact'})).toBeNull();
  expect(previewPurchaseStock).not.toHaveBeenCalled();
+});
+
+it('opens the separate stock entry form without creating a purchase',async()=>{
+ render(<PurchaseBillForm companyId={1} onClose={()=>{}}/>);
+ fireEvent.click(screen.getByRole('radio',{name:/Opening stock/}));
+ fireEvent.click(screen.getByRole('button',{name:'Continue'}));
+ expect(await screen.findByRole('region',{name:'Stock entry form'})).toBeTruthy();
+ expect(createPurchaseBill).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('button',{name:'Back to categories'}));
+ expect(screen.getAllByRole('radio')).toHaveLength(3);
 });

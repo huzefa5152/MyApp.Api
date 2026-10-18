@@ -1,3 +1,5 @@
+import StockEntryForm from "./StockEntryForm";
+import { usePermissions } from "../contexts/PermissionsContext";
 import DocumentCopyPicker from "./DocumentCopyPicker";
 import { appendCopiedLines, copyLine } from "../utils/documentCopy";
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -33,6 +35,8 @@ const colors = {
 };
 
 export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, prefillFromInvoiceId = null, readOnly = false }) {
+  const { has } = usePermissions();
+  const [stockEntryOpen, setStockEntryOpen] = useState(false);
   const isEdit = !!billId;
   const [isNonStock, setIsNonStock] = useState(false);
   const [isGeneratedLocal, setIsGeneratedLocal] = useState(false);
@@ -313,12 +317,15 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
 
   const continueCategory = () => {
     if (!categoryChoice) { setError("Choose a purchase category to continue."); return; }
+    if(categoryChoice === "StockEntry") { setStockEntryOpen(true); return; }
     const local = categoryChoice === "LocalDirect";
     if (local !== isNonStock) setItems(rows => rows.map(i => ({ ...i, itemTypeId: "", hsCode: "", saleType: "", sourceInvoiceItemIds: [] })));
     if (!categoryConfirmed) setGstRate(local ? 0 : 18);
     setIsNonStock(local); setCategoryConfirmed(true); setChoosingCategory(false); setError("");
     requestAnimationFrame(() => detailHeading.current?.focus());
   };
+
+  if(stockEntryOpen) return <StockEntryForm companyId={companyId} onClose={onClose} onBack={()=>setStockEntryOpen(false)} />;
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
@@ -335,13 +342,13 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
           {!isEdit && !isAgainstSale && <ol className="purchase-flow-steps" aria-label="Purchase creation progress"><li aria-current={choosingCategory ? "step" : undefined}><span>{choosingCategory ? "1" : <MdCheckCircle aria-hidden="true" />}</span>Purchase category</li><li aria-current={!choosingCategory ? "step" : undefined}><span>2</span>Bill details</li></ol>}
           {error && <div ref={errRef} role="alert" tabIndex={-1} style={formStyles.error}>{error}</div>}
           {choosingCategory ? <section className="purchase-category-step" aria-labelledby="purchase-category-title">
-            <h3 id="purchase-category-title">What are you purchasing?</h3><p>Choose how this purchase should be recorded.</p>
+            <h3 id="purchase-category-title">What would you like to record?</h3><p>Choose a purchase or stock entry.</p>
             <fieldset className="purchase-category-options"><legend>Purchase category</legend>
-              {[{value:"LocalDirect", title:"Local direct purchase", description:"Record supplier costs and payables. No inventory movement.", icon:MdLocalShipping}, {value:"Inventory", title:"Inventory purchase", description:"Buy stock using catalog items and inventory controls.", icon:MdInventory2}].map(({value,title,description,icon:Icon}) => <label className={`purchase-category-option${categoryChoice === value ? " is-selected" : ""}`} key={value}><input type="radio" name="purchase-category" value={value} checked={categoryChoice === value} onChange={() => { setCategoryChoice(value); setError(""); }} /><Icon className="purchase-category-icon" aria-hidden="true" /><span><strong>{title}</strong><small>{description}</small></span></label>)}
+              {[{value:"LocalDirect", title:"Local direct purchase", description:"Record supplier costs and payables. No inventory movement.", icon:MdLocalShipping}, {value:"Inventory", title:"Stock purchase", description:"Add stock and record the supplier payable.", icon:MdInventory2}, ...(has("stock.opening.manage") || has("stock.adjust.create") ? [{value:"StockEntry",title:"Opening stock / Stock adjustment",description:"Record existing stock or count corrections. No supplier payable.",icon:MdInventory2}] : [])].map(({value,title,description,icon:Icon}) => <label className={`purchase-category-option${categoryChoice === value ? " is-selected" : ""}`} key={value}><input type="radio" name="purchase-category" value={value} checked={categoryChoice === value} onChange={() => { setCategoryChoice(value); setError(""); }} /><Icon className="purchase-category-icon" aria-hidden="true" /><span><strong>{title}</strong><small>{description}</small></span></label>)}
             </fieldset>
             {categoryConfirmed && (categoryChoice === "LocalDirect") !== isNonStock && <p className="purchase-category-warning" role="status">Changing category clears item classifications and source links. Descriptions, quantities and prices are kept.</p>}
           </section> : <>
-          {!isEdit && <div className="purchase-category-selected"><div><strong ref={detailHeading} tabIndex={-1}>{isNonStock ? "Local direct purchase" : "Inventory purchase"}</strong><small>{isNonStock ? "Supplier payable only · No stock movement" : isAgainstSale ? "Linked to a customer sale bill" : "Catalog items · Inventory controls apply"}</small></div>{!isAgainstSale && <button type="button" onClick={() => { setCategoryChoice(isNonStock ? "LocalDirect" : "Inventory"); setChoosingCategory(true); setError(""); }}>Change category</button>}</div>}
+          {!isEdit && <div className="purchase-category-selected"><div><strong ref={detailHeading} tabIndex={-1}>{isNonStock ? "Local direct purchase" : "Stock purchase"}</strong><small>{isNonStock ? "Supplier payable only · No stock movement" : isAgainstSale ? "Linked to a customer sale bill" : "Catalog items · Inventory controls apply"}</small></div>{!isAgainstSale && <button type="button" onClick={() => { setCategoryChoice(isNonStock ? "LocalDirect" : "Inventory"); setChoosingCategory(true); setError(""); }}>Change category</button>}</div>}
           {isGeneratedLocal && <p>This purchase preserves the supplier payable recorded from its source document. Correct private costs from Costs &amp; suppliers; record a supplier credit to adjust the booked payable.</p>}
           <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
             {/* Number and the copy shortcut share one row; the copy panel takes

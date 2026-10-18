@@ -12,7 +12,7 @@ namespace MyApp.Api.Services.Implementations
     /// unresolvable lands on a Suspense account created on demand, so the books
     /// stay balanced and the gap is visible on the chart instead of stopping the
     /// operator from saving their bill.</summary>
-    public class PostingService : IPostingService
+    public partial class PostingService : IPostingService
     {
         private readonly AppDbContext _context;
         private readonly IGeneralLedgerService _gl;
@@ -259,19 +259,7 @@ namespace MyApp.Api.Services.Implementations
         {
             if (itemTypeIds.Count == 0) return new Dictionary<int, decimal>();
 
-            var rows = await _context.PurchaseItems.AsNoTracking()
-                .Where(pi => pi.PurchaseBill.CompanyId == companyId
-                          && pi.ItemTypeId.HasValue
-                          && itemTypeIds.Contains(pi.ItemTypeId.Value)
-                          && pi.Quantity > 0m)
-                .Select(pi => new
-                {
-                    ItemTypeId = pi.ItemTypeId!.Value,
-                    pi.Quantity,
-                    pi.LineTotal,
-                    Date = pi.PurchaseBill.Date,
-                })
-                .ToListAsync();
+            var rows = await InventoryCostBasis.LoadAsync(_context, companyId, itemTypeIds);
 
             var costs = new Dictionary<int, decimal>();
             foreach (var group in rows.GroupBy(r => r.ItemTypeId))
@@ -279,7 +267,7 @@ namespace MyApp.Api.Services.Implementations
                 var upToDate = group.Where(r => r.Date.Date <= asOf.Date).ToList();
                 var basis = upToDate.Count > 0 ? upToDate : group.ToList();
                 var qty = basis.Sum(r => r.Quantity);
-                if (qty > 0m) costs[group.Key] = basis.Sum(r => r.LineTotal) / qty;
+                if (qty > 0m) costs[group.Key] = basis.Sum(r => r.Value) / qty;
             }
             return costs;
         }
@@ -598,6 +586,9 @@ namespace MyApp.Api.Services.Implementations
                     await PostPurchaseBillAsync(b);
                     if (b.GrandTotal != 0m) result.PostedPurchaseBills++;
                 }
+
+                var stockEntries = await _context.StockEntries.Where(e => e.CompanyId == companyId && !e.IsCancelled).ToListAsync();
+                foreach (var entry in stockEntries.Where(e => IsOpen(e.Date))) await PostStockEntryAsync(entry);
 
                 var payments = await _context.Payments
                     .Include(p => p.Allocations)

@@ -32,6 +32,7 @@ namespace MyApp.Api.Services.Interfaces
 
         /// <summary>Purchase bill: Dr Inventory (or COGS when the company does
         /// not track stock), Dr Input tax, Cr A/P, Cr WHT payable.</summary>
+        Task PostStockEntryAsync(StockEntry entry);
         Task PostPurchaseBillAsync(PurchaseBill bill);
 
         /// <summary>Receipt: Dr bank/cash, Cr A/R per settled invoice. Payment:

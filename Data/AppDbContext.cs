@@ -140,6 +140,7 @@ namespace MyApp.Api.Data
         public DbSet<SalesQuoteItem> SalesQuoteItems { get; set; }
         public DbSet<SalesOrder> SalesOrders { get; set; }
         public DbSet<SalesOrderItem> SalesOrderItems { get; set; }
+        public DbSet<StockEntry> StockEntries { get; set; }
         public DbSet<StockMovement> StockMovements { get; set; }
         public DbSet<OpeningStockBalance> OpeningStockBalances { get; set; }
 
@@ -177,6 +178,18 @@ namespace MyApp.Api.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<StockEntry>(e =>
+            {
+                e.HasIndex(x => new { x.CompanyId, x.RequestId }).IsUnique();
+                e.HasIndex(x => new { x.CompanyId, x.Date });
+                e.Property(x => x.QuantityDelta).HasPrecision(18, 4);
+                e.Property(x => x.UnitCost).HasPrecision(19, 4);
+                e.Property(x => x.Kind).HasMaxLength(20);
+                e.Property(x => x.Reason).HasMaxLength(500);
+                e.HasOne(x => x.ItemType).WithMany().HasForeignKey(x => x.ItemTypeId).OnDelete(DeleteBehavior.Restrict);
+                e.HasOne<Company>().WithMany().HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Cascade);
+            });
+
             modelBuilder.Entity<Invoice>().Property(i => i.TaxTreatment).HasMaxLength(16).HasDefaultValue("FBR");
             ConfigureEmailWorkspace(modelBuilder);
             ConfigureAccountingExpansion(modelBuilder);
