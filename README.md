@@ -307,6 +307,7 @@ Publish output optimized from 79 MB to 37 MB via:
 - **Accounting dashboard** is rebuilt on the same pieces: cash and liquidity, working capital, stock and tax position, the import book (when the ledger is on), where the capital sits, profitability, a Top 10 customer balances chart and monthly charts. With the ledger off, ledger figures say so instead of showing zeros.
 - Drills and clickable charts only appear for users who may open them; the period and any open drill survive Back from "Open bill". A credit or debit note in a drill opens on its own Credit Notes / Debit Notes screen.
 - The Overview loads faster: stock is walked once per load instead of about fifteen times.
+- **Stock page** restyled to match: a compact header with the company, an "as of" time and the inventory / costing chips; Adjustment and Opening balance up front, with the stock sheet, monthly sheet and Annex-H1 under **Export** and Reconcile, Split, Cost history and Switch to V2 under **Tools**. The totals are a KPI strip, and one card holds the tabs, search, columns, a totals row and the pager. An expanded item shows its **GD lots** and **Movement history** as two tabs. Every column, export, dialog and permission is unchanged; the landed cost and margin totals now also need the actual-cost permission, and the dialogs' Save cannot be pressed twice.
 
 ### 2026-10-09 — Tighter admin layout, Consignments fits without scrolling
 

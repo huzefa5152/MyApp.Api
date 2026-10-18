@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
 import { Link } from "react-router-dom";
-import { MdInventory, MdBusiness, MdSearch, MdAdd, MdHistory, MdTune, MdClose, MdSwapHoriz, MdExpandMore, MdChevronRight, MdSyncAlt, MdFileDownload, MdEdit, MdCallSplit } from "react-icons/md";
+import { MdInventory, MdSearch, MdAdd, MdHistory, MdClose, MdSwapHoriz, MdExpandMore, MdChevronRight, MdFileDownload, MdEdit, MdBuild } from "react-icons/md";
+import StockMenu, { StockMenuItem } from "../Components/stock/StockMenu";
+import "./StockDashboardPage.css";
 import CostHistoryDialog from "../Components/CostHistoryDialog";
 import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockMovements, getStockGdDetails, setLineClaimMonth, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock, exportStockOnHand, exportStockMonthly, exportAnnexH1, getTrackedItemTypes, getCostingMethod } from "../api/stockApi";
 // Shared blob-save helper: it reads the filename off Content-Disposition and
@@ -9,7 +11,7 @@ import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockM
 import { saveBlob } from "../api/accountingReportApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getAllUnits } from "../api/unitsApi";
-import { dropdownStyles, formStyles, modalSizes } from "../theme";
+import { formStyles, modalSizes } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
@@ -21,21 +23,6 @@ import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
 import usePersistentFilter from "../hooks/usePersistentFilter";
 import { useColumnVisibility } from "../Components/ColumnPicker";
-
-const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
-  rowAlt: "#fafbfd",
-  bandBg: "#f0f7ff",
-  // Same red already used throughout this file for a negative on-hand/available
-  // figure — named here so a negative margin can reuse it instead of a new literal.
-  negative: "#c62828",
-};
 
 const money = (v) =>
   Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -88,6 +75,10 @@ export default function StockDashboardPage() {
   const [search, setSearch] = usePersistentFilter("stock-dashboard", "search", "");
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  // When the figures on screen were fetched -- the header's "as of".
+  const [loadedAt, setLoadedAt] = useState(null);
+  // Save in flight in either stock dialog; stops a double submit.
+  const [saving, setSaving] = useState(false);
 
   // On-hand drill-down: which item-type row is expanded, plus a cache of
   // the full movement history per item type (so re-expanding is instant).
@@ -96,6 +87,8 @@ export default function StockDashboardPage() {
   const [drillLoading, setDrillLoading] = useState(null); // itemTypeId being fetched
   const [gdDetails, setGdDetails] = useState({}); // itemTypeId → GD source rows
   const [gdLoading, setGdLoading] = useState(null);
+  // Which half of an expanded On-Hand row shows: "gd" lots or "moves".
+  const [drillTab, setDrillTab] = useState("gd");
 
   const [showOpening, setShowOpening] = useState(false);
   // Set while RESTATING an existing opening balance rather than adding one.
@@ -163,6 +156,7 @@ export default function StockDashboardPage() {
       // so drop the drill cache; keep the expanded row open to refetch.
       setDrill({});
       setGdDetails({});
+      setLoadedAt(new Date());
     } catch {
       setOnhand([]); setOpenings([]); setItemTypes([]); setTrackedIds(null);
     } finally {
@@ -450,6 +444,8 @@ export default function StockDashboardPage() {
   const submitOpening = async (e) => {
     e.preventDefault();
     if (!openingDraft.itemTypeId) return notify("Pick an item.", "error");
+    if (saving) return;
+    setSaving(true);
     try {
       const actual = openingDraft.actualCostExcludingTax;
       const payload = {
@@ -477,6 +473,8 @@ export default function StockDashboardPage() {
       fetchAll();
     } catch (err) {
       notify(err.response?.data?.error || "Failed to save opening balance.", "error");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -537,7 +535,13 @@ export default function StockDashboardPage() {
   // adjustment / bill edit) re-loads an already-open row automatically.
   const toggleDrill = useCallback((itemTypeId) => {
     setExpandedId(prev => (prev === itemTypeId ? null : itemTypeId));
+    setDrillTab("gd");
   }, []);
+  // A focused row opens with Enter or Space, as a click would.
+  const rowKey = (e, itemTypeId) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleDrill(itemTypeId); }
+  };
 
   // Load the FULL movement history for the expanded item (paging through
   // all pages — the feed is small per item) so the operator sees every IN,
@@ -612,6 +616,8 @@ export default function StockDashboardPage() {
         && !parseFloat(adjustDraft.delta) && !parseFloat(adjustDraft.valueDelta)
         && !parseFloat(adjustDraft.actualValueDelta))
       return notify("Give a quantity change, a value change, an actual-cost change, or some combination.", "error");
+    if (saving) return;
+    setSaving(true);
     try {
       const setMode = adjustDraft.mode === "set";
       const { data } = await adjustStock({
@@ -642,6 +648,8 @@ export default function StockDashboardPage() {
       fetchAll();
     } catch (err) {
       notify(err.response?.data?.error || "Failed to record adjustment.", "error");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -750,351 +758,629 @@ export default function StockDashboardPage() {
   // exactly what it is for.
   const adjustPickerItems = itemTypes.filter(trackable);
 
-  return (
-    <div className="stock-page">
-      <div style={styles.header}>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={styles.headerIcon}><MdInventory size={28} color="#fff" /></div>
-          <div>
-            <h2 style={styles.title}>Stock Dashboard</h2>
-            <p style={styles.subtitle}>
-              {selectedCompany
-                ? `On-hand inventory for ${selectedCompany.brandName || selectedCompany.name}`
-                : "Select a company"}
-            </p>
-            {/* What the company is set to sits with the title it describes;
-                the actions get the toolbar row to themselves. */}
-            <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginTop: "0.4rem" }}>
-              {selectedCompany && (
-                <span
-                  style={flowVersion === 2 ? styles.verPillV2 : styles.verPillV1}
-                  title={flowVersion === 2
-                    ? "V2 Standard Inventory — all item types are tracked; HS code is FBR metadata only."
-                    : "V1 Legacy — only HS-coded item types are stock-tracked."}
-                >
-                  {flowVersion === 2 ? "Inventory V2 · Standard" : "Inventory V1 · Legacy"}
-                </span>
-              )}
-              {selectedCompany && (
-                <span
-                  style={isFifo ? styles.verPillV2 : styles.verPillV1}
-                  title={isFifo
-                    ? "Stock is valued FIFO by GD: a sale uses claimed GDs first, oldest GD date first, then unclaimed GDs."
-                    : "Stock is valued at the weighted average of everything held."}
-                >
-                  {isFifo ? "Costing · FIFO by GD" : "Costing · Weighted average"}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-        <div style={styles.toolbar}>
-          {/* V2 is one-way. Under V2 every item type is inventory, so a company
-              builds up positions on items V1 does not track; going back would
-              hide them rather than remove them, which reads as stock vanishing.
-              The server refuses it too -- this only stops us offering a button
-              whose answer is always no. */}
-          {canManagePolicy && selectedCompany && flowVersion !== 2 && (
-            <button
-              style={styles.altBtn}
-              onClick={switchVersion}
-              title="Switch to standard inventory (V2). This cannot be undone."
-            >
-              <MdSyncAlt size={16} /> Switch to V2
-            </button>
-          )}
-          {canExport && selectedCompany && (
-            <button
-              style={{ ...styles.altBtn, ...(exporting ? styles.altBtnBusy : null) }}
-              onClick={downloadExcel}
-              disabled={exporting || loading}
-              title="Download the stock dashboard as the customs-lot stock sheet — one row per item, Opening / Consumed / Balance, with the Cost of Good Sold block left to fill in"
-            >
-              <MdFileDownload size={16} /> {exporting ? "Preparing…" : "Export Excel"}
-            </button>
-          )}
-          {canExport && selectedCompany && isFifo && (
-            <span style={styles.monthExport}>
-              <input
-                type="month"
-                value={sheetMonth}
-                max={todayYmd().slice(0, 7)}
-                onChange={(e) => setSheetMonth(e.target.value)}
-                style={styles.monthInput}
-                aria-label="Month for the monthly stock sheet"
-              />
-              <button
-                style={{ ...styles.altBtn, ...(exporting ? styles.altBtnBusy : null) }}
-                onClick={downloadMonthly}
-                disabled={exporting || loading || !sheetMonth}
-                title="Download the month's stock sheet — one row per GD line with its HS code: Opening on the 1st, that month's Consumed at FIFO cost, Balance at month end"
-              >
-                <MdFileDownload size={16} /> Monthly sheet
-              </button>
-              <button
-                style={{ ...styles.altBtn, ...(exporting ? styles.altBtnBusy : null) }}
-                onClick={downloadAnnexH1}
-                disabled={exporting || loading || !sheetMonth}
-                title="Annex-H1 stock statement for the month: per HS code, unit and rate - opening, purchased/imported, supplies and closing at cost"
-              >
-                <MdFileDownload size={16} /> Annex-H1
-              </button>
-              {canManagePolicy && (
-                <Link to="/stock/reconcile" style={{ ...styles.altBtn, textDecoration: "none" }}
-                  title="Upload the month's stock sheet and bring the books in line with it, GD by GD">
-                  <MdSyncAlt size={16} /> Reconcile to sheet
-                </Link>
-              )}
-              {canManagePolicy && (
-                <Link to="/stock/split" style={{ ...styles.altBtn, textDecoration: "none" }}
-                  title="Move GD lines that are really a different product to their own item">
-                  <MdCallSplit size={16} /> Split an item
-                </Link>
-              )}
-            </span>
-          )}
-          {canManageOpening && (
-            <button style={styles.altBtn} onClick={startAddOpening}>
-              <MdTune size={16} /> Opening Balance
-            </button>
-          )}
-          {canAdjust && (
-            <button style={styles.altBtn} onClick={() => { setAdjustLockedItem(null); setShowAdjust(true); }}>
-              <MdSwapHoriz size={16} /> Adjustment
-            </button>
-          )}
-          {canViewActualCost && (
-            <button style={styles.altBtn} onClick={() => setCostHistoryItem({})}>
-              <MdHistory size={16} /> Cost History
-            </button>
-          )}
-        </div>
-      </div>
+  // Tools menu: each entry keeps the gate it had as a header button. Reconcile
+  // and Split sat inside the FIFO export block, so they keep that condition.
+  const canReconcile = canExport && !!selectedCompany && isFifo && canManagePolicy;
+  const canSwitchV2 = canManagePolicy && !!selectedCompany && flowVersion !== 2;
+  const showTools = canReconcile || canViewActualCost || canSwitchV2;
+  const showCostTiles = canViewActualCost && onhandTotals.actual > 0;
+  const onhandMargin = onhandTotals.excl - onhandTotals.actual;
 
-      {loadingCompanies ? (
-        <div style={styles.loading}><div style={styles.spinner} /></div>
-      ) : companies.length === 0 ? (
-        <div style={styles.empty}>No companies available.</div>
-      ) : (
-        <>
-          <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <MdBusiness size={20} color={colors.blue} />
-            <select style={dropdownStyles.base} value={selectedCompany?.id || ""}
+  return (
+    <div className="stock-page stk">
+      <header className="stk-head">
+        <div style={{ minWidth: 0 }}>
+          <h2>Stock</h2>
+          <div className="stk-sub">
+            {selectedCompany
+              ? `${selectedCompany.brandName || selectedCompany.name}${loadedAt ? ` · as of ${loadedAt.toLocaleString(undefined, { day: "2-digit", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}`
+              : "Select a company"}
+          </div>
+          {/* What the company is set to sits with the title it describes. */}
+          {selectedCompany && (
+            <div className="stk-chips">
+              <span
+                className={`stk-chip${flowVersion === 2 ? "" : " grey"}`}
+                title={flowVersion === 2
+                  ? "V2 Standard Inventory — all item types are tracked; HS code is FBR metadata only."
+                  : "V1 Legacy — only HS-coded item types are stock-tracked."}
+              >
+                {flowVersion === 2 ? "Inventory V2 · Standard" : "Inventory V1 · Legacy"}
+              </span>
+              <span
+                className={`stk-chip${isFifo ? "" : " grey"}`}
+                title={isFifo
+                  ? "Stock is valued FIFO by GD: a sale uses claimed GDs first, oldest GD date first, then unclaimed GDs."
+                  : "Stock is valued at the weighted average of everything held."}
+              >
+                {isFifo ? "Costing · FIFO by GD" : "Costing · Weighted average"}
+              </span>
+            </div>
+          )}
+        </div>
+        <div className="stk-actions">
+          {!loadingCompanies && companies.length > 1 && (
+            <select className="stk-select" aria-label="Company" value={selectedCompany?.id || ""}
                     onChange={e => setSelectedCompany(companies.find(c => parseInt(c.id) === parseInt(e.target.value)))}>
               {companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
             </select>
-          </div>
+          )}
+          {canAdjust && (
+            <button type="button" className="stk-btn primary" onClick={() => { setAdjustLockedItem(null); setShowAdjust(true); }}>
+              <MdSwapHoriz size={16} /> Adjustment
+            </button>
+          )}
+          {canManageOpening && (
+            <button type="button" className="stk-btn" onClick={startAddOpening}>
+              <MdAdd size={16} /> Opening balance
+            </button>
+          )}
+          {canExport && selectedCompany && (
+            <StockMenu label={exporting ? "Preparing…" : "Export"} icon={<MdFileDownload size={16} />} busy={exporting}>
+              <StockMenuItem
+                title={exporting ? "Preparing…" : "Stock sheet (Excel)"}
+                hint="One row per item · Opening / Consumed / Balance · follows the search"
+                onClick={downloadExcel}
+                disabled={exporting || loading}
+                aria-label="Export Excel stock sheet"
+              />
+              {isFifo && (
+                <>
+                  <div className="stk-sep" role="separator" />
+                  <div className="stk-mlbl">Monthly (FIFO)</div>
+                  <label className="stk-monthrow">
+                    Month
+                    <input
+                      type="month"
+                      className="stk-input"
+                      value={sheetMonth}
+                      max={todayYmd().slice(0, 7)}
+                      onChange={(e) => setSheetMonth(e.target.value)}
+                      aria-label="Month for the monthly stock sheet and Annex-H1"
+                    />
+                  </label>
+                  <StockMenuItem
+                    title="Monthly stock sheet"
+                    hint="One row per GD line: Opening on the 1st, the month's Consumed at FIFO cost, Balance at month end"
+                    onClick={downloadMonthly}
+                    disabled={exporting || loading || !sheetMonth}
+                  />
+                  <StockMenuItem
+                    title="Annex-H1"
+                    hint="Per HS code, unit and rate: opening, purchased/imported, supplies and closing at cost"
+                    onClick={downloadAnnexH1}
+                    disabled={exporting || loading || !sheetMonth}
+                  />
+                </>
+              )}
+            </StockMenu>
+          )}
+          {showTools && (
+            <StockMenu label="Tools" icon={<MdBuild size={15} />}>
+              {canReconcile && (
+                <StockMenuItem as={Link} to="/stock/reconcile" title="Reconcile to my stock sheet"
+                  hint="Upload the month's stock sheet and bring the books in line with it, GD by GD" />
+              )}
+              {canReconcile && (
+                <StockMenuItem as={Link} to="/stock/split" title="Split an item"
+                  hint="Move GD lines that are really a different product to their own item" />
+              )}
+              {canViewActualCost && (
+                <StockMenuItem title="Cost history" hint="Every change to landed cost, company-wide"
+                  onClick={() => setCostHistoryItem({})} />
+              )}
+              {/* V2 is one-way. Under V2 every item type is inventory, so a company
+                  builds up positions on items V1 does not track; going back would
+                  hide them rather than remove them, which reads as stock vanishing.
+                  The server refuses it too -- this only stops us offering a button
+                  whose answer is always no. */}
+              {canSwitchV2 && (
+                <>
+                  {(canReconcile || canViewActualCost) && <div className="stk-sep" role="separator" />}
+                  <StockMenuItem title="Switch to Inventory V2"
+                    hint="Standard inventory for every item type. This cannot be undone."
+                    onClick={switchVersion} />
+                </>
+              )}
+            </StockMenu>
+          )}
+        </div>
+      </header>
 
+      {loadingCompanies ? (
+        <div className="stk-loading"><div className="stk-spinner" /></div>
+      ) : companies.length === 0 ? (
+        <div className="stk-empty">No companies available.</div>
+      ) : (
+        <>
           {selectedCompany && !selectedCompany.inventoryTrackingEnabled && (
-            <div style={styles.warnBanner}>
+            <div className="stk-banner" role="status">
               ⚠ Inventory tracking is OFF for this company. Stock IN / OUT movements are not being recorded automatically.
               You can still record opening balances and manual adjustments here, then enable tracking on the Company settings to begin auto-tracking purchases and sales.
             </div>
           )}
 
-          <div style={styles.tabs}>
-            <TabBtn active={tab === "onhand"} onClick={() => setTab("onhand")}>On-Hand ({onhand.length})</TabBtn>
-            {summary.length > 0 && <TabBtn active={tab === "inventory"} onClick={() => setTab("inventory")}>Inventory ({summary.length})</TabBtn>}
-            {canManageOpening && <TabBtn active={tab === "opening"} onClick={() => setTab("opening")}>Opening Balances ({openings.length})</TabBtn>}
-            {canViewMovements && <TabBtn active={tab === "movements"} onClick={() => setTab("movements")}>Movements ({movTotal})</TabBtn>}
-          </div>
+          {/* Totals follow the search, over the whole filtered set rather than
+              the page on screen. */}
+          {!loading && filteredOnhand.length > 0 && (
+            <div className="stk-kpis">
+              <Kpi label="Quantity" value={num(onhandTotals.qty)} sub={`${filteredOnhand.length} items`} />
+              <Kpi label="Excluding tax" value={money(onhandTotals.excl)} sub="Value before sales tax" />
+              <Kpi label="Sales tax" value={money(onhandTotals.tax)} sub="At each item's rate" />
+              <Kpi label="Including tax" value={money(onhandTotals.incl)} sub="Excluding + sales tax" tone="t" />
+              {/* Landed cost and the margin over it. Shown only when a costing
+                  import has actually supplied an actual cost (otherwise these
+                  would read 0 and imply the stock cost nothing), and only to
+                  someone allowed to see actual cost. */}
+              {showCostTiles && (
+                <Kpi label="Actual (landed) cost" value={money(onhandTotals.actual)} sub="What the stock cost" tone="o" />
+              )}
+              {showCostTiles && (
+                <Kpi label="Margin over cost" value={money(onhandMargin)} sub="Excluding − landed" tone="g"
+                  negative={onhandMargin < 0} />
+              )}
+            </div>
+          )}
 
-          {tab === "onhand" && (
-            <>
-              {/* Search renders whenever there is ANY stock data — gating it
-                  on the FILTERED list meant a no-match search unmounted the
-                  box itself and the operator had no way to clear it. */}
-              {onhand.length > 0 && (
-                <div style={styles.toolbar}>
-                  <SearchBox value={search} onChange={setSearch} />
-                  {onhandPicker}
-                </div>
-              )}
-              {!loading && filteredOnhand.length > 0 && (
-                <div style={styles.valueStrip}>
-                  <ValueTile label="Quantity" value={num(onhandTotals.qty)} />
-                  <ValueTile label="Excluding tax" value={money(onhandTotals.excl)} />
-                  <ValueTile label="Sales tax" value={money(onhandTotals.tax)} />
-                  <ValueTile label="Including tax" value={money(onhandTotals.incl)} strong />
-                  {/* Landed cost and the margin over it. Shown only when a
-                      costing import has actually supplied an actual cost —
-                      otherwise these would read 0 and imply the stock cost
-                      nothing. */}
-                  {onhandTotals.actual > 0 && (
-                    <ValueTile label="Actual (landed) cost" value={money(onhandTotals.actual)} />
-                  )}
-                  {onhandTotals.actual > 0 && (
-                    <ValueTile
-                      label="Margin over cost"
-                      value={money(onhandTotals.excl - onhandTotals.actual)}
-                    />
-                  )}
-                </div>
-              )}
-              {loading ? (
-                <div style={styles.loading}><div style={styles.spinner} /></div>
-              ) : filteredOnhand.length === 0 ? (
-                <div style={styles.empty}>
-                  <MdInventory size={40} color={colors.cardBorder} />
-                  {search ? (
-                    <>
-                      <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
-                        No items match "{search}".
+          <div className="stk-card">
+            <div className="stk-tabs" role="tablist" aria-label="Stock views">
+              <TabBtn active={tab === "onhand"} onClick={() => setTab("onhand")} count={onhand.length}>On hand</TabBtn>
+              {summary.length > 0 && <TabBtn active={tab === "inventory"} onClick={() => setTab("inventory")} count={summary.length}>Inventory</TabBtn>}
+              {canManageOpening && <TabBtn active={tab === "opening"} onClick={() => setTab("opening")} count={openings.length}>Opening balances</TabBtn>}
+              {canViewMovements && <TabBtn active={tab === "movements"} onClick={() => setTab("movements")} count={movTotal}>Movements</TabBtn>}
+            </div>
+
+            {tab === "onhand" && (
+              <section role="tabpanel" aria-label="On hand">
+                {/* Search renders whenever there is ANY stock data — gating it
+                    on the FILTERED list meant a no-match search unmounted the
+                    box itself and the operator had no way to clear it. */}
+                {onhand.length > 0 && (
+                  <div className="stk-toolbar">
+                    <SearchBox value={search} onChange={setSearch} />
+                    <span className="stk-grow" />
+                    {onhandPicker}
+                  </div>
+                )}
+                {loading ? (
+                  <div className="stk-loading"><div className="stk-spinner" /></div>
+                ) : filteredOnhand.length === 0 ? (
+                  <div className="stk-empty">
+                    <MdInventory size={40} />
+                    {search ? (
+                      <>
+                        <p>No items match "{search}".</p>
+                        <button type="button" className="stk-btn" onClick={() => setSearch("")}>
+                          Clear search
+                        </button>
+                      </>
+                    ) : (
+                      <p>
+                        No stock data yet. Set opening balances or post a Purchase Bill / FBR-submitted invoice to start tracking.
                       </p>
-                      <button type="button" style={styles.clearSearchBtn} onClick={() => setSearch("")}>
-                        Clear search
-                      </button>
-                    </>
-                  ) : (
-                    <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
-                      No stock data yet. Set opening balances or post a Purchase Bill / FBR-submitted invoice to start tracking.
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <>
-                  {/* Desktop / tablet — table */}
-                  {/* Fourteen columns did not fit any laptop, so the figures
-                      are grouped instead of dropped: the code, unit and last
-                      movement sit under the item name, and the opening / IN /
-                      OUT flow sits under the on-hand figure it explains.
-                      Nothing is hidden, and the table stops scrolling
-                      sideways. */}
-                  <div className="stock-table" style={styles.tableWrap}>
-                    <table style={styles.table}>
-                      <thead>
-                        <tr>
-                          <th style={{ ...styles.th, width: 28 }} aria-label="Expand GD details"></th>
-                          {showOnhandCol("gd") && <th style={styles.th}>GD No</th>}
-                          {showOnhandCol("item") && <th style={{ ...styles.th, minWidth: 160 }}>Item</th>}
-                          {showOnhandCol("onhand") && <th style={{ ...styles.th, textAlign: "right" }}>On-Hand</th>}
-                          {showOnhandCol("excl") && <th style={{ ...styles.th, textAlign: "right" }}>Excluding</th>}
-                          {showOnhandCol("tax") && <th style={{ ...styles.th, textAlign: "right" }}>Sales Tax</th>}
-                          {showOnhandCol("incl") && <th style={{ ...styles.th, textAlign: "right" }}>Including</th>}
-                          {canViewActualCost && showOnhandCol("actual") && <th style={{ ...styles.th, textAlign: "right" }}>Actual Cost</th>}
-                          {canViewActualCost && showOnhandCol("margin") && <th style={{ ...styles.th, textAlign: "right" }}>Margin</th>}
-                          {(canAdjust || canViewActualCost) && <th style={styles.th} aria-label="Actions"></th>}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {onhandPageRows.map((r, idx) => {
-                          const isOpen = expandedId === r.itemTypeId;
-                          const rowBg = idx % 2 === 0 ? "#fff" : colors.rowAlt;
-                          const colCount = 1
-                            + ["gd", "item", "onhand", "excl", "tax", "incl"].filter(showOnhandCol).length
-                            + (canViewActualCost ? ["actual", "margin"].filter(showOnhandCol).length : 0)
-                            + ((canAdjust || canViewActualCost) ? 1 : 0);
-                          return (
-                          <Fragment key={r.itemTypeId}>
-                          <tr
-                            style={{ backgroundColor: isOpen ? colors.bandBg : rowBg, cursor: "pointer" }}
-                            onClick={() => toggleDrill(r.itemTypeId)}
-                          >
-                            {(
-                              <td style={{ ...styles.td, textAlign: "center", color: colors.textSecondary, paddingLeft: 6, paddingRight: 0 }}>
-                                {isOpen ? <MdExpandMore size={18} /> : <MdChevronRight size={18} />}
-                              </td>
-                            )}
-                            {showOnhandCol("gd") && (
-                              <td style={styles.td}><GdList gds={r.gdNumbers} /></td>
-                            )}
-                            {showOnhandCol("item") && (
-                            <td style={styles.td}>
-                              {/* Clamped, never ellipsised on one line: two
-                                  item names sharing a prefix must stay
-                                  distinguishable (dashboard incident
-                                  2026-05-13). */}
-                              <div style={styles.itemName}>{r.itemTypeName}</div>
-                              <div style={styles.itemMeta}>
-                                <span style={styles.hsChip}>{r.hsCode || "no HS code"}</span>
-                                {r.uom && <span>{r.uom}</span>}
-                                <span>
-                                  {r.lastMovementAt
-                                    ? `moved ${new Date(r.lastMovementAt).toLocaleDateString()}`
-                                    : "no movements"}
-                                </span>
-                              </div>
-                            </td>
-                            )}
-                            {showOnhandCol("onhand") && (
-                            <td style={styles.tdMoney}>
-                              <div style={{ fontWeight: 700, color: r.onHand < 0 ? "#c62828" : colors.blue }}>
-                                {fmtOnHand(r.onHand)}
-                              </div>
-                              {/* Opening / in / out, each as quantity and the
-                                  money against it (the opening's stored value
-                                  and the valuation walk's own ValueIn /
-                                  ValueOut, all from the API row). One mini
-                                  grid row per leg keeps the two figures
-                                  aligned without a wide single line. */}
-                              <div style={styles.flowGrid}>
-                                <span title="Opening balance">{num(r.openingBalance)}</span>
-                                <span style={styles.flowValue} title="Opening value, excluding tax">{money(r.openingValueExcludingTax)}</span>
-                                <span style={{ color: "#2e7d32" }} title="Total in">+{num(r.totalIn)}</span>
-                                <span style={{ ...styles.flowValue, color: "#2e7d32" }} title="Value in, excluding tax">+{money(r.valueIn)}</span>
-                                <span style={{ color: "#c62828" }} title="Total out">−{num(r.totalOut)}</span>
-                                <span style={{ ...styles.flowValue, color: "#c62828" }} title="Value out, excluding tax">−{money(r.valueOut)}</span>
-                              </div>
-                            </td>
-                            )}
-                            {showOnhandCol("excl") && <td style={styles.tdMoney}>{money(r.valueExcludingTax)}</td>}
-                            {showOnhandCol("tax") && (
-                            <td style={styles.tdMoney}>
-                              <div>{money(r.salesTax)}</div>
-                              <div style={styles.rateChip}>
-                                {r.salesTaxRate ? `${num(r.salesTaxRate)}%` : "no rate"}
-                              </div>
-                            </td>
-                            )}
-                            {showOnhandCol("incl") && <td style={{ ...styles.tdMoney, fontWeight: 700 }}>{money(r.valueIncludingTax)}</td>}
-                            {canViewActualCost && showOnhandCol("actual") && (
-                              <td style={{ ...styles.tdMoney, color: colors.textSecondary }}>
-                                {r.actualCostExcludingTax ? money(r.actualCostExcludingTax) : "—"}
-                              </td>
-                            )}
-                            {canViewActualCost && showOnhandCol("margin") && (
-                              <td style={{ ...styles.tdMoney, fontWeight: 600, color: r.margin < 0 ? colors.negative : colors.textPrimary }}>
-                                {money(r.margin)}
-                                <div style={styles.rateChip}>
-                                  {r.marginPercent != null ? `${num(r.marginPercent)}%` : "—"}
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {/* Desktop / tablet — table. The code, unit and last
+                        movement sit under the item name, and the opening / IN /
+                        OUT flow sits under the on-hand figure it explains. */}
+                    <div className="stock-table stk-tw">
+                      <table className="stk-table">
+                        <thead>
+                          <tr>
+                            <th style={{ width: 28 }} aria-label="Expand item details"></th>
+                            {showOnhandCol("item") && <th>Item</th>}
+                            {showOnhandCol("gd") && <th>GD No</th>}
+                            {showOnhandCol("onhand") && <th className="num">On-Hand</th>}
+                            {showOnhandCol("excl") && <th className="num">Excluding</th>}
+                            {showOnhandCol("tax") && <th className="num">Sales Tax</th>}
+                            {showOnhandCol("incl") && <th className="num">Including</th>}
+                            {canViewActualCost && showOnhandCol("actual") && <th className="num">Actual Cost</th>}
+                            {canViewActualCost && showOnhandCol("margin") && <th className="num">Margin</th>}
+                            {(canAdjust || canViewActualCost) && <th aria-label="Actions"></th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {onhandPageRows.map((r) => {
+                            const isOpen = expandedId === r.itemTypeId;
+                            const colCount = 1
+                              + ["gd", "item", "onhand", "excl", "tax", "incl"].filter(showOnhandCol).length
+                              + (canViewActualCost ? ["actual", "margin"].filter(showOnhandCol).length : 0)
+                              + ((canAdjust || canViewActualCost) ? 1 : 0);
+                            return (
+                            <Fragment key={r.itemTypeId}>
+                            <tr
+                              className={`stk-row${isOpen ? " open" : ""}`}
+                              tabIndex={0}
+                              aria-expanded={isOpen}
+                              onClick={() => toggleDrill(r.itemTypeId)}
+                              onKeyDown={(e) => rowKey(e, r.itemTypeId)}
+                            >
+                              <td><span className="stk-chev">{isOpen ? <MdExpandMore size={18} /> : <MdChevronRight size={18} />}</span></td>
+                              {showOnhandCol("item") && (
+                              <td>
+                                {/* Clamped, never ellipsised on one line: two
+                                    item names sharing a prefix must stay
+                                    distinguishable (dashboard incident
+                                    2026-05-13). */}
+                                <div className="stk-name">{r.itemTypeName}</div>
+                                <div className="stk-meta">
+                                  <span className="stk-mono">{r.hsCode || "no HS code"}</span>
+                                  {r.uom && <span>{r.uom}</span>}
+                                  <span>
+                                    {r.lastMovementAt
+                                      ? `moved ${new Date(r.lastMovementAt).toLocaleDateString()}`
+                                      : "no movements"}
+                                  </span>
                                 </div>
                               </td>
-                            )}
-                            {(canAdjust || canViewActualCost) && (
-                              <td style={styles.td} onClick={e => e.stopPropagation()}>
-                                <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", alignItems: "flex-end" }}>
+                              )}
+                              {showOnhandCol("gd") && (
+                                <td><GdList gds={r.gdNumbers} /></td>
+                              )}
+                              {showOnhandCol("onhand") && (
+                              <td className="num">
+                                <div style={{ fontWeight: 700, color: r.onHand < 0 ? "var(--dash-negative)" : "var(--dash-primary)" }}>
+                                  {fmtOnHand(r.onHand)}
+                                </div>
+                                {/* Opening / in / out, each as quantity and the
+                                    money against it (the opening's stored value
+                                    and the valuation walk's own ValueIn /
+                                    ValueOut, all from the API row). */}
+                                <div className="stk-flow">
+                                  <span title="Opening balance">{num(r.openingBalance)}</span>
+                                  <span title="Opening value, excluding tax">{money(r.openingValueExcludingTax)}</span>
+                                  <span className="pos" title="Total in">+{num(r.totalIn)}</span>
+                                  <span className="pos" title="Value in, excluding tax">+{money(r.valueIn)}</span>
+                                  <span className="neg" title="Total out">−{num(r.totalOut)}</span>
+                                  <span className="neg" title="Value out, excluding tax">−{money(r.valueOut)}</span>
+                                </div>
+                              </td>
+                              )}
+                              {showOnhandCol("excl") && <td className="num">{money(r.valueExcludingTax)}</td>}
+                              {showOnhandCol("tax") && (
+                              <td className="num">
+                                <div>{money(r.salesTax)}</div>
+                                <div className="stk-rate">
+                                  {r.salesTaxRate ? `${num(r.salesTaxRate)}%` : "no rate"}
+                                </div>
+                              </td>
+                              )}
+                              {showOnhandCol("incl") && <td className="num" style={{ fontWeight: 700 }}>{money(r.valueIncludingTax)}</td>}
+                              {canViewActualCost && showOnhandCol("actual") && (
+                                <td className="num" style={{ color: "var(--dash-text)" }}>
+                                  {r.actualCostExcludingTax ? money(r.actualCostExcludingTax) : "—"}
+                                </td>
+                              )}
+                              {canViewActualCost && showOnhandCol("margin") && (
+                                <td className={`num${r.margin < 0 ? " neg" : ""}`} style={{ fontWeight: 600 }}>
+                                  {money(r.margin)}
+                                  <div>
+                                    {r.marginPercent != null
+                                      ? <span className={`stk-pct${r.margin < 0 ? " neg" : ""}`}>{num(r.marginPercent)}%</span>
+                                      : <span className="stk-rate">—</span>}
+                                  </div>
+                                </td>
+                              )}
+                              {(canAdjust || canViewActualCost) && (
+                                <td className="stk-acts" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
                                   {canAdjust && (
-                                    <button type="button" style={{ ...rowIconBtn, ...rowIconAdjust }} onClick={() => openAdjustForRow(r)}
+                                    <button type="button" className="stk-ib" onClick={() => openAdjustForRow(r)}
                                       title={`Record a stock adjustment for ${r.itemTypeName}`} aria-label={`Adjust ${r.itemTypeName}`}>
-                                      <MdSwapHoriz size={17} />
+                                      <MdSwapHoriz size={16} />
                                     </button>
                                   )}
                                   {canViewActualCost && (
                                     <button
-                                      type="button" style={rowIconBtn}
+                                      type="button" className="stk-ib"
                                       onClick={() => setCostHistoryItem({ itemTypeId: r.itemTypeId, itemTypeName: r.itemTypeName })}
                                       title={`What changed the actual cost of ${r.itemTypeName}`}
                                       aria-label={`Cost history for ${r.itemTypeName}`}
                                     >
-                                      <MdHistory size={17} />
+                                      <MdHistory size={16} />
                                     </button>
                                   )}
-                                </div>
+                                </td>
+                              )}
+                            </tr>
+                            {isOpen && (
+                              <tr className="stk-drow">
+                                <td colSpan={colCount}>
+                                  <OnhandDrill
+                                    row={r} tab={drillTab} onTab={setDrillTab}
+                                    gdRows={gdDetails[r.itemTypeId]} gdLoading={gdLoading === r.itemTypeId}
+                                    moves={drill[r.itemTypeId]} movesLoading={drillLoading === r.itemTypeId}
+                                    canViewMovements={canViewMovements} canEdit={canManageOpening}
+                                    onSave={saveClaimMonth} canViewActualCost={canViewActualCost}
+                                  />
+                                </td>
+                              </tr>
+                            )}
+                            </Fragment>
+                            );
+                          })}
+                        </tbody>
+                        {/* The whole filtered set, like the tiles above -- not just this page. */}
+                        <tfoot>
+                          <tr>
+                            <td colSpan={1 + ["item", "gd"].filter(showOnhandCol).length}>
+                              Total · {filteredOnhand.length} items
+                            </td>
+                            {showOnhandCol("onhand") && <td className="num">{num(onhandTotals.qty)}</td>}
+                            {showOnhandCol("excl") && <td className="num">{money(onhandTotals.excl)}</td>}
+                            {showOnhandCol("tax") && <td className="num">{money(onhandTotals.tax)}</td>}
+                            {showOnhandCol("incl") && <td className="num">{money(onhandTotals.incl)}</td>}
+                            {canViewActualCost && showOnhandCol("actual") && (
+                              <td className="num">{onhandTotals.actual > 0 ? money(onhandTotals.actual) : "—"}</td>
+                            )}
+                            {canViewActualCost && showOnhandCol("margin") && (
+                              <td className={`num${onhandTotals.actual > 0 && onhandMargin < 0 ? " neg" : ""}`}>
+                                {onhandTotals.actual > 0 ? money(onhandMargin) : "—"}
                               </td>
+                            )}
+                            {(canAdjust || canViewActualCost) && <td />}
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+
+                    {/* Mobile — On-hand stack. The "answer" the page exists to
+                        show is on-hand quantity, so it goes top-right at large
+                        size. IN / OUT / Opening are secondary stats below. */}
+                    <div className="stock-cards stk-cards">
+                      {onhandPageRows.map((r) => {
+                        const isOpen = expandedId === r.itemTypeId;
+                        return (
+                        <div key={r.itemTypeId} className="stock-card">
+                          <div className="stock-card__top">
+                            <div className="stock-card__top-left">
+                              {showOnhandCol("gd") && r.gdNumbers?.length > 0 && (
+                                <span className="stock-card__hs">GD {r.gdNumbers.join(", ")}</span>
+                              )}
+                              <span className="stock-card__name stk-name" style={{ minWidth: 0, maxWidth: "none" }}>{r.itemTypeName}</span>
+                              {r.hsCode && <span className="stock-card__hs">{r.hsCode}</span>}
+                            </div>
+                            <div className="stock-card__onhand">
+                              <span className="stock-card__onhand-label">On-Hand</span>
+                              <span
+                                className="stock-card__onhand-value"
+                                style={{ color: r.onHand < 0 ? "var(--dash-negative)" : "var(--dash-primary)" }}
+                              >
+                                {fmtOnHand(r.onHand)}
+                                {r.uom && <span className="stock-card__uom"> {r.uom}</span>}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="stock-card__stats">
+                            <div className="stock-card__stat">
+                              <span className="stock-card__stat-label">Opening</span>
+                              <span className="stock-card__stat-value">{r.openingBalance.toLocaleString()}</span>
+                              <span className="stk-rate">{money(r.openingValueExcludingTax)}</span>
+                            </div>
+                            <div className="stock-card__stat">
+                              <span className="stock-card__stat-label">Total IN</span>
+                              <span className="stock-card__stat-value pos">+{r.totalIn.toLocaleString()}</span>
+                              <span className="stk-rate">{money(r.valueIn)}</span>
+                            </div>
+                            <div className="stock-card__stat">
+                              <span className="stock-card__stat-label">Total OUT</span>
+                              <span className="stock-card__stat-value neg">−{r.totalOut.toLocaleString()}</span>
+                              <span className="stk-rate">{money(r.valueOut)}</span>
+                            </div>
+                            <div className="stock-card__stat">
+                              <span className="stock-card__stat-label">Excluding</span>
+                              <span className="stock-card__stat-value">{money(r.valueExcludingTax)}</span>
+                            </div>
+                            <div className="stock-card__stat">
+                              <span className="stock-card__stat-label">Sales Tax{r.salesTaxRate ? ` (${num(r.salesTaxRate)}%)` : ""}</span>
+                              <span className="stock-card__stat-value">{money(r.salesTax)}</span>
+                            </div>
+                            <div className="stock-card__stat">
+                              <span className="stock-card__stat-label">Including</span>
+                              <span className="stock-card__stat-value" style={{ fontWeight: 700 }}>{money(r.valueIncludingTax)}</span>
+                            </div>
+                            {canViewActualCost && (
+                              <div className="stock-card__stat">
+                                <span className="stock-card__stat-label">Actual Cost</span>
+                                <span className="stock-card__stat-value">
+                                  {r.actualCostExcludingTax ? money(r.actualCostExcludingTax) : "—"}
+                                </span>
+                              </div>
+                            )}
+                            {canViewActualCost && (
+                              <div className="stock-card__stat">
+                                <span className="stock-card__stat-label">Margin</span>
+                                <span className={`stock-card__stat-value${r.margin < 0 ? " neg" : ""}`}>
+                                  {money(r.margin)} {r.marginPercent != null ? `(${num(r.marginPercent)}%)` : "(—)"}
+                                </span>
+                              </div>
+                            )}
+                            <div className="stock-card__stat">
+                              <span className="stock-card__stat-label">Last Move</span>
+                              <span className="stock-card__stat-value stock-card__stat-value--muted">
+                                {r.lastMovementAt ? new Date(r.lastMovementAt).toLocaleDateString() : "—"}
+                              </span>
+                            </div>
+                          </div>
+                          <button type="button" className="stk-btn" style={cardBtn} aria-expanded={isOpen} onClick={() => toggleDrill(r.itemTypeId)}>
+                            {isOpen ? <MdExpandMore size={16} /> : <MdChevronRight size={16} />}
+                            {isOpen ? "Hide GD details" : "View GD details"}
+                          </button>
+                          {isOpen && (
+                            <OnhandDrill
+                              row={r} tab={drillTab} onTab={setDrillTab}
+                              gdRows={gdDetails[r.itemTypeId]} gdLoading={gdLoading === r.itemTypeId}
+                              moves={drill[r.itemTypeId]} movesLoading={drillLoading === r.itemTypeId}
+                              canViewMovements={canViewMovements} canEdit={canManageOpening}
+                              onSave={saveClaimMonth} canViewActualCost={canViewActualCost}
+                            />
+                          )}
+                          {canAdjust && (
+                            <button type="button" className="stk-btn primary" style={cardBtn} onClick={() => openAdjustForRow(r)}>
+                              <MdSwapHoriz size={15} /> Adjustment
+                            </button>
+                          )}
+                          {canViewActualCost && (
+                            <button
+                              type="button" className="stk-btn" style={cardBtn}
+                              onClick={() => setCostHistoryItem({ itemTypeId: r.itemTypeId, itemTypeName: r.itemTypeName })}
+                            >
+                              <MdHistory size={15} /> Cost history
+                            </button>
+                          )}
+                        </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* One pager below both renders -- they are the desktop and
+                        phone views of the same page. The totals above still
+                        cover the whole filtered set, not this page. */}
+                    <div className="stk-pager">
+                      <Pagination
+                        page={onhandPage}
+                        totalPages={onhandTotalPages}
+                        total={filteredOnhand.length}
+                        onPage={setOnhandPage}
+                        pageSize={onhandSize}
+                        onPageSize={setOnhandPageSize}
+                        unit="items"
+                      />
+                    </div>
+                  </>
+                )}
+              </section>
+            )}
+
+            {tab === "inventory" && (
+              <section role="tabpanel" aria-label="Inventory">
+                {summary.length > 0 && (
+                  <div className="stk-toolbar">
+                    <SearchBox value={search} onChange={setSearch} />
+                    <span className="stk-grow" />
+                    {inventoryPicker}
+                  </div>
+                )}
+                {loading ? (
+                  <div className="stk-loading"><div className="stk-spinner" /></div>
+                ) : filteredSummary.length === 0 ? (
+                  <div className="stk-empty">
+                    <MdInventory size={40} />
+                    <p>{search ? `No items match "${search}".` : "No inventory activity yet."}</p>
+                  </div>
+                ) : (
+                  <>
+                  {/* Desktop / tablet — table */}
+                  <div className="stock-table stk-tw">
+                    <table className="stk-table">
+                      <thead>
+                        {(() => {
+                          // Two-tier header: the figures are grouped by what they
+                          // answer, so a dozen numeric columns read as four ideas.
+                          const qty = ["instock", "available", "committed", "todeliver", "delivered", "incoming"].filter(showInvCol);
+                          const flow = ["valuein", "valueout"].filter(showInvCol);
+                          const hand = ["excl", "tax", "incl"].filter(showInvCol);
+                          const cost = canViewActualCost ? ["actual", "margin"].filter(showInvCol) : [];
+                          const lead = 1 + ["item", "hs"].filter(showInvCol).length;
+                          const band = (n, label, tint) => n > 0 && (
+                            <th colSpan={n} className="band" style={{ background: tint }}>{label}</th>
+                          );
+                          return (
+                            <>
+                              <tr>
+                                <th colSpan={lead} />
+                                {band(qty.length, "Quantity", "var(--dash-band-qty)")}
+                                {band(flow.length, "Value movement", "var(--dash-band-flow)")}
+                                {band(hand.length, "In hand", "var(--dash-primary)")}
+                                {band(cost.length, "Cost & margin", "var(--dash-positive)")}
+                              </tr>
+                              <tr>
+                                <th style={{ width: 28 }} aria-label="Expand stock ledger"></th>
+                                {showInvCol("item") && <th>Item</th>}
+                                {showInvCol("hs") && <th>HS Code</th>}
+                                {showInvCol("instock") && <th className="num" title="Physical stock in hand">In Stock</th>}
+                                {showInvCol("available") && <th className="num" title="Free to sell = In Stock - Committed">Available</th>}
+                                {showInvCol("committed") && <th className="num" title="Reserved to customers = To Deliver + Delivered">Committed</th>}
+                                {showInvCol("todeliver") && <th className="num" title="Ordered, not yet delivered">To Deliver</th>}
+                                {showInvCol("delivered") && <th className="num" title="Delivered on a challan, not yet billed">Delivered</th>}
+                                {showInvCol("incoming") && <th className="num" title="On un-billed goods receipts">Incoming</th>}
+                                {showInvCol("valuein") && <th className="num" title="Value that came in: opening / GD stock plus purchases, excluding tax">In</th>}
+                                {showInvCol("valueout") && <th className="num" title="Value that went out on invoices and other stock out, excluding tax">Out</th>}
+                                {showInvCol("excl") && <th className="num" title="Value of the stock in hand, excluding tax">Excl.</th>}
+                                {showInvCol("tax") && <th className="num" title="Sales tax on the stock in hand">S.Tax</th>}
+                                {showInvCol("incl") && <th className="num" title="Value including sales tax">Incl.</th>}
+                                {canViewActualCost && showInvCol("actual") && <th className="num" title="Landed cost of the stock in hand">Actual</th>}
+                                {canViewActualCost && showInvCol("margin") && <th className="num" title="Excluding value less actual cost">Margin</th>}
+                              </tr>
+                            </>
+                          );
+                        })()}
+                      </thead>
+                      <tbody>
+                        {filteredSummary.map((r) => {
+                          const isOpen = expandedId === r.itemTypeId;
+                          const colCount = 1 + ["item", "hs"].filter(showInvCol).length + inventoryTracked;
+                          return (
+                          <Fragment key={r.itemTypeId}>
+                          <tr
+                            className={`stk-row${isOpen ? " open" : ""}`}
+                            tabIndex={0}
+                            aria-expanded={isOpen}
+                            onClick={() => toggleDrill(r.itemTypeId)}
+                            onKeyDown={(e) => rowKey(e, r.itemTypeId)}
+                          >
+                            <td><span className="stk-chev">{isOpen ? <MdExpandMore size={18} /> : <MdChevronRight size={18} />}</span></td>
+                            {showInvCol("item") && (
+                            <td>
+                              <div className="stk-name">{r.itemTypeName}</div>
+                              {(!r.tracked || (r.reorderLevel != null && r.available <= r.reorderLevel)) && (
+                                <div className="stk-meta">
+                                  {!r.tracked && (
+                                    <span className="stk-badge" title="FBR-reporting item — not tracked as inventory">FBR-only</span>
+                                  )}
+                                  {r.reorderLevel != null && r.available <= r.reorderLevel && (
+                                    <span className="stk-badge low" title={`At/below reorder level ${r.reorderLevel}`}>Low</span>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                            )}
+                            {showInvCol("hs") && (
+                              <td>
+                                <span className="stk-mono">{r.hsCode || "—"}</span>
+                                {r.uom && <div className="stk-meta">{r.uom}</div>}
+                              </td>
+                            )}
+                            {r.tracked ? (
+                              <>
+                                {showInvCol("instock") && <td className="num" style={{ fontWeight: 700, color: r.onHand < 0 ? "var(--dash-negative)" : "var(--dash-primary)" }}>{fmtOnHand(r.onHand)}</td>}
+                                {showInvCol("available") && <td className="num" style={{ fontWeight: 700, color: r.available < 0 ? "var(--dash-negative)" : "var(--dash-secondary)" }}>{r.available.toLocaleString()}</td>}
+                                {showInvCol("committed") && <td className="num">{r.committed.toLocaleString()}</td>}
+                                {showInvCol("todeliver") && <td className="num">{r.toDeliver.toLocaleString()}</td>}
+                                {showInvCol("delivered") && <td className="num">{r.delivered.toLocaleString()}</td>}
+                                {showInvCol("incoming") && <td className="num">{r.incoming.toLocaleString()}</td>}
+                                <InventoryValueCells o={onhandById.get(r.itemTypeId)} show={showInvCol} canViewActualCost={canViewActualCost} />
+                              </>
+                            ) : inventoryTracked > 0 && (
+                              <td style={{ textAlign: "center", color: "var(--dash-text)" }} colSpan={inventoryTracked}>—</td>
                             )}
                           </tr>
                           {isOpen && (
-                            <tr>
-                              <td colSpan={colCount} style={{ padding: 0, maxWidth: 0, borderBottom: `1px solid ${colors.cardBorder}`, backgroundColor: colors.bandBg }}>
-                                <GdPanel rows={gdDetails[r.itemTypeId]} loading={gdLoading === r.itemTypeId}
-                                  openingQty={r.openingBalance} openingValue={r.openingValueExcludingTax}
-                                  canEdit={canManageOpening} onSave={saveClaimMonth} />
-                                {canViewMovements && <DrillPanel
-                                  rows={drill[r.itemTypeId]}
-                                  loading={drillLoading === r.itemTypeId}
-                                  uom={r.uom}
-                                  canViewActualCost={canViewActualCost}
-                                />}
+                            <tr className="stk-drow">
+                              <td colSpan={colCount}>
+                                <div className="stk-drill">
+                                  <StockLedgerPanel
+                                    gdRows={gdDetails[r.itemTypeId]} gdLoading={gdLoading === r.itemTypeId}
+                                    movements={canViewMovements ? drill[r.itemTypeId] : []}
+                                    movementsLoading={canViewMovements && drillLoading === r.itemTypeId}
+                                    canViewMovements={canViewMovements}
+                                    openingQty={onhandById.get(r.itemTypeId)?.openingBalance}
+                                    onHand={r.onHand} uom={r.uom}
+                                    position={onhandById.get(r.itemTypeId)}
+                                    showCol={showLedgerCol} picker={ledgerPicker} canViewActualCost={canViewActualCost}
+                                  />
+                                </div>
                               </td>
                             </tr>
                           )}
@@ -1105,608 +1391,351 @@ export default function StockDashboardPage() {
                     </table>
                   </div>
 
-                  {/* Mobile — On-hand stack. The "answer" the page exists to
-                      show is on-hand quantity, so it goes top-right at large
-                      size. IN / OUT / Opening are secondary stats below. */}
-                  <div className="stock-cards">
-                    {onhandPageRows.map((r) => {
-                      const isOpen = expandedId === r.itemTypeId;
-                      return (
+                  {/* Mobile — inventory (V2 buckets) stack. In Stock is the
+                      headline metric; the reservation buckets are secondary
+                      stats below. Untracked (FBR-only) items show a note. */}
+                  <div className="stock-cards stk-cards">
+                    {filteredSummary.map((r) => (
                       <div key={r.itemTypeId} className="stock-card">
                         <div className="stock-card__top">
                           <div className="stock-card__top-left">
-                            {showOnhandCol("gd") && r.gdNumbers?.length > 0 && (
-                              <span className="stock-card__hs">GD {r.gdNumbers.join(", ")}</span>
+                            <span className="stock-card__name stk-name" style={{ minWidth: 0, maxWidth: "none" }}>{r.itemTypeName}</span>
+                            {showInvCol("hs") && r.hsCode && <span className="stock-card__hs">{r.hsCode}</span>}
+                            {(!r.tracked || (r.reorderLevel != null && r.available <= r.reorderLevel)) && (
+                              <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", marginTop: 2 }}>
+                                {!r.tracked && (
+                                  <span className="stk-badge" title="FBR-reporting item — not tracked as inventory">FBR-only</span>
+                                )}
+                                {r.reorderLevel != null && r.available <= r.reorderLevel && (
+                                  <span className="stk-badge low" title={`At/below reorder level ${r.reorderLevel}`}>Low</span>
+                                )}
+                              </div>
                             )}
-                            <span className="stock-card__name">{r.itemTypeName}</span>
-                            {r.hsCode && <span className="stock-card__hs">{r.hsCode}</span>}
                           </div>
-                          <div className="stock-card__onhand">
-                            <span className="stock-card__onhand-label">On-Hand</span>
-                            <span
-                              className="stock-card__onhand-value"
-                              style={{ color: r.onHand < 0 ? "#c62828" : colors.blue }}
-                            >
-                              {fmtOnHand(r.onHand)}
-                              {r.uom && <span className="stock-card__uom"> {r.uom}</span>}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="stock-card__stats">
-                          <div className="stock-card__stat">
-                            <span className="stock-card__stat-label">Opening</span>
-                            <span className="stock-card__stat-value">{r.openingBalance.toLocaleString()}</span>
-                            <span style={styles.cardStatMoney}>{money(r.openingValueExcludingTax)}</span>
-                          </div>
-                          <div className="stock-card__stat">
-                            <span className="stock-card__stat-label">Total IN</span>
-                            <span className="stock-card__stat-value" style={{ color: "#2e7d32" }}>+{r.totalIn.toLocaleString()}</span>
-                            <span style={styles.cardStatMoney}>{money(r.valueIn)}</span>
-                          </div>
-                          <div className="stock-card__stat">
-                            <span className="stock-card__stat-label">Total OUT</span>
-                            <span className="stock-card__stat-value" style={{ color: "#c62828" }}>−{r.totalOut.toLocaleString()}</span>
-                            <span style={styles.cardStatMoney}>{money(r.valueOut)}</span>
-                          </div>
-                          <div className="stock-card__stat">
-                            <span className="stock-card__stat-label">Excluding</span>
-                            <span className="stock-card__stat-value">{money(r.valueExcludingTax)}</span>
-                          </div>
-                          <div className="stock-card__stat">
-                            <span className="stock-card__stat-label">Sales Tax{r.salesTaxRate ? ` (${num(r.salesTaxRate)}%)` : ""}</span>
-                            <span className="stock-card__stat-value">{money(r.salesTax)}</span>
-                          </div>
-                          <div className="stock-card__stat">
-                            <span className="stock-card__stat-label">Including</span>
-                            <span className="stock-card__stat-value" style={{ fontWeight: 700 }}>{money(r.valueIncludingTax)}</span>
-                          </div>
-                          {canViewActualCost && (
-                            <div className="stock-card__stat">
-                              <span className="stock-card__stat-label">Actual Cost</span>
-                              <span className="stock-card__stat-value">
-                                {r.actualCostExcludingTax ? money(r.actualCostExcludingTax) : "—"}
+                          {r.tracked && (
+                            <div className="stock-card__onhand">
+                              <span className="stock-card__onhand-label">In Stock</span>
+                              <span className="stock-card__onhand-value" style={{ color: r.onHand < 0 ? "var(--dash-negative)" : "var(--dash-primary)" }}>
+                                {fmtOnHand(r.onHand)}
                               </span>
                             </div>
                           )}
-                          {canViewActualCost && (
-                            <div className="stock-card__stat">
-                              <span className="stock-card__stat-label">Margin</span>
-                              <span className="stock-card__stat-value" style={{ color: r.margin < 0 ? colors.negative : undefined }}>
-                                {money(r.margin)} {r.marginPercent != null ? `(${num(r.marginPercent)}%)` : "(—)"}
-                              </span>
-                            </div>
-                          )}
-                          <div className="stock-card__stat">
-                            <span className="stock-card__stat-label">Last Move</span>
-                            <span className="stock-card__stat-value stock-card__stat-value--muted">
-                              {r.lastMovementAt ? new Date(r.lastMovementAt).toLocaleDateString() : "—"}
-                            </span>
-                          </div>
                         </div>
-                        {(
-                          <button type="button" style={cardDrillBtn} onClick={() => toggleDrill(r.itemTypeId)}>
-                            {isOpen ? <MdExpandMore size={16} /> : <MdChevronRight size={16} />}
-                            {isOpen ? "Hide GD details" : "View GD details"}
-                          </button>
-                        )}
-                        {isOpen && (
-                          <>
-                            <GdPanel rows={gdDetails[r.itemTypeId]} loading={gdLoading === r.itemTypeId}
-                              openingQty={r.openingBalance} openingValue={r.openingValueExcludingTax}
-                              canEdit={canManageOpening} onSave={saveClaimMonth} />
-                            {canViewMovements && <DrillPanel rows={drill[r.itemTypeId]} loading={drillLoading === r.itemTypeId} uom={r.uom} canViewActualCost={canViewActualCost} />}
-                          </>
-                        )}
-                        {canAdjust && (
-                          <button type="button" style={cardAdjustBtn} onClick={() => openAdjustForRow(r)}>
-                            <MdSwapHoriz size={15} /> Adjustment
-                          </button>
-                        )}
-                        {canViewActualCost && (
-                          <button
-                            type="button" style={cardHistoryBtn}
-                            onClick={() => setCostHistoryItem({ itemTypeId: r.itemTypeId, itemTypeName: r.itemTypeName })}
-                          >
-                            <MdHistory size={15} /> Cost history
-                          </button>
-                        )}
-                      </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* One pager below both renders -- they are the desktop and
-                      phone views of the same page. The totals strip above
-                      still covers the whole filtered set, not this page. */}
-                  <Pagination
-                    page={onhandPage}
-                    totalPages={onhandTotalPages}
-                    total={filteredOnhand.length}
-                    onPage={setOnhandPage}
-                    pageSize={onhandSize}
-                    onPageSize={setOnhandPageSize}
-                    unit="items"
-                  />
-                </>
-              )}
-            </>
-          )}
-
-          {tab === "inventory" && (
-            <>
-              {summary.length > 0 && (
-                <div style={styles.toolbar}>
-                  <SearchBox value={search} onChange={setSearch} />
-                  {inventoryPicker}
-                </div>
-              )}
-              {loading ? (
-                <div style={styles.loading}><div style={styles.spinner} /></div>
-              ) : filteredSummary.length === 0 ? (
-                <div style={styles.empty}>
-                  <MdInventory size={40} color={colors.cardBorder} />
-                  <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
-                    {search ? `No items match "${search}".` : "No inventory activity yet."}
-                  </p>
-                </div>
-              ) : (
-                <>
-                {/* Desktop / tablet — table */}
-                <div className="stock-table" style={styles.tableWrap}>
-                  <table style={styles.table}>
-                    <thead>
-                      {(() => {
-                        // Two-tier header: the figures are grouped by what they
-                        // answer, so a dozen numeric columns read as four ideas.
-                        const R = { ...styles.th, textAlign: "right", whiteSpace: "nowrap" };
-                        const G = { ...styles.th, textAlign: "center", padding: "0.35rem 0.45rem", backgroundColor: "#eef3f9" };
-                        const qty = ["instock", "available", "committed", "todeliver", "delivered", "incoming"].filter(showInvCol);
-                        const flow = ["valuein", "valueout"].filter(showInvCol);
-                        const hand = ["excl", "tax", "incl"].filter(showInvCol);
-                        const cost = canViewActualCost ? ["actual", "margin"].filter(showInvCol) : [];
-                        const lead = 1 + ["item", "hs"].filter(showInvCol).length;
-                        const band = (n, label, tint) => n > 0 && (
-                          <th colSpan={n} style={{ ...G, color: tint, borderLeft: `1px solid ${colors.cardBorder}` }}>{label}</th>
-                        );
-                        return (
-                          <>
-                            <tr>
-                              <th colSpan={lead} style={G} />
-                              {band(qty.length, "Quantity", colors.textSecondary)}
-                              {band(flow.length, "Value movement", "#37474f")}
-                              {band(hand.length, "In hand", colors.blue)}
-                              {band(cost.length, "Cost & margin", "#2e7d32")}
-                            </tr>
-                            <tr>
-                              <th style={{ ...styles.th, width: 28 }} aria-label="Expand stock ledger"></th>
-                              {showInvCol("item") && <th style={styles.th}>Item</th>}
-                              {showInvCol("hs") && <th style={styles.th}>HS Code</th>}
-                              {showInvCol("instock") && <th style={R} title="Physical stock in hand">In Stock</th>}
-                              {showInvCol("available") && <th style={R} title="Free to sell = In Stock - Committed">Available</th>}
-                              {showInvCol("committed") && <th style={R} title="Reserved to customers = To Deliver + Delivered">Committed</th>}
-                              {showInvCol("todeliver") && <th style={R} title="Ordered, not yet delivered">To Deliver</th>}
-                              {showInvCol("delivered") && <th style={R} title="Delivered on a challan, not yet billed">Delivered</th>}
-                              {showInvCol("incoming") && <th style={R} title="On un-billed goods receipts">Incoming</th>}
-                              {showInvCol("valuein") && <th style={R} title="Value that came in: opening / GD stock plus purchases, excluding tax">In</th>}
-                              {showInvCol("valueout") && <th style={R} title="Value that went out on invoices and other stock out, excluding tax">Out</th>}
-                              {showInvCol("excl") && <th style={R} title="Value of the stock in hand, excluding tax">Excl.</th>}
-                              {showInvCol("tax") && <th style={R} title="Sales tax on the stock in hand">S.Tax</th>}
-                              {showInvCol("incl") && <th style={R} title="Value including sales tax">Incl.</th>}
-                              {canViewActualCost && showInvCol("actual") && <th style={R} title="Landed cost of the stock in hand">Actual</th>}
-                              {canViewActualCost && showInvCol("margin") && <th style={R} title="Excluding value less actual cost">Margin</th>}
-                            </tr>
-                          </>
-                        );
-                      })()}
-                    </thead>
-                    <tbody>
-                      {filteredSummary.map((r, idx) => {
-                        const isOpen = expandedId === r.itemTypeId;
-                        const colCount = 1 + ["item", "hs"].filter(showInvCol).length + inventoryTracked;
-                        return (
-                        <Fragment key={r.itemTypeId}>
-                        <tr
-                          style={{ backgroundColor: isOpen ? colors.bandBg : (idx % 2 ? colors.rowAlt : "#fff"), cursor: "pointer" }}
-                          onClick={() => toggleDrill(r.itemTypeId)}
-                        >
-                          <td style={{ ...styles.td, textAlign: "center", color: colors.textSecondary, paddingLeft: 6, paddingRight: 0 }}>
-                            {isOpen ? <MdExpandMore size={18} /> : <MdChevronRight size={18} />}
-                          </td>
-                          {showInvCol("item") && (
-                          <td style={styles.td}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
-                              <span style={{ fontWeight: 600 }}>{r.itemTypeName}</span>
-                              {!r.tracked && (
-                                <span style={styles.fbrBadge} title="FBR-reporting item — not tracked as inventory">FBR-only</span>
-                              )}
-                              {r.reorderLevel != null && r.available <= r.reorderLevel && (
-                                <span style={styles.lowBadge} title={`At/below reorder level ${r.reorderLevel}`}>Low</span>
-                              )}
-                            </div>
-                          </td>
-                          )}
-                          {showInvCol("hs") && (
-                            <td style={styles.td}>
-                              <span style={styles.hsChip}>{r.hsCode || "—"}</span>
-                              {r.uom && <div style={styles.itemMeta}>{r.uom}</div>}
-                            </td>
-                          )}
-                          {r.tracked ? (
-                            <>
-                              {showInvCol("instock") && <td style={{ ...styles.td, textAlign: "right", fontWeight: 700, color: r.onHand < 0 ? "#c62828" : colors.blue }}>{fmtOnHand(r.onHand)}</td>}
-                              {showInvCol("available") && <td style={{ ...styles.td, textAlign: "right", fontWeight: 700, color: r.available < 0 ? "#c62828" : colors.teal }}>{r.available.toLocaleString()}</td>}
-                              {showInvCol("committed") && <td style={{ ...styles.td, textAlign: "right" }}>{r.committed.toLocaleString()}</td>}
-                              {showInvCol("todeliver") && <td style={{ ...styles.td, textAlign: "right" }}>{r.toDeliver.toLocaleString()}</td>}
-                              {showInvCol("delivered") && <td style={{ ...styles.td, textAlign: "right" }}>{r.delivered.toLocaleString()}</td>}
-                              {showInvCol("incoming") && <td style={{ ...styles.td, textAlign: "right" }}>{r.incoming.toLocaleString()}</td>}
-                              <InventoryValueCells o={onhandById.get(r.itemTypeId)} show={showInvCol} canViewActualCost={canViewActualCost} />
-                            </>
-                          ) : inventoryTracked > 0 && (
-                            <td style={{ ...styles.td, textAlign: "center", color: colors.textSecondary }} colSpan={inventoryTracked}>—</td>
-                          )}
-                        </tr>
-                        {isOpen && (
-                          <tr>
-                            <td colSpan={colCount} style={{ padding: 0, maxWidth: 0, borderBottom: `1px solid ${colors.cardBorder}`, backgroundColor: colors.bandBg }}>
-                              <StockLedgerPanel
-                                gdRows={gdDetails[r.itemTypeId]} gdLoading={gdLoading === r.itemTypeId}
-                                movements={canViewMovements ? drill[r.itemTypeId] : []}
-                                movementsLoading={canViewMovements && drillLoading === r.itemTypeId}
-                                canViewMovements={canViewMovements}
-                                openingQty={onhandById.get(r.itemTypeId)?.openingBalance}
-                                onHand={r.onHand} uom={r.uom}
-                                position={onhandById.get(r.itemTypeId)}
-                                showCol={showLedgerCol} picker={ledgerPicker} canViewActualCost={canViewActualCost}
-                              />
-                            </td>
-                          </tr>
-                        )}
-                        </Fragment>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Mobile — inventory (V2 buckets) stack. In Stock is the
-                    headline metric; the reservation buckets are secondary
-                    stats below. Untracked (FBR-only) items show a note. */}
-                <div className="stock-cards">
-                  {filteredSummary.map((r) => (
-                    <div key={r.itemTypeId} className="stock-card">
-                      <div className="stock-card__top">
-                        <div className="stock-card__top-left">
-                          <span className="stock-card__name">{r.itemTypeName}</span>
-                          {showInvCol("hs") && r.hsCode && <span className="stock-card__hs">{r.hsCode}</span>}
-                          {(!r.tracked || (r.reorderLevel != null && r.available <= r.reorderLevel)) && (
-                            <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", marginTop: 2 }}>
-                              {!r.tracked && (
-                                <span style={styles.fbrBadge} title="FBR-reporting item — not tracked as inventory">FBR-only</span>
-                              )}
-                              {r.reorderLevel != null && r.available <= r.reorderLevel && (
-                                <span style={styles.lowBadge} title={`At/below reorder level ${r.reorderLevel}`}>Low</span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        {r.tracked && (
-                          <div className="stock-card__onhand">
-                            <span className="stock-card__onhand-label">In Stock</span>
-                            <span className="stock-card__onhand-value" style={{ color: r.onHand < 0 ? "#c62828" : colors.blue }}>
-                              {fmtOnHand(r.onHand)}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                      {r.tracked ? (
-                        <div className="stock-card__stats">
-                          {(() => { const o = onhandById.get(r.itemTypeId); if (!o) return null; return (<>
-                            {showInvCol("valuein") && <div className="stock-card__stat"><span className="stock-card__stat-label">Value In</span><span className="stock-card__stat-value" style={{ color: "#2e7d32" }}>{money(Number(o.openingValueExcludingTax || 0) + Number(o.valueIn || 0))}</span></div>}
-                            {showInvCol("valueout") && <div className="stock-card__stat"><span className="stock-card__stat-label">Value Out</span><span className="stock-card__stat-value" style={{ color: "#c62828" }}>{money(o.valueOut)}</span></div>}
-                            {showInvCol("excl") && <div className="stock-card__stat"><span className="stock-card__stat-label">Excluding</span><span className="stock-card__stat-value">{money(o.valueExcludingTax)}</span></div>}
-                            {showInvCol("incl") && <div className="stock-card__stat"><span className="stock-card__stat-label">Including</span><span className="stock-card__stat-value">{money(o.valueIncludingTax)}</span></div>}
-                            {canViewActualCost && showInvCol("margin") && o.margin != null && <div className="stock-card__stat"><span className="stock-card__stat-label">Margin</span><span className="stock-card__stat-value" style={{ color: o.margin < 0 ? colors.negative : "#2e7d32" }}>{money(o.margin)}</span></div>}
-                          </>); })()}
-                          <div className="stock-card__stat">
-                            <span className="stock-card__stat-label">Available</span>
-                            <span className="stock-card__stat-value" style={{ color: r.available < 0 ? "#c62828" : colors.teal }}>{r.available.toLocaleString()}</span>
-                          </div>
-                          <div className="stock-card__stat">
-                            <span className="stock-card__stat-label">Committed</span>
-                            <span className="stock-card__stat-value">{r.committed.toLocaleString()}</span>
-                          </div>
-                          <div className="stock-card__stat">
-                            <span className="stock-card__stat-label">To Deliver</span>
-                            <span className="stock-card__stat-value">{r.toDeliver.toLocaleString()}</span>
-                          </div>
-                          <div className="stock-card__stat">
-                            <span className="stock-card__stat-label">Delivered</span>
-                            <span className="stock-card__stat-value">{r.delivered.toLocaleString()}</span>
-                          </div>
-                          <div className="stock-card__stat">
-                            <span className="stock-card__stat-label">Incoming</span>
-                            <span className="stock-card__stat-value">{r.incoming.toLocaleString()}</span>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="stock-card__notes">Not tracked as inventory (FBR-reporting item).</div>
-                      )}
-                      <button type="button" style={cardDrillBtn} onClick={() => toggleDrill(r.itemTypeId)}>
-                        {expandedId === r.itemTypeId ? <MdExpandMore size={16} /> : <MdChevronRight size={16} />}
-                        {expandedId === r.itemTypeId ? "Hide stock ledger" : "View stock ledger"}
-                      </button>
-                      {expandedId === r.itemTypeId && (
-                        <StockLedgerPanel
-                          gdRows={gdDetails[r.itemTypeId]} gdLoading={gdLoading === r.itemTypeId}
-                          movements={canViewMovements ? drill[r.itemTypeId] : []}
-                          movementsLoading={canViewMovements && drillLoading === r.itemTypeId}
-                          canViewMovements={canViewMovements}
-                          openingQty={onhandById.get(r.itemTypeId)?.openingBalance}
-                          onHand={r.onHand} uom={r.uom}
-                          position={onhandById.get(r.itemTypeId)}
-                          showCol={showLedgerCol} picker={ledgerPicker} canViewActualCost={canViewActualCost}
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
-                </>
-              )}
-            </>
-          )}
-
-          {tab === "opening" && canManageOpening && (
-            <>
-              {openings.length > 0 && (
-                <div style={styles.toolbar}>
-                  <SearchBox value={search} onChange={setSearch} />
-                  {openingPicker}
-                </div>
-              )}
-              {openings.length > 0 && filteredOpenings.length === 0 ? (
-                <div style={styles.empty}>
-                  <p style={{ color: colors.textSecondary }}>No opening balances match "{search}".</p>
-                  <button type="button" style={styles.clearSearchBtn} onClick={() => setSearch("")}>Clear search</button>
-                </div>
-              ) : openings.length === 0 ? (
-                <div style={{ ...styles.empty, padding: "2rem 1rem" }}>
-                  <p style={{ color: colors.textSecondary }}>No opening balances set yet. Click "Opening Balance" above to add one.</p>
-                </div>
-              ) : (
-                <>
-                  {/* Desktop — table */}
-                  <div className="stock-table" style={styles.tableWrap}>
-                    <table style={styles.table}>
-                      <thead>
-                        <tr>
-                          {showOpenCol("gd") && <th style={styles.th}>GD No</th>}
-                          {showOpenCol("item") && <th style={styles.th}>Item</th>}
-                          {showOpenCol("qty") && <th style={{ ...styles.th, textAlign: "right" }}>Quantity</th>}
-                          {showOpenCol("excl") && <th style={{ ...styles.th, textAlign: "right" }}>Excluding</th>}
-                          {showOpenCol("rate") && <th style={{ ...styles.th, textAlign: "right" }}>S.Tax %</th>}
-                          {showOpenCol("tax") && <th style={{ ...styles.th, textAlign: "right" }}>Sales Tax</th>}
-                          {showOpenCol("incl") && <th style={{ ...styles.th, textAlign: "right" }}>Including</th>}
-                          {canViewActualCost && showOpenCol("actual") && <th style={{ ...styles.th, textAlign: "right" }}>Actual Cost</th>}
-                          {canViewActualCost && showOpenCol("margin") && <th style={{ ...styles.th, textAlign: "right" }}>Margin</th>}
-                          {showOpenCol("asof") && <th style={styles.th}>As Of</th>}
-                          {showOpenCol("notes") && <th style={styles.th}>Notes</th>}
-                          <th style={{ ...styles.th, width: 60 }}></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredOpenings.map((o, idx) => (
-                          <tr key={o.id} style={{ backgroundColor: idx % 2 === 0 ? "#fff" : colors.rowAlt }}>
-                            {showOpenCol("gd") && <td style={styles.td}><GdList gds={gdByItem.get(o.itemTypeId)} /></td>}
-                            {showOpenCol("item") && <td style={styles.td}><strong>{o.itemTypeName}</strong></td>}
-                            {showOpenCol("qty") && <td style={{ ...styles.td, textAlign: "right", fontWeight: 600 }}>{o.quantity.toLocaleString()}</td>}
-                            {showOpenCol("excl") && <td style={styles.tdMoney}>{money(o.valueExcludingTax)}</td>}
-                            {showOpenCol("rate") && <td style={{ ...styles.tdMoney, color: colors.textSecondary }}>{o.salesTaxRate ? `${num(o.salesTaxRate)}%` : "—"}</td>}
-                            {showOpenCol("tax") && <td style={styles.tdMoney}>{money(o.salesTax)}</td>}
-                            {showOpenCol("incl") && <td style={{ ...styles.tdMoney, fontWeight: 600 }}>{money(o.valueIncludingTax)}</td>}
-                            {canViewActualCost && showOpenCol("actual") && (
-                              <td style={{ ...styles.tdMoney, color: colors.textSecondary }}>
-                                {o.actualCostExcludingTax ? money(o.actualCostExcludingTax) : "—"}
-                              </td>
-                            )}
-                            {canViewActualCost && showOpenCol("margin") && (
-                              <td style={{ ...styles.tdMoney, fontWeight: 600, color: o.margin < 0 ? colors.negative : colors.textPrimary }}>
-                                {money(o.margin)}
-                                <div style={{ fontSize: "0.72rem", fontWeight: 400, color: colors.textSecondary, whiteSpace: "nowrap" }}>
-                                  {o.marginPercent != null ? `${num(o.marginPercent)}%` : "—"}
-                                </div>
-                              </td>
-                            )}
-                            {showOpenCol("asof") && <td style={styles.td}>{new Date(o.asOfDate).toLocaleDateString()}</td>}
-                            {showOpenCol("notes") && <td style={{ ...styles.td, fontSize: "0.78rem", color: colors.textSecondary }}>{o.notes || "—"}</td>}
-                            <td style={styles.td}>
-                              <button style={btnTiny} title="Restate this opening balance" onClick={() => startEditOpening(o)}><MdEdit size={14} /></button>
-                              <button style={btnTiny} onClick={() => handleDeleteOpening(o)}><MdClose size={14} /></button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Mobile — opening balance cards */}
-                  <div className="stock-cards">
-                    {filteredOpenings.map((o) => (
-                      <div key={o.id} className="stock-card">
-                        <div className="stock-card__top">
-                          <div className="stock-card__top-left">
-                            {showOpenCol("gd") && gdText(o.itemTypeId) && (
-                              <span className="stock-card__hs">GD {gdText(o.itemTypeId)}</span>
-                            )}
-                            <span className="stock-card__name">{o.itemTypeName}</span>
-                            <span className="stock-card__hs">As of {new Date(o.asOfDate).toLocaleDateString()}</span>
-                          </div>
-                          <div className="stock-card__onhand">
-                            <span className="stock-card__onhand-label">Quantity</span>
-                            <span className="stock-card__onhand-value" style={{ color: colors.blue }}>
-                              {o.quantity.toLocaleString()}
-                            </span>
-                          </div>
-                        </div>
-                        {canViewActualCost && (
+                        {r.tracked ? (
                           <div className="stock-card__stats">
+                            {(() => { const o = onhandById.get(r.itemTypeId); if (!o) return null; return (<>
+                              {showInvCol("valuein") && <div className="stock-card__stat"><span className="stock-card__stat-label">Value In</span><span className="stock-card__stat-value pos">{money(Number(o.openingValueExcludingTax || 0) + Number(o.valueIn || 0))}</span></div>}
+                              {showInvCol("valueout") && <div className="stock-card__stat"><span className="stock-card__stat-label">Value Out</span><span className="stock-card__stat-value neg">{money(o.valueOut)}</span></div>}
+                              {showInvCol("excl") && <div className="stock-card__stat"><span className="stock-card__stat-label">Excluding</span><span className="stock-card__stat-value">{money(o.valueExcludingTax)}</span></div>}
+                              {showInvCol("incl") && <div className="stock-card__stat"><span className="stock-card__stat-label">Including</span><span className="stock-card__stat-value">{money(o.valueIncludingTax)}</span></div>}
+                              {canViewActualCost && showInvCol("margin") && o.margin != null && <div className="stock-card__stat"><span className="stock-card__stat-label">Margin</span><span className={`stock-card__stat-value ${o.margin < 0 ? "neg" : "pos"}`}>{money(o.margin)}</span></div>}
+                            </>); })()}
                             <div className="stock-card__stat">
-                              <span className="stock-card__stat-label">Actual Cost</span>
-                              <span className="stock-card__stat-value">
-                                {o.actualCostExcludingTax ? money(o.actualCostExcludingTax) : "—"}
-                              </span>
+                              <span className="stock-card__stat-label">Available</span>
+                              <span className="stock-card__stat-value" style={{ color: r.available < 0 ? "var(--dash-negative)" : "var(--dash-secondary)" }}>{r.available.toLocaleString()}</span>
                             </div>
                             <div className="stock-card__stat">
-                              <span className="stock-card__stat-label">Margin</span>
-                              <span className="stock-card__stat-value" style={{ color: o.margin < 0 ? colors.negative : undefined }}>
-                                {money(o.margin)} {o.marginPercent != null ? `(${num(o.marginPercent)}%)` : "(—)"}
-                              </span>
+                              <span className="stock-card__stat-label">Committed</span>
+                              <span className="stock-card__stat-value">{r.committed.toLocaleString()}</span>
+                            </div>
+                            <div className="stock-card__stat">
+                              <span className="stock-card__stat-label">To Deliver</span>
+                              <span className="stock-card__stat-value">{r.toDeliver.toLocaleString()}</span>
+                            </div>
+                            <div className="stock-card__stat">
+                              <span className="stock-card__stat-label">Delivered</span>
+                              <span className="stock-card__stat-value">{r.delivered.toLocaleString()}</span>
+                            </div>
+                            <div className="stock-card__stat">
+                              <span className="stock-card__stat-label">Incoming</span>
+                              <span className="stock-card__stat-value">{r.incoming.toLocaleString()}</span>
                             </div>
                           </div>
+                        ) : (
+                          <div className="stock-card__notes">Not tracked as inventory (FBR-reporting item).</div>
                         )}
-                        {o.notes && (
-                          <div className="stock-card__notes">{o.notes}</div>
+                        <button type="button" className="stk-btn" style={cardBtn} aria-expanded={expandedId === r.itemTypeId} onClick={() => toggleDrill(r.itemTypeId)}>
+                          {expandedId === r.itemTypeId ? <MdExpandMore size={16} /> : <MdChevronRight size={16} />}
+                          {expandedId === r.itemTypeId ? "Hide stock ledger" : "View stock ledger"}
+                        </button>
+                        {expandedId === r.itemTypeId && (
+                          <StockLedgerPanel
+                            gdRows={gdDetails[r.itemTypeId]} gdLoading={gdLoading === r.itemTypeId}
+                            movements={canViewMovements ? drill[r.itemTypeId] : []}
+                            movementsLoading={canViewMovements && drillLoading === r.itemTypeId}
+                            canViewMovements={canViewMovements}
+                            openingQty={onhandById.get(r.itemTypeId)?.openingBalance}
+                            onHand={r.onHand} uom={r.uom}
+                            position={onhandById.get(r.itemTypeId)}
+                            showCol={showLedgerCol} picker={ledgerPicker} canViewActualCost={canViewActualCost}
+                          />
                         )}
-                        <button
-                          className="stock-card__delete"
-                          style={{ color: colors.blue }}
-                          onClick={() => startEditOpening(o)}
-                        >
-                          <MdEdit size={14} /> Edit
-                        </button>
-                        <button
-                          className="stock-card__delete"
-                          onClick={() => handleDeleteOpening(o)}
-                        >
-                          <MdClose size={14} /> Delete
-                        </button>
                       </div>
                     ))}
                   </div>
-                </>
-              )}
-            </>
-          )}
+                  </>
+                )}
+              </section>
+            )}
 
-          {tab === "movements" && canViewMovements && (
-            <>
-              {movements.length === 0 ? (
-                <div style={styles.empty}>
-                  <MdHistory size={40} color={colors.cardBorder} />
-                  <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>No movements recorded yet.</p>
-                </div>
-              ) : (
-                <>
-                  <div style={{ ...styles.toolbar, justifyContent: "flex-end" }}>{movementPicker}</div>
-                  {/* Desktop — table */}
-                  <div className="stock-table" style={styles.tableWrap}>
-                    <table style={styles.table}>
-                      <thead>
-                        <tr>
-                          {showMovCol("date") && <th style={styles.th}>Date</th>}
-                          {showMovCol("item") && <th style={styles.th}>Item</th>}
-                          {showMovCol("direction") && <th style={styles.th}>Direction</th>}
-                          {showMovCol("qty") && <th style={{ ...styles.th, textAlign: "right" }}>Qty</th>}
-                          {showMovCol("unitcost") && <th style={{ ...styles.th, textAlign: "right" }}>Unit Cost</th>}
-                          {showMovCol("value") && <th style={{ ...styles.th, textAlign: "right" }}>Value</th>}
-                          {showMovCol("balance") && <th style={{ ...styles.th, textAlign: "right" }}>Balance</th>}
-                          {showMovCol("source") && <th style={styles.th}>Source</th>}
-                          {showMovCol("notes") && <th style={styles.th}>Notes</th>}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {movements.map((m, idx) => (
-                          <tr key={m.id} style={{ backgroundColor: idx % 2 === 0 ? "#fff" : colors.rowAlt }}>
-                            {showMovCol("date") && <td style={styles.td}>{new Date(m.movementDate).toLocaleDateString()}</td>}
-                            {showMovCol("item") && <td style={styles.td}>{m.itemTypeName}</td>}
-                            {showMovCol("direction") && <td style={{ ...styles.td, color: m.direction === "In" ? "#2e7d32" : "#c62828", fontWeight: 600 }}>{m.direction}</td>}
-                            {showMovCol("qty") && (
-                            <td style={{ ...styles.td, textAlign: "right", fontWeight: 600 }}>
-                              {m.sourceType === "Revaluation" ? "—" : m.quantity.toLocaleString()}
-                            </td>
-                            )}
-                            {showMovCol("unitcost") && (
-                            <td style={{ ...styles.tdMoney, color: colors.textSecondary }}>
-                              {m.sourceType === "Revaluation" ? "—" : num(m.unitCost)}
-                            </td>
-                            )}
-                            {showMovCol("value") && (
-                            <td style={{ ...styles.tdMoney, color: m.direction === "In" ? "#2e7d32" : "#c62828" }}>
-                              {m.direction === "In" ? "+" : "−"}{money(m.value)}
-                            </td>
-                            )}
-                            {showMovCol("balance") && <td style={styles.tdMoney}>{num(m.runningQuantity)} · {money(m.runningValue)}</td>}
-                            {showMovCol("source") && <td style={{ ...styles.td, fontSize: "0.78rem" }}>{m.sourceType}{m.sourceDocNumber ? ` #${m.sourceDocNumber}` : ""}</td>}
-                            {showMovCol("notes") && <td style={{ ...styles.td, fontSize: "0.78rem", color: colors.textSecondary }}>{m.notes || "—"}</td>}
+            {tab === "opening" && canManageOpening && (
+              <section role="tabpanel" aria-label="Opening balances">
+                {openings.length > 0 && (
+                  <div className="stk-toolbar">
+                    <SearchBox value={search} onChange={setSearch} />
+                    <span className="stk-grow" />
+                    {openingPicker}
+                  </div>
+                )}
+                {openings.length > 0 && filteredOpenings.length === 0 ? (
+                  <div className="stk-empty">
+                    <p>No opening balances match "{search}".</p>
+                    <button type="button" className="stk-btn" onClick={() => setSearch("")}>Clear search</button>
+                  </div>
+                ) : openings.length === 0 ? (
+                  <div className="stk-empty">
+                    <p>No opening balances set yet. Click "Opening balance" above to add one.</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Desktop — table */}
+                    <div className="stock-table stk-tw">
+                      <table className="stk-table">
+                        <thead>
+                          <tr>
+                            {showOpenCol("gd") && <th>GD No</th>}
+                            {showOpenCol("item") && <th>Item</th>}
+                            {showOpenCol("qty") && <th className="num">Quantity</th>}
+                            {showOpenCol("excl") && <th className="num">Excluding</th>}
+                            {showOpenCol("rate") && <th className="num">S.Tax %</th>}
+                            {showOpenCol("tax") && <th className="num">Sales Tax</th>}
+                            {showOpenCol("incl") && <th className="num">Including</th>}
+                            {canViewActualCost && showOpenCol("actual") && <th className="num">Actual Cost</th>}
+                            {canViewActualCost && showOpenCol("margin") && <th className="num">Margin</th>}
+                            {showOpenCol("asof") && <th>As Of</th>}
+                            {showOpenCol("notes") && <th>Notes</th>}
+                            <th style={{ width: 64 }} aria-label="Actions"></th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {filteredOpenings.map((o) => (
+                            <tr key={o.id}>
+                              {showOpenCol("gd") && <td><GdList gds={gdByItem.get(o.itemTypeId)} /></td>}
+                              {showOpenCol("item") && <td><div className="stk-name">{o.itemTypeName}</div></td>}
+                              {showOpenCol("qty") && <td className="num" style={{ fontWeight: 600 }}>{o.quantity.toLocaleString()}</td>}
+                              {showOpenCol("excl") && <td className="num">{money(o.valueExcludingTax)}</td>}
+                              {showOpenCol("rate") && <td className="num" style={{ color: "var(--dash-text)" }}>{o.salesTaxRate ? `${num(o.salesTaxRate)}%` : "—"}</td>}
+                              {showOpenCol("tax") && <td className="num">{money(o.salesTax)}</td>}
+                              {showOpenCol("incl") && <td className="num" style={{ fontWeight: 600 }}>{money(o.valueIncludingTax)}</td>}
+                              {canViewActualCost && showOpenCol("actual") && (
+                                <td className="num" style={{ color: "var(--dash-text)" }}>
+                                  {o.actualCostExcludingTax ? money(o.actualCostExcludingTax) : "—"}
+                                </td>
+                              )}
+                              {canViewActualCost && showOpenCol("margin") && (
+                                <td className={`num${o.margin < 0 ? " neg" : ""}`} style={{ fontWeight: 600 }}>
+                                  {money(o.margin)}
+                                  <div className="stk-rate">
+                                    {o.marginPercent != null ? `${num(o.marginPercent)}%` : "—"}
+                                  </div>
+                                </td>
+                              )}
+                              {showOpenCol("asof") && <td style={{ whiteSpace: "nowrap" }}>{new Date(o.asOfDate).toLocaleDateString()}</td>}
+                              {showOpenCol("notes") && <td style={{ fontSize: 11.5, color: "var(--dash-text)", minWidth: 140 }}>{o.notes || "—"}</td>}
+                              <td className="stk-acts">
+                                <button type="button" className="stk-ib" title="Restate this opening balance"
+                                  aria-label={`Edit opening balance for ${o.itemTypeName}`} onClick={() => startEditOpening(o)}>
+                                  <MdEdit size={15} />
+                                </button>
+                                <button type="button" className="stk-ib danger" title="Delete opening balance"
+                                  aria-label={`Delete opening balance for ${o.itemTypeName}`} onClick={() => handleDeleteOpening(o)}>
+                                  <MdClose size={15} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
 
-                  {/* Mobile — movement cards */}
-                  <div className="stock-cards">
-                    {movements.map((m) => (
-                      <div key={m.id} className="stock-card">
-                        <div className="stock-card__top">
-                          <div className="stock-card__top-left">
-                            <span className="stock-card__name">{m.itemTypeName}</span>
-                            <span className="stock-card__hs">{new Date(m.movementDate).toLocaleDateString()}</span>
+                    {/* Mobile — opening balance cards */}
+                    <div className="stock-cards stk-cards">
+                      {filteredOpenings.map((o) => (
+                        <div key={o.id} className="stock-card">
+                          <div className="stock-card__top">
+                            <div className="stock-card__top-left">
+                              {showOpenCol("gd") && gdText(o.itemTypeId) && (
+                                <span className="stock-card__hs">GD {gdText(o.itemTypeId)}</span>
+                              )}
+                              <span className="stock-card__name stk-name" style={{ minWidth: 0, maxWidth: "none" }}>{o.itemTypeName}</span>
+                              <span className="stock-card__hs">As of {new Date(o.asOfDate).toLocaleDateString()}</span>
+                            </div>
+                            <div className="stock-card__onhand">
+                              <span className="stock-card__onhand-label">Quantity</span>
+                              <span className="stock-card__onhand-value" style={{ color: "var(--dash-primary)" }}>
+                                {o.quantity.toLocaleString()}
+                              </span>
+                            </div>
                           </div>
-                          <div className="stock-card__onhand">
-                            <span
-                              className="stock-card__direction"
-                              style={{ color: m.direction === "In" ? "#2e7d32" : "#c62828" }}
-                            >
-                              {m.direction === "In" ? "+" : "−"}{m.quantity.toLocaleString()}
+                          {canViewActualCost && (
+                            <div className="stock-card__stats">
+                              <div className="stock-card__stat">
+                                <span className="stock-card__stat-label">Actual Cost</span>
+                                <span className="stock-card__stat-value">
+                                  {o.actualCostExcludingTax ? money(o.actualCostExcludingTax) : "—"}
+                                </span>
+                              </div>
+                              <div className="stock-card__stat">
+                                <span className="stock-card__stat-label">Margin</span>
+                                <span className={`stock-card__stat-value${o.margin < 0 ? " neg" : ""}`}>
+                                  {money(o.margin)} {o.marginPercent != null ? `(${num(o.marginPercent)}%)` : "(—)"}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                          {o.notes && (
+                            <div className="stock-card__notes">{o.notes}</div>
+                          )}
+                          <button type="button" className="stk-btn" style={cardBtn} onClick={() => startEditOpening(o)}
+                            aria-label={`Edit opening balance for ${o.itemTypeName}`}>
+                            <MdEdit size={14} /> Edit
+                          </button>
+                          <button type="button" className="stk-btn" style={{ ...cardBtn, color: "var(--dash-negative)" }} onClick={() => handleDeleteOpening(o)}
+                            aria-label={`Delete opening balance for ${o.itemTypeName}`}>
+                            <MdClose size={14} /> Delete
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </section>
+            )}
+
+            {tab === "movements" && canViewMovements && (
+              <section role="tabpanel" aria-label="Movements">
+                {movements.length === 0 ? (
+                  <div className="stk-empty">
+                    <MdHistory size={40} />
+                    <p>No movements recorded yet.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="stk-toolbar">
+                      <span className="stk-hint">Every stock movement, newest first</span>
+                      <span className="stk-grow" />
+                      {movementPicker}
+                    </div>
+                    {/* Desktop — table */}
+                    <div className="stock-table stk-tw">
+                      <table className="stk-table">
+                        <thead>
+                          <tr>
+                            {showMovCol("date") && <th>Date</th>}
+                            {showMovCol("item") && <th>Item</th>}
+                            {showMovCol("direction") && <th>Direction</th>}
+                            {showMovCol("qty") && <th className="num">Qty</th>}
+                            {showMovCol("unitcost") && <th className="num">Unit Cost</th>}
+                            {showMovCol("value") && <th className="num">Value</th>}
+                            {showMovCol("balance") && <th className="num">Balance</th>}
+                            {showMovCol("source") && <th>Source</th>}
+                            {showMovCol("notes") && <th>Notes</th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {movements.map((m) => (
+                            <tr key={m.id}>
+                              {showMovCol("date") && <td style={{ whiteSpace: "nowrap" }}>{new Date(m.movementDate).toLocaleDateString()}</td>}
+                              {showMovCol("item") && <td><div className="stk-name">{m.itemTypeName}</div></td>}
+                              {showMovCol("direction") && <td className={m.direction === "In" ? "pos" : "neg"} style={{ fontWeight: 600 }}>{m.direction}</td>}
+                              {showMovCol("qty") && (
+                              <td className="num" style={{ fontWeight: 600 }}>
+                                {m.sourceType === "Revaluation" ? "—" : m.quantity.toLocaleString()}
+                              </td>
+                              )}
+                              {showMovCol("unitcost") && (
+                              <td className="num" style={{ color: "var(--dash-text)" }}>
+                                {m.sourceType === "Revaluation" ? "—" : num(m.unitCost)}
+                              </td>
+                              )}
+                              {showMovCol("value") && (
+                              <td className={`num ${m.direction === "In" ? "pos" : "neg"}`}>
+                                {m.direction === "In" ? "+" : "−"}{money(m.value)}
+                              </td>
+                              )}
+                              {showMovCol("balance") && <td className="num">{num(m.runningQuantity)} · {money(m.runningValue)}</td>}
+                              {showMovCol("source") && <td style={{ fontSize: 11.5 }}>{m.sourceType}{m.sourceDocNumber ? ` #${m.sourceDocNumber}` : ""}</td>}
+                              {showMovCol("notes") && <td style={{ fontSize: 11.5, color: "var(--dash-text)", minWidth: 140 }}>{m.notes || "—"}</td>}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Mobile — movement cards */}
+                    <div className="stock-cards stk-cards">
+                      {movements.map((m) => (
+                        <div key={m.id} className="stock-card">
+                          <div className="stock-card__top">
+                            <div className="stock-card__top-left">
+                              <span className="stock-card__name stk-name" style={{ minWidth: 0, maxWidth: "none" }}>{m.itemTypeName}</span>
+                              <span className="stock-card__hs">{new Date(m.movementDate).toLocaleDateString()}</span>
+                            </div>
+                            <div className="stock-card__onhand">
+                              <span className={`stock-card__direction ${m.direction === "In" ? "pos" : "neg"}`}>
+                                {m.direction === "In" ? "+" : "−"}{m.quantity.toLocaleString()}
+                              </span>
+                              <span className="stock-card__direction-label">{m.direction}</span>
+                            </div>
+                          </div>
+                          <div className="stock-card__source">
+                            <span className="stock-card__stat-label">Value</span>
+                            <span className={`stock-card__stat-value ${m.direction === "In" ? "pos" : "neg"}`}>
+                              {m.direction === "In" ? "+" : "−"}{money(m.value)}
                             </span>
-                            <span className="stock-card__direction-label">{m.direction}</span>
                           </div>
+                          <div className="stock-card__source">
+                            <span className="stock-card__stat-label">Balance</span>
+                            <span className="stock-card__stat-value">{num(m.runningQuantity)} · {money(m.runningValue)}</span>
+                          </div>
+                          <div className="stock-card__source">
+                            <span className="stock-card__stat-label">Source</span>
+                            <span className="stock-card__stat-value">
+                              {m.sourceType}{m.sourceDocNumber ? ` #${m.sourceDocNumber}` : ""}
+                            </span>
+                          </div>
+                          {m.notes && <div className="stock-card__notes">{m.notes}</div>}
                         </div>
-                        <div className="stock-card__source">
-                          <span className="stock-card__stat-label">Value</span>
-                          <span className="stock-card__stat-value" style={{ color: m.direction === "In" ? "#2e7d32" : "#c62828" }}>
-                            {m.direction === "In" ? "+" : "−"}{money(m.value)}
-                          </span>
-                        </div>
-                        <div className="stock-card__source">
-                          <span className="stock-card__stat-label">Balance</span>
-                          <span className="stock-card__stat-value">{num(m.runningQuantity)} · {money(m.runningValue)}</span>
-                        </div>
-                        <div className="stock-card__source">
-                          <span className="stock-card__stat-label">Source</span>
-                          <span className="stock-card__stat-value">
-                            {m.sourceType}{m.sourceDocNumber ? ` #${m.sourceDocNumber}` : ""}
-                          </span>
-                        </div>
-                        {m.notes && <div className="stock-card__notes">{m.notes}</div>}
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
 
-                  <Pagination
-                    page={movPage}
-                    totalPages={movPageSize > 0 ? Math.ceil(movTotal / movPageSize) : 0}
-                    total={movTotal}
-                    onPage={setMovPage}
-                    pageSize={movSize}
-                    onPageSize={(n) => { setMovSize(n); setMovPage(1); }}
-                    unit="rows"
-                  />
-                </>
-              )}
-            </>
-          )}
+                    <div className="stk-pager">
+                      <Pagination
+                        page={movPage}
+                        totalPages={movPageSize > 0 ? Math.ceil(movTotal / movPageSize) : 0}
+                        total={movTotal}
+                        onPage={setMovPage}
+                        pageSize={movSize}
+                        onPageSize={(n) => { setMovSize(n); setMovPage(1); }}
+                        unit="rows"
+                      />
+                    </div>
+                  </>
+                )}
+              </section>
+            )}
+          </div>
         </>
       )}
 
       {showOpening && (
-        <SmallModal title={openingEditId ? "Edit Opening Balance" : "Set Opening Balance"} onClose={() => { setShowOpening(false); setOpeningEditId(null); }} onSubmit={submitOpening}>
+        <SmallModal title={openingEditId ? "Edit Opening Balance" : "Set Opening Balance"} onClose={() => { setShowOpening(false); setOpeningEditId(null); }} onSubmit={submitOpening} submitting={saving}>
           <Field label="Item">
             {openingEditId ? (
               <input
                 readOnly
                 value={itemTypes.find(it => String(it.id) === String(openingDraft.itemTypeId))?.name || ""}
-                style={{ ...mInput, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
+                style={{ ...mInput, ...mInputLocked }}
                 title="Restating this item's opening balance. To open a different item, close and use Opening Balance."
               />
             ) : (
@@ -1746,7 +1775,7 @@ export default function StockDashboardPage() {
               <input type="number" min={0} step="0.01" style={mInput} value={openingDraft.actualCostExcludingTax} onChange={e => setOpeningDraft({ ...openingDraft, actualCostExcludingTax: e.target.value })} placeholder="0.00" />
               <div style={qtyHint}>
                 {openingMarginPreview
-                  ? <span style={{ color: openingMarginPreview.margin < 0 ? colors.negative : qtyHint.color, fontWeight: 600 }}>
+                  ? <span style={{ color: openingMarginPreview.margin < 0 ? "var(--dash-negative)" : qtyHint.color, fontWeight: 600 }}>
                       Margin {money(openingMarginPreview.margin)} ({openingMarginPreview.pct.toFixed(2)}%)
                     </span>
                   : "Leave blank to keep whatever cost is already stored (e.g. from a GD import)."}
@@ -1775,14 +1804,14 @@ export default function StockDashboardPage() {
       )}
 
       {showAdjust && (
-        <SmallModal title="Stock Adjustment" onClose={closeAdjust} onSubmit={submitAdjust}>
+        <SmallModal title="Stock Adjustment" onClose={closeAdjust} onSubmit={submitAdjust} submitting={saving}>
           <Field label="Item">
             {adjustLockedItem ? (
               <input
                 type="text"
                 readOnly
                 value={`${adjustLockedItem.name}${adjustLockedItem.hsCode ? ` (${adjustLockedItem.hsCode})` : ""}`}
-                style={{ ...mInput, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
+                style={{ ...mInput, ...mInputLocked }}
                 title="Opened from the stock grid — item is fixed. Use the header Adjustment button to pick a different item."
               />
             ) : (
@@ -1822,9 +1851,9 @@ export default function StockDashboardPage() {
                 onClick={() => setAdjustDraft({ ...adjustDraft, mode: m })}
                 style={{
                   ...modeBtn,
-                  backgroundColor: adjustDraft.mode === m ? colors.blue : "#fff",
-                  color: adjustDraft.mode === m ? "#fff" : colors.textPrimary,
-                  borderColor: adjustDraft.mode === m ? colors.blue : colors.inputBorder,
+                  backgroundColor: adjustDraft.mode === m ? "var(--dash-primary)" : "var(--dash-card)",
+                  color: adjustDraft.mode === m ? "var(--dash-card)" : "var(--dash-ink)",
+                  borderColor: adjustDraft.mode === m ? "var(--dash-primary)" : "var(--dash-grid)",
                 }}
               >
                 {label}
@@ -1865,7 +1894,7 @@ export default function StockDashboardPage() {
                            placeholder="0.00" />
                     <div style={qtyHint}>
                       {adjustMarginPreview
-                        ? <span style={{ color: adjustMarginPreview.margin < 0 ? colors.negative : qtyHint.color, fontWeight: 600 }}>
+                        ? <span style={{ color: adjustMarginPreview.margin < 0 ? "var(--dash-negative)" : qtyHint.color, fontWeight: 600 }}>
                             Margin {money(adjustMarginPreview.margin)}
                             {adjustMarginPreview.pct != null ? ` (${adjustMarginPreview.pct.toFixed(2)}%)` : ""}
                           </span>
@@ -1910,7 +1939,7 @@ export default function StockDashboardPage() {
                            placeholder="e.g. -5000 to write the actual cost down" />
                     <div style={qtyHint}>
                       {adjustMarginPreview
-                        ? <span style={{ color: adjustMarginPreview.margin < 0 ? colors.negative : qtyHint.color, fontWeight: 600 }}>
+                        ? <span style={{ color: adjustMarginPreview.margin < 0 ? "var(--dash-negative)" : qtyHint.color, fontWeight: 600 }}>
                             Margin {money(adjustMarginPreview.margin)}
                             {adjustMarginPreview.pct != null ? ` (${adjustMarginPreview.pct.toFixed(2)}%)` : ""}
                           </span>
@@ -2031,7 +2060,7 @@ function GdPanel({ rows, loading, openingQty, openingValue, canEdit, onSave }) {
                   {r.quantity == null ? "—" : money(r.valueExcludingTax)}
                 </td>
                 {fifo && (
-                  <td style={{ ...gdStyles.tdNum, color: "#c62828" }} data-label="Sold">
+                  <td style={{ ...gdStyles.tdNum, color: "var(--dash-negative)" }} data-label="Sold">
                     {r.consumedQuantity == null ? "—" : (
                       <>
                         <div>{num(r.consumedQuantity)}</div>
@@ -2041,7 +2070,7 @@ function GdPanel({ rows, loading, openingQty, openingValue, canEdit, onSave }) {
                   </td>
                 )}
                 {fifo && (
-                  <td style={{ ...gdStyles.tdNum, fontWeight: 700, color: colors.blue }} data-label="Left">
+                  <td style={{ ...gdStyles.tdNum, fontWeight: 700, color: "var(--dash-primary)" }} data-label="Left">
                     {r.remainingQuantity == null ? "—" : (
                       <>
                         <div>{num(r.remainingQuantity)}</div>
@@ -2121,21 +2150,21 @@ function AllocationChips({ allocations, isIn }) {
 // what went out, and the position in hand -- all from the on-hand feed, the
 // same figures the On-Hand tab shows. Nothing is recomputed here.
 function InventoryValueCells({ o, show, canViewActualCost }) {
-  const td = { ...styles.td, textAlign: "right", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums", paddingLeft: "0.45rem", paddingRight: "0.45rem" };
+  const td = { textAlign: "right", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
   const valueIn = Number(o?.openingValueExcludingTax || 0) + Number(o?.valueIn || 0);
   const margin = o?.margin;
   return (
     <>
-      {show("valuein") && <td style={{ ...td, color: "#2e7d32", fontWeight: 600 }}>{o ? money(valueIn) : "—"}</td>}
-      {show("valueout") && <td style={{ ...td, color: "#c62828", fontWeight: 600 }}>{o ? money(o.valueOut) : "—"}</td>}
-      {show("excl") && <td style={{ ...td, fontWeight: 700, color: colors.blue }}>{o ? money(o.valueExcludingTax) : "—"}</td>}
+      {show("valuein") && <td style={{ ...td, color: "var(--dash-positive)", fontWeight: 600 }}>{o ? money(valueIn) : "—"}</td>}
+      {show("valueout") && <td style={{ ...td, color: "var(--dash-negative)", fontWeight: 600 }}>{o ? money(o.valueOut) : "—"}</td>}
+      {show("excl") && <td style={{ ...td, fontWeight: 700, color: "var(--dash-primary)" }}>{o ? money(o.valueExcludingTax) : "—"}</td>}
       {show("tax") && <td style={td}>{o ? money(o.salesTax) : "—"}</td>}
       {show("incl") && <td style={{ ...td, fontWeight: 600 }}>{o ? money(o.valueIncludingTax) : "—"}</td>}
       {canViewActualCost && show("actual") && <td style={td}>{o?.actualCostExcludingTax != null ? money(o.actualCostExcludingTax) : "—"}</td>}
       {canViewActualCost && show("margin") && (
-        <td style={{ ...td, fontWeight: 600, color: margin < 0 ? colors.negative : "#2e7d32" }}>
+        <td style={{ ...td, fontWeight: 600, color: margin < 0 ? "var(--dash-negative)" : "var(--dash-positive)" }}>
           {margin != null ? money(margin) : "—"}
-          {o?.marginPercent != null && <div style={{ fontSize: "0.68rem", fontWeight: 500, color: colors.textSecondary }}>{Number(o.marginPercent).toFixed(1)}%</div>}
+          {o?.marginPercent != null && <div style={{ fontSize: "0.68rem", fontWeight: 500, color: "var(--dash-text)" }}>{Number(o.marginPercent).toFixed(1)}%</div>}
         </td>
       )}
     </>
@@ -2228,7 +2257,7 @@ function StockLedgerPanel({ gdRows, gdLoading, movements, movementsLoading, canV
 
   if (entries.length === 0) return <div style={drillStyles.state}>No stock has moved for this item yet.</div>;
   const signed = (dir, v) => (Math.abs(v) < 0.005 ? money(0) : `${dir === "In" ? "+" : "−"}${money(v)}`);
-  const tone = (dir) => ({ color: dir === "In" ? "#2e7d32" : "#c62828" });
+  const tone = (dir) => ({ color: dir === "In" ? "var(--dash-positive)" : "var(--dash-negative)" });
   const moneyCells = (dir, value, tax, actual, reval, bold) => {
     const fw = bold ? 700 : 600;
     const margin = actual == null ? null : value - actual;
@@ -2239,7 +2268,7 @@ function StockLedgerPanel({ gdRows, gdLoading, movements, movementsLoading, canV
         {show("incl") && <td style={{ ...gdStyles.tdNum, ...tone(dir), fontWeight: fw }} data-label="Including">{signed(dir, value + tax)}</td>}
         {showCost && show("actual") && <td style={{ ...gdStyles.tdNum, fontWeight: bold ? 700 : 400 }} data-label="Actual Cost">{reval || actual == null ? "—" : signed(dir, actual)}</td>}
         {showCost && show("margin") && (
-          <td style={{ ...gdStyles.tdNum, fontWeight: fw, color: margin != null && margin < 0 ? colors.negative : "#2e7d32" }} data-label="Margin">
+          <td style={{ ...gdStyles.tdNum, fontWeight: fw, color: margin != null && margin < 0 ? "var(--dash-negative)" : "var(--dash-positive)" }} data-label="Margin">
             {reval || margin == null ? "—" : money(margin)}
           </td>
         )}
@@ -2297,11 +2326,11 @@ function StockLedgerPanel({ gdRows, gdLoading, movements, movementsLoading, canV
                     )}
                     <AllocationChips allocations={e.allocations} isIn={isIn} />
                   </td>
-                  {show("qtyin") && <td style={{ ...gdStyles.tdNum, color: "#2e7d32", fontWeight: 600 }} data-label="Qty In">{isIn && !e.reval ? `+${num(e.qty)}` : ""}</td>}
-                  {show("qtyout") && <td style={{ ...gdStyles.tdNum, color: "#c62828", fontWeight: 600 }} data-label="Qty Out">{isIn || e.reval ? "" : `−${num(e.qty)}`}</td>}
-                  {show("qtybal") && <td style={{ ...gdStyles.tdNum, fontWeight: 700, color: e.balance < 0 ? "#c62828" : "#0d47a1" }} data-label="Qty Balance">{num(e.balance)}</td>}
+                  {show("qtyin") && <td style={{ ...gdStyles.tdNum, color: "var(--dash-positive)", fontWeight: 600 }} data-label="Qty In">{isIn && !e.reval ? `+${num(e.qty)}` : ""}</td>}
+                  {show("qtyout") && <td style={{ ...gdStyles.tdNum, color: "var(--dash-negative)", fontWeight: 600 }} data-label="Qty Out">{isIn || e.reval ? "" : `−${num(e.qty)}`}</td>}
+                  {show("qtybal") && <td style={{ ...gdStyles.tdNum, fontWeight: 700, color: e.balance < 0 ? "var(--dash-negative)" : "var(--dash-primary)" }} data-label="Qty Balance">{num(e.balance)}</td>}
                   {moneyCells(e.dir, e.value, e.tax, e.actual, e.reval, false)}
-                  {show("balance") && <td style={{ ...gdStyles.tdNum, fontWeight: 700, color: e.balanceValue < 0 ? "#c62828" : "#0d47a1" }} data-label="Value Balance">{money(e.balanceValue)}</td>}
+                  {show("balance") && <td style={{ ...gdStyles.tdNum, fontWeight: 700, color: e.balanceValue < 0 ? "var(--dash-negative)" : "var(--dash-primary)" }} data-label="Value Balance">{money(e.balanceValue)}</td>}
                 </tr>
               );
             })}
@@ -2310,11 +2339,11 @@ function StockLedgerPanel({ gdRows, gdLoading, movements, movementsLoading, canV
             {[["In", tot.in, totalIn], ["Out", tot.out, totalOut]].map(([dir, t, q]) => (
               <tr key={dir}>
                 <td style={{ ...gdStyles.td, fontWeight: 700 }} colSpan={2} data-label="Total">Total {dir === "In" ? "in" : "out"}</td>
-                {show("qtyin") && <td style={{ ...gdStyles.tdNum, fontWeight: 700, color: "#2e7d32" }} data-label="Qty In">{dir === "In" ? `+${num(q)}` : ""}</td>}
-                {show("qtyout") && <td style={{ ...gdStyles.tdNum, fontWeight: 700, color: "#c62828" }} data-label="Qty Out">{dir === "Out" ? `−${num(q)}` : ""}</td>}
-                {show("qtybal") && <td style={{ ...gdStyles.tdNum, fontWeight: 800, color: "#0d47a1" }} data-label="Qty Balance">{dir === "Out" ? num(bal) : ""}</td>}
+                {show("qtyin") && <td style={{ ...gdStyles.tdNum, fontWeight: 700, color: "var(--dash-positive)" }} data-label="Qty In">{dir === "In" ? `+${num(q)}` : ""}</td>}
+                {show("qtyout") && <td style={{ ...gdStyles.tdNum, fontWeight: 700, color: "var(--dash-negative)" }} data-label="Qty Out">{dir === "Out" ? `−${num(q)}` : ""}</td>}
+                {show("qtybal") && <td style={{ ...gdStyles.tdNum, fontWeight: 800, color: "var(--dash-primary)" }} data-label="Qty Balance">{dir === "Out" ? num(bal) : ""}</td>}
                 {moneyCells(dir, t.v, t.t, t.aKnown ? t.a : null, false, true)}
-                {show("balance") && <td style={{ ...gdStyles.tdNum, fontWeight: 800, color: "#0d47a1" }} data-label="Value Balance">{dir === "Out" ? money(balValue) : ""}</td>}
+                {show("balance") && <td style={{ ...gdStyles.tdNum, fontWeight: 800, color: "var(--dash-primary)" }} data-label="Value Balance">{dir === "Out" ? money(balValue) : ""}</td>}
               </tr>
             ))}
           </tfoot>
@@ -2357,7 +2386,7 @@ function ClaimMonthEditor({ line, value, onSave }) {
 
 function DrillPanel({ rows, loading, uom, canViewActualCost }) {
   if (loading) {
-    return <div style={drillStyles.state}><div style={styles.spinner} /></div>;
+    return <div style={drillStyles.state}><div className="stk-spinner" /></div>;
   }
   if (!rows) {
     return <div style={drillStyles.state}>Loading…</div>;
@@ -2432,13 +2461,13 @@ function DrillPanel({ rows, loading, uom, canViewActualCost }) {
                 <span style={{ ...drillStyles.dirBadge, ...(isIn ? drillStyles.dirIn : drillStyles.dirOut) }}>
                   {isIn ? "IN" : "OUT"}
                 </span>
-                <span style={{ ...drillStyles.qty, color: isIn ? "#2e7d32" : "#c62828" }}>
+                <span style={{ ...drillStyles.qty, color: isIn ? "var(--dash-positive)" : "var(--dash-negative)" }}>
                   {isIn ? "+" : "−"}{fmtQty(m.quantity)}{uom ? ` ${uom}` : ""}
                 </span>
                 <span style={{ ...drillStyles.srcChip, ...(isAdjust ? drillStyles.srcAdjust : null) }}>
                   {m.sourceType}{m.sourceDocNumber ? ` #${m.sourceDocNumber}` : ""}
                 </span>
-                <span style={{ ...drillStyles.qty, color: isIn ? "#2e7d32" : "#c62828" }}>
+                <span style={{ ...drillStyles.qty, color: isIn ? "var(--dash-positive)" : "var(--dash-negative)" }}>
                   {isIn ? "+" : "−"}{money(m.value)}
                 </span>
                 <span style={drillStyles.date}>{new Date(m.movementDate).toLocaleDateString()}</span>
@@ -2461,12 +2490,13 @@ function DrillPanel({ rows, loading, uom, canViewActualCost }) {
 // what was typed.
 function SearchBox({ value, onChange }) {
   return (
-    <div style={styles.searchWrap}>
-      <MdSearch style={styles.searchIcon} />
-      <input type="text" placeholder="Search item, HS code or GD number..." value={value}
-        onChange={e => onChange(e.target.value)} style={styles.searchInput} />
+    <div className="stk-search">
+      <MdSearch size={16} className="stk-search-icon" aria-hidden="true" />
+      <input type="text" className="stk-input" placeholder="Search item, HS code or GD number..." value={value}
+        aria-label="Search item, HS code or GD number"
+        onChange={e => onChange(e.target.value)} />
       {value && (
-        <button type="button" style={styles.searchClear} onClick={() => onChange("")} title="Clear search">
+        <button type="button" className="stk-search-clear" onClick={() => onChange("")} title="Clear search" aria-label="Clear search">
           <MdClose size={16} />
         </button>
       )}
@@ -2478,40 +2508,62 @@ function SearchBox({ value, onChange }) {
 // the first plus a "+N" chip; the tooltip lists every one. The full list is in
 // the expanded GD panel, and search still matches every GD number.
 function GdList({ gds }) {
-  if (!gds || gds.length === 0) return <span style={{ color: colors.textSecondary }}>—</span>;
+  if (!gds || gds.length === 0) return <span style={{ color: "var(--dash-text)" }}>—</span>;
   const shown = gds.length <= 2 ? gds : gds.slice(0, 1);
   const rest = gds.length - shown.length;
   return (
-    <div style={gdChipStyles.wrap} title={gds.join("\n")}>
-      {shown.map(g => <span key={g} style={gdChipStyles.chip}>{g}</span>)}
-      {rest > 0 && <span style={gdChipStyles.more} aria-label={`${rest} more GD numbers`}>+{rest}</span>}
+    <div className="stk-gds" title={gds.join("\n")}>
+      {shown.map(g => <span key={g} className="stk-gd">{g}</span>)}
+      {rest > 0 && <span className="stk-gd more" aria-label={`${rest} more GD numbers`}>+{rest}</span>}
     </div>
   );
 }
 
-function ValueTile({ label, value, strong }) {
+// One figure in the KPI strip (the Overview's card, compact). `tone` picks the
+// accent strip: default primary, t = teal, o = amber, g = green.
+function Kpi({ label, value, sub, tone, negative }) {
   return (
-    <div style={styles.valueTile}>
-      <span style={styles.valueTileLabel}>{label}</span>
-      <span style={{
-        display: "block",
-        marginTop: "0.15rem",
-        fontSize: strong ? "1.05rem" : "0.98rem",
-        fontWeight: strong ? 800 : 700,
-        color: strong ? colors.blue : colors.textPrimary,
-        fontVariantNumeric: "tabular-nums",
-      }}>{value}</span>
+    <div className={`stk-kpi${tone ? ` ${tone}` : ""}`}>
+      <div className="l">{label}</div>
+      <div className={`v${negative ? " neg" : ""}`}>{value}</div>
+      {sub && <div className="s">{sub}</div>}
     </div>
   );
 }
 
-function TabBtn({ active, children, onClick }) {
+function TabBtn({ active, children, onClick, count }) {
   return (
-    <button onClick={onClick} style={{
-      borderRadius: 8, border: "1px solid #d0d7e2", cursor: "pointer",
-      backgroundColor: active ? "#0d47a1" : "#fff", color: active ? "#fff" : "#1a2332",
-      fontSize: "0.85rem", fontWeight: 600, boxShadow: "none", padding: "0.45rem 0.95rem"
-    }}>{children}</button>
+    <button type="button" role="tab" aria-selected={active} className="stk-tab" onClick={onClick}>
+      {children}<span className="n">{count}</span>
+    </button>
+  );
+}
+
+// An expanded On-Hand row: the GD lots behind it, and (with the movements
+// permission) its movement history, as two sub-tabs. Both panels are the ones
+// the row always had; only one shows at a time.
+function OnhandDrill({ row, tab, onTab, gdRows, gdLoading, moves, movesLoading, canViewMovements, canEdit, onSave, canViewActualCost }) {
+  const showMoves = canViewMovements && tab === "moves";
+  return (
+    <div className="stk-drill">
+      <div className="stk-subtabs" role="tablist" aria-label={`Details for ${row.itemTypeName}`}>
+        <button type="button" role="tab" className="stk-subtab" aria-selected={!showMoves} onClick={() => onTab("gd")}>
+          GD lots{gdRows ? ` (${gdRows.length})` : ""}
+        </button>
+        {canViewMovements && (
+          <button type="button" role="tab" className="stk-subtab" aria-selected={showMoves} onClick={() => onTab("moves")}>
+            Movement history
+          </button>
+        )}
+      </div>
+      {showMoves ? (
+        <DrillPanel rows={moves} loading={movesLoading} uom={row.uom} canViewActualCost={canViewActualCost} />
+      ) : (
+        <GdPanel rows={gdRows} loading={gdLoading}
+          openingQty={row.openingBalance} openingValue={row.openingValueExcludingTax}
+          canEdit={canEdit} onSave={onSave} />
+      )}
+    </div>
   );
 }
 
@@ -2527,7 +2579,7 @@ function TabBtn({ active, children, onClick }) {
 /// This is the same defect CLAUDE.md section 3 records against CorrectionWizard.
 /// The fix is the documented one: backdrop scrolls, card caps at 96vh, and the
 /// BODY scrolls inside it so the header and footer stay put.
-function SmallModal({ title, children, onClose, onSubmit }) {
+function SmallModal({ title, children, onClose, onSubmit, submitting }) {
   // Escape closes, because a dialog you cannot dismiss is the whole complaint.
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onClose?.(); };
@@ -2543,6 +2595,7 @@ function SmallModal({ title, children, onClose, onSubmit }) {
       role="presentation"
     >
       <div
+        className="stk"
         style={{
           ...formStyles.modal,
           maxWidth: modalSizes.md,
@@ -2555,25 +2608,9 @@ function SmallModal({ title, children, onClose, onSubmit }) {
         aria-label={title}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div style={{
-          display: "flex", justifyContent: "space-between", alignItems: "center",
-          padding: "1rem 1.25rem", borderBottom: "1px solid #e6ecf4",
-          flexShrink: 0,
-        }}>
-          <h3 style={{ margin: 0, fontSize: "1.05rem", color: "#1a2332" }}>{title}</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            style={{
-              background: "none", border: "none", color: "#5f6d7e", cursor: "pointer",
-              // padding 0 + no shadow: index.css's global button rule would
-              // otherwise stretch this into a pill and shove the X off-centre.
-              padding: 0, boxShadow: "none",
-              fontSize: "1.5rem", lineHeight: 1,
-              display: "grid", placeItems: "center", width: 44, height: 44,
-            }}
-          >×</button>
+        <div className="stk-modal-head">
+          <h3>{title}</h3>
+          <button type="button" className="stk-modal-close" onClick={onClose} aria-label="Close">×</button>
         </div>
 
         <form
@@ -2581,24 +2618,14 @@ function SmallModal({ title, children, onClose, onSubmit }) {
           style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}
         >
           {/* Only the body scrolls, so the footer buttons are always reachable. */}
-          <div style={{ overflowY: "auto", flex: 1, minHeight: 0, padding: "1.25rem" }}>
+          <div style={{ overflowY: "auto", flex: 1, minHeight: 0, padding: "14px 16px" }}>
             {children}
           </div>
-          <div style={{
-            display: "flex", justifyContent: "flex-end", gap: "0.5rem",
-            padding: "0.85rem 1.25rem", borderTop: "1px solid #e6ecf4",
-            background: "#fff", flexShrink: 0,
-          }}>
-            <button type="button" onClick={onClose} style={{
-              padding: "0.55rem 1.1rem", borderRadius: 8, border: "1px solid #d0d7e2",
-              background: "#fff", color: "#1a2332", cursor: "pointer", boxShadow: "none",
-              minHeight: 44,
-            }}>Cancel</button>
-            <button type="submit" style={{
-              padding: "0.55rem 1.1rem", borderRadius: 8, border: "none",
-              background: "#0d47a1", color: "#fff", cursor: "pointer", fontWeight: 600,
-              boxShadow: "none", minHeight: 44,
-            }}>Save</button>
+          <div className="stk-modal-foot">
+            <button type="button" className="stk-btn" onClick={onClose}>Cancel</button>
+            <button type="submit" className="stk-btn primary" disabled={submitting} aria-busy={submitting || undefined}>
+              {submitting ? "Saving…" : "Save"}
+            </button>
           </div>
         </form>
       </div>
@@ -2608,174 +2635,74 @@ function SmallModal({ title, children, onClose, onSubmit }) {
 
 function Field({ label, children }) {
   return (
-    <div style={{ marginBottom: "0.75rem" }}>
-      <label style={{ display: "block", fontSize: "0.82rem", color: "#5f6d7e", marginBottom: "0.25rem", fontWeight: 600 }}>{label}</label>
+    <div className="stk-field">
+      <label>{label}</label>
       {children}
     </div>
   );
 }
 
-const mInput = { width: "100%", padding: "0.45rem 0.65rem", border: "1px solid #d0d7e2", borderRadius: 8, fontSize: "0.85rem", backgroundColor: "#f8f9fb", color: "#1a2332", outline: "none" };
-const qtyHint = { fontSize: "0.72rem", color: "#5f6d7e", marginTop: "0.35rem" };
+const mInput = { width: "100%", minHeight: 40, padding: "0.45rem 0.65rem", border: "1px solid var(--dash-grid)", borderRadius: 8, fontSize: "12.5px", backgroundColor: "var(--dash-card)", color: "var(--dash-ink)", outline: "none" };
+const mInputLocked = { backgroundColor: "var(--dash-primary-soft)", cursor: "not-allowed" };
+const qtyHint = { fontSize: "11px", color: "var(--dash-text)", marginTop: "0.35rem" };
 // "On record now" strip + the mode switch at the top of the Adjustment dialog.
 const adjustNow = {
   display: "flex", flexWrap: "wrap", gap: "0.35rem", alignItems: "baseline",
-  padding: "0.5rem 0.7rem", marginBottom: "0.7rem",
-  border: "1px solid #e8edf3", borderRadius: 8,
-  backgroundColor: "#f0f7ff", fontSize: "0.85rem", color: "#1a2332",
+  padding: "8px 10px", marginBottom: "0.7rem",
+  borderRadius: 8, backgroundColor: "var(--dash-head-bg)", fontSize: "11.5px", color: "var(--dash-text)",
 };
 const adjustNowLabel = {
-  fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.04em",
-  textTransform: "uppercase", color: "#5f6d7e", marginRight: "0.3rem",
+  fontSize: "10.5px", fontWeight: 600, letterSpacing: "0.06em",
+  textTransform: "uppercase", color: "var(--dash-muted)", marginRight: "0.3rem",
 };
 const modeRow = { display: "flex", gap: "0.4rem", marginBottom: "0.35rem" };
 // 40px tall so the pair stays a comfortable tap target on a phone.
 const modeBtn = {
-  flex: 1, minHeight: 40, padding: "0.45rem 0.6rem", borderRadius: 8,
-  border: "1px solid", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600,
+  flex: 1, minHeight: 40, padding: "0.45rem 0.6rem", borderRadius: 8, boxShadow: "none",
+  border: "1px solid", cursor: "pointer", fontSize: "12px", fontWeight: 600,
 };
-// Icon-only row actions (house pattern: fixed box, grid-centred, explicit size)
-// so the actions column stays narrow and the figures get the width.
-const rowIconBtn = { display: "grid", placeItems: "center", width: 32, height: 32, padding: 0, borderRadius: 8, border: "1px solid #d0d7e2", backgroundColor: "#fff", color: "#5f6d7e", cursor: "pointer", boxShadow: "none", flexShrink: 0 };
-const rowIconAdjust = { border: "1px solid #90caf9", backgroundColor: "#e3f2fd", color: "#0d47a1" };
-const gdChipStyles = {
-  wrap: { display: "flex", flexWrap: "wrap", gap: 3, maxWidth: 210 },
-  chip: { fontFamily: "monospace", fontSize: "0.72rem", color: colors.blue, backgroundColor: "#eef4fc", border: "1px solid #d6e4f7", borderRadius: 5, padding: "0.05rem 0.35rem", whiteSpace: "nowrap" },
-  more: { fontSize: "0.7rem", fontWeight: 700, color: "#5f6d7e", backgroundColor: "#eef2f7", borderRadius: 5, padding: "0.05rem 0.35rem", whiteSpace: "nowrap", cursor: "help" },
-};
-const gdTh = { padding: "0.4rem 0.6rem", backgroundColor: "#f5f8fc", borderBottom: "1px solid #e8edf3", fontSize: "0.68rem", fontWeight: 700, color: "#5f6d7e", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" };
-const gdTd = { padding: "0.4rem 0.6rem", borderBottom: "1px solid #f0f3f7", verticalAlign: "top", color: "#1a2332" };
+// Full-width card button (phone): 44px tall, stacked under the card's figures.
+const cardBtn = { width: "100%", minHeight: 44, marginTop: 6 };
+const gdTh = { padding: "6px 10px", backgroundColor: "var(--dash-head-bg)", borderBottom: "1px solid var(--dash-grid)", fontSize: "10px", fontWeight: 600, color: "var(--dash-text)", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" };
+const gdTd = { padding: "6px 10px", borderBottom: "1px solid var(--dash-line)", verticalAlign: "top", color: "var(--dash-ink)" };
 const gdStyles = {
   head: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.45rem", marginBottom: "0.35rem" },
-  stat: { fontSize: "0.74rem", color: "#37474f", backgroundColor: "#fff", border: "1px solid #e8edf3", borderRadius: 999, padding: "0.1rem 0.55rem", fontVariantNumeric: "tabular-nums" },
-  statWarn: { color: "#c62828", backgroundColor: "#fdecea", border: "1px solid #f5c6c2" },
-  statOk: { color: "#2e7d32", backgroundColor: "#e8f5e9", border: "1px solid #c8e6c9" },
-  help: { fontSize: "0.73rem", color: "#5f6d7e", marginBottom: "0.5rem", lineHeight: 1.4 },
-  helpSummary: { cursor: "pointer", color: "#0d47a1", fontWeight: 600, width: "fit-content" },
-  box: { border: "1px solid #e8edf3", borderRadius: 8, backgroundColor: "#fff", overflowX: "auto" },
-  table: { width: "100%", borderCollapse: "collapse", fontSize: "0.8rem" },
+  stat: { fontSize: "11px", color: "var(--dash-ink)", backgroundColor: "var(--dash-card)", border: "1px solid var(--dash-grid)", borderRadius: 999, padding: "1px 8px", fontVariantNumeric: "tabular-nums" },
+  statWarn: { color: "var(--dash-negative)", backgroundColor: "var(--dash-negative-soft)", border: "1px solid var(--dash-negative-soft)" },
+  statOk: { color: "var(--dash-positive)", backgroundColor: "var(--dash-positive-soft)", border: "1px solid var(--dash-positive-soft)" },
+  help: { fontSize: "11px", color: "var(--dash-text)", marginBottom: "0.5rem", lineHeight: 1.4 },
+  helpSummary: { cursor: "pointer", color: "var(--dash-primary)", fontWeight: 600, width: "fit-content" },
+  box: { border: "1px solid var(--dash-grid)", borderRadius: 8, backgroundColor: "var(--dash-card)", overflowX: "auto" },
+  table: { width: "100%", borderCollapse: "collapse", fontSize: "11.5px" },
   th: { ...gdTh, textAlign: "left" },
   thNum: { ...gdTh, textAlign: "right" },
   td: gdTd,
   tdNum: { ...gdTd, textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" },
-  gdNo: { fontFamily: "monospace", fontWeight: 700, color: "#0d47a1", whiteSpace: "nowrap" },
-  sub: { fontSize: "0.7rem", color: "#5f6d7e", marginTop: 1 },
+  gdNo: { fontFamily: "ui-monospace, Consolas, monospace", fontWeight: 600, color: "var(--dash-primary)", whiteSpace: "nowrap" },
+  sub: { fontSize: "10.5px", color: "var(--dash-muted)", marginTop: 1 },
   desc: { lineHeight: 1.3, overflowWrap: "anywhere", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
-  pill: { display: "inline-block", fontSize: "0.72rem", fontWeight: 600, borderRadius: 999, padding: "0.1rem 0.5rem", whiteSpace: "nowrap" },
-  monthInput: { height: 32, padding: "0 0.4rem", border: "1px solid #d0d7e2", borderRadius: 6, fontSize: "0.78rem", color: "#1a2332", backgroundColor: "#fff", minWidth: 0 },
-  monthInputEmpty: { borderColor: "#f5c6c2", backgroundColor: "#fffafa" },
-  saveBtn: { height: 32, padding: "0 0.65rem", borderRadius: 6, border: "1px solid #0d47a1", backgroundColor: "#0d47a1", color: "#fff", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", boxShadow: "none", whiteSpace: "nowrap" },
-  saveBtnIdle: { backgroundColor: "#fff", color: "#94a3b8", border: "1px solid #d0d7e2", cursor: "default" },
-  untraced: { marginTop: "0.5rem", fontSize: "0.74rem", color: "#8d5a00", backgroundColor: "#fff8e1", border: "1px solid #ffe0a3", borderRadius: 6, padding: "0.35rem 0.6rem" },
+  pill: { display: "inline-block", fontSize: "10.5px", fontWeight: 600, borderRadius: 999, padding: "1px 8px", whiteSpace: "nowrap" },
+  monthInput: { height: 30, padding: "0 0.4rem", border: "1px solid var(--dash-grid)", borderRadius: 6, fontSize: "11.5px", color: "var(--dash-ink)", backgroundColor: "var(--dash-card)", minWidth: 0 },
+  monthInputEmpty: { borderColor: "var(--dash-warn-line)", backgroundColor: "var(--dash-warn-soft)" },
+  saveBtn: { height: 30, padding: "0 0.65rem", borderRadius: 6, border: "1px solid var(--dash-primary)", backgroundColor: "var(--dash-primary)", color: "var(--dash-card)", fontSize: "11.5px", fontWeight: 600, cursor: "pointer", boxShadow: "none", whiteSpace: "nowrap" },
+  saveBtnIdle: { backgroundColor: "var(--dash-card)", color: "var(--dash-muted)", border: "1px solid var(--dash-grid)", cursor: "default" },
+  untraced: { marginTop: "0.5rem", fontSize: "11px", color: "var(--dash-warn-ink)", backgroundColor: "var(--dash-warn-soft)", border: "1px solid var(--dash-warn-line)", borderRadius: 6, padding: "6px 10px" },
 };
-const cardAdjustBtn = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.35rem", width: "100%", minHeight: 44, marginTop: "0.6rem", padding: "0.5rem 0.75rem", borderRadius: 8, border: "1px solid #90caf9", backgroundColor: "#e3f2fd", color: "#0d47a1", fontSize: "0.84rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" };
-const cardHistoryBtn = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.35rem", width: "100%", minHeight: 44, marginTop: "0.4rem", padding: "0.5rem 0.75rem", borderRadius: 8, border: "1px solid #d0d7e2", backgroundColor: "#fff", color: "#5f6d7e", fontSize: "0.84rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" };
-const cardDrillBtn = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.3rem", width: "100%", minHeight: 40, marginTop: "0.6rem", padding: "0.45rem 0.75rem", borderRadius: 8, border: "1px solid #d0d7e2", backgroundColor: "#fff", color: "#5f6d7e", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" };
 
 const drillStyles = {
-  wrap: { padding: "0.6rem 0.85rem 0.85rem" },
-  heading: { display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.74rem", fontWeight: 700, color: "#5f6d7e", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.5rem" },
-  state: { padding: "1rem 0.85rem", textAlign: "center", color: "#5f6d7e", fontSize: "0.82rem", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 48 },
+  wrap: { padding: 0 },
+  heading: { display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "10.5px", fontWeight: 600, color: "var(--dash-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.5rem" },
+  state: { padding: "1rem 0.85rem", textAlign: "center", color: "var(--dash-text)", fontSize: "12px", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 48 },
   list: { display: "flex", flexDirection: "column", gap: "0.4rem" },
-  row: { padding: "0.5rem 0.65rem", borderRadius: 8, border: "1px solid #e8edf3", backgroundColor: "#fff" },
+  row: { padding: "8px 10px", borderRadius: 8, border: "1px solid var(--dash-grid)", backgroundColor: "var(--dash-card)" },
   rowMain: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" },
-  dirBadge: { fontSize: "0.66rem", fontWeight: 800, padding: "0.1rem 0.4rem", borderRadius: 5, letterSpacing: "0.03em" },
-  dirIn: { backgroundColor: "#e8f5e9", color: "#2e7d32" },
-  dirOut: { backgroundColor: "#fdecea", color: "#c62828" },
-  qty: { fontSize: "0.9rem", fontWeight: 700, minWidth: 70 },
-  srcChip: { fontSize: "0.74rem", fontWeight: 600, color: "#37474f", backgroundColor: "#eef2f7", padding: "0.12rem 0.45rem", borderRadius: 5 },
-  srcAdjust: { backgroundColor: "#fff3e0", color: "#e65100" },
-  date: { fontSize: "0.76rem", color: "#5f6d7e", marginLeft: "auto" },
-  bal: { fontSize: "0.74rem", fontWeight: 700, color: "#0d47a1", backgroundColor: "#f0f7ff", padding: "0.12rem 0.45rem", borderRadius: 5 },
-  notes: { fontSize: "0.74rem", color: "#5f6d7e", marginTop: "0.35rem", lineHeight: 1.35 },
+  dirBadge: { fontSize: "10.5px", fontWeight: 600, padding: "1px 8px", borderRadius: 999, letterSpacing: "0.03em" },
+  dirIn: { backgroundColor: "var(--dash-positive-soft)", color: "var(--dash-positive)" },
+  dirOut: { backgroundColor: "var(--dash-negative-soft)", color: "var(--dash-negative)" },
+  qty: { fontSize: "12.5px", fontWeight: 700, minWidth: 70, fontVariantNumeric: "tabular-nums" },
+  srcChip: { fontSize: "11px", fontWeight: 600, color: "var(--dash-ink)", backgroundColor: "var(--dash-neutral-soft)", padding: "1px 7px", borderRadius: 5 },
+  srcAdjust: { backgroundColor: "var(--dash-warn-soft)", color: "var(--dash-warn)" },
+  date: { fontSize: "11px", color: "var(--dash-text)", marginLeft: "auto" },
+  bal: { fontSize: "11px", fontWeight: 600, color: "var(--dash-primary)", backgroundColor: "var(--dash-primary-soft)", padding: "1px 7px", borderRadius: 5, fontVariantNumeric: "tabular-nums" },
+  notes: { fontSize: "11px", color: "var(--dash-text)", marginTop: "0.35rem", lineHeight: 1.35 },
 };
-
-const styles = {
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.75rem" },
-  toolbar: { display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap", width: "100%", paddingTop: "0.75rem", borderTop: `1px solid ${colors.cardBorder}` },
-  headerIcon: { width: 48, height: 48, borderRadius: 14, background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, display: "flex", alignItems: "center", justifyContent: "center" },
-  title: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
-  subtitle: { margin: "0.15rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
-  altBtn: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", borderRadius: 8, border: "1px solid #d0d7e2", backgroundColor: "#fff", color: "#0d47a1", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
-  altBtnBusy: { opacity: 0.6, cursor: "progress" },
-  monthExport: { display: "inline-flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" },
-  monthInput: { minHeight: 36, padding: "0.35rem 0.5rem", border: "1px solid #d0d7e2", borderRadius: 8, fontSize: "0.85rem", color: "#0d47a1", backgroundColor: "#fff" },
-  loading: { display: "flex", alignItems: "center", justifyContent: "center", padding: "3rem 0" },
-  spinner: { width: 28, height: 28, border: `3px solid ${colors.cardBorder}`, borderTopColor: colors.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite" },
-  empty: { display: "flex", flexDirection: "column", alignItems: "center", padding: "3rem 1rem", textAlign: "center", color: colors.textSecondary },
-  warnBanner: { padding: "0.65rem 0.95rem", marginBottom: "1rem", backgroundColor: "#fff8e1", border: "1px solid #ffcc80", borderRadius: 8, color: "#bf360c", fontSize: "0.85rem" },
-  tabs: { display: "flex", gap: "0.5rem", marginBottom: "1rem", flexWrap: "wrap" },
-  verPillV2: { fontSize: "0.74rem", fontWeight: 700, color: "#00695c", backgroundColor: "#e0f2f1", border: "1px solid #b2dfdb", padding: "0.3rem 0.6rem", borderRadius: 999 },
-  verPillV1: { fontSize: "0.74rem", fontWeight: 700, color: "#5f6d7e", backgroundColor: "#eef2f7", border: "1px solid #d0d7e2", padding: "0.3rem 0.6rem", borderRadius: 999 },
-  fbrBadge: { fontSize: "0.68rem", fontWeight: 700, color: "#6a1b9a", backgroundColor: "#f3e5f5", padding: "0.1rem 0.4rem", borderRadius: 5 },
-  lowBadge: { fontSize: "0.68rem", fontWeight: 700, color: "#c62828", backgroundColor: "#ffebee", padding: "0.1rem 0.4rem", borderRadius: 5 },
-  toolbar: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.6rem", marginBottom: "1rem" },
-  searchWrap: { position: "relative", flex: "1 1 260px", maxWidth: 360 },
-  searchIcon: { position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" },
-  searchInput: { width: "100%", padding: "0.55rem 2.4rem 0.55rem 2.3rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 10, fontSize: "0.88rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none" },
-  searchClear: { position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: 28, height: 28, display: "inline-flex", alignItems: "center", justifyContent: "center", border: "none", background: "none", color: "#94a3b8", cursor: "pointer", padding: 0, boxShadow: "none" },
-  clearSearchBtn: { marginTop: "0.75rem", padding: "0.45rem 1rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.84rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
-  tableWrap: { overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, backgroundColor: "#fff" },
-  table: { width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" },
-  itemName: {
-    fontWeight: 700, color: colors.textPrimary, lineHeight: 1.3, overflowWrap: "anywhere",
-    minWidth: 0,
-    display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
-    overflow: "hidden",
-  },
-  itemMeta: {
-    display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.2rem",
-    fontSize: "0.72rem", color: colors.textSecondary,
-  },
-  hsChip: { fontFamily: "monospace", color: colors.blue },
-  // The flow behind the on-hand figure: opening, everything in, everything
-  // out -- quantity and value per row, one shade lighter than the on-hand
-  // figure so that stays the one the eye lands on first.
-  flowGrid: {
-    display: "grid", gridTemplateColumns: "auto auto", justifyContent: "end",
-    columnGap: "0.45rem", rowGap: 1, marginTop: "0.2rem",
-    fontSize: "0.7rem", color: colors.textSecondary, fontVariantNumeric: "tabular-nums",
-    textAlign: "right",
-  },
-  flowValue: { opacity: 0.85 },
-  cardStatMoney: {
-    fontSize: "0.68rem", color: colors.textSecondary,
-    fontVariantNumeric: "tabular-nums",
-  },
-  rateChip: { marginTop: "0.15rem", fontSize: "0.72rem", color: colors.textSecondary },
-  valueStrip: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(140px, 100%), 1fr))",
-    gap: "0.6rem",
-    margin: "0 0 0.9rem",
-  },
-  valueTile: {
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 10,
-    padding: "0.5rem 0.7rem",
-    backgroundColor: colors.inputBg,
-  },
-  valueTileLabel: {
-    display: "block",
-    fontSize: "0.7rem",
-    fontWeight: 700,
-    letterSpacing: "0.04em",
-    textTransform: "uppercase",
-    color: colors.textSecondary,
-  },
-  tdMoney: {
-    padding: "0.5rem 0.6rem",
-    borderBottom: `1px solid ${colors.cardBorder}`,
-    color: colors.textPrimary,
-    verticalAlign: "top",
-    textAlign: "right",
-    fontVariantNumeric: "tabular-nums",
-    whiteSpace: "nowrap",
-  },
-  th: { textAlign: "left", padding: "0.55rem 0.6rem", backgroundColor: "#f5f8fc", borderBottom: `1px solid ${colors.cardBorder}`, fontSize: "0.7rem", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.04em" },
-  td: { padding: "0.5rem 0.6rem", borderBottom: `1px solid ${colors.cardBorder}`, color: colors.textPrimary, verticalAlign: "top" },
-  pagination: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", padding: "0.75rem 0" },
-  pageBtn: { padding: "0.4rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
-  pageInfo: { fontSize: "0.82rem", color: colors.textSecondary, fontWeight: 500 },
-};
-const btnTiny = { padding: 0, width: 28, height: 28, borderRadius: 6, border: "1px solid #d0d7e2", backgroundColor: "#fff", color: "#c62828", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", boxShadow: "none" };

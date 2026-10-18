@@ -23,6 +23,24 @@
   /* Content cards are white under every OS scheme, so no dark overrides. */
   --dash-card: #ffffff;
   --dash-ink: #0c1830;
+  /* Softer companions of the tokens above (Stock page, 2026-10-18). */
+  --dash-muted: #8a97a8;
+  --dash-line: #eef2f7;
+  --dash-head-bg: #f7f9fc;
+  --dash-neutral-soft: #eef1f5;
+  --dash-primary-soft: #e8f0fb;
+  --dash-primary-hover: #0a3a85;
+  --dash-secondary-soft: #e0f2f1;
+  --dash-positive-soft: #e7f6ec;
+  --dash-negative-soft: #fdecec;
+  --dash-warn-soft: #fff4e5;
+  --dash-warn-line: #f3d6a4;
+  --dash-warn-ink: #7a4505;
+  --dash-row-hover: #f8fbff;
+  --dash-row-open: #f0f6ff;
+  --dash-band-qty: #7d8a9c;
+  --dash-band-flow: #56657a;
+  --dash-shadow: 0 1px 2px rgba(12, 24, 48, 0.06), 0 1px 8px rgba(12, 24, 48, 0.04);
 }
 
 * {
