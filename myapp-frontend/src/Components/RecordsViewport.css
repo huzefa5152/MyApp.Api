@@ -1,0 +1,52 @@
+/* Scope viewport containment to list screens; forms and dashboards keep their layout. */
+@media screen {
+ .dl-shell:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *)) { height:100dvh; min-height:0; overflow:hidden; }
+ .dl-content-wrapper:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *)) { height:100dvh; min-height:0; }
+ .dl-content-wrapper:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *))>.dl-topbar { flex-shrink:0; }
+ .dl-main:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *)) { display:flex; flex-direction:column; height:calc(100dvh - var(--topbar-height,0px)); min-height:0; overflow:hidden; }
+ .dl-main :is(div,section,article,main):has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *)) { display:flex !important; flex-direction:column !important; flex:1 1 auto; min-height:0 !important; min-width:0; }
+ .dl-main :is(div,section,article,main):has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *))> :not(:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *))):not([data-records-viewport]) { flex-shrink:0; }
+ .records-viewport { position:relative; flex:1 1 auto; min-height:0; min-width:0; overflow:auto; overscroll-behavior:contain; scrollbar-gutter:stable; padding:2px 4px 12px 2px; outline-offset:-2px; }
+ .records-viewport:focus-visible { outline:2px solid #0d47a1; }
+ .records-viewport [data-admin-table-region] { max-height:none !important; overflow:visible !important; }
+ .records-viewport [data-grid-shell] { overflow:visible !important; }
+ .records-viewport thead th { position:sticky; top:0; z-index:2; background:#f5f8fc; }
+ .records-viewport>.pagination-bar { background:#fff; padding:10px; border-top:1px solid #e8edf3; }
+ .records-viewport .card-grid { align-content:start; }
+}
+@media screen and (max-width:767px) {
+ .dl-main:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *)) { padding:10px; }
+ .dl-main:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *)) [data-admin-page-header] { margin-bottom:10px !important; gap:8px !important; }
+ .dl-main:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *)) [data-admin-toolbar] { gap:8px !important; padding:10px !important; margin-bottom:10px !important; }
+ .records-viewport { padding-right:2px; }
+}
+@media print {
+ .records-viewport { overflow:visible; height:auto; max-height:none; }
+}
+@media screen {
+ .list-filters { flex:none; min-width:0; }
+ .list-filters>summary { display:none; }
+}
+@media screen and (max-width:767px) {
+ .list-filters { background:#fff; border:1px solid #dce4ef; border-radius:10px; margin-bottom:10px; }
+ .list-filters>summary { display:flex; justify-content:space-between; align-items:center; min-height:44px; padding:10px 12px; color:#0d47a1; font-size:13px; font-weight:600; cursor:pointer; list-style:none; }
+ .list-filters>summary::-webkit-details-marker { display:none; }
+ .list-filters>summary>span { color:#63748a; font-size:12px; font-weight:400; }
+ .list-filters>summary:focus-visible { outline:2px solid #0d47a1; outline-offset:-2px; }
+ .list-filters>.list-filters-content { max-height:38dvh; overflow:auto; padding:0 8px 8px; }
+ .list-filters .filters-row { margin-bottom:0; }
+ .list-filters .filter-date-group { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; gap:8px; min-width:0; }
+ .list-filters .filter-date-group .filter-date-sep { display:none; }
+ .list-filters .filter-date-group input { width:100%; min-width:0; }
+ .list-filters .filter-date-group input:last-child { grid-column:2; grid-row:1; }
+ .list-filters .filter-date-group select { grid-column:1 / -1; }
+}
+
+@media screen {
+ .records-viewport :is(div,section):has(> [data-admin-table-region]) { overflow:visible !important; }
+ .records-viewport .isd-register [data-admin-table-region]>table>thead th { position:sticky !important; top:0; }
+}
+
+@media screen {
+ .dl-main:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *)) [data-secondary-records] { max-height:22dvh; overflow:auto; overscroll-behavior:contain; padding:2px 4px 2px 2px; }
+}

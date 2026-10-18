@@ -1,3 +1,5 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 // src/pages/FbrPurchaseImportPage.jsx
 //
 // FBR Annexure-A xls upload + per-row import preview.
@@ -280,7 +282,7 @@ export default function FbrPurchaseImportPage() {
       </header>
 
       {/* ── Upload card ─────────────────────────────────────────────── */}
-      <section className="fbr-imp-card" style={styles.card}>
+      <ListFilters><section className="fbr-imp-card" style={styles.card}>
         <div className="fbr-imp-upload-row" style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "1rem" }}>
           {companies.length > 1 && (<div className="fbr-imp-upload-row__field" style={{ minWidth: 220 }}>
             <label style={styles.label}>Company</label>
@@ -361,13 +363,13 @@ export default function FbrPurchaseImportPage() {
             {" "}Both layouts upload here; the sample is fictional (safe for demos) and re-uploadable.
           </span>
         </div>
-      </section>
+      </section></ListFilters>
 
       {/* ── Commit result panel ─────────────────────────────────────────
            Shown after Commit completes. Replaces the preview view and
            summarises what landed in the DB. The operator can clear and
            start over (Run Preview again) once they've reviewed it. */}
-      {commitResult && (
+      <RecordsViewport label="Imported purchase preview records">{commitResult && (
         <section className="fbr-imp-card" style={{ ...styles.card, borderLeft: "4px solid #2e7d32" }}>
           <div className="fbr-imp-result-head" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.5rem" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
@@ -698,7 +700,7 @@ export default function FbrPurchaseImportPage() {
             )}
           </section>
         );
-      })}
+      })}</RecordsViewport>
     </div>
   );
 }

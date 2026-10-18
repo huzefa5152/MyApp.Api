@@ -1,3 +1,4 @@
+import RecordsViewport from "../RecordsViewport";
 import { useMemo, useState, useEffect } from "react";
 import { MdSearch, MdClose, MdVisibility, MdCheckCircle } from "react-icons/md";
 import { STARTER_TEMPLATES } from "../../utils/starterTemplates";
@@ -154,7 +155,7 @@ export default function StarterGallery({
           </select>
         </div>
 
-        <div style={s.grid}>
+        <RecordsViewport enabled={embedded} label="Starter template records"><div style={s.grid}>
           {list.length === 0 && <div style={s.empty}>No starter templates match your search.</div>}
           {list.map((t, i) => (
             <div key={t.id} style={s.card}>
@@ -176,7 +177,7 @@ export default function StarterGallery({
               </button>
             </div>
           ))}
-        </div>
+        </div></RecordsViewport>
     </>
   );
 

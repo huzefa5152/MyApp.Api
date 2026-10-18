@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useMemo } from "react";
 import { MdStraighten, MdSearch, MdCheck, MdInfo } from "react-icons/md";
 import { getAllUnits, updateUnit } from "../api/unitsApi";
@@ -169,7 +170,7 @@ export default function UnitsPage() {
       </div>
 
       {/* Grid */}
-      {loading ? (
+      <RecordsViewport label="Units records">{loading ? (
         <p style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
           Loading units…
         </p>
@@ -239,7 +240,7 @@ export default function UnitsPage() {
             </tbody>
           </table>
         </div>
-      )}
+      )}</RecordsViewport>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useEffect, useMemo, useState } from "react";
 import {
   MdAdminPanelSettings,
@@ -158,7 +159,7 @@ export default function TenantAccessPage() {
         </span>
       </div>
 
-      {loading ? (
+      <RecordsViewport label="Tenant Access records">{loading ? (
         <div style={pageStyles.empty}>Loading…</div>
       ) : filtered.length === 0 ? (
         <div style={pageStyles.empty}>
@@ -260,7 +261,7 @@ export default function TenantAccessPage() {
             })}
           </div>
         </>
-      )}
+      )}</RecordsViewport>
 
       {editUser && (
         <EditModal

@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useMemo } from "react";
 import { MdPeople, MdAdd, MdSearch, MdBusiness } from "react-icons/md";
 import ClientList from "../Components/ClientList";
@@ -194,7 +195,7 @@ export default function ClientsPage() {
       )}
 
       {/* Client List */}
-      {loadingClients ? (
+      <RecordsViewport label="Clients records">{loadingClients ? (
         <div style={styles.loadingContainer}>
           <div style={styles.spinner} />
           <span style={{ color: colors.textSecondary, fontSize: "0.9rem" }}>Loading clients...</span>
@@ -213,7 +214,7 @@ export default function ClientsPage() {
           onCopy={(client) => setCopyingClient(client)}
           fetchClients={() => fetchClients(selectedCompany?.id)}
         />
-      )}
+      )}</RecordsViewport>
 
       {/* Copy client into other companies — shared dialog used by both
           the per-company list (this screen) and the Common Client edit

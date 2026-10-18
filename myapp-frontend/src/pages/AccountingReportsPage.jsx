@@ -1,3 +1,5 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   MdAssessment, MdBusiness, MdDownload, MdWarning, MdCheckCircle, MdRefresh,
@@ -368,7 +370,7 @@ export default function AccountingReportsPage() {
         </div>
       </div>
 
-      <div style={st.controls}>
+      <ListFilters><div style={st.controls}>
         {companies.length > 0 && (
           companies.length > 1 && (<span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <MdBusiness size={20} color={colors.blue} />
@@ -392,7 +394,7 @@ export default function AccountingReportsPage() {
           {current?.period === "asOf" ? "As at" : "To"}
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={formStyles.input} />
         </label>
-      </div>
+      </div></ListFilters>
 
       {/* The tab strip scrolls sideways on a phone rather than wrapping into a
           block that pushes the report off the screen. */}
@@ -409,7 +411,7 @@ export default function AccountingReportsPage() {
       </div>
 
       {printError && <div role="alert" style={formStyles.error}>{printError}</div>}
-      {body()}
+      <RecordsViewport label="Accounting report records">{body()}</RecordsViewport>
     </div>
   );
 }

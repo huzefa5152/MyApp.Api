@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useEffect, useState } from "react";
 import { MdScience, MdAdd, MdRefresh, MdSend, MdDelete, MdInfo, MdCheckCircle, MdError } from "react-icons/md";
 import {
@@ -243,7 +244,7 @@ export default function FbrSandboxPage() {
       </div>
 
       {/* Bills table */}
-      {loading ? (
+      <RecordsViewport label="Sandbox bill records">{loading ? (
         <div style={styles.muted}>Loading…</div>
       ) : bills.length === 0 ? (
         <div style={styles.emptyState}>
@@ -367,7 +368,7 @@ export default function FbrSandboxPage() {
             ))}
           </div>
         </>
-      )}
+      )}</RecordsViewport>
       </>
       )}
     </div>

@@ -1,3 +1,5 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback } from "react";
 import { MdFactCheck, MdBusiness, MdRefresh, MdDownload, MdPerson, MdEventRepeat, MdClose } from "react-icons/md";
 import { getTaxSheet, getTaxSheetExcel, transferTaxSheet } from "../api/reportApi";
@@ -183,7 +185,7 @@ export default function TaxSheetPage() {
       </p>
 
       {/* Controls */}
-      <div style={{
+      <ListFilters><div style={{
         display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end",
         background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: 14, marginBottom: 16,
       }}>
@@ -269,7 +271,7 @@ export default function TaxSheetPage() {
             </button>
           )}
         </div>
-      </div>
+      </div></ListFilters>
 
       {error && (
         <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", padding: 12, borderRadius: 8, marginBottom: 16 }}>
@@ -277,7 +279,7 @@ export default function TaxSheetPage() {
         </div>
       )}
 
-      {report && !loading && (
+      <RecordsViewport label="Tax Sheet records">{report && !loading && (
         <div style={{ background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, overflow: "hidden" }}>
           <div style={{ padding: "12px 16px", borderBottom: `1px solid ${colors.cardBorder}` }}>
             <div style={{ fontWeight: 700, color: colors.textPrimary }}>{report.companyName}</div>
@@ -359,7 +361,7 @@ export default function TaxSheetPage() {
             </div>
           )}
         </div>
-      )}
+      )}</RecordsViewport>
 
       {loading && <div style={{ padding: 32, textAlign: "center", color: colors.textSecondary }}>Loading tax sheet…</div>}
 

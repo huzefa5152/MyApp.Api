@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -551,7 +552,7 @@ export default function PrintTemplatesPage() {
           {tab === "print" && (
             <>
               {filtersBar}
-              {loading ? <Spinner label="Loading templates…" /> : templates.length === 0 ? (
+              <RecordsViewport label="Print template records">{loading ? <Spinner label="Loading templates…" /> : templates.length === 0 ? (
                 <div style={st.empty}>
                   <MdDescription size={40} color={colors.cardBorder} />
                   <p style={{ color: colors.textSecondary, margin: "0.5rem 0 0.9rem" }}>
@@ -591,7 +592,7 @@ export default function PrintTemplatesPage() {
                     <div style={st.grid}>{rows.map(renderTemplateCard)}</div>
                   </section>
                 ))
-              )}
+              )}</RecordsViewport>
             </>
           )}
 
@@ -618,7 +619,7 @@ export default function PrintTemplatesPage() {
               <p style={st.hint}>
                 <strong>One Excel layout per document type.</strong> When set, that type&apos;s documents show an &ldquo;Export Excel&rdquo; button — all print formats of the type share the single Excel layout.
               </p>
-              {loading ? <Spinner label="Loading…" /> : excelTypeRows.length === 0 ? (
+              <RecordsViewport label="Excel template records">{loading ? <Spinner label="Loading…" /> : excelTypeRows.length === 0 ? (
                 <Empty label="No document types match your filters." />
               ) : (
                 <div style={st.grid}>
@@ -653,13 +654,13 @@ export default function PrintTemplatesPage() {
                     </div>
                   ))}
                 </div>
-              )}
+              )}</RecordsViewport>
               <input ref={excelUploadRef} type="file" accept=".xlsx,.xlsm" style={{ display: "none" }} onChange={handleExcelFile} />
             </>
           )}
 
           {/* ── Tab: Stamps ── */}
-          {tab === "stamps" && canViewStamps && (
+          <RecordsViewport enabled={tab === "stamps" && canViewStamps} label="Stamp records">{tab === "stamps" && canViewStamps && (
             <>
               <p style={st.hint}>
                 Upload stamps or signatures once, then insert them into any template as{" "}
@@ -702,7 +703,7 @@ export default function PrintTemplatesPage() {
                 </div>
               )}
             </>
-          )}
+          )}</RecordsViewport>
         </>
       )}
 

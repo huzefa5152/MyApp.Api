@@ -1,3 +1,5 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback } from "react";
 import { MdAccountBalanceWallet, MdBusiness, MdRefresh, MdDownload, MdPictureAsPdf, MdPerson } from "react-icons/md";
 import { getOutstandingLedger, getOutstandingLedgerExcel } from "../api/reportApi";
@@ -159,7 +161,7 @@ export default function OutstandingLedgerPage() {
       </p>
 
       {/* Controls */}
-      <div style={{
+      <ListFilters><div style={{
         display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end",
         background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: 14, marginBottom: 16,
       }}>
@@ -242,7 +244,7 @@ export default function OutstandingLedgerPage() {
             </>
           )}
         </div>
-      </div>
+      </div></ListFilters>
 
       {error && (
         <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", padding: 12, borderRadius: 8, marginBottom: 16 }}>
@@ -250,7 +252,7 @@ export default function OutstandingLedgerPage() {
         </div>
       )}
 
-      {loading ? (
+      <RecordsViewport label="Outstanding Ledger records">{loading ? (
         <div style={{ padding: 32, textAlign: "center", color: colors.textSecondary }}>Loading…</div>
       ) : report && (
         <div style={{ background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, overflow: "hidden" }}>
@@ -346,7 +348,7 @@ export default function OutstandingLedgerPage() {
             </div>
           )}
         </div>
-      )}
+      )}</RecordsViewport>
     </div>
   );
 }

@@ -1,3 +1,5 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import { MdAssessment, MdBusiness, MdRefresh, MdDownload, MdChevronRight, MdExpandMore, MdUnfoldMore, MdUnfoldLess, MdPerson, MdPictureAsPdf, MdFolderZip, MdClose } from "react-icons/md";
 import { getSalesReport, getSalesReportExcel } from "../api/reportApi";
@@ -314,7 +316,7 @@ export default function SalesReportPage() {
       </p>
 
       {/* Controls */}
-      <div style={{
+      <ListFilters><div style={{
         display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end",
         background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: 14, marginBottom: 16,
       }}>
@@ -432,7 +434,7 @@ export default function SalesReportPage() {
             </>
           )}
         </div>
-      </div>
+      </div></ListFilters>
 
       {error && (
         <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", padding: 12, borderRadius: 8, marginBottom: 16 }}>
@@ -441,7 +443,7 @@ export default function SalesReportPage() {
       )}
 
       {/* Report body */}
-      {report && !loading && (
+      <RecordsViewport label="Sales Report records">{report && !loading && (
         <div style={{ background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, overflow: "hidden" }}>
           <div style={{ padding: "12px 16px", borderBottom: `1px solid ${colors.cardBorder}`, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", justifyContent: "space-between" }}>
             <div>
@@ -636,7 +638,7 @@ export default function SalesReportPage() {
             </div>
           )}
         </div>
-      )}
+      )}</RecordsViewport>
 
       {loading && <div style={{ padding: 32, textAlign: "center", color: colors.textSecondary }}>Loading report…</div>}
 

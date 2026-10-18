@@ -1,3 +1,4 @@
+import RecordsViewport from "./RecordsViewport";
 import { useMemo, useState } from "react";
 import {
   MdArrowBack, MdCheckCircle, MdChevronRight, MdInfoOutline, MdOpenInNew,
@@ -208,6 +209,7 @@ export default function AccountingCatalogShell({
         </div>
       )}
 
+      <RecordsViewport label="Accounting ledger records">
       {/* ── 2. The answer ─────────────────────────────────────────────────── */}
       {report && customerLedger && (
         <div className="ledger-overview">
@@ -353,7 +355,7 @@ export default function AccountingCatalogShell({
             )}
           </table>
         </div>
-      )}
+      )}</RecordsViewport>
 
       {report && report.totalCount > 0 && (
         <Pagination

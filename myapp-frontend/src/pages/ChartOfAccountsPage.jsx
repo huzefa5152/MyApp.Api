@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback } from "react";
 import {
   MdAccountTree, MdAdd, MdEdit, MdDelete, MdAutoAwesome, MdLock, MdBusiness,
@@ -284,7 +285,7 @@ export default function ChartOfAccountsPage() {
         </div>)
       )}
 
-      {!companyId ? (
+      <RecordsViewport label="Chart Of Accounts records">{!companyId ? (
         <div style={st.empty}>Select a company to view its chart of accounts.</div>
       ) : loading ? (
         <div style={st.empty}>Loading…</div>
@@ -308,7 +309,7 @@ export default function ChartOfAccountsPage() {
           <Column title="Balance Sheet" nodes={tree.balanceSheet} />
           <Column title="Profit & Loss" nodes={tree.profitAndLoss} />
         </div>
-      )}
+      )}</RecordsViewport>
 
       {form && (
         <CoaForm

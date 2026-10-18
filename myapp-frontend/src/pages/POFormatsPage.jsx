@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { MdAdd, MdEdit, MdDelete, MdDescription, MdWarning } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -134,7 +135,7 @@ function CompanyPOFormats({ company }) {
         </div>
       )}
 
-      {loading ? (
+      <RecordsViewport label="POFormats records">{loading ? (
         <div style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>Loading…</div>
       ) : formats.length === 0 ? (
         <div style={styles.emptyCard}>
@@ -257,7 +258,7 @@ function CompanyPOFormats({ company }) {
         </>
       )}
 
-      {has("poformats.import.viewArchive") && <CustomerImportArchive companyId={company.id} />}
+      {has("poformats.import.viewArchive") && <CustomerImportArchive companyId={company.id} />}</RecordsViewport>
       {showForm && (
         <POFormatForm
           format={editing}

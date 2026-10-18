@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import "../Components/AccountingModalTables.css";
 import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -156,7 +157,7 @@ export default function PurchaseDebitNotesPage() {
         </div>
       </div>
 
-      {loading ? (
+      <RecordsViewport label="Purchase Debit Notes records">{loading ? (
         <p style={{ color: colors.textSecondary }}>Loading…</p>
       ) : filtered.length === 0 ? (
         <div style={styles.emptyState}>
@@ -270,7 +271,7 @@ export default function PurchaseDebitNotesPage() {
             </tfoot>
           </table>
         </div>
-      )}
+      )}</RecordsViewport>
 
       {viewNote && (
         <div data-admin-backdrop="" style={formStyles.backdrop} onClick={() => setViewNote(null)}>

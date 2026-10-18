@@ -1,3 +1,5 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useCompany } from "../contexts/CompanyContext";
@@ -97,7 +99,7 @@ export default function DocumentLinesPage() {
       <span className="document-lines-icon"><MdTableRows size={22} /></span>
       <div><h2>Document Lines</h2><p>Filter line items, then copy or export to Excel.</p></div>
     </header>
-    <div className="document-lines-filters">
+    <ListFilters><div className="document-lines-filters">
       <div className="document-lines-company"><span className="document-lines-label">Company</span><SearchableSelect items={companies} value={selectedCompany?.id || ""} onChange={(id) => setSelectedCompany(companies.find((c) => c.id === Number(id)))} allowClear={false} style={input} /></div>
       <label>Document type<br /><select aria-label="Document type" style={input} value={type} onChange={(e) => { setStatus(""); setParams({ type: e.target.value }); }}>
         {allowed.map(([key, source]) => <option key={key} value={key}>{source.label}</option>)}
@@ -112,7 +114,7 @@ export default function DocumentLinesPage() {
       {period !== "document" && type === "challan" && <label>Status<br /><select style={input} value={status} onChange={(e) => setStatus(e.target.value)}>
         <option value="">All statuses</option>{["Pending", "Imported", "Invoiced", "No PO", "Cancelled"].map((x) => <option key={x} value={x}>{x}</option>)}
       </select></label>}
-    </div>
+    </div></ListFilters>
     <details className="document-lines-columns"><summary>Columns <span>{visibleColumns.length} selected</span></summary>
       <div className="document-lines-column-grid">
         {availableColumns.map(([key, label]) => <label key={key}>
@@ -130,7 +132,7 @@ export default function DocumentLinesPage() {
         <button type="button" style={action} disabled={!shown.length || busy || exporting} onClick={copy}>Copy for Excel</button>
         <button type="button" style={action} disabled={!shown.length || busy || exporting} onClick={download}>{exporting ? "Exporting…" : "Download Excel"}</button>
       </div>
-    {!loaded ? <div className="document-lines-empty">{busy ? "Loading matching line items…" : error ? "Update the filters to try again." : "Select a company to view its lines."}</div> : !shown.length ? <div className="document-lines-empty">No lines match these filters. Try another period or search.</div> : <>
+    <RecordsViewport label="Document line records">{!loaded ? <div className="document-lines-empty">{busy ? "Loading matching line items…" : error ? "Update the filters to try again." : "Select a company to view its lines."}</div> : !shown.length ? <div className="document-lines-empty">No lines match these filters. Try another period or search.</div> : <>
       <div data-admin-table-region="" className="document-lines-table">
         <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 650 }}>
           <thead><tr>{visibleColumns.map(([key, label]) => <th key={key} style={{ textAlign: "left", padding: 10, background: "#e0f2f1", borderBottom: "1px solid #cbd5e1" }}>{label}</th>)}</tr></thead>
@@ -140,7 +142,7 @@ export default function DocumentLinesPage() {
         </table>
       </div>
       {shown.length > 200 && <p>Showing the first 200 lines here. Copy and Excel include all {shown.length} matching lines.</p>}
-    </>}
+    </>}</RecordsViewport>
     </section>
   </div>;
 }

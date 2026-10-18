@@ -1,3 +1,5 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { MdShoppingCart, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdChevronLeft, MdChevronRight, MdReceipt, MdClose, MdPrint, MdPictureAsPdf } from "react-icons/md";
@@ -216,7 +218,7 @@ export default function PurchaseBillsPage() {
           </div>)}
 
           {selectedCompany && (
-            <div className="filters-row">
+            <ListFilters><div className="filters-row">
               <div className="filter-search-wrap">
                 <MdSearch size={15} className="filter-search-icon" />
                 <input type="text" placeholder="Search bill#, IRN, supplier, item..." className="filter-search-input" value={search} onChange={onFilterChange(setSearch)} />
@@ -238,10 +240,10 @@ export default function PurchaseBillsPage() {
                   <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Purchase bills view mode" />
                 )}
               </div>
-            </div>
+            </div></ListFilters>
           )}
 
-          {loading ? (
+          <RecordsViewport label="Purchase Bills records">{loading ? (
             <div style={styles.loading}><div style={styles.spinner} /></div>
           ) : bills.length === 0 ? (
             <div style={styles.empty}>
@@ -347,7 +349,7 @@ export default function PurchaseBillsPage() {
                 />
               )}
             </>
-          )}
+          )}</RecordsViewport>
         </>
       )}
 

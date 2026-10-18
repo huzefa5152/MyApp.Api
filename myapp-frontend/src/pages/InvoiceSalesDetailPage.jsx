@@ -1,3 +1,5 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MdAssessment, MdDownload, MdRefresh } from "react-icons/md";
 import { getInvoiceSalesDetail, getInvoiceSalesDetailExcel } from "../api/reportApi";
@@ -66,7 +68,7 @@ export default function InvoiceSalesDetailPage() {
   return <div style={{ minWidth: 0 }}>
     <h1 style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 8px", fontSize: "clamp(1.2rem,3vw,1.6rem)", color: colors.textPrimary }}><MdAssessment color={colors.blue} />Invoice Sales Detail</h1>
     <p style={{ color: colors.textSecondary, margin: "0 0 16px" }}>Bill-by-bill sales, tax and filing status. Filters update automatically.</p>
-    <div style={styles.filters}>
+    <ListFilters><div style={styles.filters}>
       {companies.length > 1 && <Field label="Company"><select aria-label="Company" style={styles.input} value={companyId || ""} onChange={e => setSelectedCompany(companies.find(c => String(c.id) === e.target.value))}>{companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}</select></Field>}
       <Field label="Period"><select aria-label="Period" style={styles.input} value={filters.period} onChange={e => change("period", e.target.value)}>{ISD_PERIOD_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></Field>
       {filters.period === "custom" && <>
@@ -81,11 +83,11 @@ export default function InvoiceSalesDetailPage() {
         <button type="button" style={styles.button} onClick={() => { setStored(defaults(companyId)); setPage(1); }}>Clear filters</button>
         {canExport && <button type="button" style={{ ...styles.button, background: colors.teal, color: "white" }} disabled={!report || loading || exporting} onClick={exportExcel}><MdDownload />{exporting ? "Exporting…" : "Excel"}</button>}
       </div>
-    </div>
+    </div></ListFilters>
     {!companyId && <p>Select a company to view this report.</p>}
     {invalid && <p role="alert">Choose both dates, with the start on or before the end date.</p>}
     {error && !invalid && <p role="alert" style={{ color: colors.danger }}>{error}</p>}
-    <div aria-busy={loading}>
+    <RecordsViewport label="Invoice sales detail records"><div aria-busy={loading}>
       {loading && <p role="status">Loading report…</p>}
       {report && <>
         <h2 style={{ fontSize: "1.05rem", color: colors.textPrimary }}>{report.companyName} · {report.periodLabel}</h2>
@@ -94,7 +96,7 @@ export default function InvoiceSalesDetailPage() {
         <InvoiceSalesDetailGrid key={companyId} report={report} bills={view.bills} allBillCount={bills.length} loading={loading} emptyText={emptyText(report, filters)} />
         <Pagination page={view.page} totalPages={view.totalPages} total={bills.length} unit="bills" onPage={setPage} pageSize={pageSize} onPageSize={size => { setPageSize(size); setPage(1); }} />
       </>}
-    </div>
+    </div></RecordsViewport>
   </div>;
 }
 function Field({ label, children }) { return <label style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0, color: colors.textSecondary, fontSize: "0.85rem", fontWeight: 600 }}>{label}{children}</label>; }

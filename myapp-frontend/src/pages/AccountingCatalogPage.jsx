@@ -1,3 +1,5 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
@@ -137,7 +139,7 @@ function ReportIndex({ onOpen }) {
   );
 
   return (
-    <div>
+    <RecordsViewport label="Available accounting reports"><div>
       {featured.length > 0 && (
         <>
           <SectionLabel>Start here</SectionLabel>
@@ -203,7 +205,7 @@ function ReportIndex({ onOpen }) {
           );
         })}
       </div>
-    </div>
+    </div></RecordsViewport>
   );
 }
 
@@ -333,14 +335,14 @@ function GenericReport({ companyId, report, canExport, onBack, onNavigate }) {
 
   return (
     <div>
-      <AccountingCatalogFilterBar
+      <ListFilters><AccountingCatalogFilterBar
         companyId={companyId}
         filters={report.filters || []}
         value={filters}
         onApply={applyFilters}
         loading={loading}
         accountKind={report.accountKind}
-      />
+      /></ListFilters>
       <AccountingCatalogShell
         report={data}
         loading={loading}
@@ -459,7 +461,7 @@ function TrialBalanceReport({ companyId }) {
         ))}
       </div>
 
-      {loading ? <div style={st.state}>Loading…</div>
+      <RecordsViewport label="Financial summary records">{loading ? <div style={st.state}>Loading…</div>
         : error ? <div style={{ ...st.state, color: colors.danger }}>{error}</div>
         : !data || (data.rows || []).length === 0
           ? <div style={st.state}>No account activity {applied.from || applied.to ? "in this period" : "yet"}.</div>
@@ -521,7 +523,7 @@ function TrialBalanceReport({ companyId }) {
                 </tfoot>
               </table>
             </div>
-          )}
+          )}</RecordsViewport>
     </div>
   );
 }
@@ -571,7 +573,7 @@ function AgingReport({ companyId, kind }) {
       </div>
       <div style={st.asOf}>As of {new Date(data.asOf).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</div>
 
-      {rows.length === 0 ? (
+      <RecordsViewport label="Party outstanding records">{rows.length === 0 ? (
         <div style={st.state}>No outstanding {isReceivables ? "invoices" : "bills"}. All settled.</div>
       ) : narrow ? (
         <div style={st.cardList}>
@@ -635,7 +637,7 @@ function AgingReport({ companyId, kind }) {
             </tfoot>
           </table>
         </div>
-      )}
+      )}</RecordsViewport>
     </div>
   );
 }

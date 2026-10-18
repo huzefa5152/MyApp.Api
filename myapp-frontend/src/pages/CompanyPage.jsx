@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect } from "react";
 import { MdBusiness, MdAdd, MdSearch } from "react-icons/md";
 import CompanyList from "../Components/CompanyList";
@@ -147,7 +148,7 @@ export default function CompanyPage() {
         </div>
       )}
 
-      {filtered.length === 0 ? (
+      <RecordsViewport label="Company records">{filtered.length === 0 ? (
         <div style={styles.empty}>
           {companies.length === 0 ? "No companies added yet. Click \"New Company\" to get started." : "No companies match your search."}
         </div>
@@ -157,7 +158,7 @@ export default function CompanyPage() {
           onEdit={handleEdit}
           fetchCompanies={refreshCompanies}
         />
-      )}
+      )}</RecordsViewport>
 
       {showModal && (
         <CompanyForm

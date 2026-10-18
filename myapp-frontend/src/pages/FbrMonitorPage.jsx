@@ -1,3 +1,5 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 // src/pages/FbrMonitorPage.jsx
 //
 // FBR communication monitor — backs audit H-3 / M-6 (2026-05-08).
@@ -141,17 +143,17 @@ export default function FbrMonitorPage() {
         onRefresh={() => setPage((p) => p)}
       />
 
-      <Summary summary={summary} windowHours={windowHours} />
+      <ListFilters label="Summary"><Summary summary={summary} windowHours={windowHours} /></ListFilters>
 
-      <FilterBar
+      <ListFilters label="Filters"><FilterBar
         statusFilter={statusFilter}
         onStatus={(s) => { setStatusFilter(s); setPage(1); }}
         actionFilter={actionFilter}
         onAction={(a) => { setActionFilter(a); setPage(1); }}
         count={filteredCount}
-      />
+      /></ListFilters>
 
-      <RowsList
+      <RecordsViewport label="FBR log records"><RowsList
         rows={rows}
         loading={loading}
         onClickRow={async (r) => {
@@ -164,7 +166,7 @@ export default function FbrMonitorPage() {
             notify("Could not load row detail.", "error");
           }
         }}
-      />
+      /></RecordsViewport>
 
       {total > PAGE_SIZE_OPTIONS[0] && (
         <Pagination

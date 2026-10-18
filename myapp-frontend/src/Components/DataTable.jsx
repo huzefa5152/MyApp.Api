@@ -131,7 +131,7 @@ export default function DataTable({
   const headPad = dense ? "0.5rem 0.7rem" : "0.65rem 0.85rem";
 
   return (
-    <div style={pageScroll ? { ...styles.outer, overflow: "visible" } : styles.outer}>
+    <div data-grid-shell="" style={pageScroll ? { ...styles.outer, overflow: "visible" } : styles.outer}>
       {(quickSearchPlaceholder || true) && (
         <div style={styles.toolbar}>
           {quickSearchPlaceholder && (

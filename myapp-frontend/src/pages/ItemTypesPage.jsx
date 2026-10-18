@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useMemo } from "react";
 import { MdCategory, MdAdd, MdEdit, MdDelete, MdSearch, MdStar, MdStarBorder, MdInfo } from "react-icons/md";
 import { getItemTypes, updateItemType, deleteItemType } from "../api/itemTypeApi";
@@ -199,7 +200,7 @@ export default function ItemTypesPage() {
         </div>
       )}
 
-      {loading ? (
+      <RecordsViewport label="Item Types records">{loading ? (
         <p style={{ color: colors.textSecondary, textAlign: "center", padding: "2rem" }}>Loading…</p>
       ) : filtered.length === 0 ? (
         <p style={{ color: colors.textSecondary, textAlign: "center", padding: "2rem" }}>
@@ -362,7 +363,7 @@ export default function ItemTypesPage() {
             ))}
           </div>
         </>
-      )}
+      )}</RecordsViewport>
 
       {showForm && (
         <ItemTypeForm

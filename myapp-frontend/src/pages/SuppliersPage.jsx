@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useMemo } from "react";
 import { MdLocalShipping, MdAdd, MdSearch, MdBusiness } from "react-icons/md";
 import SupplierList from "../Components/SupplierList";
@@ -179,7 +180,7 @@ export default function SuppliersPage() {
         </div>
       )}
 
-      {loadingSuppliers ? (
+      <RecordsViewport label="Suppliers records">{loadingSuppliers ? (
         <div style={styles.loadingContainer}>
           <div style={styles.spinner} />
           <span style={{ color: colors.textSecondary, fontSize: "0.9rem" }}>Loading suppliers...</span>
@@ -198,7 +199,7 @@ export default function SuppliersPage() {
           onCopy={(s) => setCopyingSupplier(s)}
           fetchSuppliers={() => fetchSuppliers(selectedCompany?.id)}
         />
-      )}
+      )}</RecordsViewport>
 
       {copyingSupplier && (
         <CopyToCompaniesDialog

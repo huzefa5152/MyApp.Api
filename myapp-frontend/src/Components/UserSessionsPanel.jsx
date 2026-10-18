@@ -1,3 +1,4 @@
+import RecordsViewport from "./RecordsViewport";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   MdDevices, MdRefresh, MdSearch, MdPeople, MdLogin, MdBolt, MdLogout, MdLaptop, MdPhoneAndroid, MdChevronLeft, MdChevronRight,
@@ -185,7 +186,7 @@ export default function UserSessionsPanel() {
 
     {error && <div role="alert" style={s.alert}>{error} <button style={s.link} onClick={load}>Try again</button></div>}
     {!data && !error && <div style={s.empty}>Loading sessions…</div>}
-    {data && data.items.length === 0 && <div style={s.empty}>No sessions match these filters.</div>}
+    <RecordsViewport label="Session records">{data && data.items.length === 0 && <div style={s.empty}>No sessions match these filters.</div>}
 
     {data && data.items.length > 0 && (narrow
       ? <div style={s.cards}>{data.items.map(session => <article key={session.id} style={s.card}>
@@ -220,7 +221,7 @@ export default function UserSessionsPanel() {
             <td style={s.td} title={session.revokedAt ? `Revoked ${absolute(session.revokedAt)}` : undefined}>{absolute(session.expiresAt)}</td>
             <td style={{ ...s.td, textAlign: "right" }}>{actions(session)}</td>
           </tr>)}</tbody>
-        </table></div>)}
+        </table></div>)}</RecordsViewport>
 
     {data && data.total > 0 && <div style={s.pager}>
       <span style={s.muted}>{from}–{to} of {data.total}</span>

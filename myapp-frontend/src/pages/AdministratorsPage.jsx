@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -226,7 +227,7 @@ export default function AdministratorsPage() {
         />
       </div>
 
-      {loading ? (
+      <RecordsViewport label="Administrators records">{loading ? (
         <p style={styles.muted}>Loading administrators...</p>
       ) : filtered.length === 0 ? (
         <p style={styles.muted}>
@@ -339,7 +340,7 @@ export default function AdministratorsPage() {
             );
           })}
         </div>
-      )}
+      )}</RecordsViewport>
 
       {/* ── Create administrator modal ── */}
       {showCreate && (

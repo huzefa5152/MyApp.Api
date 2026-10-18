@@ -1,3 +1,5 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 import CommercialCostDialog from "../Components/CommercialCostDialog";
 import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -479,7 +481,7 @@ export default function ChallanPage() {
 
           {/* Filters + view-mode toggle */}
           {selectedCompany && (
-            <div className="filters-row">
+            <ListFilters><div className="filters-row">
               <div className="filter-search-wrap">
                 <MdSearch size={15} className="filter-search-icon" />
                 <input
@@ -534,7 +536,7 @@ export default function ChallanPage() {
                   <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Delivery challan view mode" />
                 )}
               </div>
-            </div>
+            </div></ListFilters>
           )}
         </>
       ) : (
@@ -544,7 +546,7 @@ export default function ChallanPage() {
         </div>
       )}
 
-      {loadingChallans ? (
+      <RecordsViewport label="Challan records">{loadingChallans ? (
         <div style={styles.loadingContainer}>
           <div style={styles.spinner} />
           <span style={{ color: colors.textSecondary, fontSize: "0.9rem" }}>Loading challans...</span>
@@ -613,7 +615,7 @@ export default function ChallanPage() {
             />
           )}
         </>
-      )}
+      )}</RecordsViewport>
 
       {showModal && selectedCompany && (
         <ChallanForm

@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useEffect, useMemo, useState } from "react";
 import {
   MdAdminPanelSettings,
@@ -358,7 +359,7 @@ export default function RolesPage() {
       </div>
 
       {/* List */}
-      {loading ? (
+      <RecordsViewport label="Roles records">{loading ? (
         <p style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
           Loading roles...
         </p>
@@ -420,7 +421,7 @@ export default function RolesPage() {
             </div>
           ))}
         </div>
-      )}
+      )}</RecordsViewport>
 
       {/* ── Create/Edit Modal ── */}
       {modalOpen && (

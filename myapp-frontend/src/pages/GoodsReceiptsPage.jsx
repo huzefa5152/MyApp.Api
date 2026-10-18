@@ -1,3 +1,5 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { MdInventory2, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf } from "react-icons/md";
@@ -163,7 +165,7 @@ export default function GoodsReceiptsPage() {
           </div>)}
 
           {selectedCompany && (
-            <div className="filters-row">
+            <ListFilters><div className="filters-row">
               <div className="filter-search-wrap">
                 <MdSearch size={15} className="filter-search-icon" />
                 <input type="text" placeholder="Search GR#, supplier, item..." className="filter-search-input" value={search} onChange={onFilterChange(setSearch)} />
@@ -178,10 +180,10 @@ export default function GoodsReceiptsPage() {
                   <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Goods receipts view mode" />
                 )}
               </div>
-            </div>
+            </div></ListFilters>
           )}
 
-          {loading ? (
+          <RecordsViewport label="Goods Receipts records">{loading ? (
             <div style={styles.loading}><div style={styles.spinner} /></div>
           ) : receipts.length === 0 ? (
             <div style={styles.empty}>
@@ -249,7 +251,7 @@ export default function GoodsReceiptsPage() {
                 />
               )}
             </>
-          )}
+          )}</RecordsViewport>
         </>
       )}
 

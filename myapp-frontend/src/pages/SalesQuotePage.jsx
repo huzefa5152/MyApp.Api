@@ -1,3 +1,5 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { MdRequestQuote, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdSwapHoriz, MdVisibility, MdUploadFile, MdGridOn } from "react-icons/md";
@@ -200,7 +202,7 @@ export default function SalesQuotePage() {
             </select>
           </div>)}
           {selectedCompany && (
-            <div className="filters-row">
+            <ListFilters><div className="filters-row">
               <div className="filter-search-wrap">
                 <MdSearch size={15} className="filter-search-icon" />
                 <input type="text" placeholder="Search Quote#, Client, Enquiry..." className="filter-search-input" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
@@ -214,12 +216,12 @@ export default function SalesQuotePage() {
                 {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               <div style={{ marginLeft: "auto" }}><PrintTemplateSelect picker={tplPicker} /></div>
-            </div>
+            </div></ListFilters>
           )}
         </>
       ) : <Empty label="No companies available. Add a company first." />}
 
-      {loading ? <Spinner label="Loading quotes..." /> : quotes.length === 0 && selectedCompany ? (
+      <RecordsViewport label="Sales Quote records">{loading ? <Spinner label="Loading quotes..." /> : quotes.length === 0 && selectedCompany ? (
         <Empty label="No sales quotes found." />
       ) : (
         <>
@@ -264,7 +266,7 @@ export default function SalesQuotePage() {
             />
           )}
         </>
-      )}
+      )}</RecordsViewport>
 
       {showForm && selectedCompany && (
         <SalesQuoteForm companyId={selectedCompany.id} quote={editQuote} onClose={() => { setShowForm(false); setEditQuote(null); refreshAttachCounts(); }} onSaved={handleSave} />

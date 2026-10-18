@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback } from "react";
 import { MdBugReport, MdWarning, MdInfo, MdSearch, MdChevronLeft, MdChevronRight, MdClose, MdLock } from "react-icons/md";
 import { getAuditLogs, getAuditSummary } from "../api/auditLogApi";
@@ -158,7 +159,7 @@ export default function AuditLogsPage() {
       </div>
 
       {/* Table (desktop) */}
-      <div style={{ background: colors.cardBg, borderRadius: 12, border: `1px solid ${colors.cardBorder}`, overflow: "hidden" }}>
+      <RecordsViewport label="Audit log records"><div style={{ background: colors.cardBg, borderRadius: 12, border: `1px solid ${colors.cardBorder}`, overflow: "hidden" }}>
         <div data-admin-table-region="" className="audit-table-wrap" style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
             <thead>
@@ -279,7 +280,7 @@ export default function AuditLogsPage() {
             onPageSize={(n) => { setPageSize(n); setPage(1); }}
           />
         )}
-      </div>
+      </div></RecordsViewport>
 
       {/* Detail Modal */}
       {selectedLog && (

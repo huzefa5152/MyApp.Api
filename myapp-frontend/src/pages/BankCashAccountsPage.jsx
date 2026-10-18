@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { MdAccountBalance, MdAdd, MdSearch, MdVisibility, MdClose, MdBusiness, MdFactCheck, MdUploadFile, MdEdit, MdDelete, MdBlock, MdCheckCircle } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
@@ -203,7 +204,7 @@ export default function BankCashAccountsPage() {
         {glOff && <span style={st.glChipOff}>GL off — balances show opening only</span>}
       </div>
 
-      {!companyId ? (
+      <RecordsViewport label="Bank and cash records">{!companyId ? (
         <div style={st.empty}>Select a company to view its bank &amp; cash accounts.</div>
       ) : loading ? (
         <div style={st.empty}>Loading…</div>
@@ -388,7 +389,7 @@ export default function BankCashAccountsPage() {
             </tfoot>
           </table>
         </div>
-      )}
+      )}</RecordsViewport>
 
       {ledgerAccount && (
         <AccountLedgerDialog account={ledgerAccount} onClose={() => setLedgerAccount(null)} />

@@ -1,3 +1,5 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 import PurchaseDebitNoteForm from "../Components/PurchaseDebitNoteForm";
 import { useEffect, useRef, useState } from "react";
 import { useCompany } from "../contexts/CompanyContext";
@@ -129,7 +131,7 @@ export default function SupplierPayablesPage() {
     </div>
     {notice && <p role="status" className="supplier-notice">{notice}</p>}
     {error && <p className="commercial-feedback" role="alert">{error}</p>}{loading && <p role="status">Loading supplier balances…</p>}
-    {!loading && !error && !supplierId && <>
+    <RecordsViewport label="Supplier payable records">{!loading && !error && !supplierId && <>
       <div className="supplier-metrics">
         <Metric label="Total payable" value={summary.reduce((s, r) => s + Math.max(0, r.netBalance), 0)} note="Amount still owed to suppliers" primary />
         <Metric label="Total paid to suppliers" value={sum(summary, "cashPaid")} note="Bill payments + advances, less refunds" />
@@ -158,11 +160,11 @@ export default function SupplierPayablesPage() {
       </dl><p>Bill balances are reduced only by payments and credits linked to those bills. Advances and unallocated credits reduce the supplier balance separately.</p>
       <p>Unallocated advances: Rs. {money(ledger.unappliedAdvances)} · Unallocated credits: Rs. {money(ledger.unallocatedCredits)}</p></details>
       <section className="supplier-panel" aria-labelledby="supplier-purchase-title"><h3 id="supplier-purchase-title">Bill-wise outstanding</h3><p className="supplier-hint">Purchase amounts, payments and outstanding balances. Open source links for the customer bill or challan.</p>
-        <div className="commercial-toolbar supplier-toolbar">
+        <ListFilters><div className="commercial-toolbar supplier-toolbar">
           <label>Find bill<input placeholder="Purchase, supplier reference, bill or challan no." value={documentSearch} onChange={e => setDocumentSearch(e.target.value)} /></label>
           <label>Settlement status<select aria-label="Settlement status" value={settlement} onChange={e => setSettlement(e.target.value)}><option value="">All purchases</option><option value="unpaid">Unpaid</option><option value="partial">Partially settled</option><option value="paid">Settled</option></select></label>
           <label>Purchase category<select aria-label="Purchase category" value={category} onChange={e => setCategory(e.target.value)}><option value="">All categories</option><option value="LocalDirect">Local direct purchases</option><option value="Inventory">Inventory purchases</option></select></label>
-        </div>
+        </div></ListFilters>
         <p className="supplier-filter-result">Showing {purchases.length} of {allPurchases.length} purchases · Outstanding in these results: <strong>Rs. {money(sum(purchases, "outstanding"))}</strong></p>
         <table className="commercial-ledger-table supplier-table"><thead><tr><th>Purchase / customer bill</th><th>Purchase amount</th><th>Paid</th><th>Credits / settlement</th><th>Outstanding</th><th>Actions</th></tr></thead><tbody>{purchases.map(p => <tr key={p.id}>
           <td><strong>Purchase #{p.number}</strong><small>{p.date.slice(0, 10)} · {p.category === "LocalDirect" ? "Local direct" : "Inventory"}{p.supplierBillNumber ? ` · Supplier ref: ${p.supplierBillNumber}` : ""}</small>{sourceLinks(p)}{p.costChanged && <small className="supplier-cost-change">Costing changed; booked payable stays unchanged.</small>}</td>
@@ -177,7 +179,7 @@ export default function SupplierPayablesPage() {
         <div className="commercial-ledger-mobile supplier-mobile-list">{transactionRows.map((r, index) => <article key={index}><small>{r.date.slice(0, 10)}</small><div>{reference(r)}</div><dl><Pair label="Purchases / increases" value={r.increase} /><Pair label="Paid" value={r.cashPaid} /><Pair label="Credits / settlement" value={r.adjustment} /><Pair label="Running supplier balance" value={r.balance} /></dl></article>)}</div>
         {!transactionRows.length && <p role="status">No transactions in this view.</p>}
       </section>
-    </>}
+    </>}</RecordsViewport>
     {challanCost && <CommercialCostDialog kind="challan" id={challanCost} companyId={selectedCompany.id} onClose={() => { setChallanCost(null); setRevision(n => n + 1); }} />}
     {bill && <CommercialCostDialog id={bill} companyId={selectedCompany.id} onClose={() => { setBill(null); setRevision(n => n + 1); }} />}
     {credit && <PurchaseDebitNoteForm companyId={selectedCompany.id} preset={credit} onClose={() => setCredit(null)} onSaved={() => { setNotice("Supplier credit saved."); setCredit(null); setRevision(n => n + 1); }} />}

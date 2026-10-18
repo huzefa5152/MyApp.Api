@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback } from "react";
 import {
   MdAdd, MdDelete, MdChevronLeft, MdChevronRight, MdReceiptLong, MdPayments,
@@ -208,7 +209,7 @@ export default function PaymentsPage({ mode = "receipts" }) {
             )}
           </div>
 
-          {loading ? (
+          <RecordsViewport label="Payments records">{loading ? (
             <div style={st.empty}>Loading…</div>
           ) : rows.length === 0 ? (
             <div style={st.empty}>No {title.toLowerCase()} yet.</div>
@@ -235,7 +236,7 @@ export default function PaymentsPage({ mode = "receipts" }) {
                 />
               ))}
             </div>
-          )}
+          )}</RecordsViewport>
 
           {totalCount > PAGE_SIZE_OPTIONS[0] && (
             <Pagination

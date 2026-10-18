@@ -1,3 +1,5 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import RichText from "../Components/RichText";
 import { MdHistory, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdInsights, MdVisibility } from "react-icons/md";
@@ -194,7 +196,7 @@ export default function ItemRateHistoryPage() {
 
           {/* Filters */}
           {selectedCompany && (
-            <div className="filters-row">
+            <ListFilters><div className="filters-row">
               <div className="filter-search-wrap filter-search-wrap--wide">
                 <MdSearch size={15} className="filter-search-icon" />
                 <input
@@ -255,7 +257,7 @@ export default function ItemRateHistoryPage() {
                   Clear
                 </button>
               )}
-            </div>
+            </div></ListFilters>
           )}
 
           {/* Summary band — avg / min / max across the FULL filtered set */}
@@ -282,7 +284,7 @@ export default function ItemRateHistoryPage() {
           )}
 
           {/* Grid */}
-          {loading ? (
+          <RecordsViewport label="Item Rate History records">{loading ? (
             <div style={styles.loadingContainer}>
               <div style={styles.spinner} />
             </div>
@@ -429,7 +431,7 @@ export default function ItemRateHistoryPage() {
             <div style={styles.emptyState}>
               <p style={{ color: colors.textSecondary }}>Select a company to begin.</p>
             </div>
-          )}
+          )}</RecordsViewport>
         </>
       ) : (
         <div style={styles.emptyState}>

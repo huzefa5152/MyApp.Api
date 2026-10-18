@@ -1,3 +1,5 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 import CostingStatus from "../Components/CostingStatus";
 import CommercialCostDialog from "../Components/CommercialCostDialog";
 import { createSalesOrderFromBill } from "../api/salesOrderApi";
@@ -1066,7 +1068,7 @@ export default function InvoicePage({ mode = "invoices" }) {
 
           {/* Filters */}
           {selectedCompany && (
-            <div className="filters-row">
+            <ListFilters><div className="filters-row">
               <div className="filter-search-wrap">
                 <MdSearch size={15} className="filter-search-icon" />
                 <input
@@ -1136,7 +1138,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                   />
                 )}
               </div>
-            </div>
+            </div></ListFilters>
           )}
         </>
       ) : (
@@ -1147,7 +1149,7 @@ export default function InvoicePage({ mode = "invoices" }) {
           submit, edit-save, delete, void…) we keep the existing list mounted
           so the browser preserves the scroll position — unmounting it here was
           why the page jumped to the top after every action. */}
-      {loadingInvoices && invoices.length === 0 ? (
+      <RecordsViewport label="Invoice records">{loadingInvoices && invoices.length === 0 ? (
         <div style={styles.loadingContainer}><div style={styles.spinner} /></div>
       ) : invoices.length === 0 && selectedCompany ? (
         <div style={styles.emptyState}>
@@ -1564,7 +1566,7 @@ export default function InvoicePage({ mode = "invoices" }) {
             />
           )}
         </>
-      )}
+      )}</RecordsViewport>
 
       {/* Bills mode shows the Item Type column (item-type pick is the
           ONE FBR-classification field exposed in Bills) but hides the

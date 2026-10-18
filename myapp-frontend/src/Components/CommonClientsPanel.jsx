@@ -74,7 +74,7 @@ export default function CommonClientsPanel({ companyId, onEdit, refreshKey }) {
       {error && <div style={styles.error}>{error}</div>}
 
       {!loading && common.length > 0 && (
-        <div style={styles.grid}>
+        <div data-secondary-records="" role="region" aria-label="Shared company contacts" tabIndex={0} style={styles.grid}>
           {common.map((c) => (
             <button
               key={c.groupId}

@@ -1,3 +1,5 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   MdMenuBook, MdAdd, MdEdit, MdDelete, MdSearch, MdBusiness, MdLock,
@@ -266,7 +268,7 @@ export default function JournalEntriesPage() {
       </div>
 
       {companies.length > 0 && (
-        <div data-admin-toolbar="" style={st.filters}>
+        <ListFilters><div data-admin-toolbar="" style={st.filters}>
           {companies.length > 1 && (<span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <MdBusiness size={20} color={colors.blue} />
             <select
@@ -304,10 +306,10 @@ export default function JournalEntriesPage() {
             />
             Manual only
           </label>
-        </div>
+        </div></ListFilters>
       )}
 
-      {!companyId ? (
+      <RecordsViewport label="Journal Entries records">{!companyId ? (
         <div style={st.empty}>Select a company to view its journal entries.</div>
       ) : loading ? (
         <div style={st.empty}>Loading…</div>
@@ -319,7 +321,7 @@ export default function JournalEntriesPage() {
         <div style={st.list}>
           {rows.map((e) => <EntryCard key={e.id} e={e} />)}
         </div>
-      )}
+      )}</RecordsViewport>
 
       {totalPages > 1 && (
         <div style={st.pager}>

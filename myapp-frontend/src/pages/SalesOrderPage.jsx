@@ -1,3 +1,5 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { richTextToPlain } from "../utils/richText";
@@ -211,7 +213,7 @@ export default function SalesOrderPage() {
             </select>
           </div>)}
           {selectedCompany && (
-            <div className="filters-row">
+            <ListFilters><div className="filters-row">
               <div className="filter-search-wrap">
                 <MdSearch size={15} className="filter-search-icon" />
                 <input type="text" placeholder="Search Order#, Client, PO..." className="filter-search-input" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
@@ -221,12 +223,12 @@ export default function SalesOrderPage() {
                 {["Open", "Closed", "Cancelled"].map((x) => <option key={x} value={x}>{x}</option>)}
               </select>
               <div style={{ marginLeft: "auto" }}><PrintTemplateSelect picker={tplPicker} /></div>
-            </div>
+            </div></ListFilters>
           )}
         </>
       ) : <Empty label="No companies available. Add a company first." />}
 
-      {loading ? <Spinner label="Loading orders..." /> : orders.length === 0 && selectedCompany ? (
+      <RecordsViewport label="Sales Order records">{loading ? <Spinner label="Loading orders..." /> : orders.length === 0 && selectedCompany ? (
         <Empty label="No sales orders found." />
       ) : (
         <>
@@ -305,7 +307,7 @@ export default function SalesOrderPage() {
             />
           )}
         </>
-      )}
+      )}</RecordsViewport>
 
       {attachTarget && selectedCompany && (
         <AttachmentQuickModal

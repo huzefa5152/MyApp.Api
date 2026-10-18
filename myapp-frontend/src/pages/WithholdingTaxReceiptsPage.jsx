@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { MdFactCheck, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdPrint, MdVisibility, MdPictureAsPdf } from "react-icons/md";
 import {
@@ -187,7 +188,7 @@ export default function WithholdingTaxReceiptsPage() {
         <div style={styles.emptyState}><MdBusiness size={40} color={colors.cardBorder} /><p style={{ color: colors.textSecondary, marginTop: 8 }}>No companies available.</p></div>
       )}
 
-      {loading ? (
+      <RecordsViewport label="Withholding Tax Receipts records">{loading ? (
         <div style={styles.loading}><div style={styles.spinner} /></div>
       ) : selectedCompany && filtered.length === 0 ? (
         <div style={styles.emptyState}>
@@ -301,7 +302,7 @@ export default function WithholdingTaxReceiptsPage() {
             </tfoot>
           </table>
         </div>
-      ) : null}
+      ) : null}</RecordsViewport>
 
       {showForm && selectedCompany && (
         <WithholdingTaxReceiptForm

@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   MdAdd, MdDelete, MdSwapHoriz, MdSearch,
@@ -190,7 +191,7 @@ export default function TransfersPage() {
             )}
           </div>
 
-          {loading ? (
+          <RecordsViewport label="Transfers records">{loading ? (
             <div style={st.empty}>Loading…</div>
           ) : rows.length === 0 ? (
             <div style={st.empty}>No transfers yet.</div>
@@ -213,7 +214,7 @@ export default function TransfersPage() {
                 />
               ))}
             </div>
-          )}
+          )}</RecordsViewport>
 
           <Pagination
             page={page}

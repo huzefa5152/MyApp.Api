@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import UserSessionsPanel from "../Components/UserSessionsPanel";
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -345,7 +346,7 @@ export default function UsersPage() {
 
       {/* Users List */}
       <div>
-        {loading ? (
+        <RecordsViewport label="Users records">{loading ? (
           <p style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
             Loading users...
           </p>
@@ -418,7 +419,7 @@ export default function UsersPage() {
               </div>
             ))}
           </div>
-        )}
+        )}</RecordsViewport>
       </div>
 
       {/* Summary */}
