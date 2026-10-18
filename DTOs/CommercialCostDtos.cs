@@ -12,6 +12,8 @@ public class CommercialCostLineDto
     public decimal PurchasedQuantity { get; set; }
     public decimal RemainingQuantity => Math.Max(0m, Quantity - PurchasedQuantity);
     public decimal PurchasedAmount { get; set; }
+    /// <summary>Quantity on paid, credited or manually entered supplier bills; costs no longer move it.</summary>
+    public decimal LockedQuantity { get; set; }
     public decimal SellingAmount { get; set; }
     public decimal? ActualUnitCost { get; set; }
     public int? SupplierId { get; set; }
@@ -42,22 +44,4 @@ public class SaveCommercialCostsDto
 {
     public string Version { get; set; } = "";
     public List<ChallanPrivateCostLineDto> Items { get; set; } = new();
-}
-
-public class CreateLocalPurchasesDto
-{
-    public string Version { get; set; } = "";
-    public DateTime Date { get; set; }
-    public List<int> ItemIds { get; set; } = new();
-    /// <summary>Optional quantity per selected line id; a line not listed buys all that remains.</summary>
-    public Dictionary<int, decimal>? Quantities { get; set; }
-    public List<LocalPurchaseSettingsDto> Suppliers { get; set; } = new();
-}
-
-public class LocalPurchaseSettingsDto
-{
-    public int SupplierId { get; set; }
-    public int? ChallanId { get; set; }
-    public string? SupplierBillNumber { get; set; }
-    public decimal GSTRate { get; set; }
 }

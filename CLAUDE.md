@@ -378,7 +378,8 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Admin scope isolation (seed / Administrator trees, Tenant Access, IDOR) | `python scripts/test_admin_scope_isolation.py` | `all checks passed` (currently `115/115`) |
 | FBR cancellation + reversal releases challans | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `26/26 checks passed` |
 | Valued stock entries (isolated local SQL only) | `py -3.14 scripts/test_stock_entry_workflow.py --base http://localhost:5191 --database <isolated-local-test-db>` | `41 stock-entry workflow checks passed` |
-| Commercial costs + local purchases: one pool for challan / bill / form / dialog, partial qty, races, edits, sale-side floor, IDOR | `python scripts/test_trader_commercial_costs.py --base <url> --db "<conn>"` | `129/129 commercial cost checks passed` |
+| Commercial costs + local purchases: one pool for challan / bill / form / dialog, races, edits, sale-side floor, IDOR | `python scripts/test_trader_commercial_costs.py --base <url> --db "<conn>"` | `124/124 commercial cost checks passed` |
+| Costs book supplier purchases automatically: create/edit/move/clear, lock once paid or credited, entered bills win, closed period, cancel/delete, tenant | `python scripts/test_cost_purchase_sync.py --base <url> --db "<conn>"` | `49/49 cost purchase sync checks passed` |
 | Stock item-type reflow **(hard pre-push gate — see box above)** | `python scripts/test_stock_itemtype_reflow.py` | `all checks passed` (currently `183/183`) |
 | PDF export pagination | `python scripts/test_pdf_pagination.py` | `all checks passed` (230 cases) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
@@ -730,29 +731,44 @@ SQL back-post; from that point the posting engine keeps them right on its own.
 
 ---
 
-### Local purchases draw on one quantity pool (2026-10-18)
+### Supplier and cost ARE the local purchase (2026-10-18, 2026-10-19)
 
-A sale line is bought from suppliers (LocalDirect, no stock) from the costing
-dialog OR the Purchase Bill form, and both spend the same remaining quantity.
-`Helpers/LocalPurchaseAllocations` is the one place that reads, locks and
-validates it. Never add a second path.
+Trader has no "create purchases" step. Saving a challan, a standalone bill or
+the costing dialog books every line that has BOTH a supplier and an actual cost
+as an automatic purchase bill (`Source = "auto-cost"`): one per (source
+document, supplier), dated like the document, GST 0. `LocalPurchaseSyncService`
+is the only writer; every path that changes a line's cost, supplier or quantity
+calls it inside its own transaction (challan create/edit/cost edit/billed edit/
+line delete/cancel/delete, sales-order challans and PO import via the challan
+service, standalone bill create/edit/void/delete, the costing dialog, MCP).
 
-- **The key is the CHALLAN line whenever one exists.** `PurchaseItem.LocalDeliveryItemId`
-  for anything that came from a challan; `LocalInvoiceItemId` only for a
-  standalone bill line. A claim sent against a challan-backed bill line is
-  normalised to its challan line, so "against the bill" and "against the
-  challan" can never both be bought.
-- **Lock, then count, inside the transaction.** Source rows are row-locked in one
-  order (delivery lines, then bill lines, ascending). The form and the dialog
-  both go through it; two saves for the last unit end with one 400.
-- **Actual cost = recorded purchases + estimate × quantity still to buy.** A
-  saved estimate never re-prices bought quantity. Fix a wrong purchase by
-  editing it while it has no payment or credit, then by supplier credit.
-  `ActualUnitCostOverride` columns are unused (kept: schema is additive only).
-- **The sale side cannot drop below what was bought.** `InvoiceService` update
-  paths call `AssertSourcesCoverPurchasesAsync` before commit; a challan with
-  any purchase keeps its lines frozen.
-- Suite: `scripts/test_trader_commercial_costs.py` (129 checks with `--db`).
+- **Open vs fixed.** An automatic bill follows the costs only while it has no
+  payment, allocation or supplier credit (`LocalPurchaseSyncService.OpenAuto`).
+  Paid/credited automatic bills and supplier bills entered on the Purchase Bill
+  form are FIXED: never changed by a sync. The open bill covers only what fixed
+  bills leave, and a line may not shrink below them, be removed, or have its
+  challan cancelled/deleted while they exist.
+- **An entered supplier bill wins.** Manual links are checked against fixed
+  purchases only (`LocalPurchaseAllocations.ValidateAsync`, `fixedOnly`); the
+  open automatic bill then shrinks around it, and grows back if it is deleted.
+- **The key is the CHALLAN line whenever one exists.** A link sent against a
+  challan-backed bill line is normalised to that challan line, so the bill and
+  challan views draw on one quantity.
+- **Header paperwork is the user's, lines are the costs'.** Editing an automatic
+  bill changes reference, IRN, GST, withholding, notes and terms only; its
+  lines, date and supplier come from the source. It cannot be deleted directly.
+- **Closed periods.** Posting goes through the ledger writer, so a sync that
+  touches a locked period is refused. Challan create checks the period BEFORE
+  the repository commits (it commits internally); a later sync failure comes
+  back as `PurchaseWarning` on the saved challan, never as an error that invites
+  a second save and a duplicate challan.
+- **Actual cost = booked purchases + estimate for anything not booked.**
+- `20261019100000_MarkCostDrivenPurchasesAutomatic` turned purchases made by the
+  old preview into automatic ones (single-source bills only). Costed lines
+  saved before this release book on their document's next save; there is no
+  backfill.
+- Suites: `scripts/test_cost_purchase_sync.py` (49) and
+  `scripts/test_trader_commercial_costs.py` (124), both with `--db`.
 
 ### Pickers are not screens (2026-09-21)
 

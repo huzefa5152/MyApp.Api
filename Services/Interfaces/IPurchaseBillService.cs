@@ -17,8 +17,6 @@ namespace MyApp.Api.Services.Interfaces
         Task<PrintPurchaseBillDto?> GetPrintDataAsync(int id);
         Task<PurchaseBillDto> CreateAsync(CreatePurchaseBillDto dto);
         Task<List<LocalPurchaseSourceSummaryDto>> GetLocalPurchaseSourcesAsync(int companyId, string? search);
-        Task<ChallanPurchasePreviewDto> PreviewFromChallanAsync(int challanId);
-        Task<List<PurchaseBillDto>> CreateFromChallanAsync(int challanId, CreateChallanPurchasesDto? request = null);
         Task<PurchaseBillDto?> UpdateAsync(int id, UpdatePurchaseBillDto dto);
         Task<bool> DeleteAsync(int id);
         Task<int> GetCountByCompanyAsync(int companyId);

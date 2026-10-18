@@ -247,7 +247,6 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onC
                       {exportingId === c.id + "-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Excel
                     </button>
                   )}
-                  {onCosts && <button style={styles.actionBtn} onClick={() => onCosts(c)}>Costs & suppliers</button>}
                   {onLocalPurchase && c.status !== "Cancelled" && <button style={styles.actionBtn} onClick={() => onLocalPurchase(c)}>Local purchase</button>}
                   {permUpdate && isEditable && !c.invoiceId && (
                     <button

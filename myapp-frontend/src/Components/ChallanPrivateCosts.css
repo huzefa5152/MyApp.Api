@@ -34,3 +34,5 @@
 .challan-private-add-supplier:disabled { opacity: .45; cursor: not-allowed; }
 .challan-private-add-supplier:focus-visible { outline: 2px solid #0d47a1; outline-offset: 2px; }
 .challan-private-supplier-modal { position: fixed; inset: 0; z-index: 1200; }
+.challan-private-auto{margin:4px 0 0;color:#0d47a1;font-size:12px}
+.challan-private-locked{display:block;margin-top:2px;color:#92400e;font-size:11px;overflow-wrap:anywhere}

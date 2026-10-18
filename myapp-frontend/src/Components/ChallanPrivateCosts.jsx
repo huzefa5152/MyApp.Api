@@ -23,7 +23,7 @@ export function useChallanSuppliers(companyId) {
   return suppliers;
 }
 
-export default function ChallanPrivateCosts({ items = [], onItemsChange, suppliers = [], readOnly = false, companyId, getActualLineTotal, showPurchaseValidation = false }) {
+export default function ChallanPrivateCosts({ items = [], onItemsChange, suppliers = [], readOnly = false, companyId, getActualLineTotal }) {
   const { has } = usePermissions();
   const [addedSuppliers, setAddedSuppliers] = useState([]);
   const [supplierTarget, setSupplierTarget] = useState(null);
@@ -51,11 +51,15 @@ export default function ChallanPrivateCosts({ items = [], onItemsChange, supplie
   const supplierId = items.length && items.every((item) => item.supplierId && item.supplierId === items[0].supplierId)
     ? items[0].supplierId : "";
   if (!items.length || (readOnly && !items.some((item) => item.supplierId || item.actualUnitCost != null))) return null;
-  const applySupplier = (id) => onItemsChange(items.map((row) => ({ ...row, supplierId: id ? Number(id) : null })));
+  // Quantity already on a paid, credited or manually entered supplier bill.
+  // A fully locked line keeps its supplier and cost: they no longer move a payable.
+  const locked = item => Number(item.lockedPurchaseQuantity ?? item.lockedQuantity ?? 0);
+  const fullyLocked = item => locked(item) > 0 && locked(item) >= Number(item.quantity || 0);
+  const applySupplier = (id) => onItemsChange(items.map((row) => fullyLocked(row) ? row : ({ ...row, supplierId: id ? Number(id) : null })));
   const updateLine = (index, patch) => onItemsChange(items.map((row, i) => i === index ? { ...row, ...patch } : row));
   return <section className="challan-private-costs" aria-label="Private supplier and cost details">
     <div className="challan-private-heading">
-      <div><strong>Private supplier and cost details</strong><p>Internal use only · Excluded from customer prints. Enter the actual price for one unit; line cost is quantity × unit price.</p></div>
+      <div><strong>Private supplier and cost details</strong><p>Internal use only · Excluded from customer prints. Enter the actual price for one unit; line cost is quantity × unit price.</p>{!readOnly && <p className="challan-private-auto">Saving books every line that has a supplier and a cost as a purchase from that supplier. Lines left blank stay unpurchased; you can add them later.</p>}</div>
       {!readOnly && items.length > 1 && <div className="challan-private-bulk">
         <span>Supplier for all lines</span>
         <div><SearchableSelect items={choices} value={supplierId} onChange={applySupplier} placeholder="Apply supplier to all" style={field} /></div>
@@ -65,17 +69,16 @@ export default function ChallanPrivateCosts({ items = [], onItemsChange, supplie
     </div>
     <div className="challan-private-columns" aria-hidden="true"><span>Item</span><span>Supplier</span><span>Actual unit price (PKR)</span><span>Actual line total (PKR)</span></div>
     {items.map((item, index) => <div key={item.id || index} className="challan-private-row">
-      <div className="challan-private-item"><span>{index + 1}</span><div><RichText text={item.description || "New line"} /></div></div>
+      <div className="challan-private-item"><span>{index + 1}</span><div><RichText text={item.description || "New line"} />{locked(item) > 0 && <small className="challan-private-locked">{fullyLocked(item) ? "On a paid or entered supplier bill. Correct it from Purchases." : `${locked(item)} on a paid or entered supplier bill; the rest follows this cost.`}</small>}</div></div>
       <div className="challan-private-supplier">
         <span className="challan-private-mobile-label">Supplier</span>
-        {readOnly ? <span>{item.supplierName || choices.find((s) => s.id === item.supplierId)?.name || "—"}</span> : <SearchableSelect items={choices} value={item.supplierId ?? ""} onChange={(id) => updateLine(index, { supplierId: id ? Number(id) : null })} placeholder="Optional supplier" style={field} />}
-        {showPurchaseValidation && !item.purchaseRecorded && !item.supplierId && <span className="commercial-field-error">Choose a supplier to record this payable.</span>}
-        {canCreate && <button className="challan-private-add-supplier" type="button" disabled={openingSupplier} onClick={() => addSupplier(index)} aria-label={`Add supplier for line ${index + 1}`}>+ Add supplier</button>}
+        {readOnly || fullyLocked(item) ? <span>{item.supplierName || choices.find((s) => s.id === item.supplierId)?.name || "—"}</span> : <SearchableSelect items={choices} value={item.supplierId ?? ""} onChange={(id) => updateLine(index, { supplierId: id ? Number(id) : null })} placeholder="Optional supplier" style={field} />}
+        {canCreate && !fullyLocked(item) && <button className="challan-private-add-supplier" type="button" disabled={openingSupplier} onClick={() => addSupplier(index)} aria-label={`Add supplier for line ${index + 1}`}>+ Add supplier</button>}
       </div>
       <label className="challan-private-cost">
         <span className="challan-private-mobile-label">Actual unit price (PKR)</span>
-        {readOnly ? <span>{item.actualUnitCost == null ? "—" : Number(item.actualUnitCost).toLocaleString(undefined, { maximumFractionDigits: 12 })}</span> : <input aria-invalid={showPurchaseValidation && !item.purchaseRecorded && (item.actualUnitCost == null || item.actualUnitCost === "" || Number(item.actualUnitCost) < 0) || undefined} aria-describedby={showPurchaseValidation && !item.purchaseRecorded ? `cost-help-${index}` : undefined} aria-label={`Actual cost per unit for line ${index + 1}`} style={field} type="number" inputMode="decimal" min="0" step="any" placeholder="Optional" value={item.actualUnitCost ?? ""} onChange={(e) => updateLine(index, { actualUnitCost: e.target.value === "" ? null : e.target.value })} />}
-        {showPurchaseValidation && !item.purchaseRecorded && <span id={`cost-help-${index}`} className="commercial-field-error">{item.actualUnitCost == null || item.actualUnitCost === "" ? "Add the actual unit cost. Enter 0 only if there is no cost." : Number(item.actualUnitCost) < 0 ? "Actual cost must be zero or more." : ""}</span>}
+        {readOnly || fullyLocked(item) ? <span>{item.actualUnitCost == null ? "—" : Number(item.actualUnitCost).toLocaleString(undefined, { maximumFractionDigits: 12 })}</span> : <input aria-invalid={Number(item.actualUnitCost) < 0 || undefined} aria-label={`Actual cost per unit for line ${index + 1}`} style={field} type="number" inputMode="decimal" min="0" step="any" placeholder="Optional" value={item.actualUnitCost ?? ""} onChange={(e) => updateLine(index, { actualUnitCost: e.target.value === "" ? null : e.target.value })} />}
+        {Number(item.actualUnitCost) < 0 && <span className="commercial-field-error">Actual cost must be zero or more.</span>}
       </label>
       <div className="challan-private-total">
         <span className="challan-private-mobile-label">Actual line total (PKR)</span>

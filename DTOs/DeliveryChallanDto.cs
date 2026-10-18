@@ -65,6 +65,8 @@ namespace MyApp.Api.DTOs
         /// </summary>
         public int? DuplicatedFromChallanNumber { get; set; }
         public bool HasAutoPurchaseBills { get; set; }
+        /// <summary>Set when the challan saved but its automatic supplier purchases could not be booked.</summary>
+        public string? PurchaseWarning { get; set; }
         public List<DeliveryItemDto> Items { get; set; } = new();
         public List<string> Warnings { get; set; } = new();
     }

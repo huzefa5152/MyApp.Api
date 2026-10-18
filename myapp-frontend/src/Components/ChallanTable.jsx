@@ -179,7 +179,6 @@ export default function ChallanTable({
             {exportingId === c.id + "-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />}
           </button>
         )}
-        {onCosts && <button data-label="Costs & suppliers" style={btnStyles.edit} onClick={() => onCosts(c)} title="Costs & suppliers"><MdEdit size={14} /></button>}
         {onLocalPurchase && c.status !== "Cancelled" && <button data-label="Local purchase" style={btnStyles.edit} onClick={() => onLocalPurchase(c)} title="Create local purchase"><MdAddShoppingCart size={14} /></button>}
           {perms.permUpdate && flags.isEditable && !c.invoiceId && (
           <button data-label={c.invoiceId || c.status === "Invoiced" ? "Supplier & cost" : "Edit items"} data-primary={(!flags.canGenerateBill) || undefined} style={btnStyles.edit} onClick={() => onEditItems?.(c)} title={c.invoiceId || c.status === "Invoiced" ? "Edit supplier & cost" : "Edit items"}>

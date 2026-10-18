@@ -306,6 +306,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+- **2026-10-19:** Supplier and actual cost on a challan or bill line now book the supplier purchase on save: one purchase per supplier, kept in step with later edits until it is paid or credited, on new, billed and FBR-filed challans, standalone bills, sales-order challans and PO imports alike. The "Save & preview supplier purchases" step, the costing dialog's purchase review and the separate challan "Costs & suppliers" button are gone. A supplier bill entered on the Purchase Bill form takes precedence over the booked purchase; closed accounting periods refuse the change. Existing preview-made purchases become automatic.
+
 - **2026-10-18:** Local (non-inventory) purchases share one quantity pool per sale line. The Purchase Bill form links to a challan or a sale bill (search, add selected or all remaining, partial quantities). A challan-backed bill line books against its challan line. The costing dialog takes a partial quantity per line, and both paths refuse more than is left, including two saves at the same moment. Actual cost is now recorded purchases plus the estimate for what is still to buy, so a saved estimate no longer re-prices bought quantity. An unpaid, uncredited linked purchase can be edited and is re-checked. A sale line cannot drop below what suppliers were paid for. "Local purchase" shortcuts are on challan and bill rows, inside the costing dialog and on Purchase Bills. Fixes a challan with one linked bill showing its other lines as fully purchased.
 
 - **2026-10-17:** Add reviewed MCP edits for existing print templates, with explicit write scopes, company and permission checks, sanitized previews and stale-edit protection.

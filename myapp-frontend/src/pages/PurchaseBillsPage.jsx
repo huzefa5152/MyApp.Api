@@ -290,7 +290,7 @@ export default function PurchaseBillsPage() {
                           <AttachmentBadge count={attachCounts[b.id]} onClick={() => setAttachTarget(b)} />
                         </div>
                         <p style={cardStyles.text}><strong>Supplier:</strong> {b.supplierName}</p>
-                        {<p style={cardStyles.text}><strong>Source:</strong> {b.purchaseCategory === "LocalDirect" ? "Local direct purchase" : b.source === "fbr-import" ? "FBR import" : "Inventory purchase"}</p>}
+                        {<p style={cardStyles.text}><strong>Source:</strong> {b.source === "auto-cost" ? "From challan / bill costs" : b.purchaseCategory === "LocalDirect" ? "Local direct purchase" : b.source === "fbr-import" ? "FBR import" : "Inventory purchase"}</p>}
                         <p style={cardStyles.text}><strong>Date:</strong> {new Date(b.date).toLocaleDateString()}</p>
                         <p style={cardStyles.text}><strong>Grand Total:</strong> Rs. {b.grandTotal?.toLocaleString()}</p>
                         {b.supplierIRN && (
@@ -311,7 +311,7 @@ export default function PurchaseBillsPage() {
                         <button style={btnView} onClick={() => { setEditingId(b.id); setViewOnly(true); setShowForm(true); }}>
                           <MdVisibility size={14} /> View
                         </button>
-                        {canUpdate && (b.source !== "local-direct" || !(b.amountPaid > 0 || b.amountCredited > 0)) && (
+                        {canUpdate && (!["local-direct", "auto-cost"].includes(b.source) || !(b.amountPaid > 0 || b.amountCredited > 0)) && (
                           <button style={btnEdit} onClick={() => { setEditingId(b.id); setViewOnly(false); setShowForm(true); }}>
                             <MdEdit size={14} /> Edit
                           </button>
@@ -331,7 +331,7 @@ export default function PurchaseBillsPage() {
                             <MdPictureAsPdf size={14} /> PDF
                           </button>
                         )}
-                        {canDelete && (
+                        {canDelete && b.source !== "auto-cost" && (
                           <button style={btnDelete} onClick={() => handleDelete(b)}>
                             <MdDelete size={14} /> Delete
                           </button>

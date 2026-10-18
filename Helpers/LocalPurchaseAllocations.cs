@@ -16,26 +16,30 @@ namespace MyApp.Api.Helpers
         public record Claim(int? DeliveryItemId, int? InvoiceItemId, decimal Quantity);
 
         public static async Task<Dictionary<int, decimal>> PurchasedByDeliveryAsync(
-            AppDbContext db, int companyId, IEnumerable<int> deliveryItemIds, int? excludeBillId = null)
+            AppDbContext db, int companyId, IEnumerable<int> deliveryItemIds, int? excludeBillId = null, bool fixedOnly = false)
         {
             var ids = deliveryItemIds.Distinct().ToList();
             if (ids.Count == 0) return new();
+            var openAuto = MyApp.Api.Services.Implementations.LocalPurchaseSyncService.OpenAuto(db).Select(p => p.Id);
             return await db.PurchaseItems.AsNoTracking()
                 .Where(p => p.LocalDeliveryItemId.HasValue && ids.Contains(p.LocalDeliveryItemId.Value)
-                    && p.PurchaseBill.CompanyId == companyId && p.PurchaseBillId != excludeBillId)
+                    && p.PurchaseBill.CompanyId == companyId && p.PurchaseBillId != excludeBillId
+                    && (!fixedOnly || !openAuto.Contains(p.PurchaseBillId)))
                 .GroupBy(p => p.LocalDeliveryItemId!.Value)
                 .Select(g => new { Id = g.Key, Qty = g.Sum(p => p.Quantity) })
                 .ToDictionaryAsync(x => x.Id, x => x.Qty);
         }
 
         public static async Task<Dictionary<int, decimal>> PurchasedByInvoiceAsync(
-            AppDbContext db, int companyId, IEnumerable<int> invoiceItemIds, int? excludeBillId = null)
+            AppDbContext db, int companyId, IEnumerable<int> invoiceItemIds, int? excludeBillId = null, bool fixedOnly = false)
         {
             var ids = invoiceItemIds.Distinct().ToList();
             if (ids.Count == 0) return new();
+            var openAuto = MyApp.Api.Services.Implementations.LocalPurchaseSyncService.OpenAuto(db).Select(p => p.Id);
             return await db.PurchaseItems.AsNoTracking()
                 .Where(p => p.LocalInvoiceItemId.HasValue && ids.Contains(p.LocalInvoiceItemId.Value)
-                    && p.PurchaseBill.CompanyId == companyId && p.PurchaseBillId != excludeBillId)
+                    && p.PurchaseBill.CompanyId == companyId && p.PurchaseBillId != excludeBillId
+                    && (!fixedOnly || !openAuto.Contains(p.PurchaseBillId)))
                 .GroupBy(p => p.LocalInvoiceItemId!.Value)
                 .Select(g => new { Id = g.Key, Qty = g.Sum(p => p.Quantity) })
                 .ToDictionaryAsync(x => x.Id, x => x.Qty);
@@ -93,8 +97,10 @@ namespace MyApp.Api.Helpers
             if (deliveryLines.Count != deliveryIds.Count || deliveryLines.Values.Any(i => i.CompanyId != companyId || i.IsDemo || i.Status == "Cancelled"))
                 throw new InvalidOperationException("A selected challan line is unavailable for this company.");
 
-            var purchasedDelivery = await PurchasedByDeliveryAsync(db, companyId, deliveryIds, excludeBillId);
-            var purchasedInvoice = await PurchasedByInvoiceAsync(db, companyId, standaloneIds, excludeBillId);
+            // An entered supplier bill displaces the automatic purchase booked
+            // from costs (it shrinks on the next sync), so only fixed purchases count.
+            var purchasedDelivery = await PurchasedByDeliveryAsync(db, companyId, deliveryIds, excludeBillId, fixedOnly: true);
+            var purchasedInvoice = await PurchasedByInvoiceAsync(db, companyId, standaloneIds, excludeBillId, fixedOnly: true);
             foreach (var c in normalised)
             {
                 if (c.DeliveryItemId is int d)

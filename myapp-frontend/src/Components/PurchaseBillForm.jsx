@@ -41,6 +41,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const opensLocal = !billId && !prefillFromInvoiceId && (!!localSource || startLocal);
   const [isNonStock, setIsNonStock] = useState(opensLocal);
   const [isGeneratedLocal, setIsGeneratedLocal] = useState(false);
+  const [isAuto, setIsAuto] = useState(false);
   const isAgainstSale = !!prefillFromInvoiceId;
   const [choosingCategory, setChoosingCategory] = useState(!billId && !prefillFromInvoiceId && !opensLocal);
   const [categoryChoice, setCategoryChoice] = useState(opensLocal ? "LocalDirect" : "");
@@ -199,6 +200,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
         const { data } = await getPurchaseBillById(billId);
         setIsNonStock(!!data.isNonStockSupplierPurchase);
         setIsGeneratedLocal(data.source === "local-direct");
+        setIsAuto(data.source === "auto-cost");
         setCurrentNumber(data.purchaseBillNumber);
         setCustomNumber(String(data.purchaseBillNumber));
         setSupplierId(String(data.supplierId));
@@ -407,6 +409,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
             {categoryConfirmed && (categoryChoice === "LocalDirect") !== isNonStock && <p className="purchase-category-warning" role="status">Changing category clears item classifications and source links. Descriptions, quantities and prices are kept.</p>}
           </section> : <>
           {!isEdit && <div className="purchase-category-selected"><div><strong ref={detailHeading} tabIndex={-1}>{isNonStock ? "Local direct purchase" : "Stock purchase"}</strong><small>{isNonStock ? "Supplier payable only · No stock movement" : isAgainstSale ? "Linked to a customer sale bill" : "Catalog items · Inventory controls apply"}</small></div>{!isAgainstSale && <button type="button" onClick={() => { setCategoryChoice(isNonStock ? "LocalDirect" : "Inventory"); setChoosingCategory(true); setError(""); }}>Change category</button>}</div>}
+          {isAuto && <p className="purchase-linked-note">This purchase follows the supplier and cost entered on its challan or bill. Change lines there; here you can add the supplier's invoice reference, IRN and GST.</p>}
           {isGeneratedLocal && <p className="purchase-linked-note">Linked lines keep their challan or bill. Quantities are re-checked against what is left to purchase. Once this purchase is paid or credited, correct it with a supplier credit instead.</p>}
           <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
             {/* Number and the copy shortcut share one row; the copy panel takes
@@ -451,7 +454,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               </div>
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Bill Date *</label>
-                <input aria-label="Bill date" aria-invalid={!date || undefined} type="date" style={formStyles.input} value={date} onChange={e => { setDate(e.target.value); if (error === "Choose a valid bill date.") setError(""); }} />
+                <input aria-label="Bill date" aria-invalid={!date || undefined} disabled={isAuto} type="date" style={formStyles.input} value={date} onChange={e => { setDate(e.target.value); if (error === "Choose a valid bill date.") setError(""); }} />
                 {!date && <small className="purchase-field-error">Choose a bill date.</small>}
               </div>
               <div data-admin-field="" style={formStyles.formGroup}>
@@ -527,6 +530,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
 
             <DocumentNotesEditor value={notes} onChange={setNotes} readOnly={readOnly} />
             </details>
+            <fieldset disabled={isAuto} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
             <div style={{ marginTop: "0.75rem", padding: "0.75rem", borderRadius: 10, border: `1px solid ${colors.cardBorder}`, backgroundColor: colors.inputBg }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
                 <strong style={{ color: colors.textPrimary }}>Items ({items.length})</strong>
@@ -664,6 +668,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               </div>
               )}
             </div>
+            </fieldset>
 
             <div style={{ marginTop: "1rem", padding: "0.75rem 1rem", borderRadius: 10, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#f8faff", display: "grid", gridTemplateColumns: "1fr auto auto", rowGap: "0.35rem", columnGap: "1rem" }}>
               <span style={{ color: colors.textSecondary }}>Subtotal:</span>

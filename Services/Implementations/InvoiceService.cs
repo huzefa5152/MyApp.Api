@@ -52,6 +52,8 @@ namespace MyApp.Api.Services.Implementations
         private readonly IItemTypeService _itemTypes;
         private readonly IFbrService _filingFbr;
 
+        private readonly LocalPurchaseSyncService _purchases;
+
         public InvoiceService(
             IInvoiceRepository invoiceRepo,
             IDeliveryChallanRepository challanRepo,
@@ -65,8 +67,10 @@ namespace MyApp.Api.Services.Implementations
             IPostingService posting,
             ILogger<InvoiceService> logger,
             IItemTypeService itemTypes,
-            IFbrService filingFbr)
+            IFbrService filingFbr,
+            LocalPurchaseSyncService purchases)
         {
+            _purchases = purchases;
             _invoiceRepo = invoiceRepo;
             _challanRepo = challanRepo;
             _companyRepo = companyRepo;
@@ -1294,7 +1298,7 @@ namespace MyApp.Api.Services.Implementations
                 }
             }
 
-            await new CommercialCostService(_context, _posting).ValidateAsync(dto.CompanyId,
+            await new CommercialCostService(_context, _purchases).ValidateAsync(dto.CompanyId,
                 dto.Items.Select(i => new ChallanPrivateCostLineDto { SupplierId = i.SupplierId, ActualUnitCost = i.ActualUnitCost }));
 
             // Bill-header defaults — identical to CreateAsync.
@@ -1484,6 +1488,7 @@ namespace MyApp.Api.Services.Implementations
                 // company's ledger is not live, and replace-on-edit otherwise.
                 await _posting.PostInvoiceAsync(created);
                 await SalesDocumentRules.RefreshOrdersAsync(_context, created.CompanyId);
+                    await _purchases.SyncBillAsync(created.Id);
                     await transaction.CommitAsync();
 
                     var loaded = await _invoiceRepo.GetByIdAsync(created.Id);
@@ -1896,6 +1901,7 @@ namespace MyApp.Api.Services.Implementations
                 // Stock guard (2026-09-11): hard-block rolls back here,
                 // soft mode rides back on the DTO as warnings.
                 var stockWarnings = await EnforceStockGuardAfterSyncAsync(invoice);
+                await _purchases.SyncInvoiceSourcesAsync(invoice.Id);
                 await LocalPurchaseAllocations.AssertSourcesCoverPurchasesAsync(_context, invoice.CompanyId, invoice.Id);
                 if (transaction != null) await transaction.CommitAsync();
 
@@ -2495,6 +2501,7 @@ namespace MyApp.Api.Services.Implementations
                 // 400 at the controller. Soft → warnings on the response;
                 // the client has already asked the operator to confirm.
                 var stockWarnings = await EnforceStockGuardAfterSyncAsync(invoice);
+                await _purchases.SyncInvoiceSourcesAsync(invoice.Id);
                 await LocalPurchaseAllocations.AssertSourcesCoverPurchasesAsync(_context, invoice.CompanyId, invoice.Id);
                 await transaction.CommitAsync();
                 await transaction.DisposeAsync();
@@ -2998,8 +3005,9 @@ namespace MyApp.Api.Services.Implementations
             var invoice = await _invoiceRepo.GetByIdAsync(id);
             if (invoice == null) return false;
 
-            if (await _context.PurchaseItems.AnyAsync(p => p.LocalInvoiceItemId.HasValue && p.LocalInvoiceItemId.Value > 0 &&
-                _context.InvoiceItems.Any(i => i.Id == p.LocalInvoiceItemId && i.InvoiceId == id)))
+            var ownLineIds = await _context.InvoiceItems.Where(i => i.InvoiceId == id && !i.DeliveryItemId.HasValue).Select(i => i.Id).ToListAsync();
+            var (_, fixedByLine) = await _purchases.FixedAsync(invoice.CompanyId, Array.Empty<int>(), ownLineIds);
+            if (fixedByLine.Values.Any(q => q > 0))
                 throw new InvalidOperationException("This bill has supplier purchases. Void the bill to preserve the supplier ledger.");
 
             // A refused delete leaves no trace: the controller catches the
@@ -3073,6 +3081,7 @@ namespace MyApp.Api.Services.Implementations
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                await _purchases.ReleaseLinesAsync(invoice.CompanyId, Array.Empty<int>(), ownLineIds);
                 // Revert linked challans from "Invoiced" → their billable state.
                 // - Imported challans revert to "Imported" (or "No PO" if PO was cleared)
                 // - Native challans revert to "Pending" (or "No PO")
@@ -3203,6 +3212,7 @@ namespace MyApp.Api.Services.Implementations
                 // a reversal would double the paper trail.
                 await _posting.PostInvoiceAsync(invoice);
                 await SalesDocumentRules.RefreshOrdersAsync(_context, invoice.CompanyId);
+                await _purchases.SyncBillAsync(invoice.Id);
                 await transaction.CommitAsync();
             }
             catch (Exception ex)

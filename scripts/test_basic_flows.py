@@ -313,12 +313,16 @@ def test_challan_supplier_purchase_gst(base, token, company, client):
     if not must("GST preview supplier", status): return
     status, challan = http("POST", f"/api/deliverychallans/company/{company['id']}", base, token=token, body={"clientId": client["id"], "poNumber": "", "deliveryDate": datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z"), "items": [{"description": "GST preview goods", "quantity": 2, "unit": "Pcs", "supplierId": supplier["id"], "actualUnitCost": 5}]})
     if not must("GST preview challan", status): return
-    status, preview = http("GET", f"/api/purchasebills/from-challan/{challan['id']}/preview", base, token=token)
-    if not must("GST preview", status): return
-    status, bills = http("POST", f"/api/purchasebills/from-challan/{challan['id']}", base, token=token, body={"revision": preview["revision"], "date": preview["date"], "suppliers": [{"supplierId": supplier["id"], "gstRate": 7.5}]})
-    check(suite, "purchase uses chosen GST without changing challan cost", status == 200 and bills[0]["gstAmount"] == 0.75 and bills[0]["grandTotal"] == 10.75)
-    if status == 200:
-        for bill in bills: http("DELETE", f"/api/purchasebills/{bill['id']}", base, token=token)
+    # Saving the costed challan books the purchase; GST is added on the purchase itself.
+    _, page = http("GET", f"/api/purchasebills/company/{company['id']}/paged?pageSize=100", base, token=token)
+    bills = [b for b in (page or {}).get("items", []) if b.get("sourceDeliveryChallanId") == challan["id"]]
+    if not bills:
+        check(suite, "costed challan books its purchase", False, f"{page}")
+        return
+    status, pb = http("GET", f"/api/purchasebills/{bills[0]['id']}", base, token=token)
+    status, pb = http("PUT", f"/api/purchasebills/{pb['id']}", base, token=token, body={"supplierId": pb["supplierId"], "date": pb["date"], "gstRate": 7.5,
+        "items": [{"id": i["id"], "description": i["description"], "quantity": i["quantity"], "uom": i["uom"], "unitPrice": i["unitPrice"]} for i in pb["items"]]})
+    check(suite, "purchase uses chosen GST without changing challan cost", status == 200 and pb["gstAmount"] == 0.75 and pb["grandTotal"] == 10.75)
     http("DELETE", f"/api/deliverychallans/{challan['id']}", base, token=token)
     http("DELETE", f"/api/suppliers/{supplier['id']}", base, token=token)
 
@@ -391,50 +395,51 @@ def test_private_challan_costs(base: str, token: str, company: dict, client: dic
             http("DELETE", f"/api/suppliers/{foreign['id']}", base, token=token)
         http("DELETE", f"/api/companies/{other['id']}", base, token=token)
 
-    status, bills = http("POST", f"/api/purchasebills/from-challan/{challan['id']}", base, token=token)
-    check(suite, "one unpaid purchase bill per supplier", status == 200 and len(bills) == 2 and
+    def booked():
+        _, page = http("GET", f"/api/purchasebills/company/{company['id']}/paged?pageSize=100", base, token=token)
+        return sorted([b for b in (page or {}).get("items", []) if b.get("sourceDeliveryChallanId") == challan["id"]], key=lambda b: b["id"])
+    bills = booked()
+    status = 200
+    check(suite, "saving the costed challan books one unpaid purchase bill per supplier", len(bills) == 2 and
           {b["supplierId"] for b in bills} == {s["id"] for s in suppliers} and
           sorted(b["grandTotal"] for b in bills) == [160, 450] and
           all(b.get("sourceDeliveryChallanId") == challan["id"] for b in bills), f"{status} {bills}")
     if status != 200:
         return
-    retry_status, retry = http("POST", f"/api/purchasebills/from-challan/{challan['id']}", base, token=token)
-    check(suite, "repeat confirmation creates no duplicate", retry_status == 200 and
-          {b["id"] for b in retry} == {b["id"] for b in bills}, f"{retry_status} {retry}")
+    _, reloaded = http("GET", f"/api/deliverychallans/{challan['id']}", base, token=token)
+    http("PUT", f"/api/deliverychallans/{challan['id']}", base, token=token, body=reloaded)
+    check(suite, "saving again creates no duplicate", [b["id"] for b in booked()] == [b["id"] for b in bills])
     _, reloaded = http("GET", f"/api/deliverychallans/{challan['id']}", base, token=token)
     check(suite, "challan reports its purchase bills", reloaded.get("hasAutoPurchaseBills") is True)
     changed = dict(reloaded)
     changed["items"] = [dict(i) for i in reloaded["items"]]
     changed["items"][0]["actualUnitCost"] = 81
     edit_status, _ = http("PUT", f"/api/deliverychallans/{challan['id']}", base, token=token, body=changed)
-    check(suite, "cost cannot drift after purchase bill creation", edit_status == 400, f"got {edit_status}")
+    check(suite, "an unpaid purchase follows a cost correction", edit_status == 200 and
+          sorted(b["grandTotal"] for b in booked()) == [162, 450], f"got {edit_status} {booked()}")
+    _, reloaded = http("GET", f"/api/deliverychallans/{challan['id']}", base, token=token)
     notes_only = dict(reloaded)
     notes_only["notes"] = "Notes can still change"
     edit_status, edited = http("PUT", f"/api/deliverychallans/{challan['id']}", base, token=token, body=notes_only)
     check(suite, "notes stay editable while lines are locked", edit_status == 200 and
           (edited or {}).get("notes") == "Notes can still change", f"got {edit_status}")
-    cancel_status, _ = http("PUT", f"/api/deliverychallans/{challan['id']}/cancel", base, token=token)
-    check(suite, "challan with purchase bills cannot be cancelled", cancel_status == 400, f"got {cancel_status}")
-
-    # Incomplete lines are refused, never half-billed.
+    # A line without a cost is simply not booked; the costed line is.
     status, partial = http("POST", f"/api/deliverychallans/company/{company['id']}", base, token=token, body={
         "clientId": client["id"], "poNumber": "PARTIAL", "deliveryDate": today,
         "items": [{"description": "Has cost", "quantity": 1, "unit": "Pcs", "supplierId": suppliers[0]["id"], "actualUnitCost": 10},
                   {"description": "No cost", "quantity": 1, "unit": "Pcs"}],
     })
     if status in (200, 201):
-        s, _ = http("POST", f"/api/purchasebills/from-challan/{partial['id']}", base, token=token)
-        check(suite, "incomplete challan refused", s == 400, f"got {s}")
+        _, page = http("GET", f"/api/purchasebills/company/{company['id']}/paged?pageSize=100", base, token=token)
+        partial_bills = [b for b in page["items"] if b.get("sourceDeliveryChallanId") == partial["id"]]
+        check(suite, "only the costed line of a partly costed challan is booked", len(partial_bills) == 1 and partial_bills[0]["grandTotal"] == 10)
 
-    # Clean up newest-first so the company teardown is not blocked: the
-    # purchase bills, then the challans (only the latest is deletable), then
-    # the order the challan delivered.
-    for b in bills:
-        http("DELETE", f"/api/purchasebills/{b['id']}", base, token=token)
+    # Clean up newest-first (only the latest challan is deletable). Deleting a
+    # challan takes its unpaid automatic purchases with it.
     if status in (200, 201):
         http("DELETE", f"/api/deliverychallans/{partial['id']}", base, token=token)
     del_status, _ = http("DELETE", f"/api/deliverychallans/{challan['id']}", base, token=token)
-    check(suite, "challan deletable once its purchase bills are gone", del_status in (200, 204), f"got {del_status}")
+    check(suite, "deleting the challan removes its unpaid purchases", del_status in (200, 204) and booked() == [], f"got {del_status}")
     http("DELETE", f"/api/salesorders/{order['id']}", base, token=token)
 
 

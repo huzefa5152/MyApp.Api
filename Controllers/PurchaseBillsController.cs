@@ -94,10 +94,12 @@ namespace MyApp.Api.Controllers
             if (source == null || source.CompanyId != companyId) return NotFound();
             var showCost = await _permissions.HasPermissionAsync(CurrentUserId, "bills.costs.view");
             return Ok(new LocalPurchaseSourceDto { Kind = kind, Id = id, Number = source.Number, Date = header.Date, ClientName = header.Client ?? "",
-                Items = source.Items.Where(i => i.RemainingQuantity > 0).Select(i => new LocalPurchaseSourceLineDto {
+                // A supplier bill entered here takes precedence over the automatic
+                // purchase booked from costs, so only locked quantity is unavailable.
+                Items = source.Items.Where(i => i.Quantity - i.LockedQuantity > 0).Select(i => new LocalPurchaseSourceLineDto {
                     DeliveryItemId = i.DeliveryItemId, InvoiceItemId = i.DeliveryItemId.HasValue ? null : i.Id,
                     SourceChallanNumber = i.SourceChallanNumber, Description = i.Description, Unit = i.Unit,
-                    Quantity = i.Quantity, PurchasedQuantity = i.PurchasedQuantity, RemainingQuantity = i.RemainingQuantity,
+                    Quantity = i.Quantity, PurchasedQuantity = i.LockedQuantity, RemainingQuantity = i.Quantity - i.LockedQuantity,
                     EstimatedUnitCost = showCost ? i.ActualUnitCost : null, SupplierId = showCost ? i.SupplierId : null }).ToList() });
         }
 
@@ -190,40 +192,6 @@ namespace MyApp.Api.Controllers
             {
                 return BadRequest(new { error = ex.Message });
             }
-        }
-
-        /// <summary>
-        /// Raise one purchase bill per supplier from a challan's private
-        /// supplier / actual-cost lines. Authorized on the challan's STORED
-        /// company — the route carries only the challan id.
-        /// </summary>
-        [HttpGet("from-challan/{challanId}/preview")]
-        [HasPermission("purchasebills.manage.create")]
-        [HasPermission("challans.list.view")]
-        public async Task<ActionResult<ChallanPurchasePreviewDto>> PreviewFromChallan(int challanId)
-        {
-            var companyId = await _context.DeliveryChallans.AsNoTracking()
-                .Where(c => c.Id == challanId && !c.IsDemo).Select(c => (int?)c.CompanyId).FirstOrDefaultAsync();
-            if (companyId == null) return NotFound();
-            await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
-            try { return Ok(await _service.PreviewFromChallanAsync(challanId)); }
-            catch (KeyNotFoundException) { return NotFound(); }
-            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
-        }
-
-        [HttpPost("from-challan/{challanId}")]
-        [HasPermission("purchasebills.manage.create")]
-        public async Task<ActionResult<List<PurchaseBillDto>>> CreateFromChallan(int challanId, [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] CreateChallanPurchasesDto? request = null)
-        {
-            var companyId = await _context.DeliveryChallans.AsNoTracking()
-                .Where(c => c.Id == challanId && !c.IsDemo)
-                .Select(c => (int?)c.CompanyId)
-                .FirstOrDefaultAsync();
-            if (companyId == null) return NotFound();
-            await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
-            try { var bills = await _service.CreateFromChallanAsync(challanId, request); await ScrubPaymentIfDenied(bills); return Ok(bills); }
-            catch (KeyNotFoundException ex) { return NotFound(new { error = ex.Message }); }
-            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
         }
 
         [HttpPut("{id}")]

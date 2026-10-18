@@ -139,28 +139,34 @@ try:
  call('PUT',combined_path,body);after=call('GET',f"/api/invoices/{combined['id']}")
  check('combined bill totals include the unchanged other delivery',after['subtotal']==1050 and after['grandTotal']==1239)
  check('other challan bill rows and rates remain unchanged',all(next(i for i in after['items'] if i['id']==old['id'])==old for old in untouched))
- # Supplier purchases and delivery changes serialize on the source challan.
+ # Costs book supplier purchases; a concurrent delivery edit and cost save
+ # serialize on the challan lines and the purchase ends up matching both.
+ def booked(challan_id):
+  page=call('GET',f"/api/purchasebills/company/{cid}/paged?pageSize=100")
+  return [call('GET',f"/api/purchasebills/{p['id']}") for p in page['items'] if p.get('sourceDeliveryChallanId')==challan_id and p.get('source')=='auto-cost']
  race=challan('Concurrent delivery',[{'description':'Concurrent goods','quantity':2,'unit':'Pcs','supplierId':supplier['id'],'actualUnitCost':10}]);race_bill=bill(race);race_path=f"/api/deliverychallans/{race['id']}/bill-edit"
+ check('a costed billed challan books its purchase',[(i['quantity'],i['unitPrice']) for p in booked(race['id']) for i in p['items']]==[(2,10)])
  race_context=call('GET',race_path);race_body=payload(race_context);race_body['items'][0]['quantity']=3
- purchase_preview=call('GET',f"/api/purchasebills/from-challan/{race['id']}/preview")
- purchase_body={'revision':purchase_preview['revision'],'date':now,'suppliers':[{'supplierId':supplier['id'],'gstRate':0}]}
+ race_costs=call('GET',f"/api/commercial-costs/challan/{race['id']}")
+ cost_body={'version':race_costs['version'],'items':[{'id':i['id'],'supplierId':supplier['id'],'actualUnitCost':11} for i in race_costs['items']]}
  from concurrent.futures import ThreadPoolExecutor
  from threading import Barrier
  barrier=Barrier(2)
  def compete(which):
   barrier.wait()
-  return flows.http('PUT' if which==0 else 'POST',race_path if which==0 else f"/api/purchasebills/from-challan/{race['id']}",a.base,token=token,body=race_body if which==0 else purchase_body)
+  return flows.http('PUT' if which==0 else 'PATCH',race_path if which==0 else f"/api/commercial-costs/challan/{race['id']}",a.base,token=token,body=race_body if which==0 else cost_body)
  with ThreadPoolExecutor(max_workers=2) as pool:outcomes=list(pool.map(compete,[0,1]))
- check('concurrent purchase creation and delivery edit cannot both succeed',sum(status in (200,201) for status,_ in outcomes)==1 and all(status in (200,201,400) for status,_ in outcomes))
+ check('concurrent delivery edit and cost save each succeed or are told to reload',all(status in (200,201,400) for status,_ in outcomes) and any(status in (200,201) for status,_ in outcomes))
  final=call('GET',f"/api/deliverychallans/{race['id']}");final_bill=call('GET',f"/api/invoices/{race_bill['id']}")
  check('concurrent outcome leaves delivery and bill quantities consistent',final['items'][0]['quantity']==final_bill['items'][0]['quantity'])
- # Generated supplier purchases freeze delivery lines.
+ check('the purchase matches the surviving delivery quantity and cost',[(i['quantity'],i['unitPrice']) for p in booked(race['id']) for i in p['items']]==[(final['items'][0]['quantity'],final['items'][0]['actualUnitCost'])])
+ # Purchases no longer freeze a billed delivery: an unpaid one follows the edit.
  source=call('GET',f"/api/deliverychallans/{dc['id']}")
  call('PATCH',f"/api/deliverychallans/{dc['id']}/private-costs",{'version':source['version'],'items':[{'id':i['id'],'supplierId':supplier['id'],'actualUnitCost':10} for i in source['items']]})
- s=snapshot();body=payload(s);preview=call('GET',f"/api/purchasebills/from-challan/{dc['id']}/preview")
- call('POST',f"/api/purchasebills/from-challan/{dc['id']}",{'revision':preview['revision'],'date':now,'suppliers':[{'supplierId':supplier['id'],'gstRate':0}]})
- call('GET',path,expected=(400,));body['items'][0]['quantity']+=1;call('PUT',path,body,expected=(400,));check('supplier purchase bills block delivery editing and context',True)
- body['items'][0]['quantity']-=1;body['items'][0]['billUnitPrice']+=1;call('PUT',path,body,expected=(400,));check('direct rate-only request cannot bypass supplier purchase lock',True)
+ s=snapshot();body=payload(s);body['items'][0]['quantity']+=1;call('PUT',path,body)
+ dc_now=call('GET',f"/api/deliverychallans/{dc['id']}")
+ check('a billed delivery with an unpaid purchase stays editable and the purchase follows',
+  sorted((i['quantity'],i['unitPrice']) for p in booked(dc['id']) for i in p['items'])==sorted((x['quantity'],10) for x in dc_now['items']))
  print('all checks passed ('+str(checks)+' billed delivery checks)',flush=True)
 finally:
  db.execute('UPDATE Invoices SET FbrStatus=NULL,FbrIRN=NULL,FbrSubmittedAt=NULL WHERE Id=? AND CompanyId=?',iid,cid)

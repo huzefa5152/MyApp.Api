@@ -77,19 +77,18 @@ def main():
         check("standalone list reports fully costed lines", listed_bill["costedLineCount"] == 1 and listed_bill["costingLineCount"] == 1)
         check("sales tax excluded from profit", d["sellingAmount"] == 200 and standalone["grandTotal"] == 236)
         d["items"][0]["supplierId"] = supplier["id"]
-        d = save("bill", bid, d)
-        request = {"version": d["version"], "date": today, "itemIds": [d["items"][0]["id"]]}
+        body = {"version": d["version"], "items": [{k: i.get(k) for k in ("id", "supplierId", "actualUnitCost")} for i in d["items"]]}
         with ThreadPoolExecutor(max_workers=2) as pool:
-            attempts = list(pool.map(lambda _: http("POST", f"/api/commercial-costs/bill/{bid}/purchases",
-                args.base, token=token, body=request), range(2)))
-        successes = [body for status, body in attempts if status in (200, 201)]
-        check("concurrent purchase requests create the liability only once",
-            len(successes) == 1 and all(status in (200, 201, 400, 409) for status, _ in attempts))
-        created = successes[0]
-        check("standalone generates one local supplier purchase", len(created) == 1)
-        purchase_id = created[0]
-        call("POST", f"/api/commercial-costs/bill/{bid}/purchases", request, expected=(400, 409))
-        check("duplicate generation is refused", True)
+            attempts = list(pool.map(lambda _: http("PATCH", f"/api/commercial-costs/bill/{bid}", args.base, token=token, body=body), range(2)))
+        check("two simultaneous cost saves: one wins, the other is told to reload",
+            sorted(status for status, _ in attempts) == [200, 400])
+        auto = [p for p in call("GET", f"/api/purchasebills/company/{cid}/paged?pageSize=100")["items"] if p.get("sourceInvoiceId") == bid]
+        check("saving a supplier and cost books exactly one supplier purchase", len(auto) == 1 and auto[0]["source"] == "auto-cost")
+        purchase_id = auto[0]["id"]
+        d = costs("bill", bid)
+        save("bill", bid, d)
+        check("saving the same costs again books nothing new",
+            [p["id"] for p in call("GET", f"/api/purchasebills/company/{cid}/paged?pageSize=100")["items"] if p.get("sourceInvoiceId") == bid] == [purchase_id])
         p = call("GET", f"/api/purchasebills/{purchase_id}")
         check("local purchase is non-stock and retains bill provenance", p["purchaseCategory"] == "LocalDirect" and p["isNonStockSupplierPurchase"] and p["sourceInvoiceId"] == bid)
         ledger = call("GET", f"/api/commercial-costs/suppliers/{cid}/{supplier['id']}")
@@ -163,12 +162,11 @@ def main():
             "items": [{"description": "Challan A", "quantity": 3, "unit": "Pcs", "actualUnitCost": 20, "supplierId": supplier["id"]},
                 {"description": "Challan B", "quantity": 2, "unit": "Pcs"}]})
         cd = costs("challan", c["id"])
-        call("POST", f"/api/commercial-costs/challan/{c['id']}/purchases", {"version": cd["version"], "date": today, "itemIds": [cd["items"][0]["id"]]})
-        check("selected ready lines can generate purchases while other costs are missing", True)
-        cd = costs("challan", c["id"]); cd["items"][1]["supplierId"] = supplier_b["id"]; cd["items"][1]["actualUnitCost"] = 30
+        check("a costed challan line is booked on save while a blank line stays open",
+            cd["items"][0]["remainingQuantity"] == 0 and cd["items"][1]["remainingQuantity"] == 2)
+        cd["items"][1]["supplierId"] = supplier_b["id"]; cd["items"][1]["actualUnitCost"] = 30
         cd = save("challan", c["id"], cd)
-        call("POST", f"/api/commercial-costs/challan/{c['id']}/purchases", {"version": cd["version"], "date": today, "itemIds": [cd["items"][1]["id"]]})
-        check("remaining challan lines can generate purchases later", True)
+        check("a line costed later is booked by that save", cd["items"][1]["remainingQuantity"] == 0)
 
         split = call("POST", f"/api/deliverychallans/company/{cid}", {"clientId": client["id"], "poNumber": "SAMPLE-SPLIT-PURCHASE", "deliveryDate": today,
             "items": [{"description": "Split A1", "quantity": 4, "unit": "Pcs"}, {"description": "Split A2", "quantity": 3, "unit": "Pcs"}, {"description": "Split B1", "quantity": 2, "unit": "Pcs"}]})
@@ -231,20 +229,12 @@ def main():
         check("form links a purchase to a standalone bill line", pool_first["items"][0]["localInvoiceItemId"] == pool_items[0]["id"] and pool_first["sourceInvoiceId"] == pool_bill["id"])
         pd = costs("bill", pool_bill["id"])
         check("bill costing sees the form purchase", pd["items"][0]["purchasedQuantity"] == 3 and pd["items"][0]["remainingQuantity"] == 2 and pd["items"][0]["purchasedAmount"] == 36)
-        pd["items"][0]["supplierId"] = supplier_b["id"]; pd["items"][0]["actualUnitCost"] = 15
-        pd["items"][1]["supplierId"] = supplier_b["id"]; pd["items"][1]["actualUnitCost"] = 50
-        pd = save("bill", pool_bill["id"], pd)
-        check("estimate prices only the quantity still to buy", pd["items"][0]["actualAmount"] == 36 + 2 * 15 and pd["items"][0]["estimatedAmount"] == 30)
         hose = pd["items"][1]["id"]
-        call("POST", f"/api/commercial-costs/bill/{pool_bill['id']}/purchases", {"version": pd["version"], "date": today, "itemIds": [hose], "quantities": {str(hose): 3}}, expected=(400,))
-        check("dialog refuses a quantity above what is left", True)
-        call("POST", f"/api/commercial-costs/bill/{pool_bill['id']}/purchases", {"version": pd["version"], "date": today, "itemIds": [hose], "quantities": {str(hose): 0}}, expected=(400,))
-        check("dialog refuses a zero quantity", True)
-        call("POST", f"/api/commercial-costs/bill/{pool_bill['id']}/purchases", {"version": pd["version"], "date": today, "itemIds": [hose], "quantities": {str(hose): 1}})
+        local_purchase(supplier_b["id"], [{"quantity": 1, "unitPrice": 50, "localInvoiceItemId": hose}])
         pd = costs("bill", pool_bill["id"])
-        check("dialog records only the partial quantity asked for", pd["items"][1]["purchasedQuantity"] == 1 and pd["items"][1]["remainingQuantity"] == 1 and pd["items"][1]["purchasedAmount"] == 50)
+        check("a partial supplier bill records only that quantity", pd["items"][1]["purchasedQuantity"] == 1 and pd["items"][1]["remainingQuantity"] == 1 and pd["items"][1]["purchasedAmount"] == 50)
         local_purchase(supplier["id"], [{"quantity": 2, "unitPrice": 45, "localInvoiceItemId": hose}], expected=(400,))
-        check("form cannot buy what the dialog already bought", True)
+        check("a supplier bill cannot buy more than is left", True)
         local_purchase(supplier["id"], [{"quantity": 1, "unitPrice": 1, "localInvoiceItemId": pool_items[0]["id"]},
                                         {"quantity": 1, "unitPrice": 1, "localInvoiceItemId": pool_items[0]["id"]}], expected=(400,))
         check("one purchase cannot claim a source line twice", True)
@@ -324,8 +314,8 @@ def main():
             sql(args.db, f"UPDATE Invoices SET FbrStatus='Submitted', FbrSubmittedAt=GETUTCDATE(), FbrIRN='SAMPLE-CHALLAN-TEST' WHERE Id={linked['id']} AND CompanyId={cid}")
         cd = costs("challan", c["id"]); cd["items"][0]["actualUnitCost"] = 25
         save("challan", c["id"], cd)
-        check("billed/filed challan estimate remains editable and leaves purchased cost alone", costs("challan", c["id"])["items"][0]["actualUnitCost"] == 25 and costs("bill", linked["id"])["profit"] == 130)
-        check("billed/filed challan payable remains unchanged", sum(p["liability"] for p in call("GET", f"/api/commercial-costs/bill/{linked['id']}/payables")) == 120)
+        check("billed/filed challan cost remains editable", costs("challan", c["id"])["items"][0]["actualUnitCost"] == 25 and costs("bill", linked["id"])["profit"] == 115)
+        check("an unpaid booked purchase follows the corrected cost", sum(p["liability"] for p in call("GET", f"/api/commercial-costs/bill/{linked['id']}/payables")) == 135)
 
         direct = call("POST", "/api/invoices/standalone", {"companyId": cid, "clientId": client["id"], "date": today, "gstRate": 0,
             "items": [{"description": "Cost at creation", "quantity": 2, "uom": "Pcs", "unitPrice": 100, "actualUnitCost": 40, "supplierId": supplier["id"]}]})
@@ -346,9 +336,13 @@ def main():
             "challanIds": [c["id"] for c in combined_challans], "items": [{"deliveryItemId": c["items"][0]["id"], "unitPrice": 50} for c in combined_challans]})
         cd = costs("bill", combined["id"])
         check("bill sums actual costs across multiple challans", cd["actualAmount"] == 80 and cd["profit"] == 170)
-        combined_purchases = call("POST", f"/api/commercial-costs/bill/{combined['id']}/purchases", {"version": cd["version"], "date": today, "itemIds": [i["id"] for i in cd["items"]],
-            "suppliers": [{"supplierId": supplier_b["id"], "challanId": c["id"], "gstRate": 10, "supplierBillNumber": f"SAMPLE-{cid}-{c['id']}"} for c in combined_challans]})
-        check("combined bill preserves one purchase per source challan and supplier", len(combined_purchases) == 2)
+        combined_purchases = [p["id"] for p in call("GET", f"/api/purchasebills/company/{cid}/paged?pageSize=100")["items"]
+            if p.get("sourceDeliveryChallanId") in [c["id"] for c in combined_challans]]
+        check("combined bill keeps one purchase per source challan and supplier", len(combined_purchases) == 2)
+        for ident in combined_purchases:
+            pb = call("GET", f"/api/purchasebills/{ident}")
+            call("PUT", f"/api/purchasebills/{ident}", {"supplierId": pb["supplierId"], "date": pb["date"], "gstRate": 10,
+                "supplierBillNumber": f"SAMPLE-{cid}-{ident}", "items": [{"id": i["id"], "description": i["description"], "quantity": i["quantity"], "uom": i["uom"], "unitPrice": i["unitPrice"]} for i in pb["items"]]})
         purchases_with_tax = [call("GET", f"/api/purchasebills/{ident}") for ident in combined_purchases]
         check("supplier preview tax and references flow to purchase bills", sum(p["grandTotal"] for p in purchases_with_tax) == 88 and all(p["supplierBillNumber"] for p in purchases_with_tax))
         check("supplier purchase tax does not inflate commercial actual cost", costs("bill", combined["id"])["profit"] == 170)
@@ -460,8 +454,6 @@ def main():
             ("PATCH", f"/api/commercial-costs/bill/{bid}", {"version": "forged", "items": []}),
             ("GET", f"/api/commercial-costs/challan/{c['id']}", None),
             ("PATCH", f"/api/commercial-costs/challan/{c['id']}", {"version": "forged", "items": []}),
-            ("POST", f"/api/commercial-costs/bill/{bid}/purchases", request),
-            ("POST", f"/api/commercial-costs/challan/{c['id']}/purchases", request),
             ("GET", f"/api/commercial-costs/bill/{bid}/payables", None),
             ("GET", f"/api/commercial-costs/suppliers/{cid}", None),
             ("GET", f"/api/commercial-costs/suppliers/{cid}/{supplier['id']}", None),

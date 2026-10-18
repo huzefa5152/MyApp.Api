@@ -24,7 +24,7 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
       render: (b) => (
         <>
           {b.supplierName || "—"}
-          {b.isNonStockSupplierPurchase && <span style={{ marginLeft: 6, padding: "1px 6px", borderRadius: 6, fontSize: "0.7rem", fontWeight: 600, background: "#e0f2f1", color: "#00695c" }}>Local direct purchase</span>}
+          {b.isNonStockSupplierPurchase && <span style={{ marginLeft: 6, padding: "1px 6px", borderRadius: 6, fontSize: "0.7rem", fontWeight: 600, background: "#e0f2f1", color: "#00695c" }}>{b.source === "auto-cost" ? "From costs" : "Local direct purchase"}</span>}
         </>
       ),
     },
@@ -84,7 +84,7 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
       <button style={btn.view} onClick={() => onView?.(b)} title="View">
         <MdVisibility size={14} />
       </button>
-      {perms.canUpdate && (b.source !== "local-direct" || !(b.amountPaid > 0 || b.amountCredited > 0)) && (
+      {perms.canUpdate && (!["local-direct", "auto-cost"].includes(b.source) || !(b.amountPaid > 0 || b.amountCredited > 0)) && (
         <button style={btn.edit} onClick={() => onEdit?.(b)} title="Edit">
           <MdEdit size={14} />
         </button>
@@ -109,7 +109,7 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
           <MdPictureAsPdf size={14} />
         </button>
       )}
-      {perms.canDelete && (
+      {perms.canDelete && b.source !== "auto-cost" && (
         <button style={btn.delete} onClick={() => onDelete?.(b)} title="Delete">
           <MdDelete size={14} />
         </button>

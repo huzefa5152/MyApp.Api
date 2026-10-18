@@ -16,10 +16,12 @@ namespace MyApp.Api.Services.Implementations
         private readonly IStockService _stock;
         private readonly IPostingService _posting;
         private readonly IInvoiceService _invoices;
+        private readonly LocalPurchaseSyncService _purchases;
         private readonly ILogger<DeliveryChallanService> _logger;
 
-        public DeliveryChallanService(IDeliveryChallanRepository repository, AppDbContext context, IStockService stock, IPostingService posting, IInvoiceService invoices, ILogger<DeliveryChallanService> logger)
+        public DeliveryChallanService(IDeliveryChallanRepository repository, AppDbContext context, IStockService stock, IPostingService posting, IInvoiceService invoices, LocalPurchaseSyncService purchases, ILogger<DeliveryChallanService> logger)
         {
+            _purchases = purchases;
             _posting = posting;
             _invoices = invoices;
             _repository = repository;
@@ -94,13 +96,17 @@ namespace MyApp.Api.Services.Implementations
         }
 
         /// <summary>
-        /// A challan that already produced automatic purchase bills keeps its
-        /// lines — the bills were raised from them.
+        /// Before a challan is cancelled or deleted: its open automatic supplier
+        /// purchases go with it, but goods already on a paid, credited or
+        /// manually entered supplier bill keep the challan in place.
         /// </summary>
-        private async Task AssertNoAutoPurchaseBillsAsync(int challanId)
+        private async Task ReleasePurchasesAsync(DeliveryChallan dc)
         {
-            if (await _context.PurchaseBills.AsNoTracking().AnyAsync(p => p.SourceDeliveryChallanId == challanId || p.Items.Any(i => i.LocalDeliveryItemId.HasValue && _context.DeliveryItems.Any(d => d.Id == i.LocalDeliveryItemId && d.DeliveryChallanId == challanId))))
-                throw new InvalidOperationException("Purchase bills already exist for this challan. Remove those bills before changing its delivery lines or cancelling it.");
+            var ids = dc.Items.Select(i => i.Id).ToList();
+            var (fixedByLine, _) = await _purchases.FixedAsync(dc.CompanyId, ids, Array.Empty<int>());
+            if (fixedByLine.Values.Any(q => q > 0))
+                throw new InvalidOperationException("This challan has goods on a paid, credited or manually entered supplier bill. Remove or credit that supplier bill first.");
+            await _purchases.ReleaseLinesAsync(dc.CompanyId, ids, Array.Empty<int>());
         }
 
         public async Task<DeliveryChallanDto?> UpdatePrivateCostsAsync(int challanId, ChallanPrivateCostsDto dto)
@@ -128,6 +134,7 @@ namespace MyApp.Api.Services.Implementations
                 line.ActualUnitCost = cost.ActualUnitCost;
             }
             await _context.SaveChangesAsync();
+            await _purchases.SyncChallanAsync(dc.Id);
             await transaction.CommitAsync();
             return await GetByIdAsync(challanId);
         }
@@ -316,6 +323,8 @@ namespace MyApp.Api.Services.Implementations
             if (dc == null) return null;
             var dto = ToDto(dc);
             await MarkAutoPurchaseBillsAsync(new List<DeliveryChallanDto> { dto });
+            var (locked, _) = await _purchases.FixedAsync(dc.CompanyId, dc.Items.Select(i => i.Id), Array.Empty<int>());
+            foreach (var line in dto.Items) line.LockedPurchaseQuantity = locked.GetValueOrDefault(line.Id);
             return dto;
         }
 
@@ -408,7 +417,16 @@ namespace MyApp.Api.Services.Implementations
                 }).ToList()
             };
 
+            await _purchases.AssertCanBookAsync(companyId, (dto.DeliveryDate ?? DateTime.UtcNow).Date,
+                dto.Items.Any(i => i.SupplierId.HasValue && i.ActualUnitCost.HasValue));
             var created = await _repository.CreateDeliveryChallanAsync(deliveryChallan, dto.CustomNumber);
+            string? purchaseWarning = null;
+            try { await _purchases.SyncChallanAsync(created.Id); }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Challan {ChallanId} saved but its supplier purchases could not be booked", created.Id);
+                purchaseWarning = "The challan was saved, but its supplier purchases were not booked. Open the challan and save it again.";
+            }
 
             // Upsert ItemDescription rows for any new item names. This makes
             // PO-imported items immediately visible in the bill form's
@@ -437,7 +455,9 @@ namespace MyApp.Api.Services.Implementations
                     created.ChallanNumber, created.CompanyId);
             }
 
-            return ToDto(created);
+            var result = ToDto(created);
+            result.PurchaseWarning = purchaseWarning;
+            return result;
         }
 
         private async Task EnsureItemDescriptionsAsync(IEnumerable<string?> descriptions)
@@ -506,8 +526,8 @@ namespace MyApp.Api.Services.Implementations
         {
             var challan = await GetByIdAsync(challanId);
             if (challan == null) return null;
-            if (challan.InvoiceId == null || !challan.IsEditable || challan.HasAutoPurchaseBills)
-                throw new InvalidOperationException("This delivery cannot be edited. Check the bill status and any supplier purchase bills.");
+            if (challan.InvoiceId == null || !challan.IsEditable)
+                throw new InvalidOperationException("This delivery cannot be edited. Check the bill status.");
             var options = await _invoices.GetBillChallanOptionsAsync(challan.InvoiceId.Value, null)
                 ?? throw new InvalidOperationException("Linked bill not found.");
             if (options.Bill.CompanyId != challan.CompanyId)
@@ -519,8 +539,8 @@ namespace MyApp.Api.Services.Implementations
         {
             var challan = await GetByIdAsync(challanId);
             if (challan == null) return null;
-            if (!challan.IsEditable || challan.HasAutoPurchaseBills)
-                throw new InvalidOperationException("This delivery cannot be edited. Check the bill status and any supplier purchase bills.");
+            if (!challan.IsEditable)
+                throw new InvalidOperationException("This delivery cannot be edited. Check the bill status.");
             if (challan.InvoiceId == null || string.IsNullOrWhiteSpace(dto.Version) || string.IsNullOrWhiteSpace(dto.BillVersion))
                 throw new InvalidOperationException("Reload the linked challan and bill before editing delivery.");
             if (dto.Items == null || dto.Items.Count == 0 || dto.Items.Count > 500 || dto.Items.Any(i =>
@@ -567,6 +587,7 @@ namespace MyApp.Api.Services.Implementations
                 if (dc.InvoiceId.HasValue) await _invoices.AssertCommercialBillMutationAsync(dc.InvoiceId.Value);
                 await ApplyItemsDiffAsync(dc, items);
                 await _repository.UpdateAsync(dc);
+                await _purchases.SyncChallanAsync(dc.Id);
 
                 await SalesDocumentRules.RefreshOrdersAsync(_context, dc.CompanyId);
                 await transaction.CommitAsync();
@@ -614,21 +635,6 @@ namespace MyApp.Api.Services.Implementations
         /// </summary>
         private async Task ApplyItemsDiffAsync(DeliveryChallan dc, List<DeliveryItemDto> items)
         {
-            // Lines that already produced automatic purchase bills are frozen:
-            // any change to them (including supplier / actual cost) is refused.
-            if (await _context.PurchaseBills.AsNoTracking().AnyAsync(p => p.SourceDeliveryChallanId == dc.Id || p.Items.Any(i => i.LocalDeliveryItemId.HasValue && _context.DeliveryItems.Any(d => d.Id == i.LocalDeliveryItemId && d.DeliveryChallanId == dc.Id))))
-            {
-                var incomingIds = items.Where(i => i.Id > 0).Select(i => i.Id).ToHashSet();
-                var changed = incomingIds.Count != dc.Items.Count ||
-                    dc.Items.Any(old => !incomingIds.Contains(old.Id)) ||
-                    items.Any(item => {
-                        var old = dc.Items.FirstOrDefault(i => i.Id == item.Id);
-                        return old == null || old.Quantity != item.Quantity || old.Description != item.Description ||
-                            old.Unit != item.Unit || old.ItemTypeId != item.ItemTypeId ||
-                            old.SupplierId != item.SupplierId || old.ActualUnitCost != item.ActualUnitCost;
-                    });
-                if (changed) await AssertNoAutoPurchaseBillsAsync(dc.Id);
-            }
             // Cross-tenant link guard — validate against the STORED CompanyId,
             // never anything from the incoming DTO.
             await ValidatePrivateCostsAsync(dc.CompanyId, items);
@@ -704,6 +710,10 @@ namespace MyApp.Api.Services.Implementations
             {
                 await SyncInvoiceItemsForChallanEditAsync(dc, removedDeliveryItemIds, quantityChanges, newItems, billRates, classificationChanges);
             }
+
+            // Removed lines leave their open automatic purchases first (no
+            // cascade on that link); a fixed supplier bill refuses the removal.
+            await _purchases.ReleaseLinesAsync(dc.CompanyId, removedDeliveryItemIds, Array.Empty<int>());
 
             // Now it's safe to delete removed delivery items
             foreach (var item in toRemove)
@@ -814,7 +824,9 @@ namespace MyApp.Api.Services.Implementations
         {
             var dc = await _repository.GetByIdAsync(challanId);
             if (dc == null) return false;
-            await AssertNoAutoPurchaseBillsAsync(challanId);
+            if (!dc.InvoiceId.HasValue && !IsEditable(dc))
+                throw new InvalidOperationException("Can only cancel Pending, No PO, or Setup Required challans.");
+            await ReleasePurchasesAsync(dc);
             // Remove a billed challan through the atomic bill reconciliation path.
             if (dc.InvoiceId.HasValue)
             {
@@ -836,9 +848,11 @@ namespace MyApp.Api.Services.Implementations
         {
             var dc = await _repository.GetByIdAsync(challanId);
             if (dc == null) return false;
-            await AssertNoAutoPurchaseBillsAsync(challanId);
+            if (!dc.InvoiceId.HasValue && !IsEditable(dc))
+                throw new InvalidOperationException("Can only delete Pending, No PO, or Setup Required challans.");
             if (dc.InvoiceId.HasValue)
             {
+                await ReleasePurchasesAsync(dc);
                 await _invoices.RemoveBilledChallanAsync(challanId, true);
                 return true;
             }
@@ -866,6 +880,7 @@ namespace MyApp.Api.Services.Implementations
                         "deleting earlier challans would leave gaps in the numbering.");
             }
 
+            await ReleasePurchasesAsync(dc);
             var companyId = dc.CompanyId;
             await using var transaction = await _context.Database.BeginTransactionAsync();
             await _repository.DeleteAsync(dc);
@@ -927,7 +942,6 @@ namespace MyApp.Api.Services.Implementations
             // Reload with Invoice included for proper edit check
             var dc = await _repository.GetByIdAsync(item.DeliveryChallanId);
             if (dc == null) return false;
-            await AssertNoAutoPurchaseBillsAsync(dc.Id);
             if (!IsEditable(dc))
             {
                 if (dc.Status == "Invoiced" && dc.Invoice?.FbrStatus == "Submitted")
@@ -951,7 +965,9 @@ namespace MyApp.Api.Services.Implementations
                         new List<DeliveryItem>());
                 }
 
+                await _purchases.ReleaseLinesAsync(dc.CompanyId, new[] { itemId }, Array.Empty<int>());
                 await _repository.DeleteItemAsync(item);
+                await _purchases.SyncChallanAsync(dc.Id);
 
                 await SalesDocumentRules.RefreshOrdersAsync(_context, dc.CompanyId);
                 await transaction.CommitAsync();
@@ -1020,7 +1036,6 @@ namespace MyApp.Api.Services.Implementations
                 if (dto.BillEditVersion != null)
                 {
                     await _context.Database.SqlQuery<int>($"SELECT [Id] AS [Value] FROM [DeliveryChallans] WITH (UPDLOCK, HOLDLOCK) WHERE [Id] = {challanId}").ToListAsync();
-                    await AssertNoAutoPurchaseBillsAsync(challanId);
                     var fresh = await _context.DeliveryChallans.AsNoTracking().Include(c => c.Items).Include(c => c.Invoice).SingleAsync(c => c.Id == challanId);
                     if (dto.Version != DeliveryVersion(fresh))
                         throw new InvalidOperationException("This challan changed after you opened it. Reload before saving.");
@@ -1085,6 +1100,8 @@ namespace MyApp.Api.Services.Implementations
                 }
 
                 await _repository.UpdateAsync(dc);
+                // Date, lines and costs may all have moved; the purchases follow.
+                await _purchases.SyncChallanAsync(dc.Id);
 
                 await SalesDocumentRules.RefreshOrdersAsync(_context, dc.CompanyId);
                 await transaction.CommitAsync();

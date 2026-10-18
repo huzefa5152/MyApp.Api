@@ -16,6 +16,8 @@
         public decimal? PhysicalQuantity { get; set; }
         public string Unit { get; set; } = "";
         public decimal? ActualUnitCost { get; set; }
+        /// <summary>Quantity on paid, credited or manually entered supplier bills; this line's cost no longer moves it.</summary>
+        public decimal LockedPurchaseQuantity { get; set; }
         public int? SupplierId { get; set; }
         public string? SupplierName { get; set; }
         public decimal? SellingUnitPrice { get; set; }

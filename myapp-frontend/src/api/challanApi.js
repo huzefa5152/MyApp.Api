@@ -1,7 +1,5 @@
 import httpClient from "./httpClient";
 
-export const updateChallanPrivateCosts = (id, payload) =>
-  httpClient.patch(`/deliverychallans/${id}/private-costs`, payload);
 
 export const getDeliveryChallansByCompany = (companyId) =>
   httpClient.get(`/deliverychallans/company/${companyId}`);

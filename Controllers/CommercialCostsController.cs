@@ -46,21 +46,8 @@ public class CommercialCostsController(CommercialCostService costs, SupplierPaya
         if (!await AssertDocument(kind, id)) return NotFound();
         try { return Ok(await costs.SaveAsync(kind, id, request, UserId)); }
         catch (CommercialCostValidationException e) { return BadRequest(new { error = e.UserMessage }); }
+        catch (InvalidOperationException e) { return BadRequest(new { error = e.Message }); }
         catch (KeyNotFoundException) { return NotFound(); }
-    }
-
-    [HttpPost("{kind}/{id:int}/purchases")]
-    [RequestSizeLimit(1048576)]
-    [HasPermission("purchasebills.manage.create")]
-    public async Task<IActionResult> CreatePurchases(string kind, int id, CreateLocalPurchasesDto request,
-        [FromServices] IPermissionService permissions)
-    {
-        if (!await AssertDocument(kind, id)) return NotFound();
-        if (!await permissions.HasPermissionAsync(UserId, "bills.costs.view")) return Forbid();
-        try { return Ok(await costs.CreatePurchasesAsync(kind, id, request)); }
-        catch (CommercialCostValidationException e) { return BadRequest(new { error = e.UserMessage }); }
-        catch (KeyNotFoundException) { return NotFound(); }
-        catch (DbUpdateException) { return Conflict(new { error = "A purchase was created concurrently. Reload the preview before trying again." }); }
     }
 
     [HttpGet("suppliers/{companyId:int}/{supplierId:int}")]

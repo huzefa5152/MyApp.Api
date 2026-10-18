@@ -3,11 +3,12 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import CommercialCostDialog from "./CommercialCostDialog";
-import { readCosts, saveCosts, createLocalPurchases, billPayables } from "../api/commercialCostApi";
+import { readCosts, saveCosts, billPayables } from "../api/commercialCostApi";
 
 const { permissions } = vi.hoisted(() => ({ permissions: new Set() }));
 vi.mock("../contexts/PermissionsContext", () => ({ usePermissions: () => ({ has: key => permissions.has(key) }) }));
-vi.mock("../api/commercialCostApi", () => ({ readCosts: vi.fn(), saveCosts: vi.fn(), createLocalPurchases: vi.fn(), billPayables: vi.fn() }));
+vi.mock("../api/commercialCostApi", () => ({ readCosts: vi.fn(), saveCosts: vi.fn(), billPayables: vi.fn() }));
+vi.mock("./PurchaseBillForm", () => ({ default: ({ localSource }) => <div role="dialog" aria-label="Purchase form">{localSource.kind}:{localSource.id}</div> }));
 vi.mock("./ChallanPrivateCosts", () => ({
   useChallanSuppliers: () => [{ id: 5, name: "Sample supplier" }],
   default: ({ items, onItemsChange, readOnly }) => <input aria-label="Actual cost" disabled={readOnly} value={items[0]?.actualUnitCost ?? ""}
@@ -34,71 +35,42 @@ it("allows zero costs without a supplier and keeps edits independent of filing",
   await waitFor(() => expect(saveCosts).toHaveBeenCalledWith("bill", 3, { version: "a", items: [{ id: 8, supplierId: null, actualUnitCost: 0 }] }));
   await screen.findByText("Commercial profit");
 });
-it("requires purchase preview and explicit confirmation before creating debt", async () => {
-  permissions.add("purchasebills.manage.create");
-  readCosts.mockResolvedValue({ data: { ...source, items: [{ ...source.items[0], supplierId: 5, actualUnitCost: 20 }] } });
-  createLocalPurchases.mockResolvedValue({ data: [11] });
-  mount(); fireEvent.click(await screen.findByText("Preview supplier purchases"));
-  expect(createLocalPurchases).not.toHaveBeenCalled();
-  await screen.findByText("Review local supplier purchases");
-  fireEvent.click(screen.getByText("Create supplier purchases"));
-  await waitFor(() => expect(createLocalPurchases).toHaveBeenCalledWith("bill", 3, expect.objectContaining({ version: "a", itemIds: [8] })));
-});
 it("never fetches supplier balances without payable permission", async () => {
   mount(); await screen.findByText("Payable not recorded");
   expect(billPayables).not.toHaveBeenCalled();
 });
 
-it("explains missing costs and supplier instead of silently disabling preview", async () => {
-  permissions.add("purchasebills.manage.create");
-  mount(); fireEvent.click(await screen.findByText("Preview supplier purchases"));
-  expect((await screen.findByRole("alert")).textContent).toContain("Add an actual cost and choose a supplier");
-  expect(createLocalPurchases).not.toHaveBeenCalled();
-});
-it("saves edited costs before opening purchase review", async () => {
+it("saving costs is the whole step: no review, no separate purchase call", async () => {
   permissions.add("purchasebills.manage.create"); permissions.add("bills.costs.update");
-  const row = { ...source.items[0], supplierId: 5, actualUnitCost: 20 };
-  readCosts.mockResolvedValue({ data: { ...source, items: [row] } });
-  saveCosts.mockResolvedValue({ data: { ...source, version: "saved", items: [{ ...row, actualUnitCost: 30 }] } });
-  mount(); fireEvent.change(await screen.findByLabelText("Actual cost"), { target: { value: "30" } });
-  fireEvent.click(screen.getByText("Preview supplier purchases"));
-  await screen.findByText("Review local supplier purchases");
-  expect(saveCosts).toHaveBeenCalledWith("bill", 3, expect.objectContaining({ items: [expect.objectContaining({ actualUnitCost: 30 })] }));
-  expect(createLocalPurchases).not.toHaveBeenCalled();
+  const booked = { ...source.items[0], supplierId: 5, actualUnitCost: 20, purchasedQuantity: 2, remainingQuantity: 0, purchasedAmount: 40, purchaseRecorded: true };
+  saveCosts.mockResolvedValue({ data: { ...source, version: "b", items: [booked] } });
+  mount(); await screen.findByText("Payable not recorded");
+  expect(screen.queryByText("Preview supplier purchases")).toBeNull();
+  fireEvent.change(screen.getByLabelText("Actual cost"), { target: { value: "20" } });
+  fireEvent.click(screen.getByText("Save costs"));
+  await waitFor(() => expect(saveCosts).toHaveBeenCalledTimes(1));
+  expect((await screen.findByRole("status")).textContent).toContain("booked as supplier purchases");
+  expect(screen.getByText("Booked to suppliers · Rs. 40.00")).toBeTruthy();
 });
-it("explains when all purchases are already recorded", async () => {
-  permissions.add("purchasebills.manage.create");
-  readCosts.mockResolvedValue({ data: { ...source, items: [{ ...source.items[0], purchaseRecorded: true }] } });
-  mount(); fireEvent.click(await screen.findByText("Preview supplier purchases"));
-  expect((await screen.findByRole("alert")).textContent).toContain("already recorded for all lines");
-});
-it("explains empty selection at purchase confirmation", async () => {
-  permissions.add("purchasebills.manage.create");
-  readCosts.mockResolvedValue({ data: { ...source, items: [{ ...source.items[0], supplierId: 5, actualUnitCost: 0 }] } });
-  mount(); fireEvent.click(await screen.findByText("Preview supplier purchases"));
-  fireEvent.click(await screen.findByText(/Selected lines.*Change selection/));
-  fireEvent.click(await screen.findByRole("checkbox"));
-  fireEvent.click(screen.getByText("Create supplier purchases"));
-  expect((await screen.findByRole("alert")).textContent).toContain("Select at least one line");
-  expect(createLocalPurchases).not.toHaveBeenCalled();
-});
-it("buys a partial quantity and refuses more than is left", async () => {
-  permissions.add("purchasebills.manage.create");
-  readCosts.mockResolvedValue({ data: { ...source, items: [{ ...source.items[0], quantity: 5, purchasedQuantity: 2, remainingQuantity: 3, purchasedAmount: 40, supplierId: 5, actualUnitCost: 25 }] } });
-  createLocalPurchases.mockResolvedValue({ data: [91] });
-  mount(); fireEvent.click(await screen.findByText("Preview supplier purchases"));
-  const qty = await screen.findByLabelText("Quantity to buy for Sample item");
-  expect(qty.value).toBe("3");
-  fireEvent.change(qty, { target: { value: "4" } });
-  fireEvent.click(screen.getByText("Create supplier purchases"));
-  expect((await screen.findByRole("alert")).textContent).toContain("no more than 3");
-  expect(createLocalPurchases).not.toHaveBeenCalled();
-  fireEvent.change(qty, { target: { value: "1.5" } });
-  fireEvent.click(screen.getByText("Create supplier purchases"));
-  await waitFor(() => expect(createLocalPurchases).toHaveBeenCalledWith("bill", 3, expect.objectContaining({ itemIds: [8], quantities: { 8: 1.5 } })));
-});
-it("shows purchased and estimated cost separately", async () => {
+it("shows a partly booked line with what is booked and its profit on booked plus estimate", async () => {
   readCosts.mockResolvedValue({ data: { ...source, items: [{ ...source.items[0], quantity: 5, purchasedQuantity: 2, remainingQuantity: 3, purchasedAmount: 40, actualUnitCost: 25 }] } });
   mount();
-  expect((await screen.findByText(/Purchased Rs\. 40\.00 · Estimated Rs\. 75\.00/)).textContent).toBeTruthy();
+  expect(await screen.findByText("2 of 5 booked · Rs. 40.00")).toBeTruthy();
+  expect(screen.getByText("Profit: Rs. -15.00")).toBeTruthy();
+});
+it("opens the purchase form for a differing supplier invoice only after costs are saved", async () => {
+  permissions.add("purchasebills.manage.create"); permissions.add("bills.costs.update");
+  mount(); await screen.findByText("Payable not recorded");
+  fireEvent.change(screen.getByLabelText("Actual cost"), { target: { value: "5" } });
+  expect(screen.getByText("Enter supplier bill").disabled).toBe(true);
+  cleanup(); mount(); fireEvent.click(await screen.findByText("Enter supplier bill"));
+  expect(screen.getByRole("dialog", { name: "Purchase form" }).textContent).toBe("bill:3");
+});
+it("shows the server's reason when a save is refused", async () => {
+  permissions.add("bills.costs.update");
+  saveCosts.mockRejectedValue({ response: { data: { error: "The accounting period is closed up to 30 Sep 2026." } } });
+  mount(); await screen.findByText("Payable not recorded");
+  fireEvent.change(screen.getByLabelText("Actual cost"), { target: { value: "5" } });
+  fireEvent.click(screen.getByText("Save costs"));
+  expect((await screen.findByRole("alert")).textContent).toContain("accounting period is closed");
 });
