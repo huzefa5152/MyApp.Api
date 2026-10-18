@@ -23,11 +23,20 @@ beforeEach(()=>{
 });
 afterEach(cleanup);
 describe("company-private PO formats",()=>{
-  it("restricted users see only granted company options and scoped requests",async()=>{
+  it("single-company users load only their company without a redundant picker",async()=>{
     render(<POFormatsPage/>);
     await waitFor(()=>expect(api.listPoFormats).toHaveBeenCalledWith({companyId:1}));
-    expect(within(screen.getByLabelText("Company")).getAllByRole("option").map(x=>x.textContent)).toEqual(["Company A"]);
+    expect(api.listPoFormats.mock.calls.every(([scope])=>scope.companyId===1)).toBe(true);
+    expect(screen.queryByLabelText("Company")).toBeNull();
+    expect(state.setSelectedCompany).not.toHaveBeenCalled();
     expect(screen.queryByText(/across ALL companies/)).toBeNull();
+  });
+  it("multiple-company users see only supplied assignments and scoped requests",async()=>{
+    state.companies=[a,b];render(<POFormatsPage/>);
+    await waitFor(()=>expect(api.listPoFormats).toHaveBeenCalledWith({companyId:1}));
+    expect(within(screen.getByLabelText("Company")).getAllByRole("option").map(x=>x.value)).toEqual(["1","2"]);
+    expect(api.listPoFormats.mock.calls.every(([scope])=>scope.companyId===1)).toBe(true);
+    expect(screen.queryByRole("option",{name:/all companies/i})).toBeNull();
   });
   it("seed admin can select any supplied company",async()=>{
     state.companies=[a,b];render(<POFormatsPage/>);
