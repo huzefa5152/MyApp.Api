@@ -298,6 +298,15 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-10-18 — Dashboards redesigned: every figure opens what makes it
+
+- **Overview dashboard.** Net sales, landed cost of sales and margin, receivables, receipts, payables, stock and recoverable tax now sit in grouped tiles. Click any figure to see the rows behind it; the rows always add up to the tile, with a second level (customer to its invoices, tax line to its documents). Margin is sales less the landed cost of what left stock, not the declared cost of goods.
+- **Payable to FBR.** A tax panel shows output tax, further tax, 236G/H billed and withholding against input tax claimed (with the 8B cap), by claim month, taken from the Import Tax Desk worksheet. It needs the sales dashboard permission and is company-wide only.
+- **Receivables** are the aged receivables report's total, net of receipts on account. A division-restricted user is told the figure is company-wide rather than shown a partial one. There are no ageing buckets, for the reason the Payment Status reports were removed.
+- **Data-health notes** at the top of the Overview flag bills that need attention (for example items with no landed cost); each opens its rows.
+- **Accounting dashboard** is rebuilt on the same pieces: cash and liquidity, working capital, stock and tax position, the import book (when the ledger is on), where the capital sits, profitability, a Top 10 customer balances chart and monthly charts. With the ledger off, ledger figures say so instead of showing zeros.
+- Drills and clickable charts only appear for users who may open them; the period and any open drill survive Back from "Open bill".
+
 ### 2026-10-09 — Tighter admin layout, Consignments fits without scrolling
 
 - **Fix**: the Consignments list no longer scrolls sideways on a laptop. Date and line count sit under the GD number, Settled sits under Credited, and the status badge sits under Outstanding, so the table fits at 1280px with real GD amounts. The company picker and the outstanding total now share one toolbar.

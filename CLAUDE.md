@@ -1560,6 +1560,24 @@ division-restricted user is refused, never shown a partial return).
 - Suites: `scripts/test_import_charges_units_lcs.py` (24 checks), harness
   `charges.*`, tenant suite 21 (5e).
 
+### 5b-20. The dashboards: every figure drills to what makes it (2026-10-18)
+
+Overview (`pages/DashboardPage.jsx`) and Accounting (`pages/AccountingDashboardPage.jsx`) share
+`Components/dashboard/`. A figure either opens a breakdown that ADDS UP to it, or is not clickable.
+
+- **One sale filter**: `Helpers/DashboardSalesFilter` -- `!IsDemo && !IsCancelled && FbrCancelledAt == null`, notes included SIGNED (credit -, debit +; DocumentType 9/10 ARE the notes, never excluded). KPIs and drills both use it.
+- **Receivables = `GetAgedReceivablesAsync(...).Total`**, the report's figure. Division-restricted users get null plus `ReceivablesScopeRestricted` (company-wide, not scopable); never add division scoping to GL aging. 236G/H billed is shown beside it, not inside it.
+- **Margin is revenue less LANDED cost** of what left stock. Declared COGS is not margin; do not put the two on one card.
+- **Payable to FBR** is the Import Tax Desk worksheet (`InputTaxWorksheet.Build`, never recomputed here) plus 236G/H and withholding. Gate `dashboard.kpi.sales.view`, company-wide only, WHOLE claim months covering the period (the panel labels them; week/custom shows its month). All-time reads the last 36 months.
+- **236G/H is not in the GL.** The panel reads it from invoices; posting it is a separate task.
+- **Drills must tie**: each level's rows sum to its parent figure (0.05), level 2 is capped at 500 rows and sets `Truncated`. A tile whose breakdown cannot tie (GL Inventory vs the stock walk, Invoices count, Received, Stock 90+ days) has NO drill.
+- **No aging buckets anywhere** (§5b-8): the accounting page charts Top 10 customer balances (receivables drill level 1) instead.
+- **Permissions**: every breakdown needs `dashboard.view`; sales / receivables / margin-landed / tax kinds also `dashboard.kpi.sales.view` (server-enforced). The UI renders a drill, chart click or health note non-clickable without them (§2) -- keep both ends.
+- **Drill URL state**: the panel (`KpiDrilldown` via `useDrillState`) owns `?drill=&group=`; the page owns `dperiod/dfrom/dto` and seeds the panel from `drillFromSearch`, so Back from "Open bill" reopens it. A drill restored for another window has no card figure and shows none.
+- **Periods are Pakistan time** (`PakistanClock.Today`), never `DateTime.Now`; stored period ids are validated against the known list.
+- **Theme tokens `--dash-*`** only (no hard-coded colours); cards stay light in OS dark mode like the rest of the app. Names line-clamp, never nowrap+ellipsis.
+- Suites: `scripts/test_dashboard_kpis.py` (live; `--db` for the DB-backed cases) and `node scripts/test_dashboard_ui.mjs` (offline).
+
 ### 5c. Customer Portal — the only anonymous surface
 
 `Controllers/PublicCustomerPortalController.cs` is one of just two
@@ -2056,6 +2074,7 @@ them can be resolved from FBR.
 | Invoice Sales Detail: periods, filters, Excel = screen, Excel format pinned, access | `python scripts/test_invoice_sales_detail.py` (add `--db "<conn>"` for the FBR-submitted cases); `node scripts/test_invoice_sales_detail.mjs` | `64/64 checks passed` (with `--db`; 61 + 3 skipped without); `45/45 checks passed` |
 | FIFO by GD (claimed first, never blocks, WA unchanged) | `cd scripts/stock_fifo_harness && dotnet run -c Release`; `python scripts/test_stock_fifo.py`; `node scripts/test_fifo_pricing.mjs` | `159 checks, 0 failed`; `61/61 checks passed`; `11/11 checks passed` |
 | Import Tax Desk (register, input-tax worksheet, tie-out) | `python scripts/test_import_tax_desk.py` | `27/27 checks passed` |
+| Dashboards (shared sale filter, receivables, landed margin, tax position, drills tie, permissions) | `python scripts/test_dashboard_kpis.py` (add `--db "<conn>"` for the DB-backed cases); `node scripts/test_dashboard_ui.mjs` | `197/197 checks passed` (with `--db`); `20 passed, 0 failed` |
 | GD charges, customs units, letters of credit | `python scripts/test_import_charges_units_lcs.py` | `24/24 checks passed` |
 | Inventory Overlay (two books, one total; normal mode unchanged) | `python scripts/test_inventory_overlay.py` (add `--db <branch db>` for the submitted-lock case) | `71/71 checks passed` (1 skipped without `--db`) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
