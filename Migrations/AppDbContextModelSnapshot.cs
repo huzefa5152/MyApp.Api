@@ -1182,6 +1182,10 @@ namespace MyApp.Api.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<decimal?>("ActualUnitCostOverride")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
                     b.Property<int>("DeliveryChallanId")
                         .HasColumnType("int");
 
@@ -2400,6 +2404,10 @@ namespace MyApp.Api.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<decimal?>("ActualUnitCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("ActualUnitCostOverride")
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
 
@@ -4543,7 +4551,6 @@ namespace MyApp.Api.Migrations
                         .IsUnique();
 
                     b.HasIndex("SourceDeliveryChallanId", "SupplierId")
-                        .IsUnique()
                         .HasFilter("[SourceDeliveryChallanId] IS NOT NULL");
 
                     b.ToTable("PurchaseBills");
@@ -4752,11 +4759,9 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("ItemTypeId");
 
                     b.HasIndex("LocalDeliveryItemId")
-                        .IsUnique()
                         .HasFilter("[LocalDeliveryItemId] IS NOT NULL");
 
                     b.HasIndex("LocalInvoiceItemId")
-                        .IsUnique()
                         .HasFilter("[LocalInvoiceItemId] IS NOT NULL");
 
                     b.HasIndex("PurchaseBillId");

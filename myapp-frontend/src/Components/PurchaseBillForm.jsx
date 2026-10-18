@@ -4,7 +4,7 @@ import DocumentCopyPicker from "./DocumentCopyPicker";
 import { appendCopiedLines, copyLine } from "../utils/documentCopy";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { MdAdd, MdDelete, MdReceipt, MdInventory2, MdLocalShipping, MdArrowForward, MdCheckCircle } from "react-icons/md";
-import { createPurchaseBill, updatePurchaseBill, getPurchaseBillById, previewPurchaseStock } from "../api/purchaseBillApi";
+import { createPurchaseBill, updatePurchaseBill, getPurchaseBillById, previewPurchaseStock, getLocalPurchaseChallans, getLocalPurchaseChallan } from "../api/purchaseBillApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getPurchaseTemplate } from "../api/invoiceApi";
@@ -34,7 +34,7 @@ const colors = {
   inputBorder: "#d0d7e2",
 };
 
-export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, prefillFromInvoiceId = null, readOnly = false }) {
+export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, prefillFromInvoiceId = null, prefillFromChallanId = null, readOnly = false }) {
   const { has } = usePermissions();
   const [stockEntryOpen, setStockEntryOpen] = useState(false);
   const isEdit = !!billId;
@@ -101,6 +101,10 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const [numberValid, setNumberValid] = useState(true);
   // Source-bill metadata when in "Purchase Against Sale" mode
   const [sourceBill, setSourceBill] = useState(null);
+  const [challanOptions, setChallanOptions] = useState([]);
+  const [selectedChallanId, setSelectedChallanId] = useState("");
+  const [challanLines, setChallanLines] = useState([]);
+  const [challanLoading, setChallanLoading] = useState(false);
   const attachmentRef = useRef(null);
 
   function newRow() {
@@ -138,6 +142,30 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
       }
     })();
   }, [companyId]);
+
+  useEffect(() => {
+    if (!isNonStock || isEdit || readOnly) return;
+    getLocalPurchaseChallans(companyId).then(r => setChallanOptions(r.data || [])).catch(() => setChallanOptions([]));
+  }, [companyId, isNonStock, isEdit, readOnly]);
+
+  const loadChallan = async (id) => {
+    setSelectedChallanId(String(id || "")); setChallanLines([]);
+    if (!id) { setSourceBill(null); setItems(rows => rows.filter(row => !row.localDeliveryItemId)); return; }
+    setChallanLoading(true);
+    try {
+      const { data } = await getLocalPurchaseChallan(companyId, id);
+      setChallanLines(data.items || []);
+      setSourceBill({ challanId: data.challanId, challanNumber: data.challanNumber, clientName: data.clientName, date: data.date });
+    } catch (e) { setError(e.response?.data?.error || "Could not load the challan's remaining items."); }
+    finally { setChallanLoading(false); }
+  };
+
+  const addChallanLine = (line) => {
+    if (items.some(i => i.localDeliveryItemId === line.deliveryItemId)) return;
+    setItems(rows => [...rows.filter(row => row.description?.trim() || row.localDeliveryItemId), { ...newRow(), description: line.description, quantity: line.remainingQuantity,
+      unitPrice: "", uom: line.unit, localDeliveryItemId: line.deliveryItemId,
+      _availableQty: line.remainingQuantity, _purchasedQty: line.purchasedQuantity }]);
+  };
 
   useEffect(() => {
     if (!isEdit) return;
@@ -256,6 +284,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
     if (items.length === 0) return setError("Add at least one item.");
     if (items.some(i => !i.description?.trim())) return setError("Every line needs a description.");
     if (items.some(i => !Number.isFinite(Number(i.quantity)) || !(Number(i.quantity) > 0))) return setError("Quantity must be greater than zero on every line.");
+    if (items.some(i => i.localDeliveryItemId && Number(i.quantity) > Number(i._availableQty))) return setError("A linked quantity cannot exceed the remaining challan quantity.");
     if (items.some(i => i.unitPrice === "" || i.unitPrice == null || !Number.isFinite(Number(i.unitPrice)) || Number(i.unitPrice) < 0)) return setError("Enter a non-negative unit price on every line.");
     if (!Number.isFinite(parseFloat(gstRate)) || parseFloat(gstRate) < 0 || parseFloat(gstRate) > 100) return setError("GST rate must be between 0 and 100.");
     if (isAgainstSale) {
@@ -296,6 +325,8 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
           hsCode: i.hsCode || null,
           saleType: i.saleType || null,
           sourceInvoiceItemIds: i.sourceInvoiceItemIds || [],
+          localDeliveryItemId: i.localDeliveryItemId || null,
+          localInvoiceItemId: i.localInvoiceItemId || null,
         })),
       };
       const res = isEdit
@@ -373,13 +404,11 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               }}>
                 <MdReceipt size={20} color="#bf360c" style={{ flexShrink: 0, marginTop: 1 }} />
                 <div style={{ fontSize: "0.84rem", color: "#1a2332", lineHeight: 1.4 }}>
-                  <strong>Procuring against Sale Bill #{sourceBill.invoiceNumber}</strong>
+                  <strong>{sourceBill.challanNumber ? `Purchasing against Challan #${sourceBill.challanNumber}` : `Procuring against Sale Bill #${sourceBill.invoiceNumber}`}</strong>
                   {" "}for <strong>{sourceBill.clientName}</strong>
                   {" "}({new Date(sourceBill.date).toLocaleDateString()})
                   <div style={{ fontSize: "0.76rem", color: "#5f6d7e", marginTop: 2 }}>
-                    Each row groups same-ItemType sale lines. Pick an HS-coded catalog item per row —
-                    on save, every linked sale line back-fills with that HSCode / UOM / Sale Type and
-                    becomes FBR-ready.
+                    {sourceBill.challanNumber ? "This bill records only the items and quantities purchased from this supplier. Create another supplier bill for other challan lines; partial quantities are supported." : "Each row groups same-ItemType sale lines. Pick an HS-coded catalog item per row; linked sale lines are classified on save."}
                   </div>
                 </div>
               </div>
@@ -404,6 +433,27 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                 {(gstRate === "" || Number(gstRate) < 0 || Number(gstRate) > 100) && <small className="purchase-field-error">Enter GST from 0 to 100. Use 0 for no GST.</small>}
               </div>
             </div>
+
+            {!readOnly && !isEdit && isNonStock && !isAgainstSale && (
+              <section aria-label="Link items from a challan" style={{ margin: "0.75rem 0", padding: "0.75rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, background: "#f8fbff" }}>
+                <label style={{ ...formStyles.label, display: "block" }}>Link to a delivery challan <span style={{ fontWeight: 400 }}>(optional)</span></label>
+                <select aria-label="Delivery challan" style={formStyles.input} value={selectedChallanId} onChange={e => loadChallan(e.target.value)}>
+                  <option value="">Standalone local purchase (no challan)</option>
+                  {challanOptions.map(c => <option key={c.challanId} value={c.challanId}>Challan #{c.challanNumber} · {c.clientName} · {c.remainingLines} line(s) remaining</option>)}
+                </select>
+                {challanLoading && <small>Loading remaining items…</small>}
+                {selectedChallanId && !challanLoading && <div style={{ display: "grid", gap: "0.4rem", marginTop: "0.6rem" }}>
+                  {challanLines.length === 0 ? <small>All challan quantities are already linked to purchase bills.</small> : challanLines.map(line => {
+                    const added = items.some(i => i.localDeliveryItemId === line.deliveryItemId);
+                    return <div key={line.deliveryItemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", padding: "0.55rem", background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 8 }}>
+                      <div style={{ minWidth: 0 }}><strong style={{ display: "block" }}>{line.description}</strong><small>{line.purchasedQuantity > 0 ? `Purchased ${line.purchasedQuantity} of ${line.quantity} · ` : ""}{line.remainingQuantity} {line.unit} available</small></div>
+                      <button type="button" disabled={added} onClick={() => addChallanLine(line)} style={{ ...formStyles.button, minHeight: 42, flexShrink: 0 }}>{added ? "Added" : "Add item"}</button>
+                    </div>;
+                  })}
+                </div>}
+                {selectedChallanId && <small style={{ display: "block", marginTop: 6, color: colors.textSecondary }}>Add the items purchased from this supplier. Create another purchase bill for items bought from a different supplier; partial quantities are supported.</small>}
+              </section>
+            )}
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
               <div data-admin-field="" style={formStyles.formGroup}>
@@ -479,6 +529,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                         <div style={{ marginBottom: "0.4rem" }}>
                           <label style={mStyles.label}>Description *</label>
                           <input aria-label={`Description for item ${idx + 1}`} type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} />
+                          {it.localDeliveryItemId && <small style={{ display: "block", marginTop: 3, color: colors.textSecondary }}>Challan line · {it._availableQty} {it.uom} available</small>}
                         </div>
                         <div style={mStyles.grid3}>
                           <div>
@@ -539,6 +590,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                           </td>
                           <td style={td}>
                             <input aria-label={`Description for item ${idx + 1}`} type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} />
+                            {it.localDeliveryItemId && <small style={{ display: "block", marginTop: 3, color: colors.textSecondary }}>Challan line · {it._availableQty} {it.uom} available</small>}
                           </td>
                           <td style={td}>
                             <QuantityInput

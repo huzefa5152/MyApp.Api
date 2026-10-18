@@ -169,6 +169,40 @@ def main():
         cd = save("challan", c["id"], cd)
         call("POST", f"/api/commercial-costs/challan/{c['id']}/purchases", {"version": cd["version"], "date": today, "itemIds": [cd["items"][1]["id"]]})
         check("remaining challan lines can generate purchases later", True)
+
+        split = call("POST", f"/api/deliverychallans/company/{cid}", {"clientId": client["id"], "poNumber": "SAMPLE-SPLIT-PURCHASE", "deliveryDate": today,
+            "items": [{"description": "Split A1", "quantity": 4, "unit": "Pcs"}, {"description": "Split A2", "quantity": 3, "unit": "Pcs"}, {"description": "Split B1", "quantity": 2, "unit": "Pcs"}]})
+        split_items = split["items"]
+        picker = call("GET", f"/api/purchasebills/company/{cid}/local-purchase-challans")
+        check("local purchase challan picker is company-scoped and lists unpurchased challans", any(x["challanId"] == split["id"] and x["remainingLines"] == 3 for x in picker))
+        selected = call("GET", f"/api/purchasebills/company/{cid}/local-purchase-challans/{split['id']}")
+        check("challan picker returns each available line and quantity", len(selected["items"]) == 3 and all(x["remainingQuantity"] == x["quantity"] for x in selected["items"]))
+        def local_bill(supplier_id, allocations, label):
+            return call("POST", "/api/purchasebills", {"companyId": cid, "supplierId": supplier_id, "date": today,
+                "purchaseCategory": "LocalDirect", "gstRate": 0, "supplierBillNumber": label,
+                "items": [{"description": split_items[index]["description"], "quantity": qty, "uom": "Pcs", "unitPrice": price,
+                    "localDeliveryItemId": split_items[index]["id"]} for index, qty, price in allocations]})
+        split_a_first = local_bill(supplier["id"], [(0, 2, 11), (1, 2, 21)], "SPLIT-A-1")
+        split_b = local_bill(supplier_b["id"], [(2, 2, 31)], "SPLIT-B")
+        check("one supplier can purchase multiple selected challan items", len(split_a_first["items"]) == 2 and split_a_first["sourceDeliveryChallanId"] == split["id"])
+        check("another supplier can purchase a different item from the same challan", len(split_b["items"]) == 1 and split_b["supplierId"] == supplier_b["id"])
+        check("partial purchase allocations reduce available quantities", call("GET", f"/api/purchasebills/company/{cid}/local-purchase-challans/{split['id']}")["items"][0]["remainingQuantity"] == 2)
+        call("POST", "/api/purchasebills", {"companyId": cid, "supplierId": supplier["id"], "date": today, "purchaseCategory": "LocalDirect", "gstRate": 0,
+            "items": [{"description": "Over allocation", "quantity": 3, "unitPrice": 12, "localDeliveryItemId": split_items[0]["id"]}]}, expected=(400,))
+        check("over-allocation is rejected by the server", True)
+        split_a_second = local_bill(supplier["id"], [(0, 2, 12), (1, 1, 22)], "SPLIT-A-2")
+        check("a source line can span multiple purchase bills and suppliers", len(split_a_second["items"]) == 2)
+        split_costs = costs("challan", split["id"])
+        check("challan costing aggregates split purchase amounts and remaining quantities",
+            [x["purchasedAmount"] for x in split_costs["items"]] == [46, 64, 62]
+            and [x["remainingQuantity"] for x in split_costs["items"]] == [0, 0, 0]
+            and split_costs["actualAmount"] == 172 and split_costs["costComplete"])
+        split_invoice = call("POST", "/api/invoices", {"companyId": cid, "clientId": client["id"], "date": today, "gstRate": 0,
+            "challanIds": [split["id"]], "items": [{"deliveryItemId": i["id"], "unitPrice": 50} for i in split_items]})
+        check("bill profit includes purchases created across suppliers", costs("bill", split_invoice["id"])["profit"] == 278)
+        split_payables = call("GET", f"/api/commercial-costs/bill/{split_invoice['id']}/payables")
+        check("bill payable drill-down includes each split supplier purchase", len(split_payables) == 3 and sum(p["liability"] for p in split_payables) == 172)
+
         linked = call("POST", "/api/invoices", {"companyId": cid, "clientId": client["id"], "date": today, "gstRate": 0,
             "challanIds": [c["id"]], "items": [{"deliveryItemId": i["id"], "unitPrice": 50} for i in c["items"]]})
         ld = costs("bill", linked["id"])
@@ -287,6 +321,10 @@ def main():
         d = costs("bill", direct["id"]); d["items"][0]["supplierId"] = foreign["id"]
         call("PATCH", f"/api/commercial-costs/bill/{direct['id']}", {"version": d["version"], "items": d["items"]}, expected=(400,))
         check("cross-company supplier rejected on cost update", True)
+        call("POST", "/api/purchasebills", {"companyId": other_company["id"], "supplierId": foreign["id"], "date": today,
+            "purchaseCategory": "LocalDirect", "gstRate": 0, "items": [{"description": "Foreign challan link", "quantity": 1,
+                "unitPrice": 5, "localDeliveryItemId": c["items"][0]["id"]}]}, expected=(400,))
+        check("cross-company challan line cannot be linked to a local purchase", True)
         roles = call("GET", "/api/roles")
         sales = next(r["id"] for r in roles if r["name"] == "Sales Edition")
         username = f"costverify{cid}"
@@ -298,6 +336,8 @@ def main():
             ("GET", f"/api/fbr/{bid}/preview-payload", None),
             ("GET", f"/api/invoices/company/{cid}/paged?costingStatus=full", None),
             ("GET", f"/api/deliverychallans/company/{cid}/paged?costingStatus=partial", None),
+            ("GET", f"/api/purchasebills/company/{cid}/local-purchase-challans", None),
+            ("GET", f"/api/purchasebills/company/{cid}/local-purchase-challans/{c['id']}", None),
             ("GET", f"/api/commercial-costs/bill/{bid}", None),
             ("PATCH", f"/api/commercial-costs/bill/{bid}", {"version": "forged", "items": []}),
             ("GET", f"/api/commercial-costs/challan/{c['id']}", None),

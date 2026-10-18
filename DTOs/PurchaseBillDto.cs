@@ -85,6 +85,8 @@ namespace MyApp.Api.DTOs
         /// grouped set of sale lines.
         /// </summary>
         public List<int> SourceInvoiceItemIds { get; set; } = new();
+        public int? LocalDeliveryItemId { get; set; }
+        public int? LocalInvoiceItemId { get; set; }
     }
 
     /// <summary>
@@ -138,6 +140,9 @@ namespace MyApp.Api.DTOs
         /// one save.
         /// </summary>
         public List<int> SourceInvoiceItemIds { get; set; } = new();
+        /// <summary>Optional local-direct allocation. Quantity is the quantity purchased from this source line.</summary>
+        public int? LocalDeliveryItemId { get; set; }
+        public int? LocalInvoiceItemId { get; set; }
     }
 
     /// <summary>
@@ -252,4 +257,34 @@ namespace MyApp.Api.DTOs
         /// <summary>Avg unit price across the group — purely a sanity reference.</summary>
         public decimal AvgSaleUnitPrice { get; set; }
     }
+}
+
+/// <summary>Unpurchased quantities from a challan, offered for local-direct supplier bills.</summary>
+public class LocalPurchaseChallanDto
+{
+    public int ChallanId { get; set; }
+    public int ChallanNumber { get; set; }
+    public DateTime Date { get; set; }
+    public string ClientName { get; set; } = "";
+    public List<LocalPurchaseChallanLineDto> Items { get; set; } = new();
+}
+
+public class LocalPurchaseChallanLineDto
+{
+    public int DeliveryItemId { get; set; }
+    public string Description { get; set; } = "";
+    public string Unit { get; set; } = "";
+    public decimal Quantity { get; set; }
+    public decimal PurchasedQuantity { get; set; }
+    public decimal RemainingQuantity { get; set; }
+}
+
+public class LocalPurchaseChallanSummaryDto
+{
+    public int ChallanId { get; set; }
+    public int ChallanNumber { get; set; }
+    public DateTime Date { get; set; }
+    public string ClientName { get; set; } = "";
+    public int RemainingLines { get; set; }
+    public decimal RemainingQuantity { get; set; }
 }

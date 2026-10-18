@@ -4,8 +4,8 @@ import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import {render,screen,fireEvent,cleanup,waitFor} from '@testing-library/react';
 import PurchaseBillForm from './PurchaseBillForm';
 vi.mock('../contexts/PermissionsContext',()=>({usePermissions:()=>({has:()=>true})}));
-import {getPurchaseBillById,createPurchaseBill,updatePurchaseBill,previewPurchaseStock} from '../api/purchaseBillApi';
-vi.mock('../api/purchaseBillApi',()=>({getPurchaseBillById:vi.fn(),createPurchaseBill:vi.fn(),updatePurchaseBill:vi.fn(),previewPurchaseStock:vi.fn(async()=>({data:{trackingEnabled:true,items:[]}}))}));
+import {getPurchaseBillById,createPurchaseBill,updatePurchaseBill,previewPurchaseStock,getLocalPurchaseChallans,getLocalPurchaseChallan} from '../api/purchaseBillApi';
+vi.mock('../api/purchaseBillApi',()=>({getPurchaseBillById:vi.fn(),createPurchaseBill:vi.fn(),updatePurchaseBill:vi.fn(),previewPurchaseStock:vi.fn(async()=>({data:{trackingEnabled:true,items:[]}})),getLocalPurchaseChallans:vi.fn(async()=>({data:[]})),getLocalPurchaseChallan:vi.fn()}));
 vi.mock('../api/supplierApi',()=>({getSuppliersByCompany:()=>Promise.resolve({data:[{id:7,name:'Sample supplier'},{id:8,name:'Second supplier',ntn:'1234567'}]})}));
 vi.mock('../api/itemTypeApi',()=>({getItemTypes:()=>Promise.resolve({data:[{id:4,name:'Sample catalog item',hsCode:'8414.5910'}]})}));
 vi.mock('../api/unitsApi',()=>({getAllUnits:()=>Promise.resolve({data:[]})}));
@@ -40,6 +40,20 @@ it('creates a local direct purchase after category selection without inventory f
  await waitFor(()=>expect(createPurchaseBill).toHaveBeenCalled());
  expect(createPurchaseBill.mock.calls[0][0]).toEqual(expect.objectContaining({purchaseCategory:'LocalDirect',gstRate:0,items:[expect.objectContaining({description:'Sample direct cost',unitPrice:25,itemTypeId:null,hsCode:null})]}));
  expect(previewPurchaseStock).not.toHaveBeenCalled();
+});
+it('creates a partial local purchase linked to selected challan lines',async()=>{
+ getLocalPurchaseChallans.mockResolvedValue({data:[{challanId:44,challanNumber:4204,clientName:'Sample customer',remainingLines:1}]});
+ getLocalPurchaseChallan.mockResolvedValue({data:{challanId:44,challanNumber:4204,clientName:'Sample customer',date:'2026-10-18',items:[{deliveryItemId:91,description:'Challan cable',unit:'Pcs',quantity:5,purchasedQuantity:0,remainingQuantity:5}]}});
+ render(<PurchaseBillForm companyId={1} onClose={()=>{}}/>);
+ fireEvent.click(screen.getByRole('radio',{name:/Local direct purchase/}));fireEvent.click(screen.getByRole('button',{name:'Continue'}));
+ fireEvent.change(await screen.findByLabelText('Delivery challan'),{target:{value:'44'}});
+ fireEvent.click(await screen.findByRole('button',{name:'Add item'}));
+ fireEvent.click(await screen.findByRole('button',{name:/Search supplier/}));fireEvent.mouseDown(await screen.findByText('Sample supplier'));
+ fireEvent.change(screen.getAllByRole('spinbutton').find(input=>input.title?.includes('Pcs')),{target:{value:'2'}});
+ fireEvent.change(screen.getByLabelText('Unit price for item 1'),{target:{value:'12.5'}});
+ fireEvent.click(screen.getByRole('button',{name:'Create',exact:true}));
+ await waitFor(()=>expect(createPurchaseBill).toHaveBeenCalled());
+ expect(createPurchaseBill.mock.calls[0][0].items[0]).toEqual(expect.objectContaining({description:'Challan cable',quantity:2,unitPrice:12.5,localDeliveryItemId:91}));
 });
 it('keeps entered prices and descriptions when changing category and clears catalog binding',async()=>{
  render(<PurchaseBillForm companyId={1} onClose={()=>{}}/>);

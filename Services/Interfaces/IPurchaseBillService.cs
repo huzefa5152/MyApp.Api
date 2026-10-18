@@ -16,6 +16,8 @@ namespace MyApp.Api.Services.Interfaces
         /// <summary>Flat merge-data payload for the PurchaseBill print templates.</summary>
         Task<PrintPurchaseBillDto?> GetPrintDataAsync(int id);
         Task<PurchaseBillDto> CreateAsync(CreatePurchaseBillDto dto);
+        Task<List<LocalPurchaseChallanSummaryDto>> GetLocalPurchaseChallansAsync(int companyId);
+        Task<LocalPurchaseChallanDto?> GetLocalPurchaseChallanAsync(int companyId, int challanId);
         Task<ChallanPurchasePreviewDto> PreviewFromChallanAsync(int challanId);
         Task<List<PurchaseBillDto>> CreateFromChallanAsync(int challanId, CreateChallanPurchasesDto? request = null);
         Task<PurchaseBillDto?> UpdateAsync(int id, UpdatePurchaseBillDto dto);

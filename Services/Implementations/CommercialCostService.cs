@@ -42,7 +42,7 @@ public class CommercialCostService(AppDbContext db, IPostingService posting)
             result = new() { Id = id, Number = c.ChallanNumber, CompanyId = c.CompanyId,
                 Items = c.Items.OrderBy(i => i.Id).Select(i => new CommercialCostLineDto {
                     Id = i.Id, DeliveryItemId = i.Id, SourceChallanId = c.Id, Description = i.Description, Unit = i.Unit,
-                    Quantity = i.Quantity, ActualUnitCost = i.ActualUnitCost, SupplierId = i.SupplierId,
+                    Quantity = i.Quantity, ActualUnitCost = i.ActualUnitCostOverride ?? i.ActualUnitCost, CostOverride = i.ActualUnitCostOverride.HasValue, SupplierId = i.SupplierId,
                     SellingAmount = c.Invoice?.Items.Where(x => x.DeliveryItemId == i.Id).Sum(x => x.LineTotal) ?? 0
                 }).ToList() };
         }
@@ -55,7 +55,8 @@ public class CommercialCostService(AppDbContext db, IPostingService posting)
                 Items = b.Items.OrderBy(i => i.Id).Select(i => new CommercialCostLineDto {
                     Id = i.Id, DeliveryItemId = i.DeliveryItemId, SourceChallanId = i.DeliveryItem?.DeliveryChallanId, Description = i.Description, Unit = i.UOM,
                     Quantity = i.Quantity, SellingAmount = i.LineTotal,
-                    ActualUnitCost = i.DeliveryItemId.HasValue ? i.DeliveryItem?.ActualUnitCost : i.ActualUnitCost,
+                    ActualUnitCost = i.DeliveryItemId.HasValue ? i.DeliveryItem?.ActualUnitCostOverride ?? i.DeliveryItem?.ActualUnitCost : i.ActualUnitCostOverride ?? i.ActualUnitCost,
+                    CostOverride = i.DeliveryItemId.HasValue ? i.DeliveryItem?.ActualUnitCostOverride.HasValue == true : i.ActualUnitCostOverride.HasValue,
                     SupplierId = i.DeliveryItemId.HasValue ? i.DeliveryItem?.SupplierId : i.SupplierId
                 }).ToList() };
         }
@@ -70,15 +71,23 @@ public class CommercialCostService(AppDbContext db, IPostingService posting)
         var recorded = await db.PurchaseItems.AsNoTracking().Where(p => p.PurchaseBill.CompanyId == result.CompanyId &&
             ((p.LocalDeliveryItemId.HasValue && deliveryIds.Contains(p.LocalDeliveryItemId.Value)) ||
              (p.LocalInvoiceItemId.HasValue && invoiceIds.Contains(p.LocalInvoiceItemId.Value))))
-            .Select(p => new { p.LocalDeliveryItemId, p.LocalInvoiceItemId }).ToListAsync();
+            .GroupBy(p => new { p.LocalDeliveryItemId, p.LocalInvoiceItemId })
+            .Select(g => new { g.Key.LocalDeliveryItemId, g.Key.LocalInvoiceItemId, Quantity = g.Sum(p => p.Quantity), Amount = g.Sum(p => p.LineTotal) }).ToListAsync();
         var legacyChallans = await db.PurchaseBills.AsNoTracking().Where(p => p.CompanyId == result.CompanyId && p.SourceDeliveryChallanId.HasValue)
             .Select(p => p.SourceDeliveryChallanId!.Value).ToListAsync();
         var legacyItems = await db.DeliveryItems.AsNoTracking().Where(i => deliveryIds.Contains(i.Id) && legacyChallans.Contains(i.DeliveryChallanId))
             .Select(i => i.Id).ToListAsync();
         foreach (var i in result.Items)
-            i.PurchaseRecorded = i.DeliveryItemId.HasValue
-                ? recorded.Any(p => p.LocalDeliveryItemId == i.DeliveryItemId) || legacyItems.Contains(i.DeliveryItemId.Value)
-                : recorded.Any(p => p.LocalInvoiceItemId == i.Id);
+        {
+            var purchases = recorded.Where(p => i.DeliveryItemId.HasValue
+                    ? p.LocalDeliveryItemId == i.DeliveryItemId
+                    : p.LocalInvoiceItemId == i.Id).ToList();
+            i.PurchasedQuantity = purchases.Sum(p => p.Quantity);
+            i.PurchasedAmount = purchases.Sum(p => p.Amount);
+            if (i.DeliveryItemId.HasValue && legacyItems.Contains(i.DeliveryItemId.Value) && i.PurchasedQuantity == 0)
+                i.PurchasedQuantity = i.Quantity;
+            i.PurchaseRecorded = i.RemainingQuantity <= 0;
+        }
         result.Version = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(result.Items))));
         return result;
     }
@@ -99,12 +108,12 @@ public class CommercialCostService(AppDbContext db, IPostingService posting)
             if (source.DeliveryItemId.HasValue)
             {
                 var line = await db.DeliveryItems.SingleAsync(x => x.Id == source.DeliveryItemId);
-                line.ActualUnitCost = i.ActualUnitCost; line.SupplierId = i.SupplierId;
+                line.ActualUnitCost = i.ActualUnitCost; line.ActualUnitCostOverride = i.ActualUnitCost; line.SupplierId = i.SupplierId;
             }
             else
             {
                 var line = await db.InvoiceItems.SingleAsync(x => x.Id == i.Id && x.InvoiceId == id);
-                line.ActualUnitCost = i.ActualUnitCost; line.SupplierId = i.SupplierId;
+                line.ActualUnitCost = i.ActualUnitCost; line.ActualUnitCostOverride = i.ActualUnitCost; line.SupplierId = i.SupplierId;
             }
         }
         db.Set<PrivateCostChange>().Add(new() { CompanyId = before.CompanyId, ActorId = actorId,
@@ -133,7 +142,7 @@ public class CommercialCostService(AppDbContext db, IPostingService posting)
             request.ItemIds.Distinct().Count() != request.ItemIds.Count)
             throw new CommercialCostValidationException("Refresh the preview and select ready lines and a purchase date.");
         var items = source.Items.Where(i => request.ItemIds.Contains(i.Id)).ToList();
-        if (items.Count != request.ItemIds.Count || items.Any(i => i.PurchaseRecorded || !i.SupplierId.HasValue || !i.ActualUnitCost.HasValue || i.Quantity <= 0))
+        if (items.Count != request.ItemIds.Count || items.Any(i => i.RemainingQuantity <= 0 || !i.SupplierId.HasValue || !i.ActualUnitCost.HasValue))
             throw new CommercialCostValidationException("Select unprocessed lines with a supplier, actual cost and positive quantity.");
         var cancelled = kind == "challan"
             ? await db.DeliveryChallans.AnyAsync(c => c.Id == id && c.Status == "Cancelled")
@@ -153,8 +162,8 @@ public class CommercialCostService(AppDbContext db, IPostingService posting)
                 PurchaseBillNumber = await CompanyDocumentNumbers.AllocateAsync(db, source.CompanyId, "purchase-bill"),
                 ReconciliationStatus = "ManualOnly", Notes = $"Local purchase from {kind} #{source.Number}",
                 SupplierBillNumber = settings?.SupplierBillNumber?.Trim(), GSTRate = settings?.GSTRate ?? 0,
-                Items = group.Select(i => new PurchaseItem { Description = i.Description, Quantity = i.Quantity,
-                    UOM = i.Unit, UnitPrice = i.ActualUnitCost!.Value, LineTotal = i.ActualAmount!.Value,
+                Items = group.Select(i => new PurchaseItem { Description = i.Description, Quantity = i.RemainingQuantity,
+                    UOM = i.Unit, UnitPrice = i.ActualUnitCost!.Value, LineTotal = Math.Round(i.RemainingQuantity * i.ActualUnitCost.Value, 2),
                     LocalDeliveryItemId = i.DeliveryItemId, LocalInvoiceItemId = i.DeliveryItemId.HasValue ? null : i.Id }).ToList() };
             bill.Subtotal = bill.Items.Sum(i => i.LineTotal);
             bill.GSTAmount = Math.Round(bill.Subtotal * bill.GSTRate / 100m, 2);

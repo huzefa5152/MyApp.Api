@@ -129,6 +129,8 @@ namespace MyApp.Api.Services.Implementations
                 RateId = i.RateId,
                 FixedNotifiedValueOrRetailPrice = i.FixedNotifiedValueOrRetailPrice,
                 SourceInvoiceItemIds = i.SourceLines?.Select(s => s.InvoiceItemId).ToList() ?? new(),
+                LocalDeliveryItemId = i.LocalDeliveryItemId,
+                LocalInvoiceItemId = i.LocalInvoiceItemId,
             }).ToList() ?? new(),
             // Distinct sale-bill numbers this purchase covered — computed
             // by walking the SourceLines → InvoiceItem → Invoice chain.
@@ -140,6 +142,43 @@ namespace MyApp.Api.Services.Implementations
                 .OrderBy(n => n)
                 .ToList() ?? new(),
         };
+
+        public async Task<List<LocalPurchaseChallanSummaryDto>> GetLocalPurchaseChallansAsync(int companyId)
+        {
+            var challans = await _context.DeliveryChallans.AsNoTracking().Include(c => c.Client).Include(c => c.Items)
+                .Where(c => c.CompanyId == companyId && !c.IsDemo && c.Status != "Cancelled")
+                .OrderByDescending(c => c.DeliveryDate).ThenByDescending(c => c.Id)
+                .ToListAsync();
+            var ids = challans.SelectMany(c => c.Items).Select(i => i.Id).ToList();
+            var purchased = await _context.PurchaseItems.AsNoTracking().Where(p => p.LocalDeliveryItemId.HasValue
+                    && ids.Contains(p.LocalDeliveryItemId.Value) && p.PurchaseBill.CompanyId == companyId)
+                .GroupBy(p => p.LocalDeliveryItemId!.Value).Select(g => new { Id = g.Key, Qty = g.Sum(p => p.Quantity) })
+                .ToDictionaryAsync(x => x.Id, x => x.Qty);
+            return challans.Select(c => new LocalPurchaseChallanSummaryDto { ChallanId = c.Id, ChallanNumber = c.ChallanNumber,
+                    Date = c.DeliveryDate ?? DateTime.MinValue, ClientName = c.Client?.Name ?? "",
+                    RemainingLines = c.Items.Count(i => i.Quantity > purchased.GetValueOrDefault(i.Id)),
+                    RemainingQuantity = c.Items.Sum(i => Math.Max(0m, i.Quantity - purchased.GetValueOrDefault(i.Id))) })
+                .Where(c => c.RemainingLines > 0).ToList();
+        }
+
+        public async Task<LocalPurchaseChallanDto?> GetLocalPurchaseChallanAsync(int companyId, int challanId)
+        {
+            var challan = await _context.DeliveryChallans.AsNoTracking()
+                .Include(c => c.Client).Include(c => c.Items)
+                .FirstOrDefaultAsync(c => c.Id == challanId && c.CompanyId == companyId && !c.IsDemo && c.Status != "Cancelled");
+            if (challan == null) return null;
+            var ids = challan.Items.Select(i => i.Id).ToList();
+            var purchased = await _context.PurchaseItems.AsNoTracking()
+                .Where(p => p.LocalDeliveryItemId.HasValue && ids.Contains(p.LocalDeliveryItemId.Value) && p.PurchaseBill.CompanyId == companyId)
+                .GroupBy(p => p.LocalDeliveryItemId!.Value)
+                .Select(g => new { Id = g.Key, Qty = g.Sum(p => p.Quantity) }).ToDictionaryAsync(x => x.Id, x => x.Qty);
+            return new LocalPurchaseChallanDto { ChallanId = challan.Id, ChallanNumber = challan.ChallanNumber,
+                Date = challan.DeliveryDate ?? DateTime.MinValue, ClientName = challan.Client?.Name ?? "",
+                Items = challan.Items.OrderBy(i => i.Id).Select(i => new LocalPurchaseChallanLineDto { DeliveryItemId = i.Id,
+                    Description = i.Description, Unit = i.Unit, Quantity = i.Quantity, PurchasedQuantity = purchased.GetValueOrDefault(i.Id),
+                    RemainingQuantity = Math.Max(0m, i.Quantity - purchased.GetValueOrDefault(i.Id)) })
+                    .Where(i => i.RemainingQuantity > 0).ToList() };
+        }
 
         public async Task<PagedResult<PurchaseBillDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
@@ -358,6 +397,40 @@ namespace MyApp.Api.Services.Implementations
             if (dto.PurchaseCategory == "LocalDirect" && dto.Items.Any(i => i.ItemTypeId.HasValue || !string.IsNullOrWhiteSpace(i.HSCode) || (i.SourceInvoiceItemIds?.Count ?? 0) > 0))
                 throw new InvalidOperationException("Local direct purchases cannot carry inventory classifications.");
 
+            var linkedDeliveryIds = dto.Items.Where(i => i.LocalDeliveryItemId.HasValue).Select(i => i.LocalDeliveryItemId!.Value).Distinct().ToList();
+            if (dto.PurchaseCategory != "LocalDirect" && dto.Items.Any(i => i.LocalDeliveryItemId.HasValue || i.LocalInvoiceItemId.HasValue))
+                throw new InvalidOperationException("Only local direct purchases can be linked to a sale or challan line.");
+            if (dto.Items.Any(i => i.LocalInvoiceItemId.HasValue))
+                throw new InvalidOperationException("This shortcut currently links local purchases to delivery challan lines only.");
+            if (dto.Items.Any(i => i.LocalDeliveryItemId.HasValue && i.LocalInvoiceItemId.HasValue))
+                throw new InvalidOperationException("A purchase line can be linked to only one source line.");
+            int? sourceChallanId = null;
+            if (linkedDeliveryIds.Count > 0)
+            {
+                if (linkedDeliveryIds.Count != dto.Items.Count(i => i.LocalDeliveryItemId.HasValue))
+                    throw new InvalidOperationException("Use one purchase line per linked challan line.");
+                var sources = await _context.DeliveryItems.Include(i => i.DeliveryChallan)
+                    .Where(i => linkedDeliveryIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id);
+                if (sources.Count != linkedDeliveryIds.Count || sources.Values.Any(i => i.DeliveryChallan.CompanyId != dto.CompanyId || i.DeliveryChallan.IsDemo || i.DeliveryChallan.Status == "Cancelled"))
+                    throw new InvalidOperationException("A selected challan line is unavailable for this company.");
+                var challanIds = sources.Values.Select(i => i.DeliveryChallanId).Distinct().ToList();
+                if (challanIds.Count != 1) throw new InvalidOperationException("A local purchase bill can link to lines from one challan only.");
+                sourceChallanId = challanIds[0];
+                // Serialize allocations on the source lines; a concurrent bill cannot spend the same remaining quantity.
+                foreach (var sourceId in linkedDeliveryIds.OrderBy(x => x))
+                    await _context.DeliveryItems.FromSqlInterpolated($"SELECT * FROM DeliveryItems WITH (UPDLOCK, HOLDLOCK) WHERE Id = {sourceId}").AsNoTracking().Select(x => x.Id).ToListAsync();
+                var reserved = await _context.PurchaseItems.Where(p => p.LocalDeliveryItemId.HasValue && linkedDeliveryIds.Contains(p.LocalDeliveryItemId.Value)
+                        && p.PurchaseBill.CompanyId == dto.CompanyId)
+                    .GroupBy(p => p.LocalDeliveryItemId!.Value).Select(g => new { Id = g.Key, Qty = g.Sum(p => p.Quantity) }).ToDictionaryAsync(x => x.Id, x => x.Qty);
+                foreach (var line in dto.Items.Where(i => i.LocalDeliveryItemId.HasValue))
+                {
+                    var src = sources[line.LocalDeliveryItemId!.Value];
+                    var remaining = Math.Max(0m, src.Quantity - reserved.GetValueOrDefault(src.Id));
+                    if (line.Quantity > remaining)
+                        throw new InvalidOperationException($"{src.Description}: only {remaining:0.####} {src.Unit} remains available on challan #{src.DeliveryChallan.ChallanNumber}.");
+                }
+            }
+
             // Validate "Purchase Against Sale Bill" lines BEFORE we touch
             // anything. Any line with SourceInvoiceItemIds:
             //   • must carry an ItemTypeId (we group sale lines by it)
@@ -431,6 +504,7 @@ namespace MyApp.Api.Services.Implementations
                     UOM = i.UOM ?? itemType?.UOM ?? "",
                     UnitPrice = i.UnitPrice,
                     LineTotal = Math.Round(i.Quantity * i.UnitPrice, 2),
+                    LocalDeliveryItemId = i.LocalDeliveryItemId,
                     HSCode = itemType != null && string.IsNullOrWhiteSpace(itemType.HSCode) ? null : i.HSCode ?? itemType?.HSCode,
                     FbrUOMId = i.FbrUOMId ?? itemType?.FbrUOMId,
                     SaleType = i.SaleType ?? itemType?.SaleType,
@@ -451,6 +525,7 @@ namespace MyApp.Api.Services.Implementations
             var bill = new PurchaseBill
             {
                 PurchaseCategory = dto.PurchaseCategory,
+                Source = linkedDeliveryIds.Count > 0 ? "local-direct" : "manual",
                 PurchaseBillNumber = nextNumber,
                 Date = dto.Date.Date,
                 CompanyId = dto.CompanyId,
@@ -470,6 +545,7 @@ namespace MyApp.Api.Services.Implementations
                 PaymentMode = dto.PaymentMode,
                 ReconciliationStatus = string.IsNullOrWhiteSpace(dto.SupplierIRN) ? "ManualOnly" : "Pending",
                 Items = items,
+                SourceDeliveryChallanId = sourceChallanId,
                 CreatedAt = DateTime.UtcNow,
             };
 
@@ -596,23 +672,29 @@ namespace MyApp.Api.Services.Implementations
                 .FirstOrDefaultAsync(c => c.Id == challanId && !c.IsDemo)
                 ?? throw new KeyNotFoundException("Challan not found.");
             if (challan.Status == "Cancelled") throw new InvalidOperationException("Cannot purchase from a cancelled challan.");
-            if (challan.Items.Count == 0 || challan.Items.Any(i => !i.SupplierId.HasValue || !i.ActualUnitCost.HasValue || i.ActualUnitCost < 0 || i.Quantity <= 0))
-                throw new InvalidOperationException("Set a supplier and non-negative actual unit cost on every line first.");
-            if (challan.Items.Any(i => i.Supplier == null || i.Supplier.CompanyId != challan.CompanyId))
-                throw new InvalidOperationException("A supplier does not belong to this company.");
+            var challanItemIds = challan.Items.Select(i => i.Id).ToList();
+            var quantities = await _context.PurchaseItems.AsNoTracking().Where(p => p.LocalDeliveryItemId.HasValue
+                    && challanItemIds.Contains(p.LocalDeliveryItemId.Value) && p.PurchaseBill.CompanyId == challan.CompanyId)
+                .GroupBy(p => p.LocalDeliveryItemId!.Value).Select(g => new { Id = g.Key, Qty = g.Sum(p => p.Quantity) })
+                .ToDictionaryAsync(x => x.Id, x => x.Qty);
+            var ready = challan.Items.Where(i => i.Quantity > quantities.GetValueOrDefault(i.Id)).ToList();
+            if (ready.Any(i => !i.SupplierId.HasValue || !i.ActualUnitCost.HasValue || i.ActualUnitCost < 0 || i.Quantity <= 0))
+                throw new InvalidOperationException("Add a supplier and non-negative actual cost to each remaining challan line you want to purchase.");
+            if (ready.Any(i => i.Supplier == null || i.Supplier.CompanyId != challan.CompanyId))
+                throw new InvalidOperationException("A line supplier does not belong to this company.");
             return new ChallanPurchasePreviewDto {
                 ChallanId = challan.Id, ChallanNumber = challan.ChallanNumber,
                 Revision = ChallanPurchaseRevision(challan),
                 Date = (challan.DeliveryDate ?? DateTime.UtcNow).Date,
                 TracksStock = false,
-                AlreadyCreated = await _context.PurchaseBills.AnyAsync(p => p.SourceDeliveryChallanId == challan.Id),
-                Suppliers = challan.Items.GroupBy(i => i.SupplierId!.Value).OrderBy(g => g.Key)
+                AlreadyCreated = ready.Count == 0,
+                Suppliers = ready.GroupBy(i => i.SupplierId!.Value).OrderBy(g => g.Key)
                     .Select(g => new ChallanSupplierPurchaseDto {
                         SupplierId = g.Key, SupplierName = g.First().Supplier!.Name,
                         Items = g.Select(i => new PurchaseItemDto {
-                            Id = i.Id, Description = i.Description, Quantity = i.Quantity,
+                            Id = i.Id, Description = i.Description, Quantity = i.Quantity - quantities.GetValueOrDefault(i.Id),
                             UOM = i.Unit, UnitPrice = i.ActualUnitCost!.Value,
-                            LineTotal = Math.Round(i.Quantity * i.ActualUnitCost.Value, 2)
+                            LineTotal = Math.Round((i.Quantity - quantities.GetValueOrDefault(i.Id)) * i.ActualUnitCost.Value, 2)
                         }).ToList()
                     }).ToList()
             };
@@ -642,17 +724,25 @@ namespace MyApp.Api.Services.Implementations
                 if (challan == null) throw new KeyNotFoundException("Challan not found.");
                 if (challan.Status == "Cancelled")
                     throw new InvalidOperationException("Cannot create purchase bills for a cancelled challan.");
-                if (challan.Items.Count == 0 || challan.Items.Any(i => !i.SupplierId.HasValue || !i.ActualUnitCost.HasValue))
-                    throw new InvalidOperationException("Set a supplier and actual unit cost on every challan line first.");
-                if (challan.Items.Any(i => i.ActualUnitCost < 0))
+                foreach (var sourceId in challan.Items.Select(i => i.Id).OrderBy(x => x))
+                    await _context.DeliveryItems.FromSqlInterpolated($"SELECT * FROM DeliveryItems WITH (UPDLOCK, HOLDLOCK) WHERE Id = {sourceId}").AsNoTracking().Select(i => i.Id).ToListAsync();
+                var challanItemIds = challan.Items.Select(i => i.Id).ToList();
+                var alreadyPurchased = await _context.PurchaseItems.Where(p => p.LocalDeliveryItemId.HasValue
+                        && challanItemIds.Contains(p.LocalDeliveryItemId.Value) && p.PurchaseBill.CompanyId == challan.CompanyId)
+                    .GroupBy(p => p.LocalDeliveryItemId!.Value).Select(g => new { Id = g.Key, Qty = g.Sum(p => p.Quantity) })
+                    .ToDictionaryAsync(x => x.Id, x => x.Qty);
+                var remainingItems = challan.Items.Where(i => i.Quantity > alreadyPurchased.GetValueOrDefault(i.Id)).ToList();
+                if (remainingItems.Any(i => !i.SupplierId.HasValue || !i.ActualUnitCost.HasValue))
+                    throw new InvalidOperationException("Add a supplier and actual cost to each remaining challan line you want to purchase.");
+                if (remainingItems.Any(i => i.ActualUnitCost < 0))
                     throw new InvalidOperationException("Actual unit cost cannot be negative.");
 
                 if (request != null && (request.Revision != ChallanPurchaseRevision(challan) || request.Date == default))
                     throw new InvalidOperationException("The challan changed or the bill date is missing. Refresh the preview before creating bills.");
-                if (challan.Items.Any(i => i.Quantity <= 0))
+                if (remainingItems.Any(i => i.Quantity <= 0))
                     throw new InvalidOperationException("Purchase quantities must be positive.");
 
-                var groups = challan.Items.GroupBy(i => i.SupplierId!.Value).OrderBy(g => g.Key).ToList();
+                var groups = remainingItems.GroupBy(i => i.SupplierId!.Value).OrderBy(g => g.Key).ToList();
                 var supplierIds = groups.Select(g => g.Key).ToList();
                 if (request != null && (request.Suppliers == null || request.Suppliers.Count != groups.Count || request.Suppliers.Any(s => s == null) ||
                     request.Suppliers.Select(s => s.SupplierId).Distinct().Count() != groups.Count ||
@@ -669,18 +759,12 @@ namespace MyApp.Api.Services.Implementations
                 var company = await _context.Companies
                     .FromSqlInterpolated($"SELECT * FROM Companies WITH (UPDLOCK, ROWLOCK) WHERE Id = {challan.CompanyId}")
                     .FirstOrDefaultAsync() ?? throw new KeyNotFoundException("Company not found.");
-                var existing = await _context.PurchaseBills.AsNoTracking()
-                    .Where(p => p.SourceDeliveryChallanId == challanId)
-                    .Select(p => new { p.Id, p.SupplierId })
-                    .ToListAsync();
-                if (existing.Count > 0)
+                if (groups.Count == 0)
                 {
-                    if (existing.Count != groups.Count || existing.Any(p => !supplierIds.Contains(p.SupplierId)))
-                        throw new InvalidOperationException("Purchase bills already exist for this challan. Review them before changing its suppliers.");
                     await tx.CommitAsync();
                     var previous = new List<PurchaseBillDto>();
-                    foreach (var row in existing)
-                        previous.Add((await GetByIdAsync(row.Id))!);
+                    var existingIds = await _context.PurchaseBills.AsNoTracking().Where(p => p.SourceDeliveryChallanId == challanId).Select(p => p.Id).ToListAsync();
+                    foreach (var existingId in existingIds) previous.Add((await GetByIdAsync(existingId))!);
                     return previous;
                 }
 
@@ -697,10 +781,10 @@ namespace MyApp.Api.Services.Implementations
                             ItemTypeId = null,
                             ItemTypeName = "",
                             Description = i.Description,
-                            Quantity = i.Quantity,
+                            Quantity = i.Quantity - alreadyPurchased.GetValueOrDefault(i.Id),
                             UOM = i.Unit,
                             UnitPrice = i.ActualUnitCost!.Value,
-                            LineTotal = Math.Round(i.Quantity * i.ActualUnitCost.Value, 2),
+                            LineTotal = Math.Round((i.Quantity - alreadyPurchased.GetValueOrDefault(i.Id)) * i.ActualUnitCost.Value, 2),
                             HSCode = null,
                             FbrUOMId = null,
                             SaleType = null,

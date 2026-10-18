@@ -62,6 +62,21 @@ namespace MyApp.Api.Controllers
             }
         }
 
+        [HttpGet("company/{companyId:int}/local-purchase-challans")]
+        [HasPermission("purchasebills.manage.create")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<List<LocalPurchaseChallanSummaryDto>>> GetLocalPurchaseChallans(int companyId)
+            => Ok(await _service.GetLocalPurchaseChallansAsync(companyId));
+
+        [HttpGet("company/{companyId:int}/local-purchase-challans/{challanId:int}")]
+        [HasPermission("purchasebills.manage.create")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<LocalPurchaseChallanDto>> GetLocalPurchaseChallan(int companyId, int challanId)
+        {
+            var result = await _service.GetLocalPurchaseChallanAsync(companyId, challanId);
+            return result == null ? NotFound() : Ok(result);
+        }
+
         [HttpPost("stock-preview")]
         [HasAnyPermission("purchasebills.manage.create", "purchasebills.manage.update")]
         public async Task<ActionResult<PurchaseStockPreviewDto>> PreviewStock(PurchaseStockPreviewRequest request)

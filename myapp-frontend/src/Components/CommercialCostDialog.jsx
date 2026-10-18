@@ -18,6 +18,9 @@ export default function CommercialCostDialog({ kind = "bill", id, companyId, onC
   const feedback = useRef(null);
   const explain = message => { setError(message); setTimeout(() => { feedback.current?.scrollIntoView?.({ block: "nearest" }); feedback.current?.focus(); }); };
   const hasCost = i => i.actualUnitCost !== "" && i.actualUnitCost != null && Number.isFinite(Number(i.actualUnitCost)) && Number(i.actualUnitCost) >= 0;
+  const remainingFor = i => Number(i.remainingQuantity ?? (i.purchaseRecorded ? 0 : i.quantity) ?? 0);
+  const purchasedQtyFor = i => Number(i.purchasedQuantity ?? (i.purchaseRecorded ? i.quantity : 0) ?? 0);
+  const purchasedAmountFor = i => Number(i.purchasedAmount ?? 0);
   const persistCosts = async () => {
     const { data: result } = await saveCosts(kind, id, { version: data.version, items: items.map(i => ({ id: i.id, supplierId: i.supplierId ? Number(i.supplierId) : null, actualUnitCost: i.actualUnitCost == null || i.actualUnitCost === "" ? null : Number(i.actualUnitCost) })) });
     setData(result); setItems(result.items); setDirty(false);
@@ -78,10 +81,10 @@ export default function CommercialCostDialog({ kind = "bill", id, companyId, onC
     try { await action(); } catch (e) { setError(e.response?.data?.error || "Could not complete the action. Reload and try again."); }
     finally { setBusy(false); }
   };
-  const ready = items.filter(i => !i.purchaseRecorded && i.supplierId && hasCost(i) && Number(i.quantity) > 0);
-  const actualFor = i => purchaseBillTotals([{ quantity: i.quantity, unitPrice: i.actualUnitCost || 0 }], 0).subtotal;
+  const ready = items.filter(i => remainingFor(i) > 0 && i.supplierId && hasCost(i));
+  const actualFor = i => Number(i.actualAmount ?? purchaseBillTotals([{ quantity: i.quantity, unitPrice: i.actualUnitCost || 0 }], 0).subtotal);
   const actual = items.reduce((s, i) => s + actualFor(i), 0);
-  const complete = items.length > 0 && items.every(i => i.actualUnitCost !== "" && i.actualUnitCost != null);
+  const complete = items.length > 0 && items.every(i => remainingFor(i) <= 0 || i.actualUnitCost !== "" && i.actualUnitCost != null);
   const groups = [...new Set(ready.filter(i => selected.includes(i.id)).map(i => Number(i.supplierId)))];
   const purchaseGroups = [...new Map(ready.filter(i => selected.includes(i.id)).map(i => {
     const key = `${i.supplierId}:${i.sourceChallanId || "bill"}`;
@@ -89,7 +92,7 @@ export default function CommercialCostDialog({ kind = "bill", id, companyId, onC
   })).values()];
   const invalidSettings = purchaseGroups.some(g => !validChallanPurchaseRate(String(supplierSettings[g.key]?.gstRate ?? 0)));
   const purchaseTotal = purchaseGroups.reduce((sum, g) => {
-    const net = ready.filter(i => selected.includes(i.id) && Number(i.supplierId) === g.supplierId && (i.sourceChallanId || null) === g.challanId).reduce((s, i) => s + actualFor(i), 0);
+    const net = ready.filter(i => selected.includes(i.id) && Number(i.supplierId) === g.supplierId && (i.sourceChallanId || null) === g.challanId).reduce((s, i) => s + remainingFor(i) * Number(i.actualUnitCost || 0), 0);
     return sum + purchaseBillTotals([{ quantity: 1, unitPrice: net }], supplierSettings[g.key]?.gstRate || 0).grandTotal;
   }, 0);
   return <div data-admin-backdrop="" style={formStyles.backdrop}>
@@ -101,19 +104,19 @@ export default function CommercialCostDialog({ kind = "bill", id, companyId, onC
         {!data ? <p>Loading costs…</p> : <>
           {!review && <><div className="commercial-metrics"><div>Selling value<strong>Rs. {money(data.sellingAmount)}</strong></div><div>Actual cost<strong>Rs. {money(actual)}</strong></div><div>{complete ? "Commercial profit" : "Provisional profit · Cost incomplete"}<strong>Rs. {money(data.sellingAmount - actual)}</strong></div><div>Margin<strong>{data.sellingAmount ? `${((data.sellingAmount - actual) / data.sellingAmount * 100).toFixed(2)}%` : "—"}</strong></div></div>
           <ChallanPrivateCosts companyId={companyId} suppliers={suppliers} items={items} getActualLineTotal={actualFor} showPurchaseValidation={validatePurchase} readOnly={busy || review || !has("bills.costs.update")} onItemsChange={rows => { setItems(rows); setDirty(true); }} />
-          <p role="status">{items.filter(hasCost).length} of {items.length} lines costed · {ready.length} ready for a supplier purchase. A supplier is only needed when recording a payable.</p>
-          <div className="commercial-grid">{items.map(i => <article key={i.id}><strong>{i.description}</strong><p>{i.purchaseRecorded ? "Supplier purchase recorded" : "Payable not recorded"}</p><span>Profit: {i.actualUnitCost == null || i.actualUnitCost === "" ? "Cost missing" : `Rs. ${money(i.sellingAmount - actualFor(i))}`}</span></article>)}</div>
+          <p role="status">{items.filter(i => purchasedQtyFor(i) > 0 || hasCost(i)).length} of {items.length} lines costed · {ready.length} ready for a supplier purchase. A supplier is only needed when recording a payable.</p>
+          <div className="commercial-grid">{items.map(i => <article key={i.id}><strong>{i.description}</strong><p>{remainingFor(i) <= 0 ? `Fully purchased · Rs. ${money(purchasedAmountFor(i))} recorded` : purchasedQtyFor(i) > 0 ? `Partially purchased ${purchasedQtyFor(i)} of ${i.quantity} · Rs. ${money(purchasedAmountFor(i))} recorded` : "Payable not recorded"}</p><span>Profit: {remainingFor(i) > 0 && !hasCost(i) ? "Cost missing" : `Rs. ${money(i.sellingAmount - actualFor(i))}`}</span></article>)}</div>
           {payables.length > 0 && <section><h3>Supplier payables for this bill</h3><div className="commercial-grid">{payables.map(p => <article key={p.id}><strong>{p.supplierName} · Purchase #{p.number}</strong><p>Liability Rs. {money(p.liability)} · Cash paid Rs. {money(p.cashPaid)}</p><p>Credits Rs. {money(p.creditAmount)} · Other settlement Rs. {money(p.adjustment)} · Outstanding Rs. {money(p.outstanding)}</p>{p.costChanged && <p>Costing changed. Review this supplier liability.</p>}</article>)}</div><Link to="/supplier-payables">Open supplier payables & ledger</Link></section>}
           </>}
           {review && <section aria-label="Review local supplier purchases" className="purchase-review">
             <div className="purchase-review-heading"><div><h3 ref={reviewHeading} tabIndex={-1}>Review local supplier purchases</h3><p>Confirm the suppliers and amounts. Reference numbers and GST are optional. No inventory will be added.</p></div>
               <label>Purchase date<input aria-label="Purchase date" type="date" value={date} onChange={e => setDate(e.target.value)} /></label></div>
             <div className="purchase-review-summary"><span><strong>{groups.length}</strong> suppliers · <strong>{purchaseGroups.length}</strong> purchase bills · <strong>{selected.length}</strong> lines selected</span><span>Total payable <strong>Rs. {money(purchaseTotal)}</strong></span></div>
-            {ready.length < items.filter(i => !i.purchaseRecorded).length && <p role="status">Only ready lines are included. Lines missing a supplier or actual cost will stay unpurchased; complete them later.</p>}
+            {ready.length < items.filter(i => remainingFor(i) > 0).length && <p role="status">Only ready lines are included. Lines missing a supplier or actual cost will stay unpurchased; complete them later.</p>}
             <div className="supplier-review-head" aria-hidden="true"><span>Supplier / source</span><span>Supplier invoice reference</span><span>GST %</span><span>Payable</span></div>
             <div className="supplier-review-list">{purchaseGroups.map(g => {
               const lines = ready.filter(i => selected.includes(i.id) && Number(i.supplierId) === g.supplierId && (i.sourceChallanId || null) === g.challanId);
-              const amount = purchaseBillTotals(lines.map(i => ({ quantity: i.quantity, unitPrice: i.actualUnitCost })), supplierSettings[g.key]?.gstRate || 0).grandTotal;
+              const amount = purchaseBillTotals(lines.map(i => ({ quantity: remainingFor(i), unitPrice: i.actualUnitCost })), supplierSettings[g.key]?.gstRate || 0).grandTotal;
               const name = suppliers.find(s => s.id === g.supplierId)?.name || `Supplier #${g.supplierId}`;
               return <article className="supplier-review-row" key={g.key}>
                 <div className="supplier-review-identity"><strong>{name}</strong><small>{lines.length} line{lines.length === 1 ? "" : "s"}{kind === "bill" ? g.challanId ? ` · Challan #${g.challanNumber || g.challanId}` : " · Standalone bill" : ""}</small></div>
@@ -138,7 +141,7 @@ export default function CommercialCostDialog({ kind = "bill", id, companyId, onC
         })}>{busy ? "Working…" : "Save costs"}</button>}
         {data && has("purchasebills.manage.create") && !review && <button style={{ ...formStyles.button, ...formStyles.submit }} disabled={busy} onClick={() => run(async () => {
           setValidatePurchase(true);
-          const pending = items.filter(i => !i.purchaseRecorded);
+          const pending = items.filter(i => remainingFor(i) > 0);
           if (!pending.length) { explain("Supplier purchases are already recorded for all lines. Review the supplier payables below or open the supplier ledger."); return; }
           if (!ready.length) { explain("No lines are ready yet. Add an actual cost and choose a supplier on at least one line. You can leave the other lines for later."); return; }
           if (items.some(i => i.actualUnitCost != null && i.actualUnitCost !== "" && !hasCost(i))) { explain("Correct the invalid actual costs before continuing. Costs must be zero or more."); return; }

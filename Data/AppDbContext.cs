@@ -1173,11 +1173,10 @@ namespace MyApp.Api.Data
                 .IsUnique();
             modelBuilder.Entity<PurchaseBill>()
                 .HasIndex(pb => pb.SupplierId);
-            // One automatic purchase bill per (source challan, supplier) — makes a
-            // repeated confirmation after a lost response safe.
+            // Local purchase bills may be split by supplier or created later
+            // for remaining quantities, so source challan/supplier is not unique.
             modelBuilder.Entity<PurchaseBill>()
                 .HasIndex(pb => new { pb.SourceDeliveryChallanId, pb.SupplierId })
-                .IsUnique()
                 .HasFilter("[SourceDeliveryChallanId] IS NOT NULL");
             modelBuilder.Entity<PurchaseBill>()
                 .HasIndex(pb => pb.SupplierIRN);
@@ -1221,9 +1220,10 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<PurchaseBill>().Property(p => p.AmountCredited).HasPrecision(18, 2);
             modelBuilder.Entity<PurchaseDebitNote>().HasOne<PurchaseBill>().WithMany().HasForeignKey(n => n.PurchaseBillId).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<InvoiceItem>().Property(i => i.ActualUnitCost).HasPrecision(18, 4);
+            modelBuilder.Entity<InvoiceItem>().Property(i => i.ActualUnitCostOverride).HasPrecision(18, 4);
             modelBuilder.Entity<PurchaseBill>().Property(i => i.PurchaseCategory).HasMaxLength(24);
-            modelBuilder.Entity<PurchaseItem>().HasIndex(i => i.LocalDeliveryItemId).IsUnique().HasFilter("[LocalDeliveryItemId] IS NOT NULL");
-            modelBuilder.Entity<PurchaseItem>().HasIndex(i => i.LocalInvoiceItemId).IsUnique().HasFilter("[LocalInvoiceItemId] IS NOT NULL");
+            modelBuilder.Entity<PurchaseItem>().HasIndex(i => i.LocalDeliveryItemId).HasFilter("[LocalDeliveryItemId] IS NOT NULL");
+            modelBuilder.Entity<PurchaseItem>().HasIndex(i => i.LocalInvoiceItemId).HasFilter("[LocalInvoiceItemId] IS NOT NULL");
             modelBuilder.Entity<PrivateCostChange>().HasIndex(i => new { i.CompanyId, i.Target, i.TargetId });
             modelBuilder.Entity<PurchaseItemSourceLine>()
                 .HasKey(x => new { x.PurchaseItemId, x.InvoiceItemId });
@@ -1429,6 +1429,7 @@ namespace MyApp.Api.Data
             // actual unit cost, used only to raise purchase bills on request.
             // Same precision as PurchaseItem.UnitPrice, the column it feeds.
             modelBuilder.Entity<DeliveryItem>().Property(di => di.ActualUnitCost).HasPrecision(18, 2);
+            modelBuilder.Entity<DeliveryItem>().Property(di => di.ActualUnitCostOverride).HasPrecision(18, 4);
             modelBuilder.Entity<DeliveryItem>()
                 .HasOne(di => di.Supplier).WithMany()
                 .HasForeignKey(di => di.SupplierId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
