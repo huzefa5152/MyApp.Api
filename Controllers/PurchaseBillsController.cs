@@ -193,9 +193,10 @@ namespace MyApp.Api.Controllers
         {
             // Authorize on the existing row's company — body fields can't
             // smuggle the bill into another tenant.
-            var existing = await _service.GetByIdAsync(id);
-            if (existing == null) return NotFound();
-            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            var companyId = await _context.PurchaseBills.Where(b => b.Id == id)
+                .Select(b => (int?)b.CompanyId).FirstOrDefaultAsync();
+            if (companyId == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
             try
             {
                 var updated = await _service.UpdateAsync(id, dto);

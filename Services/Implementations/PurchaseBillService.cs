@@ -195,7 +195,7 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<PurchaseBillDto?> GetByIdAsync(int id)
         {
-            var pb = await _context.PurchaseBills
+            var pb = await _context.PurchaseBills.AsNoTracking()
                 .Include(p => p.Company)
                 .Include(p => p.Supplier)
                 .Include(p => p.Items)
@@ -782,9 +782,9 @@ namespace MyApp.Api.Services.Implementations
             {
             var bill = await _context.PurchaseBills
                 .FromSqlInterpolated($"SELECT * FROM PurchaseBills WITH (UPDLOCK, HOLDLOCK, FORCESEEK) WHERE Id = {id}")
-                .Include(p => p.Items)
                 .FirstOrDefaultAsync(p => p.Id == id);
             if (bill == null) return null;
+            await _context.Entry(bill).Collection(p => p.Items).LoadAsync();
             if (bill.Source == "local-direct")
                 throw new InvalidOperationException("Generated local purchases retain their source lines. Correct private costing separately; use supplier credit notes for liability adjustments.");
             var targetSupplierId = dto.SupplierId ?? bill.SupplierId;

@@ -578,7 +578,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               <strong style={{ fontSize: "1.05rem", color: colors.blue }}>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
             </div>
 
-            {!readOnly && <section aria-label="Inventory impact" aria-live="polite" style={{ marginTop:16, padding:16, borderRadius:10, border:`1px solid ${colors.cardBorder}`, background:"#f8faff" }}>
+            {!readOnly && !isNonStock && <section aria-label="Inventory impact" aria-live="polite" style={{ marginTop:16, padding:16, borderRadius:10, border:`1px solid ${colors.cardBorder}`, background:"#f8faff" }}>
               <strong style={{color:colors.blue}}>Inventory impact</strong>
               <p style={{fontSize:"0.85rem",color:colors.textSecondary,margin:"8px 0"}}>Items without an HS code and challan supplier purchases do not move stock.</p>
               {isNonStock ? <p>No inventory movement. This purchase records supplier costs only.</p>

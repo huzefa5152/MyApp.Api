@@ -188,10 +188,11 @@ it('failed inventory preview blocks saving and supports retry',async()=>{
  await screen.findByText('Inventory tracking is off for this company. No stock will move.');
  expect(screen.getByRole('button',{name:'Update',exact:true}).disabled).toBe(false);
 });
-it('non-stock challan purchase explains that no inventory will move',async()=>{
+it('non-stock challan purchase hides inventory impact',async()=>{
  getPurchaseBillById.mockResolvedValue({data:{...bill,isNonStockSupplierPurchase:true,items:[{...bill.items[0],itemTypeId:null,hsCode:null,sourceInvoiceItemIds:[]}]}});
  render(<PurchaseBillForm companyId={1} billId={19} onClose={()=>{}}/>);
- await screen.findByText('No inventory movement. This purchase records supplier costs only.');
+ await screen.findByDisplayValue('Sample valve');
+ expect(screen.queryByRole('region',{name:'Inventory impact'})).toBeNull();
  expect(previewPurchaseStock).not.toHaveBeenCalled();
 });
 
@@ -205,4 +206,19 @@ it('switching to a no-HS item clears the previous HS code before saving',async()
  fireEvent.click(screen.getByRole('button',{name:'Update',exact:true}));
  await waitFor(()=>expect(updatePurchaseBill).toHaveBeenCalled());
  expect(updatePurchaseBill.mock.calls[0][1].items[0]).toMatchObject({itemTypeId:5,hsCode:null});
+});
+
+it.each(['LocalDirect','Inventory'])('shows inventory impact only for %s inventory category',async category=>{
+ render(<PurchaseBillForm companyId={1} onClose={()=>{}}/>);
+ fireEvent.click(screen.getByRole('radio',{name:category==='Inventory'?/Inventory purchase/:/Local direct purchase/}));
+ fireEvent.click(screen.getByRole('button',{name:'Continue'}));
+ await screen.findByLabelText('Description for item 1');
+ expect(screen.queryByRole('region',{name:'Inventory impact'} )!==null).toBe(category==='Inventory');
+});
+it('hides inventory impact on local purchase edit',async()=>{
+ getPurchaseBillById.mockResolvedValue({data:{...bill,purchaseCategory:'LocalDirect',isNonStockSupplierPurchase:true}});
+ render(<PurchaseBillForm companyId={1} billId={19} onClose={()=>{}}/>);
+ await screen.findByDisplayValue('Sample valve');
+ expect(screen.queryByRole('region',{name:'Inventory impact'})).toBeNull();
+ expect(previewPurchaseStock).not.toHaveBeenCalled();
 });
