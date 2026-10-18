@@ -1,5 +1,4 @@
 import ListFilters from "../Components/ListFilters";
-import RecordsViewport from "../Components/RecordsViewport";
 import PurchaseDebitNoteForm from "../Components/PurchaseDebitNoteForm";
 import { useEffect, useRef, useState } from "react";
 import { useCompany } from "../contexts/CompanyContext";
@@ -131,7 +130,7 @@ export default function SupplierPayablesPage() {
     </div>
     {notice && <p role="status" className="supplier-notice">{notice}</p>}
     {error && <p className="commercial-feedback" role="alert">{error}</p>}{loading && <p role="status">Loading supplier balances…</p>}
-    <RecordsViewport label="Supplier payable records">{!loading && !error && !supplierId && <>
+    {!loading && !error && !supplierId && <>
       <div className="supplier-metrics">
         <Metric label="Total payable" value={summary.reduce((s, r) => s + Math.max(0, r.netBalance), 0)} note="Amount still owed to suppliers" primary />
         <Metric label="Total paid to suppliers" value={sum(summary, "cashPaid")} note="Bill payments + advances, less refunds" />
@@ -179,7 +178,7 @@ export default function SupplierPayablesPage() {
         <div className="commercial-ledger-mobile supplier-mobile-list">{transactionRows.map((r, index) => <article key={index}><small>{r.date.slice(0, 10)}</small><div>{reference(r)}</div><dl><Pair label="Purchases / increases" value={r.increase} /><Pair label="Paid" value={r.cashPaid} /><Pair label="Credits / settlement" value={r.adjustment} /><Pair label="Running supplier balance" value={r.balance} /></dl></article>)}</div>
         {!transactionRows.length && <p role="status">No transactions in this view.</p>}
       </section>
-    </>}</RecordsViewport>
+    </>}
     {challanCost && <CommercialCostDialog kind="challan" id={challanCost} companyId={selectedCompany.id} onClose={() => { setChallanCost(null); setRevision(n => n + 1); }} />}
     {bill && <CommercialCostDialog id={bill} companyId={selectedCompany.id} onClose={() => { setBill(null); setRevision(n => n + 1); }} />}
     {credit && <PurchaseDebitNoteForm companyId={selectedCompany.id} preset={credit} onClose={() => setCredit(null)} onSaved={() => { setNotice("Supplier credit saved."); setCredit(null); setRevision(n => n + 1); }} />}
