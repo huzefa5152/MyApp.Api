@@ -42,8 +42,10 @@ namespace MyApp.Api.Services.Implementations
         private readonly IDivisionAccessGuard _divisionAccess;
         private readonly IGeneralLedgerService _gl;
         private readonly IImportTaxWorksheetService _worksheet;
-        // One request, one walk: the hero and the monthly series share the load.
+        // One request, one walk: the hero, the monthly series, the health list
+        // and the inventory section all read the same cached walk.
         private readonly Dictionary<string, PositionInputs> _inputsCache = new();
+        private readonly Dictionary<string, (List<ItemStockPositions.Position> Positions, Dictionary<DateTime, decimal> LandedByMonth)> _walkCache = new();
 
         public DashboardService(
             AppDbContext context,
@@ -120,7 +122,7 @@ namespace MyApp.Api.Services.Implementations
             if (canSales)      response.Sales      = await ComputeSalesAsync(companyId, period, divScope);
             if (canPurchases)  response.Purchases  = await ComputePurchasesAsync(companyId, period, divScope);
             if (canFbr)        response.Fbr        = await ComputeFbrAsync(companyId, period, divScope);
-            if (canInventory)  response.Inventory  = await ComputeInventoryAsync(companyId, divScope);
+            if (canInventory)  response.Inventory  = await ComputeInventoryAsync(companyId, period, divScope);
 
             response.Health = await ComputeHealthAsync(companyId, period, canSales, response.Hero, divScope);
             return response;
@@ -151,17 +153,14 @@ namespace MyApp.Api.Services.Implementations
                 .ToListAsync())
                 .ToDictionary(x => new DateTime(x.Year, x.Month, 1), x => x.Net);
 
-            var inputs = await LoadPositionInputsAsync(companyId, divScope);
-            var hasStock = inputs.Openings.Count > 0 || inputs.MovementsByItem.Count > 0;
+            // The hero's walk, cut by month as it went (no second walk).
+            var (_, landedByMonth) = await WalkAsync(companyId, divScope, period.From, period.To);
 
             var points = new List<DashboardMonthPoint>();
             for (var m = first; m <= last; m = m.AddMonths(1))
             {
                 var net = Round(sales.GetValueOrDefault(m));
-                var landed = hasStock
-                    ? Round(ItemStockPositions.Compute(inputs.Openings, inputs.MovementsByItem, inputs.Names,
-                        m, m.AddMonths(1), inputs.Costing).Sum(p => p.ConsumedLanded))
-                    : 0m;
+                var landed = Round(landedByMonth.GetValueOrDefault(m));
                 points.Add(new DashboardMonthPoint
                 {
                     Month = m.ToString("yyyy-MM", CultureInfo.InvariantCulture),
@@ -1722,11 +1721,25 @@ namespace MyApp.Api.Services.Implementations
         /// its breakdown cannot disagree.
         /// </summary>
         private async Task<List<ItemStockPositions.Position>> LoadPositionsAsync(
+            int companyId, HashSet<int>? divScope, DateTime? from, DateTime? to) =>
+            (await WalkAsync(companyId, divScope, from, to)).Positions;
+
+        /// <summary>The walk for one range, cached for the request, with landed
+        /// cost of sales cut by month (all months walked, not just the range).</summary>
+        private async Task<(List<ItemStockPositions.Position> Positions, Dictionary<DateTime, decimal> LandedByMonth)> WalkAsync(
             int companyId, HashSet<int>? divScope, DateTime? from, DateTime? to)
         {
+            var key = InputsKey(companyId, divScope) + "|" + from?.Ticks + "|" + to?.Ticks;
+            if (_walkCache.TryGetValue(key, out var cached)) return cached;
             var inputs = await LoadPositionInputsAsync(companyId, divScope);
-            return ItemStockPositions.Compute(inputs.Openings, inputs.MovementsByItem, inputs.Names, from, to, inputs.Costing);
+            var byMonth = new Dictionary<DateTime, decimal>();
+            var positions = ItemStockPositions.Compute(inputs.Openings, inputs.MovementsByItem, inputs.Names,
+                from, to, inputs.Costing, landedByMonth: byMonth);
+            return _walkCache[key] = (positions, byMonth);
         }
+
+        private static string InputsKey(int companyId, HashSet<int>? divScope) =>
+            companyId + ":" + (divScope == null ? "*" : string.Join(",", divScope.OrderBy(x => x)));
 
         private sealed record PositionInputs(
             Dictionary<int, ItemStockPositions.Opening> Openings,
@@ -1738,7 +1751,7 @@ namespace MyApp.Api.Services.Implementations
         /// the same walk at twelve dates without twelve loads.</summary>
         private async Task<PositionInputs> LoadPositionInputsAsync(int companyId, HashSet<int>? divScope)
         {
-            var cacheKey = companyId + ":" + (divScope == null ? "*" : string.Join(",", divScope.OrderBy(x => x)));
+            var cacheKey = InputsKey(companyId, divScope);
             if (_inputsCache.TryGetValue(cacheKey, out var cached)) return cached;
             var openingRows = await _context.OpeningStockBalances.AsNoTracking()
                 .Where(o => o.CompanyId == companyId)
@@ -1790,55 +1803,6 @@ namespace MyApp.Api.Services.Implementations
 
             var costing = await StockCosting.LoadAsync(_context, companyId, ids);
             return _inputsCache[cacheKey] = new PositionInputs(openings, movementsByItem, names, costing);
-        }
-
-        private async Task<decimal> ComputeStockOnHandValueAsync(int companyId, HashSet<int>? divScope)
-        {
-            var openingRows = await _context.OpeningStockBalances.AsNoTracking()
-                .Where(o => o.CompanyId == companyId)
-                .Select(o => new
-                {
-                    o.ItemTypeId, o.Quantity, o.ValueExcludingTax,
-                    o.ActualCostExcludingTax, o.SalesTaxRate,
-                })
-                .ToListAsync();
-
-            var movementQuery = _context.StockMovements.AsNoTracking()
-                .Where(m => m.CompanyId == companyId);
-            if (divScope != null)
-                movementQuery = movementQuery.Where(m =>
-                    m.DivisionId == null || divScope.Contains(m.DivisionId.Value));
-            var movements = await movementQuery.ToListAsync();
-
-            var openings = openingRows
-                .GroupBy(o => o.ItemTypeId)
-                .ToDictionary(
-                    g => g.Key,
-                    g => new InventoryPeriodConsumption.Opening(
-                        g.Sum(x => x.Quantity),
-                        g.Sum(x => x.ValueExcludingTax),
-                        g.Sum(x => x.ActualCostExcludingTax),
-                        g.Max(x => x.SalesTaxRate)));
-
-            var movementsByItem = movements
-                .GroupBy(m => m.ItemTypeId)
-                .ToDictionary(g => g.Key, g => g.ToList());
-
-            var costing = await StockCosting.LoadAsync(_context, companyId,
-                openings.Keys.Union(movementsByItem.Keys).Distinct().ToList());
-            decimal total = 0m;
-            foreach (var (itemTypeId, open) in openings)
-                if (!movementsByItem.ContainsKey(itemTypeId))
-                    total += open.ValueExcludingTax;   // never moved
-            foreach (var (itemTypeId, itemMovements) in movementsByItem)
-            {
-                openings.TryGetValue(itemTypeId, out var open);
-                var position = costing.Compute(itemTypeId,
-                    open.Quantity, open.ValueExcludingTax, open.ActualCostExcludingTax,
-                    open.SalesTaxRate, itemMovements);
-                total += position.ValueExcludingTax;
-            }
-            return Math.Round(total, 2, MidpointRounding.AwayFromZero);
         }
 
         private async Task<(decimal TotalGross, decimal GstAmount, decimal Subtotal)> SumInvoicesAsync(
@@ -2193,7 +2157,7 @@ namespace MyApp.Api.Services.Implementations
         // ── Inventory section ───────────────────────────────────────────
 
         private async Task<DashboardInventoryKpis> ComputeInventoryAsync(
-            int companyId, HashSet<int>? divScope)
+            int companyId, DashboardPeriod period, HashSet<int>? divScope)
         {
             // Stock value at cost = Σ (on-hand × avg unit cost). Heavy if
             // we computed it per-item with N+1; instead we do it as a
@@ -2245,7 +2209,9 @@ namespace MyApp.Api.Services.Implementations
 
             // Valued by the same walk as the hero's Stock on Hand card, so the
             // two figures on one screen cannot contradict each other.
-            decimal totalStockValue = await ComputeStockOnHandValueAsync(companyId, divScope);
+            // Closing value is period-independent; the period only picks the cached walk.
+            decimal totalStockValue = Round((await LoadPositionsAsync(companyId, divScope, period.From, period.To))
+                .Sum(p => p.ClosingDeclared));
             int trackedItemCount = 0;
             int lowStockCount = 0;
             foreach (var kv in onHandByItem)

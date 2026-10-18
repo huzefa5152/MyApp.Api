@@ -73,6 +73,11 @@ namespace MyApp.Api.Helpers
         /// movement's landed cost keyed by its invoice id (SourceId), unrounded,
         /// summed across every item walked. A FIFO settlement has no invoice and
         /// is not in it, so it can sum to less than ConsumedLanded.</param>
+        /// <param name="landedByMonth">When given, receives ConsumedLanded cut by
+        /// calendar month (key = the 1st), for EVERY month walked — not limited
+        /// by from/to. Each item's month is rounded to 2dp before it is added, as
+        /// ConsumedLanded is, so a month here equals the sum of the positions a
+        /// walk over that month alone would give.</param>
         public static List<Position> Compute(
             IReadOnlyDictionary<int, Opening> openings,
             IReadOnlyDictionary<int, List<StockMovement>> movementsByItem,
@@ -80,7 +85,8 @@ namespace MyApp.Api.Helpers
             DateTime? from = null,
             DateTime? to = null,
             StockCosting? costing = null,
-            Dictionary<int, decimal>? landedByInvoice = null)
+            Dictionary<int, decimal>? landedByInvoice = null,
+            Dictionary<DateTime, decimal>? landedByMonth = null)
         {
             costing ??= StockCosting.None;
             var result = new List<Position>();
@@ -104,6 +110,7 @@ namespace MyApp.Api.Helpers
                 var prevDeclared = Round(open.Declared);
                 var prevLanded = Round(open.Landed);
                 DateTime? last = null;
+                var itemByMonth = landedByMonth != null ? new Dictionary<DateTime, decimal>() : null;
 
                 foreach (var step in trace)
                 {
@@ -114,6 +121,18 @@ namespace MyApp.Api.Helpers
 
                     if (!byId.TryGetValue(step.MovementId, out var m)) continue;
                     if (last == null || m.MovementDate > last) last = m.MovementDate;
+
+                    if (itemByMonth != null)
+                    {
+                        var landed = m.SourceType switch
+                        {
+                            StockMovementSourceType.Invoice => landedOut,
+                            StockMovementSourceType.Adjustment or StockMovementSourceType.Revaluation => 0m,
+                            _ => step.SettledActualValue,
+                        };
+                        var month = new DateTime(m.MovementDate.Year, m.MovementDate.Month, 1);
+                        itemByMonth[month] = itemByMonth.GetValueOrDefault(month) + landed;
+                    }
 
                     // Filtered AFTER the walk, never before.
                     if (from.HasValue && m.MovementDate < from.Value) continue;
@@ -141,6 +160,10 @@ namespace MyApp.Api.Helpers
                             break;
                     }
                 }
+
+                if (itemByMonth != null)
+                    foreach (var (month, landed) in itemByMonth)
+                        landedByMonth![month] = landedByMonth.GetValueOrDefault(month) + Round(landed);
 
                 result.Add(new Position(
                     itemTypeId, meta.Name, meta.HsCode,

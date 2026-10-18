@@ -35,7 +35,7 @@ import argparse
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 try:
     import requests
@@ -633,6 +633,22 @@ def main():
         ml = ml2.get(f"i:{m_item}", {})
         landed = sorted(float((r_.get("values") or {}).get("itemLanded") or 0) for r_ in ml.get("rows", []) if r_.get("invoiceId"))
         check("each invoice carries its own landed cost from the walk (600, 1,200)", len(landed) == 2 and near(landed[0], 600) and near(landed[1], 1200), str(landed))
+
+        # The monthly series is cut from the hero's walk: a PAST month's landed cost
+        # must equal what the margin-landed drill reads for that month on its own.
+        pm_end = datetime.now().replace(day=1) - timedelta(days=1)
+        pm_from, pm_to, pm_key = pm_end.strftime("%Y-%m-01"), pm_end.strftime("%Y-%m-%d"), pm_end.strftime("%Y-%m")
+        mb0 = requests.post(f"{api}/invoices/standalone", headers=h, timeout=60, json={
+            "date": f"{pm_from[:8]}15T00:00:00Z", "companyId": mc, "clientId": cm, "gstRate": 0,
+            "items": [{"description": f"DASHKPI margin {tag}", "quantity": 5, "uom": "Pcs", "unitPrice": 150, "itemTypeId": m_item}]})
+        check("setup: a margin bill last month", mb0.ok, f"{mb0.status_code} {mb0.text[:150]}")
+        rkm = kpis(mc, period="this-month")
+        pm_point = next((m_ for m_ in (rkm.json().get("monthly") or []) if m_.get("month") == pm_key), {}) if rkm.ok else {}
+        rpm = brk(mc, "margin-landed", **{"from": pm_from, "to": pm_to})
+        pm_landed = sum(float((r_.get("values") or {}).get("landed") or 0) for r_ in rpm.json().get("rows", [])) if rpm.ok else None
+        check("last month's monthly landed cost = the margin-landed drill's landed total for that month (300)",
+              rkm.ok and rpm.ok and near(pm_point.get("landedCost"), pm_landed) and near(pm_landed, 300),
+              f"monthly {pm_point.get('landedCost')} drill {pm_landed}")
 
         # A GD claimed this month on the FIFO stock company, so the worksheet input is not zero.
         gd_line = {"gdNumber": f"KAPE-HC-9{tag[-5:]}", "gdDate": day, "description": f"DASHKPI GD {tag}", "hsCode": "8481.2000",
