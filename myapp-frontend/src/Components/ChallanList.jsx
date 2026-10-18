@@ -62,7 +62,7 @@ function WarningTooltip({ warnings }) {
   );
 }
 
-export default function ChallanList({ challans, onCancel, onDelete, onPrint, onCosts, onEditItems, onEditDelivery, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, onLinkOrder, exportingId, duplicatingId, printDisabled = false, printDisabledReason = "", attachCounts = {}, onAttach }) {
+export default function ChallanList({ challans, onCancel, onDelete, onPrint, onCosts, onLocalPurchase, onEditItems, onEditDelivery, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, onLinkOrder, exportingId, duplicatingId, printDisabled = false, printDisabledReason = "", attachCounts = {}, onAttach }) {
   const { has } = usePermissions();
   const permUpdate = has("challans.manage.update");
   const permDelete = has("challans.manage.delete");
@@ -248,6 +248,7 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onC
                     </button>
                   )}
                   {onCosts && <button style={styles.actionBtn} onClick={() => onCosts(c)}>Costs & suppliers</button>}
+                  {onLocalPurchase && c.status !== "Cancelled" && <button style={styles.actionBtn} onClick={() => onLocalPurchase(c)}>Local purchase</button>}
                   {permUpdate && isEditable && !c.invoiceId && (
                     <button
                       style={{ ...styles.actionBtn, ...styles.editBtn }}

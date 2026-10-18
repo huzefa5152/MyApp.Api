@@ -3,6 +3,7 @@ import ListFilters from "../Components/ListFilters";
 import RecordsViewport from "../Components/RecordsViewport";
 import CostingStatus from "../Components/CostingStatus";
 import CommercialCostDialog from "../Components/CommercialCostDialog";
+import PurchaseBillForm from "../Components/PurchaseBillForm";
 import { createSalesOrderFromBill } from "../api/salesOrderApi";
 import CardActions from "../Components/CardActions";
 import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
@@ -129,6 +130,7 @@ export default function InvoicePage({ mode = "invoices" }) {
   // status badge still renders in both modes so the operator can see at
   // a glance which rows are locked. `invoices` mode keeps everything.
   const [costTarget, setCostTarget] = useState(null);
+  const [localPurchaseTarget, setLocalPurchaseTarget] = useState(null);
   const isBillsMode = mode === "bills";
   // Note tabs: `creditnotes` (returns / reversals, DocumentType 10) and
   // `debitnotes` (upward adjustments, DocumentType 9). Each lists ONLY its
@@ -1165,6 +1167,7 @@ export default function InvoicePage({ mode = "invoices" }) {
           {viewMode === "table" ? (
             <InvoiceTable
               onCosts={has("bills.costs.view") && isBillsMode ? inv => setCostTarget(inv) : null}
+              onLocalPurchase={has("purchasebills.manage.create") && isBillsMode ? inv => setLocalPurchaseTarget(inv) : null}
               invoices={invoices}
               attachCounts={attachCounts}
               onAttach={(inv) => setAttachTarget(inv)}
@@ -1279,6 +1282,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                   </div>
                   <CardActions className="invoice-card-actions" style={cardStyles.buttonGroup}>
                     {isBillsMode && has("bills.costs.view") && <button style={{ ...cardStyles.button, minHeight: 44 }} onClick={() => setCostTarget(inv)}>Costs & suppliers</button>}
+                    {isBillsMode && has("purchasebills.manage.create") && !inv.isCancelled && <button style={{ ...cardStyles.button, minHeight: 44 }} onClick={() => setLocalPurchaseTarget(inv)}>Local purchase</button>}
                     {/* Bills card: View, Print Bill, Bill PDF, Bill XLS, Edit, Delete.
                         Invoices card: View, Tax Print, Tax PDF, Tax XLS, View FBR, Validate, Submit. */}
                     {/* Read-only View — shown on BOTH tabs. On the Invoices tab
@@ -1586,6 +1590,7 @@ export default function InvoicePage({ mode = "invoices" }) {
         />
       )}
 
+      {isBillsMode && localPurchaseTarget && <PurchaseBillForm companyId={localPurchaseTarget.companyId} localSource={{ kind: "bill", id: localPurchaseTarget.id }} onClose={() => setLocalPurchaseTarget(null)} onSaved={() => fetchInvoices(selectedCompany.id, page)} />}
       {isBillsMode && costTarget && <CommercialCostDialog id={costTarget.id} companyId={costTarget.companyId} onClose={() => { setCostTarget(null); fetchInvoices(selectedCompany.id, page); }} />}
       {showStandaloneForm && selectedCompany && (
         <StandaloneInvoiceForm

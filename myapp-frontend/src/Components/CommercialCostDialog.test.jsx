@@ -82,3 +82,23 @@ it("explains empty selection at purchase confirmation", async () => {
   expect((await screen.findByRole("alert")).textContent).toContain("Select at least one line");
   expect(createLocalPurchases).not.toHaveBeenCalled();
 });
+it("buys a partial quantity and refuses more than is left", async () => {
+  permissions.add("purchasebills.manage.create");
+  readCosts.mockResolvedValue({ data: { ...source, items: [{ ...source.items[0], quantity: 5, purchasedQuantity: 2, remainingQuantity: 3, purchasedAmount: 40, supplierId: 5, actualUnitCost: 25 }] } });
+  createLocalPurchases.mockResolvedValue({ data: [91] });
+  mount(); fireEvent.click(await screen.findByText("Preview supplier purchases"));
+  const qty = await screen.findByLabelText("Quantity to buy for Sample item");
+  expect(qty.value).toBe("3");
+  fireEvent.change(qty, { target: { value: "4" } });
+  fireEvent.click(screen.getByText("Create supplier purchases"));
+  expect((await screen.findByRole("alert")).textContent).toContain("no more than 3");
+  expect(createLocalPurchases).not.toHaveBeenCalled();
+  fireEvent.change(qty, { target: { value: "1.5" } });
+  fireEvent.click(screen.getByText("Create supplier purchases"));
+  await waitFor(() => expect(createLocalPurchases).toHaveBeenCalledWith("bill", 3, expect.objectContaining({ itemIds: [8], quantities: { 8: 1.5 } })));
+});
+it("shows purchased and estimated cost separately", async () => {
+  readCosts.mockResolvedValue({ data: { ...source, items: [{ ...source.items[0], quantity: 5, purchasedQuantity: 2, remainingQuantity: 3, purchasedAmount: 40, actualUnitCost: 25 }] } });
+  mount();
+  expect((await screen.findByText(/Purchased Rs\. 40\.00 · Estimated Rs\. 75\.00/)).textContent).toBeTruthy();
+});

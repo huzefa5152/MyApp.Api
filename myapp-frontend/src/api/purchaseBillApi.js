@@ -5,8 +5,8 @@ export const previewPurchaseStock = (payload) => http.post("/purchasebills/stock
 export const getPurchaseBillsByCompanyPaged = (companyId, params = {}) =>
   http.get(`/purchasebills/company/${companyId}/paged`, { params });
 export const getPurchaseBillById = (id) => http.get(`/purchasebills/${id}`);
-export const getLocalPurchaseChallans = (companyId) => http.get(`/purchasebills/company/${companyId}/local-purchase-challans`);
-export const getLocalPurchaseChallan = (companyId, challanId) => http.get(`/purchasebills/company/${companyId}/local-purchase-challans/${challanId}`);
+export const getLocalPurchaseSources = (companyId, search) => http.get(`/purchasebills/company/${companyId}/local-purchase-sources`, { params: { search } });
+export const getLocalPurchaseSource = (companyId, kind, id) => http.get(`/purchasebills/company/${companyId}/local-purchase-sources/${kind}/${id}`);
 export const getPurchaseBillPrintData = (id) => http.get(`/purchasebills/${id}/print`);
 export const createPurchaseBill = (payload) => http.post("/purchasebills", payload);
 export const updatePurchaseBill = (id, payload) => http.put(`/purchasebills/${id}`, payload);

@@ -3,7 +3,7 @@ import { canEditBilledDelivery } from "../utils/billedChallanEdit";
 import { isBillableChallan } from "../utils/challanBilling";
 import CardActions from "./CardActions";
 import { useState } from "react";
-import { MdVisibility, MdEdit, MdPrint, MdPictureAsPdf, MdGridOn, MdRequestQuote, MdContentCopy, MdCancel, MdDelete, MdWarning, MdLink } from "react-icons/md";
+import { MdVisibility, MdEdit, MdPrint, MdPictureAsPdf, MdGridOn, MdRequestQuote, MdContentCopy, MdCancel, MdDelete, MdWarning, MdLink, MdAddShoppingCart } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
 import DataTable from "./DataTable";
 import StatusBadge, { toneForStatus } from "./StatusBadge";
@@ -32,6 +32,7 @@ export default function ChallanTable({
   onDelete,
   onPrint,
   onCosts,
+  onLocalPurchase,
   onEditItems,
   onEditDelivery,
   onExportPdf,
@@ -179,6 +180,7 @@ export default function ChallanTable({
           </button>
         )}
         {onCosts && <button data-label="Costs & suppliers" style={btnStyles.edit} onClick={() => onCosts(c)} title="Costs & suppliers"><MdEdit size={14} /></button>}
+        {onLocalPurchase && c.status !== "Cancelled" && <button data-label="Local purchase" style={btnStyles.edit} onClick={() => onLocalPurchase(c)} title="Create local purchase"><MdAddShoppingCart size={14} /></button>}
           {perms.permUpdate && flags.isEditable && !c.invoiceId && (
           <button data-label={c.invoiceId || c.status === "Invoiced" ? "Supplier & cost" : "Edit items"} data-primary={(!flags.canGenerateBill) || undefined} style={btnStyles.edit} onClick={() => onEditItems?.(c)} title={c.invoiceId || c.status === "Invoiced" ? "Edit supplier & cost" : "Edit items"}>
             <MdEdit size={14} />

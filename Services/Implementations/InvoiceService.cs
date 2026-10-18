@@ -1896,6 +1896,7 @@ namespace MyApp.Api.Services.Implementations
                 // Stock guard (2026-09-11): hard-block rolls back here,
                 // soft mode rides back on the DTO as warnings.
                 var stockWarnings = await EnforceStockGuardAfterSyncAsync(invoice);
+                await LocalPurchaseAllocations.AssertSourcesCoverPurchasesAsync(_context, invoice.CompanyId, invoice.Id);
                 if (transaction != null) await transaction.CommitAsync();
 
                 var reloaded = await _invoiceRepo.GetByIdAsync(id);
@@ -2494,6 +2495,7 @@ namespace MyApp.Api.Services.Implementations
                 // 400 at the controller. Soft → warnings on the response;
                 // the client has already asked the operator to confirm.
                 var stockWarnings = await EnforceStockGuardAfterSyncAsync(invoice);
+                await LocalPurchaseAllocations.AssertSourcesCoverPurchasesAsync(_context, invoice.CompanyId, invoice.Id);
                 await transaction.CommitAsync();
                 await transaction.DisposeAsync();
                 if (dto.CompleteConsultantReview)

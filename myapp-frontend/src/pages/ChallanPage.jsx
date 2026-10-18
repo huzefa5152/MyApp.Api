@@ -1,6 +1,7 @@
 import ListFilters from "../Components/ListFilters";
 import RecordsViewport from "../Components/RecordsViewport";
 import CommercialCostDialog from "../Components/CommercialCostDialog";
+import PurchaseBillForm from "../Components/PurchaseBillForm";
 import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { renderRichTextHtml } from "../utils/richText";
@@ -315,6 +316,7 @@ export default function ChallanPage() {
   };
 
   const [costTarget, setCostTarget] = useState(null);
+  const [localPurchaseTarget, setLocalPurchaseTarget] = useState(null);
   const CostEditor = ({ challan, onSaved }) => <CommercialCostDialog kind="challan" id={challan.id} companyId={challan.companyId} onClose={onSaved} />;
   const ChallanEditor = editChallan?.invoiceId || editChallan?.status === "Invoiced" ? CostEditor : ChallanEditForm;
   const handleEditItems = (challan) => setEditChallan(challan);
@@ -567,6 +569,7 @@ export default function ChallanPage() {
               onDelete={handleDelete}
               onPrint={handlePrint}
               onCosts={has("bills.costs.view") ? c => setCostTarget(c) : null}
+              onLocalPurchase={has("purchasebills.manage.create") ? c => setLocalPurchaseTarget(c) : null}
               onEditItems={handleEditItems}
               onEditDelivery={setDeliveryEdit}
               onExportPdf={handleExportPdf}
@@ -588,6 +591,7 @@ export default function ChallanPage() {
               onDelete={handleDelete}
               onPrint={handlePrint}
               onCosts={has("bills.costs.view") ? c => setCostTarget(c) : null}
+              onLocalPurchase={has("purchasebills.manage.create") ? c => setLocalPurchaseTarget(c) : null}
               onEditItems={handleEditItems}
               onEditDelivery={setDeliveryEdit}
               onExportPdf={handleExportPdf}
@@ -636,6 +640,7 @@ export default function ChallanPage() {
       {deliveryEdit && <BilledChallanEditForm challan={deliveryEdit} onClose={() => setDeliveryEdit(null)}
         onSaved={() => { setDeliveryEdit(null); fetchChallans(selectedCompany.id, page); }}
         onOpenBill={has("bills.list.view") ? bill => { setDeliveryEdit(null); navigate(`/bills?search=${bill.invoiceNumber}`); } : undefined} />}
+      {localPurchaseTarget && <PurchaseBillForm companyId={localPurchaseTarget.companyId} localSource={{ kind: "challan", id: localPurchaseTarget.id }} onClose={() => setLocalPurchaseTarget(null)} onSaved={() => fetchChallans(selectedCompany.id, page)} />}
       {costTarget && <CommercialCostDialog kind="challan" id={costTarget.id} companyId={costTarget.companyId} onClose={() => { setCostTarget(null); fetchChallans(selectedCompany.id, page); }} />}
       {editChallan && (
         <ChallanEditor

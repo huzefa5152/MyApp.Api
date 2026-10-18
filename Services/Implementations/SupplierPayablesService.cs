@@ -71,8 +71,10 @@ public class SupplierPayablesService(AppDbContext db)
                 InvoiceIds = ids, InvoiceNumbers = ids.Select(id => invoiceLines.First(i => i.InvoiceId == id).InvoiceNumber).ToList(),
                 ChallanIds = sourceDeliveries.Select(d => d.DeliveryChallanId).Distinct().ToList(),
                 ChallanNumbers = sourceDeliveries.GroupBy(d => d.DeliveryChallanId).Select(g => g.First().ChallanNumber).ToList(),
-                CostChanged = p.Items.Any(i => i.LocalDeliveryItemId.HasValue && sourceDeliveries.Any(d => d.Id == i.LocalDeliveryItemId && (d.ActualUnitCost != i.UnitPrice || d.SupplierId != p.SupplierId)) ||
-                    i.LocalInvoiceItemId.HasValue && invoiceLines.Any(d => d.Id == i.LocalInvoiceItemId && (d.ActualUnitCost != i.UnitPrice || d.SupplierId != p.SupplierId))) };
+                // A line split across suppliers is normal; flag only when this
+                // supplier's estimate moved away from the price booked here.
+                CostChanged = p.Items.Any(i => i.LocalDeliveryItemId.HasValue && sourceDeliveries.Any(d => d.Id == i.LocalDeliveryItemId && d.SupplierId == p.SupplierId && d.ActualUnitCost != i.UnitPrice) ||
+                    i.LocalInvoiceItemId.HasValue && invoiceLines.Any(d => d.Id == i.LocalInvoiceItemId && d.SupplierId == p.SupplierId && d.ActualUnitCost != i.UnitPrice)) };
             result.Purchases.Add(row);
             result.Rows.Add(new() { Date = p.Date, CreatedAt = p.CreatedAt, Kind = "Purchase", Id = p.Id, Reference = $"Purchase #{p.PurchaseBillNumber}", Increase = row.Liability, PurchaseBillIds = new() { p.Id } });
         }

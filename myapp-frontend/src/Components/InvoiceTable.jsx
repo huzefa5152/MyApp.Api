@@ -4,7 +4,7 @@ import CardActions from "./CardActions";
 import {
   MdVisibility, MdPrint, MdPictureAsPdf, MdGridOn, MdDescription,
   MdCloudUpload, MdCheckCircle, MdHourglassEmpty, MdError, MdBlock, MdRestore,
-  MdEdit, MdDelete, MdOpenInNew, MdCancel, MdUndo, MdPostAdd, MdAssignmentTurnedIn,
+  MdEdit, MdDelete, MdOpenInNew, MdCancel, MdUndo, MdPostAdd, MdAssignmentTurnedIn, MdAddShoppingCart,
 } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
@@ -90,6 +90,7 @@ export default function InvoiceTable({
   showPaymentStatus = false,
   // handlers (parent owns them; we just call them)
   onCosts,
+  onLocalPurchase,
   onView,
   onPrintBill,
   onPrintTax,
@@ -281,6 +282,7 @@ export default function InvoiceTable({
     return (
       <CardActions nowrap label={`More actions for ${inv.invoiceNumber}`}>
         {onCosts && <button data-label="Costs & suppliers" style={btn.view} onClick={() => onCosts(inv)} title="Costs & suppliers"><MdDescription size={14} /></button>}
+        {onLocalPurchase && !inv.isCancelled && <button data-label="Local purchase" style={btn.view} onClick={() => onLocalPurchase(inv)} title="Create local purchase"><MdAddShoppingCart size={14} /></button>}
         {isBillsMode && (
           <button data-label="View" data-primary={(isBillsMode) || undefined} style={btn.view} onClick={() => onView?.(inv)} title="View bill">
             <MdVisibility size={14} />

@@ -4,7 +4,7 @@ import DocumentCopyPicker from "./DocumentCopyPicker";
 import { appendCopiedLines, copyLine } from "../utils/documentCopy";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { MdAdd, MdDelete, MdReceipt, MdInventory2, MdLocalShipping, MdArrowForward, MdCheckCircle } from "react-icons/md";
-import { createPurchaseBill, updatePurchaseBill, getPurchaseBillById, previewPurchaseStock, getLocalPurchaseChallans, getLocalPurchaseChallan } from "../api/purchaseBillApi";
+import { createPurchaseBill, updatePurchaseBill, getPurchaseBillById, previewPurchaseStock, getLocalPurchaseSources, getLocalPurchaseSource } from "../api/purchaseBillApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getPurchaseTemplate } from "../api/invoiceApi";
@@ -34,16 +34,17 @@ const colors = {
   inputBorder: "#d0d7e2",
 };
 
-export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, prefillFromInvoiceId = null, prefillFromChallanId = null, readOnly = false }) {
+export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, prefillFromInvoiceId = null, localSource = null, startLocal = false, readOnly = false }) {
   const { has } = usePermissions();
   const [stockEntryOpen, setStockEntryOpen] = useState(false);
   const isEdit = !!billId;
-  const [isNonStock, setIsNonStock] = useState(false);
+  const opensLocal = !billId && !prefillFromInvoiceId && (!!localSource || startLocal);
+  const [isNonStock, setIsNonStock] = useState(opensLocal);
   const [isGeneratedLocal, setIsGeneratedLocal] = useState(false);
   const isAgainstSale = !!prefillFromInvoiceId;
-  const [choosingCategory, setChoosingCategory] = useState(!billId && !prefillFromInvoiceId);
-  const [categoryChoice, setCategoryChoice] = useState("");
-  const [categoryConfirmed, setCategoryConfirmed] = useState(false);
+  const [choosingCategory, setChoosingCategory] = useState(!billId && !prefillFromInvoiceId && !opensLocal);
+  const [categoryChoice, setCategoryChoice] = useState(opensLocal ? "LocalDirect" : "");
+  const [categoryConfirmed, setCategoryConfirmed] = useState(opensLocal);
   const detailHeading = useRef(null);
   const [suppliers, setSuppliers] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
@@ -57,7 +58,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const [date, setDate] = useState(todayYmd());
   const [supplierBillNumber, setSupplierBillNumber] = useState("");
   const [supplierIRN, setSupplierIRN] = useState("");
-  const [gstRate, setGstRate] = useState(18);
+  const [gstRate, setGstRate] = useState(opensLocal ? 0 : 18);
   // Withholding defaults to NONE — nothing is withheld unless the operator
   // adds it. Further tax has no purchase-side counterpart (see PurchaseBill).
   const [withholdingTaxRate, setWithholdingTaxRate] = useState(null);
@@ -101,10 +102,13 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const [numberValid, setNumberValid] = useState(true);
   // Source-bill metadata when in "Purchase Against Sale" mode
   const [sourceBill, setSourceBill] = useState(null);
-  const [challanOptions, setChallanOptions] = useState([]);
-  const [selectedChallanId, setSelectedChallanId] = useState("");
-  const [challanLines, setChallanLines] = useState([]);
-  const [challanLoading, setChallanLoading] = useState(false);
+  // Local purchase linking: one challan or sale bill at a time, any number
+  // of its lines, any quantity up to what is left to purchase.
+  const [sourceSearch, setSourceSearch] = useState("");
+  const [sourceOptions, setSourceOptions] = useState([]);
+  const [selectedSource, setSelectedSource] = useState(localSource ? `${localSource.kind}:${localSource.id}` : "");
+  const [sourceLines, setSourceLines] = useState([]);
+  const [sourceLoading, setSourceLoading] = useState(false);
   const attachmentRef = useRef(null);
 
   function newRow() {
@@ -143,28 +147,49 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
     })();
   }, [companyId]);
 
+  const canLinkSource = !readOnly && !isEdit && isNonStock && !isAgainstSale;
   useEffect(() => {
-    if (!isNonStock || isEdit || readOnly) return;
-    getLocalPurchaseChallans(companyId).then(r => setChallanOptions(r.data || [])).catch(() => setChallanOptions([]));
-  }, [companyId, isNonStock, isEdit, readOnly]);
+    if (!canLinkSource) return;
+    let active = true;
+    const timer = setTimeout(() => {
+      getLocalPurchaseSources(companyId, sourceSearch.trim() || undefined)
+        .then(r => { if (active) setSourceOptions(r.data || []); })
+        .catch(() => { if (active) setSourceOptions([]); });
+    }, 250);
+    return () => { active = false; clearTimeout(timer); };
+  }, [companyId, canLinkSource, sourceSearch]);
 
-  const loadChallan = async (id) => {
-    setSelectedChallanId(String(id || "")); setChallanLines([]);
-    if (!id) { setSourceBill(null); setItems(rows => rows.filter(row => !row.localDeliveryItemId)); return; }
-    setChallanLoading(true);
+  const lineKey = line => line.deliveryItemId ? `d${line.deliveryItemId}` : `b${line.invoiceItemId}`;
+  const rowKey = row => row.localDeliveryItemId ? `d${row.localDeliveryItemId}` : row.localInvoiceItemId ? `b${row.localInvoiceItemId}` : null;
+
+  const loadSource = async (value) => {
+    setSelectedSource(value); setSourceLines([]);
+    if (!value) { setSourceBill(null); return; }
+    const [kind, id] = value.split(":");
+    setSourceLoading(true); setError("");
     try {
-      const { data } = await getLocalPurchaseChallan(companyId, id);
-      setChallanLines(data.items || []);
-      setSourceBill({ challanId: data.challanId, challanNumber: data.challanNumber, clientName: data.clientName, date: data.date });
-    } catch (e) { setError(e.response?.data?.error || "Could not load the challan's remaining items."); }
-    finally { setChallanLoading(false); }
+      const { data } = await getLocalPurchaseSource(companyId, kind, id);
+      setSourceLines(data.items || []);
+      setSourceBill({ kind: data.kind, number: data.number, clientName: data.clientName, date: data.date });
+    } catch (e) { setError(e.response?.data?.error || "Could not load the document's remaining items."); }
+    finally { setSourceLoading(false); }
   };
+  useEffect(() => { if (localSource && canLinkSource) loadSource(`${localSource.kind}:${localSource.id}`); },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [localSource?.kind, localSource?.id, canLinkSource]);
 
-  const addChallanLine = (line) => {
-    if (items.some(i => i.localDeliveryItemId === line.deliveryItemId)) return;
-    setItems(rows => [...rows.filter(row => row.description?.trim() || row.localDeliveryItemId), { ...newRow(), description: line.description, quantity: line.remainingQuantity,
-      unitPrice: "", uom: line.unit, localDeliveryItemId: line.deliveryItemId,
-      _availableQty: line.remainingQuantity, _purchasedQty: line.purchasedQuantity }]);
+  const addSourceLines = (lines) => {
+    const taken = new Set(items.map(rowKey).filter(Boolean));
+    const fresh = lines.filter(line => !taken.has(lineKey(line)));
+    if (fresh.length === 0) return;
+    // The line's own supplier is a sensible default for an empty supplier box.
+    const supplierHint = fresh.find(l => l.supplierId)?.supplierId;
+    if (!supplierId && supplierHint && suppliers.some(s => s.id === supplierHint)) setSupplierId(String(supplierHint));
+    setItems(rows => [...rows.filter(row => row.description?.trim() || rowKey(row)), ...fresh.map(line => ({ ...newRow(),
+      description: line.description, quantity: line.remainingQuantity, uom: line.unit,
+      unitPrice: line.estimatedUnitCost ?? "",
+      localDeliveryItemId: line.deliveryItemId || null, localInvoiceItemId: line.invoiceItemId || null,
+      _availableQty: line.remainingQuantity, _sourceLabel: line.sourceChallanNumber ? `Challan #${line.sourceChallanNumber}` : `Bill line` }))]);
   };
 
   useEffect(() => {
@@ -194,6 +219,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
           quantity: i.quantity, unitPrice: i.unitPrice, uom: i.uom,
           hsCode: i.hsCode || "", saleType: i.saleType || "",
           sourceInvoiceItemIds: i.sourceInvoiceItemIds || [],
+          localDeliveryItemId: i.localDeliveryItemId || null, localInvoiceItemId: i.localInvoiceItemId || null,
         })));
       } catch {
         setError("Failed to load purchase bill.");
@@ -284,7 +310,8 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
     if (items.length === 0) return setError("Add at least one item.");
     if (items.some(i => !i.description?.trim())) return setError("Every line needs a description.");
     if (items.some(i => !Number.isFinite(Number(i.quantity)) || !(Number(i.quantity) > 0))) return setError("Quantity must be greater than zero on every line.");
-    if (items.some(i => i.localDeliveryItemId && Number(i.quantity) > Number(i._availableQty))) return setError("A linked quantity cannot exceed the remaining challan quantity.");
+    const overLinked = items.find(i => rowKey(i) && i._availableQty != null && Number(i.quantity) > Number(i._availableQty));
+    if (overLinked) return setError(`${overLinked.description}: only ${overLinked._availableQty} ${overLinked.uom || ""} remains to purchase.`.replace(" .", "."));
     if (items.some(i => i.unitPrice === "" || i.unitPrice == null || !Number.isFinite(Number(i.unitPrice)) || Number(i.unitPrice) < 0)) return setError("Enter a non-negative unit price on every line.");
     if (!Number.isFinite(parseFloat(gstRate)) || parseFloat(gstRate) < 0 || parseFloat(gstRate) > 100) return setError("GST rate must be between 0 and 100.");
     if (isAgainstSale) {
@@ -380,7 +407,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
             {categoryConfirmed && (categoryChoice === "LocalDirect") !== isNonStock && <p className="purchase-category-warning" role="status">Changing category clears item classifications and source links. Descriptions, quantities and prices are kept.</p>}
           </section> : <>
           {!isEdit && <div className="purchase-category-selected"><div><strong ref={detailHeading} tabIndex={-1}>{isNonStock ? "Local direct purchase" : "Stock purchase"}</strong><small>{isNonStock ? "Supplier payable only · No stock movement" : isAgainstSale ? "Linked to a customer sale bill" : "Catalog items · Inventory controls apply"}</small></div>{!isAgainstSale && <button type="button" onClick={() => { setCategoryChoice(isNonStock ? "LocalDirect" : "Inventory"); setChoosingCategory(true); setError(""); }}>Change category</button>}</div>}
-          {isGeneratedLocal && <p>This purchase preserves the supplier payable recorded from its source document. Correct private costs from Costs &amp; suppliers; record a supplier credit to adjust the booked payable.</p>}
+          {isGeneratedLocal && <p className="purchase-linked-note">Linked lines keep their challan or bill. Quantities are re-checked against what is left to purchase. Once this purchase is paid or credited, correct it with a supplier credit instead.</p>}
           <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
             {/* Number and the copy shortcut share one row; the copy panel takes
                 the full row once it is opened. */}
@@ -404,11 +431,11 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               }}>
                 <MdReceipt size={20} color="#bf360c" style={{ flexShrink: 0, marginTop: 1 }} />
                 <div style={{ fontSize: "0.84rem", color: "#1a2332", lineHeight: 1.4 }}>
-                  <strong>{sourceBill.challanNumber ? `Purchasing against Challan #${sourceBill.challanNumber}` : `Procuring against Sale Bill #${sourceBill.invoiceNumber}`}</strong>
+                  <strong>{sourceBill.kind ? `Purchasing against ${sourceBill.kind === "challan" ? "Challan" : "Sale Bill"} #${sourceBill.number}` : `Procuring against Sale Bill #${sourceBill.invoiceNumber}`}</strong>
                   {" "}for <strong>{sourceBill.clientName}</strong>
                   {" "}({new Date(sourceBill.date).toLocaleDateString()})
                   <div style={{ fontSize: "0.76rem", color: "#5f6d7e", marginTop: 2 }}>
-                    {sourceBill.challanNumber ? "This bill records only the items and quantities purchased from this supplier. Create another supplier bill for other challan lines; partial quantities are supported." : "Each row groups same-ItemType sale lines. Pick an HS-coded catalog item per row; linked sale lines are classified on save."}
+                    {sourceBill.kind ? "Add only what you bought from this supplier. Buy the rest later or from another supplier with another purchase bill." : "Each row groups same-ItemType sale lines. Pick an HS-coded catalog item per row; linked sale lines are classified on save."}
                   </div>
                 </div>
               </div>
@@ -434,24 +461,37 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               </div>
             </div>
 
-            {!readOnly && !isEdit && isNonStock && !isAgainstSale && (
-              <section aria-label="Link items from a challan" style={{ margin: "0.75rem 0", padding: "0.75rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, background: "#f8fbff" }}>
-                <label style={{ ...formStyles.label, display: "block" }}>Link to a delivery challan <span style={{ fontWeight: 400 }}>(optional)</span></label>
-                <select aria-label="Delivery challan" style={formStyles.input} value={selectedChallanId} onChange={e => loadChallan(e.target.value)}>
-                  <option value="">Standalone local purchase (no challan)</option>
-                  {challanOptions.map(c => <option key={c.challanId} value={c.challanId}>Challan #{c.challanNumber} · {c.clientName} · {c.remainingLines} line(s) remaining</option>)}
-                </select>
-                {challanLoading && <small>Loading remaining items…</small>}
-                {selectedChallanId && !challanLoading && <div style={{ display: "grid", gap: "0.4rem", marginTop: "0.6rem" }}>
-                  {challanLines.length === 0 ? <small>All challan quantities are already linked to purchase bills.</small> : challanLines.map(line => {
-                    const added = items.some(i => i.localDeliveryItemId === line.deliveryItemId);
-                    return <div key={line.deliveryItemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", padding: "0.55rem", background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 8 }}>
-                      <div style={{ minWidth: 0 }}><strong style={{ display: "block" }}>{line.description}</strong><small>{line.purchasedQuantity > 0 ? `Purchased ${line.purchasedQuantity} of ${line.quantity} · ` : ""}{line.remainingQuantity} {line.unit} available</small></div>
-                      <button type="button" disabled={added} onClick={() => addChallanLine(line)} style={{ ...formStyles.button, minHeight: 42, flexShrink: 0 }}>{added ? "Added" : "Add item"}</button>
-                    </div>;
-                  })}
-                </div>}
-                {selectedChallanId && <small style={{ display: "block", marginTop: 6, color: colors.textSecondary }}>Add the items purchased from this supplier. Create another purchase bill for items bought from a different supplier; partial quantities are supported.</small>}
+            {canLinkSource && (
+              <section aria-label="Link items from a challan or sale bill" className="local-source-picker">
+                <label style={{ ...formStyles.label, display: "block" }}>Link to a challan or sale bill <span style={{ fontWeight: 400 }}>(optional)</span></label>
+                <div className="local-source-picker__controls">
+                  <input aria-label="Search challan or bill" type="search" style={formStyles.input} value={sourceSearch} onChange={e => setSourceSearch(e.target.value)} placeholder="Search by number or customer" />
+                  <select aria-label="Challan or sale bill" style={formStyles.input} value={selectedSource} onChange={e => loadSource(e.target.value)}>
+                    <option value="">Unlinked local purchase</option>
+                    {selectedSource && !sourceOptions.some(o => `${o.kind}:${o.id}` === selectedSource) && sourceBill?.kind &&
+                      <option value={selectedSource}>{sourceBill.kind === "challan" ? "Challan" : "Bill"} #{sourceBill.number} · {sourceBill.clientName}</option>}
+                    {sourceOptions.map(o => <option key={`${o.kind}:${o.id}`} value={`${o.kind}:${o.id}`}>{o.kind === "challan" ? "Challan" : "Bill"} #{o.number} · {o.clientName} · {o.remainingLines} line{o.remainingLines === 1 ? "" : "s"} to purchase</option>)}
+                  </select>
+                </div>
+                {sourceLoading && <small role="status">Loading remaining items…</small>}
+                {selectedSource && !sourceLoading && <>
+                  {sourceLines.length === 0 ? <small role="status">Everything on this document is already purchased.</small> : <>
+                    <div className="local-source-picker__bar">
+                      <small>{sourceLines.length} line{sourceLines.length === 1 ? "" : "s"} with quantity left to purchase</small>
+                      <button type="button" disabled={sourceLines.every(l => items.some(i => rowKey(i) === lineKey(l)))} onClick={() => addSourceLines(sourceLines)} style={{ ...formStyles.button, minHeight: 44 }}>Add all remaining</button>
+                    </div>
+                    <ul className="local-source-picker__lines">
+                      {sourceLines.map(line => {
+                        const added = items.some(i => rowKey(i) === lineKey(line));
+                        return <li key={lineKey(line)}>
+                          <div><strong>{line.description}</strong><small>{line.sourceChallanNumber ? `Challan #${line.sourceChallanNumber} · ` : ""}Ordered {line.quantity} · Purchased {line.purchasedQuantity} · <b>{line.remainingQuantity} {line.unit} left</b>{line.estimatedUnitCost != null ? ` · Est. Rs. ${line.estimatedUnitCost}` : ""}</small></div>
+                          <button type="button" disabled={added} onClick={() => addSourceLines([line])} style={{ ...formStyles.button, minHeight: 44, flexShrink: 0 }}>{added ? "Added" : "Add item"}</button>
+                        </li>;
+                      })}
+                    </ul>
+                  </>}
+                  <small className="local-source-picker__hint">Change a line's quantity below to record a partial purchase. Buy the rest later, or from another supplier on a new purchase bill.</small>
+                </>}
               </section>
             )}
 
@@ -529,7 +569,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                         <div style={{ marginBottom: "0.4rem" }}>
                           <label style={mStyles.label}>Description *</label>
                           <input aria-label={`Description for item ${idx + 1}`} type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} />
-                          {it.localDeliveryItemId && <small style={{ display: "block", marginTop: 3, color: colors.textSecondary }}>Challan line · {it._availableQty} {it.uom} available</small>}
+                          {rowKey(it) && <small style={{ display: "block", marginTop: 3, color: colors.textSecondary }}>{it._sourceLabel || "Linked line"}{it._availableQty != null ? ` · ${it._availableQty} ${it.uom} left to purchase` : ""}</small>}
                         </div>
                         <div style={mStyles.grid3}>
                           <div>
@@ -590,7 +630,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                           </td>
                           <td style={td}>
                             <input aria-label={`Description for item ${idx + 1}`} type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} />
-                            {it.localDeliveryItemId && <small style={{ display: "block", marginTop: 3, color: colors.textSecondary }}>Challan line · {it._availableQty} {it.uom} available</small>}
+                            {rowKey(it) && <small style={{ display: "block", marginTop: 3, color: colors.textSecondary }}>{it._sourceLabel || "Linked line"}{it._availableQty != null ? ` · ${it._availableQty} ${it.uom} left to purchase` : ""}</small>}
                           </td>
                           <td style={td}>
                             <QuantityInput

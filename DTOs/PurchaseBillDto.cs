@@ -185,6 +185,9 @@ namespace MyApp.Api.DTOs
         public decimal? FixedNotifiedValueOrRetailPrice { get; set; }
         /// <summary>Preserves the source-line links if this row originated from a sale-bill grouping.</summary>
         public List<int> SourceInvoiceItemIds { get; set; } = new();
+        /// <summary>Local-direct link for a NEW row; an existing row keeps the link it was saved with.</summary>
+        public int? LocalDeliveryItemId { get; set; }
+        public int? LocalInvoiceItemId { get; set; }
     }
 
     /// <summary>
@@ -259,32 +262,43 @@ namespace MyApp.Api.DTOs
     }
 }
 
-/// <summary>Unpurchased quantities from a challan, offered for local-direct supplier bills.</summary>
-public class LocalPurchaseChallanDto
+/// <summary>A challan or sale bill that still has quantity to purchase locally.</summary>
+public class LocalPurchaseSourceSummaryDto
 {
-    public int ChallanId { get; set; }
-    public int ChallanNumber { get; set; }
+    public string Kind { get; set; } = "";
+    public int Id { get; set; }
+    public int Number { get; set; }
     public DateTime Date { get; set; }
     public string ClientName { get; set; } = "";
-    public List<LocalPurchaseChallanLineDto> Items { get; set; } = new();
+    public int RemainingLines { get; set; }
+    public decimal RemainingQuantity { get; set; }
 }
 
-public class LocalPurchaseChallanLineDto
+public class LocalPurchaseSourceDto
 {
-    public int DeliveryItemId { get; set; }
+    public string Kind { get; set; } = "";
+    public int Id { get; set; }
+    public int Number { get; set; }
+    public DateTime Date { get; set; }
+    public string ClientName { get; set; } = "";
+    public List<LocalPurchaseSourceLineDto> Items { get; set; } = new();
+}
+
+/// <summary>
+/// One line still to purchase. Exactly one of DeliveryItemId / InvoiceItemId is
+/// set: a bill line that came from a challan is offered as that challan line.
+/// </summary>
+public class LocalPurchaseSourceLineDto
+{
+    public int? DeliveryItemId { get; set; }
+    public int? InvoiceItemId { get; set; }
+    public int? SourceChallanNumber { get; set; }
     public string Description { get; set; } = "";
     public string Unit { get; set; } = "";
     public decimal Quantity { get; set; }
     public decimal PurchasedQuantity { get; set; }
     public decimal RemainingQuantity { get; set; }
-}
-
-public class LocalPurchaseChallanSummaryDto
-{
-    public int ChallanId { get; set; }
-    public int ChallanNumber { get; set; }
-    public DateTime Date { get; set; }
-    public string ClientName { get; set; } = "";
-    public int RemainingLines { get; set; }
-    public decimal RemainingQuantity { get; set; }
+    /// <summary>Private costing; null unless the caller holds bills.costs.view.</summary>
+    public decimal? EstimatedUnitCost { get; set; }
+    public int? SupplierId { get; set; }
 }

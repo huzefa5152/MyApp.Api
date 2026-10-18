@@ -12,14 +12,14 @@ public class CommercialCostLineDto
     public decimal PurchasedQuantity { get; set; }
     public decimal RemainingQuantity => Math.Max(0m, Quantity - PurchasedQuantity);
     public decimal PurchasedAmount { get; set; }
-    public bool CostOverride { get; set; }
     public decimal SellingAmount { get; set; }
     public decimal? ActualUnitCost { get; set; }
     public int? SupplierId { get; set; }
-    public decimal? ActualAmount => CostOverride && ActualUnitCost.HasValue
-        ? Math.Round(Quantity * ActualUnitCost.Value, 2)
-        : (PurchasedQuantity > 0 || ActualUnitCost.HasValue)
-            ? Math.Round(PurchasedAmount + (ActualUnitCost.HasValue ? RemainingQuantity * ActualUnitCost.Value : 0m), 2) : null;
+    /// <summary>Remaining quantity at the estimated cost; recorded purchases never use it.</summary>
+    public decimal? EstimatedAmount => ActualUnitCost.HasValue ? Math.Round(RemainingQuantity * ActualUnitCost.Value, 2) : null;
+    /// <summary>What was paid to suppliers plus the estimate for what is still to buy.</summary>
+    public decimal? ActualAmount => PurchasedQuantity > 0 || ActualUnitCost.HasValue
+        ? Math.Round(PurchasedAmount + (EstimatedAmount ?? 0m), 2) : null;
     public decimal? Profit => ActualAmount.HasValue ? SellingAmount - ActualAmount.Value : null;
     public bool PurchaseRecorded { get; set; }
 }
@@ -49,6 +49,8 @@ public class CreateLocalPurchasesDto
     public string Version { get; set; } = "";
     public DateTime Date { get; set; }
     public List<int> ItemIds { get; set; } = new();
+    /// <summary>Optional quantity per selected line id; a line not listed buys all that remains.</summary>
+    public Dictionary<int, decimal>? Quantities { get; set; }
     public List<LocalPurchaseSettingsDto> Suppliers { get; set; } = new();
 }
 

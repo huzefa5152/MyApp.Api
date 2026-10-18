@@ -5,6 +5,7 @@ namespace MyApp.Api.Models
         public int Id { get; set; }
         public int InvoiceId { get; set; }
         public decimal? ActualUnitCost { get; set; }
+        // Unused since 2026-10-18: costing is purchased amounts + estimate. Column kept (schema additive only).
         public decimal? ActualUnitCostOverride { get; set; }
         public int? SupplierId { get; set; }
         public int? DeliveryItemId { get; set; }

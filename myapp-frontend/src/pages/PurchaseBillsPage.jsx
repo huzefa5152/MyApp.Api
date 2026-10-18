@@ -74,6 +74,7 @@ export default function PurchaseBillsPage() {
   const [awaitingBills, setAwaitingBills] = useState([]);
   const [loadingAwaiting, setLoadingAwaiting] = useState(false);
   const [prefillFromInvoiceId, setPrefillFromInvoiceId] = useState(null);
+  const [startLocal, setStartLocal] = useState(false);
   const [pickerSearch, setPickerSearch] = useState("");
   const [attachTarget, setAttachTarget] = useState(null);
   const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "PurchaseBill", bills.map((b) => b.id));
@@ -197,7 +198,10 @@ export default function PurchaseBillsPage() {
             >
               <MdReceipt size={16} /> Purchase Against Sale Bill
             </button>
-            <button style={styles.addBtn} onClick={() => { setEditingId(null); setPrefillFromInvoiceId(null); setViewOnly(false); setShowForm(true); }}>
+            <button style={styles.addBtn} onClick={() => { setEditingId(null); setPrefillFromInvoiceId(null); setStartLocal(true); setViewOnly(false); setShowForm(true); }}>
+              <MdAdd size={18} /> New Local Purchase
+            </button>
+            <button style={styles.addBtn} onClick={() => { setEditingId(null); setPrefillFromInvoiceId(null); setStartLocal(false); setViewOnly(false); setShowForm(true); }}>
               <MdAdd size={18} /> New Purchase Bill
             </button>
           </div>
@@ -307,7 +311,7 @@ export default function PurchaseBillsPage() {
                         <button style={btnView} onClick={() => { setEditingId(b.id); setViewOnly(true); setShowForm(true); }}>
                           <MdVisibility size={14} /> View
                         </button>
-                        {canUpdate && b.source !== "local-direct" && (
+                        {canUpdate && (b.source !== "local-direct" || !(b.amountPaid > 0 || b.amountCredited > 0)) && (
                           <button style={btnEdit} onClick={() => { setEditingId(b.id); setViewOnly(false); setShowForm(true); }}>
                             <MdEdit size={14} /> Edit
                           </button>
@@ -359,8 +363,9 @@ export default function PurchaseBillsPage() {
           billId={editingId}
           readOnly={viewOnly}
           prefillFromInvoiceId={prefillFromInvoiceId}
-          onClose={() => { setShowForm(false); setEditingId(null); setPrefillFromInvoiceId(null); setViewOnly(false); refreshAttachCounts(); }}
-          onSaved={() => { setShowForm(false); setEditingId(null); setPrefillFromInvoiceId(null); setViewOnly(false); fetchBills(page); }}
+          startLocal={startLocal && !editingId}
+          onClose={() => { setShowForm(false); setEditingId(null); setPrefillFromInvoiceId(null); setStartLocal(false); setViewOnly(false); refreshAttachCounts(); }}
+          onSaved={() => { setShowForm(false); setEditingId(null); setPrefillFromInvoiceId(null); setStartLocal(false); setViewOnly(false); fetchBills(page); }}
         />
       )}
 

@@ -137,7 +137,7 @@ def main():
         old_version = d["version"]
         d["items"][0]["actualUnitCost"] = 70
         d = save("bill", bid, d)
-        check("cost can change after supplier settlement", d["profit"] == 60)
+        check("estimate can change after settlement without re-pricing the recorded purchase", d["profit"] == 80 and d["items"][0]["purchasedAmount"] == 120)
         ledger = call("GET", f"/api/commercial-costs/suppliers/{cid}/{supplier['id']}")
         check("cost correction preserves settled liability and flags review", ledger["netBalance"] == 60 and ledger["purchases"][0]["costChanged"])
         call("PATCH", f"/api/commercial-costs/bill/{bid}", {"version": old_version, "items": d["items"]}, expected=(400,))
@@ -151,7 +151,7 @@ def main():
             d = costs("bill", bid); d["items"][0]["actualUnitCost"] = 75
             d = save("bill", bid, d)
             after = call("GET", f"/api/invoices/{bid}")
-            check("filed standalone actual cost remains editable", d["profit"] == 50)
+            check("filed standalone actual cost remains editable", d["items"][0]["actualUnitCost"] == 75 and d["profit"] == 80)
             check("filed sale values and FBR identity remain unchanged", all(before[k] == after[k] for k in ("subtotal", "gstAmount", "grandTotal", "fbrIRN", "fbrStatus", "items")))
             check("filed customer print remains unchanged", before_print == call("GET", f"/api/invoices/{bid}/print/bill"))
             audit = sql(args.db, f"SET NOCOUNT ON; SELECT COUNT(*) FROM PrivateCostChanges WHERE CompanyId={cid} AND Target='bill' AND TargetId={bid}")
@@ -173,9 +173,9 @@ def main():
         split = call("POST", f"/api/deliverychallans/company/{cid}", {"clientId": client["id"], "poNumber": "SAMPLE-SPLIT-PURCHASE", "deliveryDate": today,
             "items": [{"description": "Split A1", "quantity": 4, "unit": "Pcs"}, {"description": "Split A2", "quantity": 3, "unit": "Pcs"}, {"description": "Split B1", "quantity": 2, "unit": "Pcs"}]})
         split_items = split["items"]
-        picker = call("GET", f"/api/purchasebills/company/{cid}/local-purchase-challans")
-        check("local purchase challan picker is company-scoped and lists unpurchased challans", any(x["challanId"] == split["id"] and x["remainingLines"] == 3 for x in picker))
-        selected = call("GET", f"/api/purchasebills/company/{cid}/local-purchase-challans/{split['id']}")
+        picker = call("GET", f"/api/purchasebills/company/{cid}/local-purchase-sources")
+        check("local purchase picker is company-scoped and lists unpurchased challans", any(x["kind"] == "challan" and x["id"] == split["id"] and x["remainingLines"] == 3 for x in picker))
+        selected = call("GET", f"/api/purchasebills/company/{cid}/local-purchase-sources/challan/{split['id']}")
         check("challan picker returns each available line and quantity", len(selected["items"]) == 3 and all(x["remainingQuantity"] == x["quantity"] for x in selected["items"]))
         def local_bill(supplier_id, allocations, label):
             return call("POST", "/api/purchasebills", {"companyId": cid, "supplierId": supplier_id, "date": today,
@@ -190,7 +190,7 @@ def main():
         split_b = local_bill(supplier_b["id"], [(2, 2, 31)], "SPLIT-B")
         check("one supplier can purchase multiple selected challan items", len(split_a_first["items"]) == 2 and split_a_first["sourceDeliveryChallanId"] == split["id"])
         check("another supplier can purchase a different item from the same challan", len(split_b["items"]) == 1 and split_b["supplierId"] == supplier_b["id"])
-        check("partial purchase allocations reduce available quantities", call("GET", f"/api/purchasebills/company/{cid}/local-purchase-challans/{split['id']}")["items"][0]["remainingQuantity"] == 2)
+        check("partial purchase allocations reduce available quantities", call("GET", f"/api/purchasebills/company/{cid}/local-purchase-sources/challan/{split['id']}")["items"][0]["remainingQuantity"] == 2)
         call("POST", "/api/purchasebills", {"companyId": cid, "supplierId": supplier["id"], "date": today, "purchaseCategory": "LocalDirect", "gstRate": 0,
             "items": [{"description": "Over allocation", "quantity": 3, "unitPrice": 12, "localDeliveryItemId": split_items[0]["id"]}]}, expected=(400,))
         check("over-allocation is rejected by the server", True)
@@ -207,6 +207,110 @@ def main():
         split_payables = call("GET", f"/api/commercial-costs/bill/{split_invoice['id']}/payables")
         check("bill payable drill-down includes each split supplier purchase", len(split_payables) == 3 and sum(p["liability"] for p in split_payables) == 172)
 
+
+        # ── One pool, two entry points: challan or sale bill, form or dialog ──
+        pool_bill = call("POST", "/api/invoices/standalone", {"companyId": cid, "clientId": client["id"], "date": today, "gstRate": 0,
+            "items": [{"description": "Pool fitting", "quantity": 5, "uom": "Pcs", "unitPrice": 30},
+                      {"description": "Pool hose", "quantity": 2, "uom": "Pcs", "unitPrice": 80}]})
+        pool_items = pool_bill["items"]
+        sources = call("GET", f"/api/purchasebills/company/{cid}/local-purchase-sources")
+        check("picker lists sale bills with quantity left and drops fully bought documents",
+            any(x["kind"] == "bill" and x["id"] == pool_bill["id"] and x["remainingLines"] == 2 for x in sources)
+            and not any(x["kind"] == "challan" and x["id"] == split["id"] for x in sources))
+        found = call("GET", f"/api/purchasebills/company/{cid}/local-purchase-sources?search={pool_bill['invoiceNumber']}")
+        check("picker search finds a sale bill by number", any(x["kind"] == "bill" and x["id"] == pool_bill["id"] for x in found))
+        pool_source = call("GET", f"/api/purchasebills/company/{cid}/local-purchase-sources/bill/{pool_bill['id']}")
+        check("standalone bill lines are offered as bill lines",
+            [x["invoiceItemId"] for x in pool_source["items"]] == [i["id"] for i in pool_items] and all(x["deliveryItemId"] is None for x in pool_source["items"]))
+
+        def local_purchase(supplier_id, lines, expected=(200, 201)):
+            return call("POST", "/api/purchasebills", {"companyId": cid, "supplierId": supplier_id, "date": today,
+                "purchaseCategory": "LocalDirect", "gstRate": 0, "items": [dict({"description": "Pool line", "uom": "Pcs"}, **line) for line in lines]}, expected=expected)
+
+        pool_first = local_purchase(supplier["id"], [{"quantity": 3, "unitPrice": 12, "localInvoiceItemId": pool_items[0]["id"]}])
+        check("form links a purchase to a standalone bill line", pool_first["items"][0]["localInvoiceItemId"] == pool_items[0]["id"] and pool_first["sourceInvoiceId"] == pool_bill["id"])
+        pd = costs("bill", pool_bill["id"])
+        check("bill costing sees the form purchase", pd["items"][0]["purchasedQuantity"] == 3 and pd["items"][0]["remainingQuantity"] == 2 and pd["items"][0]["purchasedAmount"] == 36)
+        pd["items"][0]["supplierId"] = supplier_b["id"]; pd["items"][0]["actualUnitCost"] = 15
+        pd["items"][1]["supplierId"] = supplier_b["id"]; pd["items"][1]["actualUnitCost"] = 50
+        pd = save("bill", pool_bill["id"], pd)
+        check("estimate prices only the quantity still to buy", pd["items"][0]["actualAmount"] == 36 + 2 * 15 and pd["items"][0]["estimatedAmount"] == 30)
+        hose = pd["items"][1]["id"]
+        call("POST", f"/api/commercial-costs/bill/{pool_bill['id']}/purchases", {"version": pd["version"], "date": today, "itemIds": [hose], "quantities": {str(hose): 3}}, expected=(400,))
+        check("dialog refuses a quantity above what is left", True)
+        call("POST", f"/api/commercial-costs/bill/{pool_bill['id']}/purchases", {"version": pd["version"], "date": today, "itemIds": [hose], "quantities": {str(hose): 0}}, expected=(400,))
+        check("dialog refuses a zero quantity", True)
+        call("POST", f"/api/commercial-costs/bill/{pool_bill['id']}/purchases", {"version": pd["version"], "date": today, "itemIds": [hose], "quantities": {str(hose): 1}})
+        pd = costs("bill", pool_bill["id"])
+        check("dialog records only the partial quantity asked for", pd["items"][1]["purchasedQuantity"] == 1 and pd["items"][1]["remainingQuantity"] == 1 and pd["items"][1]["purchasedAmount"] == 50)
+        local_purchase(supplier["id"], [{"quantity": 2, "unitPrice": 45, "localInvoiceItemId": hose}], expected=(400,))
+        check("form cannot buy what the dialog already bought", True)
+        local_purchase(supplier["id"], [{"quantity": 1, "unitPrice": 1, "localInvoiceItemId": pool_items[0]["id"]},
+                                        {"quantity": 1, "unitPrice": 1, "localInvoiceItemId": pool_items[0]["id"]}], expected=(400,))
+        check("one purchase cannot claim a source line twice", True)
+        call("POST", "/api/purchasebills", {"companyId": cid, "supplierId": supplier["id"], "date": today, "purchaseCategory": "Inventory", "gstRate": 0,
+            "items": [{"description": "Inventory link", "quantity": 1, "unitPrice": 1, "localInvoiceItemId": hose}]}, expected=(400,))
+        check("inventory purchases cannot claim a sale line", True)
+
+        # A race: two saves for the last unit, exactly one wins.
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            raced = list(pool.map(lambda _: http("POST", "/api/purchasebills", args.base, token=token, body={"companyId": cid, "supplierId": supplier["id"],
+                "date": today, "purchaseCategory": "LocalDirect", "gstRate": 0,
+                "items": [{"description": "Race", "quantity": 1, "unitPrice": 5, "uom": "Pcs", "localInvoiceItemId": hose}]})[0], range(2)))
+        check("two simultaneous saves cannot both spend the last unit", sorted(raced) == [201, 400] or sorted(raced) == [200, 400])
+        check("pool is exhausted exactly once", costs("bill", pool_bill["id"])["items"][1]["remainingQuantity"] == 0)
+
+        # Correcting an unpaid linked purchase, then the lock once it is paid.
+        def edit_payload(bill, quantity):
+            return {"supplierId": bill["supplierId"], "date": today, "gstRate": 0, "items": [{"id": i["id"], "description": i["description"],
+                "quantity": quantity, "uom": i["uom"], "unitPrice": i["unitPrice"]} for i in bill["items"]]}
+        edited = call("PUT", f"/api/purchasebills/{pool_first['id']}", edit_payload(pool_first, 5))
+        check("an unpaid linked purchase can be corrected within what is left",
+            edited["items"][0]["quantity"] == 5 and edited["items"][0]["localInvoiceItemId"] == pool_items[0]["id"] and edited["grandTotal"] == 60)
+        call("PUT", f"/api/purchasebills/{pool_first['id']}", edit_payload(edited, 6), expected=(400,))
+        check("a correction cannot claim more than the sale line holds", True)
+        edited_again = call("PUT", f"/api/purchasebills/{pool_first['id']}", edit_payload(edited, 4))
+        check("lowering a purchase hands quantity back to the pool", costs("bill", pool_bill["id"])["items"][0]["remainingQuantity"] == 1)
+
+        # The sale side cannot drop below what suppliers were paid for.
+        pool_invoice = call("GET", f"/api/invoices/{pool_bill['id']}")
+        lowered = {"gstRate": 0, "items": [{"id": i["id"], "description": i["description"], "quantity": 3 if i["id"] == pool_items[0]["id"] else float(i["quantity"]),
+            "uom": i.get("uom") or "Pcs", "unitPrice": float(i["unitPrice"])} for i in pool_invoice["items"]]}
+        call("PUT", f"/api/invoices/{pool_bill['id']}", lowered, expected=(400,))
+        check("a sale line cannot be lowered below the quantity already purchased", call("GET", f"/api/invoices/{pool_bill['id']}")["items"][0]["quantity"] == 5)
+        lowered["items"][0]["quantity"] = 4
+        call("PUT", f"/api/invoices/{pool_bill['id']}", lowered)
+        check("a sale line can be lowered down to the purchased quantity", call("GET", f"/api/invoices/{pool_bill['id']}")["items"][0]["quantity"] == 4)
+        call("DELETE", f"/api/invoices/{pool_bill['id']}", expected=(400,))
+        check("a bill with supplier purchases cannot be deleted", True)
+
+        call("POST", f"/api/payments/payments/company/{cid}", {"date": today, "contactType": "Supplier", "contactId": supplier["id"],
+            "method": "Cash", "allocations": [{"purchaseBillId": pool_first["id"], "amount": 10}]})
+        call("PUT", f"/api/purchasebills/{pool_first['id']}", edit_payload(edited_again, 3), expected=(400,))
+        check("a paid linked purchase is corrected only by a supplier credit", call("GET", f"/api/purchasebills/{pool_first['id']}")["items"][0]["quantity"] == 4)
+
+        # A bill made from a challan offers, and books against, the CHALLAN line.
+        via = call("POST", f"/api/deliverychallans/company/{cid}", {"clientId": client["id"], "poNumber": "SAMPLE-VIA-BILL", "deliveryDate": today,
+            "items": [{"description": "Via bill bracket", "quantity": 6, "unit": "Pcs"}]})
+        via_bill = call("POST", "/api/invoices", {"companyId": cid, "clientId": client["id"], "date": today, "gstRate": 0,
+            "challanIds": [via["id"]], "items": [{"deliveryItemId": via["items"][0]["id"], "unitPrice": 20}]})
+        via_source = call("GET", f"/api/purchasebills/company/{cid}/local-purchase-sources/bill/{via_bill['id']}")
+        check("a challan-backed bill line is offered as its challan line",
+            via_source["items"][0]["deliveryItemId"] == via["items"][0]["id"] and via_source["items"][0]["invoiceItemId"] is None and via_source["items"][0]["sourceChallanNumber"] == via["challanNumber"])
+        via_buy = local_purchase(supplier["id"], [{"quantity": 2, "unitPrice": 9, "localInvoiceItemId": via_bill["items"][0]["id"]}])
+        check("a purchase sent against the bill line is booked to the challan line",
+            via_buy["items"][0]["localDeliveryItemId"] == via["items"][0]["id"] and via_buy["items"][0]["localInvoiceItemId"] is None)
+        check("challan and bill views draw on the same remaining quantity",
+            costs("challan", via["id"])["items"][0]["remainingQuantity"] == 4 and costs("bill", via_bill["id"])["items"][0]["remainingQuantity"] == 4)
+        local_purchase(supplier_b["id"], [{"quantity": 5, "unitPrice": 9, "localDeliveryItemId": via["items"][0]["id"]}], expected=(400,))
+        check("the challan view cannot re-buy what was bought against the bill", True)
+        bill_payables = call("GET", f"/api/commercial-costs/bill/{via_bill['id']}/payables")
+        check("a purchase bought against the bill shows in the bill's payables", any(p["id"] == via_buy["id"] for p in bill_payables))
+        check("a partly bought challan still lists in the picker",
+            any(x["kind"] == "challan" and x["id"] == via["id"] and x["remainingQuantity"] == 4 for x in call("GET", f"/api/purchasebills/company/{cid}/local-purchase-sources")))
+        call("GET", f"/api/purchasebills/company/{cid}/local-purchase-sources/invoice/{via_bill['id']}", expected=(404,))
+        check("unknown source kind is refused", True)
+
         linked = call("POST", "/api/invoices", {"companyId": cid, "clientId": client["id"], "date": today, "gstRate": 0,
             "challanIds": [c["id"]], "items": [{"deliveryItemId": i["id"], "unitPrice": 50} for i in c["items"]]})
         ld = costs("bill", linked["id"])
@@ -220,7 +324,7 @@ def main():
             sql(args.db, f"UPDATE Invoices SET FbrStatus='Submitted', FbrSubmittedAt=GETUTCDATE(), FbrIRN='SAMPLE-CHALLAN-TEST' WHERE Id={linked['id']} AND CompanyId={cid}")
         cd = costs("challan", c["id"]); cd["items"][0]["actualUnitCost"] = 25
         save("challan", c["id"], cd)
-        check("billed/filed challan actual cost remains editable", costs("bill", linked["id"])["profit"] == 115)
+        check("billed/filed challan estimate remains editable and leaves purchased cost alone", costs("challan", c["id"])["items"][0]["actualUnitCost"] == 25 and costs("bill", linked["id"])["profit"] == 130)
         check("billed/filed challan payable remains unchanged", sum(p["liability"] for p in call("GET", f"/api/commercial-costs/bill/{linked['id']}/payables")) == 120)
 
         direct = call("POST", "/api/invoices/standalone", {"companyId": cid, "clientId": client["id"], "date": today, "gstRate": 0,
@@ -315,7 +419,7 @@ def main():
         if args.db:
             sql(args.db, f"UPDATE Companies SET GlLockDate='{today}' WHERE Id={cid}")
             d = costs("bill", bid); d["items"][0]["actualUnitCost"] = 76
-            check("closed accounting period does not block private costing correction", save("bill", bid, d)["profit"] == 48)
+            check("closed accounting period does not block private costing correction", save("bill", bid, d)["items"][0]["actualUnitCost"] == 76)
 
         other_company = call("POST", "/api/companies", {"name": f"Sample other cost company {cid}"})
         foreign = call("POST", "/api/suppliers", {"companyId": other_company["id"], "name": "Sample other supplier"})
@@ -329,6 +433,15 @@ def main():
             "purchaseCategory": "LocalDirect", "gstRate": 0, "items": [{"description": "Foreign challan link", "quantity": 1,
                 "unitPrice": 5, "localDeliveryItemId": c["items"][0]["id"]}]}, expected=(400,))
         check("cross-company challan line cannot be linked to a local purchase", True)
+        call("POST", "/api/purchasebills", {"companyId": other_company["id"], "supplierId": foreign["id"], "date": today,
+            "purchaseCategory": "LocalDirect", "gstRate": 0, "items": [{"description": "Foreign bill link", "quantity": 1,
+                "unitPrice": 5, "localInvoiceItemId": direct["items"][0]["id"]}]}, expected=(400,))
+        check("cross-company bill line cannot be linked to a local purchase", True)
+        for kind, ident in (("challan", c["id"]), ("bill", bid)):
+            call("GET", f"/api/purchasebills/company/{other_company['id']}/local-purchase-sources/{kind}/{ident}", expected=(404,))
+            check(f"a {kind} is not reachable through another company's picker route", True)
+        check("another company's picker lists none of this company's documents",
+            not any(x["id"] in (c["id"], bid) for x in call("GET", f"/api/purchasebills/company/{other_company['id']}/local-purchase-sources")))
         roles = call("GET", "/api/roles")
         sales = next(r["id"] for r in roles if r["name"] == "Sales Edition")
         username = f"costverify{cid}"
@@ -340,8 +453,9 @@ def main():
             ("GET", f"/api/fbr/{bid}/preview-payload", None),
             ("GET", f"/api/invoices/company/{cid}/paged?costingStatus=full", None),
             ("GET", f"/api/deliverychallans/company/{cid}/paged?costingStatus=partial", None),
-            ("GET", f"/api/purchasebills/company/{cid}/local-purchase-challans", None),
-            ("GET", f"/api/purchasebills/company/{cid}/local-purchase-challans/{c['id']}", None),
+            ("GET", f"/api/purchasebills/company/{cid}/local-purchase-sources", None),
+            ("GET", f"/api/purchasebills/company/{cid}/local-purchase-sources/challan/{c['id']}", None),
+            ("GET", f"/api/purchasebills/company/{cid}/local-purchase-sources/bill/{bid}", None),
             ("GET", f"/api/commercial-costs/bill/{bid}", None),
             ("PATCH", f"/api/commercial-costs/bill/{bid}", {"version": "forged", "items": []}),
             ("GET", f"/api/commercial-costs/challan/{c['id']}", None),

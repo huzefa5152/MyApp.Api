@@ -84,7 +84,7 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
       <button style={btn.view} onClick={() => onView?.(b)} title="View">
         <MdVisibility size={14} />
       </button>
-      {perms.canUpdate && b.source !== "local-direct" && (
+      {perms.canUpdate && (b.source !== "local-direct" || !(b.amountPaid > 0 || b.amountCredited > 0)) && (
         <button style={btn.edit} onClick={() => onEdit?.(b)} title="Edit">
           <MdEdit size={14} />
         </button>

@@ -41,3 +41,11 @@
 .purchase-review-lines>div{max-height:260px;overflow-y:auto;padding:0 12px}
 .purchase-review-lines input[type=checkbox]{width:20px;min-height:20px;flex-shrink:0}
 @media(max-width:759px){.purchase-review-heading{flex-direction:column;gap:8px}.purchase-review-heading>label{width:100%}.supplier-review-head{display:none}.supplier-review-row{grid-template-columns:minmax(0,1fr) 90px;gap:8px 12px;padding:12px}.supplier-review-identity{grid-column:1/-1}.supplier-review-mobile-label{display:block;font-size:12px;color:#475569;margin-bottom:4px}.supplier-review-amount{grid-column:1/-1;display:flex;justify-content:space-between;text-align:left}.purchase-review-summary{flex-direction:column}}
+.commercial-metrics small{display:block;margin-top:4px;color:#5f6d7e;font-size:11px}
+.commercial-choice--qty{flex-wrap:wrap;justify-content:space-between;border-bottom:1px solid #eef2f7}
+.commercial-choice--qty>label:first-child{display:flex;align-items:center;gap:10px;flex:1 1 260px;min-width:0}
+.commercial-choice--qty small{display:block;color:#5f6d7e}
+.commercial-qty{display:flex;flex-direction:column;gap:2px;font-size:12px;color:#5f6d7e;flex:0 0 140px}
+.commercial-qty input{min-height:44px;width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #d0d7e2;border-radius:6px;text-align:right}
+.commercial-qty input[aria-invalid="true"]{border-color:#c62828}
+@media (max-width:480px){.commercial-qty{flex:1 1 100%}}

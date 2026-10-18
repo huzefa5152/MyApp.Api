@@ -4,8 +4,8 @@ import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import {render,screen,fireEvent,cleanup,waitFor} from '@testing-library/react';
 import PurchaseBillForm from './PurchaseBillForm';
 vi.mock('../contexts/PermissionsContext',()=>({usePermissions:()=>({has:()=>true})}));
-import {getPurchaseBillById,createPurchaseBill,updatePurchaseBill,previewPurchaseStock,getLocalPurchaseChallans,getLocalPurchaseChallan} from '../api/purchaseBillApi';
-vi.mock('../api/purchaseBillApi',()=>({getPurchaseBillById:vi.fn(),createPurchaseBill:vi.fn(),updatePurchaseBill:vi.fn(),previewPurchaseStock:vi.fn(async()=>({data:{trackingEnabled:true,items:[]}})),getLocalPurchaseChallans:vi.fn(async()=>({data:[]})),getLocalPurchaseChallan:vi.fn()}));
+import {getPurchaseBillById,createPurchaseBill,updatePurchaseBill,previewPurchaseStock,getLocalPurchaseSources,getLocalPurchaseSource} from '../api/purchaseBillApi';
+vi.mock('../api/purchaseBillApi',()=>({getPurchaseBillById:vi.fn(),createPurchaseBill:vi.fn(),updatePurchaseBill:vi.fn(),previewPurchaseStock:vi.fn(async()=>({data:{trackingEnabled:true,items:[]}})),getLocalPurchaseSources:vi.fn(async()=>({data:[]})),getLocalPurchaseSource:vi.fn()}));
 vi.mock('../api/supplierApi',()=>({getSuppliersByCompany:()=>Promise.resolve({data:[{id:7,name:'Sample supplier'},{id:8,name:'Second supplier',ntn:'1234567'}]})}));
 vi.mock('../api/itemTypeApi',()=>({getItemTypes:()=>Promise.resolve({data:[{id:4,name:'Sample catalog item',hsCode:'8414.5910'}]})}));
 vi.mock('../api/unitsApi',()=>({getAllUnits:()=>Promise.resolve({data:[]})}));
@@ -42,11 +42,12 @@ it('creates a local direct purchase after category selection without inventory f
  expect(previewPurchaseStock).not.toHaveBeenCalled();
 });
 it('creates a partial local purchase linked to selected challan lines',async()=>{
- getLocalPurchaseChallans.mockResolvedValue({data:[{challanId:44,challanNumber:4204,clientName:'Sample customer',remainingLines:1}]});
- getLocalPurchaseChallan.mockResolvedValue({data:{challanId:44,challanNumber:4204,clientName:'Sample customer',date:'2026-10-18',items:[{deliveryItemId:91,description:'Challan cable',unit:'Pcs',quantity:5,purchasedQuantity:0,remainingQuantity:5}]}});
+ getLocalPurchaseSources.mockResolvedValue({data:[{kind:'challan',id:44,number:4204,clientName:'Sample customer',remainingLines:1}]});
+ getLocalPurchaseSource.mockResolvedValue({data:{kind:'challan',id:44,number:4204,clientName:'Sample customer',date:'2026-10-18',items:[{deliveryItemId:91,description:'Challan cable',unit:'Pcs',quantity:5,purchasedQuantity:0,remainingQuantity:5}]}});
  render(<PurchaseBillForm companyId={1} onClose={()=>{}}/>);
  fireEvent.click(screen.getByRole('radio',{name:/Local direct purchase/}));fireEvent.click(screen.getByRole('button',{name:'Continue'}));
- fireEvent.change(await screen.findByLabelText('Delivery challan'),{target:{value:'44'}});
+ await waitFor(()=>expect(screen.getByRole('option',{name:/Challan #4204/})).toBeTruthy());
+ fireEvent.change(screen.getByLabelText('Challan or sale bill'),{target:{value:'challan:44'}});
  fireEvent.click(await screen.findByRole('button',{name:'Add item'}));
  fireEvent.click(await screen.findByRole('button',{name:/Search supplier/}));fireEvent.mouseDown(await screen.findByText('Sample supplier'));
  fireEvent.change(screen.getAllByRole('spinbutton').find(input=>input.title?.includes('Pcs')),{target:{value:'2'}});
@@ -54,6 +55,31 @@ it('creates a partial local purchase linked to selected challan lines',async()=>
  fireEvent.click(screen.getByRole('button',{name:'Create',exact:true}));
  await waitFor(()=>expect(createPurchaseBill).toHaveBeenCalled());
  expect(createPurchaseBill.mock.calls[0][0].items[0]).toEqual(expect.objectContaining({description:'Challan cable',quantity:2,unitPrice:12.5,localDeliveryItemId:91}));
+});
+it('opens straight into a bill-linked local purchase and adds every remaining line at its estimate',async()=>{
+ getLocalPurchaseSource.mockResolvedValue({data:{kind:'bill',id:70,number:310,clientName:'Sample customer',date:'2026-10-18',items:[
+  {deliveryItemId:null,invoiceItemId:501,description:'Standalone fitting',unit:'Pcs',quantity:3,purchasedQuantity:1,remainingQuantity:2,estimatedUnitCost:40,supplierId:8},
+  {deliveryItemId:92,invoiceItemId:null,sourceChallanNumber:4205,description:'Challan pipe',unit:'Pcs',quantity:4,purchasedQuantity:0,remainingQuantity:4,estimatedUnitCost:null}]}});
+ render(<PurchaseBillForm companyId={1} localSource={{kind:'bill',id:70}} onClose={()=>{}}/>);
+ expect(screen.queryByRole('radio',{name:/Local direct purchase/})).toBeNull();
+ fireEvent.click(await screen.findByRole('button',{name:'Add all remaining'}));
+ expect(screen.getByLabelText('Description for item 1').value).toBe('Standalone fitting');
+ fireEvent.change(screen.getByLabelText('Unit price for item 2'),{target:{value:'7'}});
+ fireEvent.click(screen.getByRole('button',{name:'Create',exact:true}));
+ await waitFor(()=>expect(createPurchaseBill).toHaveBeenCalled());
+ const sent=createPurchaseBill.mock.calls.at(-1)[0];
+ expect(sent).toEqual(expect.objectContaining({purchaseCategory:'LocalDirect',supplierId:8,gstRate:0}));
+ expect(sent.items).toEqual([expect.objectContaining({quantity:2,unitPrice:40,localInvoiceItemId:501,localDeliveryItemId:null}),expect.objectContaining({quantity:4,unitPrice:7,localDeliveryItemId:92,localInvoiceItemId:null})]);
+});
+it('refuses a linked quantity above what is left before calling the server',async()=>{
+ getLocalPurchaseSource.mockResolvedValue({data:{kind:'challan',id:45,number:4206,clientName:'Sample customer',date:'2026-10-18',items:[{deliveryItemId:93,description:'Valve',unit:'Pcs',quantity:5,purchasedQuantity:3,remainingQuantity:2,estimatedUnitCost:10,supplierId:7}]}});
+ createPurchaseBill.mockClear();
+ render(<PurchaseBillForm companyId={1} localSource={{kind:'challan',id:45}} onClose={()=>{}}/>);
+ fireEvent.click(await screen.findByRole('button',{name:'Add item'}));
+ fireEvent.change(screen.getAllByRole('spinbutton').find(input=>input.title?.includes('Pcs')),{target:{value:'3'}});
+ fireEvent.click(screen.getByRole('button',{name:'Create',exact:true}));
+ expect((await screen.findByRole('alert')).textContent).toMatch(/only 2 Pcs remains/);
+ expect(createPurchaseBill).not.toHaveBeenCalled();
 });
 it('keeps entered prices and descriptions when changing category and clears catalog binding',async()=>{
  render(<PurchaseBillForm companyId={1} onClose={()=>{}}/>);

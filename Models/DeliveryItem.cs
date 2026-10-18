@@ -26,6 +26,7 @@
 
         // Internal procurement details. Never map these to a print DTO.
         public decimal? ActualUnitCost { get; set; }
+        // Unused since 2026-10-18: costing is purchased amounts + estimate. Column kept (schema additive only).
         public decimal? ActualUnitCostOverride { get; set; }
         public int? SupplierId { get; set; }
         public Supplier? Supplier { get; set; }

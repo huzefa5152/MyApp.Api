@@ -143,41 +143,47 @@ namespace MyApp.Api.Services.Implementations
                 .ToList() ?? new(),
         };
 
-        public async Task<List<LocalPurchaseChallanSummaryDto>> GetLocalPurchaseChallansAsync(int companyId)
+        /// <summary>
+        /// Recent challans and sale bills of ONE company that still have quantity
+        /// to purchase locally, newest first. Searches number or customer name.
+        /// </summary>
+        public async Task<List<LocalPurchaseSourceSummaryDto>> GetLocalPurchaseSourcesAsync(int companyId, string? search)
         {
-            var challans = await _context.DeliveryChallans.AsNoTracking().Include(c => c.Client).Include(c => c.Items)
-                .Where(c => c.CompanyId == companyId && !c.IsDemo && c.Status != "Cancelled")
-                .OrderByDescending(c => c.DeliveryDate).ThenByDescending(c => c.Id)
+            const int limit = 40; // ponytail: newest 40 per kind before filtering; search reaches older documents
+            var term = search?.Trim() ?? "";
+            var number = int.TryParse(term, out var n) ? n : -1;
+            var challans = await _context.DeliveryChallans.AsNoTracking()
+                .Where(c => c.CompanyId == companyId && !c.IsDemo && c.Status != "Cancelled"
+                    && (term == "" || c.ChallanNumber == number || c.Client.Name.Contains(term)))
+                .OrderByDescending(c => c.DeliveryDate).ThenByDescending(c => c.Id).Take(limit)
+                .Select(c => new { c.Id, c.ChallanNumber, c.DeliveryDate, Client = c.Client.Name,
+                    Lines = c.Items.Select(i => new { DeliveryId = (int?)i.Id, InvoiceId = (int?)null, i.Quantity }).ToList() })
                 .ToListAsync();
-            var ids = challans.SelectMany(c => c.Items).Select(i => i.Id).ToList();
-            var purchased = await _context.PurchaseItems.AsNoTracking().Where(p => p.LocalDeliveryItemId.HasValue
-                    && ids.Contains(p.LocalDeliveryItemId.Value) && p.PurchaseBill.CompanyId == companyId)
-                .GroupBy(p => p.LocalDeliveryItemId!.Value).Select(g => new { Id = g.Key, Qty = g.Sum(p => p.Quantity) })
-                .ToDictionaryAsync(x => x.Id, x => x.Qty);
-            return challans.Select(c => new LocalPurchaseChallanSummaryDto { ChallanId = c.Id, ChallanNumber = c.ChallanNumber,
-                    Date = c.DeliveryDate ?? DateTime.MinValue, ClientName = c.Client?.Name ?? "",
-                    RemainingLines = c.Items.Count(i => i.Quantity > purchased.GetValueOrDefault(i.Id)),
-                    RemainingQuantity = c.Items.Sum(i => Math.Max(0m, i.Quantity - purchased.GetValueOrDefault(i.Id))) })
-                .Where(c => c.RemainingLines > 0).ToList();
-        }
-
-        public async Task<LocalPurchaseChallanDto?> GetLocalPurchaseChallanAsync(int companyId, int challanId)
-        {
-            var challan = await _context.DeliveryChallans.AsNoTracking()
-                .Include(c => c.Client).Include(c => c.Items)
-                .FirstOrDefaultAsync(c => c.Id == challanId && c.CompanyId == companyId && !c.IsDemo && c.Status != "Cancelled");
-            if (challan == null) return null;
-            var ids = challan.Items.Select(i => i.Id).ToList();
-            var purchased = await _context.PurchaseItems.AsNoTracking()
-                .Where(p => p.LocalDeliveryItemId.HasValue && ids.Contains(p.LocalDeliveryItemId.Value) && p.PurchaseBill.CompanyId == companyId)
-                .GroupBy(p => p.LocalDeliveryItemId!.Value)
-                .Select(g => new { Id = g.Key, Qty = g.Sum(p => p.Quantity) }).ToDictionaryAsync(x => x.Id, x => x.Qty);
-            return new LocalPurchaseChallanDto { ChallanId = challan.Id, ChallanNumber = challan.ChallanNumber,
-                Date = challan.DeliveryDate ?? DateTime.MinValue, ClientName = challan.Client?.Name ?? "",
-                Items = challan.Items.OrderBy(i => i.Id).Select(i => new LocalPurchaseChallanLineDto { DeliveryItemId = i.Id,
-                    Description = i.Description, Unit = i.Unit, Quantity = i.Quantity, PurchasedQuantity = purchased.GetValueOrDefault(i.Id),
-                    RemainingQuantity = Math.Max(0m, i.Quantity - purchased.GetValueOrDefault(i.Id)) })
-                    .Where(i => i.RemainingQuantity > 0).ToList() };
+            var bills = await _context.Invoices.AsNoTracking()
+                .Where(b => b.CompanyId == companyId && !b.IsDemo && !b.IsCancelled && b.NoteKind == 0
+                    && (term == "" || b.InvoiceNumber == number || b.Client.Name.Contains(term)))
+                .OrderByDescending(b => b.Date).ThenByDescending(b => b.Id).Take(limit)
+                .Select(b => new { b.Id, b.InvoiceNumber, b.Date, Client = b.Client.Name,
+                    Lines = b.Items.Select(i => new { DeliveryId = i.DeliveryItemId,
+                        InvoiceId = i.DeliveryItemId.HasValue ? (int?)null : i.Id,
+                        Quantity = i.DeliveryItem != null ? i.DeliveryItem.Quantity : i.Quantity }).ToList() })
+                .ToListAsync();
+            var byDelivery = await LocalPurchaseAllocations.PurchasedByDeliveryAsync(_context, companyId,
+                challans.SelectMany(c => c.Lines.Select(l => l.DeliveryId)).Concat(bills.SelectMany(b => b.Lines.Select(l => l.DeliveryId)))
+                    .Where(id => id.HasValue).Select(id => id!.Value));
+            var byInvoice = await LocalPurchaseAllocations.PurchasedByInvoiceAsync(_context, companyId,
+                bills.SelectMany(b => b.Lines).Where(l => l.InvoiceId.HasValue).Select(l => l.InvoiceId!.Value));
+            decimal Left(int? deliveryId, int? invoiceId, decimal qty) => Math.Max(0m, qty - (deliveryId is int d
+                ? byDelivery.GetValueOrDefault(d) : byInvoice.GetValueOrDefault(invoiceId ?? 0)));
+            var rows = challans.Select(c => new LocalPurchaseSourceSummaryDto { Kind = "challan", Id = c.Id, Number = c.ChallanNumber,
+                    Date = c.DeliveryDate ?? DateTime.MinValue, ClientName = c.Client ?? "",
+                    RemainingLines = c.Lines.Count(l => Left(l.DeliveryId, l.InvoiceId, l.Quantity) > 0),
+                    RemainingQuantity = c.Lines.Sum(l => Left(l.DeliveryId, l.InvoiceId, l.Quantity)) })
+                .Concat(bills.Select(b => new LocalPurchaseSourceSummaryDto { Kind = "bill", Id = b.Id, Number = b.InvoiceNumber,
+                    Date = b.Date, ClientName = b.Client ?? "",
+                    RemainingLines = b.Lines.Count(l => Left(l.DeliveryId, l.InvoiceId, l.Quantity) > 0),
+                    RemainingQuantity = b.Lines.Sum(l => Left(l.DeliveryId, l.InvoiceId, l.Quantity)) }));
+            return rows.Where(r => r.RemainingLines > 0).OrderByDescending(r => r.Date).ThenBy(r => r.Kind).ThenByDescending(r => r.Id).ToList();
         }
 
         public async Task<PagedResult<PurchaseBillDto>> GetPagedByCompanyAsync(
@@ -353,6 +359,36 @@ namespace MyApp.Api.Services.Implementations
             };
         }
 
+        /// <summary>Validates the claimed links through the shared pool; returns them normalised, in order.</summary>
+        private async Task<List<LocalPurchaseAllocations.Claim?>> CheckLocalLinksAsync(int companyId,
+            List<LocalPurchaseAllocations.Claim?> claimed, int? excludeBillId)
+        {
+            var checkedClaims = await LocalPurchaseAllocations.ValidateAsync(_context, companyId,
+                claimed.Where(c => c != null).Select(c => c!).ToList(), excludeBillId);
+            var next = 0;
+            return claimed.Select(c => c == null ? null : checkedClaims[next++]).ToList();
+        }
+
+        /// <summary>The one challan or one standalone bill every link points at, for drill-downs; null when mixed.</summary>
+        private async Task<(int? ChallanId, int? InvoiceId)> LocalSourceHeaderAsync(List<LocalPurchaseAllocations.Claim?> links)
+        {
+            var claims = links.Where(l => l != null).Select(l => l!).ToList();
+            if (claims.Count == 0) return (null, null);
+            if (claims.All(c => c.DeliveryItemId.HasValue))
+            {
+                var ids = claims.Select(c => c.DeliveryItemId!.Value).ToList();
+                var challans = await _context.DeliveryItems.Where(d => ids.Contains(d.Id)).Select(d => d.DeliveryChallanId).Distinct().ToListAsync();
+                return (challans.Count == 1 ? challans[0] : null, null);
+            }
+            if (claims.All(c => c.InvoiceItemId.HasValue))
+            {
+                var ids = claims.Select(c => c.InvoiceItemId!.Value).ToList();
+                var invoices = await _context.InvoiceItems.Where(i => ids.Contains(i.Id)).Select(i => i.InvoiceId).Distinct().ToListAsync();
+                return (null, invoices.Count == 1 ? invoices[0] : null);
+            }
+            return (null, null);
+        }
+
         public async Task<PurchaseBillDto> CreateAsync(CreatePurchaseBillDto dto)
         {
             // Audit C-8 (2026-05-13): wrap the create in a retry loop so
@@ -397,39 +433,13 @@ namespace MyApp.Api.Services.Implementations
             if (dto.PurchaseCategory == "LocalDirect" && dto.Items.Any(i => i.ItemTypeId.HasValue || !string.IsNullOrWhiteSpace(i.HSCode) || (i.SourceInvoiceItemIds?.Count ?? 0) > 0))
                 throw new InvalidOperationException("Local direct purchases cannot carry inventory classifications.");
 
-            var linkedDeliveryIds = dto.Items.Where(i => i.LocalDeliveryItemId.HasValue).Select(i => i.LocalDeliveryItemId!.Value).Distinct().ToList();
             if (dto.PurchaseCategory != "LocalDirect" && dto.Items.Any(i => i.LocalDeliveryItemId.HasValue || i.LocalInvoiceItemId.HasValue))
                 throw new InvalidOperationException("Only local direct purchases can be linked to a sale or challan line.");
-            if (dto.Items.Any(i => i.LocalInvoiceItemId.HasValue))
-                throw new InvalidOperationException("This shortcut currently links local purchases to delivery challan lines only.");
-            if (dto.Items.Any(i => i.LocalDeliveryItemId.HasValue && i.LocalInvoiceItemId.HasValue))
-                throw new InvalidOperationException("A purchase line can be linked to only one source line.");
-            int? sourceChallanId = null;
-            if (linkedDeliveryIds.Count > 0)
-            {
-                if (linkedDeliveryIds.Count != dto.Items.Count(i => i.LocalDeliveryItemId.HasValue))
-                    throw new InvalidOperationException("Use one purchase line per linked challan line.");
-                var sources = await _context.DeliveryItems.Include(i => i.DeliveryChallan)
-                    .Where(i => linkedDeliveryIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id);
-                if (sources.Count != linkedDeliveryIds.Count || sources.Values.Any(i => i.DeliveryChallan.CompanyId != dto.CompanyId || i.DeliveryChallan.IsDemo || i.DeliveryChallan.Status == "Cancelled"))
-                    throw new InvalidOperationException("A selected challan line is unavailable for this company.");
-                var challanIds = sources.Values.Select(i => i.DeliveryChallanId).Distinct().ToList();
-                if (challanIds.Count != 1) throw new InvalidOperationException("A local purchase bill can link to lines from one challan only.");
-                sourceChallanId = challanIds[0];
-                // Serialize allocations on the source lines; a concurrent bill cannot spend the same remaining quantity.
-                foreach (var sourceId in linkedDeliveryIds.OrderBy(x => x))
-                    await _context.DeliveryItems.FromSqlInterpolated($"SELECT * FROM DeliveryItems WITH (UPDLOCK, HOLDLOCK) WHERE Id = {sourceId}").AsNoTracking().Select(x => x.Id).ToListAsync();
-                var reserved = await _context.PurchaseItems.Where(p => p.LocalDeliveryItemId.HasValue && linkedDeliveryIds.Contains(p.LocalDeliveryItemId.Value)
-                        && p.PurchaseBill.CompanyId == dto.CompanyId)
-                    .GroupBy(p => p.LocalDeliveryItemId!.Value).Select(g => new { Id = g.Key, Qty = g.Sum(p => p.Quantity) }).ToDictionaryAsync(x => x.Id, x => x.Qty);
-                foreach (var line in dto.Items.Where(i => i.LocalDeliveryItemId.HasValue))
-                {
-                    var src = sources[line.LocalDeliveryItemId!.Value];
-                    var remaining = Math.Max(0m, src.Quantity - reserved.GetValueOrDefault(src.Id));
-                    if (line.Quantity > remaining)
-                        throw new InvalidOperationException($"{src.Description}: only {remaining:0.####} {src.Unit} remains available on challan #{src.DeliveryChallan.ChallanNumber}.");
-                }
-            }
+            // Normalised links in dto.Items order (null = an unlinked line).
+            var links = await CheckLocalLinksAsync(dto.CompanyId, dto.Items.Select(i =>
+                i.LocalDeliveryItemId.HasValue || i.LocalInvoiceItemId.HasValue
+                    ? new LocalPurchaseAllocations.Claim(i.LocalDeliveryItemId, i.LocalInvoiceItemId, i.Quantity) : null).ToList(), null);
+            var (sourceChallanId, sourceInvoiceId) = await LocalSourceHeaderAsync(links);
 
             // Validate "Purchase Against Sale Bill" lines BEFORE we touch
             // anything. Any line with SourceInvoiceItemIds:
@@ -504,7 +514,8 @@ namespace MyApp.Api.Services.Implementations
                     UOM = i.UOM ?? itemType?.UOM ?? "",
                     UnitPrice = i.UnitPrice,
                     LineTotal = Math.Round(i.Quantity * i.UnitPrice, 2),
-                    LocalDeliveryItemId = i.LocalDeliveryItemId,
+                    LocalDeliveryItemId = links[idx]?.DeliveryItemId,
+                    LocalInvoiceItemId = links[idx]?.InvoiceItemId,
                     HSCode = itemType != null && string.IsNullOrWhiteSpace(itemType.HSCode) ? null : i.HSCode ?? itemType?.HSCode,
                     FbrUOMId = i.FbrUOMId ?? itemType?.FbrUOMId,
                     SaleType = i.SaleType ?? itemType?.SaleType,
@@ -525,7 +536,7 @@ namespace MyApp.Api.Services.Implementations
             var bill = new PurchaseBill
             {
                 PurchaseCategory = dto.PurchaseCategory,
-                Source = linkedDeliveryIds.Count > 0 ? "local-direct" : "manual",
+                Source = links.Any(l => l != null) ? "local-direct" : "manual",
                 PurchaseBillNumber = nextNumber,
                 Date = dto.Date.Date,
                 CompanyId = dto.CompanyId,
@@ -546,6 +557,7 @@ namespace MyApp.Api.Services.Implementations
                 ReconciliationStatus = string.IsNullOrWhiteSpace(dto.SupplierIRN) ? "ManualOnly" : "Pending",
                 Items = items,
                 SourceDeliveryChallanId = sourceChallanId,
+                SourceInvoiceId = sourceInvoiceId,
                 CreatedAt = DateTime.UtcNow,
             };
 
@@ -869,8 +881,14 @@ namespace MyApp.Api.Services.Implementations
                 .FirstOrDefaultAsync(p => p.Id == id);
             if (bill == null) return null;
             await _context.Entry(bill).Collection(p => p.Items).LoadAsync();
-            if (bill.Source == "local-direct")
-                throw new InvalidOperationException("Generated local purchases retain their source lines. Correct private costing separately; use supplier credit notes for liability adjustments.");
+            var isLinked = bill.Items.Any(i => i.LocalDeliveryItemId.HasValue || i.LocalInvoiceItemId.HasValue)
+                || bill.SourceDeliveryChallanId.HasValue || bill.Source == "local-direct" || bill.Source == "challan-supplier";
+            if (isLinked && (bill.AmountPaid > 0 || await _context.PaymentAllocations.AnyAsync(a => a.PurchaseBillId == bill.Id)
+                    || await _context.PurchaseDebitNotes.AnyAsync(n => n.PurchaseBillId == bill.Id)))
+                throw new InvalidOperationException("This supplier purchase has payments or credits. Correct it with a supplier credit note.");
+            if (bill.PurchaseCategory != "LocalDirect" && bill.Source != "challan-supplier"
+                && dto.Items?.Any(i => i != null && (i.LocalDeliveryItemId.HasValue || i.LocalInvoiceItemId.HasValue)) == true)
+                throw new InvalidOperationException("Only local direct purchases can be linked to a sale or challan line.");
             var targetSupplierId = dto.SupplierId ?? bill.SupplierId;
             var supplierChanged = targetSupplierId != bill.SupplierId;
             if (supplierChanged)
@@ -936,20 +954,30 @@ namespace MyApp.Api.Services.Implementations
                          || bill.ReconciliationStatus == "Disputed"))
                 bill.ReconciliationStatus = "Pending";
 
+            // An existing row keeps the link it was saved with; a new row may
+            // claim one. Re-checked against every OTHER bill's claims.
+            var savedLinks = bill.Items.ToDictionary(i => i.Id, i => (Delivery: i.LocalDeliveryItemId, Invoice: i.LocalInvoiceItemId));
+            var links = await CheckLocalLinksAsync(bill.CompanyId, dto.Items.Select(i =>
+            {
+                var (delivery, invoice) = savedLinks.TryGetValue(i.Id, out var saved) ? saved : (i.LocalDeliveryItemId, i.LocalInvoiceItemId);
+                return delivery.HasValue || invoice.HasValue ? new LocalPurchaseAllocations.Claim(delivery, invoice, i.Quantity) : null;
+            }).ToList(), bill.Id);
+
             // Replace items wholesale (simpler than a diff, fine for v1)
-            var localSources = bill.Items.ToDictionary(i => i.Id, i => i.LocalDeliveryItemId);
             _context.PurchaseItems.RemoveRange(bill.Items);
             bill.Items.Clear();
 
             var newItems = new List<PurchaseItem>();
-            foreach (var i in dto.Items)
+            for (var idx = 0; idx < dto.Items.Count; idx++)
             {
+                var i = dto.Items[idx];
                 ItemType? itemType = i.ItemTypeId.HasValue
                     ? await _context.ItemTypes.FindAsync(i.ItemTypeId.Value)
                     : null;
                 var ni = new PurchaseItem
                 {
-                    LocalDeliveryItemId = localSources.GetValueOrDefault(i.Id),
+                    LocalDeliveryItemId = links[idx]?.DeliveryItemId,
+                    LocalInvoiceItemId = links[idx]?.InvoiceItemId,
                     ItemTypeId = i.ItemTypeId,
                     ItemTypeName = itemType?.Name ?? "",
                     Description = i.Description?.Trim() ?? "",

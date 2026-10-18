@@ -378,6 +378,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Admin scope isolation (seed / Administrator trees, Tenant Access, IDOR) | `python scripts/test_admin_scope_isolation.py` | `all checks passed` (currently `115/115`) |
 | FBR cancellation + reversal releases challans | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `26/26 checks passed` |
 | Valued stock entries (isolated local SQL only) | `py -3.14 scripts/test_stock_entry_workflow.py --base http://localhost:5191 --database <isolated-local-test-db>` | `41 stock-entry workflow checks passed` |
+| Commercial costs + local purchases: one pool for challan / bill / form / dialog, partial qty, races, edits, sale-side floor, IDOR | `python scripts/test_trader_commercial_costs.py --base <url> --db "<conn>"` | `129/129 commercial cost checks passed` |
 | Stock item-type reflow **(hard pre-push gate — see box above)** | `python scripts/test_stock_itemtype_reflow.py` | `all checks passed` (currently `183/183`) |
 | PDF export pagination | `python scripts/test_pdf_pagination.py` | `all checks passed` (230 cases) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
@@ -728,6 +729,30 @@ There is no startup backfill. Existing books were corrected once by a reviewed
 SQL back-post; from that point the posting engine keeps them right on its own.
 
 ---
+
+### Local purchases draw on one quantity pool (2026-10-18)
+
+A sale line is bought from suppliers (LocalDirect, no stock) from the costing
+dialog OR the Purchase Bill form, and both spend the same remaining quantity.
+`Helpers/LocalPurchaseAllocations` is the one place that reads, locks and
+validates it. Never add a second path.
+
+- **The key is the CHALLAN line whenever one exists.** `PurchaseItem.LocalDeliveryItemId`
+  for anything that came from a challan; `LocalInvoiceItemId` only for a
+  standalone bill line. A claim sent against a challan-backed bill line is
+  normalised to its challan line, so "against the bill" and "against the
+  challan" can never both be bought.
+- **Lock, then count, inside the transaction.** Source rows are row-locked in one
+  order (delivery lines, then bill lines, ascending). The form and the dialog
+  both go through it; two saves for the last unit end with one 400.
+- **Actual cost = recorded purchases + estimate × quantity still to buy.** A
+  saved estimate never re-prices bought quantity. Fix a wrong purchase by
+  editing it while it has no payment or credit, then by supplier credit.
+  `ActualUnitCostOverride` columns are unused (kept: schema is additive only).
+- **The sale side cannot drop below what was bought.** `InvoiceService` update
+  paths call `AssertSourcesCoverPurchasesAsync` before commit; a challan with
+  any purchase keeps its lines frozen.
+- Suite: `scripts/test_trader_commercial_costs.py` (129 checks with `--db`).
 
 ### Pickers are not screens (2026-09-21)
 

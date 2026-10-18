@@ -19,15 +19,15 @@ public class CommercialCostService(AppDbContext db, IPostingService posting)
             await db.DeliveryChallans.FromSqlInterpolated($"SELECT * FROM DeliveryChallans WITH (UPDLOCK, HOLDLOCK) WHERE Id = {id}").AsNoTracking().Select(c => c.Id).ToListAsync();
         else
             await db.Invoices.FromSqlInterpolated($"SELECT * FROM Invoices WITH (UPDLOCK, HOLDLOCK) WHERE Id = {id}").AsNoTracking().Select(c => c.Id).ToListAsync();
-        // Bill and challan views can reach the same delivery cost. Lock those
-        // source rows in one order without range-locking unrelated catalogs.
-        var sourceIds = kind == "challan"
+        // Bill and challan views and the Purchase Bill form reach the same
+        // source lines; lock them in the shared order.
+        var deliveryIds = kind == "challan"
             ? await db.DeliveryItems.Where(i => i.DeliveryChallanId == id).Select(i => i.Id).ToListAsync()
-            : await db.InvoiceItems.Where(i => i.InvoiceId == id && i.DeliveryItemId.HasValue)
-                .Select(i => i.DeliveryItemId!.Value).ToListAsync();
-        foreach (var sourceId in sourceIds.Distinct().OrderBy(x => x))
-            await db.DeliveryItems.FromSqlInterpolated($"SELECT * FROM DeliveryItems WITH (UPDLOCK, HOLDLOCK, FORCESEEK) WHERE Id = {sourceId}")
-                .AsNoTracking().Select(i => i.Id).ToListAsync();
+            : await db.InvoiceItems.Where(i => i.InvoiceId == id && i.DeliveryItemId.HasValue).Select(i => i.DeliveryItemId!.Value).ToListAsync();
+        var standaloneIds = kind == "bill"
+            ? await db.InvoiceItems.Where(i => i.InvoiceId == id && !i.DeliveryItemId.HasValue).Select(i => i.Id).ToListAsync()
+            : new List<int>();
+        await LocalPurchaseAllocations.LockAsync(db, deliveryIds, standaloneIds);
     }
 
     public async Task<CommercialCostDto?> ReadAsync(string kind, int id)
@@ -42,7 +42,7 @@ public class CommercialCostService(AppDbContext db, IPostingService posting)
             result = new() { Id = id, Number = c.ChallanNumber, CompanyId = c.CompanyId,
                 Items = c.Items.OrderBy(i => i.Id).Select(i => new CommercialCostLineDto {
                     Id = i.Id, DeliveryItemId = i.Id, SourceChallanId = c.Id, Description = i.Description, Unit = i.Unit,
-                    Quantity = i.Quantity, ActualUnitCost = i.ActualUnitCostOverride ?? i.ActualUnitCost, CostOverride = i.ActualUnitCostOverride.HasValue, SupplierId = i.SupplierId,
+                    Quantity = i.Quantity, ActualUnitCost = i.ActualUnitCost, SupplierId = i.SupplierId,
                     SellingAmount = c.Invoice?.Items.Where(x => x.DeliveryItemId == i.Id).Sum(x => x.LineTotal) ?? 0
                 }).ToList() };
         }
@@ -55,8 +55,7 @@ public class CommercialCostService(AppDbContext db, IPostingService posting)
                 Items = b.Items.OrderBy(i => i.Id).Select(i => new CommercialCostLineDto {
                     Id = i.Id, DeliveryItemId = i.DeliveryItemId, SourceChallanId = i.DeliveryItem?.DeliveryChallanId, Description = i.Description, Unit = i.UOM,
                     Quantity = i.Quantity, SellingAmount = i.LineTotal,
-                    ActualUnitCost = i.DeliveryItemId.HasValue ? i.DeliveryItem?.ActualUnitCostOverride ?? i.DeliveryItem?.ActualUnitCost : i.ActualUnitCostOverride ?? i.ActualUnitCost,
-                    CostOverride = i.DeliveryItemId.HasValue ? i.DeliveryItem?.ActualUnitCostOverride.HasValue == true : i.ActualUnitCostOverride.HasValue,
+                    ActualUnitCost = i.DeliveryItemId.HasValue ? i.DeliveryItem?.ActualUnitCost : i.ActualUnitCost,
                     SupplierId = i.DeliveryItemId.HasValue ? i.DeliveryItem?.SupplierId : i.SupplierId
                 }).ToList() };
         }
@@ -111,12 +110,12 @@ public class CommercialCostService(AppDbContext db, IPostingService posting)
             if (source.DeliveryItemId.HasValue)
             {
                 var line = await db.DeliveryItems.SingleAsync(x => x.Id == source.DeliveryItemId);
-                line.ActualUnitCost = i.ActualUnitCost; line.ActualUnitCostOverride = i.ActualUnitCost; line.SupplierId = i.SupplierId;
+                line.ActualUnitCost = i.ActualUnitCost; line.SupplierId = i.SupplierId;
             }
             else
             {
                 var line = await db.InvoiceItems.SingleAsync(x => x.Id == i.Id && x.InvoiceId == id);
-                line.ActualUnitCost = i.ActualUnitCost; line.ActualUnitCostOverride = i.ActualUnitCost; line.SupplierId = i.SupplierId;
+                line.ActualUnitCost = i.ActualUnitCost; line.SupplierId = i.SupplierId;
             }
         }
         db.Set<PrivateCostChange>().Add(new() { CompanyId = before.CompanyId, ActorId = actorId,
@@ -147,6 +146,14 @@ public class CommercialCostService(AppDbContext db, IPostingService posting)
         var items = source.Items.Where(i => request.ItemIds.Contains(i.Id)).ToList();
         if (items.Count != request.ItemIds.Count || items.Any(i => i.RemainingQuantity <= 0 || !i.SupplierId.HasValue || !i.ActualUnitCost.HasValue))
             throw new CommercialCostValidationException("Select unprocessed lines with a supplier, actual cost and positive quantity.");
+        // Quantity to buy per line: the remaining quantity unless the review
+        // asked for less. Never more than what is left.
+        var quantities = request.Quantities ?? new();
+        if (quantities.Keys.Any(k => !request.ItemIds.Contains(k)))
+            throw new CommercialCostValidationException("Refresh the preview and select ready lines and a purchase date.");
+        decimal Qty(CommercialCostLineDto i) => quantities.TryGetValue(i.Id, out var q) ? q : i.RemainingQuantity;
+        if (items.Any(i => Qty(i) <= 0 || Qty(i) > i.RemainingQuantity))
+            throw new CommercialCostValidationException("A purchase quantity must be more than zero and no more than the quantity still to purchase.");
         var cancelled = kind == "challan"
             ? await db.DeliveryChallans.AnyAsync(c => c.Id == id && c.Status == "Cancelled")
             : await db.Invoices.AnyAsync(b => b.Id == id && b.IsCancelled);
@@ -165,8 +172,8 @@ public class CommercialCostService(AppDbContext db, IPostingService posting)
                 PurchaseBillNumber = await CompanyDocumentNumbers.AllocateAsync(db, source.CompanyId, "purchase-bill"),
                 ReconciliationStatus = "ManualOnly", Notes = $"Local purchase from {kind} #{source.Number}",
                 SupplierBillNumber = settings?.SupplierBillNumber?.Trim(), GSTRate = settings?.GSTRate ?? 0,
-                Items = group.Select(i => new PurchaseItem { Description = i.Description, Quantity = i.RemainingQuantity,
-                    UOM = i.Unit, UnitPrice = i.ActualUnitCost!.Value, LineTotal = Math.Round(i.RemainingQuantity * i.ActualUnitCost.Value, 2),
+                Items = group.Select(i => new PurchaseItem { Description = i.Description, Quantity = Qty(i),
+                    UOM = i.Unit, UnitPrice = i.ActualUnitCost!.Value, LineTotal = Math.Round(Qty(i) * i.ActualUnitCost.Value, 2),
                     LocalDeliveryItemId = i.DeliveryItemId, LocalInvoiceItemId = i.DeliveryItemId.HasValue ? null : i.Id }).ToList() };
             bill.Subtotal = bill.Items.Sum(i => i.LineTotal);
             bill.GSTAmount = Math.Round(bill.Subtotal * bill.GSTRate / 100m, 2);
