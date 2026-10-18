@@ -54,6 +54,18 @@ export function invoiceBreakdown(values, statusLabel) {
   ];
 }
 
-export function openBillPath(invoiceNumber) {
-  return `/bills?search=${encodeURIComponent(invoiceNumber)}`;
+// Credit and debit notes are numbered per kind, so each opens on its own
+// screen (gated like the sidebar link to it); everything else is a bill.
+const DOC_SCREENS = {
+  bill: { path: "/bills", permission: "bills.list.view", label: "Open bill" },
+  creditNote: { path: "/credit-notes", permission: "invoices.list.view", label: "Open credit note" },
+  debitNote: { path: "/debit-notes", permission: "invoices.list.view", label: "Open debit note" },
+};
+
+export function openDocScreen(docType) {
+  return DOC_SCREENS[docType] || DOC_SCREENS.bill;
+}
+
+export function openBillPath(invoiceNumber, docType) {
+  return `${openDocScreen(docType).path}?search=${encodeURIComponent(invoiceNumber)}`;
 }

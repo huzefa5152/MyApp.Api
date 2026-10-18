@@ -19,7 +19,7 @@ import { getDashboardBreakdown } from "../../api/dashboardApi";
 import { usePermissions } from "../../contexts/PermissionsContext";
 import { fbrStatusLabel } from "../../utils/fbrStatus";
 import {
-  drillToSearch, reconciles, exportRows, invoiceBreakdown, openBillPath,
+  drillToSearch, reconciles, exportRows, invoiceBreakdown, openBillPath, openDocScreen,
 } from "../../utils/dashboardDrill";
 
 export { drillFromSearch } from "../../utils/dashboardDrill";
@@ -176,11 +176,11 @@ export default function KpiDrilldown({
             </div>
           ))}
         </div>
-        {r.invoiceNumber != null && has("bills.list.view") && (
-          <Link to={openBillPath(r.invoiceNumber)} style={{
+        {r.invoiceNumber != null && has(openDocScreen(r.values?.docType).permission) && (
+          <Link to={openBillPath(r.invoiceNumber, r.values?.docType)} style={{
             display: "inline-flex", alignItems: "center", minHeight: 44, marginTop: "0.4rem",
             color: colors.blue, fontWeight: 600, fontSize: "0.85rem",
-          }}>Open bill {r.invoiceNumber}</Link>
+          }}>{openDocScreen(r.values?.docType).label} {r.invoiceNumber}</Link>
         )}
       </div>
     );

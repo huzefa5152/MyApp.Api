@@ -88,6 +88,11 @@ check("invoice breakdown + bill link", () => {
   assert.strictEqual(rows.length, 7);
   assert.match(rows[3].label, /236G/);
   assert.strictEqual(D.openBillPath(1234), "/bills?search=1234");
+  assert.strictEqual(D.openBillPath(1234, "bill"), "/bills?search=1234");
+  assert.strictEqual(D.openBillPath(7, "creditNote"), "/credit-notes?search=7");
+  assert.strictEqual(D.openBillPath(7, "debitNote"), "/debit-notes?search=7");
+  assert.strictEqual(D.openDocScreen("creditNote").permission, "invoices.list.view");
+  assert.strictEqual(D.openDocScreen("bill").permission, "bills.list.view");
 });
 
 console.log("\n=== overview page data ===");

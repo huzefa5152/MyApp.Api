@@ -557,12 +557,17 @@ def main():
               str([r_.get("groupKey") for r_ in b1.get("rows", [])]))
         sep = l2.get("2026-09", {})
         inv_rows = [r_ for r_ in sep.get("rows", []) if r_.get("invoiceId")]
-        check("an invoice row carries invoiceId, invoiceNumber and exactly the invoice values",
-              bool(inv_rows) and all(r_.get("invoiceNumber") is not None and set(r_.get("values", {})) == INV_KEYS for r_ in inv_rows),
+        # docType rides along with the column values: it says which screen opens the row.
+        check("an invoice row carries invoiceId, invoiceNumber and exactly the invoice values plus docType",
+              bool(inv_rows) and all(r_.get("invoiceNumber") is not None and set(r_.get("values", {})) == INV_KEYS | {"docType"} for r_ in inv_rows),
               str(inv_rows[:1])[:300])
         check("level-2 columns are the invoice columns", {c_["key"] for c_ in sep.get("columns", [])} == INV_KEYS,
               str([c_.get("key") for c_ in sep.get("columns", [])]))
         check("the credit note is a negative level-2 row", any(near(r_.get("amount"), -20000) for r_ in inv_rows), str(inv_rows)[:300])
+        check("the credit note row says it is a credit note (opens the Credit Notes screen)",
+              any(near(r_.get("amount"), -20000) and r_["values"].get("docType") == "creditNote" for r_ in inv_rows), str(inv_rows)[:300])
+        check("a bill row says it is a bill",
+              any(r_.get("amount", 0) > 0 and r_["values"].get("docType") == "bill" for r_ in inv_rows), str(inv_rows)[:300])
         check("level 2 is newest first", [r_["values"]["date"] for r_ in inv_rows] == sorted([r_["values"]["date"] for r_ in inv_rows], reverse=True))
         check("level 2 is not truncated", sep.get("truncated") is False, str(sep.get("truncated")))
         b1c, l2c = ties("sales September (by customer)", cid, "sales", h_sep.get("netSales"), **{"from": "2026-09-01", "to": "2026-09-30"})

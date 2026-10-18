@@ -1011,6 +1011,8 @@ namespace MyApp.Api.Services.Implementations
                 ["advSection"] = r.AdvSection, ["adv236"] = Round(r.Sign * r.Adv),
                 ["wht"] = Round(r.Sign * r.Wht), ["grandTotal"] = Round(r.Sign * r.GrandTotal),
                 ["fbrStatus"] = r.FbrStatus,
+                // Notes are numbered per kind, so the row must say which screen owns it.
+                ["docType"] = r.DocType == 10 ? "creditNote" : r.DocType == 9 ? "debitNote" : "bill",
             },
         };
 
