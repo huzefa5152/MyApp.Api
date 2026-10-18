@@ -182,10 +182,13 @@ function Overview({ data, tax, onTaxRetry, has, openDrill }) {
   const sales = data.sales;
 
   const showSales = !!flags.canViewSales;
-  const showStock = showSales && hero.hasStock;
-  const showPayables = showSales && (hero.payablesTotal || 0) !== 0;
+  // Payables, stock and recoverables are not sales figures: the server sends
+  // them with the hero (sales OR purchases KPI), so that is their gate.
+  const hasHero = !!data.hero;
+  const showStock = hasHero && !!hero.hasStock;
+  const showPayables = hasHero && (hero.payablesTotal || 0) !== 0;
   const showReceivables = showSales && (hero.receivablesScopeRestricted || (hero.receivablesTotal || 0) !== 0);
-  const showRecoverable = showSales && (hero.recoverableTaxTotal || 0) !== 0;
+  const showRecoverable = hasHero && (hero.recoverableTaxTotal || 0) !== 0;
   // Every drill reads /api/dashboard/breakdown (dashboard.view); no key, no clickable figure.
   const canDrill = has("dashboard.view");
   const drillTo = (kind, opts) => (canDrill ? () => openDrill(kind, opts) : null);
@@ -250,7 +253,7 @@ function Overview({ data, tax, onTaxRetry, has, openDrill }) {
         </KpiGroup>
       )}
 
-      {showSales && (
+      {(showSales || showPayables || showStock || showRecoverable) && (
         <KpiGroup title="Cash & balances">
           {showReceivables && <KpiCard
             label="Receivables"
@@ -264,11 +267,11 @@ function Overview({ data, tax, onTaxRetry, has, openDrill }) {
             howCalculated="Customer balances from the aged receivables report, all time, net of receipts on account. 236G/H advance tax is shown separately."
             onDrillDown={hero.receivablesScopeRestricted ? null : drillTo("receivables")}
           />}
-          <KpiCard
+          {showSales && <KpiCard
             label="Received in period" value={hero.receivedInPeriod} format={money} accent={p.positive}
             icon={<MdPayments size={16} />}
             howCalculated="Customer receipts dated in the period, cancelled receipts left out."
-          />
+          />}
           {showPayables && (
             <KpiCard
               label="Payables" value={hero.payablesTotal} format={money} accent={p.negative}
