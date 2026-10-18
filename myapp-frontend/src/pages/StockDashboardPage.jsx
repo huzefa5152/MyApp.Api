@@ -902,7 +902,7 @@ export default function StockDashboardPage() {
 
           {/* Totals follow the search, over the whole filtered set rather than
               the page on screen. */}
-          {!loading && filteredOnhand.length > 0 && (
+          {!loading && filteredOnhand.length > 0 && (tab === "onhand" || tab === "inventory") && (
             <div className="stk-kpis">
               <Kpi label="Quantity" value={num(onhandTotals.qty)} sub={`${filteredOnhand.length} items`} />
               <Kpi label="Excluding tax" value={money(onhandTotals.excl)} sub="Value before sales tax" />
@@ -913,7 +913,7 @@ export default function StockDashboardPage() {
                   would read 0 and imply the stock cost nothing), and only to
                   someone allowed to see actual cost. */}
               {showCostTiles && (
-                <Kpi label="Actual (landed) cost" value={money(onhandTotals.actual)} sub="What the stock cost" tone="o" />
+                <Kpi label="Landed cost" value={money(onhandTotals.actual)} sub="What the stock cost" tone="o" />
               )}
               {showCostTiles && (
                 <Kpi label="Margin over cost" value={money(onhandMargin)} sub="Excluding − landed" tone="g"
@@ -1507,12 +1507,12 @@ export default function StockDashboardPage() {
                             {showOpenCol("item") && <th>Item</th>}
                             {showOpenCol("qty") && <th className="num">Quantity</th>}
                             {showOpenCol("excl") && <th className="num">Excluding</th>}
-                            {showOpenCol("rate") && <th className="num">S.Tax %</th>}
+                            {showOpenCol("rate") && !showOpenCol("tax") && <th className="num">S.Tax %</th>}
                             {showOpenCol("tax") && <th className="num">Sales Tax</th>}
                             {showOpenCol("incl") && <th className="num">Including</th>}
                             {canViewActualCost && showOpenCol("actual") && <th className="num">Actual Cost</th>}
                             {canViewActualCost && showOpenCol("margin") && <th className="num">Margin</th>}
-                            {showOpenCol("asof") && <th>As Of</th>}
+                            {showOpenCol("asof") && !showOpenCol("item") && <th>As Of</th>}
                             {showOpenCol("notes") && <th>Notes</th>}
                             <th style={{ width: 64 }} aria-label="Actions"></th>
                           </tr>
@@ -1521,11 +1521,11 @@ export default function StockDashboardPage() {
                           {filteredOpenings.map((o) => (
                             <tr key={o.id}>
                               {showOpenCol("gd") && <td><GdList gds={gdByItem.get(o.itemTypeId)} /></td>}
-                              {showOpenCol("item") && <td><div className="stk-name">{o.itemTypeName}</div></td>}
+                              {showOpenCol("item") && <td><div className="stk-name">{o.itemTypeName}</div>{showOpenCol("asof") && <div className="stk-meta">as of {new Date(o.asOfDate).toLocaleDateString()}</div>}</td>}
                               {showOpenCol("qty") && <td className="num" style={{ fontWeight: 600 }}>{o.quantity.toLocaleString()}</td>}
                               {showOpenCol("excl") && <td className="num">{money(o.valueExcludingTax)}</td>}
-                              {showOpenCol("rate") && <td className="num" style={{ color: "var(--dash-text)" }}>{o.salesTaxRate ? `${num(o.salesTaxRate)}%` : "—"}</td>}
-                              {showOpenCol("tax") && <td className="num">{money(o.salesTax)}</td>}
+                              {showOpenCol("rate") && !showOpenCol("tax") && <td className="num" style={{ color: "var(--dash-text)" }}>{o.salesTaxRate ? `${num(o.salesTaxRate)}%` : "—"}</td>}
+                              {showOpenCol("tax") && <td className="num">{money(o.salesTax)}{showOpenCol("rate") && <div className="stk-rate">{o.salesTaxRate ? `${num(o.salesTaxRate)}%` : "no rate"}</div>}</td>}
                               {showOpenCol("incl") && <td className="num" style={{ fontWeight: 600 }}>{money(o.valueIncludingTax)}</td>}
                               {canViewActualCost && showOpenCol("actual") && (
                                 <td className="num" style={{ color: "var(--dash-text)" }}>
@@ -1540,8 +1540,8 @@ export default function StockDashboardPage() {
                                   </div>
                                 </td>
                               )}
-                              {showOpenCol("asof") && <td style={{ whiteSpace: "nowrap" }}>{new Date(o.asOfDate).toLocaleDateString()}</td>}
-                              {showOpenCol("notes") && <td style={{ fontSize: 11.5, color: "var(--dash-text)", minWidth: 140 }}>{o.notes || "—"}</td>}
+                              {showOpenCol("asof") && !showOpenCol("item") && <td style={{ whiteSpace: "nowrap" }}>{new Date(o.asOfDate).toLocaleDateString()}</td>}
+                              {showOpenCol("notes") && <td><div className="stk-note" title={o.notes || undefined}>{o.notes || "—"}</div></td>}
                               <td className="stk-acts">
                                 <button type="button" className="stk-ib" title="Restate this opening balance"
                                   aria-label={`Edit opening balance for ${o.itemTypeName}`} onClick={() => startEditOpening(o)}>
@@ -1665,7 +1665,7 @@ export default function StockDashboardPage() {
                               )}
                               {showMovCol("balance") && <td className="num">{num(m.runningQuantity)} · {money(m.runningValue)}</td>}
                               {showMovCol("source") && <td style={{ fontSize: 11.5 }}>{m.sourceType}{m.sourceDocNumber ? ` #${m.sourceDocNumber}` : ""}</td>}
-                              {showMovCol("notes") && <td style={{ fontSize: 11.5, color: "var(--dash-text)", minWidth: 140 }}>{m.notes || "—"}</td>}
+                              {showMovCol("notes") && <td><div className="stk-note" title={m.notes || undefined}>{m.notes || "—"}</div></td>}
                             </tr>
                           ))}
                         </tbody>
@@ -2608,9 +2608,9 @@ function SmallModal({ title, children, onClose, onSubmit, submitting }) {
         aria-label={title}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="stk-modal-head">
-          <h3>{title}</h3>
-          <button type="button" className="stk-modal-close" onClick={onClose} aria-label="Close">×</button>
+        <div style={formStyles.header}>
+          <h5 style={formStyles.title}>{title}</h5>
+          <button type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
         </div>
 
         <form
@@ -2618,12 +2618,12 @@ function SmallModal({ title, children, onClose, onSubmit, submitting }) {
           style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}
         >
           {/* Only the body scrolls, so the footer buttons are always reachable. */}
-          <div style={{ overflowY: "auto", flex: 1, minHeight: 0, padding: "14px 16px" }}>
+          <div style={formStyles.body}>
             {children}
           </div>
-          <div className="stk-modal-foot">
-            <button type="button" className="stk-btn" onClick={onClose}>Cancel</button>
-            <button type="submit" className="stk-btn primary" disabled={submitting} aria-busy={submitting || undefined}>
+          <div style={formStyles.footer}>
+            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: submitting ? 0.7 : 1 }} disabled={submitting} aria-busy={submitting || undefined}>
               {submitting ? "Saving…" : "Save"}
             </button>
           </div>
@@ -2635,15 +2635,15 @@ function SmallModal({ title, children, onClose, onSubmit, submitting }) {
 
 function Field({ label, children }) {
   return (
-    <div className="stk-field">
-      <label>{label}</label>
+    <div style={formStyles.formGroup}>
+      <label style={formStyles.label}>{label}</label>
       {children}
     </div>
   );
 }
 
-const mInput = { width: "100%", minHeight: 40, padding: "0.45rem 0.65rem", border: "1px solid var(--dash-grid)", borderRadius: 8, fontSize: "12.5px", backgroundColor: "var(--dash-card)", color: "var(--dash-ink)", outline: "none" };
-const mInputLocked = { backgroundColor: "var(--dash-primary-soft)", cursor: "not-allowed" };
+const mInput = { ...formStyles.input, minHeight: 40 };
+const mInputLocked = { backgroundColor: "#eef1f5", cursor: "not-allowed" };
 const qtyHint = { fontSize: "11px", color: "var(--dash-text)", marginTop: "0.35rem" };
 // "On record now" strip + the mode switch at the top of the Adjustment dialog.
 const adjustNow = {

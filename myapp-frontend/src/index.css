@@ -41,6 +41,7 @@
   --dash-band-qty: #7d8a9c;
   --dash-band-flow: #56657a;
   --dash-shadow: 0 1px 2px rgba(12, 24, 48, 0.06), 0 1px 8px rgba(12, 24, 48, 0.04);
+  --dash-shadow-pop: 0 8px 24px rgba(12, 24, 48, 0.12);
 }
 
 * {

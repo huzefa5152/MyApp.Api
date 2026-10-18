@@ -23,12 +23,12 @@ export default function StockMenu({ label, icon, busy, children }) {
 
   return (
     <div className="stk-menuwrap" ref={wrap}>
-      <button ref={btn} type="button" className="stk-btn" aria-haspopup="menu" aria-expanded={open}
+      <button ref={btn} type="button" className="stk-btn" aria-expanded={open}
         onClick={() => setOpen((v) => !v)} disabled={busy}>
         {icon}{label} <span className="stk-caret" aria-hidden="true">▼</span>
       </button>
       {open && (
-        <div className="stk-menu" role="menu" aria-label={label}
+        <div className="stk-menu" aria-label={label}
           onClick={(e) => { if (e.target.closest("[role=menuitem]")) setOpen(false); }}>
           {children}
         </div>
@@ -40,7 +40,7 @@ export default function StockMenu({ label, icon, busy, children }) {
 // One menu entry: a bold title and a one-line explanation.
 export function StockMenuItem({ as: Tag = "button", title, hint, ...rest }) {
   return (
-    <Tag role="menuitem" className="stk-mi" {...(Tag === "button" ? { type: "button" } : {})} {...rest}>
+    <Tag className="stk-mi" {...(Tag === "button" ? { type: "button" } : {})} {...rest}>
       <b>{title}</b>
       {hint && <span>{hint}</span>}
     </Tag>
