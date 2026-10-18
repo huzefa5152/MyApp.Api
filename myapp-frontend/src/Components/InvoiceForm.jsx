@@ -1614,7 +1614,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                           }}
                         />
             <p style={{ color: colors.textSecondary, fontSize: "0.85rem", lineHeight: 1.5 }}>Item Type is optional on bills. Selected types suggest filing groups; unclassified lines stay separate. The tax consultant can combine or separate them in Adjust invoice.</p>
-            <TaxInvoiceGrouping value={groupTaxInvoiceByItemType} onChange={setGroupTaxInvoiceByItemType} />
+            {!company?.taxInvoiceUseOriginalBillLines && <TaxInvoiceGrouping value={groupTaxInvoiceByItemType} onChange={setGroupTaxInvoiceByItemType} />}
             <DocumentNotesEditor value={notes} onChange={setNotes} />
             <div style={{ marginTop: "1rem" }}>
               <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="Invoice" entityId={null} mode="edit" />

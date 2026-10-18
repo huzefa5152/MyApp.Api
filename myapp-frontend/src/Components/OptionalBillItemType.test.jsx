@@ -6,9 +6,11 @@ import { MemoryRouter } from "react-router-dom";
 import ConfirmProvider from "./ConfirmDialog";
 import InvoiceForm from "./InvoiceForm";
 import StandaloneInvoiceForm from "./StandaloneInvoiceForm";
+import EditBillForm from "./EditBillForm";
 import http from "../api/httpClient";
 vi.mock("../api/httpClient", () => ({ default: { get: vi.fn(), post: vi.fn(), put: vi.fn() } }));
 vi.mock("../contexts/PermissionsContext", () => ({ usePermissions: () => ({ has: () => true }) }));
+vi.mock("../contexts/AuthContext", () => ({ useAuth: () => ({ user: { id: 1, isSeedAdmin: true } }) }));
 vi.mock("./AttachmentManager", () => ({ default: () => null }));
 const company = { id: 7, name: "Sample company", startingInvoiceNumber: 1 };
 const lines = [{ id: 1, description: "Sample product", quantity: 2, unit: "Nos" }];
@@ -21,6 +23,49 @@ function show(Component, extra = {}) {
  const saved = vi.fn();
  render(<MemoryRouter><ConfirmProvider><Component companyId={7} company={company} billsMode onClose={()=>{}} onSaved={saved} {...extra}/></ConfirmProvider></MemoryRouter>);
  return saved;
+}
+for (const Component of [InvoiceForm, StandaloneInvoiceForm]) {
+ it(`${Component.name} keeps the layout choice for ordinary companies`, async () => {
+  show(Component);
+  expect(await screen.findByRole('combobox', {name:'Sales Tax Invoice layout'})).toBeTruthy();
+ });
+ it(`${Component.name} hides the layout choice for original-line printing companies`, async () => {
+  show(Component, {company:{...company,taxInvoiceUseOriginalBillLines:true,defaultGroupTaxInvoiceByItemType:true}});
+  await screen.findByRole('button',{name:/^Create Bill/});
+  expect(screen.queryByRole('combobox',{name:'Sales Tax Invoice layout'})).toBeNull();
+  expect(screen.queryByText(/Grouped rows sum quantity and value/)).toBeNull();
+ });
+ it(`${Component.name} preserves the stored grouping choice while its control is hidden`, async () => {
+  const saved=show(Component, {company:{...company,taxInvoiceUseOriginalBillLines:true,defaultGroupTaxInvoiceByItemType:true},prefillChallanId:10});
+  if(Component===StandaloneInvoiceForm){
+   fireEvent.click(await screen.findByRole('button',{name:'— Choose a buyer —',exact:true}));
+   fireEvent.mouseDown(screen.getByText('Sample Buyer (Registered)',{exact:true}));
+   fireEvent.change(await screen.findByPlaceholderText('Description'),{target:{value:'Sample service'}});
+   fireEvent.change(screen.getByPlaceholderText('0'),{target:{value:'2'}});
+   fireEvent.change(screen.getByPlaceholderText('Unit'),{target:{value:'Nos'}});
+   fireEvent.change(screen.getAllByPlaceholderText('0.00')[0],{target:{value:'100'}});
+  }
+  const button=await screen.findByRole('button',{name:/^Create Bill/});
+  await vi.waitFor(()=>expect(button.disabled).toBe(false));
+  fireEvent.click(button);
+  await vi.waitFor(()=>expect(saved).toHaveBeenCalledOnce());
+  const path=Component===InvoiceForm?'/invoices':'/invoices/standalone';
+  expect(http.post.mock.calls.find(([url])=>url===path)[1].groupTaxInvoiceByItemType).toBe(true);
+ });
+}
+for (const withChallan of [false, true]) {
+ it(`bill edit ${withChallan?'with':'without'} challan keeps print-layout controls hidden`, async () => {
+  const lookup = http.get.getMockImplementation();
+  http.get.mockImplementation((url,...args)=>url==='/invoices/42'?Promise.resolve({data:{
+   id:42,companyId:7,invoiceNumber:1,clientId:3,clientName:'Sample Buyer',isEditable:true,date:'2026-10-18',
+   gstRate:18,subtotal:200,gstAmount:36,grandTotal:236,groupTaxInvoiceByItemType:true,
+   challanIds:withChallan?[10]:[],items:[{id:1,description:'Sample product',quantity:2,unitPrice:100,lineTotal:200,uom:'Nos'}]
+  }}):lookup(url,...args));
+  show(EditBillForm, {invoiceId:42});
+  await screen.findByDisplayValue('Sample product');
+  expect(screen.queryByRole('combobox',{name:'Sales Tax Invoice layout'})).toBeNull();
+  expect(screen.queryByRole('button',{name:'Save print layout'})).toBeNull();
+ });
 }
 it('creates a challan bill without selecting any item type', async () => {
  const saved = show(InvoiceForm, {prefillChallanId:10});
