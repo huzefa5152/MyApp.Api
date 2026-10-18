@@ -5,22 +5,23 @@ import {colors, formStyles} from '../theme';
 import {usePermissions} from '../contexts/PermissionsContext';
 import {useConfirm} from './ConfirmDialog';
 import StockEntryForm from './StockEntryForm';
+import '../pages/StockDashboardPage.css';
 
-const rowStyle = {display:'flex', flexWrap:'wrap', alignItems:'center', justifyContent:'space-between', gap:12};
 const buttonStyle = {...formStyles.button, minHeight:44};
 const number = value => Number(value).toLocaleString('en-PK', {maximumFractionDigits:4});
 const money = value => Number(value).toLocaleString('en-PK', {minimumFractionDigits:2, maximumFractionDigits:2});
 
 // The company key discards rows, pending confirmations and drafts on a company switch.
-export default function StockEntryHistory({companyId, onChanged}) {
-  return <CompanyStockEntryHistory key={companyId} companyId={companyId} onChanged={onChanged}/>;
+export default function StockEntryHistory({companyId, onChanged, onNewEntry}) {
+  return <CompanyStockEntryHistory key={companyId} companyId={companyId} onChanged={onChanged} onNewEntry={onNewEntry}/>;
 }
 
-function CompanyStockEntryHistory({companyId, onChanged}) {
+function CompanyStockEntryHistory({companyId, onChanged, onNewEntry}) {
   const {has} = usePermissions();
   const canOpen = has('stock.opening.manage'), canAdjust = has('stock.adjust.create');
   const allowed = canOpen || canAdjust;
   const confirm = useConfirm();
+  const [kind, setKind] = useState(''), [status, setStatus] = useState(''), [search, setSearch] = useState('');
   const [entries, setEntries] = useState([]), [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false);
   const [error, setError] = useState(''), [success, setSuccess] = useState('');
@@ -32,12 +33,16 @@ function CompanyStockEntryHistory({companyId, onChanged}) {
     let active = true;
     setEntries([]); setError(''); setLoading(true);
     if (!companyId || !allowed) {setLoading(false); return;}
-    http.get(`/stockentries/company/${companyId}?page=${page}`)
+    const filters = new URLSearchParams();
+    if (kind) filters.set('kind', kind);
+    if (status) filters.set('status', status);
+    if (search.trim()) filters.set('search', search.trim());
+    http.get(`/stockentries/company/${companyId}?page=${page}${filters.size ? '&' + filters.toString() : ''}`)
       .then(({data}) => {if (active) setEntries(data);})
       .catch(() => {if (active) setError('Could not load stock entries. Please retry.');})
       .finally(() => {if (active) setLoading(false);});
     return () => {active = false;};
-  }, [companyId, page, refresh, allowed, canOpen, canAdjust]);
+  }, [companyId, page, refresh, allowed, canOpen, canAdjust, kind, status, search]);
 
   async function reverse(entry) {
     if (busy) return;
@@ -57,37 +62,36 @@ function CompanyStockEntryHistory({companyId, onChanged}) {
 
   if (!allowed) return null;
   const visible = entries.filter(entry => entry.kind === 'Opening' ? canOpen : canAdjust);
-  return <section aria-label="Opening stock and adjustment history" style={{minWidth:0}}>
-    <div style={{...rowStyle, marginBottom:16}}>
-      <div><h3 style={{fontSize:20, color:colors.blue, margin:'0 0 4px'}}>Opening stock & adjustments</h3>
-        <p style={{color:colors.textSecondary, margin:0}}>Stock and valuation only · No supplier payable.</p></div>
-      <div style={{display:'flex', flexWrap:'wrap', gap:8}}>
-        <button type="button" style={buttonStyle} disabled={busy || loading} onClick={() => setRefresh(value => value + 1)}><MdRefresh aria-hidden="true"/> Refresh entries</button>
-        <button type="button" style={{...buttonStyle, ...formStyles.submit}} disabled={busy} onClick={() => setShowForm(true)}><MdAdd aria-hidden="true"/> New stock entry</button>
+  return <section aria-label="Opening stock and adjustment history" className="inventory-entry-history">
+    <div className="inventory-toolbar">
+      <div className="inventory-search"><input aria-label="Search stock entries" placeholder="Search item or reason…" maxLength={100} value={search} onChange={e => {setPage(1);setSearch(e.target.value);}}/></div>
+      <div className="inventory-actions">
+        <select aria-label="Entry type filter" value={kind} onChange={e => {setPage(1);setKind(e.target.value);}}><option value="">All entry types</option>{canOpen && <option value="Opening">Opening stock</option>}{canAdjust && <option value="Adjustment">Adjustments</option>}</select>
+        <select aria-label="Entry status filter" value={status} onChange={e => {setPage(1);setStatus(e.target.value);}}><option value="">All statuses</option><option value="active">Active</option><option value="reversed">Reversed</option></select>
+        <button type="button" disabled={busy || loading} onClick={() => setRefresh(value => value + 1)}><MdRefresh aria-hidden="true"/> Refresh entries</button>
+        {onNewEntry ? <>{canOpen && <button type="button" disabled={busy} onClick={() => onNewEntry('Opening')}><MdAdd aria-hidden="true"/> Opening stock</button>}{canAdjust && <button className="inventory-primary" type="button" disabled={busy} onClick={() => onNewEntry('Adjustment')}>Adjustment</button>}</> :
+          <button type="button" className="inventory-primary" disabled={busy} onClick={() => setShowForm(true)}><MdAdd aria-hidden="true"/> New stock entry</button>}
       </div>
     </div>
+    <p className="inventory-caption inventory-history-note">Stock and valuation only · No supplier payable.</p>
     {error && <p role="alert" style={formStyles.error}>{error}</p>}
     {success && <p role="status" style={{color:colors.teal}}>{success}</p>}
     {loading ? <p role="status">Loading stock entries…</p> : <>
       {!error && !visible.length && <p>{page === 1 ? 'No stock entries yet.' : 'No more stock entries.'}</p>}
-      <div style={{display:'grid', gap:12}}>{visible.map(entry => <article key={entry.id} aria-label={`Stock entry #${entry.id}`}
-        style={{background:colors.cardBg, border:`1px solid ${colors.cardBorder}`, borderRadius:12, padding:16, overflowWrap:'anywhere', minWidth:0}}>
-        <div style={rowStyle}>
-          <strong style={{color:colors.textPrimary}}>#{entry.id} · {entry.itemName}</strong>
-          <span style={{color:entry.isCancelled ? colors.textSecondary : colors.teal, fontWeight:600}}>{entry.isCancelled ? 'Reversed' : 'Active'}</span>
-        </div>
-        <p style={{color:colors.textSecondary, margin:'8px 0'}}>{entry.kind === 'Opening' ? 'Opening stock' : 'Stock adjustment'} · {entry.date.slice(0,10)}</p>
-        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(min(150px,100%),1fr))', gap:12}}>
-          <div><span style={{color:colors.textSecondary}}>Quantity</span><br/><strong>{entry.quantityDelta > 0 ? '+' : ''}{number(entry.quantityDelta)} {entry.uom}</strong></div>
-          <div><span style={{color:colors.textSecondary}}>Unit cost</span><br/><strong>Rs. {money(entry.unitCost)}</strong></div>
-          <div><span style={{color:colors.textSecondary}}>Value</span><br/><strong>Rs. {money(Math.abs(entry.quantityDelta * entry.unitCost))}</strong></div>
-        </div>
-        <p style={{margin:'12px 0', color:colors.textSecondary}}>{entry.reason}</p>
-        {!entry.isCancelled && <button type="button" style={{...buttonStyle, color:colors.danger}} disabled={busy}
-          onClick={() => reverse(entry)}><MdUndo aria-hidden="true"/> Reverse entry #{entry.id}</button>}
+      <div className="inventory-entry-columns" aria-hidden="true"><span>Entry / date</span><span>Item / reason</span><span>Type</span><span>Quantity</span><span>Unit cost</span><span>Value</span><span>Status</span><span/></div>
+      <div>{visible.map(entry => <article key={entry.id} aria-label={`Stock entry #${entry.id}`} className="inventory-entry-row">
+        <div className="inventory-entry-id"><strong>#{entry.id}</strong><small>{entry.date.slice(0,10)}</small></div>
+        <div className="inventory-entry-item"><strong>{entry.itemName}</strong><small>{entry.reason}</small></div>
+        <div className="inventory-entry-kind">{entry.kind === 'Opening' ? 'Opening stock' : 'Stock adjustment'}</div>
+        <div className="inventory-entry-number"><span className="inventory-mobile-label">Quantity</span><strong>{entry.quantityDelta > 0 ? '+' : ''}{number(entry.quantityDelta)} {entry.uom}</strong></div>
+        <div className="inventory-entry-number"><span className="inventory-mobile-label">Unit cost</span>Rs. {money(entry.unitCost)}</div>
+        <div className="inventory-entry-number"><span className="inventory-mobile-label">Value</span>Rs. {money(Math.abs(entry.quantityDelta * entry.unitCost))}</div>
+        <span className={`inventory-badge ${entry.isCancelled ? 'is-reversed' : ''}`}>{entry.isCancelled ? 'Reversed' : 'Active'}</span>
+        <div>{!entry.isCancelled && <button type="button" className="inventory-reverse" aria-label={`Reverse entry #${entry.id}`} disabled={busy}
+          onClick={() => reverse(entry)}><MdUndo aria-hidden="true"/> Reverse</button>}</div>
       </article>)}</div>
     </>}
-    <nav aria-label="Stock entry pages" style={{...rowStyle, marginTop:16}}>
+    <nav aria-label="Stock entry pages" className="inventory-pagination">
       <button type="button" style={buttonStyle} disabled={busy || loading || page === 1} onClick={() => setPage(value => value - 1)}>Previous entries</button>
       <span>Page {page}</span>
       <button type="button" style={buttonStyle} disabled={busy || loading || !!error || entries.length < 20} onClick={() => setPage(value => value + 1)}>Next entries</button>

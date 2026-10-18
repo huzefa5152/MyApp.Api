@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, Fragment } from "react";
+import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import { MdInventory, MdBusiness, MdSearch, MdAdd, MdHistory, MdTune, MdClose, MdSwapHoriz, MdExpandMore, MdChevronRight } from "react-icons/md";
 import { getStockOnHand, getStockMovements, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock } from "../api/stockApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getAllUnits } from "../api/unitsApi";
-import { dropdownStyles } from "../theme";
+import { dropdownStyles, formStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
@@ -13,6 +13,8 @@ import { isDecimalUnit } from "../utils/formatQuantity";
 import SearchableItemTypeSelect from "../Components/SearchableItemTypeSelect";
 import Pagination from "../Components/Pagination";
 import StockEntryHistory from "../Components/StockEntryHistory";
+import StockEntryForm from "../Components/StockEntryForm";
+import "./StockDashboardPage.css";
 
 const colors = {
   blue: "#0d47a1",
@@ -27,12 +29,23 @@ const colors = {
 };
 
 export default function StockDashboardPage() {
+  const {selectedCompany} = useCompany();
+  return <CompanyStockDashboard key={selectedCompany?.id || 'none'}/>;
+}
+
+function CompanyStockDashboard() {
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
   const { has } = usePermissions();
   const confirm = useConfirm();
   const canManageOpening = has("stock.opening.manage");
   const canAdjust = has("stock.adjust.create");
   const canViewMovements = has("stock.movements.view");
+  const [entryDraft, setEntryDraft] = useState(null);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const alive = useRef(true), loadRequest = useRef(0), movementRequest = useRef(0);
+  useEffect(() => {alive.current = true; return () => {alive.current = false;};}, []);
 
   const [tab, setTab] = useState("onhand");
   const [onhand, setOnhand] = useState([]);
@@ -65,12 +78,15 @@ export default function StockDashboardPage() {
 
   const fetchAll = useCallback(async () => {
     if (!selectedCompany) return;
+    const request = ++loadRequest.current;
+    setLoadError('');
+    setMovPage(1);
     setLoading(true);
     try {
       const [oh, op, it, mov] = await Promise.all([
         getStockOnHand(selectedCompany.id),
         canManageOpening ? getOpeningBalances(selectedCompany.id) : Promise.resolve({ data: [] }),
-        getItemTypes(),
+        canManageOpening || canAdjust ? getItemTypes(selectedCompany.id) : Promise.resolve({data:[]}),
         // 2026-05-12: also pull the movements first page on initial load
         // so the "Movements (N)" tab label shows the correct count
         // BEFORE the operator clicks into the tab. Pre-fix this was 0
@@ -80,6 +96,7 @@ export default function StockDashboardPage() {
           ? getStockMovements(selectedCompany.id, { page: 1 }).catch(() => ({ data: { items: [], totalCount: 0, pageSize: 0 } }))
           : Promise.resolve({ data: { items: [], totalCount: 0, pageSize: 0 } }),
       ]);
+      if (!alive.current || request !== loadRequest.current) return;
       setOnhand(oh.data || []);
       setOpenings(op.data || []);
       setItemTypes(it.data || []);
@@ -90,37 +107,44 @@ export default function StockDashboardPage() {
       // so drop the drill cache; keep the expanded row open to refetch.
       setDrill({});
     } catch {
+      if (!alive.current || request !== loadRequest.current) return;
       setOnhand([]); setOpenings([]); setItemTypes([]);
+      setLoadError('Could not load inventory. Please refresh.');
     } finally {
-      setLoading(false);
+      if (alive.current && request === loadRequest.current) setLoading(false);
     }
-  }, [selectedCompany, canManageOpening, canViewMovements]);
+  }, [selectedCompany, canManageOpening, canAdjust, canViewMovements]);
 
   const fetchMovements = useCallback(async (pg) => {
     if (!selectedCompany || !canViewMovements) return;
+    const request = ++movementRequest.current;
     try {
       // Don't send pageSize — let the server apply Pagination:DefaultPageSize
       // from appsettings.json. Read it back from the response so totalPages
       // is accurate.
       const { data } = await getStockMovements(selectedCompany.id, { page: pg || movPage });
+      if (!alive.current || request !== movementRequest.current) return;
       setMovements(data.items || []);
       setMovTotal(data.totalCount || 0);
       setMovPageSize(data.pageSize || 0);
     } catch {
+      if (!alive.current || request !== movementRequest.current) return;
       setMovements([]); setMovTotal(0);
     }
   }, [selectedCompany, movPage, canViewMovements]);
 
-  useEffect(() => { if (selectedCompany) fetchAll(); }, [selectedCompany]);
+  useEffect(() => { if (selectedCompany) fetchAll(); }, [fetchAll]);
   useEffect(() => { if (tab === "movements") fetchMovements(movPage); }, [tab, selectedCompany, movPage]);
 
   // Units list (carries the AllowsDecimalQuantity flag) drives whether the
-  // opening-balance / adjustment quantity inputs accept decimals — the same
-  // per-Unit rule the bill / challan forms use. Units are global (not
-  // company-scoped), so fetch once on mount.
+  // opening-balance / adjustment quantity inputs accept decimals, using the
+  // selected company catalog just like bill and challan forms.
   useEffect(() => {
-    getAllUnits().then(r => setUnits(r.data || [])).catch(() => setUnits([]));
-  }, []);
+    if (!selectedCompany || !(canManageOpening || canAdjust)) return;
+    let active = true;
+    getAllUnits(selectedCompany.id).then(r => {if (active) setUnits(r.data || []);}).catch(() => {if (active) setUnits([]);});
+    return () => {active = false;};
+  }, [selectedCompany, canManageOpening, canAdjust]);
 
   const filteredOnhand = onhand.filter(r =>
     !search || r.itemTypeName.toLowerCase().includes(search.toLowerCase()) ||
@@ -130,6 +154,8 @@ export default function StockDashboardPage() {
   const submitOpening = async (e) => {
     e.preventDefault();
     if (!openingDraft.itemTypeId) return notify("Pick an item.", "error");
+    if (busy) return;
+    setBusy(true);
     try {
       await upsertOpeningBalance({
         companyId: selectedCompany.id,
@@ -144,7 +170,7 @@ export default function StockDashboardPage() {
       fetchAll();
     } catch (err) {
       notify(err.response?.data?.error || "Failed to save opening balance.", "error");
-    }
+    } finally {if (alive.current) setBusy(false);}
   };
 
   // Single delete handler shared between the desktop table and the
@@ -156,7 +182,7 @@ export default function StockDashboardPage() {
       variant: "danger",
       confirmText: "Delete",
     });
-    if (!ok) return;
+    if (!ok || !alive.current) return;
     try {
       await deleteOpeningBalance(o.id);
       fetchAll();
@@ -222,6 +248,8 @@ export default function StockDashboardPage() {
   const submitAdjust = async (e) => {
     e.preventDefault();
     if (!adjustDraft.itemTypeId || !adjustDraft.delta) return notify("Pick an item and a non-zero delta.", "error");
+    if (busy) return;
+    setBusy(true);
     try {
       await adjustStock({
         companyId: selectedCompany.id,
@@ -235,7 +263,7 @@ export default function StockDashboardPage() {
       fetchAll();
     } catch (err) {
       notify(err.response?.data?.error || "Failed to record adjustment.", "error");
-    }
+    } finally {if (alive.current) setBusy(false);}
   };
 
   // UOM-driven decimal rule for the modal quantity inputs. Each ItemType
@@ -261,80 +289,47 @@ export default function StockDashboardPage() {
   const openingPickerItems = hsCodedItemTypes.filter(it => !onhandIds.has(it.id));
 
   return (
-    <div className="stock-page">
-      <div data-admin-page-header="" style={styles.header}>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div data-admin-page-icon="" style={styles.headerIcon}><MdInventory size={28} color="#fff" /></div>
-          <div>
-            <h2 style={styles.title}>Stock Dashboard</h2>
-            <p style={styles.subtitle}>
-              {selectedCompany
-                ? `On-hand inventory for ${selectedCompany.brandName || selectedCompany.name}`
-                : "Select a company"}
-            </p>
-          </div>
+    <div className="stock-page inventory-page">
+      <div data-admin-page-header="" className="inventory-heading">
+        <div className="inventory-heading-title"><div data-admin-page-icon="" style={styles.headerIcon}><MdInventory size={23} color="#fff" /></div>
+          <div><h2>Inventory</h2><p>Stock balances, movements and corrections.</p></div>
         </div>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          {canManageOpening && (
-            <button style={styles.altBtn} onClick={() => setShowOpening(true)}>
-              <MdTune size={16} /> Opening Balance
-            </button>
-          )}
-          {canAdjust && (
-            <button style={styles.altBtn} onClick={() => { setAdjustLockedItem(null); setShowAdjust(true); }}>
-              <MdSwapHoriz size={16} /> Adjustment
-            </button>
-          )}
-        </div>
+        {companies.length > 0 && <label className="inventory-company"><span className="visually-hidden">Company</span>
+          <select aria-label="Company" style={dropdownStyles.base} value={selectedCompany?.id || ""}
+            onChange={e => setSelectedCompany(companies.find(c => String(c.id) === e.target.value))}>
+            {companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
+          </select></label>}
       </div>
-
-      {loadingCompanies ? (
-        <div style={styles.loading}><div style={styles.spinner} /></div>
-      ) : companies.length === 0 ? (
-        <div style={styles.empty}>No companies available.</div>
-      ) : (
-        <>
-          {companies.length > 1 && (<div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <MdBusiness size={20} color={colors.blue} />
-            <select style={dropdownStyles.base} value={selectedCompany?.id || ""}
-                    onChange={e => setSelectedCompany(companies.find(c => parseInt(c.id) === parseInt(e.target.value)))}>
-              {companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
-            </select>
-          </div>)}
-
-          {selectedCompany && !selectedCompany.inventoryTrackingEnabled && (
-            <div style={styles.warnBanner}>
-              ⚠ Inventory tracking is OFF for this company. Stock IN / OUT movements are not being recorded automatically.
-              You can still record opening balances and manual adjustments here, then enable tracking on the Company settings to begin auto-tracking purchases and sales.
-            </div>
-          )}
-
-          <div style={styles.tabs}>
-            <TabBtn active={tab === "onhand"} onClick={() => setTab("onhand")}>On-Hand ({onhand.length})</TabBtn>
-            {canManageOpening && <TabBtn active={tab === "opening"} onClick={() => setTab("opening")}>Opening Balances ({openings.length})</TabBtn>}
+      {loadingCompanies ? <p role="status">Loading companies…</p> : !selectedCompany ? <div style={styles.empty}>No companies available.</div> : <>
+        {loadError && <p role="alert" className="inventory-error">{loadError}</p>}
+        <div className="inventory-summary" aria-label="Inventory summary">
+          <div><span>Stock items</span><strong>{loading ? '—' : onhand.length}</strong><small>Tracked inventory</small></div>
+          <div><span>Stock value</span><strong>{loading ? '—' : `Rs. ${onhand.reduce((total, row) => total + (row.stockValue || 0), 0).toLocaleString('en-PK', {maximumFractionDigits:2})}`}</strong><small>Current cost basis</small></div>
+          <div><span>Out of stock</span><strong className="inventory-attention">{loading ? '—' : onhand.filter(row => row.onHand <= 0).length}</strong><small>Items to review</small></div>
+          <div><span>Inventory tracking</span><strong className="inventory-tracking">{selectedCompany.inventoryTrackingEnabled ? 'Enabled' : 'Off'}</strong><small>For this company</small></div>
+        </div>
+        {!selectedCompany.inventoryTrackingEnabled && <p className="inventory-warning">Tracking is off. Automatic stock movements are paused.</p>}
+        <section className="inventory-panel" aria-label="Inventory records">
+          <div className="inventory-tabs" role="tablist" aria-label="Inventory views">
+            <TabBtn active={tab === "onhand"} onClick={() => setTab("onhand")}>Stock on hand</TabBtn>
+            {(canManageOpening || canAdjust) && <TabBtn active={tab === "entries"} onClick={() => setTab("entries")}>Opening & adjustments</TabBtn>}
             {canViewMovements && <TabBtn active={tab === "movements"} onClick={() => setTab("movements")}>Movements ({movTotal})</TabBtn>}
-            {(canManageOpening || canAdjust) && <TabBtn active={tab === "entries"} onClick={() => setTab("entries")}>Opening stock & adjustments</TabBtn>}
+            {canManageOpening && <TabBtn active={tab === "opening"} onClick={() => setTab("opening")}>Opening balances ({openings.length})</TabBtn>}
           </div>
-
-          {tab === "entries" && selectedCompany && (canManageOpening || canAdjust) &&
-            <StockEntryHistory companyId={selectedCompany.id} onChanged={fetchAll}/>}
-
+          {tab !== 'entries' && <div className="inventory-toolbar">
+            {tab === 'onhand' ? <div className="inventory-search"><MdSearch aria-hidden="true"/><input aria-label="Search inventory" placeholder="Search item or HS code…" value={search} onChange={e => setSearch(e.target.value)}/>{search && <button type="button" aria-label="Clear search" onClick={() => setSearch('')}><MdClose/></button>}</div> : <span className="inventory-caption">{tab === 'opening' ? 'Existing starting quantities' : 'Stock movement history'}</span>}
+            <div className="inventory-actions">
+              <button type="button" disabled={loading} aria-label="Refresh inventory" onClick={fetchAll}>Refresh</button>
+              {canManageOpening && <button type="button" onClick={() => setEntryDraft({kind:'Opening'})}><MdAdd aria-hidden="true"/> Opening stock</button>}
+              {canAdjust && <button type="button" className="inventory-primary" onClick={() => setEntryDraft({kind:'Adjustment'})}><MdSwapHoriz aria-hidden="true"/> Adjustment</button>}
+              {(canManageOpening || canAdjust) && <div className="inventory-more"><button type="button" aria-label="More inventory actions" aria-expanded={toolsOpen} onClick={() => setToolsOpen(!toolsOpen)}>•••</button>
+                {toolsOpen && <div className="inventory-menu">{canManageOpening && <button type="button" onClick={() => {setToolsOpen(false);setShowOpening(true);}}>Set opening balance</button>}{canAdjust && <button type="button" onClick={() => {setToolsOpen(false);setAdjustLockedItem(null);setShowAdjust(true);}}>Quantity-only adjustment</button>}</div>}
+              </div>}
+            </div>
+          </div>}
+          {tab === "entries" && (canManageOpening || canAdjust) && <StockEntryHistory companyId={selectedCompany.id} onChanged={fetchAll} onNewEntry={kind => setEntryDraft({kind})}/>}
           {tab === "onhand" && (
             <>
-              {/* Search renders whenever there is ANY stock data — gating it
-                  on the FILTERED list meant a no-match search unmounted the
-                  box itself and the operator had no way to clear it. */}
-              {onhand.length > 0 && (
-                <div style={styles.searchWrap}>
-                  <MdSearch style={styles.searchIcon} />
-                  <input type="text" placeholder="Search item or HS code..." value={search} onChange={e => setSearch(e.target.value)} style={styles.searchInput} />
-                  {search && (
-                    <button type="button" style={styles.searchClear} onClick={() => setSearch("")} title="Clear search">
-                      <MdClose size={16} />
-                    </button>
-                  )}
-                </div>
-              )}
               {loading ? (
                 <div style={styles.loading}><div style={styles.spinner} /></div>
               ) : filteredOnhand.length === 0 ? (
@@ -363,8 +358,7 @@ export default function StockDashboardPage() {
                       <thead>
                         <tr>
                           {canViewMovements && <th style={{ ...styles.th, width: 34 }} aria-label="Expand"></th>}
-                          <th style={styles.th}>Item</th>
-                          <th style={styles.th}>HS Code</th>
+                          <th style={{...styles.th,width:'25%'}}>Item / HS code</th>
                           <th style={styles.th}>UOM</th>
                           <th style={{ ...styles.th, textAlign: "right" }}>Opening</th>
                           <th style={{ ...styles.th, textAlign: "right" }}>Total IN</th>
@@ -378,7 +372,7 @@ export default function StockDashboardPage() {
                         {filteredOnhand.map((r, idx) => {
                           const isOpen = expandedId === r.itemTypeId;
                           const rowBg = idx % 2 === 0 ? "#fff" : colors.rowAlt;
-                          const colCount = 8 + (canViewMovements ? 1 : 0) + (canAdjust ? 1 : 0);
+                          const colCount = 7 + (canViewMovements ? 1 : 0) + (canAdjust ? 1 : 0);
                           return (
                           <Fragment key={r.itemTypeId}>
                           <tr
@@ -390,8 +384,7 @@ export default function StockDashboardPage() {
                                 {isOpen ? <MdExpandMore size={18} /> : <MdChevronRight size={18} />}
                               </td>
                             )}
-                            <td style={styles.td}><strong>{r.itemTypeName}</strong></td>
-                            <td style={{ ...styles.td, fontFamily: "monospace", fontSize: "0.78rem" }}>{r.hsCode || "—"}</td>
+                            <td style={styles.td}>{canViewMovements ? <button type="button" className="inventory-item-link" aria-label={`Movement history for ${r.itemTypeName}`} aria-expanded={isOpen} onClick={e => {e.stopPropagation();toggleDrill(r.itemTypeId);}}>{r.itemTypeName}</button> : <strong>{r.itemTypeName}</strong>}<small>{r.hsCode || "—"}</small></td>
                             <td style={styles.td}>{r.uom || "—"}</td>
                             <td style={{ ...styles.td, textAlign: "right" }}>{r.openingBalance.toLocaleString()}</td>
                             <td style={{ ...styles.td, textAlign: "right", color: "#2e7d32" }}>+{r.totalIn.toLocaleString()}</td>
@@ -641,11 +634,15 @@ export default function StockDashboardPage() {
               )}
             </>
           )}
+        </section>
         </>
-      )}
+      }
 
-      {showOpening && (
-        <SmallModal title="Set Opening Balance" onClose={() => setShowOpening(false)} onSubmit={submitOpening}>
+      {entryDraft && selectedCompany && (entryDraft.kind === 'Opening' ? canManageOpening : canAdjust) && <StockEntryForm key={selectedCompany.id} companyId={selectedCompany.id} initialKind={entryDraft.kind} compact
+        onClose={() => {setEntryDraft(null);fetchAll();}} onBack={() => {setEntryDraft(null);fetchAll();}}/>}
+
+      {showOpening && canManageOpening && (
+        <SmallModal busy={busy} title="Set opening balance" onClose={() => setShowOpening(false)} onSubmit={submitOpening}>
           <Field label="Item">
             <SearchableItemTypeSelect
               items={openingPickerItems}
@@ -655,8 +652,7 @@ export default function StockDashboardPage() {
               style={mInput}
             />
             <div style={qtyHint}>
-              Items without an HS Code, or already on the stock grid, are hidden —
-              use the grid's Adjust action for tracked items.
+              Only new HS-coded stock items are shown.
             </div>
           </Field>
           <Field label="Quantity">
@@ -670,8 +666,8 @@ export default function StockDashboardPage() {
         </SmallModal>
       )}
 
-      {showAdjust && (
-        <SmallModal title="Stock Adjustment" onClose={closeAdjust} onSubmit={submitAdjust}>
+      {showAdjust && canAdjust && (
+        <SmallModal busy={busy} title="Quantity-only adjustment" onClose={closeAdjust} onSubmit={submitAdjust}>
           <Field label="Item">
             {adjustLockedItem ? (
               <input
@@ -694,7 +690,7 @@ export default function StockDashboardPage() {
               </>
             )}
           </Field>
-          <Field label="Delta (positive = up, negative = down)">
+          <Field label="Quantity change (+ / −)">
             <input type="number" step={adjustAllowsDecimal ? "0.0001" : "1"} required style={mInput} value={adjustDraft.delta} onChange={e => setAdjustDraft({ ...adjustDraft, delta: e.target.value })} />
             {adjustItem && (
               <div style={qtyHint}>UOM: <strong>{adjustUom || "—"}</strong> · {adjustAllowsDecimal ? "decimals allowed" : "whole numbers only"}</div>
@@ -791,33 +787,18 @@ function DrillPanel({ rows, loading, uom }) {
 }
 
 function TabBtn({ active, children, onClick }) {
-  return (
-    <button onClick={onClick} style={{
-      borderRadius: 8, border: "1px solid #d0d7e2", cursor: "pointer",
-      backgroundColor: active ? "#0d47a1" : "#fff", color: active ? "#fff" : "#1a2332",
-      fontSize: "0.85rem", fontWeight: 600, boxShadow: "none", padding: "0.45rem 0.95rem"
-    }}>{children}</button>
-  );
+  return <button type="button" role="tab" aria-selected={active} onClick={onClick}>{children}</button>;
 }
 
-function SmallModal({ title, children, onClose, onSubmit }) {
-  return (
-    <div data-admin-backdrop="" style={{ position: "fixed", inset: 0, backgroundColor: "rgba(15,20,30,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100, padding: "2vh 1rem", overflowY: "auto" }}>
-      <div data-admin-dialog="" className="admin-stock-modal" style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 480, maxHeight: "94vh", overflowY: "auto", padding: "1.25rem", boxShadow: "0 20px 60px rgba(13,71,161,0.2)" }}>
-        <div data-admin-header="" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h3 style={{ margin: 0, fontSize: "1.05rem", color: "#1a2332" }}>{title}</h3>
-          <button data-admin-close="" onClick={onClose} style={{ background: "none", border: "none", color: "#5f6d7e", cursor: "pointer", padding: 0, fontSize: "1.5rem", lineHeight: 1 }}>×</button>
-        </div>
-        <form onSubmit={onSubmit}>
-          <div data-admin-body="">{children}</div>
-          <div data-admin-footer="" style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-            <button data-admin-close="" type="button" onClick={onClose} style={{ padding: "0.45rem 1rem", borderRadius: 8, border: "1px solid #d0d7e2", background: "#fff", color: "#1a2332", cursor: "pointer", boxShadow: "none" }}>Cancel</button>
-            <button type="submit" style={{ padding: "0.45rem 1rem", borderRadius: 8, border: "none", background: "#0d47a1", color: "#fff", cursor: "pointer", fontWeight: 600, boxShadow: "none" }}>Save</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
+function SmallModal({ title, children, onClose, onSubmit, busy }) {
+  return <div data-admin-backdrop="" style={formStyles.backdrop}>
+    <form data-admin-dialog="" role="dialog" aria-modal="true" aria-label={title} className="inventory-modal" style={{...formStyles.modal,maxWidth:560}} onSubmit={onSubmit}>
+      <div data-admin-header="" style={formStyles.header}><div><h3 style={{...formStyles.title,fontSize:17}}>{title}</h3><small className="inventory-modal-subtitle">Quantity only · Existing inventory tools</small></div>
+        <button data-admin-close="" type="button" aria-label="Close inventory dialog" disabled={busy} style={formStyles.closeButton} onClick={onClose}><MdClose/></button></div>
+      <fieldset disabled={busy} data-admin-body="" style={{...formStyles.body,border:0,margin:0,minWidth:0}}>{children}</fieldset>
+      <div data-admin-footer="" style={formStyles.footer}><button type="button" disabled={busy} style={formStyles.button} onClick={onClose}>Cancel</button>
+        <button type="submit" disabled={busy} className="inventory-primary" style={{...formStyles.button,...formStyles.submit}}>{busy ? 'Saving…' : 'Save'}</button></div>
+    </form></div>;
 }
 
 function Field({ label, children }) {

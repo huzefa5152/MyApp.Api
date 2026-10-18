@@ -30,6 +30,7 @@ namespace MyApp.Api.DTOs
         // Carat) display without truncation.
         public decimal OnHand { get; set; }
         public decimal OpeningBalance { get; set; }
+        public decimal StockValue { get; set; }
         public decimal TotalIn { get; set; }
         public decimal TotalOut { get; set; }
         public DateTime? LastMovementAt { get; set; }

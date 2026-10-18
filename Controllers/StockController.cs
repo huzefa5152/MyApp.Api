@@ -69,7 +69,7 @@ namespace MyApp.Api.Controllers
             // item still surfaced on the on-hand grid. Missing ids fall through
             // to `it == null → continue` below and drop out of the dashboard.
             var itemTypes = await _context.ItemTypes
-                .Where(it => ids.Contains(it.Id) && !it.IsDeleted)
+                .Where(it => it.CompanyId == companyId && ids.Contains(it.Id) && !it.IsDeleted)
                 .ToDictionaryAsync(it => it.Id);
 
             var openings = await _context.OpeningStockBalances
@@ -90,6 +90,8 @@ namespace MyApp.Api.Controllers
                 .Select(g => new { ItemTypeId = g.Key, Last = g.Max(m => m.MovementDate) })
                 .ToDictionaryAsync(x => x.ItemTypeId, x => x.Last);
 
+            var costRows = await InventoryCostBasis.LoadAsync(_context, companyId, ids);
+            var averageCosts = costRows.GroupBy(r => r.ItemTypeId).ToDictionary(g => g.Key, g => InventoryCostBasis.Average(g));
             var rows = new List<StockOnHandRowDto>();
             foreach (var id in ids)
             {
@@ -110,6 +112,7 @@ namespace MyApp.Api.Controllers
                     TotalIn = totalIn,
                     TotalOut = totalOut,
                     OnHand = opening + totalIn - totalOut,
+                    StockValue = Math.Round((opening + totalIn - totalOut) * averageCosts.GetValueOrDefault(id), 2),
                     LastMovementAt = lastDates.TryGetValue(id, out var d) ? d : null,
                 });
             }

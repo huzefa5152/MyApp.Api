@@ -17,13 +17,30 @@ public class StockEntriesController(AppDbContext db, ICompanyAccessGuard access,
     private int UserId => int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id) ? id : 0;
     [HttpGet("company/{companyId}")]
     [HasAnyPermission("stock.opening.manage", "stock.adjust.create")]
-    public async Task<IActionResult> List(int companyId, int page = 1)
+    public async Task<IActionResult> List(int companyId, int page = 1, string? kind = null, string? status = null, string? search = null)
     {
         await access.AssertAccessAsync(UserId, companyId);
         var canOpen = await permissions.HasPermissionAsync(UserId, "stock.opening.manage");
         var canAdjust = await permissions.HasPermissionAsync(UserId, "stock.adjust.create");
-        return Ok(await db.StockEntries.AsNoTracking().Where(e => e.CompanyId == companyId &&
-            (e.Kind == "Opening" && canOpen || e.Kind == "Adjustment" && canAdjust)).OrderByDescending(e => e.Id)
+        var query = db.StockEntries.AsNoTracking().Where(e => e.CompanyId == companyId &&
+            (e.Kind == "Opening" && canOpen || e.Kind == "Adjustment" && canAdjust));
+        if (!string.IsNullOrEmpty(kind))
+        {
+            if (kind != "Opening" && kind != "Adjustment") return BadRequest(new { error = "Choose a valid entry type." });
+            query = query.Where(e => e.Kind == kind);
+        }
+        if (!string.IsNullOrEmpty(status))
+        {
+            if (status != "active" && status != "reversed") return BadRequest(new { error = "Choose a valid entry status." });
+            query = query.Where(e => e.IsCancelled == (status == "reversed"));
+        }
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            if (term.Length > 100) return BadRequest(new { error = "Search is too long." });
+            query = query.Where(e => e.ItemType.Name.Contains(term) || e.Reason.Contains(term));
+        }
+        return Ok(await query.OrderByDescending(e => e.Id)
             .Skip((PaginationHelper.ClampPage(page) - 1) * 20).Take(20)
             .Select(e => new { e.Id, e.Kind, e.Date, e.ItemTypeId, ItemName = e.ItemType.Name, Uom = e.ItemType.UOM, e.QuantityDelta, e.UnitCost, e.Reason, e.IsCancelled }).ToListAsync());
     }
