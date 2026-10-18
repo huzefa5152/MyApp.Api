@@ -7,11 +7,11 @@ import {useConfirm} from './ConfirmDialog';
 import SearchableItemTypeSelect from './SearchableItemTypeSelect';
 import '../pages/StockDashboardPage.css';
 
-export default function StockEntryForm({companyId,onClose,onBack,initialKind,compact=false}) {
+export default function StockEntryForm({companyId,onClose,onBack,initialKind,initialItemId,compact=false}) {
  const {has}=usePermissions(),confirm=useConfirm();
  const [kind,setKind]=useState(initialKind==='Adjustment'&&has('stock.adjust.create')?'Adjustment':has('stock.opening.manage')?'Opening':'Adjustment');
  const [options,setOptions]=useState({items:[],trackingEnabled:false}),[entries,setEntries]=useState([]),[page,setPage]=useState(1);
- const [itemId,setItemId]=useState(''),[date,setDate]=useState(todayYmd()),[direction,setDirection]=useState('add');
+ const [itemId,setItemId]=useState(initialItemId ? String(initialItemId) : ''),[date,setDate]=useState(todayYmd()),[direction,setDirection]=useState('add');
  const [quantity,setQuantity]=useState(''),[cost,setCost]=useState(''),[reason,setReason]=useState('');
  const [busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(''),[success,setSuccess]=useState('');
  const request=useRef(crypto.randomUUID());

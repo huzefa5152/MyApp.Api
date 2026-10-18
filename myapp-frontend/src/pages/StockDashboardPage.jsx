@@ -1,16 +1,9 @@
 import { useState, useEffect, useCallback, useRef, Fragment } from "react";
-import { MdInventory, MdBusiness, MdSearch, MdAdd, MdHistory, MdTune, MdClose, MdSwapHoriz, MdExpandMore, MdChevronRight } from "react-icons/md";
-import { getStockOnHand, getStockMovements, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock } from "../api/stockApi";
-import { getItemTypes } from "../api/itemTypeApi";
-import { getAllUnits } from "../api/unitsApi";
-import { dropdownStyles, formStyles } from "../theme";
+import { MdInventory, MdSearch, MdAdd, MdHistory, MdClose, MdSwapHoriz, MdExpandMore, MdChevronRight } from "react-icons/md";
+import { getStockOnHand, getStockMovements } from "../api/stockApi";
+import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
-import { useConfirm } from "../Components/ConfirmDialog";
-import { notify } from "../utils/notify";
-import { todayYmd } from "../utils/dateInput";
-import { isDecimalUnit } from "../utils/formatQuantity";
-import SearchableItemTypeSelect from "../Components/SearchableItemTypeSelect";
 import Pagination from "../Components/Pagination";
 import StockEntryHistory from "../Components/StockEntryHistory";
 import StockEntryForm from "../Components/StockEntryForm";
@@ -36,13 +29,10 @@ export default function StockDashboardPage() {
 function CompanyStockDashboard() {
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
   const { has } = usePermissions();
-  const confirm = useConfirm();
   const canManageOpening = has("stock.opening.manage");
   const canAdjust = has("stock.adjust.create");
   const canViewMovements = has("stock.movements.view");
   const [entryDraft, setEntryDraft] = useState(null);
-  const [toolsOpen, setToolsOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState('');
   const alive = useRef(true), loadRequest = useRef(0), movementRequest = useRef(0);
   useEffect(() => {alive.current = true; return () => {alive.current = false;};}, []);
@@ -55,9 +45,6 @@ function CompanyStockDashboard() {
   // Server-driven page size from appsettings Pagination:DefaultPageSize.
   // Set after the first response so the pagination math is accurate.
   const [movPageSize, setMovPageSize] = useState(0);
-  const [openings, setOpenings] = useState([]);
-  const [itemTypes, setItemTypes] = useState([]);
-  const [units, setUnits] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -67,15 +54,6 @@ function CompanyStockDashboard() {
   const [drill, setDrill] = useState({});        // itemTypeId → movement[]
   const [drillLoading, setDrillLoading] = useState(null); // itemTypeId being fetched
 
-  const [showOpening, setShowOpening] = useState(false);
-  const [openingDraft, setOpeningDraft] = useState({ itemTypeId: "", quantity: 0, asOfDate: todayYmd(), notes: "" });
-  const [showAdjust, setShowAdjust] = useState(false);
-  const [adjustDraft, setAdjustDraft] = useState({ itemTypeId: "", delta: 0, movementDate: todayYmd(), notes: "" });
-  // Set when the Adjustment modal is launched from a grid row — the item
-  // is fixed (read-only display) so the operator just types the delta.
-  // Null when opened from the header button (free pick).
-  const [adjustLockedItem, setAdjustLockedItem] = useState(null);
-
   const fetchAll = useCallback(async () => {
     if (!selectedCompany) return;
     const request = ++loadRequest.current;
@@ -83,10 +61,8 @@ function CompanyStockDashboard() {
     setMovPage(1);
     setLoading(true);
     try {
-      const [oh, op, it, mov] = await Promise.all([
+      const [oh, mov] = await Promise.all([
         getStockOnHand(selectedCompany.id),
-        canManageOpening ? getOpeningBalances(selectedCompany.id) : Promise.resolve({ data: [] }),
-        canManageOpening || canAdjust ? getItemTypes(selectedCompany.id) : Promise.resolve({data:[]}),
         // 2026-05-12: also pull the movements first page on initial load
         // so the "Movements (N)" tab label shows the correct count
         // BEFORE the operator clicks into the tab. Pre-fix this was 0
@@ -98,8 +74,6 @@ function CompanyStockDashboard() {
       ]);
       if (!alive.current || request !== loadRequest.current) return;
       setOnhand(oh.data || []);
-      setOpenings(op.data || []);
-      setItemTypes(it.data || []);
       setMovements(mov.data?.items || []);
       setMovTotal(mov.data?.totalCount || 0);
       setMovPageSize(mov.data?.pageSize || 0);
@@ -108,12 +82,12 @@ function CompanyStockDashboard() {
       setDrill({});
     } catch {
       if (!alive.current || request !== loadRequest.current) return;
-      setOnhand([]); setOpenings([]); setItemTypes([]);
+      setOnhand([]);
       setLoadError('Could not load inventory. Please refresh.');
     } finally {
       if (alive.current && request === loadRequest.current) setLoading(false);
     }
-  }, [selectedCompany, canManageOpening, canAdjust, canViewMovements]);
+  }, [selectedCompany, canViewMovements]);
 
   const fetchMovements = useCallback(async (pg) => {
     if (!selectedCompany || !canViewMovements) return;
@@ -136,75 +110,12 @@ function CompanyStockDashboard() {
   useEffect(() => { if (selectedCompany) fetchAll(); }, [fetchAll]);
   useEffect(() => { if (tab === "movements") fetchMovements(movPage); }, [tab, selectedCompany, movPage]);
 
-  // Units list (carries the AllowsDecimalQuantity flag) drives whether the
-  // opening-balance / adjustment quantity inputs accept decimals, using the
-  // selected company catalog just like bill and challan forms.
-  useEffect(() => {
-    if (!selectedCompany || !(canManageOpening || canAdjust)) return;
-    let active = true;
-    getAllUnits(selectedCompany.id).then(r => {if (active) setUnits(r.data || []);}).catch(() => {if (active) setUnits([]);});
-    return () => {active = false;};
-  }, [selectedCompany, canManageOpening, canAdjust]);
-
   const filteredOnhand = onhand.filter(r =>
     !search || r.itemTypeName.toLowerCase().includes(search.toLowerCase()) ||
     (r.hsCode || "").toLowerCase().includes(search.toLowerCase())
   );
 
-  const submitOpening = async (e) => {
-    e.preventDefault();
-    if (!openingDraft.itemTypeId) return notify("Pick an item.", "error");
-    if (busy) return;
-    setBusy(true);
-    try {
-      await upsertOpeningBalance({
-        companyId: selectedCompany.id,
-        itemTypeId: parseInt(openingDraft.itemTypeId),
-        quantity: parseFloat(openingDraft.quantity) || 0,
-        asOfDate: openingDraft.asOfDate,
-        notes: openingDraft.notes || null,
-      });
-      notify("Opening balance saved.", "success");
-      setShowOpening(false);
-      setOpeningDraft({ itemTypeId: "", quantity: 0, asOfDate: todayYmd(), notes: "" });
-      fetchAll();
-    } catch (err) {
-      notify(err.response?.data?.error || "Failed to save opening balance.", "error");
-    } finally {if (alive.current) setBusy(false);}
-  };
-
-  // Single delete handler shared between the desktop table and the
-  // mobile card so the confirm dialog stays consistent across viewports.
-  const handleDeleteOpening = async (o) => {
-    const ok = await confirm({
-      title: "Delete opening balance?",
-      message: `Remove the opening balance for "${o.itemTypeName}"? This won't affect movement-driven stock; only the seeded starting quantity is removed.`,
-      variant: "danger",
-      confirmText: "Delete",
-    });
-    if (!ok || !alive.current) return;
-    try {
-      await deleteOpeningBalance(o.id);
-      fetchAll();
-    } catch (err) {
-      notify(err?.response?.data?.error || "Failed to delete opening balance.", "error");
-    }
-  };
-
-  const closeAdjust = () => {
-    setShowAdjust(false);
-    setAdjustLockedItem(null);
-    setAdjustDraft({ itemTypeId: "", delta: 0, movementDate: todayYmd(), notes: "" });
-  };
-
-  // Per-row "Adjust" action on the on-hand grid: open the Adjustment modal
-  // with the row's item pre-picked and locked — operator just enters the
-  // delta. Header "Adjustment" button keeps the free item pick.
-  const openAdjustForRow = (r) => {
-    setAdjustLockedItem({ id: r.itemTypeId, name: r.itemTypeName, hsCode: r.hsCode, uom: r.uom });
-    setAdjustDraft({ itemTypeId: String(r.itemTypeId), delta: 0, movementDate: todayYmd(), notes: "" });
-    setShowAdjust(true);
-  };
+  const openAdjustForRow = (row) => setEntryDraft({kind:'Adjustment',itemId:row.itemTypeId});
 
   // Expand/collapse the per-item movement drill-down. Pure toggle — the
   // fetch is driven by the effect below so a cache-clear (after an
@@ -245,49 +156,6 @@ function CompanyStockDashboard() {
   // Drop the drill cache + collapse whenever the company changes.
   useEffect(() => { setExpandedId(null); setDrill({}); }, [selectedCompany]);
 
-  const submitAdjust = async (e) => {
-    e.preventDefault();
-    if (!adjustDraft.itemTypeId || !adjustDraft.delta) return notify("Pick an item and a non-zero delta.", "error");
-    if (busy) return;
-    setBusy(true);
-    try {
-      await adjustStock({
-        companyId: selectedCompany.id,
-        itemTypeId: parseInt(adjustDraft.itemTypeId),
-        delta: parseFloat(adjustDraft.delta),
-        movementDate: adjustDraft.movementDate,
-        notes: adjustDraft.notes || null,
-      });
-      notify("Adjustment recorded.", "success");
-      closeAdjust();
-      fetchAll();
-    } catch (err) {
-      notify(err.response?.data?.error || "Failed to record adjustment.", "error");
-    } finally {if (alive.current) setBusy(false);}
-  };
-
-  // UOM-driven decimal rule for the modal quantity inputs. Each ItemType
-  // carries a UOM string; whether that unit allows fractional quantities is
-  // configured per-Unit (AllowsDecimalQuantity) on the Units page. Unknown
-  // UOMs fall back to whole-numbers-only, same as the bill / challan forms.
-  const openingItem = itemTypes.find(it => String(it.id) === String(openingDraft.itemTypeId));
-  const openingUom = openingItem?.uom || "";
-  const openingAllowsDecimal = isDecimalUnit(openingUom, units);
-  // Fall back to the locked row's UOM when the catalog lookup misses
-  // (e.g. soft-deleted item type still present in the grid).
-  const adjustItem = itemTypes.find(it => String(it.id) === String(adjustDraft.itemTypeId)) || adjustLockedItem;
-  const adjustUom = adjustItem?.uom || "";
-  const adjustAllowsDecimal = isDecimalUnit(adjustUom, units);
-
-  // Modal pickers list only HS-coded catalog items — stock tracking is
-  // FBR-classified inventory; quick no-HS entries are bill drafts, not
-  // stockable goods. Opening Balance additionally hides items already on
-  // the on-hand grid: those are corrected via the per-row Adjust action,
-  // not by seeding a second opening.
-  const hsCodedItemTypes = itemTypes.filter(it => it.hsCode && it.hsCode.trim());
-  const onhandIds = new Set(onhand.map(r => r.itemTypeId));
-  const openingPickerItems = hsCodedItemTypes.filter(it => !onhandIds.has(it.id));
-
   return (
     <div className="stock-page inventory-page">
       <div data-admin-page-header="" className="inventory-heading">
@@ -314,17 +182,13 @@ function CompanyStockDashboard() {
             <TabBtn active={tab === "onhand"} onClick={() => setTab("onhand")}>Stock on hand</TabBtn>
             {(canManageOpening || canAdjust) && <TabBtn active={tab === "entries"} onClick={() => setTab("entries")}>Opening & adjustments</TabBtn>}
             {canViewMovements && <TabBtn active={tab === "movements"} onClick={() => setTab("movements")}>Movements ({movTotal})</TabBtn>}
-            {canManageOpening && <TabBtn active={tab === "opening"} onClick={() => setTab("opening")}>Opening balances ({openings.length})</TabBtn>}
           </div>
           {tab !== 'entries' && <div className="inventory-toolbar">
-            {tab === 'onhand' ? <div className="inventory-search"><MdSearch aria-hidden="true"/><input aria-label="Search inventory" placeholder="Search item or HS code…" value={search} onChange={e => setSearch(e.target.value)}/>{search && <button type="button" aria-label="Clear search" onClick={() => setSearch('')}><MdClose/></button>}</div> : <span className="inventory-caption">{tab === 'opening' ? 'Existing starting quantities' : 'Stock movement history'}</span>}
+            {tab === 'onhand' ? <div className="inventory-search"><MdSearch aria-hidden="true"/><input aria-label="Search inventory" placeholder="Search item or HS code…" value={search} onChange={e => setSearch(e.target.value)}/>{search && <button type="button" aria-label="Clear search" onClick={() => setSearch('')}><MdClose/></button>}</div> : <span className="inventory-caption">Stock movement history</span>}
             <div className="inventory-actions">
               <button type="button" disabled={loading} aria-label="Refresh inventory" onClick={fetchAll}>Refresh</button>
               {canManageOpening && <button type="button" onClick={() => setEntryDraft({kind:'Opening'})}><MdAdd aria-hidden="true"/> Opening stock</button>}
               {canAdjust && <button type="button" className="inventory-primary" onClick={() => setEntryDraft({kind:'Adjustment'})}><MdSwapHoriz aria-hidden="true"/> Adjustment</button>}
-              {(canManageOpening || canAdjust) && <div className="inventory-more"><button type="button" aria-label="More inventory actions" aria-expanded={toolsOpen} onClick={() => setToolsOpen(!toolsOpen)}>•••</button>
-                {toolsOpen && <div className="inventory-menu">{canManageOpening && <button type="button" onClick={() => {setToolsOpen(false);setShowOpening(true);}}>Set opening balance</button>}{canAdjust && <button type="button" onClick={() => {setToolsOpen(false);setAdjustLockedItem(null);setShowAdjust(true);}}>Quantity-only adjustment</button>}</div>}
-              </div>}
             </div>
           </div>}
           {tab === "entries" && (canManageOpening || canAdjust) && <StockEntryHistory companyId={selectedCompany.id} onChanged={fetchAll} onNewEntry={kind => setEntryDraft({kind})}/>}
@@ -346,7 +210,7 @@ function CompanyStockDashboard() {
                     </>
                   ) : (
                     <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
-                      No stock data yet. Set opening balances or post a Purchase Bill / FBR-submitted invoice to start tracking.
+                      No stock data yet. Record opening stock or post a stock purchase / FBR-submitted invoice to start tracking.
                     </p>
                   )}
                 </div>
@@ -486,75 +350,6 @@ function CompanyStockDashboard() {
             </>
           )}
 
-          {tab === "opening" && canManageOpening && (
-            <>
-              {openings.length === 0 ? (
-                <div style={{ ...styles.empty, padding: "2rem 1rem" }}>
-                  <p style={{ color: colors.textSecondary }}>No opening balances set yet. Click "Opening Balance" above to add one.</p>
-                </div>
-              ) : (
-                <>
-                  {/* Desktop — table */}
-                  <div data-admin-table-region="" className="stock-table" style={styles.tableWrap}>
-                    <table style={styles.table}>
-                      <thead>
-                        <tr>
-                          <th style={styles.th}>Item</th>
-                          <th style={{ ...styles.th, textAlign: "right" }}>Quantity</th>
-                          <th style={styles.th}>As Of</th>
-                          <th style={styles.th}>Notes</th>
-                          <th style={{ ...styles.th, width: 60 }}></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {openings.map((o, idx) => (
-                          <tr key={o.id} style={{ backgroundColor: idx % 2 === 0 ? "#fff" : colors.rowAlt }}>
-                            <td style={styles.td}><strong>{o.itemTypeName}</strong></td>
-                            <td style={{ ...styles.td, textAlign: "right", fontWeight: 600 }}>{o.quantity.toLocaleString()}</td>
-                            <td style={styles.td}>{new Date(o.asOfDate).toLocaleDateString()}</td>
-                            <td style={{ ...styles.td, fontSize: "0.78rem", color: colors.textSecondary }}>{o.notes || "—"}</td>
-                            <td style={styles.td}>
-                              <button style={btnTiny} onClick={() => handleDeleteOpening(o)}><MdClose size={14} /></button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Mobile — opening balance cards */}
-                  <div className="stock-cards">
-                    {openings.map((o) => (
-                      <div key={o.id} className="stock-card">
-                        <div className="stock-card__top">
-                          <div className="stock-card__top-left">
-                            <span className="stock-card__name">{o.itemTypeName}</span>
-                            <span className="stock-card__hs">As of {new Date(o.asOfDate).toLocaleDateString()}</span>
-                          </div>
-                          <div className="stock-card__onhand">
-                            <span className="stock-card__onhand-label">Quantity</span>
-                            <span className="stock-card__onhand-value" style={{ color: colors.blue }}>
-                              {o.quantity.toLocaleString()}
-                            </span>
-                          </div>
-                        </div>
-                        {o.notes && (
-                          <div className="stock-card__notes">{o.notes}</div>
-                        )}
-                        <button
-                          className="stock-card__delete"
-                          onClick={() => handleDeleteOpening(o)}
-                        >
-                          <MdClose size={14} /> Delete
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </>
-          )}
-
           {tab === "movements" && canViewMovements && (
             <>
               {movements.length === 0 ? (
@@ -638,68 +433,9 @@ function CompanyStockDashboard() {
         </>
       }
 
-      {entryDraft && selectedCompany && (entryDraft.kind === 'Opening' ? canManageOpening : canAdjust) && <StockEntryForm key={selectedCompany.id} companyId={selectedCompany.id} initialKind={entryDraft.kind} compact
+      {entryDraft && selectedCompany && (entryDraft.kind === 'Opening' ? canManageOpening : canAdjust) && <StockEntryForm key={selectedCompany.id} companyId={selectedCompany.id} initialKind={entryDraft.kind} initialItemId={entryDraft.itemId} compact
         onClose={() => {setEntryDraft(null);fetchAll();}} onBack={() => {setEntryDraft(null);fetchAll();}}/>}
 
-      {showOpening && canManageOpening && (
-        <SmallModal busy={busy} title="Set opening balance" onClose={() => setShowOpening(false)} onSubmit={submitOpening}>
-          <Field label="Item">
-            <SearchableItemTypeSelect
-              items={openingPickerItems}
-              value={openingDraft.itemTypeId}
-              onChange={(newId) => setOpeningDraft({ ...openingDraft, itemTypeId: newId ? String(newId) : "" })}
-              placeholder="Search & pick an item…"
-              style={mInput}
-            />
-            <div style={qtyHint}>
-              Only new HS-coded stock items are shown.
-            </div>
-          </Field>
-          <Field label="Quantity">
-            <input type="number" min={0} step={openingAllowsDecimal ? "0.0001" : "1"} required style={mInput} value={openingDraft.quantity} onChange={e => setOpeningDraft({ ...openingDraft, quantity: e.target.value })} />
-            {openingItem && (
-              <div style={qtyHint}>UOM: <strong>{openingUom || "—"}</strong> · {openingAllowsDecimal ? "decimals allowed" : "whole numbers only"}</div>
-            )}
-          </Field>
-          <Field label="As Of"><input type="date" required style={mInput} value={openingDraft.asOfDate} onChange={e => setOpeningDraft({ ...openingDraft, asOfDate: e.target.value })} /></Field>
-          <Field label="Notes"><input type="text" style={mInput} value={openingDraft.notes} onChange={e => setOpeningDraft({ ...openingDraft, notes: e.target.value })} placeholder="optional" /></Field>
-        </SmallModal>
-      )}
-
-      {showAdjust && canAdjust && (
-        <SmallModal busy={busy} title="Quantity-only adjustment" onClose={closeAdjust} onSubmit={submitAdjust}>
-          <Field label="Item">
-            {adjustLockedItem ? (
-              <input
-                type="text"
-                readOnly
-                value={`${adjustLockedItem.name}${adjustLockedItem.hsCode ? ` (${adjustLockedItem.hsCode})` : ""}`}
-                style={{ ...mInput, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
-                title="Opened from the stock grid — item is fixed. Use the header Adjustment button to pick a different item."
-              />
-            ) : (
-              <>
-                <SearchableItemTypeSelect
-                  items={hsCodedItemTypes}
-                  value={adjustDraft.itemTypeId}
-                  onChange={(newId) => setAdjustDraft({ ...adjustDraft, itemTypeId: newId ? String(newId) : "" })}
-                  placeholder="Search & pick an item…"
-                  style={mInput}
-                />
-                <div style={qtyHint}>Items without an HS Code are hidden.</div>
-              </>
-            )}
-          </Field>
-          <Field label="Quantity change (+ / −)">
-            <input type="number" step={adjustAllowsDecimal ? "0.0001" : "1"} required style={mInput} value={adjustDraft.delta} onChange={e => setAdjustDraft({ ...adjustDraft, delta: e.target.value })} />
-            {adjustItem && (
-              <div style={qtyHint}>UOM: <strong>{adjustUom || "—"}</strong> · {adjustAllowsDecimal ? "decimals allowed" : "whole numbers only"}</div>
-            )}
-          </Field>
-          <Field label="Date"><input type="date" required style={mInput} value={adjustDraft.movementDate} onChange={e => setAdjustDraft({ ...adjustDraft, movementDate: e.target.value })} /></Field>
-          <Field label="Notes"><input type="text" style={mInput} value={adjustDraft.notes} onChange={e => setAdjustDraft({ ...adjustDraft, notes: e.target.value })} placeholder="e.g. count correction, breakage" /></Field>
-        </SmallModal>
-      )}
     </div>
   );
 }
@@ -790,28 +526,6 @@ function TabBtn({ active, children, onClick }) {
   return <button type="button" role="tab" aria-selected={active} onClick={onClick}>{children}</button>;
 }
 
-function SmallModal({ title, children, onClose, onSubmit, busy }) {
-  return <div data-admin-backdrop="" style={formStyles.backdrop}>
-    <form data-admin-dialog="" role="dialog" aria-modal="true" aria-label={title} className="inventory-modal" style={{...formStyles.modal,maxWidth:560}} onSubmit={onSubmit}>
-      <div data-admin-header="" style={formStyles.header}><div><h3 style={{...formStyles.title,fontSize:17}}>{title}</h3><small className="inventory-modal-subtitle">Quantity only · Existing inventory tools</small></div>
-        <button data-admin-close="" type="button" aria-label="Close inventory dialog" disabled={busy} style={formStyles.closeButton} onClick={onClose}><MdClose/></button></div>
-      <fieldset disabled={busy} data-admin-body="" style={{...formStyles.body,border:0,margin:0,minWidth:0}}>{children}</fieldset>
-      <div data-admin-footer="" style={formStyles.footer}><button type="button" disabled={busy} style={formStyles.button} onClick={onClose}>Cancel</button>
-        <button type="submit" disabled={busy} className="inventory-primary" style={{...formStyles.button,...formStyles.submit}}>{busy ? 'Saving…' : 'Save'}</button></div>
-    </form></div>;
-}
-
-function Field({ label, children }) {
-  return (
-    <div style={{ marginBottom: "0.75rem" }}>
-      <label style={{ display: "block", fontSize: "0.82rem", color: "#5f6d7e", marginBottom: "0.25rem", fontWeight: 600 }}>{label}</label>
-      {children}
-    </div>
-  );
-}
-
-const mInput = { width: "100%", padding: "0.45rem 0.65rem", border: "1px solid #d0d7e2", borderRadius: 8, fontSize: "0.85rem", backgroundColor: "#f8f9fb", color: "#1a2332", outline: "none" };
-const qtyHint = { fontSize: "0.72rem", color: "#5f6d7e", marginTop: "0.35rem" };
 const rowAdjustBtn = { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "1px solid #90caf9", backgroundColor: "#e3f2fd", color: "#0d47a1", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", boxShadow: "none", whiteSpace: "nowrap" };
 const cardAdjustBtn = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.35rem", width: "100%", minHeight: 44, marginTop: "0.6rem", padding: "0.5rem 0.75rem", borderRadius: 8, border: "1px solid #90caf9", backgroundColor: "#e3f2fd", color: "#0d47a1", fontSize: "0.84rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" };
 const cardDrillBtn = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.3rem", width: "100%", minHeight: 40, marginTop: "0.6rem", padding: "0.45rem 0.75rem", borderRadius: 8, border: "1px solid #d0d7e2", backgroundColor: "#fff", color: "#5f6d7e", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" };
@@ -858,4 +572,3 @@ const styles = {
   pageBtn: { padding: "0.4rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
   pageInfo: { fontSize: "0.82rem", color: colors.textSecondary, fontWeight: 500 },
 };
-const btnTiny = { padding: 0, width: 28, height: 28, borderRadius: 6, border: "1px solid #d0d7e2", backgroundColor: "#fff", color: "#c62828", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", boxShadow: "none" };
