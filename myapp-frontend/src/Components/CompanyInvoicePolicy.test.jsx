@@ -22,6 +22,18 @@ it("does not offer policy configuration to an ordinary company administrator", (
     expect(screen.queryByRole("checkbox", { name: "Print original bill lines on tax invoices" })).toBeNull();
     expect(screen.queryByRole("checkbox", { name: "Send blank FBR product descriptions" })).toBeNull();
 });
+it("hides the unused layout choice and restores its saved selection when switched off", () => {
+    mount(true);
+    const layout = () => screen.queryByRole("combobox", { name: "Default Sales Tax Invoice layout" });
+    expect(layout().value).toBe("individual");
+    fireEvent.change(layout(), { target: { value: "grouped" } });
+    const originalLines = screen.getByRole("checkbox", { name: "Print original bill lines on tax invoices" });
+    fireEvent.click(originalLines);
+    expect(layout()).toBeNull();
+    expect(screen.queryByText(/Default for new bills only/)).toBeNull();
+    fireEvent.click(originalLines);
+    expect(layout().value).toBe("grouped");
+});
 it("saves the explicit seed administrator choices", async () => {
     const view = mount(true);
     fireEvent.change(view.container.querySelector('input[name="name"]'), { target: { value: "Synthetic company" } });
