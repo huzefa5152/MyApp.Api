@@ -135,8 +135,8 @@ export default function KpiCard({
             flexShrink: 0,
           }}>{icon}</span>
         )}
-        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
-        {badge && <span style={{ marginLeft: "auto", fontSize: "0.62rem", padding: "1px 6px", borderRadius: 999, border: `1px solid ${accent}55`, color: accent, letterSpacing: 0 }}>{badge}</span>}
+        <span style={{ minWidth: 0, overflowWrap: "anywhere", lineHeight: 1.3 }}>{label}</span>
+        {badge && <span style={{ marginLeft: "auto", flexShrink: 0, whiteSpace: "nowrap", fontSize: "0.62rem", padding: "1px 6px", borderRadius: 999, border: `1px solid ${accent}55`, color: accent, letterSpacing: 0 }}>{badge}</span>}
       </div>
 
       <div className="dash-kpi-card__value" style={{

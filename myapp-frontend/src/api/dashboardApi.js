@@ -54,3 +54,15 @@ export async function getDashboardBreakdown(companyId, kind, periodOrOptions = "
   });
   return data;
 }
+
+/**
+ * GET /api/dashboard/tax-position?companyId=X&period=... — the Payable to FBR
+ * panel. 403 (with a message) for no permission or division-restricted access.
+ */
+export async function getDashboardTaxPosition(companyId, periodOrOptions = "this-month") {
+  const { data } = await httpClient.get("/dashboard/tax-position", {
+    params: { companyId, ...periodParams(periodOrOptions) },
+    timeout: 60000,
+  });
+  return data;
+}

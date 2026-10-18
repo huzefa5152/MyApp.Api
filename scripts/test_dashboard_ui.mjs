@@ -90,5 +90,30 @@ check("invoice breakdown + bill link", () => {
   assert.strictEqual(D.openBillPath(1234), "/bills?search=1234");
 });
 
+console.log("\n=== overview page data ===");
+const O = await import(new URL("../myapp-frontend/src/Components/dashboard/overviewData.js", import.meta.url).href);
+check("each drill's card figure is the tile that opened it", () => {
+  const hero = { netSales: 100, salesInclTax: 118, grossMarginLanded: 30, receivablesTotal: 500, stockAgeUnder30: 1, stockAge30To90: 2, stockAgeOver90: 3 };
+  assert.strictEqual(O.drillCardValue({ kind: "sales" }, { hero }), 100); // NET, not incl. tax
+  assert.strictEqual(O.drillCardValue({ kind: "margin-landed" }, { hero }), 30);
+  assert.strictEqual(O.drillCardValue({ kind: "receivables" }, { hero }), 500);
+  assert.strictEqual(O.drillCardValue({ kind: "receivables" }, { hero: { ...hero, receivablesScopeRestricted: true } }), null);
+  assert.strictEqual(O.drillCardValue({ kind: "stock-ageing" }, { hero }), 6);
+  assert.strictEqual(O.drillCardValue({ kind: "tax-payable" }, { hero, tax: { totalPayable: 42 } }), 42);
+  assert.strictEqual(O.drillCardValue({ kind: "health-unfiled" }, { hero, health: [{ key: "health-unfiled", amount: 9 }] }), 9);
+  assert.strictEqual(O.drillCardValue({ kind: "sales", period: "all-time" }, { hero }), null); // chart month: own window
+  assert.strictEqual(O.drillCardValue(null, { hero }), null);
+});
+check("chart series: months labelled, input tax below the line, top 10", () => {
+  assert.strictEqual(O.monthLabel("2026-05"), "May 26");
+  const m = O.monthlySeries([{ month: "2026-01", netSales: 10, landedCost: 7, marginPct: null }]);
+  assert.deepStrictEqual(m[0], { month: "2026-01", label: "Jan 26", netSales: 10, landedCost: 7, marginPct: null });
+  const t = O.taxMonthSeries([{ month: "2026-02", outputTax: 18, furtherTax: 4, adv236: 1, inputTax: 5 }]);
+  assert.strictEqual(t[0].input, -5);
+  assert.strictEqual(O.topCustomers(Array.from({ length: 20 }, (_, i) => ({ id: i, name: "C" + i, value: i }))).length, 10);
+  assert.strictEqual(O.hasAny(t, ["output"]), true);
+  assert.strictEqual(O.hasAny([{ output: 0 }], ["output"]), false);
+});
+
 console.log(`\n${pass} passed, ${failures.length} failed`);
 process.exit(failures.length ? 1 : 0);

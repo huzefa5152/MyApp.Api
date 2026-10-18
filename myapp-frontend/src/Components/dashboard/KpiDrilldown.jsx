@@ -84,7 +84,8 @@ export default function KpiDrilldown({
   }, []);
 
   // A new card (or reopening) starts at level 1 unless told where to resume.
-  useEffect(() => { if (open) setGroupKey(initialGroupKey); }, [open, kind, initialGroupKey]);
+  // Titles from a previous drill must not label this one (opened straight at level 2).
+  useEffect(() => { if (open) { setGroupKey(initialGroupKey); setRootTitle(""); setGroupLabel(""); } }, [open, kind, initialGroupKey]);
 
   const closeAndClear = useCallback(() => {
     setSearchParams((p) => drillToSearch(p, null), { replace: true });

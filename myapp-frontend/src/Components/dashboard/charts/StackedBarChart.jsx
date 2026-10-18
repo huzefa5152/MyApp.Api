@@ -1,4 +1,5 @@
-// Stacked bars per category. Same props as BarLineChart; every series stacks.
+// Stacked bars per category. Same props as BarLineChart; every series stacks
+// (negative values stack below the axis).
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import { chartPalette, formatMoneyShort } from "../chartTheme";
 
@@ -8,7 +9,7 @@ export default function StackedBarChart({ data, series, onBarClick, ariaLabel, x
   return (
     <div role="img" aria-label={ariaLabel} style={{ width: "100%", height: "100%" }}>
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+      <BarChart data={data} stackOffset="sign" margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
         <CartesianGrid stroke={p.grid} vertical={false} />
         <XAxis dataKey={xKey} tick={{ fill: p.text, fontSize: 11 }} />
         <YAxis tickFormatter={formatMoneyShort} tick={{ fill: p.text, fontSize: 11 }} width={64} />
