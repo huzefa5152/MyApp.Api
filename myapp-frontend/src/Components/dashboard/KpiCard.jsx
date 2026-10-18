@@ -54,6 +54,8 @@ export default function KpiCard({
   secondLine = null,
   // Small pill beside the label (e.g. "FBR", "est.").
   badge = null,
+  // Tooltip line for onDrillDown; a card that opens a report says so instead.
+  clickHint = "Click to see the breakdown.",
 }) {
   // Compute % delta vs previous when both numbers are available.
   let deltaPct = null;
@@ -99,7 +101,7 @@ export default function KpiCard({
         boxShadow: "0 1px 2px rgba(12, 24, 48, 0.04), 0 10px 28px -18px rgba(12, 24, 48, 0.18)",
         cursor: onDrillDown ? "pointer" : undefined,
       }}
-      title={[title, howCalculated, onDrillDown ? "Click to see the breakdown." : null].filter(Boolean).join("\n\n")}
+      title={[title, howCalculated, onDrillDown ? clickHint : null].filter(Boolean).join("\n\n")}
       onClick={onDrillDown || undefined}
       onKeyDown={onDrillDown ? (e) => {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onDrillDown(); }

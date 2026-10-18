@@ -120,5 +120,36 @@ check("chart series: months labelled, input tax below the line, top 10", () => {
   assert.strictEqual(O.hasAny([{ output: 0 }], ["output"]), false);
 });
 
+console.log("\n=== accounting page data ===");
+const A = await import(new URL("../myapp-frontend/src/Components/dashboard/accountingData.js", import.meta.url).href);
+check("accounting presets cut like the server (Monday weeks, inclusive to)", () => {
+  // 2026-10-18 is a Sunday: its week starts Monday 12th.
+  assert.deepStrictEqual(A.presetRange("this-week", "2026-10-18"), { from: "2026-10-12", to: "2026-10-18" });
+  assert.deepStrictEqual(A.presetRange("last-week", "2026-10-18"), { from: "2026-10-05", to: "2026-10-11" });
+  assert.deepStrictEqual(A.presetRange("this-month", "2026-02-10"), { from: "2026-02-01", to: "2026-02-28" });
+  assert.deepStrictEqual(A.presetRange("last-month", "2026-01-15"), { from: "2025-12-01", to: "2025-12-31" });
+  assert.deepStrictEqual(A.presetRange("last-year", "2026-01-15"), { from: "2025-01-01", to: "2025-12-31" });
+  assert.deepStrictEqual(A.presetRange("all-time", "2026-10-18"), { from: "2000-01-01", to: "2026-10-18" });
+  assert.deepStrictEqual(A.presetRange("custom", "2026-10-18", { from: "2026-08-01", to: "2026-08-31" }), { from: "2026-08-01", to: "2026-08-31" });
+  assert.strictEqual(A.presetRange("custom", "2026-10-18", { from: "2026-08-01" }), null);
+});
+check("accounting drill figures are the tile's own, and only for its window", () => {
+  const summary = { receivables: { total: 500 }, recoverableTax: 7, unrealisedMargin: 3, importLandedCost: 90, importInputTax: 4, importIncomeTax: 1, capitalInStock: 99 };
+  const range = { from: "2026-10-01", to: "2026-10-31" };
+  const d = (kind) => ({ kind, ...range });
+  assert.strictEqual(A.accountingCardValue(d("receivables"), { summary, range }), 500);
+  assert.strictEqual(A.accountingCardValue(d("duty-burden"), { summary, range }), 5);
+  assert.strictEqual(A.accountingCardValue(d("import-book"), { summary, range }), 90);
+  assert.strictEqual(A.accountingCardValue(d("tax-payable"), { summary, tax: { totalPayable: 42 }, range }), 42);
+  assert.strictEqual(A.accountingCardValue(d("stock-on-hand"), { summary, range }), null); // GL inventory is not the stock walk
+  assert.strictEqual(A.accountingCardValue({ kind: "receivables", from: "2026-08-01", to: "2026-08-31" }, { summary, range }), null);
+});
+check("accounting chart series", () => {
+  assert.deepStrictEqual(A.agingSeries({ current: 1, days1To30: 2, days31To60: 3, days61To90: 4, over90: 5 })[0],
+    { label: "Receivables", current: 1, d1to30: 2, d31to60: 3, d61to90: 4, over90: 5 });
+  assert.deepStrictEqual(A.cashSeries([{ month: "2026-09", cashIn: 10, cashOut: 4 }])[0], { month: "2026-09", label: "Sep 26", cashIn: 10, cashOut: 4 });
+  assert.strictEqual(A.profitSeries([{ month: "2026-09", income: 10, expense: 12, netProfit: -2 }])[0].netProfit, -2);
+});
+
 console.log(`\n${pass} passed, ${failures.length} failed`);
 process.exit(failures.length ? 1 : 0);

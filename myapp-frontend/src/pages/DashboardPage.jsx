@@ -15,8 +15,8 @@
 //
 // Drill state lives in the URL (?drill=&group=, plus ?dperiod= for a chart
 // month opened outside the page's period) so Back from "Open bill" reopens it.
-import { useState, useEffect, useCallback } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import {
   MdReceipt, MdShoppingCart, MdInventory, MdCloudDone, MdHourglassEmpty, MdError,
   MdCheckCircle, MdLock, MdOpenInNew, MdInfo, MdAttachMoney, MdLocalShipping,
@@ -28,7 +28,8 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { getDashboardKpis, getDashboardTaxPosition } from "../api/dashboardApi";
 import KpiCard from "../Components/dashboard/KpiCard";
 import KpiGroup from "../Components/dashboard/KpiGroup";
-import KpiDrilldown, { drillFromSearch } from "../Components/dashboard/KpiDrilldown";
+import KpiDrilldown from "../Components/dashboard/KpiDrilldown";
+import useDrillState from "../Components/dashboard/useDrillState";
 import DashboardHeader from "../Components/dashboard/DashboardHeader";
 import HealthBanner from "../Components/dashboard/HealthBanner";
 import ChartCard from "../Components/dashboard/ChartCard";
@@ -41,7 +42,6 @@ import { chartPalette, formatMoneyShort } from "../Components/dashboard/chartThe
 import {
   drillCardValue, monthlySeries, taxMonthSeries, topCustomers, ageingSeries, ageingTotal, hasAny, monthRange,
 } from "../Components/dashboard/overviewData";
-import { drillToSearch } from "../utils/dashboardDrill";
 import "./DashboardPage.css";
 
 const STORE = { period: "dashboardPeriod", from: "dashboardFrom", to: "dashboardTo" };
@@ -63,7 +63,6 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const { selectedCompany, companies, setSelectedCompany } = useCompany();
   const { has, loading: permsLoading } = usePermissions();
-  const [searchParams, setSearchParams] = useSearchParams();
 
   const [range, setRange] = useState(() => {
     const p = load(STORE.period);
@@ -78,10 +77,7 @@ export default function DashboardPage() {
   const [taxReload, setTaxReload] = useState(0);
 
   // Resume a drill from the URL (Back from "Open bill" lands here).
-  const [drill, setDrill] = useState(() => {
-    const s = drillFromSearch(searchParams);
-    return s ? { ...s, period: searchParams.get("dperiod") || null, from: searchParams.get("dfrom") || null, to: searchParams.get("dto") || null } : null;
-  });
+  const { drill, openDrill, closeDrill } = useDrillState();
 
   const canViewPage = has?.("dashboard.view") ?? false;
   const displayName = user?.name || user?.username || "there";
@@ -123,34 +119,6 @@ export default function DashboardPage() {
       });
     return () => { cancelled = true; };
   }, [canSales, companyId, range, ready, taxReload]);
-
-  // opts.period (+ from/to for "custom"): a chart month opens on its own window.
-  const openDrill = useCallback((kind, opts = {}) => {
-    setDrill({ kind, groupKey: opts.groupKey || null, period: opts.period || null, from: opts.from || null, to: opts.to || null });
-  }, []);
-
-  // The panel owns ?drill= and ?group= (it moves between levels); the page owns
-  // only the d* window keys. setSearchParams' updater sees the params of the
-  // last render, so the panel's own writes can drop d* keys written in the same
-  // or a neighbouring commit: re-add them whenever the URL disagrees with the
-  // open drill. Only d* keys are touched, so this can never undo a level change.
-  useEffect(() => {
-    if (!drill) return;
-    const want = [["dperiod", drill.period], ["dfrom", drill.from], ["dto", drill.to]];
-    if (want.every(([k, v]) => (searchParams.get(k) || null) === (v || null))) return;
-    setSearchParams((p) => {
-      const n = new URLSearchParams(p);
-      for (const [k, v] of want) { if (v) n.set(k, v); else n.delete(k); }
-      return n;
-    }, { replace: true });
-  }, [drill, searchParams, setSearchParams]);
-
-  // Clears every drill key in one update: KpiDrilldown clears drill/group too, and
-  // two updates from one tick would otherwise overwrite each other.
-  const closeDrill = useCallback(() => {
-    setDrill(null);
-    setSearchParams((p) => { const n = drillToSearch(p, null); ["dperiod", "dfrom", "dto"].forEach((k) => n.delete(k)); return n; }, { replace: true });
-  }, [setSearchParams]);
 
   if (permsLoading) return <Shell><LoadingShimmer /></Shell>;
   if (!canViewPage) return <Shell><AccessDeniedBanner displayName={displayName} /></Shell>;
