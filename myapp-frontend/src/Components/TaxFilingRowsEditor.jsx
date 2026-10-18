@@ -7,6 +7,7 @@ import { useConfirm } from "./ConfirmDialog";
 import FilingClassificationFields from "./FilingClassificationFields";
 import { amount, money, mergeFilingRows, separateFilingRow, filingErrors } from "../utils/taxFilingRows";
 import "./TaxFilingRowsEditor.css";
+import InvoiceDocumentView from "./InvoiceDocumentView";
 
 export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readOnly = false }) {
   const { has } = usePermissions();
@@ -28,14 +29,14 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
     async function load() {
       try {
         const { data: next } = await getTaxFiling(invoiceId);
-        const { data: catalog } = await getItemTypes(next.bill.companyId);
+        const { data: catalog } = readOnly ? { data: [] } : await getItemTypes(next.bill.companyId);
         if (active) { setData(next); setRows(next.rows); setTypes(catalog || []); }
       } catch (e) { if (active) setError(e.response?.data?.message || "Could not load filing rows. Close and try again."); }
     }
     load();
     closeRef.current?.focus();
     return () => { active = false; };
-  }, [invoiceId]);
+  }, [invoiceId, readOnly]);
   const changeRows = (next) => { setRows(next); setDirty(true); setError(""); };
   const change = (index, key, value) => changeRows(rows.map((r, i) => i === index ? { ...r, [key]: value } : r));
   const close = async () => {
@@ -84,11 +85,12 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
   const difference = data ? amount(data.bill.subtotal) - total : 0;
   return <div style={formStyles.backdrop}>
     <form id="tax-filing-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="filing-title" className="tax-filing" style={{ ...formStyles.modal, maxWidth: modalSizes.xxl }} onSubmit={save} onKeyDown={keyDown}>
-      <header className="tf-header" style={formStyles.header}><div><h2 id="filing-title" style={formStyles.title}>Tax filing rows {data ? `· Invoice ${data.bill.invoiceNumber}` : ""}</h2><p>Combine selected groups or classify each separately. Original bill quantities, prices and amounts stay unchanged.</p></div><button ref={closeRef} type="button" aria-label="Close" style={formStyles.closeButton} onClick={close} disabled={saving}>&times;</button></header>
+      <header className="tf-header" style={formStyles.header}><div><h2 id="filing-title" style={formStyles.title}>{readOnly ? "View Invoice" : "Tax filing rows"} {data ? `· Invoice ${data.bill.invoiceNumber}` : ""}</h2>{!readOnly && <p>Combine selected groups or classify each separately. Original bill quantities, prices and amounts stay unchanged.</p>}</div><button ref={closeRef} type="button" aria-label="Close" style={formStyles.closeButton} onClick={close} disabled={saving}>&times;</button></header>
       <div className="tf-body" style={formStyles.body}>
         {error && <div ref={errorRef} tabIndex={-1} role="alert" className="tf-error">{error}</div>}
         {!data && !error && <p role="status">Loading the bill and filing rows…</p>}
-        {data && <>
+        {data && readOnly && <InvoiceDocumentView bill={data.bill} rows={rows} requiresReview={data.requiresReview} />}
+        {data && !readOnly && <>
           <div className="tf-document-context"><span>Company</span><strong>{data.bill.companyName || "Selected company"}</strong><span>Invoice #{data.bill.invoiceNumber}</span></div>
           <p className="tf-grouping-help">1. Select the rows to group. 2. Combine selected. 3. Choose an HS classification and filing unit for each group.</p>
           <p role="status">{data.bill.items.length} bill lines → <strong>{rows.length} FBR filing {rows.length === 1 ? "row" : "rows"}</strong>. Bill item types suggest the starting groups; unclassified lines remain separate.</p>
@@ -114,7 +116,7 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
           {!types.some(t => t.hsCode && t.saleType) && editable && <p className="tf-warning">This company has no saved filing classifications yet. Search FBR HS codes above and enter an item name to save a new company classification with this review.</p>}
         </>}
       </div>
-      <footer className="tf-footer" style={formStyles.footer}><span aria-live="polite">{data && <b>{difference === 0 ? "Total matched" : `Rs. ${money(Math.abs(difference) / 100)} ${difference > 0 ? "remaining" : "over the bill"}`} · </b>}GST and further tax remain the bill's recorded taxes.</span><button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={close} disabled={saving}>{readOnly ? "Done" : "Cancel"}</button>{editable && <button type="submit" style={{ ...formStyles.button, ...formStyles.submit }} disabled={saving || difference !== 0}>{saving ? "Saving…" : "Save filing rows & complete review"}</button>}</footer>
+      <footer className="tf-footer" style={formStyles.footer}><span aria-live="polite">{!readOnly && <>{data && <b>{difference === 0 ? "Total matched" : `Rs. ${money(Math.abs(difference) / 100)} ${difference > 0 ? "remaining" : "over the bill"}`} · </b>}GST and further tax remain the bill's recorded taxes.</>}</span><button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={close} disabled={saving}>{readOnly ? "Close" : "Cancel"}</button>{editable && <button type="submit" style={{ ...formStyles.button, ...formStyles.submit }} disabled={saving || difference !== 0}>{saving ? "Saving…" : "Save filing rows & complete review"}</button>}</footer>
     </form>
   </div>;
 }

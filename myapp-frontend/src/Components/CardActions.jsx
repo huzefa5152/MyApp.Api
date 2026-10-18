@@ -32,7 +32,7 @@ function flatten(children) {
 
 const MENU_WIDTH = 232;
 
-export default function CardActions({ children, style, label = "More actions", nowrap = false }) {
+export default function CardActions({ children, style, label = "More actions", nowrap = false, className }) {
   const items = flatten(children);
   const primary = items.filter((c) => c.props["data-primary"]);
   let rest = items.filter((c) => !c.props["data-primary"]);
@@ -87,7 +87,7 @@ export default function CardActions({ children, style, label = "More actions", n
   };
 
   return (
-    <div style={{ display: "flex", flexWrap: nowrap ? "nowrap" : "wrap", gap: nowrap ? 4 : "0.4rem", alignItems: "center", ...style }}>
+    <div className={className} style={{ display: "flex", flexWrap: nowrap ? "nowrap" : "wrap", gap: nowrap ? 4 : "0.4rem", alignItems: "center", ...style }}>
       {primary}
       {rest.length > 0 && (
         <button

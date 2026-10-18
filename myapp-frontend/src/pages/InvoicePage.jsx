@@ -1,3 +1,4 @@
+import "./InvoiceCardActions.css";
 import ListFilters from "../Components/ListFilters";
 import RecordsViewport from "../Components/RecordsViewport";
 import CostingStatus from "../Components/CostingStatus";
@@ -337,7 +338,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       if (handoverFilter) params.handoverFilter = handoverFilter;
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
-      if (costingStatus) params.costingStatus = costingStatus;
+      if (isBillsMode && costingStatus) params.costingStatus = costingStatus;
       // Note tabs list ONLY their own type; other tabs get sale bills
       // only (server-side split — the three groups never mix).
       if (isNotesMode) params.type = noteDocType === 10 ? "creditnotes" : "debitnotes";
@@ -727,7 +728,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       if (clientFilter) params.clientId = clientFilter;
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
-      if (costingStatus) params.costingStatus = costingStatus;
+      if (isBillsMode && costingStatus) params.costingStatus = costingStatus;
       if (isNotesMode) params.type = noteDocType === 10 ? "creditnotes" : "debitnotes";
       const { data } = await getPagedInvoicesByCompany(selectedCompany.id, params);
       const ids = (data.items || []).map((i) => i.id);
@@ -765,7 +766,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     if (clientFilter) params.clientId = clientFilter;
     if (dateFrom) params.dateFrom = dateFrom;
     if (dateTo) params.dateTo = dateTo;
-      if (costingStatus) params.costingStatus = costingStatus;
+      if (isBillsMode && costingStatus) params.costingStatus = costingStatus;
     if (isNotesMode) params.type = noteDocType === 10 ? "creditnotes" : "debitnotes";
     const { data } = await getPagedInvoicesByCompany(selectedCompany.id, params);
     const all = data.items || [];
@@ -903,7 +904,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     setBulkResults({ open: true, action: "submit", items: results });
   };
 
-  const hasFilters = costingStatus || search || clientFilter || fbrFilter || handoverFilter || dateFrom || dateTo;
+  const hasFilters = (isBillsMode && costingStatus) || search || clientFilter || fbrFilter || handoverFilter || dateFrom || dateTo;
 
   return (
     <DocumentLinesNavigation type={isBillsMode ? "bill" : mode === "creditnotes" ? "creditNote" : mode === "debitnotes" ? "debitNote" : "taxInvoice"}>
@@ -1117,12 +1118,13 @@ export default function InvoicePage({ mode = "invoices" }) {
                   <option value="delivered">Docs delivered</option>
                 </select>
               )}
+              {isBillsMode && has("bills.costs.view") && <select aria-label="Costing status" className="filter-select" value={costingStatus} onChange={handleFilterChange(setCostingStatus)}>
+                <option value="">All costing statuses</option><option value="not-costed">Not costed</option><option value="partial">Partially costed</option><option value="full">Fully costed</option>
+              </select>}
               <div className="filter-date-group">
                 <input type="date" className="filter-date-input" value={dateFrom} onChange={handleFilterChange(setDateFrom)} title="From date" />
                 <span className="filter-date-sep">–</span>
-              {!isNotesMode && has("bills.costs.view") && <select aria-label="Costing status" className="filter-select" value={costingStatus} onChange={handleFilterChange(setCostingStatus)}>
-                <option value="">All costing statuses</option><option value="not-costed">Not costed</option><option value="partial">Partially costed</option><option value="full">Fully costed</option>
-              </select>}
+
                 <input type="date" className="filter-date-input" value={dateTo} onChange={handleFilterChange(setDateTo)} title="To date" />
               </div>
               {hasFilters && (
@@ -1162,7 +1164,7 @@ export default function InvoicePage({ mode = "invoices" }) {
         <>
           {viewMode === "table" ? (
             <InvoiceTable
-              onCosts={has("bills.costs.view") && !isNotesMode ? inv => setCostTarget(inv) : null}
+              onCosts={has("bills.costs.view") && isBillsMode ? inv => setCostTarget(inv) : null}
               invoices={invoices}
               attachCounts={attachCounts}
               onAttach={(inv) => setAttachTarget(inv)}
@@ -1252,7 +1254,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                       {inv.indentNo && <div><span style={cardStyles.metaLabel}>Indent</span><span style={cardStyles.metaValue}>{inv.indentNo}</span></div>}
                       {inv.site && <div><span style={cardStyles.metaLabel}>Site</span><span style={cardStyles.metaValue}>{inv.site}</span></div>}
                       <div><span style={cardStyles.metaLabel}>Date</span><span style={cardStyles.metaValue}>{new Date(inv.date).toLocaleDateString()}</span></div>
-                      {!isNotesMode && has("bills.costs.view") && <div><CostingStatus document={inv} onOpen={() => setCostTarget(inv)} /></div>}
+                      {isBillsMode && has("bills.costs.view") && <div><CostingStatus document={inv} onOpen={() => setCostTarget(inv)} /></div>}
                       <div><span style={cardStyles.metaLabel}>Lines</span><span style={cardStyles.metaValue}>{inv.items?.length || 0} item{inv.items?.length === 1 ? "" : "s"}</span></div>
                       {inv.challanNumbers?.length > 0 && <div><span style={cardStyles.metaLabel}>Challan</span><span style={cardStyles.metaValue}>#{inv.challanNumbers.join(", #")}</span></div>}
                     </div>
@@ -1275,8 +1277,8 @@ export default function InvoicePage({ mode = "invoices" }) {
                       )}
                     </div>
                   </div>
-                  <CardActions style={cardStyles.buttonGroup}>
-                    {!isNotesMode && has("bills.costs.view") && <button style={{ ...cardStyles.button, minHeight: 44 }} onClick={() => setCostTarget(inv)}>Costs & suppliers</button>}
+                  <CardActions className="invoice-card-actions" style={cardStyles.buttonGroup}>
+                    {isBillsMode && has("bills.costs.view") && <button style={{ ...cardStyles.button, minHeight: 44 }} onClick={() => setCostTarget(inv)}>Costs & suppliers</button>}
                     {/* Bills card: View, Print Bill, Bill PDF, Bill XLS, Edit, Delete.
                         Invoices card: View, Tax Print, Tax PDF, Tax XLS, View FBR, Validate, Submit. */}
                     {/* Read-only View — shown on BOTH tabs. On the Invoices tab
@@ -1584,7 +1586,7 @@ export default function InvoicePage({ mode = "invoices" }) {
         />
       )}
 
-      {costTarget && <CommercialCostDialog id={costTarget.id} companyId={costTarget.companyId} onClose={() => { setCostTarget(null); fetchInvoices(selectedCompany.id, page); }} />}
+      {isBillsMode && costTarget && <CommercialCostDialog id={costTarget.id} companyId={costTarget.companyId} onClose={() => { setCostTarget(null); fetchInvoices(selectedCompany.id, page); }} />}
       {showStandaloneForm && selectedCompany && (
         <StandaloneInvoiceForm
           companyId={selectedCompany.id}
