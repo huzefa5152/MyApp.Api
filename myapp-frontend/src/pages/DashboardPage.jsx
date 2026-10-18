@@ -129,18 +129,21 @@ export default function DashboardPage() {
     setDrill({ kind, groupKey: opts.groupKey || null, period: opts.period || null, from: opts.from || null, to: opts.to || null });
   }, []);
 
-  // The URL write happens here, not in the click: setSearchParams' updater sees
-  // the params of the last render, so KpiDrilldown's own mirror (same commit,
-  // child effects first) would drop d* keys written earlier. Writing the whole
-  // state last keeps every key.
+  // The panel owns ?drill= and ?group= (it moves between levels); the page owns
+  // only the d* window keys. setSearchParams' updater sees the params of the
+  // last render, so the panel's own writes can drop d* keys written in the same
+  // or a neighbouring commit: re-add them whenever the URL disagrees with the
+  // open drill. Only d* keys are touched, so this can never undo a level change.
   useEffect(() => {
     if (!drill) return;
+    const want = [["dperiod", drill.period], ["dfrom", drill.from], ["dto", drill.to]];
+    if (want.every(([k, v]) => (searchParams.get(k) || null) === (v || null))) return;
     setSearchParams((p) => {
-      const n = drillToSearch(p, { kind: drill.kind, groupKey: drill.groupKey });
-      for (const [k, v] of [["dperiod", drill.period], ["dfrom", drill.from], ["dto", drill.to]]) { if (v) n.set(k, v); else n.delete(k); }
+      const n = new URLSearchParams(p);
+      for (const [k, v] of want) { if (v) n.set(k, v); else n.delete(k); }
       return n;
     }, { replace: true });
-  }, [drill, setSearchParams]);
+  }, [drill, searchParams, setSearchParams]);
 
   // Clears every drill key in one update: KpiDrilldown clears drill/group too, and
   // two updates from one tick would otherwise overwrite each other.
