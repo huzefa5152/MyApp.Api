@@ -76,6 +76,7 @@ function CompanyStockEntryHistory({companyId, onChanged, onNewEntry}) {
     <p className="inventory-caption inventory-history-note">Stock and valuation only · No supplier payable.</p>
     {error && <p role="alert" style={formStyles.error}>{error}</p>}
     {success && <p role="status" style={{color:colors.teal}}>{success}</p>}
+    <div className="inventory-record-scroll" role="region" aria-label="Stock entry records" tabIndex={0}>
     {loading ? <p role="status">Loading stock entries…</p> : <>
       {!error && !visible.length && <p>{page === 1 ? 'No stock entries yet.' : 'No more stock entries.'}</p>}
       <div className="inventory-entry-columns" aria-hidden="true"><span>Entry / date</span><span>Item / reason</span><span>Type</span><span>Quantity</span><span>Unit cost</span><span>Value</span><span>Status</span><span/></div>
@@ -91,6 +92,7 @@ function CompanyStockEntryHistory({companyId, onChanged, onNewEntry}) {
           onClick={() => reverse(entry)}><MdUndo aria-hidden="true"/> Reverse</button>}</div>
       </article>)}</div>
     </>}
+    </div>
     <nav aria-label="Stock entry pages" className="inventory-pagination">
       <button type="button" style={buttonStyle} disabled={busy || loading || page === 1} onClick={() => setPage(value => value - 1)}>Previous entries</button>
       <span>Page {page}</span>

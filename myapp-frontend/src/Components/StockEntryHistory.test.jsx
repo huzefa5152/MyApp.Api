@@ -86,3 +86,5 @@ it('allows retry after a failed load', async () => {
   await screen.findByRole('alert'); fireEvent.click(screen.getByRole('button', {name:'Refresh entries'}));
   await screen.findByRole('article'); expect(screen.queryByRole('alert')).toBeNull();
 });
+
+it('keeps history filters and page controls outside its scrollable records',async()=>{render(<StockEntryHistory companyId={7}/>);const row=await screen.findByRole('article',{name:'Stock entry #9'});const region=screen.getByRole('region',{name:'Stock entry records'});expect(region.contains(row)).toBe(true);expect(region.tabIndex).toBe(0);expect(region.contains(screen.getByLabelText('Search stock entries'))).toBe(false);expect(region.contains(screen.getByRole('navigation',{name:'Stock entry pages'}))).toBe(false);});

@@ -193,7 +193,7 @@ function CompanyStockDashboard() {
           </div>}
           {tab === "entries" && (canManageOpening || canAdjust) && <StockEntryHistory companyId={selectedCompany.id} onChanged={fetchAll} onNewEntry={kind => setEntryDraft({kind})}/>}
           {tab === "onhand" && (
-            <>
+            <div className="inventory-record-scroll" role="region" aria-label="Stock on hand records" tabIndex={0}>
               {loading ? (
                 <div style={styles.loading}><div style={styles.spinner} /></div>
               ) : filteredOnhand.length === 0 ? (
@@ -347,7 +347,7 @@ function CompanyStockDashboard() {
                   </div>
                 </>
               )}
-            </>
+            </div>
           )}
 
           {tab === "movements" && canViewMovements && (
@@ -359,6 +359,7 @@ function CompanyStockDashboard() {
                 </div>
               ) : (
                 <>
+                  <div className="inventory-record-scroll" role="region" aria-label="Stock movement records" tabIndex={0}>
                   {/* Desktop — table */}
                   <div data-admin-table-region="" className="stock-table" style={styles.tableWrap}>
                     <table style={styles.table}>
@@ -417,6 +418,7 @@ function CompanyStockDashboard() {
                     ))}
                   </div>
 
+                  </div>
                   {movPageSize > 0 && movTotal > movPageSize && (
                     <Pagination
                       page={movPage}
