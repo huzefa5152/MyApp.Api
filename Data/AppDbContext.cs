@@ -652,6 +652,8 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<Invoice>().Property(i => i.GSTAmount).HasPrecision(18, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.GrandTotal).HasPrecision(18, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.AmountPaid).HasPrecision(18, 2);
+            modelBuilder.Entity<Invoice>().Property(i => i.ImportSettlementAdjustment).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseBill>().Property(b => b.ImportSettlementAdjustment).HasPrecision(18, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.WithholdingTaxRate).HasPrecision(5, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.FreightCharges).HasPrecision(18, 2).HasDefaultValue(0m);
             modelBuilder.Entity<Invoice>().Property(i => i.WithholdingTaxAmount).HasPrecision(18, 2);

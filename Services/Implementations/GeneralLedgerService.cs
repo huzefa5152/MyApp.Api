@@ -449,6 +449,7 @@ namespace MyApp.Api.Services.Implementations
                     {
                         i.Id, i.ClientId, ClientName = i.Client!.Name, i.Date, i.DueDate,
                         Gross = i.GrandTotal + i.FreightCharges - i.WithholdingTaxAmount, i.AmountPaid,
+                        Imported = i.ImportSettlementAdjustment ?? 0m,
                     })
                     .ToListAsync();
 
@@ -457,7 +458,11 @@ namespace MyApp.Api.Services.Implementations
                     .Select(x => new
                     {
                         x.ClientId, x.ClientName, x.Date, x.DueDate,
-                        Due = x.Gross - (asOf == null ? x.AmountPaid : paid.GetValueOrDefault(x.Id)),
+                        // As of a date, paid = allocations dated by then plus what
+                        // an import settled before this system existed (it has no
+                        // payment to date, so it counts from the document's own
+                        // date — every row here is on or before asOf).
+                        Due = x.Gross - (asOf == null ? x.AmountPaid : paid.GetValueOrDefault(x.Id) + x.Imported),
                     })
                     .Where(x => x.Due > 0m)
                     .Select(x => (x.ClientId, x.ClientName, (x.DueDate ?? x.Date).Date, x.Due))
@@ -471,6 +476,7 @@ namespace MyApp.Api.Services.Implementations
                     {
                         b.Id, b.SupplierId, SupplierName = b.Supplier!.Name, b.Date, b.DueDate,
                         Gross = b.GrandTotal - b.WithholdingTaxAmount, b.AmountPaid,
+                        Imported = b.ImportSettlementAdjustment ?? 0m,
                     })
                     .ToListAsync();
 
@@ -479,7 +485,7 @@ namespace MyApp.Api.Services.Implementations
                     .Select(x => new
                     {
                         x.SupplierId, x.SupplierName, x.Date, x.DueDate,
-                        Due = x.Gross - (asOf == null ? x.AmountPaid : paid.GetValueOrDefault(x.Id)),
+                        Due = x.Gross - (asOf == null ? x.AmountPaid : paid.GetValueOrDefault(x.Id) + x.Imported),
                     })
                     .Where(x => x.Due > 0m)
                     .Select(x => (x.SupplierId, x.SupplierName, (x.DueDate ?? x.Date).Date, x.Due))

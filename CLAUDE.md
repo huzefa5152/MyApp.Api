@@ -448,6 +448,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Document copy | `python scripts/test_document_copy.py` | `184/184 checks passed` |
 | Customer Portal (incl. IDOR suite) | `python scripts/test_customer_portal.py` | `94/94 checks passed` |
 | Accounting reports | `python scripts/test_accounting_reports.py` | `315/315 checks passed` |
+| Imported settlement survives receipts; dashboard, summary and as-of aging agree (needs `sqlcmd`, local DB only) | `python scripts/test_import_settlement.py` | `14/14 import settlement checks passed` |
 | Public file allowlist | `python scripts/verify_public_file_allowlist.py` | `10/10 checks passed` |
 | Print pagination (offline) | see `PRINT_TEMPLATE_GUIDE.md` §11 | `0 failing cases` |
 | PDF page breaks never cut a line item (offline) | `node scripts/test_pdf_page_cuts.mjs` | `10 passed, 0 failed` |

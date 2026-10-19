@@ -2382,6 +2382,10 @@ namespace MyApp.Api.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<decimal?>("ImportSettlementAdjustment")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<int>("InvoiceNumber")
                         .HasColumnType("int");
 
@@ -4555,6 +4559,10 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("decimal(5,2)");
 
                     b.Property<decimal>("GrandTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("ImportSettlementAdjustment")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 

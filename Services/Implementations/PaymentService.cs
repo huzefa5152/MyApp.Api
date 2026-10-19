@@ -700,8 +700,12 @@ namespace MyApp.Api.Services.Implementations
         }
 
         // ── Recompute helpers ─────────────────────────────────────────────────
-        // AmountPaid = Σ allocation amounts from NON-cancelled payments. Run
-        // after the allocation rows are persisted so the query sees them.
+        // AmountPaid = Σ allocation amounts from NON-cancelled payments, plus the
+        // settlement an import carried over with no allocation behind it
+        // (ImportSettlementAdjustment — null for documents made here). Without
+        // that term the first receipt recorded against an imported bill wiped
+        // what Manager had already marked paid. Run after the allocation rows
+        // are persisted so the query sees them.
 
         private async Task RecomputeInvoiceAsync(int invoiceId)
         {
@@ -710,7 +714,7 @@ namespace MyApp.Api.Services.Implementations
                 .Where(a => a.InvoiceId == invoiceId && !a.Payment.IsCancelled)
                 .SumAsync(a => (decimal?)(a.Amount + a.AdjustmentAmount)) ?? 0m;
             var inv = await _context.Invoices.FirstOrDefaultAsync(i => i.Id == invoiceId);
-            if (inv != null) inv.AmountPaid = paid;
+            if (inv != null) inv.AmountPaid = paid + (inv.ImportSettlementAdjustment ?? 0m);
         }
 
         private async Task RecomputePurchaseBillAsync(int billId)
@@ -719,7 +723,7 @@ namespace MyApp.Api.Services.Implementations
                 .Where(a => a.PurchaseBillId == billId && !a.Payment.IsCancelled)
                 .SumAsync(a => (decimal?)(a.Amount + a.AdjustmentAmount)) ?? 0m;
             var bill = await _context.PurchaseBills.FirstOrDefaultAsync(b => b.Id == billId);
-            if (bill != null) bill.AmountPaid = paid;
+            if (bill != null) bill.AmountPaid = paid + (bill.ImportSettlementAdjustment ?? 0m);
         }
 
         // ── Mapping ───────────────────────────────────────────────────────────

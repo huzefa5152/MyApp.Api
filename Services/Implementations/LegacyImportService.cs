@@ -947,7 +947,8 @@ namespace MyApp.Api.Services.Implementations
             foreach (var s in invSums)
             {
                 var inv = await _db.Invoices.FirstOrDefaultAsync(i => i.Id == s.Id);
-                if (inv != null) inv.AmountPaid = s.Sum;
+                // Keeps a settlement an earlier import recorded (see PaymentService).
+                if (inv != null) inv.AmountPaid = s.Sum + (inv.ImportSettlementAdjustment ?? 0m);
             }
             var billSums = await _db.PaymentAllocations
                 .Where(a => a.PurchaseBillId != null && a.Payment.CompanyId == companyId && !a.Payment.IsCancelled)
@@ -956,7 +957,7 @@ namespace MyApp.Api.Services.Implementations
             foreach (var s in billSums)
             {
                 var bill = await _db.PurchaseBills.FirstOrDefaultAsync(b => b.Id == s.Id);
-                if (bill != null) bill.AmountPaid = s.Sum;
+                if (bill != null) bill.AmountPaid = s.Sum + (bill.ImportSettlementAdjustment ?? 0m);
             }
             await _db.SaveChangesAsync();
             result.Created["invoicesReflowed"] = invSums.Count;

@@ -54,6 +54,14 @@ namespace MyApp.Api.Models
         public DateTime? DueDate { get; set; }
         public decimal AmountPaid { get; set; }
 
+        /// <summary>The part of <see cref="AmountPaid"/> that no allocation here
+        /// accounts for: settled in the source system before an import (Manager
+        /// balance due), signed — negative where the imported allocations exceed
+        /// what the source marked paid. Null for documents created in the app.
+        /// The invariant is AmountPaid = Σ allocations + this, so recomputing from
+        /// allocations, and aging as of a date, keep the imported settlement.</summary>
+        public decimal? ImportSettlementAdjustment { get; set; }
+
         // ── Withholding tax (income-tax, s.153 — Manager.io parity) ──
         // Tax WE withhold at source when paying this supplier bill and remit to
         // FBR. Mirror of Invoice, opposite direction: it reduces what we pay the

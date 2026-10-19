@@ -617,6 +617,27 @@ namespace MyApp.Api.Services.Implementations
                 }
                 await _db.SaveChangesAsync();
 
+                // Record the part of each anchored AmountPaid that no imported
+                // allocation accounts for, so a later receipt or payment
+                // recompute keeps it (AmountPaid = Σ allocations + adjustment).
+                // The same rule as migration AddImportSettlementAdjustment's
+                // backfill, scoped to this company and to rows not yet recorded.
+                await _db.Database.ExecuteSqlRawAsync(@"
+UPDATE i SET ImportSettlementAdjustment = i.AmountPaid - ISNULL(a.Settled, 0)
+FROM Invoices i
+OUTER APPLY (SELECT SUM(pa.Amount + pa.AdjustmentAmount) AS Settled
+             FROM PaymentAllocations pa JOIN Payments p ON p.Id = pa.PaymentId
+             WHERE pa.InvoiceId = i.Id AND p.IsCancelled = 0) a
+WHERE i.CompanyId = {0} AND i.ExternalRef LIKE 'mgr-%' AND i.ImportSettlementAdjustment IS NULL
+  AND ABS(i.AmountPaid - ISNULL(a.Settled, 0)) > 0.005;
+UPDATE b SET ImportSettlementAdjustment = b.AmountPaid - ISNULL(a.Settled, 0)
+FROM PurchaseBills b
+OUTER APPLY (SELECT SUM(pa.Amount + pa.AdjustmentAmount) AS Settled
+             FROM PaymentAllocations pa JOIN Payments p ON p.Id = pa.PaymentId
+             WHERE pa.PurchaseBillId = b.Id AND p.IsCancelled = 0) a
+WHERE b.CompanyId = {0} AND b.ExternalRef LIKE 'mgr-%' AND b.ImportSettlementAdjustment IS NULL
+  AND ABS(b.AmountPaid - ISNULL(a.Settled, 0)) > 0.005;", companyId);
+
                 // ── Document attachments ────────────────────────────────────────
                 // Manager document attachments arrive as an "attachments" manifest
                 // (in summaryDocs) — [{ownerType, ownerKey, fileName, contentType,
