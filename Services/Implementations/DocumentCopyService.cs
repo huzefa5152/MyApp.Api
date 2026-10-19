@@ -210,6 +210,10 @@ namespace MyApp.Api.Services.Implementations
                 // as one that expired last month.
                 ValidUntil = ShiftRelative(quote.ValidUntil, quote.Date, ctx.Date),
                 GSTRate = quote.GSTRate,
+                // Discounts are part of the price offered, so a copy keeps them.
+                DiscountValue = quote.DiscountValue,
+                DiscountIsPercent = quote.DiscountIsPercent,
+                DiscountReason = quote.DiscountReason,
                 CustomerEnquiryRef = ctx.Details ? quote.CustomerEnquiryRef : null,
                 EnquiryDate = ctx.Details ? quote.EnquiryDate : null,
                 Notes = ctx.Details ? quote.Notes : null,
@@ -221,6 +225,9 @@ namespace MyApp.Api.Services.Implementations
                     Quantity = i.Quantity,
                     Unit = i.Unit,
                     UnitPrice = i.UnitPrice,
+                    DiscountValue = i.DiscountValue,
+                    DiscountIsPercent = i.DiscountIsPercent,
+                    DiscountReason = i.DiscountReason,
                     // Duplicate the file — two quotes sharing one image would lose
                     // it the moment either is edited or deleted.
                     ImagePath = QuoteLineImages.TryCopy(i.ImagePath, quote.CompanyId),

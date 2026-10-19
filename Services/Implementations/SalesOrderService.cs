@@ -775,6 +775,7 @@ namespace MyApp.Api.Services.Implementations
 
             var quoteItems = new List<SalesQuoteItem>();
             decimal? gstRate = null;
+            SalesQuote? sourceQuote = null;
             if (order.SalesQuoteId.HasValue)
             {
                 // Scoped to the order's company — a cross-company quote link
@@ -788,6 +789,7 @@ namespace MyApp.Api.Services.Implementations
                 {
                     quoteItems = quote.Items.ToList();
                     gstRate = quote.GSTRate;
+                    sourceQuote = quote;
                 }
             }
 
@@ -825,8 +827,13 @@ namespace MyApp.Api.Services.Implementations
                             qi.Description.Trim(), item.Description.Trim(), StringComparison.OrdinalIgnoreCase));
                     if (match != null)
                     {
-                        line.UnitPrice = match.UnitPrice;
+                        // A line discount is part of the price the customer
+                        // accepted, so the bill takes the NET unit price.
+                        line.UnitPrice = match.DiscountAmount > 0 && match.Quantity > 0
+                            ? match.LineTotal / match.Quantity
+                            : match.UnitPrice;
                         line.PriceSource = "Quote";
+                        line.QuoteDiscountNote = QuoteDiscount.Note(match.DiscountValue, match.DiscountIsPercent, match.DiscountAmount, match.DiscountReason);
                     }
                     else
                     {
@@ -854,6 +861,11 @@ namespace MyApp.Api.Services.Implementations
                 Site = order.Site,
                 SalesQuoteId = order.SalesQuoteId,
                 GstRate = gstRate,
+                QuoteDiscountReminder = sourceQuote is { DiscountAmount: > 0 } q
+                    ? $"Quote #{q.QuoteNumber} gave a discount on the whole quote: " +
+                      QuoteDiscount.Note(q.DiscountValue, q.DiscountIsPercent, q.DiscountAmount, q.DiscountReason) +
+                      ". It is not in the prices below — adjust the bill if it applies."
+                    : null,
                 Lines = lines
             };
         }

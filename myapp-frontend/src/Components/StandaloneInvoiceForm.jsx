@@ -212,6 +212,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [salesOrders, setSalesOrders] = useState([]);
   const [salesOrderId, setSalesOrderId] = useState("");
   const [soLoadedMsg, setSoLoadedMsg] = useState("");
+  // What the source quote's discounts did to the prefilled prices. Line
+  // discounts are already in the unit prices; a whole-quote discount is not,
+  // so it is shown as a reminder for the operator to act on.
+  const [quoteDiscountInfo, setQuoteDiscountInfo] = useState(null);
   // Customer PO — prefilled from a selected Sales Order, or typed manually.
   const [poNumber, setPoNumber] = useState("");
   const [poDate, setPoDate] = useState("");
@@ -306,6 +310,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // clean slate when the order is removed, not a half-populated leftover.
   const handleSalesOrderSelect = async (id) => {
     setSalesOrderId(id ? String(id) : "");
+    setQuoteDiscountInfo(null);
     if (!id) {
       setSoLoadedMsg("");
       setSelectedClientId("");
@@ -325,6 +330,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       if (!data || typeof data !== "object" || !Array.isArray(data.lines)) {
         throw new Error("unexpected prefill payload");
       }
+      const lineNotes = data.lines.filter((l) => l.quoteDiscountNote).map((l) => ({ description: l.description, note: l.quoteDiscountNote }));
+      if (data.quoteDiscountReminder || lineNotes.length) setQuoteDiscountInfo({ whole: data.quoteDiscountReminder, lines: lineNotes });
       if (data.clientId) setSelectedClientId(String(data.clientId));
       setDivisionId(data.divisionId ? String(data.divisionId) : "");
       // GST only prefills when FBR is off — with FBR on the rate is locked
@@ -823,6 +830,20 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                   )}
                   {soLoadedMsg && <div style={{ fontSize: "0.72rem", color: colors.teal, marginTop: 4, fontWeight: 600 }}>{soLoadedMsg}</div>}
                 </div>
+                {quoteDiscountInfo && (
+                  <div role="note" style={{ marginBottom: "1rem", padding: "0.7rem 0.85rem", borderRadius: 10, border: "1px solid #f0c36d", background: "#fff8e6", color: "#5c4400", fontSize: "0.85rem", lineHeight: 1.45 }}>
+                    <div style={{ fontWeight: 700, marginBottom: "0.25rem" }}>Discounts on the source quote</div>
+                    {quoteDiscountInfo.lines.length > 0 && (
+                      <div>
+                        Already in the prices below:
+                        <ul style={{ margin: "0.2rem 0 0", paddingLeft: "1.2rem" }}>
+                          {quoteDiscountInfo.lines.map((l, i) => <li key={i} style={{ overflowWrap: "anywhere" }}><b>{l.description}</b>: {l.note}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    {quoteDiscountInfo.whole && <div style={{ marginTop: quoteDiscountInfo.lines.length ? "0.4rem" : 0, overflowWrap: "anywhere" }}>{quoteDiscountInfo.whole}</div>}
+                  </div>
+                )}
 
                 {/* ── Step 1: Pick FBR scenario ───────────────
                     Collapsed by default — operator sees a one-line summary

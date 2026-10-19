@@ -42,6 +42,13 @@ namespace MyApp.Api.Models
 
         // Priced totals — same money precision contract as Invoice.
         public decimal Subtotal { get; set; }
+
+        // Discount on the whole quote, taken off Subtotal before GST. It stays
+        // on the quote: a bill made from it shows a reminder, not a discount.
+        public decimal DiscountValue { get; set; }
+        public bool DiscountIsPercent { get; set; }
+        public decimal DiscountAmount { get; set; }
+        public string? DiscountReason { get; set; }
         public decimal GSTRate { get; set; }
         public decimal GSTAmount { get; set; }
         public decimal GrandTotal { get; set; }

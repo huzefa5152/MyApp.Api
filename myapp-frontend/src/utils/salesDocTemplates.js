@@ -97,7 +97,7 @@ export const defaultQuoteTemplate = `<!DOCTYPE html><html><head><title>Quotation
     {{#each items}}
       <tr>
         <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
-        <td>{{{richText this.description}}}</td>
+        <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="r">{{fmt this.unitPrice}}</td>
@@ -109,6 +109,7 @@ export const defaultQuoteTemplate = `<!DOCTYPE html><html><head><title>Quotation
 
   <div class="totals">
     <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+    {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
     <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
     <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
   </div>

@@ -37,6 +37,14 @@ namespace MyApp.Api.Models
         /// </summary>
         public string? ImagePath { get; set; }
 
+        // Discount on this line, before GST: a percentage or a rupee amount.
+        // LineTotal is NET of it, so the bill made from the quote takes the
+        // discounted price. See Helpers/QuoteDiscount.
+        public decimal DiscountValue { get; set; }
+        public bool DiscountIsPercent { get; set; }
+        public decimal DiscountAmount { get; set; }
+        public string? DiscountReason { get; set; }
+
         // Navigation
         public SalesQuote SalesQuote { get; set; } = null!;
         public ItemType? ItemType { get; set; }

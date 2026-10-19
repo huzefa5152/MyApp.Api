@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from "react";
-import { MdAdd, MdDelete, MdContentPaste, MdRepeat } from "react-icons/md";
+import { useState, useEffect, useLayoutEffect, useRef, Fragment } from "react";
+import { MdAdd, MdDelete, MdContentPaste, MdRepeat, MdLocalOffer, MdClose } from "react-icons/md";
+import { lineAmounts } from "../utils/quoteDiscount";
 import LookupAutocomplete from "./LookupAutocomplete";
 import LineItemImageCell from "./LineItemImageCell";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
@@ -42,6 +43,9 @@ import useIsNarrow from "../hooks/useIsNarrow";
  *   - showImage + onUploadImage → per-line product photo (Quote), stored on the
  *                                 row as `imagePath` and printed via the
  *                                 {{this.imagePath}} merge field
+ *   - showDiscount              → a per-line discount (10% or a rupee amount) +
+ *                                 reason, opened from the row's tag button (Quote);
+ *                                 needs showUnitPrice + showAmount
  */
 export default function LineItemsEditor({
   items,
@@ -62,6 +66,7 @@ export default function LineItemsEditor({
   // Unit price / amount columns.
   showUnitPrice = false,
   showAmount = false,
+  showDiscount = false,
   currency = "Rs",
   priceOptional = false,
   unitPriceTitle,
@@ -88,6 +93,25 @@ export default function LineItemsEditor({
   narrowBreakpoint = 768,
 }) {
   const isNarrow = useIsNarrow(narrowBreakpoint);
+  const withDiscount = showDiscount && showUnitPrice && showAmount;
+  // The table also gives way to cards whenever it does not fit the space it is
+  // given (a dialog, or the sidebar open, is narrower than the window). The
+  // width the table needed is remembered, so it comes back once there is room.
+  const panelRef = useRef(null);
+  const tableWrapRef = useRef(null);
+  const [panelWidth, setPanelWidth] = useState(null);
+  const [tableNeeds, setTableNeeds] = useState(0);
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([entry]) => setPanelWidth(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  useLayoutEffect(() => {
+    const wrap = tableWrapRef.current;
+    if (wrap && wrap.scrollWidth > wrap.clientWidth + 1 && wrap.scrollWidth !== tableNeeds) setTableNeeds(wrap.scrollWidth);
+  });
   const showBulk = showBulkBar && showItemType;
   // The photo cell is inert without an uploader, so require both.
   const showPhoto = showImage && typeof onUploadImage === "function";
@@ -138,8 +162,57 @@ export default function LineItemsEditor({
     }));
   };
 
-  const lineTotal = (it) =>
-    Math.round((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0) * 100) / 100;
+  // Net of the line's discount when this document takes discounts (Quote);
+  // plain qty x price otherwise.
+  const lineTotal = (it) => lineAmounts(withDiscount ? it : { quantity: it.quantity, unitPrice: it.unitPrice }).net;
+  const fmtMoney = (n) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  const discountOpen = (it) => withDiscount && (it._discountOpen || !!String(it.discountText || "").trim());
+  const openDiscount = (idx) => setItem(idx, { _discountOpen: true });
+  const clearDiscount = (idx) => setItem(idx, { discountText: "", discountReason: "", _discountOpen: false });
+
+  // The discount strip under a line: one box for "10%" or "500", the reason,
+  // and what it takes off. A wrapping flex row, so nothing is cut at any width.
+  const discountStrip = (item, idx, locked) => {
+    const { discount, error } = lineAmounts(item);
+    return (
+      <div style={s.discStrip}>
+        <span style={s.discTag}><MdLocalOffer size={14} /> Discount</span>
+        <div style={s.discValueWrap}>
+          <input
+            aria-label={`Discount for line ${idx + 1}`}
+            style={{ ...s.cellInput, textAlign: "right", ...(error ? s.inputError : null) }}
+            value={item.discountText || ""}
+            placeholder="10% or 500"
+            disabled={locked}
+            onChange={(e) => setItem(idx, { discountText: e.target.value })}
+            autoFocus={!item.discountText}
+          />
+        </div>
+        <div style={s.discReasonWrap}>
+          <input
+            aria-label={`Discount reason for line ${idx + 1}`}
+            style={s.cellInput}
+            value={item.discountReason || ""}
+            maxLength={200}
+            placeholder="Reason (optional), e.g. old item taken in exchange"
+            disabled={locked}
+            onChange={(e) => setItem(idx, { discountReason: e.target.value })}
+          />
+        </div>
+        <span style={error ? s.discError : s.discAmount}>{error || (discount ? `− ${currency} ${fmtMoney(discount)}` : "")}</span>
+        {!locked && (
+          <button type="button" style={s.discRemove} onClick={() => clearDiscount(idx)} title="Remove this discount" aria-label={`Remove discount from line ${idx + 1}`}><MdClose size={16} /></button>
+        )}
+      </div>
+    );
+  };
+
+  const amountCell = (item) => {
+    const { gross, discount } = lineAmounts(item);
+    return withDiscount && discount > 0
+      ? <><div>{fmtMoney(gross - discount)}</div><div style={s.grossStruck}>{fmtMoney(gross)}</div></>
+      : fmtMoney(lineTotal(item));
+  };
 
   // Auto-fill price from the item's last billed rate. Only fills when the row's
   // price is still 0 so it never clobbers a typed price; always sets the hint.
@@ -283,6 +356,13 @@ export default function LineItemsEditor({
     />
   );
 
+  // Below the sum of its columns the browser would crush qty / unit / price
+  // until their values are cut, so the table keeps this minimum and overflows
+  // instead, which flips it to cards.
+  const tableMin = 28 + (showPhoto ? 62 : 0) + (showItemType ? 190 : 0) + 240 + 100 + 130
+    + (showUnitPrice ? 120 : 0) + (showAmount ? 110 : 0) + (withDiscount ? 92 : 52) - 120;
+  const narrow = isNarrow || (panelWidth != null && tableNeeds > 0 && panelWidth < tableNeeds);
+
   const priceInput = (item, idx, styleExtra) => (
     <input
       type="number"
@@ -298,7 +378,7 @@ export default function LineItemsEditor({
   );
 
   return (
-    <div className="admin-items-panel">
+    <div className="admin-items-panel" ref={panelRef}>
       <div style={s.itemsHeaderBar}>
         <label style={{ ...s.label, margin: 0 }}>
           {itemsLabel}
@@ -350,7 +430,7 @@ export default function LineItemsEditor({
         />
       )}
 
-      {isNarrow ? (
+      {narrow ? (
         <div style={s.mcards}>
           {items.map((item, idx) => {
             const locked = rowLocked(item);
@@ -360,27 +440,27 @@ export default function LineItemsEditor({
                 <div style={s.mcardHead}>
                   <span style={s.mnum}>{idx + 1}</span>
                   {showPhoto && imageCell(item, idx, 48)}
-                  {showItemType ? (
-                    <div style={{ flex: 1 }}>
-                      <SearchableItemTypeSelect
-                        divisionId={divisionId}
-                        items={itemTypes}
-                        value={item.itemTypeId || ""}
-                        onChange={(newId) => pickItemType(idx, newId)}
-                        nonInventoryItems={nonInventoryItems}
-                        nonInventoryValue={item.nonInventoryItemId || ""}
-                        onPickNonInventory={(n) => pickNonInventory(idx, n)}
-                        placeholder={itemTypePlaceholder}
-                        style={{ padding: "0.4rem 0.55rem", fontSize: "0.82rem" }}
-                      />
-                    </div>
-                  ) : (
-                    <div style={{ flex: 1 }} />
-                  )}
+                  <div style={{ flex: 1 }} />
                   {items.length > 1 && !locked && (
                     <button type="button" style={s.del} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={16} /></button>
                   )}
                 </div>
+                {/* Own row: beside the photo and the delete button it had ~130px on a phone. */}
+                {showItemType && (
+                  <div style={{ marginBottom: "0.5rem" }}>
+                    <SearchableItemTypeSelect
+                      divisionId={divisionId}
+                      items={itemTypes}
+                      value={item.itemTypeId || ""}
+                      onChange={(newId) => pickItemType(idx, newId)}
+                      nonInventoryItems={nonInventoryItems}
+                      nonInventoryValue={item.nonInventoryItemId || ""}
+                      onPickNonInventory={(n) => pickNonInventory(idx, n)}
+                      placeholder={itemTypePlaceholder}
+                      style={{ padding: "0.4rem 0.55rem", fontSize: "0.82rem" }}
+                    />
+                  </div>
+                )}
                 <LookupAutocomplete
                   label="Item description"
                   endpoint="/lookup/items"
@@ -409,15 +489,24 @@ export default function LineItemsEditor({
                   )}
                 </div>
                 {showAmount && (
-                  <div style={s.mamt}><span>Amount</span><b>{currency} {lineTotal(item).toLocaleString()}</b></div>
+                  <div style={s.mamt}>
+                    <span>Amount</span>
+                    <span style={{ textAlign: "right" }}>
+                      <b style={{ whiteSpace: "nowrap" }}>{currency} {fmtMoney(lineTotal(item))}</b>
+                      {withDiscount && lineAmounts(item).discount > 0 && <span style={{ ...s.grossStruck, display: "block" }}>{currency} {fmtMoney(lineAmounts(item).gross)}</span>}
+                    </span>
+                  </div>
                 )}
+                {discountOpen(item) ? discountStrip(item, idx, locked) : (withDiscount && !locked && (
+                  <button type="button" style={s.discAddBtn} onClick={() => openDiscount(idx)}><MdLocalOffer size={14} /> Add discount</button>
+                ))}
               </div>
             );
           })}
         </div>
       ) : (
-        <div data-admin-table-region="" style={s.tableWrap}>
-          <table style={s.table}>
+        <div data-admin-table-region="" ref={tableWrapRef} style={s.tableWrap}>
+          <table style={{ ...s.table, minWidth: tableMin }}>
             <thead>
               <tr>
                 <th style={{ ...s.th, width: 28, textAlign: "center" }}>#</th>
@@ -428,15 +517,17 @@ export default function LineItemsEditor({
                 <th style={{ ...s.th, width: 130 }}>Unit</th>
                 {showUnitPrice && <th style={{ ...s.th, width: 120, textAlign: "right" }}>Unit Price{priceOptional && <span style={s.opt}> (opt)</span>}</th>}
                 {showAmount && <th style={{ ...s.th, width: 110, textAlign: "right" }}>Amount</th>}
-                <th style={{ ...s.th, width: 40 }}></th>
+                <th style={{ ...s.th, width: withDiscount ? 92 : 52 }}><span style={s.srOnly}>Actions</span></th>
               </tr>
             </thead>
             <tbody>
               {items.map((item, idx) => {
                 const locked = rowLocked(item);
                 const hint = rowLockHint ? rowLockHint(item) : null;
+                const colCount = 5 + (showPhoto ? 1 : 0) + (showItemType ? 1 : 0) + (showUnitPrice ? 1 : 0) + (showAmount ? 1 : 0);
                 return (
-                  <tr key={idx}>
+                  <Fragment key={idx}>
+                  <tr>
                     <td style={{ ...s.td, textAlign: "center", color: colors.textSecondary, fontWeight: 700 }}>{idx + 1}</td>
                     {showPhoto && (
                       <td style={{ ...s.td, verticalAlign: "top", textAlign: "center" }}>{imageCell(item, idx, 46)}</td>
@@ -477,14 +568,26 @@ export default function LineItemsEditor({
                     </td>
                     {showUnitPrice && <td style={s.td}>{priceInput(item, idx)}</td>}
                     {showAmount && (
-                      <td style={{ ...s.td, textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>{lineTotal(item).toLocaleString()}</td>
+                      <td style={{ ...s.td, textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>{amountCell(item)}</td>
                     )}
                     <td style={{ ...s.td, textAlign: "center" }}>
-                      {items.length > 1 && !locked && (
-                        <button type="button" style={s.del} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={16} /></button>
-                      )}
+                      <div style={s.rowActions}>
+                        {withDiscount && !locked && (
+                          <button type="button" style={{ ...s.discToggle, ...(discountOpen(item) ? s.discToggleOn : null) }} onClick={() => (discountOpen(item) ? clearDiscount(idx) : openDiscount(idx))} title={discountOpen(item) ? "Remove this line's discount" : "Give a discount on this line"} aria-label={discountOpen(item) ? `Remove discount from line ${idx + 1}` : `Add discount to line ${idx + 1}`} aria-pressed={discountOpen(item)}><MdLocalOffer size={16} /></button>
+                        )}
+                        {items.length > 1 && !locked && (
+                          <button type="button" style={s.del} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={16} /></button>
+                        )}
+                      </div>
                     </td>
                   </tr>
+                  {discountOpen(item) && (
+                    <tr>
+                      <td style={s.td} />
+                      <td colSpan={colCount - 1} style={{ ...s.td, paddingTop: 0 }}>{discountStrip(item, idx, locked)}</td>
+                    </tr>
+                  )}
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -533,5 +636,20 @@ const s = {
   m3col: { display: "grid", gridTemplateColumns: "1fr 1fr 1.1fr", gap: "0.5rem", marginTop: "0.5rem" },
   m2col: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "0.5rem" },
   mlabel: { display: "block", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.03em", color: colors.textSecondary, fontWeight: 700, marginBottom: "0.2rem" },
+  rowActions: { display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35rem" },
+  srOnly: { position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" },
+  // Line discount (Quote).
+  discStrip: { display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.5rem", padding: "0.5rem 0.6rem", borderRadius: 8, background: "#f3faf9", border: `1px dashed ${colors.teal}55` },
+  discTag: { display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.74rem", fontWeight: 700, color: colors.teal, textTransform: "uppercase", letterSpacing: "0.03em", whiteSpace: "nowrap" },
+  discValueWrap: { flex: "0 1 130px", minWidth: 110 },
+  discReasonWrap: { flex: "1 1 220px", minWidth: 0 },
+  discAmount: { fontSize: "0.85rem", fontWeight: 700, color: colors.teal, whiteSpace: "nowrap", marginLeft: "auto" },
+  discError: { fontSize: "0.78rem", fontWeight: 600, color: colors.danger, whiteSpace: "nowrap", marginLeft: "auto" },
+  discRemove: { display: "grid", placeItems: "center", padding: 0, boxShadow: "none", width: 32, height: 32, borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.textSecondary, cursor: "pointer", flexShrink: 0 },
+  discToggle: { display: "grid", placeItems: "center", padding: 0, boxShadow: "none", width: 32, height: 32, borderRadius: 8, border: `1px solid ${colors.teal}40`, background: "#fff", color: colors.teal, cursor: "pointer", flexShrink: 0 },
+  discToggleOn: { background: colors.teal, color: "#fff", borderColor: colors.teal },
+  discAddBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.35rem", marginTop: "0.5rem", padding: "0.4rem 0.8rem", borderRadius: 8, border: `1px dashed ${colors.teal}80`, background: "#fff", color: colors.teal, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
+  grossStruck: { fontSize: "0.72rem", fontWeight: 500, color: colors.textSecondary, textDecoration: "line-through" },
+  inputError: { borderColor: colors.danger, background: colors.dangerLight },
   mamt: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.55rem", paddingTop: "0.45rem", borderTop: `1px dashed ${colors.cardBorder}`, fontSize: "0.85rem", color: colors.textSecondary },
 };

@@ -53,6 +53,10 @@ namespace MyApp.Api.Services.Implementations
                 EnquiryDate = q.EnquiryDate,
                 Notes = q.Notes,
                 Subtotal = q.Subtotal,
+                DiscountValue = q.DiscountValue,
+                DiscountIsPercent = q.DiscountIsPercent,
+                DiscountAmount = q.DiscountAmount,
+                DiscountReason = q.DiscountReason,
                 GSTRate = q.GSTRate,
                 GSTAmount = q.GSTAmount,
                 GrandTotal = q.GrandTotal,
@@ -75,7 +79,11 @@ namespace MyApp.Api.Services.Implementations
                     Unit = i.Unit,
                     UnitPrice = i.UnitPrice,
                     LineTotal = i.LineTotal,
-                    ImagePath = i.ImagePath
+                    ImagePath = i.ImagePath,
+                    DiscountValue = i.DiscountValue,
+                    DiscountIsPercent = i.DiscountIsPercent,
+                    DiscountAmount = i.DiscountAmount,
+                    DiscountReason = i.DiscountReason
                 }).ToList()
             };
         }
@@ -103,15 +111,34 @@ namespace MyApp.Api.Services.Implementations
             return ids.ToHashSet();
         }
 
-        /// <summary>Recompute line totals + header totals + amount-in-words.</summary>
-        private static void ApplyTotals(SalesQuote quote, decimal gstRate)
+        private static void SetLineDiscount(SalesQuoteItem line, SalesQuoteItemDto dto)
         {
-            quote.GSTRate = gstRate;
+            line.DiscountValue = dto.DiscountValue;
+            line.DiscountIsPercent = dto.DiscountIsPercent;
+            line.DiscountReason = QuoteDiscount.CleanReason(dto.DiscountReason, dto.DiscountValue);
+        }
+
+        /// <summary>
+        /// Recompute line totals + header totals + amount-in-words. Discounts
+        /// come off before GST: each line's own, then the whole quote's.
+        /// </summary>
+        private static void ApplyTotals(SalesQuote quote, SalesQuoteDto dto)
+        {
+            quote.GSTRate = dto.GSTRate;
             foreach (var it in quote.Items)
-                it.LineTotal = Math.Round(it.Quantity * it.UnitPrice, 2);
+            {
+                var gross = Math.Round(it.Quantity * it.UnitPrice, 2);
+                it.DiscountAmount = QuoteDiscount.Amount(gross, it.DiscountValue, it.DiscountIsPercent, $"\"{it.Description}\"");
+                it.LineTotal = gross - it.DiscountAmount;
+            }
             quote.Subtotal = quote.Items.Sum(i => i.LineTotal);
-            quote.GSTAmount = Math.Round(quote.Subtotal * gstRate / 100m, 2);
-            quote.GrandTotal = quote.Subtotal + quote.GSTAmount;
+            quote.DiscountValue = dto.DiscountValue;
+            quote.DiscountIsPercent = dto.DiscountIsPercent;
+            quote.DiscountAmount = QuoteDiscount.Amount(quote.Subtotal, dto.DiscountValue, dto.DiscountIsPercent, "the whole quote");
+            quote.DiscountReason = QuoteDiscount.CleanReason(dto.DiscountReason, dto.DiscountValue);
+            var taxable = quote.Subtotal - quote.DiscountAmount;
+            quote.GSTAmount = Math.Round(taxable * dto.GSTRate / 100m, 2);
+            quote.GrandTotal = taxable + quote.GSTAmount;
             quote.AmountInWords = NumberToWordsConverter.Convert(quote.GrandTotal);
         }
 
@@ -238,7 +265,8 @@ namespace MyApp.Api.Services.Implementations
                         ImagePath = i.ImagePath
                     }).ToList()
                 };
-                ApplyTotals(quote, dto.GSTRate);
+                foreach (var (line, src) in quote.Items.Zip(dto.Items)) SetLineDiscount(line, src);
+                ApplyTotals(quote, dto);
                 _context.SalesQuotes.Add(quote);
                 try
                 {
@@ -315,6 +343,7 @@ namespace MyApp.Api.Services.Implementations
                     if (!string.Equals(existing.ImagePath, itemDto.ImagePath, StringComparison.OrdinalIgnoreCase))
                         staleImages.Add(existing.ImagePath);
                     existing.ImagePath = itemDto.ImagePath;
+                    SetLineDiscount(existing, itemDto);
                 }
                 else
                 {
@@ -329,13 +358,14 @@ namespace MyApp.Api.Services.Implementations
                         UnitPrice = itemDto.UnitPrice,
                         ImagePath = itemDto.ImagePath
                     });
+                    SetLineDiscount(quote.Items.Last(), itemDto);
                 }
             }
 
             await using var numberTx = await _context.Database.BeginTransactionAsync();
             await CompanyDocumentNumbers.RenumberAsync(_context, quote.CompanyId, "quote", quote.Id, quote.QuoteNumber, dto.CustomNumber, quote.DivisionId);
             quote.QuoteNumber = dto.CustomNumber ?? quote.QuoteNumber;
-            ApplyTotals(quote, dto.GSTRate);
+            ApplyTotals(quote, dto);
             await _repository.UpdateAsync(quote);
             await numberTx.CommitAsync();
             foreach (var stale in staleImages) QuoteLineImages.TryDelete(stale, quote.CompanyId);
@@ -456,6 +486,10 @@ namespace MyApp.Api.Services.Implementations
                 ClientNTN = client?.NTN,
                 ClientSTRN = client?.STRN,
                 Subtotal = q.Subtotal,
+                DiscountValue = q.DiscountValue,
+                DiscountIsPercent = q.DiscountIsPercent,
+                DiscountAmount = q.DiscountAmount,
+                DiscountReason = q.DiscountReason,
                 GSTRate = q.GSTRate,
                 GSTAmount = q.GSTAmount,
                 GrandTotal = q.GrandTotal,
@@ -473,7 +507,11 @@ namespace MyApp.Api.Services.Implementations
                     Uom = i.Unit,
                     UnitPrice = i.UnitPrice,
                     LineTotal = i.LineTotal,
-                    ImagePath = i.ImagePath
+                    ImagePath = i.ImagePath,
+                    GrossAmount = i.LineTotal + i.DiscountAmount,
+                    DiscountAmount = i.DiscountAmount,
+                    DiscountReason = i.DiscountReason,
+                    DiscountNote = QuoteDiscount.Note(i.DiscountValue, i.DiscountIsPercent, i.DiscountAmount, i.DiscountReason)
                 }).ToList()
             };
         }

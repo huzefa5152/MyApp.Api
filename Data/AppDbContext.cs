@@ -517,6 +517,7 @@ namespace MyApp.Api.Data
                 .HasForeignKey(dc => dc.DuplicatedFromId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+
             // Performance indexes on frequently-queried foreign keys
             modelBuilder.Entity<Invoice>()
                 .HasIndex(i => i.ClientId);
@@ -1014,6 +1015,12 @@ namespace MyApp.Api.Data
             // Per-line product photo — relative URL only (see QuoteLineImages).
             modelBuilder.Entity<SalesQuoteItem>().Property(i => i.ImagePath)
                 .HasMaxLength(MyApp.Api.Helpers.QuoteLineImages.MaxUrlLength);
+            modelBuilder.Entity<SalesQuote>().Property(q => q.DiscountValue).HasPrecision(18, 4);
+            modelBuilder.Entity<SalesQuote>().Property(q => q.DiscountAmount).HasPrecision(18, 2);
+            modelBuilder.Entity<SalesQuote>().Property(q => q.DiscountReason).HasMaxLength(MyApp.Api.Helpers.QuoteDiscount.MaxReasonLength);
+            modelBuilder.Entity<SalesQuoteItem>().Property(i => i.DiscountValue).HasPrecision(18, 4);
+            modelBuilder.Entity<SalesQuoteItem>().Property(i => i.DiscountAmount).HasPrecision(18, 2);
+            modelBuilder.Entity<SalesQuoteItem>().Property(i => i.DiscountReason).HasMaxLength(MyApp.Api.Helpers.QuoteDiscount.MaxReasonLength);
             modelBuilder.Entity<SalesOrderItem>().Property(i => i.Quantity).HasPrecision(28, 12);
             modelBuilder.Entity<SalesOrderItem>().Property(i => i.UnitPrice).HasPrecision(28, 12);
 

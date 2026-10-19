@@ -244,7 +244,16 @@ namespace MyApp.Api.DTOs
         public string? ClientAddress { get; set; }
         public string? ClientNTN { get; set; }
         public string? ClientSTRN { get; set; }
+        /// <summary>Sum of the lines, each already net of its own discount.</summary>
         public decimal Subtotal { get; set; }
+        /// <summary>Whole-quote discount in rupees (0 when none); GST is on Subtotal minus this.</summary>
+        public decimal DiscountAmount { get; set; }
+        public decimal DiscountValue { get; set; }
+        public bool DiscountIsPercent { get; set; }
+        public string? DiscountReason { get; set; }
+        /// <summary>"10%" or "" — for a "Discount (10%)" label.</summary>
+        public string DiscountPercentLabel => DiscountIsPercent && DiscountAmount > 0 ? $"{MyApp.Api.Helpers.QuoteDiscount.Num(DiscountValue)}%" : "";
+        public decimal AmountAfterDiscount => Subtotal - DiscountAmount;
         public decimal GSTRate { get; set; }
         public decimal GSTAmount { get; set; }
         public decimal GrandTotal { get; set; }
@@ -269,7 +278,14 @@ namespace MyApp.Api.DTOs
         // "uom" — matching the {{this.uom}} merge token in the templates.
         public string Uom { get; set; } = "";
         public decimal UnitPrice { get; set; }
+        /// <summary>Net of the line discount.</summary>
         public decimal LineTotal { get; set; }
+        /// <summary>Quantity x unit price, before the line discount.</summary>
+        public decimal GrossAmount { get; set; }
+        public decimal DiscountAmount { get; set; }
+        public string? DiscountReason { get; set; }
+        /// <summary>"Less 10% (Rs 4,100): Exchange of old battery"; null without a discount.</summary>
+        public string? DiscountNote { get; set; }
         /// <summary>
         /// Relative URL of this line's product photo, or null. Rendered as
         /// {{this.imagePath}} — resolves against the &lt;base href&gt; the print

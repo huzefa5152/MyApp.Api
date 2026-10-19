@@ -86,7 +86,7 @@ tbody tr:nth-child(even) td{background:#f5f5f5 !important;}
     {{#each items}}
       <tr>
         <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
-        <td>{{{richText this.description}}}</td>
+        <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
         <td class="c">{{this.itemTypeName}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
@@ -98,6 +98,7 @@ tbody tr:nth-child(even) td{background:#f5f5f5 !important;}
   </table>
   <div class="totals">
     <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+    {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
     <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
     <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
   </div>
@@ -193,7 +194,7 @@ td{border-bottom:1px solid #f0f0f0;padding:7px 8px;font-size:12px;color:#222;}
     {{#each items}}
       <tr>
         <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
-        <td>{{{richText this.description}}}</td>
+        <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -204,6 +205,7 @@ td{border-bottom:1px solid #f0f0f0;padding:7px 8px;font-size:12px;color:#222;}
   </table>
   <div class="totals">
     <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+    {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
     <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
     <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
   </div>
@@ -294,7 +296,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
       {{#each items}}
         <tr>
           <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
-          <td>{{{richText this.description}}}</td>
+          <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -305,6 +307,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
     </table>
     <div class="totals">
       <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+      {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
       <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
       <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
     </div>
@@ -398,7 +401,7 @@ tbody tr:nth-child(even) td{background:#f8fbff !important;}
       {{#each items}}
         <tr>
           <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
-          <td>{{{richText this.description}}}</td>
+          <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -409,6 +412,7 @@ tbody tr:nth-child(even) td{background:#f8fbff !important;}
     </table>
     <div class="totals">
       <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+      {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
       <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
       <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
     </div>
@@ -501,7 +505,7 @@ td{border-bottom:1px dotted #999;padding:6px 8px;font-size:11.5px;}
     {{#each items}}
       <tr>
         <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
-        <td>{{{richText this.description}}}</td>
+        <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -512,6 +516,7 @@ td{border-bottom:1px dotted #999;padding:6px 8px;font-size:11.5px;}
   </table>
   <div class="totals">
     <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+    {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
     <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
     <div class="row grand"><span>GRAND TOTAL</span><span>Rs {{fmt grandTotal}}</span></div>
   </div>
@@ -610,7 +615,7 @@ tbody tr:nth-child(even) td{background:#faf7f0 !important;}
       {{#each items}}
         <tr>
           <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
-          <td>{{{richText this.description}}}</td>
+          <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -621,6 +626,7 @@ tbody tr:nth-child(even) td{background:#faf7f0 !important;}
     </table>
     <div class="totals">
       <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+      {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
       <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
       <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
     </div>
@@ -708,7 +714,7 @@ tbody tr:nth-child(even) td{background:#f5f8fc !important;}
     {{#each items}}
       <tr>
         <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
-        <td>{{{richText this.description}}}</td>
+        <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -719,6 +725,7 @@ tbody tr:nth-child(even) td{background:#f5f8fc !important;}
   </table>
   <div class="totals">
     <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+    {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
     <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
     <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
   </div>
@@ -822,7 +829,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
         {{#each items}}
           <tr>
             <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
-            <td>{{{richText this.description}}}</td>
+            <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
             <td class="c">{{this.quantity}}</td>
             <td class="c">{{this.uom}}</td>
             <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -833,6 +840,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
       </table>
       <div class="totals">
         <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+        {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
         <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
         <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
       </div>
@@ -934,7 +942,7 @@ table.items td:last-child{border-right:none;}
       {{#each items}}
         <tr>
           <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
-          <td>{{{richText this.description}}}</td>
+          <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -946,6 +954,7 @@ table.items td:last-child{border-right:none;}
     <div class="footer-section">
       <table class="totals-table"><tbody>
         <tr><td>Subtotal</td><td>Rs {{fmt subtotal}}</td></tr>
+        {{#if discountAmount}}<tr><td>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</td><td style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</td></tr>{{/if}}
         <tr><td>GST @ {{gstRate}}%</td><td>Rs {{fmt gstAmount}}</td></tr>
         <tr><td>Grand Total</td><td>Rs {{fmt grandTotal}}</td></tr>
       </tbody></table>
@@ -1045,7 +1054,7 @@ tbody tr:nth-child(even) td{background:#f1f8f2 !important;}
     {{#each items}}
       <tr>
         <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
-        <td>{{{richText this.description}}}</td>
+        <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -1056,6 +1065,7 @@ tbody tr:nth-child(even) td{background:#f1f8f2 !important;}
   </table>
   <div class="totals">
     <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+    {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
     <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
     <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
   </div>
@@ -1153,7 +1163,7 @@ tbody tr:nth-child(even) td{background:#f1f8f2 !important;}
       {{#each items}}
         <tr>
           <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
-          <td>{{{richText this.description}}}</td>
+          <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -1164,6 +1174,7 @@ tbody tr:nth-child(even) td{background:#f1f8f2 !important;}
     </table>
     <div class="totals">
       <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+      {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
       <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
       <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
     </div>
@@ -1258,7 +1269,7 @@ tbody tr:nth-child(even) td{background:#f5f7f8 !important;}
       {{#each items}}
         <tr>
           <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
-          <td>{{{richText this.description}}}</td>
+          <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -1269,6 +1280,7 @@ tbody tr:nth-child(even) td{background:#f5f7f8 !important;}
     </table>
     <div class="totals">
       <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+      {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
       <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
       <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
     </div>
@@ -1360,7 +1372,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
     {{#each items}}
       <tr>
         <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
-        <td>{{{richText this.description}}}</td>
+        <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -1371,6 +1383,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
   </table>
   <div class="totals">
     <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+    {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
     <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
     <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
   </div>
@@ -1463,7 +1476,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
       {{#each items}}
         <tr>
           <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
-          <td>{{{richText this.description}}}</td>
+          <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -1474,6 +1487,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
     </table>
     <div class="totals">
       <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+      {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
       <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
       <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
     </div>
@@ -1585,7 +1599,7 @@ table.items tbody tr:nth-child(even) td{background:#f8f8f8 !important;}
       {{#each items}}
         <tr>
           <td class="c cell">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
-          <td class="cell">{{{richText this.description}}}</td>
+          <td class="cell">{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
           <td class="c cell">{{this.quantity}}</td>
           <td class="c cell">{{this.uom}}</td>
           <td class="r cell">Rs {{fmt this.unitPrice}}</td>
@@ -1601,6 +1615,7 @@ table.items tbody tr:nth-child(even) td{background:#f8f8f8 !important;}
       <div class="totals-right">
         <table><tbody>
           <tr><td>Subtotal</td><td>Rs {{fmt subtotal}}</td></tr>
+          {{#if discountAmount}}<tr><td>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</td><td style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</td></tr>{{/if}}
           <tr><td>GST @ {{gstRate}}%</td><td>Rs {{fmt gstAmount}}</td></tr>
           <tr><td>Grand Total</td><td>Rs {{fmt grandTotal}}</td></tr>
         </tbody></table>

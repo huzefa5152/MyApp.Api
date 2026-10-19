@@ -2,6 +2,8 @@ import { MdClose, MdPrint, MdRequestQuote } from "react-icons/md";
 import { formStyles, modalSizes } from "../theme";
 import AttachmentManager from "./AttachmentManager";
 import RichText from "./RichText";
+import useIsNarrow from "../hooks/useIsNarrow";
+import { discountNote } from "../utils/quoteDiscount";
 
 // Read-only view of a Sales Quote: header + meta + items + totals + notes, plus
 // its attachments in view mode (preview / download only). Mirrors the
@@ -26,11 +28,20 @@ const Meta = ({ label, value }) => (
 );
 
 export default function SalesQuoteDetailModal({ companyId, quote, canPrint, onPrint, onClose }) {
+  // Below 640px the table squeezes the description to a word per line and
+  // cuts the amount, so each line becomes a card.
+  const isNarrow = useIsNarrow(640);
   if (!quote) return null;
   const items = quote.items || [];
   // Photo column only when at least one line has one — mirrors the print
   // template's {{#if hasLineImages}} so the view matches the paper.
   const hasImages = items.some((i) => i.imagePath);
+  const note = (i) => (i.discountAmount > 0 ? <div style={st.discNote}>{discountNote(i.discountValue, i.discountIsPercent, i.discountAmount, i.discountReason)}</div> : null);
+  const thumb = (i) => (
+    <a href={i.imagePath} target="_blank" rel="noreferrer" title="Open full size" style={st.thumbLink}>
+      <img src={i.imagePath} alt="" style={st.thumb} />
+    </a>
+  );
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }} onClick={(e) => e.stopPropagation()}>
@@ -59,6 +70,26 @@ export default function SalesQuoteDetailModal({ companyId, quote, canPrint, onPr
           )}
 
           <div style={st.sectionTitle}>Items ({items.length})</div>
+          {isNarrow ? (
+            <div style={st.cards}>
+              {items.map((i, idx) => (
+                <div key={i.id ?? idx} style={st.card}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                    <span style={st.cardNum}>{idx + 1}</span>
+                    {i.imagePath && <div style={{ flex: "0 0 auto" }}>{thumb(i)}</div>}
+                    <div style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
+                      <RichText text={i.description} />
+                      {note(i)}
+                    </div>
+                  </div>
+                  <div style={st.cardFoot}>
+                    <span>{Number(i.quantity).toLocaleString()} {i.unit} × {money(i.unitPrice)}</span>
+                    <b style={{ whiteSpace: "nowrap", color: colors.textPrimary }}>{money(i.lineTotal)}</b>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
           <div data-admin-table-region="" style={st.tableWrap}>
             <table style={st.table}>
               <thead>
@@ -78,28 +109,31 @@ export default function SalesQuoteDetailModal({ companyId, quote, canPrint, onPr
                     <td style={{ ...st.td, textAlign: "center", color: colors.textSecondary }}>{idx + 1}</td>
                     {hasImages && (
                       <td style={{ ...st.td, textAlign: "center" }}>
-                        {i.imagePath ? (
-                          <a href={i.imagePath} target="_blank" rel="noreferrer" title="Open full size" style={st.thumbLink}>
-                            <img src={i.imagePath} alt="" style={st.thumb} />
-                          </a>
-                        ) : (
+                        {i.imagePath ? thumb(i) : (
                           <span style={{ color: colors.textSecondary }}>—</span>
                         )}
                       </td>
                     )}
-                    <td style={st.td}><RichText text={i.description} /></td>
+                    <td style={st.td}><RichText text={i.description} />{note(i)}</td>
                     <td style={{ ...st.td, textAlign: "right" }}>{Number(i.quantity).toLocaleString()}</td>
                     <td style={st.td}>{i.unit}</td>
-                    <td style={{ ...st.td, textAlign: "right" }}>{money(i.unitPrice)}</td>
-                    <td style={{ ...st.td, textAlign: "right", fontWeight: 700 }}>{money(i.lineTotal)}</td>
+                    <td style={{ ...st.td, textAlign: "right", whiteSpace: "nowrap" }}>{money(i.unitPrice)}</td>
+                    <td style={{ ...st.td, textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>{money(i.lineTotal)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          )}
 
           <div style={st.totals}>
             <div style={st.tRow}><span>Subtotal</span><span>{money(quote.subtotal)}</span></div>
+            {quote.discountAmount > 0 && (
+              <div style={st.tRow}>
+                <span>Discount{quote.discountIsPercent ? ` (${quote.discountValue}%)` : ""}{quote.discountReason ? ` — ${quote.discountReason}` : ""}</span>
+                <span style={{ whiteSpace: "nowrap" }}>− {money(quote.discountAmount)}</span>
+              </div>
+            )}
             <div style={st.tRow}><span>GST @ {quote.gstRate}%</span><span>{money(quote.gstAmount)}</span></div>
             <div style={{ ...st.tRow, ...st.grand }}><span>Grand Total</span><span>{money(quote.grandTotal)}</span></div>
           </div>
@@ -148,8 +182,13 @@ const st = {
   // fixed-size flex box max-width/max-height clamp it properly and letterbox.
   thumbLink: { display: "flex", alignItems: "center", justifyContent: "center", width: 48, height: 48, margin: "0 auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, overflow: "hidden", background: "#fff" },
   thumb: { maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block" },
-  totals: { marginTop: "1rem", marginLeft: "auto", width: 280 },
-  tRow: { display: "flex", justifyContent: "space-between", padding: "0.25rem 0", fontSize: "0.9rem", color: colors.textSecondary },
+  cards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
+  card: { border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.65rem 0.75rem", background: "#fff", fontSize: "0.88rem", color: colors.textPrimary },
+  cardNum: { flex: "0 0 auto", width: 24, height: 24, borderRadius: 7, background: "#f0f3f8", color: colors.textSecondary, display: "grid", placeItems: "center", fontSize: "0.78rem", fontWeight: 700 },
+  cardFoot: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginTop: "0.5rem", paddingTop: "0.45rem", borderTop: `1px dashed ${colors.cardBorder}`, fontSize: "0.85rem", color: colors.textSecondary },
+  discNote: { marginTop: 4, fontSize: "0.78rem", fontWeight: 600, color: colors.teal },
+  totals: { marginTop: "1rem", marginLeft: "auto", width: "100%", maxWidth: 320 },
+  tRow: { display: "flex", justifyContent: "space-between", gap: "0.75rem", padding: "0.25rem 0", fontSize: "0.9rem", color: colors.textSecondary },
   grand: { borderTop: `2px solid ${colors.blue}`, marginTop: 4, paddingTop: 8, fontWeight: 800, fontSize: "1rem", color: colors.blue },
   notes: { fontSize: "0.86rem", color: colors.textPrimary, whiteSpace: "pre-wrap", background: "#fafbfc", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, padding: "0.6rem 0.8rem" },
 };
