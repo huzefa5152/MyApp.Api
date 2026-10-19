@@ -1,5 +1,5 @@
 import { copyLine } from "../utils/documentCopy";
-import { useState, useEffect, useRef, Fragment } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, Fragment } from "react";
 import { MdAdd, MdDelete, MdContentPaste, MdRepeat, MdLocalOffer, MdClose } from "react-icons/md";
 import { lineAmounts } from "../utils/quoteDiscount";
 import LookupAutocomplete from "./LookupAutocomplete";
@@ -92,6 +92,32 @@ export default function LineItemsEditor({
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, [narrowBreakpoint]);
+
+  // The table also gives way to cards whenever it does not fit the space it
+  // is given — a dialog on a laptop, or with the sidebar open, is narrower than
+  // the window, and a sideways-scrolling item table is hard to use. The width
+  // the table needed is remembered, so it comes back once there is room.
+  const panelRef = useRef(null);
+  const tableWrapRef = useRef(null);
+  const [panelWidth, setPanelWidth] = useState(null);
+  const [tableNeeds, setTableNeeds] = useState(0);
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([entry]) => setPanelWidth(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  useLayoutEffect(() => {
+    const wrap = tableWrapRef.current;
+    if (wrap && wrap.scrollWidth > wrap.clientWidth + 1 && wrap.scrollWidth !== tableNeeds) setTableNeeds(wrap.scrollWidth);
+  });
+  // Below the sum of its columns (less a little slack the pickers can give up)
+  // the browser would crush qty / unit / price until their values are cut, so
+  // the table keeps this minimum and overflows instead, which flips to cards.
+  const tableMin = 28 + (showImage ? 64 : 0) + (showItemType ? (showDiscount ? 170 : 180) : 0) + 220 + 92 + 120
+    + (showUnitPrice ? 230 : 0) + (showDiscount && showUnitPrice ? 112 : 76) - 40;
+  const narrow = isNarrow || (panelWidth != null && tableNeeds > 0 && panelWidth < tableNeeds);
 
   // After a row is added/inserted we stash the index to focus; this runs post-
   // render (once the new description input exists) and focuses it exactly once.
@@ -340,7 +366,7 @@ export default function LineItemsEditor({
   );
 
   return (
-    <div className="admin-items-panel">
+    <div className="admin-items-panel" ref={panelRef}>
       <div style={s.itemsHeaderBar}>
         <label style={{ ...s.label, margin: 0 }}>
           {itemsLabel}
@@ -409,7 +435,7 @@ export default function LineItemsEditor({
         </div>
       )}
 
-      {isNarrow ? (
+      {narrow ? (
         <div style={s.mcards}>
           {items.map((item, idx) => {
             const locked = rowLocked(item);
@@ -476,8 +502,8 @@ export default function LineItemsEditor({
           })}
         </div>
       ) : (
-        <div data-admin-table-region="" style={s.tableWrap}>
-          <table style={s.table}>
+        <div data-admin-table-region="" ref={tableWrapRef} style={s.tableWrap}>
+          <table style={{ ...s.table, minWidth: tableMin }}>
             <thead>
               <tr>
                 <th style={{ ...s.th, width: 28, textAlign: "center" }}>#</th>

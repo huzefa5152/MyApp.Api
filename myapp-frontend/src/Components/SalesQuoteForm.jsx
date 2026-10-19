@@ -236,11 +236,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
               </div>
             </div></section>
 
-            {/* Photo + item type + description + qty + unit + price + amount +
-                actions need ~1000px; below that the cards read better than a
-                squeezed table (tablets included). */}
             <LineItemsEditor companyId={companyId}
-              narrowBreakpoint={1000}
               showImage
               onUploadImage={async file => (await uploadQuoteLineImage(companyId, file)).data.url}
               onImageBusyChange={delta => setImageUploads(count => Math.max(0, count + delta))}
