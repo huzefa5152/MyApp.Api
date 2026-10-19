@@ -52,6 +52,14 @@
         /// the edit form.
         /// </summary>
         public int? DuplicatedFromId { get; set; }
+        /// <summary>The original row when this row holds lines left off a partial bill.</summary>
+        public int? SplitFromChallanId { get; set; }
+        /// <summary>True when some of this challan's lines are billed and others are not (on another row of the same number).</summary>
+        public bool IsPartiallyBilled { get; set; }
+        /// <summary>Snapshot hash of the challan; a billed-delivery edit is refused when it no longer matches.</summary>
+        public string? Version { get; set; }
+        /// <summary>Snapshot hash of the linked bill sent back by the billed-delivery editor.</summary>
+        public string? BillEditVersion { get; set; }
 
         /// <summary>
         /// Copy lineage — when this document was produced by the Copy action,

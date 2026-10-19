@@ -578,6 +578,43 @@ namespace MyApp.Api.Controllers
         /// the delivery, so the link is structural) and any bill already filed
         /// with FBR.
         /// </summary>
+        /// <summary>
+        /// The bill's challans and the ones that could be added (same company, buyer,
+        /// division). Only while the bill is unfiled; the service refuses otherwise.
+        /// </summary>
+        [HttpGet("{id}/challans")]
+        [HasPermission("bills.manage.update")]
+        public async Task<IActionResult> GetBillChallans(int id, [FromQuery] string? search = null)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound(new { error = "Bill not found." });
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
+            try
+            {
+                var options = await _service.GetBillChallanOptionsAsync(id, search);
+                return options == null ? NotFound(new { error = "Bill not found." }) : Ok(options);
+            }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
+        /// <summary>Keep / remove / add challans on an unfiled bill, and leave single lines out.</summary>
+        [HttpPut("{id}/challans")]
+        [HasPermission("bills.manage.update")]
+        public async Task<IActionResult> UpdateBillChallans(int id, [FromBody] UpdateBillChallansDto dto)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound(new { error = "Bill not found." });
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
+            try
+            {
+                var updated = await _service.UpdateBillChallansAsync(id, dto, User.Identity?.Name);
+                return updated == null ? NotFound(new { error = "Bill not found." }) : Ok(updated);
+            }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
         [HttpPost("{id}/unlink-challan/{challanId}")]
         [HasPermission("bills.manage.update")]
         public async Task<ActionResult<InvoiceDto>> UnlinkChallan(int id, int challanId)

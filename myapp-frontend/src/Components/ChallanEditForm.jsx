@@ -14,6 +14,9 @@ import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
 import { formStyles, modalSizes } from "../theme";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
+import BilledChallanEditForm from "./BilledChallanEditForm";
+import { canEditBilledDelivery } from "../utils/billedChallanEdit";
+import { createPortal } from "react-dom";
 
 const colors = {
   textPrimary: "#1a2332",
@@ -105,6 +108,8 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   const [customNumber, setCustomNumber] = useState(String(challan.challanNumber));
   const [numberValid, setNumberValid] = useState(true);
   const [saving, setSaving] = useState(false);
+  // A billed challan's lines and rates are edited together with its bill.
+  const [billEdit, setBillEdit] = useState(false);
 
   // Load lookups once
   useEffect(() => {
@@ -221,6 +226,9 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       {purchasePreview.dialog}
+      {/* Outside the form: a portal still bubbles React events, so a nested submit would save this form too. */}
+      {billEdit && createPortal(<BilledChallanEditForm challan={challan} onClose={() => setBillEdit(false)}
+        onSaved={() => { setBillEdit(false); onSaved(); }} />, document.body)}
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>
@@ -259,6 +267,13 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
                 {!statusWillChange && <> (will stay <strong>{previewStatus}</strong>)</>}
               </span>
             </div>
+
+            {canEditBilledDelivery(challan, has) && (
+              <div style={{ ...styles.statusBanner, backgroundColor: "#eef4fb", borderColor: "#90caf9", color: colors.blue, flexWrap: "wrap" }}>
+                <span style={{ flex: "1 1 220px", minWidth: 0 }}>This challan is on bill #{challan.invoiceNumber}. To change its lines and bill rates together, edit the delivery with its bill.</span>
+                <button type="button" style={{ ...formStyles.button, ...formStyles.submit, minHeight: 44 }} disabled={saving} onClick={() => setBillEdit(true)}>Edit delivery &amp; update bill</button>
+              </div>
+            )}
 
             {/* ── Header row: Client / Site / Delivery Date ── */}
             <div style={styles.rowGroup}>

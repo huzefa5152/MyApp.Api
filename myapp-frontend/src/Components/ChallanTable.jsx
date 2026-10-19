@@ -14,7 +14,8 @@ function evalRowFlags(c, perms) {
   );
   const canCancel = c.status !== "Invoiced" && isEditable;
   const isDuplicate = c.duplicatedFromId != null;
-  const canDelete = canCancel && (isDuplicate || c.isLatest === true);
+  // A row split off a partial bill shares its number like a duplicate.
+  const canDelete = canCancel && (isDuplicate || c.splitFromChallanId != null || c.isLatest === true);
   const canGenerateBill = perms.permCreateBill && (c.status === "Pending" || c.status === "Imported" || (c.status === "No PO" && perms.companyFbrOff));
   const canDuplicate = perms.permDuplicate
     && !isDuplicate
@@ -124,7 +125,9 @@ export default function ChallanTable({
       accessor: (c) => c.status,
       render: (c) => (
         <>
-          <StatusBadge tone={toneForStatus(c.status)} status={c.status === "Invoiced" ? "Billed" : c.status} />
+          <StatusBadge tone={c.isPartiallyBilled ? "warning" : toneForStatus(c.status)}
+            status={!c.isPartiallyBilled ? (c.status === "Invoiced" ? "Billed" : c.status)
+              : c.status === "Invoiced" ? "Partially billed" : `${c.status} · rest of #${c.challanNumber}`} />
           {/* Which bill it went onto. "Billed" alone left the operator with no
               way back to the document that billed it — the link was in the data
               (InvoiceId) but never on the screen. */}

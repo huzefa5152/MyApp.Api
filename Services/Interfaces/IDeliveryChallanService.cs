@@ -16,6 +16,8 @@ namespace MyApp.Api.Services.Interfaces
         Task<DeliveryChallanDto?> GetByIdAsync(int id);
         Task<DeliveryChallanDto> CreateDeliveryChallanAsync(int companyId, DeliveryChallanDto dto);
         Task<DeliveryChallanDto?> UpdateItemsAsync(int challanId, List<DeliveryItemDto> items);
+        Task<BilledChallanEditContextDto?> GetBilledEditContextAsync(int challanId);
+        Task<DeliveryChallanDto?> UpdateBilledItemsAsync(int challanId, BilledChallanEditDto dto);
         Task<DeliveryChallanDto?> UpdatePoAsync(int challanId, string poNumber, DateTime? poDate);
         /// <summary>
         /// Full-field update for a challan. Lets the operator edit client, site,

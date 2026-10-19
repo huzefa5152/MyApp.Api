@@ -177,3 +177,9 @@ export const createChallanForInvoice = (invoiceId) =>
 /** Detach a challan that was attached to a standalone bill, freeing it to be billed elsewhere. */
 export const unlinkChallanFromInvoice = (invoiceId, challanId) =>
   httpClient.post(`/invoices/${invoiceId}/unlink-challan/${challanId}`);
+
+// Keep / remove / add challans on an unfiled bill, and leave single lines out.
+export const getBillChallans = (id, search = "") =>
+  httpClient.get(`/invoices/${id}/challans`, { params: { search } });
+export const updateBillChallans = (id, payload) =>
+  httpClient.put(`/invoices/${id}/challans`, payload);

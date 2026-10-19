@@ -69,6 +69,12 @@ namespace MyApp.Api.Services.Interfaces
         /// returning it to the billable pool. Refused for a bill raised FROM the
         /// challan (its lines reference the delivery) and for a filed bill.</summary>
         Task<InvoiceDto?> UnlinkChallanAsync(int invoiceId, int challanId);
+        // Manage a bill's challans (Keep / Remove / Add, leave single lines out) while it is unfiled.
+        Task<BillChallanOptionsDto?> GetBillChallanOptionsAsync(int id, string? search);
+        Task<InvoiceDto?> UpdateBillChallansAsync(int id, UpdateBillChallansDto dto, string? actorUserName = null);
+        Task AssertCommercialBillMutationAsync(int id, string? expectedVersion = null);
+        Task ReconcileChallanBillAsync(int id);
+        Task RemoveBilledChallanAsync(int challanId, bool delete);
 
         Task<bool> DeleteAsync(int id);
         /// <summary>

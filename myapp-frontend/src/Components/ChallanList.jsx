@@ -58,6 +58,8 @@ function WarningTooltip({ warnings }) {
   );
 }
 
+const partialColors = { bg: "#fff8e1", color: "#b26a00", border: "#b26a0030" };
+
 export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, onCopy, exportingId, duplicatingId, printDisabled = false, printDisabledReason = "", companyFbrOff = false }) {
   const { has } = usePermissions();
   const permUpdate = has("challans.manage.update");
@@ -80,7 +82,12 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
     <>
       <div className="card-grid">
         {challans.map((c) => {
-          const sc = statusColors[c.status] || statusColors.Pending;
+          // Billed row of a challan whose other lines are still pending: its
+          // status reads "Partially billed", not "Billed". The row with the
+          // unbilled rest reads "Pending · rest of #N" (one amber badge each).
+          const partlyBilled = c.isPartiallyBilled && c.status === "Invoiced";
+          const restOf = c.isPartiallyBilled && c.status !== "Invoiced";
+          const sc = partlyBilled || restOf ? partialColors : statusColors[c.status] || statusColors.Pending;
           // Backend now sends `isEditable` — use it so billed-but-not-FBR-submitted challans can also be edited
           const isEditable = c.isEditable ?? (c.status === "Pending" || c.status === "Imported" || c.status === "No PO" || c.status === "Setup Required");
           // Separate flag: delete/cancel is only allowed when NOT billed
@@ -93,7 +100,8 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
           //     number — deleting one doesn't create a numbering gap).
           //     2026-05-08: this carve-out matches the new server-side rule
           //     in DeliveryChallanService.DeleteAsync.
-          const canDelete = canCancel && (isDuplicate || c.isLatest === true);
+          // A row split off a partial bill shares its number like a duplicate.
+          const canDelete = canCancel && (isDuplicate || c.splitFromChallanId != null || c.isLatest === true);
           const hasWarnings = c.warnings && c.warnings.length > 0;
           // Generate Bill shortcut — Pending / Imported always; "No PO" too when
           // the company has FBR integration OFF (a PO isn't needed to bill, and the
@@ -141,8 +149,10 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                           DUPLICATE
                         </span>
                       )}
-                      <span style={{ ...styles.statusBadge, backgroundColor: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>
-                        {c.status === "Invoiced" ? "Billed" : c.status}
+                      <span style={{ ...styles.statusBadge, backgroundColor: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}
+                        title={partlyBilled ? "Some lines of this challan are billed; the rest are pending on another row of the same number."
+                          : restOf ? "Lines of this challan not yet billed. Billable on their own." : undefined}>
+                        {partlyBilled ? "Partially billed" : restOf ? `${c.status} · rest of #${c.challanNumber}` : c.status === "Invoiced" ? "Billed" : c.status}
                       </span>
                       {/* Which bill it went onto. "Billed" on its own gave the
                           operator no way back to the document that billed it. */}

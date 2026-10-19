@@ -22,6 +22,8 @@
         public decimal? SellingUnitPrice { get; set; }
         public decimal? UnitProfit { get; set; }
         public decimal? TotalProfit { get; set; }
+        /// <summary>Bill rate for this line, sent only by the billed-delivery editor (0 = free).</summary>
+        public decimal? BillUnitPrice { get; set; }
 
         /// <summary>
         /// Optional link to the Sales Order line this challan line fulfils.

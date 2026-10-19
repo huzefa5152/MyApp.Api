@@ -206,7 +206,7 @@ namespace MyApp.Api.Repositories.Implementations
                                 .Include(dc => dc.Items)
                                     .ThenInclude(i => i.ItemType)
                                 .Include(dc => dc.Client)
-                                .Where(dc => dc.CompanyId == companyId
+                                .Where(dc => dc.CompanyId == companyId && dc.InvoiceId == null
                                           && (dc.Status == "Pending" || dc.Status == "Imported"
                                               || (includeNoPo && dc.Status == "No PO")));
             // Division-RBAC scope (null = unrestricted); company-level rows

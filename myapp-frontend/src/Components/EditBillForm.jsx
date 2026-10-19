@@ -25,6 +25,7 @@ import ItemTypeForm from "./ItemTypeForm";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
 import BillNumberField from "./BillNumberField";
+import BillChallansEditor from "./BillChallansEditor";
 
 // The Customer Portal addresses a document by its NUMBER
 // (GET /portal/{token}/invoices/{invoiceNumber}), so changing it breaks a link
@@ -180,6 +181,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   const [paymentMode, setPaymentMode] = useState("");
   const [documentType, setDocumentType] = useState(4);
   const [loading, setLoading] = useState(true);
+  // Manage challans works on the SAVED bill; after it saves the bill is reloaded.
+  const [showChallanEditor, setShowChallanEditor] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   // Bulk-apply mode for the "Apply same Item Type to all rows" UX.
   const [bulkApplyMode, setBulkApplyMode] = useState("all");
   const [saving, setSaving] = useState(false);
@@ -347,7 +351,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
       }
     };
     load();
-  }, [invoiceId]);
+  }, [invoiceId, reloadKey]);
 
   // Bug fix: bills with NO [SNxxx] tag (created before scenario tagging, or
   // seeded data) used to leave the picker on "auto-detect", which the
@@ -1337,6 +1341,12 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                         <> (<b>DC#{invoice.challanNumbers.join(", DC#")}</b>)</>
                       )}.
                       The bill will sync automatically.
+                      {has("bills.manage.update") && !invoice.isDemo && (invoice.documentType ?? 4) === 4 && !invoice.originalInvoiceId && !invoice.fbrIRN && (
+                        <div style={{ marginTop: 8 }}>
+                          <button type="button" style={{ ...formStyles.button, ...formStyles.submit, minHeight: 44 }} onClick={() => setShowChallanEditor(true)}>Manage challans</button>
+                          <span style={{ marginLeft: 8, fontSize: "0.78rem" }}>Add or remove challans, or leave single lines for a later bill. Unsaved edits here are discarded.</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -2083,6 +2093,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
           onSaved={(created) => onItemTypeCreated(created)}
         />
       )}
+      {showChallanEditor && invoice && <BillChallansEditor invoice={invoice} onClose={() => setShowChallanEditor(false)}
+        onSaved={() => { setShowChallanEditor(false); setLoading(true); setReloadKey(k => k + 1); }} />}
     </div>
   );
 }

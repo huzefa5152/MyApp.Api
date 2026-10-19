@@ -54,6 +54,12 @@ namespace MyApp.Api.Models
         // for natively-created and imported challans.
         public int? DuplicatedFromId { get; set; }
 
+        // Set on the row that holds the lines LEFT OFF a bill when only part of
+        // a challan was billed: the original row's id. Same ChallanNumber; the
+        // lines moved here, they were not copied. Unbilled rows of one challan
+        // are merged back into one (InvoiceService.PartialBilling).
+        public int? SplitFromChallanId { get; set; }
+
         /// <summary>
         /// Copy lineage (2026-08-28): the document this row was created from via
         /// the Copy Document action, as a (type, id) pair —

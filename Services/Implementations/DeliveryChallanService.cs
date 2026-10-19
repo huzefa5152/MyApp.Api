@@ -15,13 +15,15 @@ namespace MyApp.Api.Services.Implementations
         private readonly AppDbContext _context;
         private readonly IStockService _stock;
         private readonly ILogger<DeliveryChallanService> _logger;
+        private readonly IInvoiceService _invoices;
 
-        public DeliveryChallanService(IDeliveryChallanRepository repository, AppDbContext context, IStockService stock, ILogger<DeliveryChallanService> logger)
+        public DeliveryChallanService(IDeliveryChallanRepository repository, AppDbContext context, IStockService stock, ILogger<DeliveryChallanService> logger, IInvoiceService invoices)
         {
             _repository = repository;
             _context = context;
             _stock = stock;
             _logger = logger;
+            _invoices = invoices;
         }
 
         // Cross-tenant link guard for non-inventory item refs on the lines.
@@ -160,6 +162,8 @@ namespace MyApp.Api.Services.Implementations
                 IsEditable = IsEditable(dc),
                 IsImported = dc.IsImported,
                 DuplicatedFromId = dc.DuplicatedFromId,
+                SplitFromChallanId = dc.SplitFromChallanId,
+                Version = DeliveryVersion(dc),
                 DuplicatedFromChallanNumber = dc.DuplicatedFrom?.ChallanNumber,
                 SalesOrderId = dc.SalesOrderId,
                 SalesOrderNumber = dc.SalesOrder?.SalesOrderNumber,
@@ -226,6 +230,18 @@ namespace MyApp.Api.Services.Implementations
         /// "Imported" is the counterpart of "Pending" for historical challans
         /// loaded via the bulk Excel import. Both statuses are billable.
         /// </summary>
+        /// <summary>Snapshot of the challan and its lines; a billed-delivery edit is refused once it moves.</summary>
+        private static string DeliveryVersion(DeliveryChallan dc) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new { dc.Id, dc.CompanyId, dc.ClientId, dc.ChallanNumber,
+                dc.PoNumber, PoDate = dc.PoDate?.ToString("yyyy-MM-ddTHH:mm:ss.fffffff"), dc.Site, dc.Notes, dc.IndentNo,
+                DeliveryDate = dc.DeliveryDate?.ToString("yyyy-MM-ddTHH:mm:ss.fffffff"), dc.Status, dc.InvoiceId, dc.SalesOrderId,
+                FbrStatus = dc.Invoice?.FbrStatus, FbrIRN = dc.Invoice?.FbrIRN,
+                Items = dc.Items.OrderBy(i => i.Id).Select(i => new { i.Id, i.Description,
+                    Quantity = i.Quantity.ToString("G29", System.Globalization.CultureInfo.InvariantCulture),
+                    DeliveredQuantity = i.DeliveredQuantity?.ToString("G29", System.Globalization.CultureInfo.InvariantCulture),
+                    i.Unit, i.ItemTypeId, i.NonInventoryItemId, i.SalesOrderItemId, i.SupplierId,
+                    ActualUnitCost = i.ActualUnitCost?.ToString("G29", System.Globalization.CultureInfo.InvariantCulture) }) })));
+
         private static bool IsEditable(DeliveryChallan dc)
         {
             if (dc.Status == "Pending" || dc.Status == "Imported" ||
@@ -233,8 +249,8 @@ namespace MyApp.Api.Services.Implementations
                 return true;
             if (dc.Status == "Invoiced")
             {
-                // Editable only if linked invoice is NOT FBR-submitted
-                return dc.Invoice?.FbrStatus != "Submitted";
+                // Editable only while the linked bill has not started FBR submission.
+                return dc.Invoice == null || ChallanBillingRules.BillEditable(dc.Invoice);
             }
             // Cancelled and any other unknown status → not editable
             return false;
@@ -281,6 +297,15 @@ namespace MyApp.Api.Services.Implementations
                 .Where(p => p.SourceDeliveryChallanId.HasValue && ids.Contains(p.SourceDeliveryChallanId.Value))
                 .Select(p => p.SourceDeliveryChallanId!.Value).Distinct().ToListAsync()).ToHashSet();
             foreach (var dto in dtos) dto.HasAutoPurchaseBills = linked.Contains(dto.Id);
+
+            // Partially billed: the challan's rows (same number, split on billing)
+            // are not all on a bill, nor all off one.
+            var roots = dtos.Select(d => d.SplitFromChallanId ?? d.Id).Distinct().ToList();
+            var rows = await _context.DeliveryChallans.AsNoTracking()
+                .Where(c => (roots.Contains(c.Id) || (c.SplitFromChallanId != null && roots.Contains(c.SplitFromChallanId.Value))) && c.Status != "Cancelled")
+                .Select(c => new { Root = c.SplitFromChallanId ?? c.Id, Billed = c.InvoiceId != null }).ToListAsync();
+            var partial = rows.GroupBy(r => r.Root).Where(g => g.Any(r => r.Billed) && g.Any(r => !r.Billed)).Select(g => g.Key).ToHashSet();
+            foreach (var dto in dtos) dto.IsPartiallyBilled = partial.Contains(dto.SplitFromChallanId ?? dto.Id);
         }
 
         public async Task<PagedResult<DeliveryChallanDto>> GetPagedByCompanyAsync(
@@ -465,6 +490,43 @@ namespace MyApp.Api.Services.Implementations
         private Task EnsureItemDescriptionsAsync(IEnumerable<string?> descriptions) =>
             ItemDescriptionRegistry.EnsureNamesAsync(_context, descriptions);
 
+        public async Task<BilledChallanEditContextDto?> GetBilledEditContextAsync(int challanId)
+        {
+            var challan = await GetByIdAsync(challanId);
+            if (challan == null) return null;
+            if (challan.InvoiceId == null || !challan.IsEditable)
+                throw new InvalidOperationException("This delivery cannot be edited. Check the bill status.");
+            var options = await _invoices.GetBillChallanOptionsAsync(challan.InvoiceId.Value, null)
+                ?? throw new InvalidOperationException("Linked bill not found.");
+            if (options.Bill.CompanyId != challan.CompanyId)
+                throw new InvalidOperationException("The linked bill does not belong to this company.");
+            return new BilledChallanEditContextDto { Challan = challan, Bill = options.Bill, BillVersion = options.Version };
+        }
+
+        /// <summary>
+        /// Edit a billed challan's delivery and its bill together: quantity, description
+        /// and rate changes follow onto the bill, a removed delivery line leaves it, and a
+        /// new delivery line joins it at the entered rate. Totals, stock and GL reconcile.
+        /// </summary>
+        public async Task<DeliveryChallanDto?> UpdateBilledItemsAsync(int challanId, BilledChallanEditDto dto)
+        {
+            var challan = await GetByIdAsync(challanId);
+            if (challan == null) return null;
+            if (!challan.IsEditable)
+                throw new InvalidOperationException("This delivery cannot be edited. Check the bill status.");
+            if (challan.InvoiceId == null || string.IsNullOrWhiteSpace(dto.Version) || string.IsNullOrWhiteSpace(dto.BillVersion))
+                throw new InvalidOperationException("Reload the linked challan and bill before editing delivery.");
+            if (dto.Items == null || dto.Items.Count == 0 || dto.Items.Count > 500 || dto.Items.Any(i =>
+                string.IsNullOrWhiteSpace(i.Description) || i.Quantity <= 0 || string.IsNullOrWhiteSpace(i.Unit)
+                || i.BillUnitPrice == null || i.BillUnitPrice < 0 || i.BillUnitPrice >= 1000000))
+                throw new InvalidOperationException("Keep at least one valid delivery item and enter each bill rate, including 0 for a free item.");
+            challan.Version = dto.Version;
+            challan.BillEditVersion = dto.BillVersion;
+            challan.Items = dto.Items;
+            challan.CustomNumber = null;
+            return await UpdateChallanAsync(challanId, challan);
+        }
+
         public async Task<DeliveryChallanDto?> UpdateItemsAsync(int challanId, List<DeliveryItemDto> items)
         {
             var dc = await _repository.GetByIdAsync(challanId);
@@ -481,6 +543,7 @@ namespace MyApp.Api.Services.Implementations
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                if (dc.InvoiceId.HasValue) await _invoices.AssertCommercialBillMutationAsync(dc.InvoiceId.Value);
                 await ApplyItemsDiffAsync(dc, items);
                 await _repository.UpdateAsync(dc);
 
@@ -552,8 +615,13 @@ namespace MyApp.Api.Services.Implementations
             var toRemove = dc.Items.Where(i => !updatedIds.Contains(i.Id)).ToList();
             var removedDeliveryItemIds = toRemove.Select(i => i.Id).ToList();
 
+            if (items.Where(i => i.Id > 0).GroupBy(i => i.Id).Any(g => g.Count() > 1)
+                || items.Any(i => i.Id > 0 && !dc.Items.Any(d => d.Id == i.Id)))
+                throw new InvalidOperationException("Each existing item must belong to this challan and appear only once.");
             var quantityChanges = new Dictionary<int, decimal>(); // deliveryItemId → newQuantity
             var newItems = new List<DeliveryItem>();
+            // Bill rates sent by the billed-delivery editor (0 = free item).
+            var billRates = new Dictionary<DeliveryItem, decimal>();
 
             foreach (var itemDto in items)
             {
@@ -573,6 +641,7 @@ namespace MyApp.Api.Services.Implementations
                     existing.Unit = itemDto.Unit;
                     existing.ActualUnitCost = itemDto.ActualUnitCost;
                     existing.SupplierId = itemDto.SupplierId;
+                    if (itemDto.BillUnitPrice.HasValue) billRates[existing] = itemDto.BillUnitPrice.Value;
                 }
                 else
                 {
@@ -589,15 +658,16 @@ namespace MyApp.Api.Services.Implementations
                     };
                     dc.Items.Add(newItem);
                     newItems.Add(newItem);
+                    if (itemDto.BillUnitPrice.HasValue) billRates[newItem] = itemDto.BillUnitPrice.Value;
                 }
             }
 
             // ── Sync linked invoice items BEFORE deleting delivery items ──
             // EF's FK cascade (SET NULL on InvoiceItem.DeliveryItemId) would
             // otherwise null the FKs and prevent the sync from matching items.
-            if (dc.InvoiceId.HasValue && dc.Invoice != null && dc.Invoice.FbrStatus != "Submitted")
+            if (dc.InvoiceId.HasValue && dc.Invoice != null && ChallanBillingRules.BillEditable(dc.Invoice))
             {
-                await SyncInvoiceItemsForChallanEditAsync(dc, removedDeliveryItemIds, quantityChanges, newItems);
+                await SyncInvoiceItemsForChallanEditAsync(dc, removedDeliveryItemIds, quantityChanges, newItems, billRates);
             }
 
             // Now it's safe to delete removed delivery items
@@ -623,7 +693,8 @@ namespace MyApp.Api.Services.Implementations
             DeliveryChallan dc,
             List<int> removedDeliveryItemIds,
             Dictionary<int, decimal> quantityChanges,
-            List<DeliveryItem> newlyAddedDeliveryItems)
+            List<DeliveryItem> newlyAddedDeliveryItems,
+            Dictionary<DeliveryItem, decimal>? billRates = null)
         {
             var invoice = await _context.Invoices
                 .Include(i => i.Items)
@@ -659,40 +730,41 @@ namespace MyApp.Api.Services.Implementations
                 }
             }
 
-            // Add invoice items for newly-added delivery items (with UnitPrice=0 — user must edit).
+            // Explicit bill rates (billed-delivery editor) for existing lines.
+            if (billRates != null)
+                foreach (var (deliveryItem, rate) in billRates)
+                {
+                    var line = invoice.Items.FirstOrDefault(i => deliveryItem.Id > 0 && i.DeliveryItemId == deliveryItem.Id);
+                    if (line == null) continue;
+                    line.UnitPrice = rate;
+                    line.LineTotal = Math.Round(line.Quantity * rate, 2);
+                }
+
+            // New lines carry the explicit bill rate; the plain challan edit still adds them at zero.
             // Use navigation property instead of DeliveryItemId so EF auto-populates the FK
             // when IDs are assigned on SaveChangesAsync.
             foreach (var newDi in newlyAddedDeliveryItems)
             {
+                var type = newDi.NonInventoryItemId == null && newDi.ItemTypeId != null ? await _context.ItemTypes.FindAsync(newDi.ItemTypeId) : null;
+                var rate = billRates?.GetValueOrDefault(newDi) ?? 0m;
                 invoice.Items.Add(new InvoiceItem
                 {
                     InvoiceId = invoice.Id,
                     DeliveryItem = newDi,  // navigation → EF picks up the generated FK
-                    ItemTypeName = newDi.ItemType?.Name ?? "",
+                    ItemTypeId = type?.Id,
+                    ItemTypeName = type?.Name ?? "",
+                    NonInventoryItemId = newDi.NonInventoryItemId,
+                    HSCode = type?.HSCode, FbrUOMId = type?.FbrUOMId, SaleType = type?.SaleType,
                     Description = newDi.Description,
                     Quantity = newDi.Quantity,
                     UOM = newDi.Unit,
-                    UnitPrice = 0m,
-                    LineTotal = 0m
+                    UnitPrice = rate,
+                    LineTotal = Math.Round(newDi.Quantity * rate, 2)
                 });
             }
 
-            // Recalculate totals
-            invoice.Subtotal = invoice.Items.Sum(ii => ii.LineTotal);
-            invoice.GSTAmount = Math.Round(invoice.Subtotal * invoice.GSTRate / 100, 2);
-            invoice.GrandTotal = invoice.Subtotal + invoice.GSTAmount;
-            invoice.AmountInWords = Helpers.NumberToWordsConverter.Convert(invoice.GrandTotal);
-
-            // If any invoice item now has UnitPrice=0, mark FBR status as needing re-validation
-            if (invoice.Items.Any(ii => ii.UnitPrice == 0m) && invoice.FbrStatus != "Submitted")
-            {
-                invoice.FbrStatus = null; // require re-validate
-            }
-
-            await _context.SaveChangesAsync();
-
-            // Re-sync the bill's stock OUT movements to its new line set.
-            // Fix 2026-06-29: removing or re-qty-ing a line on the challan
+            // Re-total (GST, withholding, receipts still covered), then stock and GL
+            // follow. Fix 2026-06-29: removing or re-qty-ing a line on the challan
             // (the only way to add/remove lines on a billed invoice — see
             // InvoiceService.UpdateAsync) used to delete/update the linked
             // InvoiceItem here but never touched StockMovements, so the OUT
@@ -701,7 +773,8 @@ namespace MyApp.Api.Services.Implementations
             // invoice's prior OUT rows and re-inserts from current items,
             // so removals, qty changes, and additions all reflow. No-op
             // when inventory tracking is off or the bill is a demo.
-            await _stock.SyncInvoiceStockMovementsAsync(invoice);
+            await _context.SaveChangesAsync();
+            await _invoices.ReconcileChallanBillAsync(invoice.Id);
         }
 
         // 2026-08-11 fix: when a challan is deleted or cancelled, a Sales Order that
@@ -746,9 +819,14 @@ namespace MyApp.Api.Services.Implementations
             var dc = await _repository.GetByIdAsync(challanId);
             if (dc == null) return false;
             await AssertNoAutoPurchaseBillsAsync(challanId);
-            // Cannot cancel a billed challan (even if invoice is not FBR-submitted, cancelling would leave invoice in bad state)
-            if (dc.Status == "Invoiced")
-                throw new InvalidOperationException("Cannot cancel a challan that has been billed. Delete the bill first to revert the challan.");
+            // A billed challan leaves its bill in the same step (re-total, stock, GL),
+            // only while the bill is unfiled; RemoveBilledChallanAsync enforces that.
+            if (dc.InvoiceId.HasValue)
+            {
+                await _invoices.RemoveBilledChallanAsync(challanId, false);
+                await ReopenSalesOrderIfUnderdeliveredAsync(dc.SalesOrderId);
+                return true;
+            }
             if (!IsEditable(dc))
                 throw new InvalidOperationException("Can only cancel Pending, No PO, or Setup Required challans.");
 
@@ -763,8 +841,12 @@ namespace MyApp.Api.Services.Implementations
             var dc = await _repository.GetByIdAsync(challanId);
             if (dc == null) return false;
             await AssertNoAutoPurchaseBillsAsync(challanId);
-            if (dc.Status == "Invoiced")
-                throw new InvalidOperationException("Cannot delete a challan that has been billed. Delete the bill first to revert the challan.");
+            if (dc.InvoiceId.HasValue)
+            {
+                await _invoices.RemoveBilledChallanAsync(challanId, true);
+                await ReopenSalesOrderIfUnderdeliveredAsync(dc.SalesOrderId);
+                return true;
+            }
             if (!IsEditable(dc))
                 throw new InvalidOperationException("Can only delete Pending, No PO, or Setup Required challans.");
 
@@ -773,7 +855,8 @@ namespace MyApp.Api.Services.Implementations
             // the numbering sequence — the original keeps the number. The
             // max-number rule below only applies to canonical (non-duplicate)
             // challans.
-            var isDuplicate = dc.DuplicatedFromId != null;
+            // A row split off a partial bill shares its number too.
+            var isDuplicate = dc.DuplicatedFromId != null || dc.SplitFromChallanId != null;
             if (!isDuplicate)
             {
                 // Only the LAST challan (highest number) can be deleted so the
@@ -859,10 +942,11 @@ namespace MyApp.Api.Services.Implementations
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                if (dc.InvoiceId.HasValue) await _invoices.AssertCommercialBillMutationAsync(dc.InvoiceId.Value);
                 // IMPORTANT: Sync invoice BEFORE deleting the delivery item — otherwise
                 // EF's FK cascade (SET NULL) would null out InvoiceItem.DeliveryItemId and
                 // the sync would no longer find the matching invoice items.
-                if (dc.InvoiceId.HasValue && dc.Invoice != null && dc.Invoice.FbrStatus != "Submitted")
+                if (dc.InvoiceId.HasValue && dc.Invoice != null && ChallanBillingRules.BillEditable(dc.Invoice))
                 {
                     await SyncInvoiceItemsForChallanEditAsync(
                         dc,
@@ -913,8 +997,14 @@ namespace MyApp.Api.Services.Implementations
             // the operator gets a useful error instead of a silent no-op).
             if (dc.Status == "Cancelled")
                 throw new InvalidOperationException("Cannot edit a cancelled challan.");
-            if (dc.Status == "Invoiced" && dc.Invoice?.FbrStatus == "Submitted")
-                throw new InvalidOperationException("Cannot edit a challan whose bill has been submitted to FBR.");
+            if (!IsEditable(dc))
+                throw new InvalidOperationException("This challan is locked because its bill is cancelled or FBR submission has started.");
+            if (!string.IsNullOrWhiteSpace(dto.Version) && dto.Version != DeliveryVersion(dc))
+                throw new InvalidOperationException("This challan changed after you opened it. Reload before saving.");
+            if (dto.Items?.Any(i => i.BillUnitPrice < 0 || i.BillUnitPrice >= 1000000) == true)
+                throw new InvalidOperationException("Bill rates must be non-negative and below 1,000,000.");
+            if (dto.Items?.Any(i => i.BillUnitPrice.HasValue) == true && (dc.InvoiceId == null || string.IsNullOrWhiteSpace(dto.BillEditVersion)))
+                throw new InvalidOperationException("Reload the bill before saving priced delivery items.");
 
             // Auto-register any new unit names so they appear on the Units
             // admin screen, then reject fractional qty for integer-only UOMs.
@@ -957,6 +1047,7 @@ namespace MyApp.Api.Services.Implementations
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                if (dc.InvoiceId.HasValue) await _invoices.AssertCommercialBillMutationAsync(dc.InvoiceId.Value, dto.BillEditVersion);
                 await CompanyDocumentNumbers.RenumberAsync(_context, dc.CompanyId, "challan", dc.Id, dc.ChallanNumber, dto.CustomNumber, dc.DivisionId);
                 dc.ChallanNumber = dto.CustomNumber ?? dc.ChallanNumber;
                 // Items: diff-based update so the linked bill stays in sync.
@@ -1046,7 +1137,9 @@ namespace MyApp.Api.Services.Implementations
             // present. ("Setup Required" — incomplete FBR fields — still stays
             // out; that's not about the PO.)
             var challans = await _repository.GetPendingChallansByCompanyAsync(companyId, includeNoPo: true, allowedDivisionIds);
-            return challans.Select(ToDto).ToList();
+            var dtos = challans.Select(ToDto).ToList();
+            await MarkAutoPurchaseBillsAsync(dtos);
+            return dtos;
         }
 
         public async Task<PrintChallanDto?> GetPrintDataAsync(int challanId)
