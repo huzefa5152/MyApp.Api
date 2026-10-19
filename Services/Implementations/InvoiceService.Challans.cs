@@ -162,6 +162,11 @@ public partial class InvoiceService
         var leaveOut = keptChallans.Concat(added)
             .Select(c => (Challan: c, Ids: c.Items.Where(i => leaveOutIds.Contains(i.Id)).Select(i => i.Id).ToList()))
             .Where(x => x.Ids.Count > 0).ToList();
+        // A challan attached to the bill for reference has no line on it: nothing
+        // of it is billed, so nothing of it can be "left out".
+        var onBill = invoice.Items.Where(i => i.DeliveryItemId.HasValue).Select(i => i.DeliveryItemId!.Value).ToHashSet();
+        if (keptChallans.SelectMany(c => c.Items).Any(i => leaveOutIds.Contains(i.Id) && !onBill.Contains(i.Id)))
+            throw new InvalidOperationException("Only lines on this bill can be left out. A challan attached for reference has no billed lines.");
         var emptied = leaveOut.FirstOrDefault(x => x.Ids.Count == x.Challan.Items.Count);
         if (emptied.Challan != null)
             throw new InvalidOperationException($"Every line of challan #{emptied.Challan.ChallanNumber} is left out. Remove the whole challan instead.");

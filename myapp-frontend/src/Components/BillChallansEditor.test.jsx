@@ -86,3 +86,11 @@ it("lets an empty historical link be removed while keeping standalone items", as
   fireEvent.click(remove);
   expect(screen.getByRole("button", { name: "Save challans" }).disabled).toBe(false);
 });
+it("shows an attached challan as reference only, with nothing to untick", async () => {
+  const attached = { ...source(3, 30), challanNumber: 13 };
+  getBillChallans.mockResolvedValue({ data: { ...snapshot, linked: [source(1, 10), attached] } });
+  await open();
+  expect(screen.getByText(/Attached for reference/)).toBeTruthy();
+  expect(screen.queryByLabelText("Bill Item 30 on this bill")).toBeNull();
+  expect(screen.getByLabelText("Bill Item 10 on this bill")).toBeTruthy();
+});

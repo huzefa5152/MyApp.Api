@@ -227,6 +227,20 @@ status, _ = flows.http('PUT', f'/api/invoices/{bl["id"]}/challans', a.base, toke
     'version': 'x', 'challanIds': [L['id']], 'addedChallanVersions': {}, 'unitPrices': {}, 'leaveOutDeliveryItemIds': [L['items'][1]['id']]})
 check('nor leave a line out', status == 400 and len(rows(L['challanNumber'])) == 1)
 
+# ── 11b. A challan attached to a bill for reference has no billed line ──
+N = challan([line('Attach N1', 1), line('Attach N2', 1)])
+P = challan([line('Host P1', 1)])
+bp = bill([P], P['items'])
+db.execute("UPDATE DeliveryChallans SET InvoiceId = ?, Status = 'Invoiced' WHERE Id = ?", bp['id'], N['id'])
+snap = options(bp['id'])
+ok, why = refused('PUT', f'/api/invoices/{bp["id"]}/challans', {'version': snap['version'], 'challanIds': [P['id'], N['id']],
+                  'addedChallanVersions': {}, 'unitPrices': {}, 'leaveOutDeliveryItemIds': [N['items'][0]['id']]}, 'only lines on this bill')
+check('a line of an attached challan cannot be left out', ok and len(rows(N['challanNumber'])) == 1, str(why))
+detached = edit(bp['id'], [P['id']])
+r = rows(N['challanNumber'])
+check('removing an attached challan detaches it and leaves the bill lines alone', len(r) == 1 and r[0]['invoiceId'] is None
+      and r[0]['status'] == 'Pending' and detached['subtotal'] == bp['subtotal'], str(r))
+
 # ── 12. Another company's user reaches none of it ──
 other = call('POST', '/api/companies', {'name': f'[TEMP] Partial other {time.time_ns()}', 'startingChallanNumber': 1, 'startingInvoiceNumber': 1})
 roles = call('GET', '/api/roles')
