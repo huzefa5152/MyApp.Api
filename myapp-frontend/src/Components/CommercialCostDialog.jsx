@@ -6,6 +6,7 @@ import ChallanPrivateCosts, { useChallanSuppliers } from "./ChallanPrivateCosts"
 import PurchaseBillForm from "./PurchaseBillForm";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { formStyles } from "../theme";
+import { notify } from "../utils/notify";
 import "./CommercialCosts.css";
 
 const money = n => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -79,13 +80,19 @@ export default function CommercialCostDialog({ kind = "bill", id, companyId, onC
   const save = () => run(async () => {
     if (items.some(i => i.actualUnitCost != null && i.actualUnitCost !== "" && !hasCost(i))) throw { response: { data: { error: "Enter a valid actual cost of zero or more. Leave it blank if you do not know it yet." } } };
     const { data: result } = await saveCosts(kind, id, { version: data.version, items: items.map(i => ({ id: i.id, supplierId: i.supplierId ? Number(i.supplierId) : null, actualUnitCost: i.actualUnitCost == null || i.actualUnitCost === "" ? null : Number(i.actualUnitCost) })) });
-    setData(result); setItems(result.items); setDirty(false);
-    if (kind === "bill" && has("purchasebills.payables.view")) setPayables((await billPayables(id)).data);
-    setMessage("Saved. Lines with a supplier and cost are booked as supplier purchases.");
+    // Done: close and say so. Staying open left the only sign of success at the
+    // top of the dialog, out of sight of the button the operator had just pressed.
+    const unbooked = result.items.filter(i => i.actualUnitCost != null && !i.supplierId && remainingFor(i) > 0).length;
+    notify(unbooked
+      ? `Costs saved. ${unbooked} line(s) have a cost but no supplier: kept as an estimate, no supplier purchase booked.`
+      : "Costs saved. Lines with a supplier and cost are booked as supplier purchases.", "success");
+    onClose();
   });
   const lineStatus = i => remainingFor(i) <= 0 ? `Booked to suppliers · Rs. ${money(purchasedAmountFor(i))}`
     : purchasedQtyFor(i) > 0 ? `${purchasedQtyFor(i)} of ${i.quantity} booked · Rs. ${money(purchasedAmountFor(i))}`
+    : hasCost(i) && !i.supplierId ? "Estimate only · no supplier, so no purchase is booked"
     : "Payable not recorded";
+  const disabledLook = disabled => (disabled ? { opacity: 0.55, cursor: "not-allowed" } : null);
 
   return <div data-admin-backdrop="" style={formStyles.backdrop}>
     <section ref={dialog} role="dialog" aria-modal="true" aria-labelledby="commercial-cost-title" className="commercial-dialog" style={{ ...formStyles.modal, maxWidth: 1050 }}>
@@ -102,8 +109,11 @@ export default function CommercialCostDialog({ kind = "bill", id, companyId, onC
       </div>
       <footer style={{ ...formStyles.footer, flexWrap: "wrap" }}>
         <button style={{ ...formStyles.button, ...formStyles.cancel }} disabled={busy} onClick={onClose}>Close</button>
-        {data && has("purchasebills.manage.create") && <button style={formStyles.button} disabled={busy || dirty} title={dirty ? "Save costs first" : "For a supplier invoice that differs from these costs"} onClick={() => setFormOpen(true)}>Enter supplier bill</button>}
-        {data && has("bills.costs.update") && <button style={{ ...formStyles.button, ...formStyles.submit }} disabled={busy || !dirty} onClick={save}>{busy ? "Saving…" : "Save costs"}</button>}
+        {data && has("purchasebills.manage.create") && <button style={{ ...formStyles.button, ...disabledLook(busy || dirty) }} disabled={busy || dirty}
+          title={dirty ? "Save costs first" : "Only when the supplier's own invoice differs from these costs (price, GST or their bill number). It takes the place of the automatic purchase."}
+          onClick={() => setFormOpen(true)}>Enter supplier's invoice</button>}
+        {data && has("bills.costs.update") && <button style={{ ...formStyles.button, ...formStyles.submit, ...disabledLook(busy || !dirty) }} disabled={busy || !dirty}
+          title={dirty ? undefined : "Change a supplier or cost to save"} onClick={save}>{busy ? "Saving…" : "Save costs"}</button>}
       </footer>
     </section>
     {formOpen && <PurchaseBillForm companyId={companyId} localSource={{ kind, id }} onClose={() => setFormOpen(false)}
