@@ -436,6 +436,9 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Audit verifier (static) | `python scripts/verify_audit_2026_05_13_security.py` | `67/67 checks passed` |
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` |
+| Quote discounts: per line and whole quote before GST, refusals, print fields, net price on the bill prefill, cross-company refusal | `python scripts/test_quote_discount.py --base <url>` | `33/33 quote discount checks passed` |
+| Quote discount arithmetic on the screen (offline) | `node scripts/test_quote_discount.mjs` | `22 passed, 0 failed` |
+| Manage bill challans + partial bills: leave lines out, merge-back, release paths, delivered-quantity restore, FBR lock, GL lock, receipts cover, tenant | `python scripts/test_partial_billing.py --base <url> --database <local *_Test db>` | `58/58 partial billing checks passed` |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
 | Bill / invoice numbering — Auto vs a hand-typed number, both create paths, per division + renumbering on edit | `python scripts/test_custom_bill_number.py` (add `--db "<conn>"` for the FBR-filed lock suite) | `52/52 checks passed` (4 skipped without `--db`) |
 | Stock item-type reflow (V1) | `python scripts/test_stock_itemtype_reflow.py` | `76/76 checks passed` |

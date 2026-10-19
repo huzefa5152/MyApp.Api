@@ -298,6 +298,10 @@ Optional company Gmail inbox: authorize an account once and link it only to assi
 
 ## Changelog
 
+- **2026-10-19:** Bills and challans now work as on the Trader line. Manage challans on an unfiled bill (keep, remove back to Pending / No PO, or add); editing a billed challan updates its bill; the bill form picks challans under With PO / Without PO tabs. A bill can leave challan lines out: they move to a new row of the same challan number that stays billable, shown as "Pending · rest of #N", while the billed row shows "Partially billed"; rows merge back when billed together or released. A challan with supplier purchases cannot be split. Changing a bill's challans is refused once it is submitted to FBR.
+
+- **2026-10-19:** Sales quotes take discounts before GST, per line (10% or a rupee amount, optional reason) and on the whole quote. Line discounts print under the item on every quote design, the whole-quote discount as a row above GST. A bill from the quote's order takes the net line price and shows the whole-quote discount as a reminder; copies keep the discounts.
+
 - **2026-10-12:** Add a supplier-grouped purchase preview to challan creation and editing, with zero GST by default, editable per-supplier GST, bill date and reference, duplicate/stale-preview protection, and purchase source filters. Purchases retain the challan item types and follow the company inventory policy, including V2.
 
 ### 2026-10-10
