@@ -167,7 +167,8 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
           <div data-admin-body="" className="admin-quote-body" style={formStyles.body}>
             <DocumentCopyPicker companyId={companyId} destination="Quote" allowDetails={!isEdit} disabled={false}
               onCopy={(source,lines,details) => {
-                setItems(prev => appendCopiedLines(details ? [] : prev, lines, blankItem));
+                setItems(prev => appendCopiedLines(details ? [] : prev, lines, blankItem, true));
+                if (details && source.discountValue) { setQuoteDiscount(discountText(source.discountValue, source.discountIsPercent)); setQuoteDiscountReason(source.discountReason || ""); }
                 if(details) { setClient({id:source.clientId,label:source.clientName});setNotes(source.notes||"");setGstRate(source.gstRate??18);setContactPerson(source.contactPerson||"");setEnquiryRef(source.customerEnquiryRef||"");setEnquiryDate(source.enquiryDate?.slice(0,10)||"");setValidForDays(source.validUntil && source.date ? String(Math.max(0, Math.round((new Date(source.validUntil)-new Date(source.date))/86400000))) : ""); }
               }} />
             {error && <div ref={errRef} style={s.err}>{error}</div>}

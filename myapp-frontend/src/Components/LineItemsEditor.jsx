@@ -255,7 +255,7 @@ export default function LineItemsEditor({
   };
 
   const duplicateItem = idx => {
-    const next = [...items]; next.splice(idx+1,0,copyLine(items[idx],makeBlankItem));
+    const next = [...items]; next.splice(idx+1,0,copyLine(items[idx],makeBlankItem,true));
     onItemsChange(next); requestFocus(idx+1);
   };
   const removeItem = (idx) => onItemsChange(items.filter((_, i) => i !== idx));

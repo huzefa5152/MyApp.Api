@@ -1,4 +1,5 @@
 // Quote discount arithmetic on the screen (offline): node scripts/test_quote_discount.mjs
+import { copyLine } from "../myapp-frontend/src/utils/documentCopy.js";
 import { parseDiscount, applyDiscount, lineAmounts, quoteTotals, discountFields, discountText } from "../myapp-frontend/src/utils/quoteDiscount.js";
 
 let passed = 0, failed = 0;
@@ -39,6 +40,13 @@ eq("whole-quote too big", quoteTotals([{ quantity: 1, unitPrice: 1000 }], "2000"
 eq("api fields", discountFields("10%", "  Exchange of old battery "), { discountValue: 10, discountIsPercent: true, discountReason: "Exchange of old battery" });
 eq("reason dropped without a discount", discountFields("", "x"), { discountValue: 0, discountIsPercent: false, discountReason: null });
 eq("edit text round trip", [discountText(10, true), discountText(5000, false), discountText(0, false)], ["10%", "5000", ""]);
+
+// Copying a saved quote line: a quote keeps the discount, anything else takes the net price.
+const saved = { description: "Battery", quantity: 2, unit: "Pcs", unitPrice: 41000, lineTotal: 73800, discountAmount: 8200, discountValue: 10, discountIsPercent: true, discountReason: "Exchange" };
+const toQuote = copyLine(saved, () => ({}), true);
+eq("copy into a quote keeps the discount", [toQuote.unitPrice, toQuote.discountText, toQuote.discountReason], [41000, "10%", "Exchange"]);
+eq("copy into a bill takes the net unit price", copyLine(saved).unitPrice, 36900);
+eq("copy of an undiscounted line is unchanged", copyLine({ description: "X", quantity: 1, unitPrice: 5 }).unitPrice, 5);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
