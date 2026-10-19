@@ -147,8 +147,8 @@
 }
 .cc-metric__icon { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border-radius: 8px; flex-shrink: 0; }
 .cc-metric__value {
-  font-family: var(--cc-mono); font-variant-numeric: tabular-nums; font-size: clamp(1.15rem, 1.55vw, 1.55rem);
-  font-weight: 600; color: var(--cc-ink); line-height: 1.15; word-break: break-word;
+  font-family: var(--cc-mono); font-variant-numeric: tabular-nums; font-size: clamp(1.05rem, 1.25vw, 1.5rem);
+  font-weight: 600; color: var(--cc-ink); line-height: 1.15; white-space: nowrap;
 }
 .cc-metric__sub { font-size: 0.78rem; color: var(--cc-muted); }
 .cc-metric__hint { font-size: 0.72rem; color: var(--cc-faint); line-height: 1.35; }
