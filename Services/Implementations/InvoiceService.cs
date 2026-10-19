@@ -3897,15 +3897,15 @@ namespace MyApp.Api.Services.Implementations
                 AmountInWords = NumberToWordsConverter.Convert(CommercialTotalCalculator.Total(inv.GrandTotal, inv.FreightCharges)),
                 PaymentTerms = inv.PaymentTerms,
                 Notes = inv.Notes,
-                Items = inv.Items.Select((ii, idx) => new PrintBillItemDto
+                Items = MergeSameBillLines(inv).Select((g, idx) => new PrintBillItemDto
                 {
                     SNo = idx + 1,
-                    ItemTypeName = ii.ItemTypeName,
-                    Description = ii.Description,
-                    Quantity = ii.Quantity,
-                    UOM = ii.UOM,
-                    UnitPrice = ii.UnitPrice,
-                    LineTotal = ii.LineTotal,
+                    ItemTypeName = g[0].ItemTypeName,
+                    Description = g[0].Description,
+                    Quantity = g.Sum(ii => ii.Quantity),
+                    UOM = g[0].UOM,
+                    UnitPrice = g[0].UnitPrice,
+                    LineTotal = g.Sum(ii => ii.LineTotal),
                     GSTRate = inv.GSTRate,
                     // The ONLY field on this document that reads the overlay.
                     // The Bills tab has no item-type picker, so a bill row's own
@@ -3914,9 +3914,30 @@ namespace MyApp.Api.Services.Implementations
                     // rate and line total deliberately stay the bill's own: this
                     // is the delivery document the buyer signs for goods
                     // received, and it must keep matching what shipped.
-                    HSCode = ii.Adjustment?.AdjustedHSCode ?? ii.HSCode
+                    HSCode = BillLineHsCode(g[0])
                 }).ToList()
             };
+        }
+
+        private static string? BillLineHsCode(InvoiceItem ii) => ii.Adjustment?.AdjustedHSCode ?? ii.HSCode;
+
+        /// <summary>
+        /// The same item delivered on several challans of one PO prints as ONE
+        /// row with the quantities and amounts added. The bill keeps one line per
+        /// challan line underneath (stock, challan edits, notes and supplier
+        /// purchases all key on that link); this only changes what the buyer
+        /// sees. Lines merge only when PO, description, unit, rate, item type and
+        /// HS code all match, so a different rate or PO always stays its own row.
+        /// </summary>
+        private static List<List<InvoiceItem>> MergeSameBillLines(Invoice inv)
+        {
+            var poByChallan = inv.DeliveryChallans.ToDictionary(c => c.Id, c => c.PoNumber?.Trim() ?? "");
+            static string Norm(string? s) => string.Join(' ', (s ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToUpperInvariant();
+            string Po(InvoiceItem ii) => ii.DeliveryItem != null && poByChallan.TryGetValue(ii.DeliveryItem.DeliveryChallanId, out var po)
+                ? po : inv.PoNumber?.Trim() ?? "";
+            return inv.Items
+                .GroupBy(ii => (Norm(Po(ii)), Norm(ii.Description), Norm(ii.UOM), ii.UnitPrice, Norm(ii.ItemTypeName), Norm(BillLineHsCode(ii))))
+                .Select(g => g.ToList()).ToList();
         }
 
         public Task<Dictionary<int, int>> GetCompanyIdsAsync(IEnumerable<int> invoiceIds) =>
