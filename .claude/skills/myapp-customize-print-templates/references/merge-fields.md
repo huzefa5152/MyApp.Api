@@ -259,12 +259,12 @@ These are C# property names from `DTOs/PrintDtos.cs`, retained exactly to avoid 
 
 ### PrintQuoteDto
 
-`CompanyBrandName` (string), `CompanyLogoPath` (string?), `CompanyAddress` (string?), `CompanyPhone` (string?), `CompanyNTN` (string?), `CompanySTRN` (string?), `DivisionName` (string?), `DivisionBrandName` (string?), `DivisionLogoPath` (string?), `DivisionAddress` (string?), `DivisionPhone` (string?), `DivisionNTN` (string?), `DivisionSTRN` (string?), `DivisionEmail` (string?), `QuoteNumber` (int), `Date` (DateTime), `ValidUntil` (DateTime?), `CustomerEnquiryRef` (string?), `EnquiryDate` (DateTime?), `ClientName` (string), `ClientAddress` (string?), `ClientNTN` (string?), `ClientSTRN` (string?), `Subtotal` (decimal), `GSTRate` (decimal), `GSTAmount` (decimal), `GrandTotal` (decimal), `AmountInWords` (string), `Notes` (string?), `HasLineImages` (bool), `Items` (List<PrintQuoteItemDto>)
+`CompanyBrandName` (string), `CompanyLogoPath` (string?), `CompanyAddress` (string?), `CompanyPhone` (string?), `CompanyNTN` (string?), `CompanySTRN` (string?), `DivisionName` (string?), `DivisionBrandName` (string?), `DivisionLogoPath` (string?), `DivisionAddress` (string?), `DivisionPhone` (string?), `DivisionNTN` (string?), `DivisionSTRN` (string?), `DivisionEmail` (string?), `QuoteNumber` (int), `Date` (DateTime), `ValidUntil` (DateTime?), `CustomerEnquiryRef` (string?), `EnquiryDate` (DateTime?), `ClientName` (string), `ClientAddress` (string?), `ClientNTN` (string?), `ClientSTRN` (string?), `Subtotal` (decimal, net of line discounts), `DiscountAmount` (decimal, whole-quote discount), `DiscountValue` (decimal), `DiscountIsPercent` (bool), `DiscountPercentLabel` (string, "10%" or ""), `DiscountReason` (string?), `AmountAfterDiscount` (decimal), `GSTRate` (decimal), `GSTAmount` (decimal, on AmountAfterDiscount), `GrandTotal` (decimal), `AmountInWords` (string), `Notes` (string?), `HasLineImages` (bool), `Items` (List<PrintQuoteItemDto>)
 
 
 ### PrintQuoteItemDto
 
-`SNo` (int), `ItemTypeName` (string), `Description` (string), `Quantity` (decimal), `Uom` (string), `UnitPrice` (decimal), `LineTotal` (decimal), `ImagePath` (string?)
+`SNo` (int), `ItemTypeName` (string), `Description` (string), `Quantity` (decimal), `Uom` (string), `UnitPrice` (decimal), `LineTotal` (decimal, net of the line discount), `GrossAmount` (decimal), `DiscountAmount` (decimal), `DiscountReason` (string?), `DiscountNote` (string?, e.g. "Less 10% (Rs 4,100): reason"), `ImagePath` (string?)
 
 
 ### PrintOrderDto
