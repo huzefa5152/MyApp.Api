@@ -9,6 +9,7 @@ import CardActions from "../Components/CardActions";
 import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import useQueryAction from "../hooks/useQueryAction";
 import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdUndo, MdPostAdd, MdLocalShipping, MdAssignmentTurnedIn } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import StandaloneInvoiceForm from "../Components/StandaloneInvoiceForm";
@@ -311,7 +312,13 @@ export default function InvoicePage({ mode = "invoices" }) {
   const [handoverBulkBusy, setHandoverBulkBusy] = useState(false);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [costingStatus, setCostingStatus] = useState("");
+  // ?costingStatus= arrives from the dashboard ("bills with no actual cost").
+  const [costingStatus, setCostingStatus] = useState(() => (isBillsMode && searchParams.get("costingStatus")) || "");
+  // Dashboard quick actions: ?new=1 opens New Bill, ?new=standalone the no-challan form.
+  useQueryAction("new", isBillsMode && !!selectedCompany, (v) => {
+    if (v === "standalone") { if (canCreateStandalone) setShowStandaloneForm(true); }
+    else if (canCreate) setShowForm(true);
+  });
   const [hasExcelBill, setHasExcelBill] = useState(false);
   const [hasExcelTax, setHasExcelTax] = useState(false);
   const [exportingId, setExportingId] = useState(null);

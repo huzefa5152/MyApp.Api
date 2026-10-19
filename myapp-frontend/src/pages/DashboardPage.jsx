@@ -1,46 +1,45 @@
 // src/pages/DashboardPage.jsx
 //
-// Home-page dashboard — permission-shaped, time-aware, mobile-first.
+// Home dashboard — the operator's daily command centre: what the business did
+// in the period, what it is owed and owes today, what is waiting on them, and
+// one click to the work.
 //
-// Architecture:
-//   • Single API call: GET /api/dashboard/kpis?companyId&period
-//   • Backend returns ONLY the sections the caller has perm for
-//     (sales/purchases/fbr/inventory blocks are nullable on the wire),
-//     which means the page renders ONLY what's allowed without leaking
-//     numbers via empty placeholders.
-//   • If the user has dashboard.view but no .kpi.* perms → welcome
-//     banner only. No metrics, no chart, no leak.
+// Data: ONE call, GET /api/dashboard/kpis?companyId&period. The server returns
+// only the sections the caller's dashboard.kpi.* permissions allow (each block
+// is null otherwise), so nothing is fetched or shown that the role cannot see.
+// Every figure on this page is the server's; the page only formats, compares
+// and links.
 //
-// Layout (mobile-first):
-//   • Hero band: 1 col on mobile, 2 cols at 480px, 4 cols at 768px+.
-//     Uses CSS grid auto-fit/minmax — no media queries needed.
-//   • Section grid: 1 col on mobile, 2 cols at 1024px+. Each section
-//     is a card with header, content, optional empty-state line.
-//   • Period picker: full-width on mobile, inline on desktop.
+// What each figure IS — said on screen, because they look alike:
+//   • Business activity  — totals for the selected period (sales, purchases,
+//                          collections, payments, GST).
+//   • Position           — balances as at today (aged receivables / payables,
+//                          challans waiting to be billed), whatever the period.
+//   • Sales and purchases are document totals; collections and payments are
+//     money that moved. Neither is profit — profit lives on the Accounting
+//     dashboard, which reads the ledger.
 //
-// Visuals:
-//   • Each section has a small accent strip in its KPI cards so the
-//     identity (Sales / Purchases / FBR / Inventory) is readable
-//     without colour ambiguity.
-//   • Numbers are monospace + PKR locale formatted.
-//   • Sparklines are inline SVG (no charting lib) — tight bundle size,
-//     full mobile control.
-import { useState, useEffect, useMemo } from "react";
+// Drill-downs go to the report or list that holds the records behind a figure,
+// filtered to it. A destination the caller cannot open is not linked at all.
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
   MdTrendingUp, MdShoppingCart, MdReceipt, MdInventory, MdCloudDone,
-  MdHourglassEmpty, MdError, MdCheckCircle, MdLock, MdRefresh,
+  MdHourglassEmpty, MdError, MdCheckCircle, MdLock,
   MdOpenInNew, MdInfo, MdAttachMoney, MdAccountBalance,
+  MdLocalShipping, MdAddShoppingCart, MdCallReceived, MdCallMade, MdMenuBook, MdPostAdd, MdNoteAdd,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { getDashboardKpis } from "../api/dashboardApi";
-import KpiCard from "../Components/dashboard/KpiCard";
-import Sparkline from "../Components/dashboard/Sparkline";
 import TopList from "../Components/dashboard/TopList";
 import ByCounterpartyCard from "../Components/dashboard/ByCounterpartyCard";
-import { notify } from "../utils/notify";
+import {
+  Hero, Section, Panel, HeadLink, Metric, MetricGrid, QuickActions, AttentionList,
+  TrendChart, PartyTable, Skeleton, ErrorBanner,
+  fmtMoney, fmtDate, ymd, daysSince, change, reportHref,
+} from "../Components/dashboard/CommandCenter";
 import "./DashboardPage.css";
 
 const PERIOD_OPTIONS = [
@@ -81,12 +80,30 @@ function formatDate(s) {
   } catch { return s; }
 }
 
+const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+function readStoredPeriod() {
+  try { return localStorage.getItem(PERIOD_STORAGE_KEY) || "all-time"; } catch { return "all-time"; }
+}
+
+/**
+ * The selected dashboard period as report-screen filters. The dashboard's
+ * `to` is exclusive (the first instant after the period); the reports take an
+ * inclusive last day. All Time is the reports' All Periods.
+ */
+function reportRange(period) {
+  if (!period?.from || !period?.to) return { period: "allPeriods" };
+  const last = new Date(period.to);
+  last.setDate(last.getDate() - 1);
+  return { period: "custom", from: ymd(period.from), to: ymd(last) };
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
   const { selectedCompany, companies, setSelectedCompany } = useCompany();
   const { has, loading: permsLoading } = usePermissions();
 
-  const [period, setPeriod] = useState(() => localStorage.getItem(PERIOD_STORAGE_KEY) || "all-time");
+  const [period, setPeriod] = useState(readStoredPeriod);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -94,199 +111,364 @@ export default function DashboardPage() {
   const canViewPage = has?.("dashboard.view") ?? false;
   const displayName = user?.name || user?.username || "there";
 
-  // Persist the period selection so the operator's last choice
-  // survives reloads.
   useEffect(() => {
-    if (period) localStorage.setItem(PERIOD_STORAGE_KEY, period);
+    try { if (period) localStorage.setItem(PERIOD_STORAGE_KEY, period); } catch { /* storage blocked */ }
   }, [period]);
 
-  // Refetch whenever the company picker or period changes. Skip when
-  // perms are still loading (we'd hammer the endpoint with a request
-  // that the fetch wrapper would 401 on).
-  useEffect(() => {
+  // `cancelled` guards a slow response for an old company/period landing
+  // after a newer one.
+  const load = useCallback((isCancelled = () => false) => {
     if (permsLoading || !canViewPage || !selectedCompany?.id) return;
-    let cancelled = false;
-    (async () => {
-      setLoading(true); setError(null);
-      try {
-        const res = await getDashboardKpis(selectedCompany.id, period);
-        if (!cancelled) setData(res);
-      } catch (err) {
-        if (cancelled) return;
-        const msg = err?.response?.data?.error || err?.message || "Failed to load dashboard.";
-        setError(msg);
-        notify(msg, "error");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+    setLoading(true); setError(null);
+    getDashboardKpis(selectedCompany.id, period)
+      .then((res) => { if (!isCancelled()) setData(res); })
+      .catch((err) => {
+        if (isCancelled()) return;
+        setError(err?.response?.data?.error || "The dashboard could not be loaded.");
+      })
+      .finally(() => { if (!isCancelled()) setLoading(false); });
   }, [permsLoading, canViewPage, selectedCompany?.id, period]);
 
-  // ── Permission gates (fast-paths before render) ─────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    load(() => cancelled);
+    return () => { cancelled = true; };
+  }, [load]);
 
-  if (permsLoading) {
-    return <Shell><LoadingShimmer /></Shell>;
-  }
-
-  if (!canViewPage) {
-    return <Shell><AccessDeniedBanner displayName={displayName} reason="page" /></Shell>;
-  }
-
+  if (permsLoading) return <div className="cc"><Skeleton /></div>;
+  if (!canViewPage) return <div className="cc"><AccessDeniedBanner displayName={displayName} reason="page" /></div>;
   if (!selectedCompany) {
-    return <Shell><EmptyState heading="Pick a company" body="Use the company picker in the top bar to start." /></Shell>;
+    return <div className="cc"><EmptyState heading="Pick a company" body="Use the company picker in the top bar to start." /></div>;
   }
 
-  // We allow the page to render the welcome banner before data lands,
-  // so the operator doesn't see a flash of "no permission" on slow
-  // networks.
   const flags = data?.permissions;
   const hasAnyKpi = !!(flags?.canViewSales || flags?.canViewPurchases || flags?.canViewFbr || flags?.canViewInventory);
+  const periodLabel = PERIOD_OPTIONS.find((p) => p.code === period)?.label || "";
+  const showCompanyPicker = (companies?.length ?? 0) > 1;
 
   return (
-    <Shell>
-      <Header
-        displayName={displayName}
-        companies={companies}
-        selectedCompanyId={selectedCompany?.id}
-        onCompanyChange={(id) => {
-          const c = companies.find((cc) => cc.id === id);
-          if (c) setSelectedCompany(c);
-        }}
-        period={period}
-        onPeriodChange={setPeriod}
-      />
+    <div className="cc">
+      <Hero
+        eyebrow="Overview"
+        title={<>Welcome back, <span style={{ color: "#9ef2ff" }}>{displayName}</span></>}
+        subtitle={<>{selectedCompany?.name ? <><strong>{selectedCompany.name}</strong> · </> : null}Showing <strong>{periodLabel}</strong></>}
+      >
+        {showCompanyPicker && (
+          <select className="cc-hero-select" aria-label="Company" value={selectedCompany?.id ?? ""}
+            onChange={(e) => {
+              const c = companies.find((cc) => cc.id === parseInt(e.target.value, 10));
+              if (c) setSelectedCompany(c);
+            }}>
+            {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        )}
+        <select className="cc-hero-select" aria-label="Period" value={period} onChange={(e) => setPeriod(e.target.value)}>
+          {PERIOD_OPTIONS.map((p) => <option key={p.code} value={p.code}>{p.label}</option>)}
+        </select>
+      </Hero>
 
-      {error && (
-        <div style={{ ...styles.card, borderLeft: "4px solid #c62828", color: "#c62828", fontSize: "0.85rem" }}>
-          <strong>Couldn't load dashboard:</strong> {error}
-        </div>
-      )}
+      <QuickActions actions={quickActions(has)} />
 
-      {loading && !data && <LoadingShimmer />}
+      {error && <ErrorBanner message={error} onRetry={() => load()} />}
+      {loading && !data && <Skeleton />}
+      {!loading && data && !hasAnyKpi && <WelcomeOnlyBanner displayName={displayName} />}
 
-      {!loading && data && !hasAnyKpi && (
-        <WelcomeOnlyBanner displayName={displayName} />
-      )}
-
-      {data && hasAnyKpi && (
-        <>
-          {/* Hero band — 4 KPIs. Hides cards the user can't see (sales-
-              only role gets 2 hero cards; admin gets 4). */}
-          <HeroBand data={data} />
-
-          {/* Counterparty breakdown row — Sales by Client + Purchases by
-              Supplier. Sits right under the hero so the operator sees
-              "where is the money coming from / going to" before drilling
-              into per-section detail. Each card hides if the operator
-              lacks the matching .kpi.* perm. */}
-          {(data.sales || data.purchases) && (
-            <div className="dash-section-grid" style={styles.sectionGrid}>
-              {data.sales && (
-                <ByCounterpartyCard
-                  items={data.sales.topClients}
-                  total={data.sales.totalSales}
-                  accent={accents.sales}
-                  title="Sales by Client"
-                  subtitle={`Top ${Math.min(20, (data.sales.topClients || []).length)} clients · period total Rs. ${formatPkrCompact(data.sales.totalSales)}`}
-                  emptyText="No invoiced clients in this period."
-                />
-              )}
-              {data.purchases && (
-                <ByCounterpartyCard
-                  items={data.purchases.topSuppliers}
-                  total={data.purchases.totalPurchases}
-                  accent={accents.purchases}
-                  title="Purchases by Supplier"
-                  subtitle={`Top ${Math.min(20, (data.purchases.topSuppliers || []).length)} suppliers · period total Rs. ${formatPkrCompact(data.purchases.totalPurchases)}`}
-                  emptyText="No supplier activity in this period."
-                />
-              )}
-            </div>
-          )}
-
-          {/* Section grid — sales / purchases side-by-side at desktop,
-              stacked on mobile. The Top 5 lists were moved into the
-              Sales/Purchases-by-Counterparty cards above; sections
-              below stick to recent items + drill-through links.
-              Each section's "Open" header link is gated by the DESTINATION
-              screen's view permission (not the KPI perm) so a user who
-              can see sales numbers but can't open /invoices doesn't
-              see a button that 403s on click. */}
-          <div className="dash-section-grid" style={styles.sectionGrid}>
-            {data.sales      && <SalesSection      data={data.sales}      canOpen={has?.("invoices.list.view") || has?.("bills.list.view")} />}
-            {data.purchases  && <PurchasesSection  data={data.purchases}  canOpen={has?.("purchasebills.list.view")} />}
-            {data.fbr        && <FbrSection        data={data.fbr} />}
-            {data.inventory  && <InventorySection  data={data.inventory}  canOpen={has?.("stock.dashboard.view")} />}
-          </div>
-        </>
-      )}
-    </Shell>
-  );
-}
-
-// ── Shell + header + helpers ────────────────────────────────────────
-
-function Shell({ children }) {
-  // .dl-main already provides outer padding (1.75rem 2rem desktop / 1.25rem 1rem mobile),
-  // so the dashboard itself only needs a max-width cap and the inner element gap.
-  return (
-    <div style={{ maxWidth: 1480, margin: "0 auto" }}>
-      {children}
+      {data && hasAnyKpi && <CommandCentre data={data} has={has} periodLabel={periodLabel} />}
     </div>
   );
 }
 
-function Header({ displayName, companies, selectedCompanyId, onCompanyChange, period, onPeriodChange }) {
-  const periodLabel = PERIOD_OPTIONS.find((p) => p.code === period)?.label || "";
-  const selectedCompany = companies?.find((c) => c.id === selectedCompanyId);
-  // Hide the picker when there's only one company — showing a 1-option
-  // dropdown is just visual noise.
-  const showCompanyPicker = (companies?.length ?? 0) > 1;
+// ── Quick actions ───────────────────────────────────────────────────────
+//
+// Each opens the page's own form (useQueryAction on that page), so there is
+// one create path per document. Shown only to a role that can complete it.
+function quickActions(has) {
+  const can = (k) => has?.(k) ?? false;
+  return [
+    can("challans.manage.create") && { label: "New delivery challan", to: "/challans?new=1", icon: MdLocalShipping },
+    can("bills.manage.create") && { label: "Bill delivered challans", to: "/bills?new=1", icon: MdPostAdd },
+    can("bills.manage.create.standalone") && { label: "Bill without challan", to: "/bills?new=standalone", icon: MdNoteAdd },
+    can("purchasebills.manage.create") && { label: "Record local purchase", to: "/purchase-bills?new=local", icon: MdAddShoppingCart },
+    can("accounting.receipts.create") && { label: "Record customer receipt", to: "/receipts?new=1", icon: MdCallReceived },
+    can("accounting.payments.create") && { label: "Record supplier payment", to: "/payments?new=1", icon: MdCallMade },
+    can("purchasebills.payables.view") && { label: "Supplier payables", to: "/supplier-payables", icon: MdMenuBook },
+  ].filter(Boolean);
+}
+
+// ── The command centre itself ───────────────────────────────────────────
+
+function CommandCentre({ data, has, periodLabel }) {
+  const can = (k) => has?.(k) ?? false;
+  const reports = can("accounting.reports.view");
+  const range = reportRange(data.period);
+  const today = { period: "today" };
+  const hero = data.hero || {};
+  const { sales, purchases, receivables, payables, cash, work, fbr } = data;
+  const flags = data.permissions || {};
+
+  // Where each figure opens: the filtered report when the caller can read
+  // reports, otherwise the list screen behind it, otherwise nothing.
+  const links = {
+    sales: reports ? reportHref("sales-invoice-register", range) : can("bills.list.view") ? "/bills" : null,
+    purchases: reports ? reportHref("purchase-bill-register", range) : can("purchasebills.list.view") ? "/purchase-bills" : null,
+    collections: reports ? reportHref("receipts-register", range) : can("accounting.receipts.view") ? "/receipts" : null,
+    payments: reports ? reportHref("payments-register", range) : can("accounting.payments.view") ? "/payments" : null,
+    gst: reports ? reportHref("tax-summary", range) : null,
+    receivables: reports ? reportHref("aged-receivables", today) : can("reports.outstanding.view") ? "/reports/outstanding" : null,
+    receivablesOverdue: reports ? reportHref("aged-receivables", { ...today, status: "overdue" }) : can("reports.outstanding.view") ? "/reports/outstanding" : null,
+    payables: reports ? reportHref("aged-payables", today) : can("purchasebills.payables.view") ? "/supplier-payables" : null,
+    payablesOverdue: reports ? reportHref("aged-payables", { ...today, status: "overdue" }) : can("purchasebills.payables.view") ? "/supplier-payables" : null,
+    billChallans: can("bills.manage.create") ? "/bills?new=1" : can("challans.list.view") ? "/challans" : null,
+    setupRequired: can("challans.list.view") ? `/challans?status=${encodeURIComponent("Setup Required")}` : null,
+    notCosted: can("bills.list.view") ? "/bills?costingStatus=not-costed" : null,
+    fbr: can("bills.list.view") ? "/invoices" : null,
+  };
+  const customerHref = (r) => reports ? reportHref("customer-outstanding", { ...today, clientId: r.id }) : null;
+  const supplierHref = (r) => reports ? reportHref("supplier-outstanding", { ...today, supplierId: r.id })
+    : can("purchasebills.payables.view") ? `/supplier-payables?supplierId=${r.id}` : null;
+
+  const asAt = receivables?.asOf || payables?.asOf;
+  const oldestDays = daysSince(work?.oldestAwaitingBillingDate);
+
+  // 12-month sales vs purchases, one point per month. A month opens its sales
+  // register when the caller can read reports.
+  const trend = (sales?.trend12m || purchases?.trend12m || []).map((pt, i) => {
+    const [y, m] = pt.month.split("-").map(Number);
+    const to = reports && sales
+      ? reportHref("sales-invoice-register", { period: "custom", from: ymd(new Date(y, m - 1, 1)), to: ymd(new Date(y, m, 0)) })
+      : null;
+    return {
+      label: pt.label, short: pt.label,
+      sales: sales?.trend12m?.[i]?.value ?? 0,
+      purchases: purchases?.trend12m?.[i]?.value ?? 0,
+      to,
+    };
+  });
+  const trendBars = [
+    sales && { key: "sales", label: "Sales", color: accents.sales },
+    purchases && { key: "purchases", label: "Purchases", color: "#4db6ac" },
+  ].filter(Boolean);
+
   return (
-    <header className="dash-hero" style={styles.heroBanner}>
-      <div className="dash-hero__title-block" style={{ flex: 1, minWidth: 0, position: "relative" }}>
-        <p style={styles.heroEyebrow}>Overview</p>
-        <h1 className="dash-hero__heading" style={styles.heroHeading}>
-          Welcome back, <span style={{ color: "#9ef2ff" }}>{displayName}</span>
-        </h1>
-        <p className="dash-hero__subtitle" style={styles.heroSubtitle}>
-          {selectedCompany?.name ? <><strong>{selectedCompany.name}</strong> · </> : null}
-          Showing <strong>{periodLabel}</strong>
-        </p>
-      </div>
-      {/* Picker bar — wraps to a new line on phones (flex-wrap on
-          parent), sits inline on desktop. Each control is full-width
-          on phones so taps land easily. */}
-      <div className="dash-hero__pickers" style={styles.heroPickers}>
-        {showCompanyPicker && (
-          <select
-            value={selectedCompanyId ?? ""}
-            onChange={(e) => onCompanyChange(parseInt(e.target.value, 10))}
-            className="dash-hero__select"
-            style={styles.heroSelect}
-            aria-label="Company"
-          >
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+    <>
+      {/* ── Business activity — the selected period ─────────────────── */}
+      <Section title="Business activity" kind={periodLabel}>
+        <MetricGrid min={180}>
+          {flags.canViewSales && (
+            <Metric label="Sales" icon={MdAttachMoney} accent={accents.sales}
+              value={fmtMoney(hero.totalSales)}
+              delta={change(hero.totalSales, hero.totalSalesPrev)}
+              sub={sales ? `${plural(sales.invoiceCount, "bill")} · avg ${fmtMoney(sales.averageInvoiceValue)}` : undefined}
+              hint="Billed to customers (grand total incl. GST). Credit and debit notes, demo and voided bills are left out. Not profit."
+              to={links.sales} />
+          )}
+          {flags.canViewPurchases && (
+            <Metric label="Purchases" icon={MdShoppingCart} accent={accents.purchases}
+              value={fmtMoney(hero.totalPurchases)}
+              delta={change(hero.totalPurchases, hero.totalPurchasesPrev)} higherIsBetter={false}
+              sub={purchases ? `${plural(purchases.billCount, "bill")}${purchases.localPurchaseCount > 0 ? ` · ${fmtMoney(purchases.localPurchasesTotal)} local` : ""}` : undefined}
+              hint="Every purchase bill in the period, including local purchases booked from supplier costs on challans and bills — those are part of this total, not added to it."
+              to={links.purchases} />
+          )}
+          {cash?.hasCollections && (
+            <Metric label="Collected" icon={MdCallReceived} accent="#2e7d32"
+              value={fmtMoney(cash.collections)}
+              delta={change(cash.collections, cash.collectionsPrev)}
+              sub={plural(cash.collectionCount, "receipt")}
+              hint="Money received from customers in the period. Voided and bounced receipts are left out."
+              to={links.collections} />
+          )}
+          {cash?.hasPayments && (
+            <Metric label="Paid out" icon={MdCallMade} accent="#37474f"
+              value={fmtMoney(cash.payments)}
+              delta={change(cash.payments, cash.paymentsPrev)} higherIsBetter={false}
+              sub={plural(cash.paymentCount, "payment")}
+              hint="Money paid out in the period. Voided and bounced payments are left out."
+              to={links.payments} />
+          )}
+          {flags.canViewSales && flags.canViewPurchases && (
+            <Metric label="GST net" icon={MdAccountBalance} accent={accents.fbr}
+              value={fmtMoney(hero.gstNet)}
+              delta={change(hero.gstNet, hero.gstNetPrev)} higherIsBetter={false}
+              sub={`Output ${fmtMoney(hero.gstOutput)} − input ${fmtMoney(hero.gstInput)}`}
+              hint="Sales tax charged on sales less sales tax on purchases, from the documents."
+              to={links.gst} />
+          )}
+        </MetricGrid>
+      </Section>
+
+      {/* ── Position — balances today ───────────────────────────────── */}
+      {(receivables || payables || work) && (
+        <Section title="Position" kind={asAt ? `As at ${fmtDate(asAt)}` : "Today"}>
+          <MetricGrid>
+            {receivables && (
+              <Metric label="Customers owe you" icon={MdCallReceived} accent="#00897b"
+                value={fmtMoney(receivables.total)}
+                sub={receivables.overdue > 0
+                  ? `${fmtMoney(receivables.overdue)} overdue · ${plural(receivables.overduePartyCount, "customer")}`
+                  : `${plural(receivables.partyCount, "customer")} · nothing overdue`}
+                hint="Unpaid balance of sale bills, less tax withheld at source. A bill is overdue the day after its due date (its bill date when none is set)."
+                to={links.receivables} />
+            )}
+            {payables && (
+              <Metric label="You owe suppliers" icon={MdCallMade} accent="#e65100"
+                value={fmtMoney(payables.total)}
+                sub={payables.overdue > 0
+                  ? `${fmtMoney(payables.overdue)} overdue · ${plural(payables.overduePartyCount, "supplier")}`
+                  : `${plural(payables.partyCount, "supplier")} · nothing overdue`}
+                hint="Unpaid balance of purchase bills (local purchases included), less tax you withheld."
+                to={links.payables} />
+            )}
+            {work && (
+              <Metric label="Challans to bill" icon={MdLocalShipping} accent="#f57c00"
+                value={work.challansAwaitingBilling.toLocaleString("en-PK")}
+                sub={work.challansAwaitingBilling > 0
+                  ? `Oldest ${fmtDate(work.oldestAwaitingBillingDate)}${oldestDays != null ? ` · ${plural(oldestDays, "day")}` : ""}`
+                  : "Everything delivered is billed"}
+                hint="Delivered challans not yet on a bill. They are not sales until billed, so they are not counted in Sales."
+                to={work.challansAwaitingBilling > 0 ? links.billChallans : null} />
+            )}
+          </MetricGrid>
+        </Section>
+      )}
+
+      {/* ── Trend + attention ───────────────────────────────────────── */}
+      <div className="cc-split cc-split--wide" style={{ marginTop: "1.25rem" }}>
+        {trendBars.length > 0 && (
+          <Panel title="Sales and purchases" kind="Last 12 months">
+            <TrendChart points={trend} bars={trendBars}
+              ariaLabel="Monthly sales and purchases for the last 12 months" />
+            {reports && sales && <p className="cc-note">Select a month to open its sales register.</p>}
+          </Panel>
         )}
-        <select
-          value={period}
-          onChange={(e) => onPeriodChange(e.target.value)}
-          className="dash-hero__select"
-          style={styles.heroSelect}
-          aria-label="Period"
-        >
-          {PERIOD_OPTIONS.map((p) => (
-            <option key={p.code} value={p.code}>{p.label}</option>
-          ))}
-        </select>
+        <Panel title="Needs attention">
+          <AttentionList items={attentionItems({ receivables, payables, work, fbr, links, oldestDays, canCosts: can("bills.costs.view"), periodLabel })} />
+        </Panel>
       </div>
-    </header>
+
+      {/* ── Who owes / whom you owe ─────────────────────────────────── */}
+      {(receivables || payables) && (
+        <div className="cc-split" style={{ marginTop: "0.85rem" }}>
+          {receivables && (
+            <Panel title="Largest customer balances" kind="Today" action={<HeadLink to={links.receivables}>Full aging</HeadLink>}>
+              <PartyTable rows={receivables.top} hrefFor={customerHref} emptyText="No customer owes anything."
+                columns={[
+                  { key: "name", label: "Customer" },
+                  { key: "total", label: "Owed", money: true },
+                  { key: "overdue", label: "Overdue", money: true, tone: (r) => (r.overdue > 0 ? "bad" : undefined) },
+                ]} />
+            </Panel>
+          )}
+          {payables && (
+            <Panel title="Largest supplier balances" kind="Today" action={<HeadLink to={links.payables}>Full aging</HeadLink>}>
+              <PartyTable rows={payables.top} hrefFor={supplierHref} emptyText="Nothing is owed to suppliers."
+                columns={[
+                  { key: "name", label: "Supplier" },
+                  { key: "total", label: "Owed", money: true },
+                  { key: "overdue", label: "Overdue", money: true, tone: (r) => (r.overdue > 0 ? "bad" : undefined) },
+                ]} />
+            </Panel>
+          )}
+        </div>
+      )}
+
+      {/* ── Counterparty breakdown for the period ───────────────────── */}
+      {(sales || purchases) && (
+        <div className="dash-section-grid" style={styles.sectionGrid}>
+          {sales && (
+            <ByCounterpartyCard items={sales.topClients} total={sales.totalSales} accent={accents.sales}
+              title="Sales by Client"
+              subtitle={`Top ${Math.min(20, (sales.topClients || []).length)} clients · ${periodLabel} total Rs. ${formatPkrCompact(sales.totalSales)}`}
+              emptyText="No invoiced clients in this period." />
+          )}
+          {purchases && (
+            <ByCounterpartyCard items={purchases.topSuppliers} total={purchases.totalPurchases} accent={accents.purchases}
+              title="Purchases by Supplier"
+              subtitle={`Top ${Math.min(20, (purchases.topSuppliers || []).length)} suppliers · ${periodLabel} total Rs. ${formatPkrCompact(purchases.totalPurchases)}`}
+              emptyText="No supplier activity in this period." />
+          )}
+        </div>
+      )}
+
+      {/* ── Detail sections (unchanged) ──────────────────────────────
+          Each "Open" link is gated by the destination screen's own view
+          permission, so it never 403s. */}
+      <div className="dash-section-grid" style={styles.sectionGrid}>
+        {sales      && <SalesSection      data={sales}           canOpen={can("invoices.list.view") || can("bills.list.view")} />}
+        {purchases  && <PurchasesSection  data={purchases}       canOpen={can("purchasebills.list.view")} />}
+        {fbr        && <FbrSection        data={fbr} />}
+        {data.inventory && <InventorySection data={data.inventory} canOpen={can("stock.dashboard.view")} />}
+      </div>
+    </>
   );
 }
+
+/**
+ * The attention list, most urgent first: money past due (largest first), then
+ * work blocking a sale, then housekeeping. Each item names what, why, how
+ * much, and opens the records to act on. Built only from server figures.
+ */
+function attentionItems({ receivables, payables, work, fbr, links, oldestDays, canCosts, periodLabel }) {
+  const items = [];
+  if (receivables?.overdue > 0) {
+    items.push({
+      rank: receivables.over90 > 0 ? 0 : 1, amount: receivables.overdue,
+      tone: receivables.over90 > 0 ? "danger" : "warn",
+      title: `${plural(receivables.overduePartyCount, "customer")} past due`,
+      why: receivables.over90 > 0
+        ? `${fmtMoney(receivables.over90)} is more than 90 days late. Follow up for collection.`
+        : "Bills past their due date. Follow up for collection.",
+      figure: fmtMoney(receivables.overdue), actionLabel: "See who", to: links.receivablesOverdue,
+    });
+  }
+  if (payables?.overdue > 0) {
+    items.push({
+      rank: payables.over90 > 0 ? 0 : 1, amount: payables.overdue,
+      tone: payables.over90 > 0 ? "danger" : "warn",
+      title: `${plural(payables.overduePartyCount, "supplier")} awaiting payment`,
+      why: payables.over90 > 0
+        ? `${fmtMoney(payables.over90)} is more than 90 days past due.`
+        : "Purchase bills past their due date.",
+      figure: fmtMoney(payables.overdue), actionLabel: "Review", to: links.payablesOverdue,
+    });
+  }
+  if (work?.challansAwaitingBilling > 0) {
+    items.push({
+      rank: oldestDays != null && oldestDays > 7 ? 1 : 2, amount: 0,
+      tone: oldestDays != null && oldestDays > 7 ? "warn" : "info",
+      title: `${plural(work.challansAwaitingBilling, "challan")} waiting to be billed`,
+      why: `Goods delivered but not billed${oldestDays != null ? `; the oldest is ${plural(oldestDays, "day")} old` : ""}.`,
+      actionLabel: "Bill now", to: links.billChallans,
+    });
+  }
+  if (work?.challansSetupRequired > 0) {
+    items.push({
+      rank: 2, amount: 0, tone: "warn",
+      title: `${plural(work.challansSetupRequired, "challan")} need FBR setup`,
+      why: "FBR details are missing on the company or the client, so these cannot be filed once billed.",
+      actionLabel: "Open", to: links.setupRequired,
+    });
+  }
+  if (canCosts && work?.billsWithoutCost > 0) {
+    items.push({
+      rank: 3, amount: 0, tone: "info",
+      title: `${plural(work.billsWithoutCost, "bill")} with no actual cost`,
+      why: `${periodLabel}: no line has its cost entered, so profit on these bills is not known yet.`,
+      actionLabel: "Add costs", to: links.notCosted,
+    });
+  }
+  if (fbr?.failed > 0) {
+    items.push({
+      rank: 1, amount: 0, tone: "danger",
+      title: `${plural(fbr.failed, "invoice")} failed at FBR`,
+      why: `${periodLabel}: rejected on validation or submission. Fix and resubmit.`,
+      actionLabel: "Open invoices", to: links.fbr,
+    });
+  }
+  return items.sort((a, b) => a.rank - b.rank || b.amount - a.amount);
+}
+
+// ── Gates and empty states ─────────────────────────────────────────────
 
 function WelcomeOnlyBanner({ displayName }) {
   return (
@@ -310,7 +492,7 @@ function WelcomeOnlyBanner({ displayName }) {
   );
 }
 
-function AccessDeniedBanner({ displayName, reason }) {
+function AccessDeniedBanner({ displayName }) {
   return (
     <div style={{ ...styles.card, padding: "2.5rem 1.5rem", textAlign: "center" }}>
       <MdLock size={48} color="#9e9e9e" style={{ marginBottom: "0.5rem" }} />
@@ -333,92 +515,6 @@ function EmptyState({ heading, body, icon = MdInfo }) {
       <h3 style={{ margin: "0.5rem 0 0.25rem", fontSize: "1rem", fontWeight: 700, color: "#1a2332" }}>{heading}</h3>
       <p style={{ margin: 0, fontSize: "0.85rem", color: "#5f6d7e" }}>{body}</p>
     </div>
-  );
-}
-
-function LoadingShimmer() {
-  // Plain skeleton — same layout as the real cards so paint is stable.
-  return (
-    <>
-      <div style={styles.heroGrid}>
-        {[0, 1, 2, 3].map((i) => (
-          <div key={i} style={{ ...styles.card, height: 140, animation: "fadeIn 0.4s ease" }}>
-            <div style={{ width: "60%", height: 12, background: "#eef2f7", borderRadius: 4, marginBottom: 16 }} />
-            <div style={{ width: "75%", height: 28, background: "#eef2f7", borderRadius: 4 }} />
-          </div>
-        ))}
-      </div>
-    </>
-  );
-}
-
-// ── Hero band ──────────────────────────────────────────────────────
-
-function HeroBand({ data }) {
-  const hero = data.hero || {};
-  const sales = data.sales;
-  const purchases = data.purchases;
-  const flags = data.permissions || {};
-
-  // Hide individual hero cards based on perms. A user with only sales
-  // gets 2 cards (Total Sales + Net would be misleading without
-  // purchases, so we hide Net too). Admin gets all 4.
-  const showSales = flags.canViewSales;
-  const showPurchases = flags.canViewPurchases;
-  const showNet = showSales && showPurchases;
-  const showGstNet = showSales && showPurchases;
-
-  return (
-    <section className="dash-hero-grid" style={styles.heroGrid} aria-label="Headline KPIs">
-      {showSales && (
-        <KpiCard
-          label="Total Sales"
-          value={hero.totalSales}
-          prevValue={hero.totalSalesPrev}
-          accent={accents.sales}
-          format={(v) => `Rs. ${formatPkrCompact(v)}`}
-          trend={sales?.trend12m}
-          icon={<MdAttachMoney size={16} />}
-          title="Sum of GrandTotal across all sales invoices in the selected period"
-        />
-      )}
-      {showPurchases && (
-        <KpiCard
-          label="Total Purchases"
-          value={hero.totalPurchases}
-          prevValue={hero.totalPurchasesPrev}
-          accent={accents.purchases}
-          format={(v) => `Rs. ${formatPkrCompact(v)}`}
-          trend={purchases?.trend12m}
-          icon={<MdShoppingCart size={16} />}
-          higherIsBetter={false}
-          title="Sum of GrandTotal across all purchase bills in the selected period"
-        />
-      )}
-      {showNet && (
-        <KpiCard
-          label="Net (Sales − Purchases)"
-          value={hero.net}
-          prevValue={hero.netPrev}
-          accent="#37474f"
-          format={(v) => `Rs. ${formatPkrCompact(v)}`}
-          icon={<MdTrendingUp size={16} />}
-          title="What's left after subtracting purchases from sales — a rough cash-flow signal"
-        />
-      )}
-      {showGstNet && (
-        <KpiCard
-          label="GST Net (Output − Input)"
-          value={hero.gstNet}
-          prevValue={hero.gstNetPrev}
-          accent="#6a1b9a"
-          format={(v) => `Rs. ${formatPkrCompact(v)}`}
-          icon={<MdAccountBalance size={16} />}
-          higherIsBetter={false}
-          title="Output Tax (collected on sales) minus Input Tax (paid on purchases) — what you owe FBR"
-        />
-      )}
-    </section>
   );
 }
 

@@ -28,6 +28,7 @@ import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
 import { exportToPdf } from "../utils/exportUtils";
 import { DEFAULT_TEMPLATES } from "../utils/templateSampleData";
+import useQueryAction from "../hooks/useQueryAction";
 
 const colors = {
   blue: "#0d47a1",
@@ -75,6 +76,10 @@ export default function PurchaseBillsPage() {
   const [loadingAwaiting, setLoadingAwaiting] = useState(false);
   const [prefillFromInvoiceId, setPrefillFromInvoiceId] = useState(null);
   const [startLocal, setStartLocal] = useState(false);
+  // Dashboard quick action: ?new=local opens New Local Purchase.
+  useQueryAction("new", !!selectedCompany && canCreate, (v) => {
+    setEditingId(null); setPrefillFromInvoiceId(null); setStartLocal(v === "local"); setViewOnly(false); setShowForm(true);
+  });
   const [pickerSearch, setPickerSearch] = useState("");
   const [attachTarget, setAttachTarget] = useState(null);
   const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "PurchaseBill", bills.map((b) => b.id));

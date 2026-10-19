@@ -6,6 +6,7 @@ using MyApp.Api.Data;
 using MyApp.Api.Helpers;
 using MyApp.Api.DTOs;
 using MyApp.Api.Models;
+using MyApp.Api.Models.Accounting;
 using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Services.Implementations
@@ -33,11 +34,14 @@ namespace MyApp.Api.Services.Implementations
     {
         private readonly AppDbContext _context;
         private readonly IPermissionService _permissions;
+        private readonly IAccountingReportService _reports;
 
-        public DashboardService(AppDbContext context, IPermissionService permissions)
+        public DashboardService(AppDbContext context, IPermissionService permissions,
+            IAccountingReportService reports)
         {
             _context = context;
             _permissions = permissions;
+            _reports = reports;
         }
 
         public async Task<DashboardKpisResponse> GetKpisAsync(
@@ -94,6 +98,19 @@ namespace MyApp.Api.Services.Implementations
             if (canPurchases)  response.Purchases  = await ComputePurchasesAsync(companyId, period);
             if (canFbr)        response.Fbr        = await ComputeFbrAsync(companyId, period);
             if (canInventory)  response.Inventory  = await ComputeInventoryAsync(companyId);
+
+            // Balances, money movement and open work. Same two KPI keys: what
+            // customers owe is a sales figure, what is owed to suppliers a
+            // purchases one. The aging is the aged reports' own builder, so the
+            // dashboard and the Receivable / Payable Aging report cannot differ.
+            if (canSales)
+                response.Receivables = ToBalances(await _reports.GetAgedReceivablesAsync(companyId, null));
+            if (canPurchases)
+                response.Payables = ToBalances(await _reports.GetAgedPayablesAsync(companyId, null));
+            if (canHero)
+                response.Cash = await ComputeCashAsync(companyId, period, canSales, canPurchases);
+            if (canSales)
+                response.Work = await ComputeWorkAsync(companyId, period);
 
             return response;
         }
@@ -428,6 +445,15 @@ namespace MyApp.Api.Services.Implementations
             var count = aggregate?.Count ?? 0;
             var avg = count > 0 ? totalPurchases / count : 0m;
 
+            // Local purchases — the classification SupplierPayablesService and
+            // the purchase form use (category LocalDirect, or an older
+            // challan-supplier bill). Includes the automatic ones costs book.
+            var local = await q
+                .Where(pb => pb.PurchaseCategory == "LocalDirect" || pb.Source == "challan-supplier")
+                .GroupBy(_ => 1)
+                .Select(g => new { Total = g.Sum(pb => pb.GrandTotal), Count = g.Count() })
+                .FirstOrDefaultAsync();
+
             // Same SupplierGroup roll-up as the Clients side above —
             // see that comment for context.
             var topSuppliers = await q
@@ -468,6 +494,8 @@ namespace MyApp.Api.Services.Implementations
                 Trend12m = await Trend12mPurchasesAsync(companyId),
                 TopSuppliers = topSuppliers,
                 RecentBills = recent,
+                LocalPurchasesTotal = local?.Total ?? 0m,
+                LocalPurchaseCount = local?.Count ?? 0,
             };
         }
 
@@ -661,6 +689,105 @@ namespace MyApp.Api.Services.Implementations
                 LowStockItemCount = lowStockCount,
                 TopItemsByMovement = topItems,
                 RecentMovements = recentMovements,
+            };
+        }
+
+        // ── Balances / cash / open work ─────────────────────────────────
+
+        private static DashboardBalancesKpis ToBalances(AgedReportDto aged)
+        {
+            static decimal Overdue(AgedPartyRowDto r) => r.Days1To30 + r.Days31To60 + r.Days61To90 + r.Over90;
+            return new DashboardBalancesKpis
+            {
+                AsOf = aged.AsOf,
+                Total = aged.Total,
+                Overdue = aged.Days1To30 + aged.Days31To60 + aged.Days61To90 + aged.Over90,
+                Over90 = aged.Over90,
+                PartyCount = aged.Rows.Count,
+                OverduePartyCount = aged.Rows.Count(r => Overdue(r) > 0m),
+                // Rows arrive largest balance first.
+                Top = aged.Rows.Take(6).Select(r => new DashboardBalanceRow
+                {
+                    Id = r.PartyId,
+                    Name = r.Name,
+                    Total = r.Total,
+                    Overdue = Overdue(r),
+                    OpenDocuments = r.OpenDocuments,
+                }).ToList(),
+            };
+        }
+
+        private async Task<DashboardCashKpis> ComputeCashAsync(
+            int companyId, DashboardPeriod period, bool canSales, bool canPurchases)
+        {
+            // The registers' rule: a voided or bounced document moved nothing.
+            async Task<Dictionary<PaymentDirection, (decimal Total, int Count)>> SumAsync(DateTime? from, DateTime? to)
+            {
+                var q = _context.Payments.AsNoTracking()
+                    .Where(p => p.CompanyId == companyId && !p.IsCancelled && p.ChequeStatus != ChequeStatus.Bounced);
+                if (from.HasValue) q = q.Where(p => p.Date >= from.Value);
+                if (to.HasValue) q = q.Where(p => p.Date < to.Value);
+                return (await q.GroupBy(p => p.Direction)
+                        .Select(g => new { g.Key, Total = g.Sum(x => x.Amount), Count = g.Count() })
+                        .ToListAsync())
+                    .ToDictionary(x => x.Key, x => (x.Total, x.Count));
+            }
+
+            var now = await SumAsync(period.From, period.To);
+            var prev = period.PreviousFrom.HasValue
+                ? await SumAsync(period.PreviousFrom, period.PreviousTo)
+                : null;
+            var cash = new DashboardCashKpis { HasCollections = canSales, HasPayments = canPurchases };
+            if (canSales)
+            {
+                var r = now.GetValueOrDefault(PaymentDirection.Receipt);
+                cash.Collections = r.Total;
+                cash.CollectionCount = r.Count;
+                cash.CollectionsPrev = prev?.GetValueOrDefault(PaymentDirection.Receipt).Total;
+            }
+            if (canPurchases)
+            {
+                var p = now.GetValueOrDefault(PaymentDirection.Payment);
+                cash.Payments = p.Total;
+                cash.PaymentCount = p.Count;
+                cash.PaymentsPrev = prev?.GetValueOrDefault(PaymentDirection.Payment).Total;
+            }
+            return cash;
+        }
+
+        private async Task<DashboardWorkKpis> ComputeWorkAsync(int companyId, DashboardPeriod period)
+        {
+            // Billable now — the bill form's own rule, whatever the period: a
+            // challan waiting to be billed is open work until it is billed.
+            var awaiting = await _context.DeliveryChallans.AsNoTracking()
+                .Where(dc => dc.CompanyId == companyId && dc.InvoiceId == null
+                          && ChallanBillingRules.Statuses.Contains(dc.Status))
+                .GroupBy(_ => 1)
+                .Select(g => new
+                {
+                    Count = g.Count(),
+                    SetupRequired = g.Count(dc => dc.Status == "Setup Required"),
+                    Oldest = g.Min(dc => dc.DeliveryDate ?? dc.CreatedAt),
+                })
+                .FirstOrDefaultAsync();
+
+            // Sale bills with no actual cost on any line — the "Not costed"
+            // filter the Bills list applies (InvoiceRepository), for the period.
+            var bills = _context.Invoices.AsNoTracking()
+                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
+                         && i.DocumentType != 9 && i.DocumentType != 10
+                         && !i.Items.Any(line => (line.DeliveryItemId.HasValue
+                                ? line.DeliveryItem!.ActualUnitCost
+                                : line.ActualUnitCost).HasValue));
+            if (period.From.HasValue) bills = bills.Where(i => i.Date >= period.From.Value);
+            if (period.To.HasValue) bills = bills.Where(i => i.Date < period.To.Value);
+
+            return new DashboardWorkKpis
+            {
+                ChallansAwaitingBilling = awaiting?.Count ?? 0,
+                ChallansSetupRequired = awaiting?.SetupRequired ?? 0,
+                OldestAwaitingBillingDate = awaiting?.Oldest,
+                BillsWithoutCost = await bills.CountAsync(),
             };
         }
 

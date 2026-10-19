@@ -28,6 +28,7 @@ import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { defaultReceiptTemplate, defaultPaymentTemplate } from "../utils/accountingDocTemplates";
 import RichText from "../Components/RichText";
+import useQueryAction from "../hooks/useQueryAction";
 
 const fmtMoney = (n) =>
   Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -106,6 +107,9 @@ export default function PaymentsPage({ mode = "receipts" }) {
 
   // Reset to page 1 on company / mode switch.
   useEffect(() => { setPage(1); setSearch(""); setShowForm(false); setEditing(null); setViewing(null); }, [companyId, dir]);
+  // Dashboard quick action: ?new=1 opens Record Receipt / Record Payment. After
+  // the reset above, which would otherwise close the form it just opened.
+  useQueryAction("new", !!companyId && canCreate, () => setShowForm(true));
   useEffect(() => { fetchRows(page); }, [fetchRows, page]);
 
   const handleDelete = async (p) => {

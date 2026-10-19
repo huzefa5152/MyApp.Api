@@ -24,7 +24,8 @@ export default function SupplierPayablesPage() {
   const { has } = usePermissions();
   const [summary, setSummary] = useState([]);
   const [ledger, setLedger] = useState(null);
-  const [supplierId, setSupplierId] = useState("");
+  // ?supplierId= arrives from a dashboard supplier row.
+  const [supplierId, setSupplierId] = useState(() => new URLSearchParams(window.location.search).get("supplierId") || "");
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
   const [asOf, setAsOf] = useState("");

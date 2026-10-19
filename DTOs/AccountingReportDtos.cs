@@ -319,5 +319,22 @@ namespace MyApp.Api.DTOs
         /// date. Carried here so the dashboard needs no second permission to
         /// show it.</summary>
         public GlStatusDto Ledger { get; set; } = new();
+
+        /// <summary>The largest balances behind <see cref="Receivables"/> /
+        /// <see cref="Payables"/> — the aged reports' own rows, largest first.</summary>
+        public List<AgedPartyRowDto> TopReceivables { get; set; } = new();
+        public List<AgedPartyRowDto> TopPayables { get; set; } = new();
+
+        /// <summary>Cost of sales and gross profit for the period, from the
+        /// Monthly Profit report (the P&amp;L's own sections). Null when the
+        /// report could not be built (no GL, no chart).</summary>
+        public decimal? CostOfSales { get; set; }
+        public decimal? GrossProfit { get; set; }
+
+        /// <summary>The twelve months ending with the period's month — each row
+        /// is that month's Profit &amp; Loss (Monthly Profit report).</summary>
+        public List<AccountingCatalog.MonthlyProfitRowDto> ProfitTrend { get; set; } = new();
+        /// <summary>The Monthly Profit report's own notice (no GL, cost-of-sales caveat).</summary>
+        public string? ProfitNotice { get; set; }
     }
 }

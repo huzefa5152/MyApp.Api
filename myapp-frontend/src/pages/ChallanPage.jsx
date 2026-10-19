@@ -6,6 +6,7 @@ import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/
 import { useState, useEffect, useCallback, useRef } from "react";
 import { renderRichTextHtml } from "../utils/richText";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import useQueryAction from "../hooks/useQueryAction";
 import { MdDescription, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdUploadFile } from "react-icons/md";
 import ChallanList from "../Components/ChallanList";
 import ChallanTable from "../Components/ChallanTable";
@@ -98,7 +99,7 @@ export default function ChallanPage() {
   const [pageSize, setPageSize] = useState(10); // server-echoed size (drives page math)
   const [userPageSize, setUserPageSize] = usePageSize("challans"); // operator-chosen override
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState(() => new URLSearchParams(window.location.search).get("status") || "");
   const [clientFilter, setClientFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -219,6 +220,8 @@ export default function ChallanPage() {
   };
 
   const handleAddChallan = () => { if (selectedCompany) setShowModal(true); };
+  // Dashboard quick action: /challans?new=1 opens the create form.
+  useQueryAction("new", !!selectedCompany && canCreate, handleAddChallan);
 
   const handleSaveChallan = async (payload) => {
     if (!selectedCompany) return;

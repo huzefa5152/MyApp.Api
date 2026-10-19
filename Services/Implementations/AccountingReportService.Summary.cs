@@ -56,8 +56,12 @@ namespace MyApp.Api.Services.Implementations
 
             // Working capital, aged as at the period end — the aged reports'
             // own totals (demo, cancelled and notes are excluded there).
-            summary.Receivables = Buckets(await GetAgedReceivablesAsync(companyId, periodTo));
-            summary.Payables = Buckets(await GetAgedPayablesAsync(companyId, periodTo));
+            var agedReceivables = await GetAgedReceivablesAsync(companyId, periodTo);
+            var agedPayables = await GetAgedPayablesAsync(companyId, periodTo);
+            summary.Receivables = Buckets(agedReceivables);
+            summary.Payables = Buckets(agedPayables);
+            summary.TopReceivables = agedReceivables.Rows.Take(8).ToList();
+            summary.TopPayables = agedPayables.Rows.Take(8).ToList();
 
             // Tax positions, per the ledger.
             var tax = await GetTaxControlAsync(companyId, periodFrom, periodTo);

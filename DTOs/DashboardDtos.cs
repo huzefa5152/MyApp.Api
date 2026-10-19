@@ -97,6 +97,67 @@ namespace MyApp.Api.DTOs
         public List<DashboardTrendPoint> Trend12m { get; set; } = new();
         public List<DashboardTopEntity> TopSuppliers { get; set; } = new();
         public List<DashboardRecentBill> RecentBills { get; set; } = new();
+
+        // The part of TotalPurchases that is local purchases (supplier + cost
+        // on a challan or bill, or a Local Purchase entered by hand). A SUBSET
+        // of TotalPurchases, never added to it — the automatic purchase bills
+        // are ordinary PurchaseBills rows.
+        public decimal LocalPurchasesTotal { get; set; }
+        public int LocalPurchaseCount { get; set; }
+    }
+
+    /// <summary>What customers owe, or what is owed to suppliers, as at today —
+    /// a point-in-time balance, not a period figure. Taken from the aged
+    /// report (<c>BuildAgingAsync</c>), so it is the Receivable / Payable
+    /// Aging report's own total.</summary>
+    public class DashboardBalancesKpis
+    {
+        public DateTime AsOf { get; set; }
+        public decimal Total { get; set; }
+        /// <summary>Past its due date (or its document date when none is set).</summary>
+        public decimal Overdue { get; set; }
+        public decimal Over90 { get; set; }
+        public int PartyCount { get; set; }
+        public int OverduePartyCount { get; set; }
+        public List<DashboardBalanceRow> Top { get; set; } = new();
+    }
+
+    public class DashboardBalanceRow
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public decimal Total { get; set; }
+        public decimal Overdue { get; set; }
+        public int OpenDocuments { get; set; }
+    }
+
+    /// <summary>Money that actually moved in the period — receipts from
+    /// customers and payments to suppliers, voided and bounced left out (the
+    /// registers' rule). Cash movement, not profit.</summary>
+    public class DashboardCashKpis
+    {
+        public decimal Collections { get; set; }
+        public int CollectionCount { get; set; }
+        public decimal? CollectionsPrev { get; set; }
+        public decimal Payments { get; set; }
+        public int PaymentCount { get; set; }
+        public decimal? PaymentsPrev { get; set; }
+        /// <summary>False when the caller can see only one side.</summary>
+        public bool HasCollections { get; set; }
+        public bool HasPayments { get; set; }
+    }
+
+    /// <summary>Open work — documents waiting on the operator.</summary>
+    public class DashboardWorkKpis
+    {
+        /// <summary>Challans that can be billed now (<c>ChallanBillingRules</c>).</summary>
+        public int ChallansAwaitingBilling { get; set; }
+        public DateTime? OldestAwaitingBillingDate { get; set; }
+        /// <summary>Of those, the ones blocked on missing FBR setup.</summary>
+        public int ChallansSetupRequired { get; set; }
+        /// <summary>Sale bills in the period with no actual cost on any line —
+        /// their profit is not known yet.</summary>
+        public int BillsWithoutCost { get; set; }
     }
 
     public class DashboardFbrKpis
@@ -152,6 +213,12 @@ namespace MyApp.Api.DTOs
         public DashboardPurchaseKpis? Purchases { get; set; }
         public DashboardFbrKpis? Fbr { get; set; }
         public DashboardInventoryKpis? Inventory { get; set; }
+
+        // Receivables need the sales KPI permission, payables the purchases one.
+        public DashboardBalancesKpis? Receivables { get; set; }
+        public DashboardBalancesKpis? Payables { get; set; }
+        public DashboardCashKpis? Cash { get; set; }
+        public DashboardWorkKpis? Work { get; set; }
 
         // Tells the page which sections the user CAN see (so it can
         // decide between "show welcome banner" vs "render empty
