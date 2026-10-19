@@ -306,6 +306,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+- **2026-10-19:** A PO format can be created from a scanned PDF or a photo. When a sample PDF has no text layer, the Add PO Format dialog reads it with the same browser OCR that PO import uses, and the server lays out the words by the same rule (`PoLayoutText.FromOcrPages`, new `POST /poformats/fingerprint-ocr`). A format saved from a scan therefore matches that scan on import.
+
 - **2026-10-19:** A bill made from several challans of the same PO prints the same item once, with the quantities and amounts added, on the bill print, PDF, Excel and customer portal. Lines merge only when PO, description, unit, rate, item type and HS code match; the bill still keeps one line per challan line underneath.
 
 - **2026-10-19:** Supplier and actual cost on a challan or bill line now book the supplier purchase on save: one purchase per supplier, kept in step with later edits until it is paid or credited, on new, billed and FBR-filed challans, standalone bills, sales-order challans and PO imports alike. The "Save & preview supplier purchases" step, the costing dialog's purchase review and the separate challan "Costs & suppliers" button are gone. A supplier bill entered on the Purchase Bill form takes precedence over the booked purchase; closed accounting periods refuse the change. Existing preview-made purchases become automatic.

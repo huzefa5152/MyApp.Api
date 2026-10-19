@@ -9,6 +9,11 @@ export const getPoFormat = (id) => http.get(`/poformats/${id}`);
 // Upload a sample PDF; server returns raw text + hash + any existing
 // match. The Add/Edit form calls this first so the operator can see if
 // a format for this layout is already saved before creating a duplicate.
+// A scanned PDF or photo: the browser reads it with OCR (utils/poOcr.js) and
+// sends the words; the server lays them out like PO import does.
+export const fingerprintOcr = (pages, companyId) =>
+  http.post("/poformats/fingerprint-ocr", { pages }, { params: companyId ? { companyId } : {} });
+
 export const fingerprintPdf = (file, companyId) => {
   const fd = new FormData();
   fd.append("file", file);

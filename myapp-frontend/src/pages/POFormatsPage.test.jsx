@@ -9,7 +9,10 @@ const state = vi.hoisted(() => ({ companies: [], selectedCompany: null, allowed:
 vi.mock("../contexts/CompanyContext", () => ({ useCompany: () => state }));
 vi.mock("../contexts/PermissionsContext", () => ({ usePermissions: () => ({ has: key => state.allowed.has(key) }) }));
 vi.mock("../Components/ConfirmDialog", () => ({ useConfirm: () => vi.fn().mockResolvedValue(true) }));
-vi.mock("../api/poFormatApi", () => ({ listPoFormats:vi.fn(),getPoFormat:vi.fn(),deletePoFormat:vi.fn(),getPoFormatClients:vi.fn(),fingerprintPdf:vi.fn(),createPoFormatSimple:vi.fn(),updatePoFormatSimple:vi.fn() }));
+vi.mock("../api/poFormatApi", () => ({ listPoFormats:vi.fn(),getPoFormat:vi.fn(),deletePoFormat:vi.fn(),getPoFormatClients:vi.fn(),fingerprintPdf:vi.fn(),fingerprintOcr:vi.fn(),createPoFormatSimple:vi.fn(),updatePoFormatSimple:vi.fn() }));
+const ocr = vi.hoisted(() => ({ readPoFile: vi.fn() }));
+vi.mock("../utils/poOcr", () => ({ OCR_ACCEPT: ".pdf,.png", isImageFile: f => /\.png$/.test(f.name), readPoFile: ocr.readPoFile,
+  averageConfidence: pages => Math.round(pages.flat().reduce((s, w) => s + w.confidence, 0) / pages.flat().length) }));
 const a={id:1,name:"Company A"},b={id:2,name:"Company B"};
 const row=(id,name,clientId=11)=>({id,name,clientId,clientName:"A client",companyId:1,isActive:true,currentVersion:1,updatedAt:"2026-09-21",ruleSetJson:JSON.stringify({engine:"simple-headers-v1",descriptionHeader:"Description",quantityHeader:"Quantity"})});
 beforeEach(()=>{
@@ -112,5 +115,43 @@ describe("company-private PO formats",()=>{
     await screen.findByText(/Unable to load this company's clients/);
     expect(screen.getByRole("button",{name:"Save PO Format"}).disabled).toBe(true);
     expect(api.createPoFormatSimple).not.toHaveBeenCalled();
+  });
+  it("a scanned PDF falls back to OCR and saves a format from the words read",async()=>{
+    const pages=[[{text:"Description",left:0,right:90,top:0,bottom:20,confidence:92},{text:"Quantity",left:200,right:270,top:0,bottom:20,confidence:90}]];
+    api.fingerprintPdf.mockRejectedValue({response:{status:400,data:{error:"Could not extract text from the PDF. It may be scanned/image-based."}}});
+    ocr.readPoFile.mockResolvedValue(pages);
+    api.fingerprintOcr.mockResolvedValue({data:{rawText:"Description Quantity",matchedFormat:null}});
+    api.createPoFormatSimple.mockResolvedValue({});
+    const ui=render(<POFormatForm companyId={1} companyName="Company A" onClose={()=>{}} onSaved={()=>{}}/>);
+    await screen.findByRole("option",{name:"A client"});
+    fireEvent.change(screen.getByLabelText("Client *"),{target:{value:"11"}});
+    const file=new File(["%PDF scan"],"tapes.pdf",{type:"application/pdf"});
+    fireEvent.change(ui.container.querySelector('input[type="file"]'),{target:{files:[file]}});
+    await waitFor(()=>expect(api.fingerprintOcr).toHaveBeenCalledWith(pages,1));
+    expect(ocr.readPoFile).toHaveBeenCalledWith(file,expect.any(Function));
+    expect((await screen.findByText(/Read from a scan with OCR \(91% confidence\)/)).textContent).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+    fireEvent.change(screen.getByPlaceholderText('e.g. "Item Name"'),{target:{value:"Description"}});
+    fireEvent.change(screen.getByPlaceholderText('e.g. "Quantity" or "Qty"'),{target:{value:"Quantity"}});
+    await waitFor(()=>expect(screen.getByRole("button",{name:"Save PO Format"}).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("button",{name:"Save PO Format"}));
+    await waitFor(()=>expect(api.createPoFormatSimple).toHaveBeenCalledWith(expect.objectContaining({companyId:1,clientId:11,rawText:"Description Quantity"})));
+  });
+  it("a photo goes straight to OCR, and other PDF errors do not trigger it",async()=>{
+    ocr.readPoFile.mockResolvedValue([[{text:"Qty",left:0,right:30,top:0,bottom:20,confidence:80}]]);
+    api.fingerprintOcr.mockResolvedValue({data:{rawText:"Qty",matchedFormat:null}});
+    const ui=render(<POFormatForm companyId={1} companyName="Company A" onClose={()=>{}} onSaved={()=>{}}/>);
+    await screen.findByRole("option",{name:"A client"});
+    fireEvent.change(ui.container.querySelector('input[type="file"]'),{target:{files:[new File(["png"],"po.png",{type:"image/png"})]}});
+    await waitFor(()=>expect(api.fingerprintOcr).toHaveBeenCalled());
+    expect(api.fingerprintPdf).not.toHaveBeenCalled();
+    cleanup(); vi.clearAllMocks();
+    api.getPoFormatClients.mockResolvedValue({data:[{id:11,name:"A client"}]});
+    api.fingerprintPdf.mockRejectedValue({response:{status:403,data:{error:"Forbidden"}}});
+    const ui2=render(<POFormatForm companyId={1} companyName="Company A" onClose={()=>{}} onSaved={()=>{}}/>);
+    await screen.findByRole("option",{name:"A client"});
+    fireEvent.change(ui2.container.querySelector('input[type="file"]'),{target:{files:[new File(["x"],"x.pdf",{type:"application/pdf"})]}});
+    expect((await screen.findByText("Forbidden")).textContent.trim()).toBe("Forbidden");
+    expect(ocr.readPoFile).not.toHaveBeenCalled();
   });
 });

@@ -190,8 +190,7 @@ namespace MyApp.Api.Controllers
         // archive. The words are laid out into lines HERE, by the same rule a PDF
         // gets (PoLayoutText), and then go through the same format matching and
         // parser — so an image matches the same saved PO format as the PDF.
-        private const int MaxOcrPages = 10;
-        private const int MaxOcrWords = 20000;
+        private const int MaxOcrPages = PoLayoutText.MaxOcrPages;
         private static readonly Dictionary<string, string> OcrFileTypes = new(StringComparer.OrdinalIgnoreCase)
         {
             [".png"] = "image/png", [".jpg"] = "image/jpeg", [".jpeg"] = "image/jpeg",
@@ -219,8 +218,7 @@ namespace MyApp.Api.Controllers
             OcrPagesDto? ocr;
             try { ocr = JsonSerializer.Deserialize<OcrPagesDto>(words ?? "", OcrJsonOpts); }
             catch (JsonException) { return BadRequest(new { error = "The text read from the image could not be understood." }); }
-            if (ocr == null || ocr.Pages.Count == 0 || ocr.Pages.Count > MaxOcrPages
-                || ocr.Pages.Sum(p => p.Count) > MaxOcrWords)
+            if (ocr == null || !PoLayoutText.IsAcceptableOcr(ocr))
                 return BadRequest(new { error = $"Send between 1 and {MaxOcrPages} pages of text read from the image." });
 
             using var ms = new MemoryStream();
@@ -240,14 +238,7 @@ namespace MyApp.Api.Controllers
             var sw = System.Diagnostics.Stopwatch.StartNew();
             try
             {
-                var lines = new List<string>();
-                foreach (var page in ocr.Pages)
-                    lines.AddRange(PoLayoutText.FromOcrPage(page
-                        .Where(w => !string.IsNullOrWhiteSpace(w.Text) && w.Right >= w.Left && w.Bottom >= w.Top)
-                        .Select(w => new PositionedWord(Truncate(w.Text.Trim(), 100), w.Left, w.Right, w.Top, w.Bottom,
-                            w.Right - w.Left, w.Bottom - w.Top, w.Confidence))
-                        .ToList()));
-                var rawText = string.Join("\n", lines);
+                var rawText = PoLayoutText.FromOcrPages(ocr);
 
                 if (string.IsNullOrWhiteSpace(rawText))
                 {

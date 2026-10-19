@@ -64,6 +64,30 @@ namespace MyApp.Api.Helpers
             return lines;
         }
 
+        public const int MaxOcrPages = 10;
+        public const int MaxOcrWords = 20000;
+
+        /// <summary>True when an OCR payload is within the limits every OCR endpoint accepts.</summary>
+        public static bool IsAcceptableOcr(MyApp.Api.DTOs.OcrPagesDto? ocr) =>
+            ocr != null && ocr.Pages.Count > 0 && ocr.Pages.Count <= MaxOcrPages && ocr.Pages.Sum(p => p.Count) <= MaxOcrWords;
+
+        /// <summary>
+        /// The text of a PO read by the browser's OCR, laid out by the ONE rule both
+        /// PO import and PO format creation use — so a format saved from a scan
+        /// matches that scan when it is imported.
+        /// </summary>
+        public static string FromOcrPages(MyApp.Api.DTOs.OcrPagesDto ocr)
+        {
+            var lines = new List<string>();
+            foreach (var page in ocr.Pages)
+                lines.AddRange(FromOcrPage(page
+                    .Where(w => !string.IsNullOrWhiteSpace(w.Text) && w.Right >= w.Left && w.Bottom >= w.Top)
+                    .Select(w => { var t = w.Text.Trim(); return new PositionedWord(t.Length > 100 ? t[..100] : t, w.Left, w.Right, w.Top, w.Bottom,
+                        w.Right - w.Left, w.Bottom - w.Top, w.Confidence); })
+                    .ToList()));
+            return string.Join("\n", lines);
+        }
+
         /// <summary>Lines of one OCR'd image (image space: larger Y is LOWER on the page).</summary>
         public static List<string> FromOcrPage(IReadOnlyList<PositionedWord> words)
         {

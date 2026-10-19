@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from "react";
+import { OCR_ACCEPT, isImageFile, readPoFile, averageConfidence } from "../utils/poOcr";
 import { MdUploadFile, MdCheckCircle, MdWarning, MdInfoOutline } from "react-icons/md";
 
 import {
   fingerprintPdf,
+  fingerprintOcr,
   updatePoFormatMetadata,
   getPoFormatClients,
   createPoFormatSimple,
@@ -50,6 +52,8 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState(!!initialRawText);
   const [existingMatchName, setExistingMatchName] = useState(null);
+  const [ocrStatus, setOcrStatus] = useState("");
+  const [ocrNote, setOcrNote] = useState("");
   const [notes, setNotes] = useState(format?.notes || "");
 
   const [saving, setSaving] = useState(false);
@@ -92,8 +96,27 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
     setUploaded(false);
     setExistingMatchName(null);
     setError("");
+    setOcrNote("");
+    // A scanned PDF has no text layer and a photo never has one: read either
+    // with OCR in the browser, the same reader PO import uses.
+    const readByOcr = async () => {
+      setOcrStatus("Preparing the scan…");
+      const pages = await readPoFile(file, (fraction, label) => setOcrStatus(`${label} ${Math.round(fraction * 100)}%`));
+      if (!pages.some((p) => p.length)) throw { response: { data: { error: "No readable text was found on the scan. Try a clearer copy." } } };
+      const read = await fingerprintOcr(pages, companyId);
+      setOcrNote(`Read from a scan with OCR (${averageConfidence(pages)}% confidence). Copy the labels exactly as they appear below.`);
+      return read;
+    };
     try {
-      const res = await fingerprintPdf(file, companyId);
+      let res;
+      if (isImageFile(file)) res = await readByOcr();
+      else {
+        try { res = await fingerprintPdf(file, companyId); }
+        catch (err) {
+          if (err.response?.status !== 400 || !/scanned|image-based|extract text/i.test(err.response?.data?.error || "")) throw err;
+          res = await readByOcr();
+        }
+      }
       setRawText(res.data.rawText || "");
       if (res.data.matchedFormat && res.data.isExactMatch) {
         setExistingMatchName(res.data.matchedFormat.name);
@@ -104,9 +127,10 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
         setName(`${selectedClient.name} PO`);
       }
     } catch (err) {
-      setError(err.response?.data?.error || err.response?.data?.message || "Failed to read PDF.");
+      setError(err.response?.data?.error || err.response?.data?.message || "Failed to read the sample.");
     } finally {
       setUploading(false);
+      setOcrStatus("");
     }
   };
 
@@ -122,7 +146,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
       return setError("Fill the Description and Quantity column headers.");
     }
     if (!isEdit && !rawText) {
-      return setError("Upload a sample PDF so we can lock in the layout fingerprint.");
+      return setError("Upload a sample PO (PDF, scan or photo) so we can lock in the layout fingerprint.");
     }
 
     const representativeClientId = selectedClient.id;
@@ -221,19 +245,20 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
               fingerprint hash — useful if the client's template changed). */}
           <div style={{ marginBottom: "1rem" }}>
             <label style={styles.label}>
-              Sample PDF {isEdit ? "(optional — upload to replace)" : "*"}
+              Sample PO (PDF, scan or photo) {isEdit ? "(optional — upload to replace)" : "*"}
             </label>
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf"
+              accept={OCR_ACCEPT}
+              aria-label="Sample PO file"
               onChange={handleFileChange}
               style={{ display: "none" }}
             />
             <div style={styles.dropZone} onClick={() => fileInputRef.current?.click()}>
               <MdUploadFile size={32} color={colors.textSecondary} />
               <p style={{ margin: "0.5rem 0 0.25rem", color: colors.textSecondary, fontSize: "0.9rem" }}>
-                {uploading ? "Reading PDF…" : uploaded ? <><MdCheckCircle size={16} color={colors.success} style={{ verticalAlign: "middle" }} /> Sample loaded — fill the 5 fields below</> : isEdit ? "Click to upload a new sample PDF (optional)" : "Click to upload a sample PDF"}
+                {uploading ? (ocrStatus || "Reading the sample…") : uploaded ? <><MdCheckCircle size={16} color={colors.success} style={{ verticalAlign: "middle" }} /> Sample loaded — fill the 5 fields below</> : isEdit ? "Click to upload a new sample (optional)" : "Click to upload a sample PO: PDF, scanned PDF or photo"}
               </p>
               <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>Max 10 MB</span>
             </div>
@@ -244,6 +269,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
           {rawText && (
             <div style={{ marginBottom: "1rem" }}>
               <label style={styles.label}>Extracted text (for reference)</label>
+              {ocrNote && <div role="status" style={{ ...styles.hint, color: "#92400e", marginBottom: 4 }}>{ocrNote}</div>}
               <textarea
                 readOnly
                 style={{ ...styles.input, ...styles.textarea, fontFamily: "monospace", fontSize: "0.78rem", backgroundColor: "#fafbfc" }}

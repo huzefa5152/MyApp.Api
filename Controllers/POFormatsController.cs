@@ -154,6 +154,37 @@ namespace MyApp.Api.Controllers
             });
         }
 
+        // A scanned PDF or a photo has no text layer. The browser reads it with
+        // OCR (utils/poOcr.js, the same reader PO import uses) and sends the
+        // words; they are laid out by the same rule import uses, so a format
+        // saved from this scan matches the scan when it is imported.
+        [HttpPost("fingerprint-ocr")]
+        [HasAnyPermission("poformats.manage.create", "poformats.manage.update")]
+        [RequestSizeLimit(4 * 1024 * 1024)]
+        public async Task<ActionResult<FingerprintPdfResponseDto>> FingerprintOcr([FromBody] OcrPagesDto ocr, [FromQuery] int? companyId)
+        {
+            if (companyId is not > 0)
+                return BadRequest(new { error = "Choose a company before uploading a sample." });
+            await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
+            if (!MyApp.Api.Helpers.PoLayoutText.IsAcceptableOcr(ocr))
+                return BadRequest(new { error = $"Send between 1 and {MyApp.Api.Helpers.PoLayoutText.MaxOcrPages} pages of text read from the scan." });
+
+            var rawText = MyApp.Api.Helpers.PoLayoutText.FromOcrPages(ocr);
+            if (string.IsNullOrWhiteSpace(rawText))
+                return BadRequest(new { error = "No readable text was found on the scan. Try a clearer copy." });
+
+            var fp = _fingerprint.Compute(rawText);
+            var match = await _registry.FindMatchAsync(rawText, companyId);
+            return Ok(new FingerprintPdfResponseDto
+            {
+                RawText = rawText,
+                Hash = fp.Hash,
+                Keywords = fp.Keywords.ToList(),
+                MatchedFormat = match != null ? ToDto(match.Format) : null,
+                IsExactMatch = match?.IsExactMatch ?? false,
+            });
+        }
+
         // Power-user path: full ruleset JSON. Exposed for the rare case where
         // simple-headers-v1 can't handle a layout (e.g. a PDF with a
         // delivery-date column between description and qty). 99% of

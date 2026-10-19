@@ -366,6 +366,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | A company saves with a name only, FBR details added later | `python scripts/test_company_create_minimal.py` | `8/8 checks` |
 | Cross-tenant leak sweep — both editions against a company they were never given | `python scripts/test_tenant_leak_sweep.py` | `105/105 checks` |
 | Every permission module lands in a navbar section (offline) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
+| PO format from a scanned PDF / photo: OCR fingerprint, save, match on import, company guard | `python scripts/test_po_format_from_scan.py --base <url>` | `10/10 PO format from scan checks passed` |
 | Onboarding import — sample, preview, commit, re-upload adds nothing, fix list, permissions | `python scripts/test_onboarding_import.py`; `cd scripts/onboarding_harness && dotnet run -c Release`; `node scripts/test_onboarding_import.mjs` | `70/70 checks passed`; `97 checks, 0 failed`; `23/23 checks passed` |
 | Accounting — chart of accounts | `python scripts/test_accounting_chart.py` | `103/103 checks` |
 | Accounting — general ledger core | `python scripts/test_accounting_gl.py` | `93/93 checks` |
