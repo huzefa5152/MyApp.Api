@@ -738,6 +738,20 @@ namespace MyApp.Api.Services.Implementations
                     .Where(t => referencedTypeIds.Contains(t.Id))
                     .ToDictionaryAsync(t => t.Id);
 
+            // Partial billing: a line of a selected challan that is not on the bill
+            // is LEFT OUT — it moves to a new row of the same challan that stays
+            // billable (InvoiceService.PartialBilling). Before this it was
+            // stranded: the whole challan was marked billed anyway.
+            if (dto.Items.Select(i => i.DeliveryItemId).Distinct().Count() != dto.Items.Count)
+                throw new InvalidOperationException("A delivery line appears twice on this bill.");
+            var billedDeliveryIds = dto.Items.Select(i => i.DeliveryItemId).ToHashSet();
+            var leaveOut = challans
+                .Select(dc => (Challan: dc, Ids: dc.Items.Where(i => !billedDeliveryIds.Contains(i.Id)).Select(i => i.Id).ToList()))
+                .Where(x => x.Ids.Count > 0).ToList();
+            var emptied = leaveOut.FirstOrDefault(x => x.Ids.Count == x.Challan.Items.Count);
+            if (emptied.Challan != null)
+                throw new InvalidOperationException($"Challan #{emptied.Challan.ChallanNumber} has no line on this bill. Untick the whole challan instead.");
+
             // Build invoice items from delivery items + user-provided unit prices
             var invoiceItems = new List<InvoiceItem>();
             foreach (var itemDto in dto.Items)
@@ -1056,6 +1070,11 @@ namespace MyApp.Api.Services.Implementations
                     // marks only those columns (no full-graph DbSet.Update cascade);
                     // company (CurrentInvoiceNumber) and any ItemType usage bump are
                     // already tracked-Modified and flush in this same save.
+                    // Move the left-out lines to their own billable rows first, so the
+                    // challans linked below hold only what this bill carries.
+                    var splitIds = new List<int>();
+                    foreach (var (challan, ids) in leaveOut) splitIds.Add(await SplitOffAsync(challan, ids));
+
                     _context.Invoices.Add(invoice);
                     foreach (var dc in challans)
                     {
@@ -1113,6 +1132,13 @@ namespace MyApp.Api.Services.Implementations
                 // company's ledger is not live, and replace-on-edit otherwise.
                 await _posting.PostInvoiceAsync(created);
                 await SalesDocumentRules.RefreshOrdersAsync(_context, created.CompanyId);
+                    if (splitIds.Count > 0)
+                    {
+                        // Re-join with any earlier unbilled row of the same challan,
+                        // and rebook open supplier purchases on the rows they now sit on.
+                        await MergeUnbilledSplitsAsync(splitIds);
+                        foreach (var id in leaveOut.Select(x => x.Challan.Id).Concat(splitIds)) await _purchases.SyncChallanAsync(id);
+                    }
                     await transaction.CommitAsync();
 
                     // Reload with includes
@@ -2718,6 +2744,7 @@ namespace MyApp.Api.Services.Implementations
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                var releasedIds = invoice.DeliveryChallans.Select(c => c.Id).ToList();
                 released.AddRange(ReleaseChallans(invoice));
 
                 // Give the goods back, unless a credit note already did.
@@ -2740,6 +2767,8 @@ namespace MyApp.Api.Services.Implementations
                 invoice.FbrCancelledBy = actorUserName;
 
                 await _context.SaveChangesAsync();
+                // Rows of a partly billed challan that are now all unbilled become one row again.
+                await MergeUnbilledSplitsAsync(releasedIds);
                 await SalesDocumentRules.RefreshOrdersAsync(_context, invoice.CompanyId);
                 await transaction.CommitAsync();
             }
@@ -3087,6 +3116,7 @@ namespace MyApp.Api.Services.Implementations
                 // - Native challans revert to "Pending" (or "No PO")
                 // Note: GetByIdAsync tracks these; we use tracked updates to stay consistent
                 // and avoid issues with ExecuteDelete + tracked entities in same transaction.
+                var releasedIds = invoice.DeliveryChallans.Select(c => c.Id).ToList();
                 foreach (var dc in invoice.DeliveryChallans)
                 {
                     var hasPo = !string.IsNullOrWhiteSpace(dc.PoNumber);
@@ -3125,6 +3155,8 @@ namespace MyApp.Api.Services.Implementations
                 _context.Invoices.Remove(invoice);
 
                 await _context.SaveChangesAsync();
+                // Rows of a partly billed challan that are now all unbilled become one row again.
+                await MergeUnbilledSplitsAsync(releasedIds);
 
                 // ── If this was the LAST invoice for the company, reset the
                 // counter so the operator can re-seed numbering and new bills
@@ -3185,6 +3217,7 @@ namespace MyApp.Api.Services.Implementations
                 // Same transition table as DeleteAsync — imported challans
                 // revert to "Imported", native ones to "Pending", and any
                 // PO-less challan to "No PO".
+                var revertedIds = invoice.DeliveryChallans.Select(c => c.Id).ToList();
                 revertedChallans.AddRange(ReleaseChallans(invoice));
 
                 // A voided bill must stop deducting stock — purge its movements
@@ -3206,6 +3239,8 @@ namespace MyApp.Api.Services.Implementations
                 invoice.CancelReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
 
                 await _context.SaveChangesAsync();
+                // Rows of a partly billed challan that are now all unbilled become one row again.
+                await MergeUnbilledSplitsAsync(revertedIds);
                 // A voided bill is not a sale. Re-posting it removes its entry,
                 // which is what the engine does with a cancelled document — no
                 // reversing entry, because the bill itself carries the void and
@@ -3558,8 +3593,11 @@ namespace MyApp.Api.Services.Implementations
                             .FirstOrDefaultAsync(i => i.Id == original.Id);
                         if (originalWithChallans != null)
                         {
+                            var releasedIds = originalWithChallans.DeliveryChallans.Select(c => c.Id).ToList();
                             releasedChallans = ReleaseChallans(originalWithChallans);
                             if (releasedChallans.Count > 0) await _context.SaveChangesAsync();
+                            // Rows of a partly billed challan that are now all unbilled become one row again.
+                            await MergeUnbilledSplitsAsync(releasedIds);
                         }
                     }
 

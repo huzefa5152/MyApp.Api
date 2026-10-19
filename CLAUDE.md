@@ -333,7 +333,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 > `master`** (a direct push, or a merge/PR that lands on it), you MUST:
 > 1. have a backend running against a schema-current DB, and
 > 2. run `python scripts/test_stock_itemtype_reflow.py` and see **`all checks
->    passed`** (currently **183/183**).
+>    passed`** (currently **250/250**).
 >
 > If it is **red**, or you **cannot run it**, **DO NOT PUSH.** A broken inventory
 > in/out flow must never reach master — ever. Run it even when the change looks
@@ -367,7 +367,8 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Cross-tenant leak sweep — both editions against a company they were never given | `python scripts/test_tenant_leak_sweep.py` | `105/105 checks` |
 | Every permission module lands in a navbar section (offline) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 | Quote discounts: per line and whole quote before GST, refusals, print fields, net price on the bill prefill, whole-quote reminder, cross-company refusal | `python scripts/test_quote_discount.py --base <url>` | `33/33 quote discount checks passed` |
-| Quote discount arithmetic on the screen (offline) | `node scripts/test_quote_discount.mjs` | `22 passed, 0 failed` |
+| Quote discount arithmetic + copying a discounted line (offline) | `node scripts/test_quote_discount.mjs` | `25 passed, 0 failed` |
+| Partial bills: leave challan lines out on create and in Manage challans, merge-back, release paths, billed-challan sync, supplier purchases, FBR lock, tenant | `python scripts/test_partial_billing.py --base <url> --database <local *_Test db>` | `38/38 partial billing checks passed` |
 | PO format from a scanned PDF / photo: OCR fingerprint, save, match on import, company guard | `python scripts/test_po_format_from_scan.py --base <url>` | `10/10 PO format from scan checks passed` |
 | Onboarding import — sample, preview, commit, re-upload adds nothing, fix list, permissions | `python scripts/test_onboarding_import.py`; `cd scripts/onboarding_harness && dotnet run -c Release`; `node scripts/test_onboarding_import.mjs` | `70/70 checks passed`; `97 checks, 0 failed`; `23/23 checks passed` |
 | Accounting — chart of accounts | `python scripts/test_accounting_chart.py` | `103/103 checks` |
@@ -384,7 +385,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Valued stock entries (isolated local SQL only) | `py -3.14 scripts/test_stock_entry_workflow.py --base http://localhost:5191 --database <isolated-local-test-db>` | `41 stock-entry workflow checks passed` |
 | Commercial costs + local purchases: one pool for challan / bill / form / dialog, races, edits, sale-side floor, IDOR | `python scripts/test_trader_commercial_costs.py --base <url> --db "<conn>"` | `124/124 commercial cost checks passed` |
 | Costs book supplier purchases automatically: create/edit/move/clear, lock once paid or credited, entered bills win, closed period, cancel/delete, tenant | `python scripts/test_cost_purchase_sync.py --base <url> --db "<conn>"` | `49/49 cost purchase sync checks passed` |
-| Stock item-type reflow **(hard pre-push gate — see box above)** | `python scripts/test_stock_itemtype_reflow.py` | `all checks passed` (currently `183/183`) |
+| Stock item-type reflow **(hard pre-push gate — see box above)** | `python scripts/test_stock_itemtype_reflow.py` | `all checks passed` (currently `250/250`) |
 | PDF export pagination | `python scripts/test_pdf_pagination.py` | `all checks passed` (230 cases) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |

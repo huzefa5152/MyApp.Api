@@ -36,6 +36,7 @@ const statusToTone = {
   Closed: "neutral",
   Reconciled: "success",
   Partial: "warning",
+  "Partially billed": "warning",
 };
 
 export function toneForStatus(status) {

@@ -1145,6 +1145,9 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("Site")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("SplitFromChallanId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -1162,6 +1165,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("InvoiceId");
 
                     b.HasIndex("SalesOrderId");
+
+                    b.HasIndex("SplitFromChallanId");
 
                     b.HasIndex("CompanyId", "ChallanNumber");
 

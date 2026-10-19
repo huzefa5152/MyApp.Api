@@ -11,6 +11,8 @@ public class BillChallanOptionDto
     public DateTime? DeliveryDate { get; set; }
     public int? SalesOrderId { get; set; }
     public int? SalesOrderNumber { get; set; }
+    /// <summary>Set when this row holds lines left off an earlier partial bill.</summary>
+    public int? SplitFromChallanId { get; set; }
     public string Version { get; set; } = "";
     public List<BillChallanItemDto> Items { get; set; } = new();
 }
@@ -39,4 +41,10 @@ public class UpdateBillChallansDto
     [Required, MaxLength(100)] public List<int> ChallanIds { get; set; } = new();
     [Required] public Dictionary<int, string> AddedChallanVersions { get; set; } = new();
     [Required] public Dictionary<int, decimal> UnitPrices { get; set; } = new();
+    /// <summary>
+    /// Lines of the selected challans to leave OFF this bill. Each moves to a new
+    /// row of its challan (same number) that stays billable. Unit prices are sent
+    /// only for the added lines that ARE billed.
+    /// </summary>
+    [MaxLength(2000)] public List<int> LeaveOutDeliveryItemIds { get; set; } = new();
 }

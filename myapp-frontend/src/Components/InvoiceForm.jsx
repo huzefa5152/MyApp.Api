@@ -102,6 +102,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [allChallans, setAllChallans] = useState([]);
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
+  // Lines of the selected challans NOT billed now. The server moves each to a
+  // new row of its challan (same number) that stays billable.
+  const [leftOutIds, setLeftOutIds] = useState([]);
+  const toggleLeftOut = (id) => setLeftOutIds((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   // Optional "bill from a Sales Order" shortcut — picks the order's client and
   // pre-ticks its billable challans in the list below.
   const canUseOrders = has("salesorders.list.view");
@@ -532,9 +536,11 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   };
 
   const selectedChallans = clientChallans.filter((c) => selectedIds.includes(c.id));
-  const allItems = selectedChallans.flatMap((c) =>
+  const shownItems = selectedChallans.flatMap((c) =>
     c.items.map((item) => ({ ...item, challanNumber: c.challanNumber }))
   );
+  // Everything below (totals, validation, the payload) is the billed lines only.
+  const allItems = shownItems.filter((item) => !leftOutIds.includes(item.id));
 
   const subtotal = allItems.reduce((sum, item) => {
     const price = parseFloat(itemPrices[item.id]) || 0;
@@ -616,6 +622,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
 
     if (billNumberMode === "custom" && !billNumberOk)
       return setError("Enter a bill number that isn't already in use, or switch back to Auto.");
+
+    const emptied = selectedChallans.find((c) => c.items.length > 0 && c.items.every((i) => leftOutIds.includes(i.id)));
+    if (emptied) return setError(`Challan #${emptied.challanNumber}: every line is left out. Untick the challan instead.`);
 
     const missingPrices = allItems.filter((i) => !itemPrices[i.id] || parseFloat(itemPrices[i.id]) <= 0);
     if (missingPrices.length > 0) return setError("Enter unit price for all items.");
@@ -1120,11 +1129,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                     )}
 
                     {/* Items - unified single-row table (same layout as Edit Bill) */}
-                    {allItems.length > 0 && (
+                    {shownItems.length > 0 && (
                       <div>
                         <div style={styles.itemsHeaderBar}>
                           <label style={{ ...styles.label, margin: 0 }}>
-                            Items ({allItems.length})
+                            Items ({allItems.length === shownItems.length ? allItems.length : `${allItems.length} of ${shownItems.length} billed`})
+                            <span style={styles.leaveOutHint}> — untick a line to bill it later; it stays on its challan as pending</span>
                           </label>
                           <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
                             {/* Bills mode hides all item-type-management
@@ -1231,12 +1241,17 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
 
                         {isNarrow ? (
                           <div style={styles.mcards}>
-                            {allItems.map((item) => {
+                            {shownItems.map((item) => {
                               const price = parseFloat(itemPrices[item.id]) || 0;
                               const displayUom = itemUoms[item.id] ?? item.unit;
+                              const out = leftOutIds.includes(item.id);
                               return (
-                                <div key={item.id} style={styles.mcard}>
+                                <div key={item.id} style={{ ...styles.mcard, ...(out ? styles.leftOutRow : null) }}>
                                   <div style={styles.mcardHead}>
+                                    <label style={styles.billTick}>
+                                      <input type="checkbox" checked={!out} onChange={() => toggleLeftOut(item.id)} aria-label={`Bill ${item.description} now`} />
+                                      {out ? "Later" : "Bill"}
+                                    </label>
                                     <span style={styles.mdc}>DC #{item.challanNumber}</span>
                                     <div style={{ flex: 1, minWidth: 160 }}>
                                       <SearchableItemTypeSelect
@@ -1352,7 +1367,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                           <table style={styles.unifiedTable}>
                             <thead>
                               <tr style={styles.unifiedThead}>
-                                <th style={{ ...styles.unifiedTh, width: "4%" }}>DC#</th>
+                                <th style={{ ...styles.unifiedTh, width: "6%" }}>Bill · DC#</th>
                                 {/* Optional Item Type helps the
                                     invoice can group by it — shown in both
                                     Bills and Invoices modes. */}
@@ -1377,13 +1392,17 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                               </tr>
                             </thead>
                             <tbody>
-                              {allItems.map((item) => {
+                              {shownItems.map((item) => {
                                 const price = parseFloat(itemPrices[item.id]) || 0;
                                 const displayUom = itemUoms[item.id] ?? item.unit;
+                                const out = leftOutIds.includes(item.id);
                                 return (
-                                  <tr key={item.id} style={styles.unifiedRow}>
+                                  <tr key={item.id} style={{ ...styles.unifiedRow, ...(out ? styles.leftOutRow : null) }}>
                                     <td style={{ ...styles.unifiedTd, fontSize: "0.76rem", color: colors.textSecondary }}>
-                                      {item.challanNumber}
+                                      <label style={styles.billTickCell} title={out ? "Left out: billed later" : "Billed now: untick to bill this line later"}>
+                                        <input type="checkbox" checked={!out} onChange={() => toggleLeftOut(item.id)} aria-label={`Bill ${item.description} now`} />
+                                        <span>{item.challanNumber}</span>
+                                      </label>
                                     </td>
                                     <td style={styles.unifiedTd}>
                                       {/* Picking an ItemType auto-fills HS Code, UOM, SaleType,
@@ -1678,6 +1697,10 @@ const styles = {
   mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
   mcard: { border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" },
   mcardHead: { display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.5rem", flexWrap: "wrap" },
+  billTick: { display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.74rem", fontWeight: 700, color: "#0d47a1", minHeight: 44, cursor: "pointer", flexShrink: 0 },
+  billTickCell: { display: "flex", flexDirection: "column", alignItems: "center", gap: 2, cursor: "pointer" },
+  leftOutRow: { opacity: 0.5 },
+  leaveOutHint: { fontWeight: 400, fontSize: "0.72rem", color: "#5f6d7e" },
   mdc: { fontSize: "0.7rem", fontWeight: 700, color: "#0d47a1", background: "#e3f2fd", borderRadius: 6, padding: "0.15rem 0.45rem", flexShrink: 0 },
   mlabel: { display: "block", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.03em", color: colors.textSecondary, fontWeight: 700, marginBottom: "0.2rem" },
   mgrid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem", marginTop: "0.4rem" },

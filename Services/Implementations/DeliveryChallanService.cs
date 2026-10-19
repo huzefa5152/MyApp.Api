@@ -147,6 +147,15 @@ namespace MyApp.Api.Services.Implementations
                 .Where(p => p.SourceDeliveryChallanId.HasValue && ids.Contains(p.SourceDeliveryChallanId.Value))
                 .Select(p => p.SourceDeliveryChallanId!.Value).Distinct().ToListAsync()).ToHashSet();
             foreach (var dto in dtos) dto.HasAutoPurchaseBills = linked.Contains(dto.Id);
+
+            // Partially billed: the challan's rows (same number, split on billing)
+            // are not all on a bill, nor all off one.
+            var roots = dtos.Select(d => d.SplitFromChallanId ?? d.Id).Distinct().ToList();
+            var rows = await _context.DeliveryChallans.AsNoTracking()
+                .Where(c => (roots.Contains(c.Id) || (c.SplitFromChallanId != null && roots.Contains(c.SplitFromChallanId.Value))) && c.Status != "Cancelled")
+                .Select(c => new { Root = c.SplitFromChallanId ?? c.Id, Billed = c.InvoiceId != null }).ToListAsync();
+            var partial = rows.GroupBy(r => r.Root).Where(g => g.Any(r => r.Billed) && g.Any(r => !r.Billed)).Select(g => g.Key).ToHashSet();
+            foreach (var dto in dtos) dto.IsPartiallyBilled = partial.Contains(dto.SplitFromChallanId ?? dto.Id);
         }
 
         /// <summary>Check if company+client have all required FBR fields filled.</summary>
@@ -177,6 +186,7 @@ namespace MyApp.Api.Services.Implementations
                 IsEditable = IsEditable(dc),
                 IsImported = dc.IsImported,
                 DuplicatedFromId = dc.DuplicatedFromId,
+                SplitFromChallanId = dc.SplitFromChallanId,
                 DuplicatedFromChallanNumber = dc.DuplicatedFrom?.ChallanNumber,
                 SalesOrderId = dc.SalesOrderId,
                 SalesOrderNumber = dc.SalesOrder?.SalesOrderNumber,
@@ -864,7 +874,8 @@ namespace MyApp.Api.Services.Implementations
             // the numbering sequence — the original keeps the number. The
             // max-number rule below only applies to canonical (non-duplicate)
             // challans.
-            var isDuplicate = dc.DuplicatedFromId != null;
+            // A row split off a partial bill shares its number too.
+            var isDuplicate = dc.DuplicatedFromId != null || dc.SplitFromChallanId != null;
             if (!isDuplicate)
             {
                 // Only the LAST challan (highest number) can be deleted so the
@@ -1164,7 +1175,9 @@ namespace MyApp.Api.Services.Implementations
         public async Task<List<DeliveryChallanDto>> GetPendingChallansByCompanyAsync(int companyId)
         {
             var challans = await _repository.GetPendingChallansByCompanyAsync(companyId);
-            return challans.Select(ToDto).ToList();
+            var dtos = challans.Select(ToDto).ToList();
+            await MarkAutoPurchaseBillsAsync(dtos);
+            return dtos;
         }
 
         public async Task<PrintChallanDto?> GetPrintDataAsync(int challanId)

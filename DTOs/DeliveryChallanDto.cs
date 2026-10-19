@@ -59,6 +59,10 @@ namespace MyApp.Api.DTOs
         /// the edit form.
         /// </summary>
         public int? DuplicatedFromId { get; set; }
+        /// <summary>The original row when this row holds lines left off a partial bill.</summary>
+        public int? SplitFromChallanId { get; set; }
+        /// <summary>True when some of this challan's lines are billed and others are not (on another row of the same number).</summary>
+        public bool IsPartiallyBilled { get; set; }
         /// <summary>
         /// Mirror of the parent's ChallanNumber for convenient display
         /// ("Duplicate of #1042") without the frontend having to re-fetch.

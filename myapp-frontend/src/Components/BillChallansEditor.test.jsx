@@ -28,7 +28,25 @@ it("distinguishes duplicate numbers and sends new rates with source versions", a
   fireEvent.click(screen.getByRole("button", { name: "Save challans" }));
   await waitFor(() => expect(onSaved).toHaveBeenCalled());
   expect(updateBillChallans).toHaveBeenCalledWith(1, { version: "bill-version", challanIds: [1, 2],
-    addedChallanVersions: { 2: "source-2" }, unitPrices: { 20: 3940 } });
+    addedChallanVersions: { 2: "source-2" }, unitPrices: { 20: 3940 }, leaveOutDeliveryItemIds: [] });
+});
+it("leaves a line out: no rate needed for it, and every line out of a challan blocks saving", async () => {
+  const twoLine = { ...source(2, 20), items: [{ id: 20, description: "Item 20", quantity: 2, unit: "Pcs" }, { id: 21, description: "Item 21", quantity: 3, unit: "Pcs" }] };
+  getBillChallans.mockResolvedValue({ data: { ...snapshot, available: [twoLine] } });
+  const onSaved = await open();
+  fireEvent.click(screen.getByRole("button", { name: "Add challan 12 record 2" }));
+  fireEvent.click(screen.getByLabelText("Bill Item 21 now"));
+  expect(screen.queryByLabelText("Unit rate for Item 21")).toBeNull();
+  fireEvent.change(screen.getByLabelText("Unit rate for Item 20"), { target: { value: "100" } });
+  fireEvent.click(screen.getByLabelText("Bill Item 20 now"));
+  expect(screen.getByRole("button", { name: "Save challans" }).disabled).toBe(true);
+  expect(screen.getByText(/Every line of DC#12 is unticked/)).toBeTruthy();
+  fireEvent.click(screen.getByLabelText("Bill Item 20 now"));
+  updateBillChallans.mockResolvedValue({ data: bill });
+  fireEvent.click(screen.getByRole("button", { name: "Save challans" }));
+  await waitFor(() => expect(onSaved).toHaveBeenCalled());
+  expect(updateBillChallans).toHaveBeenCalledWith(1, { version: "bill-version", challanIds: [1, 2],
+    addedChallanVersions: { 2: "source-2" }, unitPrices: { 20: 100 }, leaveOutDeliveryItemIds: [21] });
 });
 it("allows explicit zero and replacement while preventing an empty bill", async () => {
   await open();

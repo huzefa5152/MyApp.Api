@@ -495,6 +495,8 @@ namespace MyApp.Api.Data
                 .HasForeignKey(dc => dc.DuplicatedFromId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            modelBuilder.Entity<DeliveryChallan>().HasIndex(dc => dc.SplitFromChallanId);
+
             // Performance indexes on frequently-queried foreign keys
             modelBuilder.Entity<Invoice>()
                 .HasIndex(i => i.ClientId);

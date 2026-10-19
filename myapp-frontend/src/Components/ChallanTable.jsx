@@ -135,7 +135,9 @@ export default function ChallanTable({
       width: 130,
       accessor: (c) => c.status,
       render: (c) => (
-        <StatusBadge tone={toneForStatus(c.status)} status={c.status === "Invoiced" ? "Billed" : c.status} />
+        <StatusBadge tone={c.isPartiallyBilled ? "warning" : toneForStatus(c.status)}
+          status={!c.isPartiallyBilled ? (c.status === "Invoiced" ? "Billed" : c.status)
+            : c.status === "Invoiced" ? "Partially billed" : `${c.status} · rest of #${c.challanNumber}`} />
       ),
     },
   ];

@@ -306,6 +306,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+- **2026-10-19:** Partial bills. A bill made from challans can leave individual challan lines out: untick a line on Create Bill, or on Bills → Edit → Manage challans. The line moves to a new row of the same challan number that stays billable (both rows show PARTIALLY BILLED). Billing it later onto the same bill, removing the challan, or deleting/voiding/reversing the bill joins the rows back into one challan. Line ids never change, so costs and supplier purchases follow the line; a line on a paid or entered supplier bill cannot be left out. Changing a bill's challans stays limited to bills not yet submitted to FBR. Copying a discounted quote line keeps its discount in a quote and takes the net price anywhere else.
+
 - **2026-10-19:** Sales quotes take discounts before GST, either on a line (10% or a rupee amount, with an optional reason such as an old item taken in exchange) or on the whole quote. The line's discount prints under its description on every quote design, and the whole-quote discount prints as its own row above GST. A bill made from the quote's sales order takes each line's discounted price; the whole-quote discount shows on the bill form as a reminder instead of changing prices. The quote form shows lines as cards below 1,000px, and the quote view shows them as cards on phones.
 
 - **2026-10-19:** A PO format can be created from a scanned PDF or a photo. When a sample PDF has no text layer, the Add PO Format dialog reads it with the same browser OCR that PO import uses, and the server lays out the words by the same rule (`PoLayoutText.FromOcrPages`, new `POST /poformats/fingerprint-ocr`). A format saved from a scan therefore matches that scan on import.
