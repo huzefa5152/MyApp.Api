@@ -60,6 +60,8 @@ export default function BillChallansEditor({ invoice, onClose, onSaved }) {
   const selectedLineIds = new Set([...selected.values()].flatMap(c => c.items.map(i => i.id)));
   const leftOut = [...leaveOut].filter(id => selectedLineIds.has(id));
   const billed = (i) => !leaveOut.has(i.id);
+  // Lines this bill actually carries. A challan attached for reference has none.
+  const onBill = new Set((bill.items || []).map(i => i.deliveryItemId).filter(Boolean));
   const emptied = [...selected.values()].find(c => c.items.length > 0 && c.items.every(i => leaveOut.has(i.id)));
   const retainedLines = (bill.items || []).filter(i => !removedItemIds.has(i.deliveryItemId) && !leaveOut.has(i.deliveryItemId));
   const validRates = added.every(c => c.items.length > 0 && c.items.filter(billed).every(i => rates[i.id] !== undefined
@@ -138,7 +140,8 @@ export default function BillChallansEditor({ invoice, onClose, onSaved }) {
           {canEditDelivery && linked.has(c.id) && !c.hasAutoPurchaseBills && <button type="button" style={{ ...button, marginTop: 8, opacity: saving || loading || changed ? 0.5 : 1 }} disabled={saving || loading || changed}
             title={changed ? "Save or undo the challan selection first" : undefined}
             onClick={() => setDeliveryEdit({ id: c.id, companyId: bill.companyId, divisionId: bill.divisionId, challanNumber: c.challanNumber })}>Edit delivery & update bill</button>}
-          {selected.has(c.id) && linked.has(c.id) && c.items.map(i => <label key={i.id} style={{ ...lineRow, opacity: leaveOut.has(i.id) ? 0.55 : 1 }}>
+          {selected.has(c.id) && linked.has(c.id) && !c.items.some(i => onBill.has(i.id)) && <p style={{ marginTop: 10, color: "#5f6d7e" }}>Attached for reference: its lines are not billed on this bill.</p>}
+          {selected.has(c.id) && linked.has(c.id) && c.items.filter(i => onBill.has(i.id)).map(i => <label key={i.id} style={{ ...lineRow, opacity: leaveOut.has(i.id) ? 0.55 : 1 }}>
             <input type="checkbox" checked={!leaveOut.has(i.id)} disabled={saving} onChange={() => toggleLine(i.id)} aria-label={`Bill ${i.description} on this bill`} style={tick} />
             <span style={{ overflowWrap: "anywhere", minWidth: 0 }}>{i.description} <small>· {i.quantity} {i.unit}</small>
               {leaveOut.has(i.id) && <small style={{ display: "block", color: "#8a5a00" }}>Will go back to the challan as pending</small>}</span>

@@ -314,6 +314,18 @@ try:
     status, _ = flows.http('GET', f"/api/deliverychallans/{Lc['id']}/bill-edit", a.base, token=token)
     check('nor edit its delivery together with the bill', status == 400)
 
+    # ── 13b. A challan attached to a standalone bill for reference has no billed line ──
+    N = challan([line('Attach N1', 1), line('Attach N2', 1)])
+    sb = call('POST', '/api/invoices/standalone', {'companyId': cid, 'clientId': client['id'], 'date': today, 'gstRate': 18,
+              'items': [{'description': 'Typed service line', 'quantity': 1, 'uom': 'Pcs', 'unitPrice': 500, 'itemTypeId': item_type}]})
+    call('POST', f"/api/invoices/{sb['id']}/link-challan/{N['id']}")
+    ok, why = refused('PUT', f"/api/invoices/{sb['id']}/challans", edit_body(sb['id'], [N['id']], [N['items'][0]['id']]), 'only lines on this bill')
+    check('a line of an attached challan cannot be left out', ok and len(rows(N['challanNumber'])) == 1, str(why))
+    detached = edit(sb['id'], [])
+    r = rows(N['challanNumber'])
+    check('removing an attached challan detaches it and leaves the typed bill lines alone',
+          len(r) == 1 and r[0]['invoiceId'] is None and detached['subtotal'] == sb['subtotal'], str(r))
+
     # ── 14. Another company's user reaches none of it ──
     other = call('POST', '/api/companies', {'name': f'[TEMP] Partial other {time.time_ns()}', 'startingChallanNumber': 1, 'startingInvoiceNumber': 1})
     admin_role = next(r['id'] for r in call('GET', '/api/roles') if r['name'] == 'Administrator')
