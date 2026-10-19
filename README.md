@@ -306,6 +306,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+- **2026-10-19:** Sales quotes take discounts before GST, either on a line (10% or a rupee amount, with an optional reason such as an old item taken in exchange) or on the whole quote. The line's discount prints under its description on every quote design, and the whole-quote discount prints as its own row above GST. A bill made from the quote's sales order takes each line's discounted price; the whole-quote discount shows on the bill form as a reminder instead of changing prices. The quote form shows lines as cards below 1,000px, and the quote view shows them as cards on phones.
+
 - **2026-10-19:** A PO format can be created from a scanned PDF or a photo. When a sample PDF has no text layer, the Add PO Format dialog reads it with the same browser OCR that PO import uses, and the server lays out the words by the same rule (`PoLayoutText.FromOcrPages`, new `POST /poformats/fingerprint-ocr`). A format saved from a scan therefore matches that scan on import.
 
 - **2026-10-19:** A bill made from several challans of the same PO prints the same item once, with the quantities and amounts added, on the bill print, PDF, Excel and customer portal. Lines merge only when PO, description, unit, rate, item type and HS code match; the bill still keeps one line per challan line underneath.

@@ -233,7 +233,7 @@ export default function SalesQuotePage() {
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <AttachmentBadge count={attachCounts[q.id]} onClick={() => setAttachTarget(q)} />
                     <span style={{ ...st.badge, background: `${STATUS_COLORS[q.status] || "#5f6d7e"}18`, color: STATUS_COLORS[q.status] || "#5f6d7e" }}>{q.status}</span>
-                    {Number(q.subtotal) === 0 && <span style={{ ...st.badge, color: "#9a5700", background: "#fff3e0" }}>Needs pricing</span>}
+                    {Number(q.subtotal) === 0 && !(q.items || []).some((i) => Number(i.discountAmount) > 0) && <span style={{ ...st.badge, color: "#9a5700", background: "#fff3e0" }}>Needs pricing</span>}
                   </div>
                 </div>
                 <div style={st.client}>{q.clientName}</div>
@@ -241,7 +241,7 @@ export default function SalesQuotePage() {
                 {q.customerEnquiryRef && <div style={st.meta}>Enquiry: {q.customerEnquiryRef}</div>}
                 {q.validUntil && <div style={st.meta}>Valid until: {fmtDate(q.validUntil)}</div>}
                 <div style={st.total}>Rs {Number(q.grandTotal).toLocaleString()}</div>
-                <div style={st.subMeta}>Subtotal Rs {Number(q.subtotal).toLocaleString()} · GST {q.gstRate}% (Rs {Number(q.gstAmount).toLocaleString()})</div>
+                <div style={st.subMeta}>Subtotal Rs {Number(q.subtotal).toLocaleString()}{Number(q.discountAmount) > 0 ? ` · Discount Rs ${Number(q.discountAmount).toLocaleString()}` : ""} · GST {q.gstRate}% (Rs {Number(q.gstAmount).toLocaleString()})</div>
                 {q.convertedToSalesOrderNumber && <div style={st.converted}>→ Sales Order #{q.convertedToSalesOrderNumber}</div>}
                 <div style={st.actions}>
                   <button style={st.actBtn} onClick={() => setViewQuote(q)} title="View"><MdVisibility size={16} /></button>

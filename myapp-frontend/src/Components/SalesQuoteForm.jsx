@@ -16,6 +16,7 @@ import AttachmentManager from "./AttachmentManager";
 import { formStyles, modalSizes } from "../theme";
 import useScrollToError from "../hooks/useScrollToError";
 import DocumentNotesEditor from "./DocumentNotesEditor";
+import { quoteTotals, lineAmounts, discountFields, discountText } from "../utils/quoteDiscount";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
 
 import { todayYmd } from "../utils/dateInput";
@@ -50,9 +51,13 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
   const [gstRate, setGstRate] = useState(quote?.gstRate ?? 18);
   const [notes, setNotes] = useState(quote?.notes || "");
   const [contactPerson, setContactPerson] = useState(quote?.contactPerson || "");
+  // Whole-quote discount: "5%" or "5000", taken off before GST. It stays on
+  // the quote; a bill made from it only shows a reminder.
+  const [quoteDiscount, setQuoteDiscount] = useState(discountText(quote?.discountValue, quote?.discountIsPercent));
+  const [quoteDiscountReason, setQuoteDiscountReason] = useState(quote?.discountReason || "");
   const [items, setItems] = useState(
     quote?.items?.length
-      ? quote.items.map((i) => ({ id: i.id, _imageKey: crypto.randomUUID(), imagePath: i.imagePath || null, itemTypeId: i.itemTypeId, description: i.description, quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice, rateHint: "" }))
+      ? quote.items.map((i) => ({ id: i.id, _imageKey: crypto.randomUUID(), imagePath: i.imagePath || null, itemTypeId: i.itemTypeId, description: i.description, quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice, rateHint: "", discountText: discountText(i.discountValue, i.discountIsPercent), discountReason: i.discountReason || "" }))
       : [blankItem()]
   );
   const [units, setUnits] = useState([]);
@@ -92,10 +97,8 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
     };
   };
 
-  const lineTotal = (it) => Math.round((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0) * 100) / 100;
-  const subtotal = items.reduce((s, it) => s + lineTotal(it), 0);
-  const gstAmount = Math.round(subtotal * (Number(gstRate) || 0)) / 100;
-  const grandTotal = subtotal + gstAmount;
+  const totals = quoteTotals(items.filter((i) => i.description.trim()), quoteDiscount, gstRate);
+  const money = (n) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -104,6 +107,9 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
     const valid = items.filter((i) => i.description.trim());
     if (!client) { setError("Please select a client."); return; }
     if (valid.length === 0) { setError("Add at least one item."); return; }
+    const badLine = valid.findIndex((i) => lineAmounts(i).error);
+    if (badLine >= 0) { setError(`Line ${items.indexOf(valid[badLine]) + 1}: the discount is not valid (${lineAmounts(valid[badLine]).error.toLowerCase()}).`); return; }
+    if (totals.error) { setError(`Quote discount: ${totals.error.toLowerCase()}.`); return; }
 
     setSaving(true);
     try {
@@ -117,6 +123,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
         gstRate: Number(gstRate) || 0,
         notes: notes.trim() || null,
         contactPerson: contactPerson || null,
+        ...discountFields(quoteDiscount, quoteDiscountReason),
         items: valid.map((i) => ({
           id: i.id || 0,
           itemTypeId: i.itemTypeId || null,
@@ -125,6 +132,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
           unit: i.unit,
           unitPrice: Number(i.unitPrice) || 0,
           imagePath: i.imagePath || null,
+          ...discountFields(i.discountText, i.discountReason),
         })),
       });
       // Upload any files staged before the record had an id (no-op in edit
@@ -228,7 +236,11 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
               </div>
             </div></section>
 
+            {/* Photo + item type + description + qty + unit + price + amount +
+                actions need ~1000px; below that the cards read better than a
+                squeezed table (tablets included). */}
             <LineItemsEditor companyId={companyId}
+              narrowBreakpoint={1000}
               showImage
               onUploadImage={async file => (await uploadQuoteLineImage(companyId, file)).data.url}
               onImageBusyChange={delta => setImageUploads(count => Math.max(0, count + delta))}
@@ -241,15 +253,24 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
               canCreateItemType={canCreateItemType}
               onAddItemType={() => setShowAddItemType(true)}
               showUnitPrice
+              showDiscount
               getRate={getRate}
               itemsLabel="Items"
               itemsHint="unit price is required per line and remembered for later billing"
             />
 
             <div style={s.totals}>
-              <div style={s.tRow}><span>Subtotal</span><span>Rs {subtotal.toLocaleString()}</span></div>
-              <div style={s.tRow}><span>GST @ {gstRate || 0}%</span><span>Rs {gstAmount.toLocaleString()}</span></div>
-              <div style={{ ...s.tRow, ...s.grand }}><span>Grand Total</span><span>Rs {grandTotal.toLocaleString()}</span></div>
+              <div style={s.tRow}><span>Subtotal</span><span style={s.tAmt}>Rs {money(totals.subtotal)}</span></div>
+              <div style={s.discRow}>
+                <label htmlFor="quote-discount" style={s.discLabel}>Discount <span style={s.opt}>(whole quote)</span></label>
+                <input id="quote-discount" style={{ ...s.discInput, ...(totals.error ? s.inputError : null) }} value={quoteDiscount} onChange={(e) => setQuoteDiscount(e.target.value)} placeholder="5% or 500" />
+                <span style={totals.error ? s.discErr : s.tAmt}>{totals.error || (totals.discount ? `− Rs ${money(totals.discount)}` : "—")}</span>
+              </div>
+              {String(quoteDiscount).trim() !== "" && (
+                <input aria-label="Quote discount reason" style={{ ...s.input, marginTop: "0.35rem" }} value={quoteDiscountReason} maxLength={200} onChange={(e) => setQuoteDiscountReason(e.target.value)} placeholder="Reason (optional), e.g. bulk order" />
+              )}
+              <div style={s.tRow}><span>GST @ {gstRate || 0}%{totals.discount ? ` on Rs ${money(totals.taxable)}` : ""}</span><span style={s.tAmt}>Rs {money(totals.gstAmount)}</span></div>
+              <div style={{ ...s.tRow, ...s.grand }}><span>Grand Total</span><span style={s.tAmt}>Rs {money(totals.grandTotal)}</span></div>
             </div>
 
             <DocumentNotesEditor value={notes} onChange={setNotes} label="Notes / Terms (optional)" />
@@ -314,8 +335,14 @@ const s = {
   hint: { fontSize: "0.7rem", color: colors.teal, marginTop: 2, fontWeight: 600 },
   del: { display: "grid", placeItems: "center", padding: "0.4rem", borderRadius: 8, border: `1px solid ${colors.danger}25`, backgroundColor: colors.dangerLight, color: colors.danger, cursor: "pointer", margin: "0 auto" },
   addBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.3rem", marginTop: "0.6rem", padding: "0.4rem 0.9rem", borderRadius: 8, border: "none", backgroundColor: `${colors.teal}14`, color: colors.teal, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" },
-  totals: { marginTop: "1rem", marginLeft: "auto", width: 280 },
-  tRow: { display: "flex", justifyContent: "space-between", padding: "0.25rem 0", fontSize: "0.9rem", color: colors.textSecondary },
+  totals: { marginTop: "1rem", marginLeft: "auto", width: "100%", maxWidth: 380, boxSizing: "border-box" },
+  tAmt: { whiteSpace: "nowrap", textAlign: "right" },
+  discRow: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.3rem 0", fontSize: "0.9rem", color: colors.textSecondary },
+  discLabel: { flex: "1 1 auto", minWidth: 0 },
+  discInput: { width: 110, flex: "0 0 110px", padding: "0.45rem 0.6rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.88rem", backgroundColor: colors.inputBg, color: "#1a2332", outline: "none", boxSizing: "border-box", textAlign: "right" },
+  discErr: { whiteSpace: "nowrap", color: colors.danger, fontSize: "0.8rem", fontWeight: 600 },
+  inputError: { borderColor: colors.danger, background: colors.dangerLight },
+  tRow: { display: "flex", justifyContent: "space-between", gap: "0.75rem", padding: "0.25rem 0", fontSize: "0.9rem", color: colors.textSecondary },
   grand: { borderTop: "2px solid #0d47a1", marginTop: 4, paddingTop: 8, fontWeight: 800, fontSize: "1rem", color: "#0d47a1" },
   // Mobile stacked-card line items (rendered below 760px instead of the table).
   mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },

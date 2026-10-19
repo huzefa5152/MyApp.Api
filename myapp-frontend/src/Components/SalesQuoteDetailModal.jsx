@@ -1,5 +1,7 @@
+import { useEffect, useState } from "react";
 import { MdClose, MdPrint, MdRequestQuote } from "react-icons/md";
 import RichText from "./RichText";
+import { discountNote } from "../utils/quoteDiscount";
 import { formStyles, modalSizes } from "../theme";
 import AttachmentManager from "./AttachmentManager";
 
@@ -23,7 +25,17 @@ const Meta = ({ label, value }) => (
   </div>
 );
 
+// Below this the six-column table squeezes the description to a word per line
+// and cuts the amount, so each line becomes a card.
+const NARROW = 640;
+
 export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPrint, onClose }) {
+  const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < NARROW);
+  useEffect(() => {
+    const onResize = () => setIsNarrow(window.innerWidth < NARROW);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
   if (!quote) return null;
   const items = quote.items || [];
   return (
@@ -53,6 +65,26 @@ export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPr
           )}
 
           <div style={st.sectionTitle}>Items ({items.length})</div>
+          {isNarrow ? (
+            <div style={st.cards}>
+              {items.map((i, idx) => (
+                <div key={i.id ?? idx} style={st.card}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                    <span style={st.cardNum}>{idx + 1}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {i.imagePath && <img src={i.imagePath} alt={`Photo for line ${idx + 1}`} style={{ display: "block", maxWidth: 72, maxHeight: 72, objectFit: "contain", marginBottom: 6 }} />}
+                      <span style={st.desc}><RichText text={i.description} /></span>
+                      {i.discountAmount > 0 && <div style={st.discNote}>{discountNote(i.discountValue, i.discountIsPercent, i.discountAmount, i.discountReason)}</div>}
+                    </div>
+                  </div>
+                  <div style={st.cardFoot}>
+                    <span>{Number(i.quantity).toLocaleString()} {i.unit} × {money(i.unitPrice)}</span>
+                    <b style={{ whiteSpace: "nowrap", color: colors.textPrimary }}>{money(i.lineTotal)}</b>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
           <div data-admin-table-region="" style={st.tableWrap}>
             <table style={st.table}>
               <thead>
@@ -69,7 +101,7 @@ export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPr
                 {items.map((i, idx) => (
                   <tr key={i.id ?? idx}>
                     <td style={{ ...st.td, textAlign: "center", color: colors.textSecondary }}>{idx + 1}</td>
-                    <td style={st.td}>{i.imagePath && <img src={i.imagePath} alt={`Photo for line ${idx + 1}`} style={{ display: "block", maxWidth: 72, maxHeight: 72, objectFit: "contain", marginBottom: 6 }} />}<span style={st.desc}><RichText text={i.description} /></span></td>
+                    <td style={st.td}>{i.imagePath && <img src={i.imagePath} alt={`Photo for line ${idx + 1}`} style={{ display: "block", maxWidth: 72, maxHeight: 72, objectFit: "contain", marginBottom: 6 }} />}<span style={st.desc}><RichText text={i.description} /></span>{i.discountAmount > 0 && <div style={st.discNote}>{discountNote(i.discountValue, i.discountIsPercent, i.discountAmount, i.discountReason)}</div>}</td>
                     <td style={{ ...st.td, textAlign: "right" }}>{Number(i.quantity).toLocaleString()}</td>
                     <td style={st.td}>{i.unit}</td>
                     <td style={{ ...st.td, textAlign: "right" }}>{money(i.unitPrice)}</td>
@@ -79,9 +111,16 @@ export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPr
               </tbody>
             </table>
           </div>
+          )}
 
           <div style={st.totals}>
             <div style={st.tRow}><span>Subtotal</span><span>{money(quote.subtotal)}</span></div>
+            {quote.discountAmount > 0 && (
+              <div style={st.tRow}>
+                <span>Discount{quote.discountIsPercent ? ` (${quote.discountValue}%)` : ""}{quote.discountReason ? ` — ${quote.discountReason}` : ""}</span>
+                <span style={{ whiteSpace: "nowrap" }}>− {money(quote.discountAmount)}</span>
+              </div>
+            )}
             <div style={st.tRow}><span>GST @ {quote.gstRate}%</span><span>{money(quote.gstAmount)}</span></div>
             <div style={{ ...st.tRow, ...st.grand }}><span>Grand Total</span><span>{money(quote.grandTotal)}</span></div>
           </div>
@@ -127,8 +166,13 @@ const st = {
   th: { textAlign: "left", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.02em", fontWeight: 700, color: colors.textSecondary, padding: "0.5rem 0.5rem", borderBottom: `2px solid ${colors.cardBorder}`, whiteSpace: "nowrap", background: "#fafbfc", position: "sticky", top: 0 },
   td: { padding: "0.4rem 0.5rem", verticalAlign: "middle", borderBottom: `1px solid ${colors.cardBorder}`, fontSize: "0.88rem", color: colors.textPrimary },
   desc: { whiteSpace: "pre-wrap" },
+  cards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
+  card: { border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.65rem 0.75rem", background: "#fff" },
+  cardNum: { flex: "0 0 auto", width: 24, height: 24, borderRadius: 7, background: "#f0f3f8", color: colors.textSecondary, display: "grid", placeItems: "center", fontSize: "0.78rem", fontWeight: 700 },
+  cardFoot: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginTop: "0.5rem", paddingTop: "0.45rem", borderTop: `1px dashed ${colors.cardBorder}`, fontSize: "0.85rem", color: colors.textSecondary },
+  discNote: { marginTop: 4, fontSize: "0.78rem", fontWeight: 600, color: "#00897b" },
   totals: { marginTop: "1rem", marginLeft: "auto", width: 280 },
-  tRow: { display: "flex", justifyContent: "space-between", padding: "0.25rem 0", fontSize: "0.9rem", color: colors.textSecondary },
+  tRow: { display: "flex", justifyContent: "space-between", gap: "0.75rem", padding: "0.25rem 0", fontSize: "0.9rem", color: colors.textSecondary },
   grand: { borderTop: `2px solid ${colors.blue}`, marginTop: 4, paddingTop: 8, fontWeight: 800, fontSize: "1rem", color: colors.blue },
   notes: { fontSize: "0.86rem", color: colors.textPrimary, whiteSpace: "pre-wrap", background: "#fafbfc", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, padding: "0.6rem 0.8rem" },
 };

@@ -190,12 +190,12 @@ These are C# property names from `DTOs/PrintDtos.cs`, retained exactly to avoid 
 
 ### PrintQuoteDto
 
-`CompanyBrandName` (string), `CompanyLogoPath` (string?), `CompanyAddress` (string?), `CompanyPhone` (string?), `CompanyNTN` (string?), `CompanySTRN` (string?), `QuoteNumber` (int), `Date` (DateTime), `ValidUntil` (DateTime?), `CustomerEnquiryRef` (string?), `EnquiryDate` (DateTime?), `ContactPerson` (string?), `ClientName` (string), `ClientAddress` (string?), `ClientNTN` (string?), `ClientSTRN` (string?), `Subtotal` (decimal), `GSTRate` (decimal), `GSTAmount` (decimal), `GrandTotal` (decimal), `AmountInWords` (string), `Notes` (string?), `Items` (List<PrintQuoteItemDto>)
+`CompanyBrandName` (string), `CompanyLogoPath` (string?), `CompanyAddress` (string?), `CompanyPhone` (string?), `CompanyNTN` (string?), `CompanySTRN` (string?), `QuoteNumber` (int), `Date` (DateTime), `ValidUntil` (DateTime?), `CustomerEnquiryRef` (string?), `EnquiryDate` (DateTime?), `ContactPerson` (string?), `ClientName` (string), `ClientAddress` (string?), `ClientNTN` (string?), `ClientSTRN` (string?), `Subtotal` (decimal, net of line discounts), `DiscountAmount` (decimal, whole-quote discount), `DiscountValue` (decimal), `DiscountIsPercent` (bool), `DiscountPercentLabel` (string, "10%" or ""), `DiscountReason` (string?), `AmountAfterDiscount` (decimal), `GSTRate` (decimal), `GSTAmount` (decimal, on AmountAfterDiscount), `GrandTotal` (decimal), `AmountInWords` (string), `Notes` (string?), `Items` (List<PrintQuoteItemDto>)
 
 
 ### PrintQuoteItemDto
 
-`SNo` (int), `ItemTypeName` (string), `Description` (string), `Quantity` (decimal), `Uom` (string), `UnitPrice` (decimal), `LineTotal` (decimal)
+`SNo` (int), `ItemTypeName` (string), `Description` (string), `Quantity` (decimal), `Uom` (string), `UnitPrice` (decimal), `LineTotal` (decimal, net of the line discount), `GrossAmount` (decimal), `DiscountAmount` (decimal), `DiscountReason` (string?), `DiscountNote` (string?, e.g. "Less 10% (Rs 4,100): reason")
 
 
 ### PrintOrderDto
