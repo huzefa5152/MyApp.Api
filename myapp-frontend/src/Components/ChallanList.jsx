@@ -157,6 +157,12 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onC
                       <span style={{ ...styles.statusBadge, backgroundColor: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>
                         {partlyBilled ? "Partially billed" : restOf ? `${c.status} · rest of #${c.challanNumber}` : c.status === "Invoiced" ? "Billed" : c.status}
                       </span>
+                      {/* Which bill it went onto. */}
+                      {c.invoiceNumber != null && (
+                        <span style={{ fontSize: "0.72rem", color: "#5f6d7e", whiteSpace: "nowrap" }}>
+                          Bill #{c.invoiceNumber}
+                        </span>
+                      )}
                     </div>
                   </div>
 

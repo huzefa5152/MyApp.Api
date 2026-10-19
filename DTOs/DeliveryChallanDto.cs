@@ -27,6 +27,9 @@ namespace MyApp.Api.DTOs
         public string? Notes { get; set; }
         public string Status { get; set; } = "Pending";
         public int? InvoiceId { get; set; }
+        /// <summary>Number of the bill this challan was billed on, so the
+        /// challan can say where it went. Null until it is billed.</summary>
+        public int? InvoiceNumber { get; set; }
         /// <summary>
         /// Set when this challan fulfils a Sales Order (raised via
         /// "Create Challan from Order"). Null for ad-hoc challans. Each line's

@@ -181,6 +181,7 @@ namespace MyApp.Api.Services.Implementations
                 Notes = dc.Notes,
                 Status = dc.Status,
                 InvoiceId = dc.InvoiceId,
+                InvoiceNumber = dc.Invoice?.InvoiceNumber,
                 InvoiceFbrStatus = dc.Invoice?.FbrStatus,
                 Version = DeliveryVersion(dc),
                 IsEditable = IsEditable(dc),
