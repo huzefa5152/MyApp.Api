@@ -4,7 +4,9 @@ using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 using MyApp.Api.Models;
+using MyApp.Api.Models.Accounting;
 using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Services.Implementations
@@ -38,15 +40,18 @@ namespace MyApp.Api.Services.Implementations
         private readonly AppDbContext _context;
         private readonly IPermissionService _permissions;
         private readonly IDivisionAccessGuard _divisionAccess;
+        private readonly IGeneralLedgerService _ledger;
 
         public DashboardService(
             AppDbContext context,
             IPermissionService permissions,
-            IDivisionAccessGuard divisionAccess)
+            IDivisionAccessGuard divisionAccess,
+            IGeneralLedgerService ledger)
         {
             _context = context;
             _permissions = permissions;
             _divisionAccess = divisionAccess;
+            _ledger = ledger;
         }
 
         public async Task<DashboardKpisResponse> GetKpisAsync(
@@ -110,6 +115,24 @@ namespace MyApp.Api.Services.Implementations
             if (canPurchases)  response.Purchases  = await ComputePurchasesAsync(companyId, period, divScope);
             if (canFbr)        response.Fbr        = await ComputeFbrAsync(companyId, period, divScope);
             if (canInventory)  response.Inventory  = await ComputeInventoryAsync(companyId, divScope);
+
+            // Balances as at today. The aging is the aged reports' own builder,
+            // so the dashboard and the Receivable / Payable Aging report cannot
+            // differ - but it has no division filter, so a division-restricted
+            // caller gets neither block (fail closed) rather than balances of
+            // divisions they cannot see.
+            if (divScope == null)
+            {
+                if (canSales)
+                    response.Receivables = ToBalances(await _ledger.GetAgedReceivablesAsync(companyId));
+                if (canPurchases)
+                    response.Payables = ToBalances(await _ledger.GetAgedPayablesAsync(companyId));
+            }
+            if (canHero)
+                response.Cash = await ComputeCashAsync(companyId, period, canSales, canPurchases, divScope);
+            if (canSales)
+                response.Work = await ComputeWorkAsync(companyId, divScope,
+                    perms.Contains("salesorders.list.view"), perms.Contains("salesquotes.list.view"));
 
             return response;
         }
@@ -748,6 +771,127 @@ namespace MyApp.Api.Services.Implementations
                 TopItemsByMovement = topItems,
                 RecentMovements = recentMovements,
             };
+        }
+
+        // ── Balances / cash / open work ─────────────────────────────────
+
+        private static DashboardBalancesKpis ToBalances(AgedReportDto aged)
+        {
+            static decimal Overdue(AgedPartyRowDto r) => r.Days1To30 + r.Days31To60 + r.Days61To90 + r.Over90;
+            return new DashboardBalancesKpis
+            {
+                AsOf = aged.AsOf,
+                Total = aged.Total,
+                Overdue = aged.Days1To30 + aged.Days31To60 + aged.Days61To90 + aged.Over90,
+                Over90 = aged.Over90,
+                PartyCount = aged.Rows.Count,
+                OverduePartyCount = aged.Rows.Count(r => Overdue(r) > 0m),
+                Top = aged.Rows.OrderByDescending(r => r.Total).Take(6).Select(r => new DashboardBalanceRow
+                {
+                    Id = r.PartyId,
+                    Name = r.Name,
+                    Total = r.Total,
+                    Overdue = Overdue(r),
+                    OpenDocuments = r.OpenDocuments,
+                }).ToList(),
+            };
+        }
+
+        private async Task<DashboardCashKpis> ComputeCashAsync(int companyId, DashboardPeriod period,
+            bool canSales, bool canPurchases, HashSet<int>? divScope)
+        {
+            // The registers' rule: a voided or bounced document moved nothing.
+            async Task<Dictionary<PaymentDirection, (decimal Total, int Count)>> SumAsync(DateTime? from, DateTime? to)
+            {
+                var q = _context.Payments.AsNoTracking()
+                    .Where(p => p.CompanyId == companyId && !p.IsCancelled && p.ChequeStatus != ChequeStatus.Bounced);
+                if (divScope != null) q = q.Where(p => p.DivisionId == null || divScope.Contains(p.DivisionId.Value));
+                if (from.HasValue) q = q.Where(p => p.Date >= from.Value);
+                if (to.HasValue) q = q.Where(p => p.Date < to.Value);
+                return (await q.GroupBy(p => p.Direction)
+                        .Select(g => new { g.Key, Total = g.Sum(x => x.Amount), Count = g.Count() })
+                        .ToListAsync())
+                    .ToDictionary(x => x.Key, x => (x.Total, x.Count));
+            }
+
+            var now = await SumAsync(period.From, period.To);
+            var prev = period.PreviousFrom.HasValue ? await SumAsync(period.PreviousFrom, period.PreviousTo) : null;
+            var cash = new DashboardCashKpis { HasCollections = canSales, HasPayments = canPurchases };
+            if (canSales)
+            {
+                var r = now.GetValueOrDefault(PaymentDirection.Receipt);
+                cash.Collections = r.Total;
+                cash.CollectionCount = r.Count;
+                cash.CollectionsPrev = prev?.GetValueOrDefault(PaymentDirection.Receipt).Total;
+            }
+            if (canPurchases)
+            {
+                var p = now.GetValueOrDefault(PaymentDirection.Payment);
+                cash.Payments = p.Total;
+                cash.PaymentCount = p.Count;
+                cash.PaymentsPrev = prev?.GetValueOrDefault(PaymentDirection.Payment).Total;
+            }
+            return cash;
+        }
+
+        private async Task<DashboardWorkKpis> ComputeWorkAsync(int companyId,
+            HashSet<int>? divScope, bool canOrders, bool canQuotes)
+        {
+            var challans = _context.DeliveryChallans.AsNoTracking()
+                .Where(dc => dc.CompanyId == companyId && !dc.IsDemo && dc.InvoiceId == null);
+            if (divScope != null) challans = challans.Where(dc => dc.DivisionId == null || divScope.Contains(dc.DivisionId.Value));
+
+            // Billable now - the bill form's own rule (ChallanBillingRules).
+            var awaiting = await challans
+                .Where(dc => ChallanBillingRules.Statuses.Contains(dc.Status))
+                .GroupBy(_ => 1)
+                .Select(g => new { Count = g.Count(), Oldest = g.Min(dc => dc.DeliveryDate ?? dc.CreatedAt) })
+                .FirstOrDefaultAsync();
+            var work = new DashboardWorkKpis
+            {
+                ChallansAwaitingBilling = awaiting?.Count ?? 0,
+                OldestAwaitingBillingDate = awaiting?.Oldest,
+                ChallansSetupRequired = await challans.CountAsync(dc => dc.Status == "Setup Required"),
+            };
+
+            if (canOrders)
+            {
+                // An order closes itself when every line is delivered, so a
+                // stored "Open" is an order still to deliver (or reopened).
+                var orders = _context.SalesOrders.AsNoTracking()
+                    .Where(o => o.CompanyId == companyId && o.Status == "Open");
+                if (divScope != null) orders = orders.Where(o => o.DivisionId == null || divScope.Contains(o.DivisionId.Value));
+                var open = await orders.GroupBy(_ => 1)
+                    .Select(g => new { Count = g.Count(), Oldest = g.Min(o => o.OrderDate) })
+                    .FirstOrDefaultAsync();
+                work.OpenSalesOrders = open?.Count ?? 0;
+                work.OldestOpenOrderDate = open?.Oldest;
+            }
+
+            if (canQuotes)
+            {
+                // SalesQuoteService.DeriveStatus: Accepted once an order
+                // references the quote, Expired past ValidUntil, else Active.
+                var today = DateTime.UtcNow.Date;
+                var soon = today.AddDays(7);
+                var quotes = _context.SalesQuotes.AsNoTracking()
+                    .Where(q => q.CompanyId == companyId && q.ConvertedToSalesOrderId == null
+                             && !_context.SalesOrders.Any(o => o.SalesQuoteId == q.Id)
+                             && (q.ValidUntil == null || q.ValidUntil.Value.Date >= today));
+                if (divScope != null) quotes = quotes.Where(q => q.DivisionId == null || divScope.Contains(q.DivisionId.Value));
+                var active = await quotes.GroupBy(_ => 1)
+                    .Select(g => new
+                    {
+                        Count = g.Count(),
+                        Value = g.Sum(q => q.GrandTotal),
+                        Soon = g.Count(q => q.ValidUntil != null && q.ValidUntil.Value.Date <= soon),
+                    })
+                    .FirstOrDefaultAsync();
+                work.ActiveQuotes = active?.Count ?? 0;
+                work.ActiveQuotesValue = active?.Value ?? 0m;
+                work.QuotesExpiringSoon = active?.Soon ?? 0;
+            }
+            return work;
         }
 
         // ── Helpers ─────────────────────────────────────────────────────

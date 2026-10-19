@@ -2,6 +2,7 @@ import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/
 import CardActions from "../Components/CardActions";
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
+import useQueryAction from "../hooks/useQueryAction";
 import { MdShoppingCart, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdReceipt, MdClose, MdPayments, MdAssignment, MdPrint, MdPictureAsPdf, MdLocalShipping, MdCopyAll } from "react-icons/md";
 import { getPurchaseBillsByCompanyPaged, deletePurchaseBill, getPurchaseBillPrintData } from "../api/purchaseBillApi";
 import { mergeTemplate } from "../utils/templateEngine";
@@ -97,6 +98,10 @@ export default function PurchaseBillsPage() {
   // An empty scope hides the picker and blocks Print/PDF.
   const tplPicker = usePrintTemplates("PurchaseBill", { divisionId: divisionFilter });
   const [showForm, setShowForm] = useState(false);
+  // Dashboard quick action: ?new=1 opens New Purchase Bill (the New button's own reset).
+  useQueryAction("new", !!selectedCompany && canCreate, () => {
+    setEditingId(null); setPrefillFromInvoiceId(null); setPrefillItems(null); setPrefillSourceLabel(null); setViewOnly(false); setShowForm(true);
+  });
   const [editingId, setEditingId] = useState(null);
   const [viewOnly, setViewOnly] = useState(false);
   // { contactId, documentId } for the payment shortcut; null when closed.

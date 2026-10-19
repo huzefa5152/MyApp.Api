@@ -24,6 +24,7 @@ import DivisionSelect from "../Components/DivisionSelect";
 import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
 import { defaultReceiptTemplate, defaultPaymentTemplate } from "../utils/accountingDocTemplates";
+import useQueryAction from "../hooks/useQueryAction";
 
 const fmtMoney = (n) =>
   Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -78,6 +79,8 @@ export default function PaymentsPage({ mode = "receipts" }) {
   const [exportingId, setExportingId] = useState(null);   // PDF export in flight
 
   const companyId = selectedCompany?.id;
+  // Dashboard quick action: ?new=1 opens Record Receipt / Record Payment.
+  useQueryAction("new", !!companyId && canCreate, () => setShowForm(true));
 
   const fetchRows = useCallback(async (pg) => {
     if (!companyId) { setRows([]); return; }

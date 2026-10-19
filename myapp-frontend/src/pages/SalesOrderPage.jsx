@@ -1,6 +1,7 @@
 import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import useQueryAction from "../hooks/useQueryAction";
 import { MdAssignment, MdAdd, MdBusiness, MdSearch, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdLocalShipping, MdUploadFile, MdVisibility, MdReceiptLong, MdLink, MdCopyAll } from "react-icons/md";
 import SalesOrderForm from "../Components/SalesOrderForm";
 import CopyDocumentModal from "../Components/CopyDocumentModal";
@@ -69,6 +70,8 @@ export default function SalesOrderPage() {
   const [showImport, setShowImport] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  // Dashboard quick action: ?new=1 opens New Sales Order.
+  useQueryAction("new", !!selectedCompany && canCreate, () => { setEditOrder(null); setShowForm(true); });
   const [editOrder, setEditOrder] = useState(null);
   const [deliverOrder, setDeliverOrder] = useState(null);
   const [attachOrder, setAttachOrder] = useState(null);

@@ -288,6 +288,9 @@ forbidden_for = {
     "admin": set(),       # seed admin bypasses
 }
 endpoints_to_test = [
+    # Both dashboards carry balances, top customers/suppliers and money moved.
+    ("GET",  "/api/dashboard/kpis?companyId={cid}&period=all-time"),
+    ("GET",  "/api/accounting/summary/company/{cid}"),
     ("GET",  "/api/companies/{cid}"),
     ("GET",  "/api/companies/{cid}".replace("{cid}", "{cid}")),  # same — kept for clarity
     ("GET",  "/api/clients/company/{cid}"),

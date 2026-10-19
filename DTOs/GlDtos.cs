@@ -191,5 +191,25 @@ namespace MyApp.Api.DTOs
 
         public List<RecentMoneyDocDto> RecentReceipts { get; set; } = new();
         public List<RecentMoneyDocDto> RecentPayments { get; set; } = new();
+
+        /// <summary>The largest balances behind <see cref="Receivables"/> /
+        /// <see cref="Payables"/> - the aged reports' own rows, largest first.</summary>
+        public List<AgedPartyRowDto> TopReceivables { get; set; } = new();
+        public List<AgedPartyRowDto> TopPayables { get; set; } = new();
+
+        /// <summary>Income, expenses and net profit for each of the twelve
+        /// months ending with the period's last day - the same journal-line
+        /// sum as <see cref="Income"/> / <see cref="Expenses"/>, bucketed by the
+        /// entry's month. Empty until the GL is enabled.</summary>
+        public List<SummaryMonthDto> ProfitTrend { get; set; } = new();
+    }
+
+    public class SummaryMonthDto
+    {
+        public DateTime From { get; set; }
+        public DateTime To { get; set; }
+        public decimal Income { get; set; }
+        public decimal Expenses { get; set; }
+        public decimal NetProfit { get; set; }
     }
 }

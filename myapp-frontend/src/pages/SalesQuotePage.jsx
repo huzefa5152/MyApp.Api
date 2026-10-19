@@ -28,6 +28,7 @@ import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
 import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
+import useQueryAction from "../hooks/useQueryAction";
 
 const colors = { blue: "#0d47a1", teal: "#00897b", textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBorder: "#d0d7e2" };
 
@@ -57,6 +58,8 @@ export default function SalesQuotePage() {
   const [viewQuote, setViewQuote] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  // Dashboard quick action: ?new=1 opens New Sales Quote.
+  useQueryAction("new", !!selectedCompany && canCreate, () => { setEditQuote(null); setShowForm(true); });
   const [showImport, setShowImport] = useState(false);
   const [editQuote, setEditQuote] = useState(null);
   const [page, setPage] = useState(1);

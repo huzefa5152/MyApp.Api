@@ -397,6 +397,14 @@ check(S, "dana TotalSales == 590 (North only)", dana_sales == 590, f"got {dana_s
 status, kpi_e = request("GET", f"/api/dashboard/kpis?companyId={cid}&period=all-time", token=erik)
 erik_sales = ((kpi_e or {}).get("hero") or {}).get("totalSales")
 check(S, "erik TotalSales == 1770 (both)", erik_sales == 1770, f"got {erik_sales}")
+# The dashboard's balances come from the aging, which has no division filter,
+# so a division-restricted caller gets none rather than other divisions' money.
+check(S, "dana dashboard receivables withheld (aging is not division-scoped)",
+      (kpi_d or {}).get("receivables") is None, f"got {(kpi_d or {}).get('receivables')}")
+check(S, "dana dashboard payables withheld (aging is not division-scoped)",
+      (kpi_d or {}).get("payables") is None, f"got {(kpi_d or {}).get('payables')}")
+check(S, "erik dashboard receivables present (unrestricted)",
+      (kpi_e or {}).get("receivables") is not None, "receivables missing")
 
 status, _ = request("GET", f"/api/stock/company/{cid}/onhand", token=dana)
 status_check(S, "dana stock on-hand (scoped SQL) → 200", status, 200)

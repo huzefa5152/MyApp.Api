@@ -1,105 +1,87 @@
 // src/pages/AccountingDashboardPage.jsx
 //
-// Accounting overview — cash & liquidity, working capital, profitability
-// and cheque exposure on one screen.
+// Dashboards → Accounting — the financial control centre: profit and its
+// trend, cash, what customers owe, what is owed to suppliers and the ledger's
+// health, for one company and one period.
 //
 // Data:
-//   • GET /accounting/summary/company/{id}?from&to  → AccountingSummaryDto
-//     (gated by accounting.dashboard.view — same permission as this page)
-//   • GET /accounting/gl/company/{id}/status        → GlStatusDto
-//     (gated by accounting.coa.view on the backend, so we only fetch it
-//     when the caller holds that key — a dashboard-only role must not
-//     trigger a 403 on page load)
-//   • POST /accounting/gl/company/{id}/enable|rebuild (accounting.gl.manage)
-//     — both backfill the whole ledger and can take a minute, so the
-//     buttons show a spinner and stay disabled while in flight.
+//   • GET /accounting/summary/company/{id}?from&to → AccountingSummaryDto
+//     (accounting.dashboard.view — the same key as this page). One read for
+//     the whole screen, including twelve months of income and expenses.
+//   • GET /accounting/gl/company/{id}/status → GlStatusDto, fetched only for a
+//     caller holding accounting.coa.view (the endpoint's own key), so a
+//     dashboard-only role never triggers a 403 on load.
+//   • POST /accounting/gl/company/{id}/enable|rebuild (accounting.gl.manage).
 //
-// Layout (mobile-first, no media queries):
-//   • Row 1  Cash & liquidity  — Cash & Bank (expandable per-account),
-//            Receipts, Payments, Net cash flow
-//   • Row 2  Working capital   — Receivables / Payables aging bars, Net position
-//   • Row 3  Profitability     — Income / Expenses / Net profit (GL only)
-//   • Row 4  Cheques + recents — PDC in/out, last 5 receipts / payments
-//   • Footer GL health         — entry count, Σ Dr = Σ Cr, lock date, Rebuild
+// What each figure IS, said on screen:
+//   • Profit, receipts and payments are for the selected period.
+//   • Cash & bank, receivables and payables are balances as at TODAY — the
+//     summary reads them that way whatever the period.
+//   • There is no gross profit here: this line posts no cost of goods sold,
+//     so "revenue less cost of sales" would only be revenue (the Gross Profit
+//     and Monthly Profit reports are blocked for the same reason).
 //
-// All grids use repeat(auto-fit, minmax(min(Npx, 100%), 1fr)) so they
-// collapse to a single column on phones. Money renders as "Rs. 1,234"
-// with negatives in parens. Long operator-supplied names line-clamp to
-// 2 lines (never nowrap-ellipsis). Interactive controls are ≥44px tall.
+// Tiles link to their report only for a caller holding accounting.reports.view.
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import {
-  MdBusiness, MdAccountBalanceWallet, MdReceiptLong, MdPayments, MdSwapVert,
-  MdTrendingUp, MdTrendingDown, MdAttachMoney, MdAccountBalance, MdExpandMore,
+  MdAccountBalance, MdAccountBalanceWallet, MdReceiptLong, MdPayments, MdSwapVert,
+  MdTrendingUp, MdTrendingDown, MdAttachMoney, MdExpandMore,
   MdCallReceived, MdCallMade, MdAutorenew, MdCheckCircle, MdErrorOutline,
-  MdLock, MdClose, MdCalendarToday,
+  MdLock, MdClose,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
-import { colors, dropdownStyles } from "../theme";
-import { MdChevronRight } from "react-icons/md";
 import { getAccountingSummary, getGlStatus, enableGl, rebuildGl } from "../api/accountingApi";
+import {
+  Hero, Section, Panel, HeadLink, Metric, MetricGrid, AgingBar, PartyTable, TrendChart,
+  Skeleton, ErrorBanner, fmtMoney, fmtDate, ymd, reportHref,
+} from "../Components/dashboard/CommandCenter";
 
-// ── Formatting helpers ───────────────────────────────────────────────
+// ── Period presets ───────────────────────────────────────────────────────
 
-/** "Rs. 1,234" — negatives in parens: "(Rs. 1,234)". */
-const fmtMoney = (v) => {
-  const n = Number(v || 0);
-  const abs = Math.abs(n).toLocaleString("en-PK", { maximumFractionDigits: 0 });
-  return n < 0 ? `(Rs. ${abs})` : `Rs. ${abs}`;
-};
-
-const fmtDate = (d) =>
-  d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
-
-const pad2 = (n) => String(n).padStart(2, "0");
-/** Local yyyy-MM-dd for <input type="date"> (avoids UTC off-by-one). */
-const toInputDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-
-const currentMonthRange = () => {
+function presetRange(code) {
   const now = new Date();
-  return {
-    from: toInputDate(new Date(now.getFullYear(), now.getMonth(), 1)),
-    to: toInputDate(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
-  };
-};
-
-// Aging buckets in display order — green (safe) → red (overdue).
-const AGING_BUCKETS = [
-  { key: "current",   label: "Current", color: "#2e7d32" },
-  { key: "days1To30", label: "1–30",    color: "#7cb342" },
-  { key: "days31To60", label: "31–60",  color: "#f9a825" },
-  { key: "days61To90", label: "61–90",  color: "#ef6c00" },
-  { key: "over90",    label: "90+",     color: "#c62828" },
+  const y = now.getFullYear(), m = now.getMonth();
+  switch (code) {
+    case "last-month": return { from: ymd(new Date(y, m - 1, 1)), to: ymd(new Date(y, m, 0)) };
+    case "this-quarter": { const q = Math.floor(m / 3) * 3; return { from: ymd(new Date(y, q, 1)), to: ymd(now) }; }
+    case "this-year": return { from: ymd(new Date(y, 0, 1)), to: ymd(now) };
+    case "last-year": return { from: ymd(new Date(y - 1, 0, 1)), to: ymd(new Date(y - 1, 11, 31)) };
+    case "this-month":
+    default: return { from: ymd(new Date(y, m, 1)), to: ymd(now) };
+  }
+}
+const PRESETS = [
+  { code: "this-month", label: "This month" },
+  { code: "last-month", label: "Last month" },
+  { code: "this-quarter", label: "This quarter" },
+  { code: "this-year", label: "This year" },
+  { code: "last-year", label: "Last year" },
+  { code: "custom", label: "Custom range" },
 ];
 
-// Line-clamp for user-supplied names — NEVER nowrap+ellipsis (see CLAUDE.md).
-const clamp2 = {
-  display: "-webkit-box",
-  WebkitLineClamp: 2,
-  WebkitBoxOrient: "vertical",
-  overflow: "hidden",
-};
+const pct = (v) => `${Number(v).toFixed(1)}%`;
 
 export default function AccountingDashboardPage() {
   const { companies, selectedCompany, setSelectedCompany } = useCompany();
   const { has, loading: permsLoading } = usePermissions();
   const confirm = useConfirm();
-  const navigate = useNavigate();
 
   const canView = has("accounting.dashboard.view");
   const canManageGl = has("accounting.gl.manage");
-  // /gl/status is gated by accounting.coa.view on the backend — don't call
-  // it (and don't render the GL-health footer) without that key.
   const canViewGlStatus = has("accounting.coa.view");
+  const canOpenReports = has("accounting.reports.view");
+  const canOpenReceipts = has("accounting.receipts.view");
+  const canOpenPayments = has("accounting.payments.view");
 
   const companyId = selectedCompany?.id;
 
-  // Draft dates live in the inputs; `period` only changes on Apply so we
-  // don't refetch on every keystroke of the date picker.
-  const [draft, setDraft] = useState(currentMonthRange);
+  // The preset applies at once; custom dates apply on Apply, so the date
+  // picker does not refetch on every keystroke.
+  const [preset, setPreset] = useState("this-month");
+  const [draft, setDraft] = useState(() => presetRange("this-month"));
   const [period, setPeriod] = useState(draft);
 
   const [summary, setSummary] = useState(null);
@@ -108,7 +90,6 @@ export default function AccountingDashboardPage() {
   const [error, setError] = useState(null);
   const [enabling, setEnabling] = useState(false);
   const [rebuilding, setRebuilding] = useState(false);
-  // GlEnableResultDto from the last enable/rebuild — shown as a banner.
   const [glResult, setGlResult] = useState(null);
 
   const load = useCallback(async () => {
@@ -118,14 +99,13 @@ export default function AccountingDashboardPage() {
     try {
       const [sumRes, statRes] = await Promise.all([
         getAccountingSummary(companyId, { from: period.from, to: period.to }),
-        // Status is optional decoration — swallow its failure so a perms
-        // hiccup there can't blank the whole dashboard.
+        // Status is decoration — its failure must not blank the dashboard.
         canViewGlStatus ? getGlStatus(companyId).catch(() => null) : Promise.resolve(null),
       ]);
       setSummary(sumRes.data);
       setGlStatus(statRes?.data ?? null);
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to load the accounting summary.");
+      setError(err.response?.data?.error || "The accounting summary could not be loaded.");
       setSummary(null);
       setGlStatus(null);
     } finally {
@@ -134,11 +114,29 @@ export default function AccountingDashboardPage() {
   }, [companyId, canView, canViewGlStatus, period]);
 
   useEffect(() => { load(); }, [load]);
-
-  // Stale enable/rebuild results belong to the previous company.
   useEffect(() => { setGlResult(null); }, [companyId]);
 
-  const applyPeriod = () => {
+  // Report link carrying the dashboard's own period. Null without permission.
+  const reportLink = useCallback(
+    (reportId, extra = {}) => canOpenReports
+      ? reportHref(reportId, { period: "custom", from: period.from, to: period.to, ...extra })
+      : null,
+    [canOpenReports, period]
+  );
+  // Balances shown here are as at today, so their reports open as at today.
+  const todayLink = useCallback(
+    (reportId, extra = {}) => canOpenReports ? reportHref(reportId, { period: "today", ...extra }) : null,
+    [canOpenReports]
+  );
+
+  const choosePreset = (code) => {
+    setPreset(code);
+    if (code === "custom") return;
+    const r = presetRange(code);
+    setDraft(r);
+    setPeriod(r);
+  };
+  const applyCustom = () => {
     if (!draft.from || !draft.to) { notify("Pick both From and To dates.", "error"); return; }
     if (new Date(draft.from) > new Date(draft.to)) { notify("From date must be on or before To date.", "error"); return; }
     setPeriod({ ...draft });
@@ -179,225 +177,53 @@ export default function AccountingDashboardPage() {
     }
   };
 
-  if (permsLoading) {
-    return <div style={st.empty}>Loading…</div>;
-  }
+  if (permsLoading) return <div className="cc"><Skeleton /></div>;
   if (!canView) {
-    return (
-      <div style={{ padding: "2rem", color: colors.textSecondary }}>
-        You don't have permission to view the accounting dashboard.
-      </div>
-    );
+    return <div className="cc"><p className="cc-empty" style={{ padding: "2rem" }}>You don't have permission to view the accounting dashboard.</p></div>;
   }
-
-  // Dashboard → report, carrying the dashboard's own period so the report opens
-  // on the numbers the card just showed. Without this the drill-down would
-  // silently re-scope to the report default and the figures would not match.
-  const canOpenReports = has("accounting.reports.view");
-  const reportLink = useCallback(
-    (reportId) => {
-      if (!canOpenReports) return null;
-      const qs = new URLSearchParams({ period: "custom", from: period.from, to: period.to });
-      return `/accounting/reports/${reportId}?${qs}`;
-    },
-    [canOpenReports, period]
-  );
-
-  const netCashFlow = summary ? Number(summary.receiptsTotal || 0) - Number(summary.paymentsTotal || 0) : 0;
-  const netPosition = summary ? Number(summary.receivables?.total || 0) - Number(summary.payables?.total || 0) : 0;
 
   return (
-    <div style={st.page}>
-      {/* Spinner keyframes for the enable/rebuild buttons. */}
+    <div className="cc">
       <style>{`@keyframes acctdash-spin { to { transform: rotate(360deg); } }`}</style>
-
-      {/* ── Header ──────────────────────────────────────────────────── */}
-      <div style={st.headerRow}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-          <span style={st.headerIcon}><MdAccountBalance size={24} /></span>
-          <div>
-            <h2 style={st.h2}>Accounting</h2>
-            <div style={st.subtitle}>Cash, receivables, payables &amp; profit at a glance</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Company selector — same mechanism as Receipts/Payments. */}
-      {companies.length > 0 && (
-        companies.length > 1 && (<div style={st.companyRow}>
-          <MdBusiness size={20} color={colors.blue} />
-          <select
-            style={dropdownStyles.base}
-            value={selectedCompany?.id || ""}
-            onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))}
-          >
+      <Hero
+        eyebrow="Accounting"
+        title="Financial control centre"
+        subtitle={summary
+          ? <>Profit for <strong>{fmtDate(summary.from)} – {fmtDate(summary.to)}</strong> · balances as at today</>
+          : "Profit, cash, receivables and payables from the general ledger"}
+      >
+        {companies.length > 1 && (
+          <select className="cc-hero-select" aria-label="Company" value={selectedCompany?.id || ""}
+            onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))}>
             {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
           </select>
-        </div>)
-      )}
+        )}
+        <select className="cc-hero-select" aria-label="Period" value={preset} onChange={(e) => choosePreset(e.target.value)}>
+          {PRESETS.map((p) => <option key={p.code} value={p.code}>{p.label}</option>)}
+        </select>
+        {preset === "custom" && (
+          <>
+            <input type="date" className="cc-hero-date" aria-label="From date" value={draft.from} max={draft.to || undefined}
+              onChange={(e) => setDraft((d) => ({ ...d, from: e.target.value }))} />
+            <input type="date" className="cc-hero-date" aria-label="To date" value={draft.to} min={draft.from || undefined}
+              onChange={(e) => setDraft((d) => ({ ...d, to: e.target.value }))} />
+            <button type="button" className="cc-hero-btn" onClick={applyCustom}>Apply</button>
+          </>
+        )}
+      </Hero>
 
-      {!companyId ? (
-        <div style={st.empty}>Select a company to view its accounting summary.</div>
-      ) : (
+      {!companyId && <p className="cc-empty">Select a company to view its accounting summary.</p>}
+      {error && <ErrorBanner message={error} onRetry={load} />}
+      {loading && !summary && <Skeleton rows={3} />}
+
+      {companyId && summary && (
         <>
-          {/* Period picker — from/to date inputs + Apply. Defaults to the
-              current month. Wraps to full-width controls on phones. */}
-          <div style={st.periodBar}>
-            <span style={st.periodLabel}><MdCalendarToday size={15} /> Period</span>
-            <input
-              type="date"
-              style={st.dateInput}
-              value={draft.from}
-              max={draft.to || undefined}
-              onChange={(e) => setDraft((d) => ({ ...d, from: e.target.value }))}
-              aria-label="From date"
-            />
-            <span style={{ color: colors.textSecondary }}>→</span>
-            <input
-              type="date"
-              style={st.dateInput}
-              value={draft.to}
-              min={draft.from || undefined}
-              onChange={(e) => setDraft((d) => ({ ...d, to: e.target.value }))}
-              aria-label="To date"
-            />
-            <button style={st.applyBtn} onClick={applyPeriod}>Apply</button>
-          </div>
-
-          {error && (
-            <div style={st.errorBanner}>
-              <MdErrorOutline size={18} style={{ flexShrink: 0 }} />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {loading && !summary && <div style={st.empty}>Loading accounting summary…</div>}
-
-          {summary && (
-            <>
-              {glResult && <GlResultBanner result={glResult} onDismiss={() => setGlResult(null)} />}
-
-              {/* GL-off callout — balances & profit need posting turned on. */}
-              {!summary.glEnabled && (
-                <GlOffCallout canManage={canManageGl} enabling={enabling} onEnable={handleEnable} />
-              )}
-
-              {/* ── Row 1 · Cash & liquidity ─────────────────────────── */}
-              <SectionLabel>Cash &amp; liquidity</SectionLabel>
-              <div style={st.kpiGrid}>
-                <CashCard
-                  total={summary.cashAndBankTotal}
-                  accounts={summary.cashAccounts || []}
-                  glEnabled={summary.glEnabled}
-                  to={reportLink("cash-bank-summary")}
-                  onOpen={navigate}
-                />
-                <MoneyCard
-                  label="Receipts (period)"
-                  icon={MdReceiptLong}
-                  accent={colors.success}
-                  value={fmtMoney(summary.receiptsTotal)}
-                  sub={`${summary.receiptCount || 0} receipt${summary.receiptCount === 1 ? "" : "s"}`}
-                  to={reportLink("receipts-register")}
-                  onOpen={navigate}
-                />
-                <MoneyCard
-                  label="Payments (period)"
-                  icon={MdPayments}
-                  accent={colors.blue}
-                  value={fmtMoney(summary.paymentsTotal)}
-                  sub={`${summary.paymentCount || 0} payment${summary.paymentCount === 1 ? "" : "s"}`}
-                  to={reportLink("payments-register")}
-                  onOpen={navigate}
-                />
-                <MoneyCard
-                  label="Net cash flow"
-                  icon={MdSwapVert}
-                  accent={netCashFlow >= 0 ? colors.success : colors.danger}
-                  value={fmtMoney(netCashFlow)}
-                  valueColor={netCashFlow >= 0 ? "#2e7d32" : colors.danger}
-                  sub="Receipts − payments"
-                  to={reportLink("cash-bank-summary")}
-                  onOpen={navigate}
-                />
-              </div>
-
-              {/* ── Row 2 · Working capital ──────────────────────────── */}
-              <SectionLabel>Working capital</SectionLabel>
-              <div style={st.kpiGrid}>
-                <AgingCard
-                  title="Receivables" icon={MdCallReceived} accent={colors.teal}
-                  data={summary.receivables} emptyText="Nothing outstanding from customers."
-                  to={reportLink("aged-receivables")} onOpen={navigate}
-                />
-                <AgingCard
-                  title="Payables" icon={MdCallMade} accent="#e65100"
-                  data={summary.payables} emptyText="Nothing owed to suppliers."
-                  to={reportLink("aged-payables")} onOpen={navigate}
-                />
-                <MoneyCard
-                  label="Net position"
-                  icon={MdAccountBalance}
-                  accent={netPosition >= 0 ? colors.success : colors.danger}
-                  value={fmtMoney(netPosition)}
-                  valueColor={netPosition >= 0 ? "#2e7d32" : colors.danger}
-                  sub="Receivables − payables"
-                  to={reportLink("aged-receivables")}
-                  onOpen={navigate}
-                />
-              </div>
-
-              {/* ── Row 3 · Profitability (GL figures — hidden until on) ─ */}
-              {summary.glEnabled && (
-                <>
-                  <SectionLabel>Profitability (period)</SectionLabel>
-                  <div style={st.kpiGrid}>
-                    <MoneyCard label="Income" icon={MdTrendingUp} accent={colors.success} value={fmtMoney(summary.income)} />
-                    <MoneyCard
-                      label="Expenses" icon={MdTrendingDown} accent={colors.danger}
-                      value={fmtMoney(summary.expenses)}
-                      to={reportLink("expenses")} onOpen={navigate}
-                    />
-                    <MoneyCard
-                      label="Net profit"
-                      icon={MdAttachMoney}
-                      accent={Number(summary.netProfit || 0) >= 0 ? colors.success : colors.danger}
-                      value={fmtMoney(summary.netProfit)}
-                      valueColor={Number(summary.netProfit || 0) >= 0 ? "#2e7d32" : colors.danger}
-                      sub="Income − expenses"
-                    />
-                  </div>
-                </>
-              )}
-
-              {/* ── Row 4 · Cheques + recent money movement ──────────── */}
-              <SectionLabel>Cheques &amp; recent activity</SectionLabel>
-              <div style={st.listGrid}>
-                <PdcCard
-                  title="Cheques in hand" icon={MdCallReceived} accent={colors.success} data={summary.pdcIn}
-                  to={reportLink("cheques-in-hand")} onOpen={navigate}
-                />
-                <PdcCard
-                  title="Cheques issued" icon={MdCallMade} accent={colors.blue} data={summary.pdcOut}
-                  to={reportLink("cheques-issued")} onOpen={navigate}
-                />
-                <RecentCard
-                  title="Recent receipts" accent={colors.success} rows={summary.recentReceipts || []}
-                  emptyText="No receipts in this period."
-                  onOpenRow={(r) => navigate(`/receipts?highlight=${r.id}`)}
-                />
-                <RecentCard
-                  title="Recent payments" accent={colors.blue} rows={summary.recentPayments || []}
-                  emptyText="No payments in this period."
-                  onOpenRow={(r) => navigate(`/payments?highlight=${r.id}`)}
-                />
-              </div>
-
-              {/* ── GL health footer ─────────────────────────────────── */}
-              {glStatus && glStatus.enabled && (
-                <GlHealthFooter status={glStatus} canManage={canManageGl} rebuilding={rebuilding} onRebuild={handleRebuild} />
-              )}
-            </>
+          {glResult && <GlResultBanner result={glResult} onDismiss={() => setGlResult(null)} />}
+          {!summary.glEnabled && <GlOffCallout canManage={canManageGl} enabling={enabling} onEnable={handleEnable} />}
+          <Dashboard summary={summary} reportLink={reportLink} todayLink={todayLink}
+            canOpenReports={canOpenReports} canOpenReceipts={canOpenReceipts} canOpenPayments={canOpenPayments} />
+          {summary.glEnabled && glStatus && (
+            <GlHealthFooter status={glStatus} canManage={canManageGl} rebuilding={rebuilding} onRebuild={handleRebuild} />
           )}
         </>
       )}
@@ -405,228 +231,209 @@ export default function AccountingDashboardPage() {
   );
 }
 
-// ── Building blocks ──────────────────────────────────────────────────
+function Dashboard({ summary, reportLink, todayLink, canOpenReports, canOpenReceipts, canOpenPayments }) {
+  const asAt = "As at today";
+  const income = Number(summary.income || 0);
+  const netProfit = Number(summary.netProfit || 0);
+  const netMargin = income > 0 ? (netProfit / income) * 100 : null;
+  const netCash = Number(summary.receiptsTotal || 0) - Number(summary.paymentsTotal || 0);
+  const rec = summary.receivables || {};
+  const pay = summary.payables || {};
+  const overdue = (b) => Number(b.days1To30 || 0) + Number(b.days31To60 || 0) + Number(b.days61To90 || 0) + Number(b.over90 || 0);
 
-function SectionLabel({ children }) {
-  return <div style={st.sectionLabel}>{children}</div>;
+  // Aging drill: "Not yet due" opens the whole aging; a late bucket opens the
+  // overdue worklist (the report's own filter).
+  const agingHref = (id) => (bucket) => todayLink(id, bucket === "current" ? {} : { status: "overdue" });
+
+  // Twelve months, each that month's income and expenses. A month opens its
+  // Profit & Loss.
+  const trend = (summary.profitTrend || []).map((r) => {
+    const d = new Date(r.from);
+    return {
+      label: d.toLocaleDateString("en-GB", { month: "short", year: "numeric" }),
+      short: d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" }),
+      income: r.income, expenses: r.expenses, netProfit: r.netProfit,
+      to: canOpenReports ? reportHref("profit-loss", { period: "custom", from: ymd(r.from), to: ymd(r.to) }) : null,
+    };
+  });
+
+  return (
+    <>
+      {/* ── Profitability — the period ───────────────────────────────── */}
+      <Section title="Profitability" kind="Selected period">
+        <MetricGrid>
+          <Metric label="Income" icon={MdTrendingUp} accent="#0d47a1" value={fmtMoney(income)}
+            hint="Income accounts in the ledger for the period — sales net of credit notes, excluding sales tax."
+            to={reportLink("profit-loss")} />
+          <Metric label="Expenses" icon={MdTrendingDown} accent="#c62828" value={fmtMoney(summary.expenses)}
+            sub="Purchases expensed and running costs"
+            hint="Every expense account in the ledger for the period."
+            to={reportLink("expenses")} />
+          <Metric label={netProfit >= 0 ? "Net profit" : "Net loss"} icon={MdAttachMoney}
+            accent={netProfit >= 0 ? "#2e7d32" : "#c62828"} value={fmtMoney(netProfit)}
+            tone={netProfit >= 0 ? "good" : "bad"}
+            sub={netMargin != null ? `${pct(netMargin)} of income` : "Income − expenses"}
+            hint="Income less expenses for the period, per the ledger."
+            to={reportLink("profit-loss")} />
+        </MetricGrid>
+        <p className="cc-note">No gross profit is shown: this ledger posts no cost of goods sold, so cost of sales is not separated from other expenses.</p>
+      </Section>
+
+      <div className="cc-split cc-split--wide" style={{ marginTop: "0.85rem" }}>
+        <Panel title="Income and expenses" kind="12 months to period end"
+          action={<HeadLink to={canOpenReports && summary.profitTrend?.length
+            ? reportHref("profit-loss", { period: "custom", from: ymd(summary.profitTrend[0].from), to: ymd(summary.to) }) : null}>Profit &amp; loss</HeadLink>}>
+          {summary.glEnabled ? (
+            <TrendChart points={trend}
+              bars={[{ key: "income", label: "Income", color: "#0d47a1" }, { key: "expenses", label: "Expenses", color: "#e57373" }]}
+              line={{ key: "netProfit", label: "Net profit", color: "#00897b" }}
+              ariaLabel="Monthly income, expenses and net profit" />
+          ) : <p className="cc-empty">The trend appears once the General Ledger is on.</p>}
+          {canOpenReports && trend.length > 0 && <p className="cc-note">Select a month to open its Profit &amp; Loss.</p>}
+        </Panel>
+        <CashPanel total={summary.cashAndBankTotal} accounts={summary.cashAccounts || []} asAt={asAt}
+          to={todayLink("cash-bank-summary")} />
+      </div>
+
+      {/* ── Cash movement — the period ───────────────────────────────── */}
+      <Section title="Cash movement" kind="Selected period">
+        <MetricGrid>
+          <Metric label="Received" icon={MdReceiptLong} accent="#2e7d32" value={fmtMoney(summary.receiptsTotal)}
+            sub={`${summary.receiptCount || 0} receipt${summary.receiptCount === 1 ? "" : "s"}`}
+            to={reportLink("receipts-register")} />
+          <Metric label="Paid out" icon={MdPayments} accent="#0d47a1" value={fmtMoney(summary.paymentsTotal)}
+            sub={`${summary.paymentCount || 0} payment${summary.paymentCount === 1 ? "" : "s"}`}
+            to={reportLink("payments-register")} />
+          <Metric label="Net cash movement" icon={MdSwapVert} accent={netCash >= 0 ? "#2e7d32" : "#c62828"}
+            value={fmtMoney(netCash)} tone={netCash >= 0 ? "good" : "bad"}
+            sub="Received − paid out"
+            hint="Money in less money out. Cash movement, not profit: a sale on credit is profit before it is cash."
+            to={reportLink("cash-bank-summary")} />
+          <Metric label="Cheques in hand" icon={MdCallReceived} accent="#2e7d32" value={fmtMoney(summary.pdcIn?.amount)}
+            sub={chequeSub(summary.pdcIn)} tone={summary.pdcIn?.dueSoonCount > 0 ? "warn" : undefined}
+            hint="Received cheques not yet cleared, whenever written."
+            to={todayLink("cheques-in-hand")} />
+          <Metric label="Cheques issued" icon={MdCallMade} accent="#0d47a1" value={fmtMoney(summary.pdcOut?.amount)}
+            sub={chequeSub(summary.pdcOut)} tone={summary.pdcOut?.dueSoonCount > 0 ? "warn" : undefined}
+            hint="Cheques you wrote that have not cleared, whenever written."
+            to={todayLink("cheques-issued")} />
+        </MetricGrid>
+      </Section>
+
+      {/* ── Receivables / payables — as at today ─────────────────────── */}
+      <Section title="Customers owe you" kind={asAt}
+        action={<HeadLink to={todayLink("aged-receivables")}>Receivable aging</HeadLink>}>
+        <div className="cc-split">
+          <Panel>
+            <BalanceHead total={rec.total} overdue={overdue(rec)} label="outstanding" />
+            <AgingBar buckets={rec} hrefFor={agingHref("aged-receivables")} />
+          </Panel>
+          <Panel title="Largest customer balances">
+            <PartyTable rows={(summary.topReceivables || []).map((r) => ({ ...r, id: r.partyId, late: overdue(r) }))}
+              hrefFor={(r) => todayLink("customer-outstanding", { clientId: r.id })}
+              emptyText="No customer owes anything."
+              columns={[
+                { key: "name", label: "Customer" },
+                { key: "openDocuments", label: "Open bills", render: (r) => r.openDocuments },
+                { key: "total", label: "Owed", money: true },
+                { key: "late", label: "Overdue", money: true, tone: (r) => (r.late > 0 ? "bad" : undefined) },
+              ]} />
+          </Panel>
+        </div>
+      </Section>
+
+      <Section title="You owe suppliers" kind={asAt}
+        action={<HeadLink to={todayLink("aged-payables")}>Payable aging</HeadLink>}>
+        <div className="cc-split">
+          <Panel>
+            <BalanceHead total={pay.total} overdue={overdue(pay)} label="outstanding" />
+            <AgingBar buckets={pay} hrefFor={agingHref("aged-payables")} />
+          </Panel>
+          <Panel title="Largest supplier balances">
+            <PartyTable rows={(summary.topPayables || []).map((r) => ({ ...r, id: r.partyId, late: overdue(r) }))}
+              hrefFor={(r) => todayLink("supplier-outstanding", { supplierId: r.id })}
+              emptyText="Nothing is owed to suppliers."
+              columns={[
+                { key: "name", label: "Supplier" },
+                { key: "openDocuments", label: "Open bills", render: (r) => r.openDocuments },
+                { key: "total", label: "Owed", money: true },
+                { key: "late", label: "Overdue", money: true, tone: (r) => (r.late > 0 ? "bad" : undefined) },
+              ]} />
+          </Panel>
+        </div>
+        <p className="cc-note">Balances are unpaid bills less tax withheld, net of advances paid or received on account (counted as not yet due).</p>
+      </Section>
+
+      {/* ── Recent money movement ───────────────────────────────────── */}
+      <Section title="Recent activity" kind="Latest five">
+        <div className="cc-split">
+          <Panel title="Receipts" action={<HeadLink to={canOpenReceipts ? "/receipts" : null}>All receipts</HeadLink>}>
+            <RecentTable rows={summary.recentReceipts} to={canOpenReceipts ? "/receipts" : null} empty="No receipts recorded yet." />
+          </Panel>
+          <Panel title="Payments" action={<HeadLink to={canOpenPayments ? "/payments" : null}>All payments</HeadLink>}>
+            <RecentTable rows={summary.recentPayments} to={canOpenPayments ? "/payments" : null} empty="No payments recorded yet." />
+          </Panel>
+        </div>
+      </Section>
+    </>
+  );
 }
 
-/**
- * Makes a KPI card open its report.
- *
- * The dashboard is the starting point for an investigation, so a figure the
- * operator can question should be reachable in one click. Rendered as a real
- * button when there is somewhere to go — keyboard and screen readers get the
- * affordance too — and as a plain div when there isn't, so a card never looks
- * clickable and then do nothing. `to` is null when the user lacks report
- * permission, which is why the guard is here and not at the call sites.
- */
-function Clickable({ to, onOpen, children }) {
-  const [hover, setHover] = useState(false);
-  if (!to) return <div style={st.card}>{children}</div>;
+// ── Pieces ───────────────────────────────────────────────────────────────
+
+function chequeSub(d) {
+  const count = d?.count || 0;
+  const base = `${count} pending cheque${count !== 1 ? "s" : ""}`;
+  return d?.dueSoonCount > 0 ? `${base} · ${d.dueSoonCount} due within 7 days (${fmtMoney(d.dueSoonAmount)})` : base;
+}
+
+function BalanceHead({ total, overdue, label }) {
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => onOpen(to)}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(to); } }}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        ...st.card,
-        cursor: "pointer",
-        transform: hover ? "translateY(-2px)" : "none",
-        boxShadow: hover ? "0 10px 24px rgba(13,71,161,0.14)" : st.card.boxShadow,
-        transition: "transform 0.18s ease, box-shadow 0.18s ease",
-      }}
-    >
-      {children}
-      <span style={{ ...st.drillHint, opacity: hover ? 1 : 0.55 }}>
-        View report <MdChevronRight size={14} />
-      </span>
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "0.35rem 1rem", marginBottom: "0.75rem" }}>
+      <span className="cc-metric__value">{fmtMoney(total)}</span>
+      <span className="cc-metric__sub">{label}</span>
+      {overdue > 0 && <span className="cc-metric__sub cc-tone--bad" style={{ fontWeight: 700 }}>{fmtMoney(overdue)} overdue</span>}
     </div>
   );
 }
 
-/** Generic KPI card — accent strip, label, big money value, optional sub. */
-function MoneyCard({ label, icon: Icon, accent, value, valueColor, sub, children, to, onOpen }) {
+function RecentTable({ rows, to, empty }) {
   return (
-    <Clickable to={to} onOpen={onOpen}>
-      <div style={{ ...st.accentStrip, background: accent }} />
-      <div style={st.cardBody}>
-        <div style={st.cardLabelRow}>
-          <span style={{ ...st.cardIcon, background: `${accent}15`, color: accent }}><Icon size={16} /></span>
-          <span style={st.cardLabel}>{label}</span>
-        </div>
-        <div style={{ ...st.cardValue, color: valueColor || colors.textPrimary }}>{value}</div>
-        {sub && <div style={st.cardSub}>{sub}</div>}
-        {children}
-      </div>
-    </Clickable>
+    <PartyTable rows={(rows || []).slice(0, 5)} hrefFor={to ? () => to : null} emptyText={empty}
+      columns={[
+        { key: "contactName", label: "Party", render: (r) => <>{r.contactName || "(no contact)"} <span className="cc-metric__hint">{r.reference}</span></> },
+        { key: "date", label: "Date", render: (r) => fmtDate(r.date) },
+        { key: "amount", label: "Amount", money: true },
+      ]} />
   );
 }
 
-/** Cash & Bank total with an expandable per-account balance list. */
-function CashCard({ total, accounts, glEnabled, to, onOpen }) {
+/** Cash & bank balance as at today, with the per-account list one tap away. */
+function CashPanel({ total, accounts, asAt, to }) {
   const [open, setOpen] = useState(false);
-  const count = accounts.length;
   return (
-    <MoneyCard
-      label="Cash & Bank"
-      icon={MdAccountBalanceWallet}
-      accent={colors.teal}
-      value={fmtMoney(total)}
-      sub={glEnabled ? undefined : "Needs GL posting — enable it to see balances"}
-      to={to}
-      onOpen={onOpen}
-    >
-      {count > 0 && (
-        <div style={{ marginTop: 8, borderTop: `1px dashed ${colors.cardBorder}`, paddingTop: 4 }}>
-          {/* Inside a clickable card: expanding the balance list must not also
-              navigate away from the dashboard. */}
-          <button
-            style={st.expandToggle}
-            onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
-            aria-expanded={open}
-          >
-            <MdExpandMore
-              size={18}
-              style={{ transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none", color: colors.teal }}
-            />
-            {count} account{count !== 1 ? "s" : ""}
-            {!open && <span style={st.expandHint}>view balances</span>}
+    <Panel title="Cash & bank" kind={asAt} action={<HeadLink to={to}>Cash & bank summary</HeadLink>}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+        <span className="cc-metric__icon" style={{ color: "#00897b", background: "#00897b14", width: 34, height: 34 }}><MdAccountBalanceWallet size={18} /></span>
+        <span className={`cc-metric__value ${Number(total) < 0 ? "cc-tone--bad" : ""}`}>{fmtMoney(total)}</span>
+      </div>
+      <p className="cc-metric__sub" style={{ margin: "0.3rem 0 0" }}>Balance of every cash and bank account</p>
+      {accounts.length > 0 && (
+        <>
+          <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} style={st.expandToggle}>
+            <MdExpandMore size={18} style={{ transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none", color: "#00897b" }} />
+            {accounts.length} account{accounts.length !== 1 ? "s" : ""}
           </button>
           {open && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 2 }}>
-              {accounts.map((a) => (
-                <div key={a.accountId} style={st.accountRow}>
-                  <span style={{ ...clamp2, flex: 1, minWidth: 0, fontWeight: 600, color: colors.textPrimary }}>
-                    {a.code ? `${a.code} · ` : ""}{a.name}
-                  </span>
-                  <span style={st.accountBal}>{fmtMoney(a.balance)}</span>
-                </div>
-              ))}
-            </div>
+            <PartyTable rows={accounts.map((a) => ({ ...a, id: a.accountId, label: `${a.code ? `${a.code} · ` : ""}${a.name}` }))}
+              columns={[{ key: "label", label: "Account" }, { key: "balance", label: "Balance", money: true, tone: (r) => (r.balance < 0 ? "bad" : undefined) }]} />
           )}
-        </div>
+        </>
       )}
-    </MoneyCard>
+    </Panel>
   );
 }
 
-/** Receivables / payables total + horizontal aging bucket bars. */
-function AgingCard({ title, icon: Icon, accent, data, emptyText, to, onOpen }) {
-  const buckets = data || {};
-  const total = Number(buckets.total || 0);
-  return (
-    <Clickable to={to} onOpen={onOpen}>
-      <div style={{ ...st.accentStrip, background: accent }} />
-      <div style={st.cardBody}>
-        <div style={st.cardLabelRow}>
-          <span style={{ ...st.cardIcon, background: `${accent}15`, color: accent }}><Icon size={16} /></span>
-          <span style={st.cardLabel}>{title}</span>
-        </div>
-        <div style={{ ...st.cardValue, color: colors.textPrimary }}>{fmtMoney(total)}</div>
-        {total <= 0 ? (
-          <div style={st.cardSub}>{emptyText}</div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
-            {AGING_BUCKETS.map((b) => {
-              const amount = Number(buckets[b.key] || 0);
-              const pct = Math.max(0, Math.min(100, (amount / total) * 100));
-              return (
-                <div key={b.key}>
-                  <div style={st.bucketHead}>
-                    <span style={{ fontWeight: 600 }}>{b.label}</span>
-                    <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmtMoney(amount)}</span>
-                  </div>
-                  <div style={st.bucketTrack} role="img" aria-label={`${b.label}: ${fmtMoney(amount)}`}>
-                    <div style={{ ...st.bucketFill, width: `${pct}%`, background: b.color }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </Clickable>
-  );
-}
-
-/** Post-dated cheque exposure card with a due-soon (next 7 days) highlight. */
-function PdcCard({ title, icon: Icon, accent, data, to, onOpen }) {
-  const d = data || {};
-  const count = d.count || 0;
-  return (
-    <Clickable to={to} onOpen={onOpen}>
-      <div style={{ ...st.accentStrip, background: accent }} />
-      <div style={st.cardBody}>
-        <div style={st.cardLabelRow}>
-          <span style={{ ...st.cardIcon, background: `${accent}15`, color: accent }}><Icon size={16} /></span>
-          <span style={st.cardLabel}>{title}</span>
-        </div>
-        <div style={{ ...st.cardValue, color: colors.textPrimary }}>{fmtMoney(d.amount)}</div>
-        <div style={st.cardSub}>{count} pending cheque{count !== 1 ? "s" : ""}</div>
-        {(d.dueSoonCount || 0) > 0 && (
-          <div style={st.dueSoonChip}>
-            <MdErrorOutline size={14} style={{ flexShrink: 0 }} />
-            {d.dueSoonCount} due within 7 days · {fmtMoney(d.dueSoonAmount)}
-          </div>
-        )}
-      </div>
-    </Clickable>
-  );
-}
-
-/** Last 5 receipts / payments — reference, contact, amount, date. */
-function RecentCard({ title, accent, rows, emptyText, onOpenRow }) {
-  const items = rows.slice(0, 5);
-  return (
-    <div style={st.card}>
-      <div style={{ ...st.accentStrip, background: accent }} />
-      <div style={st.cardBody}>
-        <div style={st.cardLabelRow}>
-          <span style={{ ...st.cardIcon, background: `${accent}15`, color: accent }}>
-            <MdReceiptLong size={16} />
-          </span>
-          <span style={st.cardLabel}>{title}</span>
-        </div>
-        {items.length === 0 ? (
-          <div style={{ ...st.cardSub, fontStyle: "italic" }}>{emptyText}</div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
-            {items.map((r) => (
-              <div
-                key={r.id}
-                style={{ ...st.recentRow, ...(onOpenRow ? { cursor: "pointer" } : {}) }}
-                onClick={onOpenRow ? () => onOpenRow(r) : undefined}
-                role={onOpenRow ? "button" : undefined}
-                tabIndex={onOpenRow ? 0 : undefined}
-                onKeyDown={onOpenRow ? (e) => {
-                  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenRow(r); }
-                } : undefined}
-                title={onOpenRow ? `Open ${r.reference}` : undefined}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ ...st.recentRef, color: accent }}>{r.reference}</div>
-                  <div style={{ ...clamp2, fontSize: "0.78rem", color: colors.textPrimary, fontWeight: 600 }}>
-                    {r.contactName || "(no contact)"}
-                  </div>
-                </div>
-                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={st.recentAmt}>{fmtMoney(r.amount)}</div>
-                  <div style={st.recentDate}>{fmtDate(r.date)}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/** Prominent brand-gradient callout shown while summary.glEnabled is false. */
 function GlOffCallout({ canManage, enabling, onEnable }) {
   return (
     <div style={st.callout}>
@@ -640,7 +447,7 @@ function GlOffCallout({ canManage, enabling, onEnable }) {
         </div>
       </div>
       {canManage && (
-        <button style={{ ...st.calloutBtn, opacity: enabling ? 0.75 : 1 }} onClick={onEnable} disabled={enabling}>
+        <button type="button" style={{ ...st.calloutBtn, opacity: enabling ? 0.75 : 1 }} onClick={onEnable} disabled={enabling}>
           {enabling ? (
             <>
               <MdAutorenew size={18} style={{ animation: "acctdash-spin 1s linear infinite" }} />
@@ -669,33 +476,27 @@ function GlResultBanner({ result, onDismiss }) {
     <div style={st.resultBanner}>
       <MdCheckCircle size={20} style={{ color: "#2e7d32", flexShrink: 0 }} />
       <div style={{ flex: 1, minWidth: 200 }}>
-        <div style={{ fontWeight: 700, color: colors.textPrimary, fontSize: "0.9rem" }}>
+        <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>
           Ledger {result.kind === "rebuilt" ? "rebuilt" : "enabled and backfilled"}
         </div>
         <div style={st.resultChips}>
           {chips.length === 0
             ? <span style={st.resultChip}>Nothing to post — ledger was already up to date</span>
-            : chips.map(([label, v]) => (
-                <span key={label} style={st.resultChip}>{label}: <strong>{v}</strong></span>
-              ))}
+            : chips.map(([label, v]) => <span key={label} style={st.resultChip}>{label}: <strong>{v}</strong></span>)}
         </div>
       </div>
-      <button style={st.dismissBtn} onClick={onDismiss} aria-label="Dismiss">
-        <MdClose size={16} />
-      </button>
+      <button type="button" style={st.dismissBtn} onClick={onDismiss} aria-label="Dismiss"><MdClose size={16} /></button>
     </div>
   );
 }
 
-/** Small muted footer — ledger entry count, Dr/Cr balance check, lock date. */
+/** Ledger entry count, the Dr = Cr check, the lock date and Rebuild. */
 function GlHealthFooter({ status, canManage, rebuilding, onRebuild }) {
   return (
     <div style={st.glFooter}>
-      <span style={st.glFooterItem}>
-        {Number(status.entryCount || 0).toLocaleString("en-PK")} journal entries
-      </span>
+      <span style={st.glFooterItem}>{Number(status.entryCount || 0).toLocaleString("en-PK")} journal entries</span>
       <span style={st.glFooterDot}>·</span>
-      <span style={{ ...st.glFooterItem, color: status.isBalanced ? "#2e7d32" : colors.danger }}>
+      <span style={{ ...st.glFooterItem, color: status.isBalanced ? "#2e7d32" : "#c62828" }}>
         {status.isBalanced
           ? <><MdCheckCircle size={14} /> Σ Dr = Σ Cr ({fmtMoney(status.totalDebit)})</>
           : <><MdErrorOutline size={14} /> Out of balance — Dr {fmtMoney(status.totalDebit)} vs Cr {fmtMoney(status.totalCredit)}</>}
@@ -707,7 +508,7 @@ function GlHealthFooter({ status, canManage, rebuilding, onRebuild }) {
         </>
       )}
       {canManage && (
-        <button style={{ ...st.rebuildBtn, opacity: rebuilding ? 0.7 : 1 }} onClick={onRebuild} disabled={rebuilding}>
+        <button type="button" style={{ ...st.rebuildBtn, opacity: rebuilding ? 0.7 : 1 }} onClick={onRebuild} disabled={rebuilding}>
           <MdAutorenew size={16} style={rebuilding ? { animation: "acctdash-spin 1s linear infinite" } : undefined} />
           {rebuilding ? "Rebuilding…" : "Rebuild ledger"}
         </button>
@@ -716,159 +517,44 @@ function GlHealthFooter({ status, canManage, rebuilding, onRebuild }) {
   );
 }
 
-// ── Styles ───────────────────────────────────────────────────────────
-
 const st = {
-  page: { padding: 0, maxWidth: 1480, margin: "0 auto" },
-
-  headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1rem" },
-  headerIcon: { display: "grid", placeItems: "center", width: 44, height: 44, padding: 0, borderRadius: 12, flexShrink: 0, background: `${colors.blue}15`, color: colors.blue },
-  h2: { margin: 0, fontSize: "1.4rem", color: colors.textPrimary, lineHeight: 1.1 },
-  subtitle: { fontSize: "0.8rem", color: colors.textSecondary, marginTop: 2 },
-
-  companyRow: { marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" },
-
-  periodBar: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1rem" },
-  periodLabel: { display: "inline-flex", alignItems: "center", gap: 5, fontSize: "0.8rem", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.06em" },
-  dateInput: {
-    ...dropdownStyles.base,
-    minWidth: "min(150px, 100%)",
-    flex: "1 1 140px",
-    maxWidth: 190,
-    minHeight: 44,
-    cursor: "pointer",
-  },
-  applyBtn: {
-    display: "inline-flex", alignItems: "center", justifyContent: "center",
-    padding: "0.55rem 1.2rem", minHeight: 44, borderRadius: 8, border: "none",
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
-    color: "#fff", fontWeight: 700, cursor: "pointer", flexShrink: 0,
-  },
-
-  errorBanner: {
-    display: "flex", alignItems: "center", gap: 8, padding: "0.75rem 1rem",
-    borderRadius: 10, border: `1px solid ${colors.danger}40`, background: colors.dangerLight,
-    color: colors.danger, fontSize: "0.86rem", fontWeight: 600, marginBottom: "1rem",
-  },
-
-  sectionLabel: {
-    fontSize: "0.72rem", fontWeight: 700, color: colors.textSecondary,
-    textTransform: "uppercase", letterSpacing: "0.12em",
-    margin: "1.1rem 0 0.5rem", paddingLeft: 2,
-  },
-
-  // Card grid per spec — collapses to one column on phones without media queries.
-  kpiGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
-    gap: "0.85rem",
-    alignItems: "start",
-  },
-  // Row 4 lists get a wider minimum so a 5-row receipt list stays legible.
-  listGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(280px, 100%), 1fr))",
-    gap: "0.85rem",
-    alignItems: "start",
-  },
-
-  // "View report" hint that fades in on hover — present but never shouting.
-  drillHint: {
-    display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 2,
-    padding: "0 0.9rem 0.6rem", fontSize: "0.7rem", fontWeight: 700,
-    color: colors.blue, transition: "opacity 0.18s ease",
-  },
-  card: {
-    background: colors.cardBg, border: `1px solid ${colors.cardBorder}`, borderRadius: 14,
-    boxShadow: "0 2px 12px rgba(0,0,0,0.05)", position: "relative", overflow: "hidden",
-    display: "flex", minWidth: 0,
-  },
-  accentStrip: { width: 5, flexShrink: 0 },
-  cardBody: { padding: "0.9rem 1rem", flex: 1, minWidth: 0 },
-  cardLabelRow: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6 },
-  cardIcon: { display: "grid", placeItems: "center", width: 28, height: 28, padding: 0, borderRadius: 8, flexShrink: 0 },
-  cardLabel: { fontSize: "0.78rem", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.05em", minWidth: 0, ...clamp2 },
-  cardValue: { fontSize: "1.45rem", fontWeight: 800, lineHeight: 1.15, wordBreak: "break-word", fontVariantNumeric: "tabular-nums" },
-  cardSub: { fontSize: "0.78rem", color: colors.textSecondary, marginTop: 4 },
-
   expandToggle: {
-    display: "flex", alignItems: "center", gap: 5, width: "100%", minHeight: 44,
-    padding: "0.3rem 0", background: "none", border: "none", cursor: "pointer",
-    font: "inherit", fontSize: "0.82rem", fontWeight: 700, color: colors.textPrimary,
+    display: "flex", alignItems: "center", gap: 5, width: "100%", minHeight: 44, marginTop: "0.5rem",
+    padding: "0.3rem 0", background: "none", border: "none", borderTop: "1px dashed #e6ecf4", boxShadow: "none",
+    cursor: "pointer", font: "inherit", fontSize: "0.82rem", fontWeight: 700, color: "#1a2332",
   },
-  expandHint: { marginLeft: "auto", fontSize: "0.72rem", fontWeight: 500, color: colors.textSecondary },
-  accountRow: {
-    display: "flex", alignItems: "center", gap: 10, padding: "0.4rem 0.5rem",
-    borderRadius: 6, background: colors.inputBg, fontSize: "0.8rem",
-  },
-  accountBal: { fontWeight: 700, color: colors.textPrimary, fontVariantNumeric: "tabular-nums", flexShrink: 0 },
-
-  bucketHead: { display: "flex", justifyContent: "space-between", gap: 8, fontSize: "0.74rem", color: colors.textSecondary, marginBottom: 2 },
-  bucketTrack: { height: 8, borderRadius: 999, background: colors.inputBg, overflow: "hidden" },
-  bucketFill: { height: "100%", borderRadius: 999, transition: "width 0.3s ease" },
-
-  dueSoonChip: {
-    display: "inline-flex", alignItems: "center", gap: 5, marginTop: 8,
-    padding: "0.3rem 0.65rem", borderRadius: 999, fontSize: "0.75rem", fontWeight: 700,
-    background: "#fff8e1", border: "1px solid #f9a82550", color: "#b26a00",
-  },
-
-  recentRow: {
-    display: "flex", alignItems: "flex-start", gap: 10, padding: "0.45rem 0.55rem",
-    borderRadius: 8, background: colors.inputBg,
-  },
-  recentRef: { fontSize: "0.74rem", fontWeight: 800, letterSpacing: "0.02em" },
-  recentAmt: { fontSize: "0.84rem", fontWeight: 700, color: colors.textPrimary, fontVariantNumeric: "tabular-nums" },
-  recentDate: { fontSize: "0.72rem", color: colors.textSecondary, marginTop: 1 },
-
   callout: {
-    display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.9rem",
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
-    borderRadius: 14, padding: "1.1rem 1.25rem", color: "#fff",
-    boxShadow: "0 10px 28px -12px rgba(13,71,161,0.5)", marginBottom: "0.35rem",
+    display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.85rem", padding: "1rem 1.1rem",
+    borderRadius: 14, border: "1px solid #0d47a133", background: "linear-gradient(135deg, #0d47a10d, #00897b0d)", marginBottom: "0.85rem",
   },
-  calloutIcon: {
-    display: "grid", placeItems: "center", width: 48, height: 48, padding: 0, borderRadius: 12,
-    background: "rgba(255,255,255,0.16)", border: "1px solid rgba(255,255,255,0.3)", flexShrink: 0,
-  },
-  calloutTitle: { fontSize: "1.05rem", fontWeight: 800 },
-  calloutBody: { fontSize: "0.84rem", lineHeight: 1.5, color: "rgba(255,255,255,0.88)", marginTop: 3, maxWidth: 620 },
+  calloutIcon: { display: "grid", placeItems: "center", width: 48, height: 48, padding: 0, borderRadius: 12, background: "#0d47a115", color: "#0d47a1", flexShrink: 0 },
+  calloutTitle: { fontWeight: 800, fontSize: "1rem", color: "#1a2332" },
+  calloutBody: { fontSize: "0.84rem", color: "#5f6d7e", marginTop: 2, lineHeight: 1.45 },
   calloutBtn: {
-    display: "inline-flex", alignItems: "center", gap: 7,
-    padding: "0.6rem 1.15rem", minHeight: 44, borderRadius: 9, border: "none",
-    background: "#fff", color: colors.blue, fontWeight: 800, fontSize: "0.88rem",
-    cursor: "pointer", flexShrink: 0,
+    display: "inline-flex", alignItems: "center", gap: 8, padding: "0.65rem 1.3rem", minHeight: 44,
+    borderRadius: 10, border: "none", background: "linear-gradient(135deg, #0d47a1, #00897b)", color: "#fff",
+    fontWeight: 700, cursor: "pointer", flexShrink: 0, boxShadow: "none",
   },
-
   resultBanner: {
     display: "flex", alignItems: "flex-start", gap: 10, padding: "0.8rem 1rem",
-    borderRadius: 12, border: "1px solid #2e7d3240", background: "#f0f9f1",
-    marginBottom: "0.35rem",
+    borderRadius: 12, border: "1px solid #2e7d3240", background: "#f0f9f1", marginBottom: "0.85rem",
   },
   resultChips: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 },
-  resultChip: {
-    fontSize: "0.75rem", color: colors.textPrimary, background: "#fff",
-    border: `1px solid ${colors.cardBorder}`, borderRadius: 999, padding: "0.2rem 0.6rem",
-  },
+  resultChip: { fontSize: "0.75rem", background: "#fff", border: "1px solid #e8edf3", borderRadius: 999, padding: "0.2rem 0.6rem" },
   dismissBtn: {
     display: "grid", placeItems: "center", width: 44, height: 44, minWidth: 44, padding: 0,
-    borderRadius: 8, border: "none", background: "transparent", color: colors.textSecondary,
-    cursor: "pointer", boxShadow: "none", flexShrink: 0,
+    borderRadius: 8, border: "none", background: "transparent", color: "#5f6d7e", cursor: "pointer", boxShadow: "none", flexShrink: 0,
   },
-
   glFooter: {
     display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.35rem 0.6rem",
-    marginTop: "1.4rem", paddingTop: "0.85rem", borderTop: `1px dashed ${colors.cardBorder}`,
-    fontSize: "0.76rem", color: colors.textSecondary,
+    marginTop: "1.4rem", paddingTop: "0.85rem", borderTop: "1px dashed #e6ecf4", fontSize: "0.76rem", color: "#5f6d7e",
   },
   glFooterItem: { display: "inline-flex", alignItems: "center", gap: 4, fontVariantNumeric: "tabular-nums" },
   glFooterDot: { opacity: 0.5 },
   rebuildBtn: {
     display: "inline-flex", alignItems: "center", gap: 6, marginLeft: "auto",
     padding: "0.4rem 0.85rem", minHeight: 44, borderRadius: 8,
-    border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.textSecondary,
-    fontSize: "0.78rem", fontWeight: 700, cursor: "pointer",
+    border: "1px solid #e8edf3", background: "#fff", color: "#5f6d7e",
+    fontSize: "0.78rem", fontWeight: 700, cursor: "pointer", boxShadow: "none",
   },
-
-  empty: { padding: "2rem", textAlign: "center", color: colors.textSecondary },
 };

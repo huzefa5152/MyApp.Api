@@ -1,6 +1,7 @@
 import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
+import useQueryAction from "../hooks/useQueryAction";
 import { MdDescription, MdAdd, MdBusiness, MdSearch, MdUploadFile } from "react-icons/md";
 import ChallanList from "../Components/ChallanList";
 import CopyDocumentModal from "../Components/CopyDocumentModal";
@@ -94,7 +95,8 @@ export default function ChallanPage() {
   // User-chosen rows-per-page (persisted, null until picked → server default).
   const [size, setSize] = usePageSize("challans");
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  // ?status= arrives from the dashboard ("challans need FBR setup").
+  const [statusFilter, setStatusFilter] = useState(() => new URLSearchParams(window.location.search).get("status") || "");
   const [divisionFilter, setDivisionFilter] = useState("");
   const [clientFilter, setClientFilter] = useState("");
   // Seed the SO filter from ?salesOrderId= so the "View Challans" shortcut
@@ -221,6 +223,8 @@ export default function ChallanPage() {
   };
 
   const handleAddChallan = () => { if (selectedCompany) setShowModal(true); };
+  // Dashboard quick action: /challans?new=1 opens the create form.
+  useQueryAction("new", !!selectedCompany && canCreate, handleAddChallan);
 
   const handleSaveChallan = async (payload) => {
     if (!selectedCompany) return;

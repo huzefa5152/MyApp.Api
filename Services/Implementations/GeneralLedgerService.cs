@@ -647,6 +647,30 @@ namespace MyApp.Api.Services.Implementations
                 summary.Income = -plByAccount.Where(x => x.Type == AccountType.Income).Sum(x => x.Net);
                 summary.Expenses = plByAccount.Where(x => x.Type == AccountType.Expense).Sum(x => x.Net);
                 summary.NetProfit = summary.Income - summary.Expenses;
+
+                // The same sum, month by month, for the twelve months ending
+                // with the period's last day. Every month is listed, a month
+                // with no entries included - no trading is worth seeing too.
+                var trendFrom = new DateTime(periodTo.Year, periodTo.Month, 1).AddMonths(-11);
+                var monthly = await _context.JournalLines.AsNoTracking()
+                    .Where(l => l.JournalEntry.CompanyId == companyId
+                             && l.JournalEntry.Date >= trendFrom && l.JournalEntry.Date <= periodTo
+                             && (l.Account.AccountType == AccountType.Income || l.Account.AccountType == AccountType.Expense))
+                    .GroupBy(l => new { l.JournalEntry.Date.Year, l.JournalEntry.Date.Month, l.Account.AccountType })
+                    .Select(g => new { g.Key.Year, g.Key.Month, Type = g.Key.AccountType, Net = g.Sum(x => x.Debit - x.Credit) })
+                    .ToListAsync();
+                for (var m = trendFrom; m <= periodTo; m = m.AddMonths(1))
+                {
+                    var rows = monthly.Where(x => x.Year == m.Year && x.Month == m.Month).ToList();
+                    var income = -rows.Where(x => x.Type == AccountType.Income).Sum(x => x.Net);
+                    var expenses = rows.Where(x => x.Type == AccountType.Expense).Sum(x => x.Net);
+                    var end = m.AddMonths(1).AddDays(-1);
+                    summary.ProfitTrend.Add(new SummaryMonthDto
+                    {
+                        From = m, To = end > periodTo ? periodTo : end,
+                        Income = income, Expenses = expenses, NetProfit = income - expenses,
+                    });
+                }
             }
 
             // Working capital buckets (subledger).
@@ -662,6 +686,8 @@ namespace MyApp.Api.Services.Implementations
                 Total = ap.Total, Current = ap.Current, Days1To30 = ap.Days1To30,
                 Days31To60 = ap.Days31To60, Days61To90 = ap.Days61To90, Over90 = ap.Over90,
             };
+            summary.TopReceivables = ar.Rows.OrderByDescending(r => r.Total).Take(8).ToList();
+            summary.TopPayables = ap.Rows.OrderByDescending(r => r.Total).Take(8).ToList();
 
             // Money movement in the period.
             var periodPayments = await _context.Payments.AsNoTracking()

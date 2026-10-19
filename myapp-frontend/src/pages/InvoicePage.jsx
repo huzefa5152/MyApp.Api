@@ -2,6 +2,7 @@ import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/
 import CardActions from "../Components/CardActions";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import useQueryAction from "../hooks/useQueryAction";
 import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo, MdPostAdd, MdCopyAll, MdDownload, MdAddLink, MdLinkOff } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import PaymentForm from "../Components/PaymentForm";
@@ -229,6 +230,12 @@ export default function InvoicePage({ mode = "invoices" }) {
   // Separate visibility flag for the "Create Bill (No Challan)" modal so
   // it doesn't share state with the regular New Bill flow.
   const [showStandaloneForm, setShowStandaloneForm] = useState(false);
+  // Dashboard quick actions: ?new=1 opens New Bill, ?new=standalone the
+  // no-challan form (refused, like its button, when bills need a sales order).
+  useQueryAction("new", isBillsMode && !!selectedCompany, (v) => {
+    if (v === "standalone") { if (canCreateStandalone && !requireSO) setShowStandaloneForm(true); }
+    else if (canCreate) setShowForm(true);
+  });
   const [editingId, setEditingId] = useState(null);
   const [viewingId, setViewingId] = useState(null);
   // The standalone bill whose delivery challan the operator is sorting out.
