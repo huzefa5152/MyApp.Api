@@ -47,6 +47,9 @@ Suites:
   9. Opening balance        -> one document per client, a second entry
                                replaces it, A/R vs Retained earnings in the GL,
                                dashboard sales unchanged, receipts protect it
+ 10. Opening everywhere     -> Clients A/R and counts, bill lists, receipt form,
+                               oldest-first split, bill actions refused, aging,
+                               dashboard receivables; paid-ahead as credit
 
 KNOWN LIMITATION, deliberately not asserted: invoices are charged at full
 GrandTotal while `Invoice.BalanceDue` settles against
@@ -722,10 +725,17 @@ def suite_9_opening_balance(base, token, cid, client_id, item_type_id):
     st, d = http("PUT", url, base, token=token, body={"amount": 80000, "date": days_ago_iso(30)})
     check(suite, "owes 80,000 -> saved", st == 200 and eq((d or {}).get("amount"), 80000), f"{st} {d}")
     l = led()
-    check(suite, "ledger closing 80,000, row reads 'Opening balance'",
-          eq(l.get("closingBalance"), 80000)
-          and any(e.get("type") == "Opening Balance" and e.get("reference") == "Opening balance"
-                  for e in l.get("entries") or []), f"{l.get('closingBalance')} {l.get('entries')}")
+    check(suite, "drill-down: it IS the Opening figure (80,000), not a dated row",
+          eq(l.get("openingBalance"), 80000) and eq(l.get("closingBalance"), 80000)
+          and not any(e.get("type") == "Opening Balance" for e in l.get("entries") or []),
+          f"opening {l.get('openingBalance')} closing {l.get('closingBalance')} {l.get('entries')}")
+    _, rows = http("GET", f"/api/customer-ledger/company/{cid}", base, token=token)
+    row = next((r for r in (rows or []) if r.get("clientId") == client_id), {})
+    check(suite, "list row: in the Opening column, not Invoiced",
+          eq(row.get("opening"), 80000) and eq(row.get("invoiced"), 0) and eq(row.get("closing"), 80000), row)
+    _, w = http("GET", f"/api/customer-ledger/company/{cid}/client/{client_id}?from={today_iso()}", base, token=token)
+    check(suite, "a From date after it still opens on it (it is where the trail starts)",
+          eq((w or {}).get("openingBalance"), 80000), (w or {}).get("openingBalance"))
     check(suite, "A/R +80,000 and Retained earnings -80,000 in the GL",
           eq(tb("Accounts receivable") - ar0, 80000) and eq(tb("Retained earnings") - re0, -80000),
           f"AR {tb('Accounts receivable') - ar0} RE {tb('Retained earnings') - re0}")
@@ -739,8 +749,9 @@ def suite_9_opening_balance(base, token, cid, client_id, item_type_id):
 
     st, d = http("PUT", url, base, token=token, body={"amount": -15000, "date": days_ago_iso(30)})
     l = led()
-    check(suite, "paid ahead 15,000 -> closing -15,000, A/R -15,000",
-          st == 200 and eq(l.get("closingBalance"), -15000) and eq(tb("Accounts receivable") - ar0, -15000),
+    check(suite, "paid ahead 15,000 -> Opening -15,000, closing -15,000, A/R -15,000",
+          st == 200 and eq(l.get("openingBalance"), -15000) and eq(l.get("closingBalance"), -15000)
+          and eq(tb("Accounts receivable") - ar0, -15000),
           f"{st} {l.get('closingBalance')} AR {tb('Accounts receivable') - ar0}")
 
     # A receipt settled against the opening invoice protects it.
@@ -758,6 +769,84 @@ def suite_9_opening_balance(base, token, cid, client_id, item_type_id):
     check(suite, "0 removes it: ledger, A/R and Retained earnings back where they started",
           st == 200 and eq(led().get("closingBalance"), 0) and eq(tb("Accounts receivable"), ar0)
           and eq(tb("Retained earnings"), re0), f"{st} {d}")
+
+
+# ── Suite 10: an opening balance everywhere a balance is read (2026-10-20) ──
+def suite_10_opening_everywhere(base, token, cid, client_id, item_type_id):
+    """Counted in every receivable figure, never as a sale, never listed or
+    actionable as a bill, and settled by receipts BEFORE any bill even when it
+    was entered today (the four production openings were)."""
+    suite = "10. Opening balance everywhere"
+    url = f"/api/customer-ledger/company/{cid}/client/{client_id}/opening-balance"
+
+    bill = make_invoice(base, token, cid, client_id, item_type_id, 30000, date=days_ago_iso(10))
+    check(suite, "setup: a 30,000 bill dated 10 days ago", bool(bill), bill)
+    st, d = http("PUT", url, base, token=token, body={"amount": 50000, "date": today_iso()})
+    doc = (d or {}).get("documentId")
+    check(suite, "setup: opening 50,000 owed, dated TODAY (after the bill)", st == 200 and doc, d)
+
+    def summary():
+        _, rows = http("GET", f"/api/clients/company/{cid}/summary", base, token=token)
+        return next((r for r in (rows or []) if r.get("clientId") == client_id), {})
+
+    s1 = summary()
+    check(suite, "Clients page: A/R 80,000 (opening + bill), Invoices count 1 (the bill only)",
+          eq(s1.get("accountsReceivable"), 80000) and s1.get("salesInvoices") == 1, s1)
+
+    _, page = http("GET", f"/api/invoices/company/{cid}/paged?page=1&pageSize=50&clientId={client_id}", base, token=token)
+    ids = [i.get("id") for i in ((page or {}).get("items") or [])]
+    check(suite, "Bills list does not list the opening balance", doc not in ids and bill["id"] in ids, ids)
+
+    _, fr = http("GET", f"/api/invoices/company/{cid}/for-receipt?clientId={client_id}", base, token=token)
+    items = (fr or {}).get("items") or []
+    check(suite, "Receipt form: the opening is offered FIRST, flagged, 50,000 due",
+          bool(items) and items[0].get("isOpening") is True and items[0].get("id") == doc
+          and eq(items[0].get("balanceDue"), 50000), items)
+
+    _, plan = http("GET", f"/api/receipts/company/{cid}/allocation-plan?clientId={client_id}&amount=60000",
+                   base, token=token)
+    lines = (plan or {}).get("lines") or []
+    check(suite, "Spread oldest first: opening 50,000 first, then 10,000 to the bill (opening dated later)",
+          len(lines) == 2 and lines[0].get("invoiceId") == doc and eq(lines[0].get("amount"), 50000)
+          and lines[1].get("invoiceId") == bill["id"] and eq(lines[1].get("amount"), 10000), lines)
+
+    st, _ = http("DELETE", f"/api/invoices/{doc}", base, token=token)
+    check(suite, "it cannot be deleted as a bill", st == 400, f"got {st}")
+    st, _ = http("POST", f"/api/invoices/{doc}/cancel", base, token=token, body={"reason": "x"})
+    check(suite, "it cannot be voided as a bill", st == 400, f"got {st}")
+    st, _ = http("PUT", f"/api/invoices/{doc}/fbr-excluded", base, token=token, body={"excluded": False})
+    check(suite, "it cannot be switched into FBR", st == 400, f"got {st}")
+    st, _ = http("GET", f"/api/invoices/{doc}/print/bill", base, token=token)
+    check(suite, "it does not print as a bill", st == 404, f"got {st}")
+
+    _, aged = http("GET", f"/api/accounting/reports/company/{cid}/aged-receivables", base, token=token)
+    row = next((r for r in ((aged or {}).get("rows") or []) if r.get("partyId") == client_id), {})
+    check(suite, "aged receivables: 80,000 for the customer", eq(row.get("total"), 80000), row)
+
+    _, bd = http("GET", f"/api/dashboard/breakdown?companyId={cid}&kind=receivables", base, token=token)
+    brow = next((r for r in ((bd or {}).get("rows") or []) if r.get("groupKey") == f"c:{client_id}"), {})
+    vals = brow.get("values") or {}
+    check(suite, "dashboard receivables: 'Opening balance' column 50,000, 'Invoiced' only the bill",
+          eq(vals.get("opening"), 50000) and eq(vals.get("invoiced"), 30000) and eq(vals.get("onAccount"), 0),
+          vals)
+    _, bd2 = http("GET", f"/api/dashboard/breakdown?companyId={cid}&kind=receivables&groupKey=c:{client_id}",
+                  base, token=token)
+    labels = [(r.get("label"), r.get("amount"), r.get("invoiceId")) for r in ((bd2 or {}).get("rows") or [])]
+    check(suite, "dashboard receivables drill: an 'Opening balance' row, the bill, nothing on account",
+          any(l == "Opening balance" and eq(a, 50000) for l, a, _ in labels)
+          and not any(i == doc for _, _, i in labels) and not any(l == "On account" for l, _, _ in labels),
+          labels)
+
+    # Paid ahead: counted as credit wherever the receivable is read.
+    st, d = http("PUT", url, base, token=token, body={"amount": -20000, "date": today_iso()})
+    s2 = summary()
+    _, aged = http("GET", f"/api/accounting/reports/company/{cid}/aged-receivables", base, token=token)
+    row = next((r for r in ((aged or {}).get("rows") or []) if r.get("partyId") == client_id), {})
+    check(suite, "paid ahead 20,000: Clients A/R 10,000, aging 10,000, Credit Notes count 0",
+          st == 200 and eq(s2.get("accountsReceivable"), 10000) and eq(row.get("total"), 10000)
+          and s2.get("creditNotes") == 0, (s2, row))
+
+    http("PUT", url, base, token=token, body={"amount": 0, "date": today_iso()})
 
 
 # ── Setup / teardown ───────────────────────────────────────────────
@@ -801,7 +890,7 @@ def setup(base, user, pw):
     clients = {k: make_client(base, token, cid, f"Ledger {k} {sfx}")
                for k in ("scenario", "discount", "notes", "advance",
                          "scopeA", "scopeB", "plain", "foreigncontact", "cashsale",
-                         "opening")}
+                         "opening", "openingall")}
 
     other_cid = make_company(base, token, f"_test_customer_ledger_other {sfx}", gl=False)
     foreign = {
@@ -863,6 +952,7 @@ def main() -> int:
                                      item_type_id, disc)
         suite_8_income_line(base, token, cid, clients["cashsale"], item_type_id, income)
         suite_9_opening_balance(base, token, cid, clients["opening"], item_type_id)
+        suite_10_opening_everywhere(base, token, cid, clients["openingall"], item_type_id)
     finally:
         teardown(base, token, [cid, foreign["company_id"]], args.keep)
 

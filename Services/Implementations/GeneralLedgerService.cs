@@ -73,7 +73,9 @@ namespace MyApp.Api.Services.Implementations
             // Block it and point to the correct path — re-import with "Full General
             // Ledger", which rebuilds the ledger and trues up to match Manager.
             if (company.GlLockDate == null
-                && await _context.Invoices.AnyAsync(i => i.CompanyId == companyId && i.IsMigrated)
+                // A hand-entered customer opening balance is migrated in shape but
+                // posts its own journal, so it is not snapshot history.
+                && await _context.Invoices.NotOpening().AnyAsync(i => i.CompanyId == companyId && i.IsMigrated)
                 && await _context.Accounts.AnyAsync(a => a.CompanyId == companyId && a.OpeningBalance != 0m))
             {
                 throw new InvalidOperationException(
@@ -549,6 +551,13 @@ namespace MyApp.Api.Services.Implementations
             // historical cut the document legs above use.
             var onAccount = await PartyOnAccount.NetByPartyAsync(
                 _context, companyId, receivables, asOf: asOf == null ? null : today);
+
+            // A customer who had PAID AHEAD when their books started (an opening
+            // credit, ClientOpeningBalance) sits in credit exactly like an advance.
+            if (receivables)
+                foreach (var (cid, credit) in await ClientOpeningBalance.PaidAheadByClientAsync(
+                             _context, companyId, asOf: asOf == null ? null : today))
+                    onAccount[cid] = onAccount.GetValueOrDefault(cid) - credit;
 
             // Scoped to the company, like every other read here: the ids come from
             // Payment.ContactId, a soft reference, so an unscoped lookup would

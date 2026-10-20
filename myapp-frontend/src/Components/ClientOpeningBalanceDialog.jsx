@@ -32,6 +32,9 @@ export default function ClientOpeningBalanceDialog({ companyId, client, onClose,
           setSide(data.amount < 0 ? "advance" : "owes");
           setAmount(String(Math.abs(data.amount)));
           setDate(String(data.date).slice(0, 10));
+        } else if (data.suggestedDate) {
+          // The day before this company's first bill or receipt.
+          setDate(String(data.suggestedDate).slice(0, 10));
         }
       })
       .catch(() => !cancelled && setError("Could not load the opening balance."))
@@ -94,9 +97,11 @@ export default function ClientOpeningBalanceDialog({ companyId, client, onClose,
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label} htmlFor="ob-date">As at</label>
                 <input id="ob-date" type="date" style={formStyles.input} value={date} onChange={(e) => setDate(e.target.value)} />
+                <div style={{ ...s.muted, marginTop: 4 }}>The day your old books ended — before the first bill on this system.</div>
               </div>
 
               <div style={s.muted}>
+                It shows as the customer's Opening balance on the ledger.{" "}
                 {current?.amount
                   ? `Currently ${current.amount < 0 ? "paid ahead" : "owes"} Rs ${fmt(Math.abs(current.amount))}. Saving replaces it.`
                   : "Brought forward from the old books. It is not a sale and is never sent to FBR."}

@@ -604,9 +604,15 @@ def main():
               near(v.get("invoiced"), 236000) and near(v.get("receipts"), 0) and near(v.get("onAccount"), -50000)
               and near(v.get("balance"), 186000) and near(v.get("wht"), 0), str(v))
         check("receivables row: 236G billed shown apart (118)", near(v.get("adv236Billed"), 118), str(v))
-        check("receivables columns are invoiced, wht, receipts, onAccount, balance, adv236Billed",
-              [c_["key"] for c_ in rb1.get("columns", [])] == ["invoiced", "wht", "receipts", "onAccount", "balance", "adv236Billed"],
+        # "opening" (a customer's opening balance, 2026-10-20) leads; the row must
+        # still add up: opening + invoiced - wht - receipts + onAccount = balance.
+        check("receivables columns are opening, invoiced, wht, receipts, onAccount, balance, adv236Billed",
+              [c_["key"] for c_ in rb1.get("columns", [])] == ["opening", "invoiced", "wht", "receipts", "onAccount", "balance", "adv236Billed"],
               str(rb1.get("columns")))
+        check("receivables row: opening 0 here, and the columns add up to the balance",
+              near(v.get("opening"), 0)
+              and near((v.get("opening") or 0) + (v.get("invoiced") or 0) - (v.get("wht") or 0)
+                       - (v.get("receipts") or 0) + (v.get("onAccount") or 0), v.get("balance")), str(v))
         rl = rl2.get(f"c:{c2}", {})
         check("its level 2 lists the two open bills and the on-account money",
               len([r_ for r_ in rl.get("rows", []) if r_.get("invoiceId")]) == 2

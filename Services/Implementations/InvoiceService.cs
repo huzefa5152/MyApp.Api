@@ -1662,10 +1662,22 @@ namespace MyApp.Api.Services.Implementations
             await ValidateNonInvLinesAsync(company, ids);
         }
 
+        /// <summary>A customer's opening balance is changed only through Clients ->
+        /// Opening balance (ClientOpeningBalanceService), which keeps its one-per-
+        /// client rule, its GL posting and the receipts-applied guard. Every bill
+        /// action that could edit, delete, void or file it refuses.</summary>
+        private static void AssertNotOpeningBalance(Invoice invoice)
+        {
+            if (ClientOpeningBalance.IsOpening(invoice.ExternalRef))
+                throw new InvalidOperationException(
+                    "This is a customer's opening balance. Change or remove it from Clients -> Opening balance.");
+        }
+
         public async Task<InvoiceDto?> UpdateAsync(int id, UpdateInvoiceDto dto)
         {
             var invoice = await _invoiceRepo.GetByIdAsync(id);
             if (invoice == null) return null;
+            AssertNotOpeningBalance(invoice);
 
             if (!IsInvoiceEditable(invoice))
                 throw new InvalidOperationException(invoice.IsCancelled
@@ -2094,6 +2106,7 @@ namespace MyApp.Api.Services.Implementations
         {
             var invoice = await _invoiceRepo.GetByIdAsync(id);
             if (invoice == null) return null;
+            AssertNotOpeningBalance(invoice);
 
             if (!IsInvoiceEditable(invoice))
                 throw new InvalidOperationException(invoice.IsCancelled
@@ -2934,6 +2947,7 @@ namespace MyApp.Api.Services.Implementations
                 .Include(i => i.DeliveryChallans)
                 .FirstOrDefaultAsync(i => i.Id == id);
             if (invoice == null) return null;
+            AssertNotOpeningBalance(invoice);
 
             // 2026-07-02: the flag now carries STOCK semantics (an excluded
             // bill holds no inventory movements), so flipping it on a bill
@@ -3011,6 +3025,7 @@ namespace MyApp.Api.Services.Implementations
         {
             var invoice = await _invoiceRepo.GetByIdAsync(id);
             if (invoice == null) return false;
+            AssertNotOpeningBalance(invoice);
 
             // Cannot delete FBR-submitted invoices — they're filed at FBR (with
             // an IRN) and FBR has no delete; the correct reversal is a Credit
@@ -3114,6 +3129,7 @@ namespace MyApp.Api.Services.Implementations
                 .Include(i => i.DeliveryChallans)
                 .FirstOrDefaultAsync(i => i.Id == id);
             if (invoice == null) return null;
+            AssertNotOpeningBalance(invoice);
 
             // A bill that reached FBR cannot be voided — it must be reversed
             // with a Credit Note that references the original IRN. Voiding it
@@ -3877,6 +3893,8 @@ namespace MyApp.Api.Services.Implementations
         {
             var inv = await _invoiceRepo.GetForPrintAsync(invoiceId);
             if (inv == null) return null;
+            // An opening balance has no lines and is not a bill: nothing to print.
+            if (ClientOpeningBalance.IsOpening(inv.ExternalRef)) return null;
 
             var poNumbers = inv.DeliveryChallans
                 .Select(dc => dc.PoNumber)
@@ -4000,6 +4018,8 @@ namespace MyApp.Api.Services.Implementations
         {
             var inv = await _invoiceRepo.GetForPrintAsync(invoiceId);
             if (inv == null) return null;
+            // An opening balance has no lines and is not a bill: nothing to print.
+            if (ClientOpeningBalance.IsOpening(inv.ExternalRef)) return null;
 
             var poNumbers = inv.DeliveryChallans
                 .Select(dc => dc.PoNumber)
@@ -4290,7 +4310,7 @@ namespace MyApp.Api.Services.Implementations
         // match the page total; includes cancelled (they still show in the list).
         public async Task<Dictionary<int, int>> GetInvoiceCountsByClientAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
-            var q = _context.Invoices.Where(i => i.CompanyId == companyId && !i.IsDemo);
+            var q = _context.Invoices.NotOpening().Where(i => i.CompanyId == companyId && !i.IsDemo);
             // Division-RBAC scope (null = unrestricted); company-level rows
             // (DivisionId == null) stay visible — policy D1.
             if (allowedDivisionIds != null)

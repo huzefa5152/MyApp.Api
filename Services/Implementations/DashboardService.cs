@@ -1195,10 +1195,20 @@ namespace MyApp.Api.Services.Implementations
 
             var aged = await _gl.GetAgedReceivablesAsync(companyId);
             // GeneralLedgerService.BuildAgingAsync's own open-document test (as of now).
-            var open = _context.Invoices.AsNoTracking()
+            // Bills only: a customer's opening balance is its own column / row,
+            // never an "open bill" (ClientOpeningBalance).
+            var open = _context.Invoices.AsNoTracking().NotOpening()
                 .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
                          && i.DocumentType != 9 && i.DocumentType != 10
                          && i.GrandTotal - i.WithholdingTaxAmount - i.AmountPaid > 0m);
+            // What each customer's opening balance still contributes: owed less
+            // receipts applied to it, or minus an opening credit (paid ahead).
+            var openingByClient = (await _context.Invoices.AsNoTracking().OnlyOpening()
+                    .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled)
+                    .Select(i => new { i.ClientId, i.DocumentType, Left = i.GrandTotal - i.AmountPaid })
+                    .ToListAsync())
+                .GroupBy(x => x.ClientId)
+                .ToDictionary(g => g.Key, g => g.Sum(x => x.DocumentType == 10 ? -x.Left : x.Left));
             result.AmountLabel = "Balance";
 
             if (key == null)
@@ -1214,10 +1224,10 @@ namespace MyApp.Api.Services.Implementations
                     })
                     .ToDictionaryAsync(x => x.ClientId);
                 result.Title = "Receivables, by customer";
-                result.Note = "The customer balance from the aged receivables report: open bills, less WHT and what was "
+                result.Note = "The customer balance from the aged receivables report: opening balance, open bills less WHT and what was "
                     + "received against them, plus money held on account (negative). 236G/H billed on those bills is shown apart.";
-                result.Columns = Cols(("invoiced", "Invoiced", "money"), ("wht", "WHT", "money"),
-                    ("receipts", "Receipts", "money"), ("onAccount", "On account", "money"),
+                result.Columns = Cols(("opening", "Opening balance", "money"), ("invoiced", "Invoiced", "money"),
+                    ("wht", "WHT", "money"), ("receipts", "Receipts", "money"), ("onAccount", "On account", "money"),
                     ("balance", "Balance", "money"), ("adv236Billed", "236G/H billed", "money"));
                 result.Rows = aged.Rows.Select(a =>
                 {
@@ -1225,9 +1235,11 @@ namespace MyApp.Api.Services.Implementations
                     var invoiced = d?.Invoiced ?? 0m;
                     var wht = d?.Wht ?? 0m;
                     var receipts = d?.Receipts ?? 0m;
+                    var opening = openingByClient.GetValueOrDefault(a.PartyId);
                     var row = GroupRow("c:" + a.PartyId.ToString(Inv), a.Name, a.Total,
-                        ("invoiced", Round(invoiced)), ("wht", Round(wht)), ("receipts", Round(receipts)),
-                        ("onAccount", Round(a.Total - (invoiced - wht - receipts))), ("balance", Round(a.Total)),
+                        ("opening", Round(opening)), ("invoiced", Round(invoiced)), ("wht", Round(wht)),
+                        ("receipts", Round(receipts)),
+                        ("onAccount", Round(a.Total - opening - (invoiced - wht - receipts))), ("balance", Round(a.Total)),
                         ("adv236Billed", Round(d?.Adv ?? 0m)));
                     row.Sub = a.OpenDocuments + " open bill" + (a.OpenDocuments == 1 ? "" : "s");
                     return row;
@@ -1242,7 +1254,15 @@ namespace MyApp.Api.Services.Implementations
             result.Note = "What is still due on each bill (grand total less WHT and receipts applied), plus money held on account.";
             result.Columns = Cols(InvoiceCols);
             var rows = new List<DashboardBreakdownRowDto>();
-            var onAccount = (party?.Total ?? 0m) - list.Sum(r => r.GrandTotal - r.Wht - r.AmountPaid);
+            var openingLeft = openingByClient.GetValueOrDefault(clientId);
+            if (Math.Abs(openingLeft) >= 0.005m)
+                rows.Add(new DashboardBreakdownRowDto
+                {
+                    Label = "Opening balance",
+                    Sub = openingLeft < 0m ? "Paid ahead when the books started" : "Owed when the books started",
+                    Amount = Round(openingLeft),
+                });
+            var onAccount = (party?.Total ?? 0m) - openingLeft - list.Sum(r => r.GrandTotal - r.Wht - r.AmountPaid);
             if (Math.Abs(onAccount) >= 0.005m)
                 rows.Add(new DashboardBreakdownRowDto
                 {
@@ -2101,7 +2121,8 @@ namespace MyApp.Api.Services.Implementations
         private async Task<DashboardFbrKpis> ComputeFbrAsync(
             int companyId, DashboardPeriod period, HashSet<int>? divScope)
         {
-            var q = _context.Invoices
+            // An opening balance is never filed, so it is never "pending FBR".
+            var q = _context.Invoices.NotOpening()
                 .AsNoTracking()
                 // Debit/Credit Notes (DocumentType 9/10) are REVERSALS, not
                 // sales — including them would double-count a reversed sale

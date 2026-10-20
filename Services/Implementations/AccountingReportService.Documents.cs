@@ -154,7 +154,8 @@ namespace MyApp.Api.Services.Implementations
 
             if (sales)
             {
-                var q = _context.Invoices.AsNoTracking()
+                // An opening balance is brought forward, not sold (ClientOpeningBalance).
+                var q = _context.Invoices.AsNoTracking().NotOpening()
                     .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled);
                 // Notes have their own report; a register of invoices should not mix
                 // them in, or the totals stop meaning "what we sold".

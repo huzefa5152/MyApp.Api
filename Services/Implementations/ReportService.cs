@@ -66,7 +66,8 @@ namespace MyApp.Api.Services.Implementations
                 .Where(c => c.Id == companyId)
                 .Select(c => new { Name = c.BrandName ?? c.Name, c.InvoiceNumberPrefix })
                 .FirstOrDefaultAsync();
-            var invoiceQuery = _context.Invoices.AsNoTracking().AsSplitQuery()
+            // A customer's opening balance is brought forward, not sold.
+            var invoiceQuery = _context.Invoices.AsNoTracking().AsSplitQuery().NotOpening()
                 .Include(i => i.Client).Include(i => i.Items)
                 .Where(i => i.CompanyId == companyId && i.Date >= from && i.Date < until
                     && i.NoteKind == 0 && !i.IsDemo);

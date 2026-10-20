@@ -298,10 +298,12 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
-### 2026-10-20 — Roles & Permissions tree regrouped
+### 2026-10-20 — Roles & Permissions tree regrouped; opening balance in the Opening column
 
 - **The permission editor now follows the sidebar.** Sections are Dashboards, Stock, Sales, Purchases, Accounting, Reports, Master Data, Settings and Administration; each module is named as its menu item, and every action is in plain words ("See list", "Add", "Edit", "Submit to FBR", "Sell more than is in stock"). Actions appear in the order you meet them, not alphabetically. No permission was added, removed or renamed: every role keeps exactly what it had.
 - **Customer opening balance** moved to Master Data → Clients → Opening balance, and that one tick is now enough to use it.
+- **Customer Ledger** shows an opening balance in the **Opening** column (and as the drill-down's Opening figure) whatever date it was entered on, instead of under Invoiced. The opening-balance form now suggests the day before the company's first bill.
+- **Opening balances, everywhere a balance is read.** The Clients A/R column, aged receivables, the dashboard receivables figure and drill (its own "Opening balance" column) and the customer portal's outstanding total now include them — including a customer who had paid ahead. They are no longer counted as sales or as invoices anywhere (sales register, Invoice Sales Detail, FBR pending count, invoice counts), no longer appear on the Bills / Invoices / Credit Notes lists, and cannot be edited, deleted, voided, printed or sent to FBR as a bill. Receipts settle an opening balance first, whatever date it carries. An opening balance no longer locks the company's starting numbers or stops the general ledger being turned on.
 
 ### 2026-10-20 — Customer opening balances
 

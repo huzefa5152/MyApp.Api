@@ -1656,6 +1656,24 @@ Overview (`pages/DashboardPage.jsx`) and Accounting (`pages/AccountingDashboardP
   removed, or flip to paid-ahead. The period lock applies to both dates.
 - Permission: `Clients > Opening balance` (key unchanged). The GET that the
   dialog reads takes the same key, so one tick is enough (§2b rule 7).
+- **Where it must show, and where it must not** (2026-10-20). `ClientOpeningBalance`
+  holds the two shared pieces; reuse them, never restate them:
+  - `NotOpening()` on every query that counts SALES or lists bills / invoices /
+    credit notes as documents: bill lists and counts, Clients-page counts and
+    Documents tab, sales register, Invoice Sales Detail (both copies),
+    dashboard FBR KPI, the start-numbering lock, the GL switch-on guard.
+  - `PaidAheadByClientAsync` is THE rule for a paid-ahead opening in a
+    receivable built from sale invoices (which drop credit notes): Clients A/R,
+    aged receivables (and so the dashboard tile), customer portal.
+  - It is a BALANCE everywhere a balance is read: the ledger's Opening figure,
+    the dashboard receivables drill's own "Opening balance" column / row, the
+    portal header, labelled "Opening balance" in the party reports.
+  - Receipts settle it FIRST, whatever its date (`OutstandingInvoice.IsOpening`
+    in the planner; `for-receipt` lists it first, flagged `isOpening`).
+  - Bill actions refuse it (`InvoiceService.AssertNotOpeningBalance`: edit,
+    item-type edit, delete, void, FBR exclusion); print returns 404.
+  - A new screen that reads invoices per customer must pick one of the two.
+    Suite: `test_customer_ledger.py` suite 10.
 - Suites: `scripts/test_customer_ledger.py` suite 9, tenant suite 14.
 
 ### 5c. Customer Portal — the only anonymous surface

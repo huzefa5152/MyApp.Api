@@ -143,7 +143,7 @@ namespace MyApp.Api.Services.Implementations
             // company field — otherwise a division-only company shows its
             // company numbers needlessly frozen at 0.
             var hasChallans = await _context.DeliveryChallans.AnyAsync(c => c.CompanyId == company.Id && c.DivisionId == null);
-            var hasInvoices = await _context.Invoices.AnyAsync(i => i.CompanyId == company.Id && i.DivisionId == null);
+            var hasInvoices = await _context.Invoices.NotOpening().AnyAsync(i => i.CompanyId == company.Id && i.DivisionId == null);
             var hasSalesQuotes = await _context.SalesQuotes.AnyAsync(q => q.CompanyId == company.Id && q.DivisionId == null);
             var hasSalesOrders = await _context.SalesOrders.AnyAsync(o => o.CompanyId == company.Id && o.DivisionId == null);
             return ToDto(company, hasChallans, hasInvoices, hasSalesQuotes, hasSalesOrders);
@@ -333,7 +333,7 @@ namespace MyApp.Api.Services.Implementations
                 company.CurrentChallanNumber = 0;
             }
 
-            var hasInvoices = await _context.Invoices.AnyAsync(i => i.CompanyId == id && i.DivisionId == null);
+            var hasInvoices = await _context.Invoices.NotOpening().AnyAsync(i => i.CompanyId == id && i.DivisionId == null);
             if (!hasInvoices)
             {
                 company.StartingInvoiceNumber = dto.StartingInvoiceNumber;
@@ -365,7 +365,7 @@ namespace MyApp.Api.Services.Implementations
                 company.StartingDebitNoteNumber = dto.StartingDebitNoteNumber > 0 ? dto.StartingDebitNoteNumber : 1;
                 company.CurrentDebitNoteNumber = 0;
             }
-            var hasCreditNotes = await _context.Invoices.AnyAsync(i => i.CompanyId == id && i.DivisionId == null && i.DocumentType == 10);
+            var hasCreditNotes = await _context.Invoices.NotOpening().AnyAsync(i => i.CompanyId == id && i.DivisionId == null && i.DocumentType == 10);
             if (!hasCreditNotes)
             {
                 company.StartingCreditNoteNumber = dto.StartingCreditNoteNumber > 0 ? dto.StartingCreditNoteNumber : 1;

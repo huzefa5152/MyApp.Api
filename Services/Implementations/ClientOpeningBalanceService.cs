@@ -41,7 +41,20 @@ namespace MyApp.Api.Services.Implementations
         {
             await AssertClientAsync(companyId, clientId);
             var doc = await FindAsync(companyId, clientId, track: false);
-            return ToDto(clientId, doc);
+            var dto = ToDto(clientId, doc);
+
+            // The ledger always opens on it whatever its date, but the GL entry
+            // is dated on it, so it belongs before the first document here.
+            var firstBill = await _db.Invoices.AsNoTracking()
+                .Where(i => i.CompanyId == companyId && !i.IsDemo
+                         && (i.ExternalRef == null || !i.ExternalRef.StartsWith(ClientOpeningBalance.Prefix)))
+                .MinAsync(i => (DateTime?)i.Date);
+            var firstReceipt = await _db.Payments.AsNoTracking()
+                .Where(p => p.CompanyId == companyId)
+                .MinAsync(p => (DateTime?)p.Date);
+            var first = new[] { firstBill, firstReceipt }.Where(d => d.HasValue).Min();
+            dto.SuggestedDate = first?.Date.AddDays(-1);
+            return dto;
         }
 
         public async Task<ClientOpeningBalanceDto> SetAsync(int companyId, int clientId, SetClientOpeningBalanceDto dto)

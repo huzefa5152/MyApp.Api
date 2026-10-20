@@ -553,16 +553,17 @@ namespace MyApp.Api.Services.Implementations
                 foreach (var i in await invoices.Select(i => new
                 {
                     i.Id, i.InvoiceNumber, i.Date, i.ClientId, i.DocumentType,
-                    Owed = i.GrandTotal - i.WithholdingTaxAmount, i.PaymentTerms, i.AmountPaid,
+                    Owed = i.GrandTotal - i.WithholdingTaxAmount, i.PaymentTerms, i.AmountPaid, i.ExternalRef,
                 }).ToListAsync())
                 {
+                    var isOpening = ClientOpeningBalance.IsOpening(i.ExternalRef);
                     // Notes carry no AmountPaid of their own, so only real invoices
                     // take part in the settlement reconciliation below.
                     if (i.DocumentType != 9 && i.DocumentType != 10)
                         documents.Add(new PartyDocument
                         {
                             Id = i.Id, Date = i.Date, PartyId = i.ClientId,
-                            Reference = $"INV-{i.InvoiceNumber}", AmountPaid = i.AmountPaid,
+                            Reference = isOpening ? "Opening balance" : $"INV-{i.InvoiceNumber}", AmountPaid = i.AmountPaid,
                         });
 
                     // A credit note reduces what the customer owes; an invoice and a
@@ -571,9 +572,9 @@ namespace MyApp.Api.Services.Implementations
                     moves.Add(new PartyMovement
                     {
                         Date = i.Date,
-                        Transaction = i.DocumentType switch
+                        Transaction = isOpening ? "Opening balance" : i.DocumentType switch
                         { 10 => "Credit Note", 9 => "Debit Note", _ => "Sales Invoice" },
-                        Reference = i.DocumentType switch
+                        Reference = isOpening ? (isCredit ? "Opening advance" : "Opening balance") : i.DocumentType switch
                         { 10 => $"CN-{i.InvoiceNumber}", 9 => $"DN-{i.InvoiceNumber}", _ => $"INV-{i.InvoiceNumber}" },
                         SourceType = "Invoice",
                         SourceId = i.Id,
@@ -1061,10 +1062,12 @@ namespace MyApp.Api.Services.Implementations
                 {
                     i.Id, i.InvoiceNumber, i.Date, i.DueDate, i.ClientId,
                     Party = i.Client!.Name, i.GrandTotal, i.GSTAmount,
-                    i.WithholdingTaxAmount, i.AmountPaid,
+                    i.WithholdingTaxAmount, i.AmountPaid, i.ExternalRef,
                     Division = i.Division != null ? i.Division.Name : null,
                 }).ToListAsync())
-                .Select(x => BuildOutstanding($"INV-{x.InvoiceNumber}", x.Id, x.Date, x.DueDate,
+                .Select(x => BuildOutstanding(
+                    ClientOpeningBalance.IsOpening(x.ExternalRef) ? "Opening balance" : $"INV-{x.InvoiceNumber}",
+                    x.Id, x.Date, x.DueDate,
                     x.ClientId, x.Party, x.GrandTotal, x.GSTAmount, x.WithholdingTaxAmount,
                     x.AmountPaid, x.Division, today))
                 .ToList();

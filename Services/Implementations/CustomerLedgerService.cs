@@ -128,13 +128,19 @@ namespace MyApp.Api.Services.Implementations
                 .ThenBy(e => e.Reference, StringComparer.Ordinal)
                 .ToList();
 
-            // Opening balance = everything strictly before `from`, collapsed to
-            // one number; the window then carries a running balance from it.
-            decimal opening = 0m;
+            // A customer's opening balance (ClientOpeningBalance) is where the
+            // trail STARTS, whatever date it was entered on: it goes into the
+            // Opening figure for every window and is never a row, the same way
+            // the list's Opening column carries it.
+            decimal opening = ordered.Where(e => e.Type == TypeOpening).Sum(e => e.Credit - e.Debit);
+            ordered = ordered.Where(e => e.Type != TypeOpening).ToList();
+
+            // Plus everything strictly before `from`, collapsed to one number;
+            // the window then carries a running balance from it.
             if (from.HasValue)
             {
                 var start = from.Value.Date;
-                opening = ordered.Where(e => e.Date.Date < start).Sum(e => e.Credit - e.Debit);
+                opening += ordered.Where(e => e.Date.Date < start).Sum(e => e.Credit - e.Debit);
                 ordered = ordered.Where(e => e.Date.Date >= start).ToList();
             }
             if (to.HasValue)
@@ -468,7 +474,7 @@ namespace MyApp.Api.Services.Implementations
             // Sequential reads — never two concurrent AppDbContext operations.
             var docs = await _context.Invoices.AsNoTracking()
                 .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled)
-                .Select(i => new { i.ClientId, i.Date, i.GrandTotal, i.DocumentType })
+                .Select(i => new { i.ClientId, i.Date, i.GrandTotal, i.DocumentType, i.ExternalRef })
                 .ToListAsync();
 
             // Same rule as BuildEntriesAsync's receipt rows, from the same
@@ -531,6 +537,14 @@ namespace MyApp.Api.Services.Implementations
 
             foreach (var d in docs)
             {
+                // An opening balance is the Opening column for every window --
+                // never Invoiced / Received -- matching the drill-down.
+                if (ClientOpeningBalance.IsOpening(d.ExternalRef))
+                {
+                    if (acc.TryGetValue(d.ClientId, out var ob))
+                        ob.Opening += d.DocumentType == CreditNoteType ? -d.GrandTotal : d.GrandTotal;
+                    continue;
+                }
                 if (d.DocumentType == CreditNoteType) Add(d.ClientId, d.Date, 0m, d.GrandTotal);
                 else Add(d.ClientId, d.Date, d.GrandTotal, 0m);
             }

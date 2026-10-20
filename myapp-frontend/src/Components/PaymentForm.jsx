@@ -304,6 +304,8 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
             return {
               id: d.id,
               number: isReceipt ? d.invoiceNumber : d.purchaseBillNumber,
+              // A customer's opening balance: settled first, labelled as itself.
+              isOpening: !!d.isOpening,
               date: d.date,
               grandTotal: d.grandTotal,
               balanceDue,
@@ -1074,7 +1076,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                         return (
                           <div key={d.id} style={allocCard}>
                             <div style={allocCardHead}>
-                              <strong>#{d.number}</strong>
+                              <strong>{d.isOpening ? "Opening balance" : `#${d.number}`}</strong>
                               <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</span>
                             </div>
                             <div style={allocCardMeta}>
@@ -1119,7 +1121,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                             return (
                               <Fragment key={d.id}>
                                 <tr>
-                                  <td style={cellTd}><strong>#{d.number}</strong></td>
+                                  <td style={cellTd}><strong>{d.isOpening ? "Opening balance" : `#${d.number}`}</strong></td>
                                   <td style={cellTd}>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</td>
                                   <td style={{ ...cellTd, textAlign: "right" }}>{d.grandTotal.toLocaleString()}</td>
                                   <td style={{ ...cellTd, textAlign: "right" }}>{d.available.toLocaleString()}</td>

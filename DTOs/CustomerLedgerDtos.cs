@@ -137,6 +137,9 @@ namespace MyApp.Api.DTOs
         /// the amount cannot go below it.</summary>
         public decimal AmountSettled { get; set; }
         public int? DocumentId { get; set; }
+        /// <summary>The day before the company's first bill or receipt -- where
+        /// an opening balance belongs. Null when the company has none yet.</summary>
+        public DateTime? SuggestedDate { get; set; }
     }
 
     public class SetClientOpeningBalanceDto

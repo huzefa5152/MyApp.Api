@@ -5,7 +5,8 @@ namespace MyApp.Api.Helpers
     /// withheld slice — and <paramref name="AmountPaid"/> what has already been
     /// settled against it (cash + settle-remainder adjustment).</summary>
     public sealed record OutstandingInvoice(
-        int Id, int InvoiceNumber, DateTime Date, decimal Collectible, decimal AmountPaid)
+        int Id, int InvoiceNumber, DateTime Date, decimal Collectible, decimal AmountPaid,
+        bool IsOpening = false)
     {
         /// <summary>What is still claimable. Never negative: an over-settled
         /// invoice offers no headroom rather than borrowing from its neighbours.</summary>
@@ -44,7 +45,11 @@ namespace MyApp.Api.Helpers
     ///     the service refuses ("each allocation must apply a positive amount"),
     ///     and it would clutter the document with allocations that mean nothing.
     ///
-    /// Ordering is Date then Id — the same tie-break <c>StockValuation</c> uses,
+    /// A customer's OPENING BALANCE is settled before any bill, whatever date it
+    /// was entered on: it is the oldest debt by definition, and an opening typed
+    /// in today would otherwise be paid last.
+    ///
+    /// Ordering is then Date then Id — the same tie-break <c>StockValuation</c> uses,
     /// so two invoices raised the same day are consumed in the order they were
     /// written rather than in whatever order the database returned them.
     /// </summary>
@@ -56,7 +61,7 @@ namespace MyApp.Api.Helpers
             var left = available > 0m ? available : 0m;
 
             foreach (var inv in (invoices ?? Enumerable.Empty<OutstandingInvoice>())
-                         .OrderBy(i => i.Date).ThenBy(i => i.Id))
+                         .OrderByDescending(i => i.IsOpening).ThenBy(i => i.Date).ThenBy(i => i.Id))
             {
                 if (left <= 0m) break;
                 var due = inv.BalanceDue;

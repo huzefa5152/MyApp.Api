@@ -406,6 +406,20 @@ namespace MyApp.Api.Services.Implementations
                 .SumAsync();
             var advance = rawAdvance < 0 ? 0 : rawAdvance;
 
+            // The customer's own OPENING BALANCE (ClientOpeningBalance) -- what
+            // they owed, or had paid ahead, when their books started here. It is
+            // not a document they can open, but it is their balance, so the
+            // header carries it: owed adds to outstanding, paid ahead to credit.
+            var openings = await _context.Invoices.AsNoTracking().OnlyOpening()
+                .Where(i => i.CompanyId == portal.CompanyId && i.ClientId == portal.ClientId
+                         && !i.IsCancelled && !i.IsDemo)
+                .Select(i => new { i.DocumentType, Left = i.GrandTotal - i.AmountPaid })
+                .ToListAsync();
+            var openingOwed = openings.Where(o => o.DocumentType != 10).Sum(o => o.Left);
+            var openingAhead = openings.Where(o => o.DocumentType == 10).Sum(o => o.Left);
+            if (openingOwed > 0) summary.OutstandingAmount += openingOwed;
+            if (openingAhead > 0) advance += openingAhead;
+
             var afterAdvance = summary.OutstandingAmount - advance;
             summary.OutstandingAmount = afterAdvance > 0 ? afterAdvance : 0;
             summary.OverpaidAmount += afterAdvance < 0 ? -afterAdvance : 0;

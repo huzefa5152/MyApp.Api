@@ -331,14 +331,14 @@ namespace MyApp.Api.Services.Implementations
                 .Select(g => new { ClientId = g.Key, N = g.Count() })
                 .ToDictionaryAsync(x => x.ClientId, x => x.N);
 
-            var invoiceCounts = await _context.Invoices
+            var invoiceCounts = await _context.Invoices.NotOpening()
                 .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
                             && i.DocumentType != 9 && i.DocumentType != 10)
                 .GroupBy(i => i.ClientId)
                 .Select(g => new { ClientId = g.Key, N = g.Count() })
                 .ToDictionaryAsync(x => x.ClientId, x => x.N);
 
-            var creditNoteCounts = await _context.Invoices
+            var creditNoteCounts = await _context.Invoices.NotOpening()
                 .Where(i => i.CompanyId == companyId && !i.IsDemo && i.DocumentType == 10)
                 .GroupBy(i => i.ClientId)
                 .Select(g => new { ClientId = g.Key, N = g.Count() })
@@ -368,6 +368,10 @@ namespace MyApp.Api.Services.Implementations
                 .ToDictionaryAsync(x => x.ClientId, x => x.Bal);
 
             var onAccountByClient = await PartyOnAccount.NetByPartyAsync(_context, companyId, receivables: true);
+            // A customer who had paid ahead when their books started (an opening
+            // credit) owes that much less -- ClientOpeningBalance's A/R rule.
+            foreach (var (cid, credit) in await ClientOpeningBalance.PaidAheadByClientAsync(_context, companyId))
+                arByClient[cid] = arByClient.GetValueOrDefault(cid) - credit;
 
             var whtByClient = await _context.WithholdingTaxReceipts
                 .Where(r => r.CompanyId == companyId)
@@ -456,7 +460,9 @@ namespace MyApp.Api.Services.Implementations
                 .ToListAsync();
 
             // Sale invoices (exclude demo / cancelled / credit+debit notes).
-            var invBase = _context.Invoices.Where(i => i.ClientId == clientId && !i.IsDemo && !i.IsCancelled && i.DocumentType != 9 && i.DocumentType != 10);
+            // Opening balances are not documents here: they show on the Statement
+            // tab as the Opening figure and are managed from Opening balance.
+            var invBase = _context.Invoices.NotOpening().Where(i => i.ClientId == clientId && !i.IsDemo && !i.IsCancelled && i.DocumentType != 9 && i.DocumentType != 10);
             dto.Invoices.Total = await invBase.CountAsync();
             dto.Invoices.Rows = await invBase.AsNoTracking()
                 .OrderByDescending(i => i.Date).ThenByDescending(i => i.InvoiceNumber).Take(CAP)
@@ -472,7 +478,7 @@ namespace MyApp.Api.Services.Implementations
                 .ToListAsync();
 
             // Credit notes (DocumentType 10).
-            var cnBase = _context.Invoices.Where(i => i.ClientId == clientId && !i.IsDemo && i.DocumentType == 10);
+            var cnBase = _context.Invoices.NotOpening().Where(i => i.ClientId == clientId && !i.IsDemo && i.DocumentType == 10);
             dto.CreditNotes.Total = await cnBase.CountAsync();
             dto.CreditNotes.Rows = await cnBase.AsNoTracking()
                 .OrderByDescending(i => i.Date).ThenByDescending(i => i.InvoiceNumber).Take(CAP)

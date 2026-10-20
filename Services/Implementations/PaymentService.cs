@@ -760,7 +760,7 @@ namespace MyApp.Api.Services.Implementations
                 .Select(i => new
                 {
                     i.Id, i.InvoiceNumber, i.Date, i.GrandTotal,
-                    i.WithholdingTaxAmount, i.AmountPaid,
+                    i.WithholdingTaxAmount, i.AmountPaid, i.ExternalRef,
                 })
                 .AsNoTracking()
                 .ToListAsync();
@@ -769,7 +769,7 @@ namespace MyApp.Api.Services.Implementations
                 .Select(i => new OutstandingInvoice(
                     i.Id, i.InvoiceNumber, i.Date,
                     WithholdingTaxCalculator.Collectible(i.GrandTotal, i.WithholdingTaxAmount),
-                    i.AmountPaid))
+                    i.AmountPaid, ClientOpeningBalance.IsOpening(i.ExternalRef)))
                 .Where(i => i.BalanceDue > 0m)
                 .ToList();
         }

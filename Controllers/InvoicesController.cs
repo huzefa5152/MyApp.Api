@@ -137,13 +137,26 @@ namespace MyApp.Api.Controllers
             var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
             var result = await _service.GetPagedByCompanyAsync(
                 companyId, 1, PaginationHelper.Clamp(100, _defaultPageSize), null, clientId, null, null, null, null, divScope);
-            return Ok(new
+
+            // The bill list leaves out the customer's opening balance (it is not a
+            // bill), but money can be applied to it -- first, as the oldest debt.
+            var opening = await _context.Invoices.AsNoTracking().OnlyOpening()
+                .Where(i => i.CompanyId == companyId && i.ClientId == clientId
+                         && i.DocumentType == null && !i.IsCancelled && !i.IsDemo)
+                .Select(i => new { i.Id, i.InvoiceNumber, i.Date, i.GrandTotal, i.AmountPaid })
+                .FirstOrDefaultAsync();
+            var items = result.Items.Select(i => new
             {
-                items = result.Items.Select(i => new
+                i.Id, i.InvoiceNumber, i.Date, i.GrandTotal, i.AmountPaid, i.BalanceDue, i.IsCancelled,
+                IsOpening = false,
+            }).ToList();
+            if (opening != null)
+                items.Insert(0, new
                 {
-                    i.Id, i.InvoiceNumber, i.Date, i.GrandTotal, i.AmountPaid, i.BalanceDue, i.IsCancelled,
-                }),
-            });
+                    opening.Id, opening.InvoiceNumber, opening.Date, opening.GrandTotal, opening.AmountPaid,
+                    BalanceDue = opening.GrandTotal - opening.AmountPaid, IsCancelled = false, IsOpening = true,
+                });
+            return Ok(new { items });
         }
 
         [HttpGet("{id}")]
