@@ -1,134 +1,105 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Permission section layout
+// Permission section layout — the Roles & Permissions editor's tree
 // ─────────────────────────────────────────────────────────────────────────────
-// Single source of truth for how the Roles & Permissions editor groups the
-// raw permission catalog (whose first-level grouping is `Module`) under the
-// app's navbar super-groups (Sales / Purchases / Configuration /
-// Administration), so the editor mirrors what users see in the sidebar.
+// The editor reads: SECTION (here) -> MODULE -> PAGE -> ACTION (catalog).
+// Sections are the SIDEBAR's own groups, in sidebar order, so an admin finds a
+// permission where they find the screen. Module / page / action are the plain
+// words in Helpers/PermissionCatalog.cs; the module string IS the label.
 //
-// HOW TO ADD A NEW MODULE OR SCREEN
-// ---------------------------------
-// 1. Add the permission(s) to `Helpers/PermissionCatalog.cs` (backend) using
-//    a Module name — e.g. "MyNewModule".
-// 2. Add ONE entry below in the `modules` array of the section it belongs
-//    under: `{ key: "MyNewModule", label: "My New Module" }`.
-// 3. If the module needs a brand-new section (e.g. "Reports"), append a
-//    section object to PERMISSION_SECTIONS — that's it; the editor will
-//    render it automatically with header, expand/collapse, and bulk-select.
-//
-// The `key` MUST match the catalog `Module` string exactly. The optional
-// `label` overrides the displayed name (use it when the catalog uses a
-// CamelCase key like "PurchaseBills" but you want "Purchase Bills" in the UI).
-// Modules in the catalog that aren't listed here fall through to "Other"
-// so they still render — they just look uncategorized until added below.
+// The full rule (naming, vocabulary, how to add a feature's permission) is
+// CLAUDE.md §2b. scripts/verify_permission_sections.py enforces it: every
+// catalog module listed below exactly once, no stale entries, no developer
+// words in the labels.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const PERMISSION_SECTIONS = [
   {
-    // Dashboard is the home page — sits at the top of the role editor
-    // so it's the first thing admins land on when curating roles.
-    // Five-tier model (one page perm + four KPI-section perms) gives a
-    // clean read in the editor: bookkeeper → Sales+Purchases, FBR officer
-    // → FBR, inventory manager → Inventory, etc.
-    section: "Dashboard",
-    modules: [{ key: "Dashboard" }],
+    section: "Dashboards",
+    modules: [
+      { key: "Overview Dashboard" },
+      { key: "Accounting Dashboard" },
+    ],
   },
   {
-    // Module order inside each section mirrors the sidebar's item order so
-    // the role editor reads exactly like the navbar.
+    section: "Stock",
+    modules: [
+      { key: "Stock" },
+    ],
+  },
+  {
     section: "Sales",
     modules: [
-      { key: "SalesQuotes", label: "Sales Quotes" },
-      { key: "SalesOrders", label: "Sales Orders" },
-      { key: "Challans", label: "Delivery Challans" },
-      // Bills (data entry) and Invoices (FBR submission) are two views of
-      // the same underlying bill data. Each has its own permission namespace
-      // so a bookkeeper role can hold bills.* without invoices.fbr.*, and
-      // an FBR officer role can hold invoices.* without bills.manage.*.
-      { key: "Bills", label: "Bill" },
+      { key: "Sales Quotes" },
+      { key: "Sales Orders" },
+      { key: "Delivery Challans" },
+      { key: "Bills" },
       { key: "Invoices" },
-      { key: "WithholdingTax", label: "Withholding Tax" },
+      { key: "Withholding Tax" },
       { key: "Item Rate History" },
     ],
   },
   {
     section: "Purchases",
     modules: [
-      { key: "PurchaseBills", label: "Purchase Bills" },
-      { key: "PurchaseDebitNotes", label: "Purchase Debit Notes" },
-      { key: "GoodsReceipts", label: "Goods Receipts" },
-      { key: "Inventory" },
-      // FBR Annexure-A purchase ledger import — Module name in
-      // PermissionCatalog.cs is "FBR Import"; show it under Purchases
-      // since the resulting Suppliers / PurchaseBills land here.
-      { key: "FBR Import" },
-      // Customs GD costing workbook import — a GD is a procurement
-      // document, so it sits here even though it feeds the Inventory
-      // "Actual Cost" figures above.
-      { key: "ImportCosting", label: "Import Costing" },
+      { key: "Purchase Bills" },
+      { key: "Purchase Debit Notes" },
+      { key: "Goods Receipts" },
+      { key: "FBR Purchase Import" },
+      { key: "Import Costing" },
     ],
   },
   {
-    // Everything under the sidebar's Accounting group (receipts, payments,
-    // transfers, journals, CoA, GL, reports, data migration) shares the
-    // single "Accounting" catalog module. Customer Ledger is its own catalog
-    // module (CustomerLedgerController) but sits in this section, right next
-    // to the Receipts/Payments entries it derives from.
     section: "Accounting",
     modules: [
-      { key: "Accounting" },
-      { key: "CustomerLedger", label: "Customer Ledger" },
-      // Spreadsheet import (opening stock + customer ledger workbooks). Its
-      // own catalog module rather than "Accounting" because it is not gated
-      // to non-production the way accounting.import.* is — see
-      // PermissionCatalog.cs. Sits here since what it writes (clients,
-      // invoices, receipts, opening balances) lands in Accounting.
-      { key: "SpreadsheetImport", label: "Spreadsheet Import" },
+      { key: "Bank & Cash Accounts" },
+      { key: "Receipts" },
+      { key: "Payments" },
+      { key: "Customer Ledger" },
+      { key: "Transfers" },
+      { key: "Journal Entries" },
+      { key: "Chart of Accounts" },
+      { key: "Spreadsheet Import" },
     ],
   },
   {
-    // Reporting module — Sales report + Tax Sheet share the "Reports"
-    // catalog module.
     section: "Reports",
-    modules: [{ key: "Reports" }],
+    modules: [
+      { key: "Reports" },
+    ],
   },
   {
-    section: "Configuration",
+    section: "Master Data",
+    modules: [
+      { key: "Clients" },
+      { key: "Suppliers" },
+      { key: "Item Types" },
+      { key: "HS Codes" },
+      { key: "Non-Inventory Items" },
+      { key: "Units & Descriptions" },
+    ],
+  },
+  {
+    section: "Settings",
     modules: [
       { key: "Companies" },
       { key: "Divisions" },
-      { key: "Clients" },
-      // Per-client public invoice links. Sits next to Clients because a portal
-      // is configured for exactly one client.
-      { key: "CustomerPortal", label: "Customer Portal" },
-      { key: "Suppliers" },
-      { key: "ItemTypes", label: "Item Types" },
-      // HS / PCT tariff master an Item Type is classified against. Sits
-      // beside Item Types (not under FBR) because it is reference data
-      // usable with FBR integration switched off.
-      { key: "HsCodes", label: "HS Codes" },
-      { key: "NonInventoryItems", label: "Non-Inventory Items" },
-      { key: "Configuration", label: "Lookups" },
-      { key: "POFormats", label: "PO Formats" },
-      { key: "ImportFeedback", label: "Import Feedback" },
-      { key: "PrintTemplates", label: "Print Templates" },
+      { key: "Customer Portal" },
+      { key: "Print Templates" },
+      { key: "PO Formats" },
       { key: "FBR" },
-      // The Configuration → Navigation Menu document library: folders plus
-      // the attachments that also power every transaction module's clip.
-      { key: "Folders" },
-      { key: "Attachments" },
+      { key: "Folders & Attachments" },
+      { key: "Import Feedback" },
     ],
   },
   {
     section: "Administration",
     modules: [
       { key: "Users" },
-      { key: "RBAC", label: "Roles & Permissions" },
+      { key: "Roles & Permissions" },
       { key: "Tenant Access" },
-      // Division-level restriction grants — managed from the Tenant Access
-      // page's "Divisions" button, so it sits right below Tenant Access.
       { key: "Division Access" },
-      { key: "AuditLogs", label: "Audit Logs" },
+      { key: "Audit Logs" },
+      { key: "Data Migration" },
     ],
   },
 ];

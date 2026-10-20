@@ -24,6 +24,15 @@ pushed history.
 itself — checking one out is the whole switch. Production databases are
 READ-ONLY; no write without the maintainer's say-so in that same conversation.
 
+## Every permission follows one tree
+
+Adding or moving a permission (new feature, new screen, a fix that needs a new
+gate) follows `CLAUDE.md` §2b: Section = the sidebar group, Module = the screen
+as the menu names it, Page = a part of it, Action = plain words (See, Add,
+Edit, Delete, Print / PDF). Never rename a key once shipped. The permission
+belongs where its BUTTON is. Run `python scripts/verify_permission_sections.py`
+before committing; it fails on any break of the rule.
+
 ## One commit does one thing
 
 Stage explicit paths: `git commit -F <msgfile> -- <paths>`. Never `git add -A`.

@@ -139,9 +139,11 @@ namespace MyApp.Api.Controllers
             }
         }
             /// <summary>A customer's opening balance (signed: + owes, - paid ahead).
-        /// The client is resolved inside the company, so a foreign id 404s.</summary>
+        /// The client is resolved inside the company, so a foreign id 404s.
+        /// Gated on the same key as the write: only the dialog reads it, and
+        /// one tick (Clients -> Opening balance) must be enough to use it.</summary>
         [HttpGet("company/{companyId}/client/{clientId}/opening-balance")]
-        [HasPermission("customerledger.list.view")]
+        [HasPermission("customerledger.opening.manage")]
         public async Task<ActionResult<ClientOpeningBalanceDto>> GetOpening(int companyId, int clientId)
         {
             await _access.AssertAccessAsync(CurrentUserId, companyId);

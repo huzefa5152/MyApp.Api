@@ -146,13 +146,68 @@ const { has } = usePermissions();
 Action buttons that the user can't activate **must not render**. Don't show a
 button that 403s on click.
 
-**Permission-module grouping (user rule, 2026-07-04):** every `Module` string
-in `PermissionCatalog.cs` **must** be mapped to its navbar section in
-`myapp-frontend/src/config/permissionSections.js` — nothing may fall into the
-role editor's "Other" bucket. When a new feature adds a permission module,
-add the mapping in the same change, under the section where the feature lives
-in the sidebar. `python scripts/verify_permission_sections.py` enforces this
-(fails on unmapped or stale modules) — run it whenever the catalog changes.
+The tree those keys appear in, and how to add one, is §2b. Read it before
+adding or moving any permission.
+
+### 2b. The permission structure — every feature, every bug fix (2026-10-20)
+
+Admins who set up roles are not technical. They find a permission by where
+the screen sits in the SIDEBAR, and they read its label as an instruction.
+So the role editor is one fixed tree:
+
+```
+SECTION        (permissionSections.js)   = a sidebar group, sidebar order
+  MODULE       (catalog, 2nd string)     = the screen / menu item, as named in the menu
+    PAGE       (catalog, 3rd string)     = a part of that screen or a task
+      ACTION   (catalog, 4th string)     = what the user may DO, in their words
+```
+
+Sections, in this order and no others:
+**Dashboards, Stock, Sales, Purchases, Accounting, Reports, Master Data,
+Settings, Administration.** (Stock is the home of the Inventory screen and its
+tools; everything else matches the sidebar group of the same name.)
+
+**Adding a permission (new feature, new screen, a bug fix that needs a new gate):**
+
+1. **Key** — `area.page.action`, lower-case, never renamed once shipped (roles
+   hold grants by key; a rename silently revokes it for every role). Add it to
+   `Helpers/PermissionCatalog.cs` NEXT TO its module's other keys, in the order
+   the user meets them: see, add, edit, delete, print, then special actions.
+   The editor shows them in catalog order, not alphabetically.
+2. **Module** — the screen's name exactly as the sidebar shows it ("Delivery
+   Challans", "Clients", "Import Costing"). A permission belongs to the screen
+   where its BUTTON is, not to the service that implements it: the customer
+   opening balance is enforced in `CustomerLedgerController` but its button is
+   on the Clients screen, so it is `Clients > Opening balance`. Reuse an
+   existing module whenever the screen exists; a new module only for a new
+   menu item.
+3. **Page** — a part of the screen or a task ("FBR filing", "Opening stock",
+   "Letters of Credit"). Never "Manage", "List", "Page" or "View".
+4. **Action** — plain words for what the user does: **See / See list, Add,
+   Edit, Delete, Print / PDF, Download Excel, Import, Assign**, or a short
+   phrase for anything special ("Submit to FBR", "Sell more than is in stock",
+   "Copy to another company"). Never View / Create / Update / Manage / Read /
+   Allow, and never CamelCase.
+5. **Description** — one sentence saying what it lets the user do, shown as
+   the checkbox tooltip.
+6. **A new module** — add `{ key: "<Module>" }` to its section in
+   `myapp-frontend/src/config/permissionSections.js`, in sidebar order.
+7. **Gate both ends** (§2): `[HasPermission("key")]` on the action and
+   `has("key")` / `<Can>` on the button. One feature = one tick: if the button
+   opens a dialog that reads data, the read endpoint takes the SAME key, or
+   the admin has to discover a second permission elsewhere in the tree.
+8. **Run `python scripts/verify_permission_sections.py`.** It fails on: an
+   unlisted or stale module, a section out of order, a duplicate or
+   badly-shaped key, a CamelCase or developer-word label, two keys with the
+   same Module > Page > Action, and any key the code checks
+   (`HasPermission`, `has()`, `<Can>`, nav `permission:`) that is not in the
+   catalog.
+
+**Regrouping or relabelling is safe** — module, page and action are display
+text; `RbacSeeder` updates them by key on startup and grants are untouched.
+Changing a KEY is not safe; do it only with a migration that moves the grants,
+and only when the maintainer asks. Prove a regroup changed nothing by
+comparing every role's key list before and after.
 
 ### 3. Mobile-first UI
 
@@ -1599,6 +1654,8 @@ Overview (`pages/DashboardPage.jsx`) and Accounting (`pages/AccountingDashboardP
   sets `GlLockDate` and REPLACES the A/R account's opening figure.
 - Receipts may be allocated to it; once they are, it cannot drop below them, be
   removed, or flip to paid-ahead. The period lock applies to both dates.
+- Permission: `Clients > Opening balance` (key unchanged). The GET that the
+  dialog reads takes the same key, so one tick is enough (§2b rule 7).
 - Suites: `scripts/test_customer_ledger.py` suite 9, tenant suite 14.
 
 ### 5c. Customer Portal — the only anonymous surface
@@ -2389,7 +2446,7 @@ written down as the expectation.
 
 | Need | File |
 |---|---|
-| Add a permission key | `Helpers/PermissionCatalog.cs` |
+| Add a permission key | `Helpers/PermissionCatalog.cs` + `permissionSections.js` -- follow §2b, then `scripts/verify_permission_sections.py` |
 | Add a tenant guard | use `ICompanyAccessGuard` (registered in `Program.cs`) |
 | Clamp page size | `Helpers/PaginationHelper.cs` |
 | Redact a new sensitive field | `Helpers/SensitiveDataRedactor.cs` |

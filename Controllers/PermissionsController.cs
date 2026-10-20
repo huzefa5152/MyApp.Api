@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 using MyApp.Api.Middleware;
 using MyApp.Api.Services.Interfaces;
 
@@ -55,9 +56,18 @@ namespace MyApp.Api.Controllers
         [HasPermission("rbac.permissions.view")]
         public async Task<ActionResult<List<PermissionTreeDto>>> GetTree()
         {
-            var perms = await _context.Permissions
-                .OrderBy(p => p.Module).ThenBy(p => p.Page).ThenBy(p => p.Action)
-                .ToListAsync();
+            // Pages and actions keep the order they are WRITTEN in the catalog
+            // (See, Add, Edit, Delete, Print), not the alphabet -- the editor is
+            // read by non-technical admins. A row no longer in the catalog sorts
+            // last. Sections and module order come from permissionSections.js.
+            var order = PermissionCatalog.All
+                .Select((p, i) => (p.Key, i))
+                .ToDictionary(x => x.Key, x => x.i);
+            int Rank(string key) => order.TryGetValue(key, out var i) ? i : int.MaxValue;
+
+            var perms = (await _context.Permissions.ToListAsync())
+                .OrderBy(p => p.Module).ThenBy(p => Rank(p.Key))
+                .ToList();
 
             var tree = perms
                 .GroupBy(p => p.Module)

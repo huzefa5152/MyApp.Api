@@ -298,6 +298,11 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-10-20 — Roles & Permissions tree regrouped
+
+- **The permission editor now follows the sidebar.** Sections are Dashboards, Stock, Sales, Purchases, Accounting, Reports, Master Data, Settings and Administration; each module is named as its menu item, and every action is in plain words ("See list", "Add", "Edit", "Submit to FBR", "Sell more than is in stock"). Actions appear in the order you meet them, not alphabetically. No permission was added, removed or renamed: every role keeps exactly what it had.
+- **Customer opening balance** moved to Master Data → Clients → Opening balance, and that one tick is now enough to use it.
+
 ### 2026-10-20 — Customer opening balances
 
 - **Enter a customer's opening balance by hand.** Customers list → the wallet button on a customer: whether they owe us or had paid ahead, the amount and the date. Saving again replaces the earlier figure; Remove clears it. New permission `customerledger.opening.manage`.
