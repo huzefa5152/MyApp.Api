@@ -184,6 +184,13 @@ public partial class InvoiceService
             if (row.SaleType.Contains("3rd", StringComparison.OrdinalIgnoreCase) && row.RetailPrice <= 0)
                 throw new InvalidOperationException("Third-schedule goods need the original retail tax base. Keep this row separate and complete the bill's retail details first.");
         }
+        // Two rows FBR cannot tell apart are refused here, where the consultant
+        // can merge them, not at FBR (see FbrDuplicateItems). The description is
+        // the one FBR receives: blank when the company omits it.
+        var duplicate = FbrDuplicateItems.Message(dto.Rows.Select((r, n) => new FbrDuplicateItems.Item(
+            n + 1, r.HSCode, bill.Company?.FbrOmitProductDescription == true ? "" : r.Description,
+            r.SaleType, r.FbrUOMId is int uom ? uom.ToString() : r.UOM, r.SroScheduleNo, r.SroItemSerialNo)));
+        if (duplicate != null) throw new InvalidOperationException(duplicate);
         var taxBase = dto.Rows.Sum(r => r.SaleType!.Contains("3rd", StringComparison.OrdinalIgnoreCase)
             ? r.RetailPrice ?? 0m : r.ValueExclTax);
         if (Math.Round(taxBase * bill.GSTRate / 100m, 2, MidpointRounding.AwayFromZero) != bill.GSTAmount)

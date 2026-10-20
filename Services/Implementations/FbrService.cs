@@ -1191,6 +1191,14 @@ namespace MyApp.Api.Services.Implementations
                 });
             }
 
+            // FBR refuses an item listed twice ("DUPLICATE INVOICE EXISTS" on the
+            // repeat). Checked on the payload itself, so it covers saved filing
+            // rows and grouped bills alike, before anything is sent.
+            var duplicate = FbrDuplicateItems.Message(fbrRequest.Items.Select((it, n) => new FbrDuplicateItems.Item(
+                n + 1, it.HsCode, it.ProductDescription, it.SaleType, it.UoM, it.SroScheduleNo, it.SroItemSerialNo, it.Rate)));
+            if (duplicate != null)
+                return Fail($"Pre-validation failed:\n• {duplicate}");
+
             // ── Call FBR API ──
             var action = isSubmit ? "Submit" : "Validate";
             var url = isSubmit ? GetSubmitUrl(company) : GetValidateUrl(company);
@@ -1407,7 +1415,7 @@ namespace MyApp.Api.Services.Implementations
                         .ToList();
                     var itemMsg = itemErrors?.Count > 0
                         ? string.Join("; ", itemErrors.Select(e =>
-                            $"Item {e.ItemSNo}: [{e.ErrorCode}] {e.Error}"))
+                            $"Item {e.ItemSNo}: [{e.ErrorCode}] {FbrDuplicateItems.Explain(e.Error)}"))
                         : "";
 
                     var msg = !string.IsNullOrWhiteSpace(itemMsg) ? itemMsg
@@ -1439,7 +1447,7 @@ namespace MyApp.Api.Services.Implementations
                         .Where(s => s.StatusCode == "01")
                         .ToList();
                     var msg = errorItems?.Count > 0
-                        ? string.Join("; ", errorItems.Select(e => $"Item {e.ItemSNo}: [{e.ErrorCode}] {e.Error}"))
+                        ? string.Join("; ", errorItems.Select(e => $"Item {e.ItemSNo}: [{e.ErrorCode}] {FbrDuplicateItems.Explain(e.Error)}"))
                         : validation.Error ?? "FBR validation failed with unspecified item errors.";
                     // Surface the same operator-friendly NTN-context hint if
                     // any line error code matches a known STATL / scenario

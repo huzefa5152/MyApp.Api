@@ -64,7 +64,7 @@ public class FilingClassificationTests
                 return Task.FromResult(new HsCodeHints(Units, Units.FirstOrDefault(), new(), 18, SaleType, new()));
             });
             var service = new InvoiceService(null!, null!, null!, null!, Db, new ConfigurationBuilder().Build(),
-                null!, null!, tax, null!, NullLogger<InvoiceService>.Instance, items, fbr);
+                null!, null!, tax, null!, NullLogger<InvoiceService>.Instance, items, fbr, null!);
             var method = typeof(InvoiceService).GetMethod("ResolveNewFilingClassificationAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
             return await (Task<ItemType>)method.Invoke(service, new object[] { Row, 7 })!;
         }
@@ -230,7 +230,7 @@ public class FilingClassificationTests
             new() { new() { UOM_ID = 13, Description = "Numbers" }, new() { UOM_ID = 14, Description = "Feet" } }, null, new(), 18, SaleType, new())));
         var itemService = new ItemTypeService(new ItemTypeRepository(db), db, tax, null!, fbr);
         var service = new InvoiceService(new InvoiceRepository(db), null!, null!, null!, db,
-            new ConfigurationBuilder().Build(), audit, null!, tax, null!, NullLogger<InvoiceService>.Instance, itemService, fbr);
+            new ConfigurationBuilder().Build(), audit, null!, tax, null!, NullLogger<InvoiceService>.Instance, itemService, fbr, null!);
         TaxFilingRowDto Row(int[] sources, decimal value, string code = Code) => new() {
             SourceLineIds = sources.ToList(), Description = "New company furniture", HSCode = code,
             UOM = "Numbers", FbrUOMId = 13, Quantity = sources.Length, ValueExclTax = value
@@ -240,6 +240,14 @@ public class FilingClassificationTests
             var editor = (await service.GetTaxFilingAsync(invoice.Id))!;
             await Assert.ThrowsAsync<InvalidOperationException>(() => service.SaveTaxFilingAsync(invoice.Id,
                 new() { Version = editor.Version, Rows = new() { Row(new[] { ids[0] }, 50), Row(new[] { ids[1] }, 50, "9999.9999") } }, 1, "Local test", true));
+            db.ChangeTracker.Clear();
+            // Two rows FBR cannot tell apart (same HS code, description, unit and
+            // sale type) are refused at save, not by FBR as "DUPLICATE INVOICE
+            // EXISTS" (Hakimi INV-3973) — and the classification the first row
+            // created rolls back with the refusal.
+            var twin = await Assert.ThrowsAsync<InvalidOperationException>(() => service.SaveTaxFilingAsync(invoice.Id,
+                new() { Version = editor.Version, Rows = new() { Row(new[] { ids[0] }, 50), Row(new[] { ids[1] }, 50) } }, 1, "Local test", true));
+            Assert.Contains("Rows 1 and 2 are the same FBR item", twin.Message);
             db.ChangeTracker.Clear();
             Assert.False(await db.ItemTypes.AnyAsync(i => i.CompanyId == company.Id));
             Assert.False(await db.Units.AnyAsync(u => u.CompanyId == company.Id));

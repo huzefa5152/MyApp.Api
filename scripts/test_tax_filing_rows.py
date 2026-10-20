@@ -145,18 +145,27 @@ def main():
         good('PUT', path, admin, {'version': current['version'], 'rows': separate})
         taxprint = good('GET', f'/api/invoices/{iid}/print/tax-invoice', admin)
         check(len(taxprint['items']) == 2 and {r['hsCode'] for r in taxprint['items']} == {filing1['hsCode'], filing2['hsCode']}, 'consultant can keep groups separate under different HS codes')
-        # Three separately classified source lines stay separate even with identical HS codes.
-        three = [{'sourceLineIds': [i['id']], 'itemTypeId': filing1['id'], 'quantity': 1, 'valueExclTax': i['lineTotal']} for i in bill['items']]
+        # Three rows with the same classification AND description are one FBR item
+        # repeated: FBR rejects the repeat as "DUPLICATE INVOICE EXISTS" (Hakimi
+        # INV-3973), so the save refuses them instead of filing them.
+        identical = [{'sourceLineIds': [i['id']], 'itemTypeId': filing1['id'], 'quantity': 1, 'valueExclTax': i['lineTotal']} for i in bill['items']]
+        reject(identical, 'rows FBR cannot tell apart are refused before FBR')
+        # Rows that differ (here by description) stay separate and are not regrouped.
+        three = [{'sourceLineIds': [i['id']], 'itemTypeId': filing1['id'], 'description': f'Filing line {n + 1}',
+                  'quantity': 1, 'valueExclTax': i['lineTotal']} for n, i in enumerate(bill['items'])]
         current = good('GET', path, admin)
         good('PUT', path, admin, {'version': current['version'], 'rows': three})
         preview = good('GET', f'/api/fbr/{iid}/preview-payload', admin)
         payload = json.loads(preview['preview']['json'])
         check(len(payload['items']) == 3, 'explicit separate rows are not silently regrouped in FBR payload')
+        check(len({item['productDescription'] for item in payload['items']}) == 3, 'each separate row keeps its own description in the FBR payload')
         # Money rounding and further tax survive a nontrivial decomposition.
         rounding = create_bill((0.03, 0.03, 0.04), further=4)
         rid = rounding['id']
         re = good('GET', f'/api/invoices/{rid}/tax-filing', admin)
-        rr = [{'sourceLineIds': [i['id']], 'itemTypeId': filing1['id'], 'quantity': 1, 'valueExclTax': i['lineTotal']} for i in rounding['items']]
+        # Distinct descriptions: three identical rows would be refused as one FBR item repeated.
+        rr = [{'sourceLineIds': [i['id']], 'itemTypeId': filing1['id'], 'description': f'Rounding line {n + 1}',
+               'quantity': 1, 'valueExclTax': i['lineTotal']} for n, i in enumerate(rounding['items'])]
         good('PUT', f'/api/invoices/{rid}/tax-filing', admin, {'version': re['version'], 'rows': rr})
         rp = good('GET', f'/api/invoices/{rid}/print/tax-invoice', admin)
         check(round(sum(i['gstAmount'] for i in rp['items']), 2) == rounding['gstAmount'], 'rounding preserves document GST across tiny rows')
