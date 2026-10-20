@@ -44,6 +44,9 @@ Suites:
                                drill-down, the aggregate row, the client-detail
                                statement and the Customers-screen A/R column all
                                have to report the same number
+  9. Opening balance        -> one document per client, a second entry
+                               replaces it, A/R vs Retained earnings in the GL,
+                               dashboard sales unchanged, receipts protect it
 
 KNOWN LIMITATION, deliberately not asserted: invoices are charged at full
 GrandTotal while `Invoice.BalanceDue` settles against
@@ -693,6 +696,70 @@ def suite_8_income_line(base, token, cid, client_id, item_type_id, income_acct):
           eq(row.get("received"), 0), f"got {row.get('received')}")
 
 
+# ── Suite 9: opening balance entered by hand (2026-10-20) ─────────
+def suite_9_opening_balance(base, token, cid, client_id, item_type_id):
+    """A customer's opening balance is ONE migrated document per client that a
+    second entry REPLACES, posted Dr/Cr A/R against Retained earnings -- never
+    Sales, so no dashboard sales figure moves."""
+    suite = "9. Opening balance"
+    url = f"/api/customer-ledger/company/{cid}/client/{client_id}/opening-balance"
+
+    def tb(name):
+        _, t = http("GET", f"/api/accounting/reports/company/{cid}/trial-balance", base, token=token)
+        row = next((r for r in ((t or {}).get("rows") or []) if r.get("name") == name), None)
+        return float(row.get("closing") or 0) if row else 0.0
+
+    def sales():
+        _, k = http("GET", f"/api/dashboard/kpis?companyId={cid}&period=all-time", base, token=token)
+        return float(((k or {}).get("hero") or {}).get("totalSales") or 0)
+
+    def led():
+        _, l = http("GET", f"/api/customer-ledger/company/{cid}/client/{client_id}", base, token=token)
+        return l if isinstance(l, dict) else {}
+
+    ar0, re0, sales0 = tb("Accounts receivable"), tb("Retained earnings"), sales()
+
+    st, d = http("PUT", url, base, token=token, body={"amount": 80000, "date": days_ago_iso(30)})
+    check(suite, "owes 80,000 -> saved", st == 200 and eq((d or {}).get("amount"), 80000), f"{st} {d}")
+    l = led()
+    check(suite, "ledger closing 80,000, row reads 'Opening balance'",
+          eq(l.get("closingBalance"), 80000)
+          and any(e.get("type") == "Opening Balance" and e.get("reference") == "Opening balance"
+                  for e in l.get("entries") or []), f"{l.get('closingBalance')} {l.get('entries')}")
+    check(suite, "A/R +80,000 and Retained earnings -80,000 in the GL",
+          eq(tb("Accounts receivable") - ar0, 80000) and eq(tb("Retained earnings") - re0, -80000),
+          f"AR {tb('Accounts receivable') - ar0} RE {tb('Retained earnings') - re0}")
+    check(suite, "dashboard sales do not move (an opening balance is not a sale)",
+          eq(sales(), sales0), f"{sales0} -> {sales()}")
+
+    st, d = http("PUT", url, base, token=token, body={"amount": 50000, "date": days_ago_iso(30)})
+    check(suite, "a second entry REPLACES the first (A/R +50,000, not +130,000)",
+          st == 200 and eq(tb("Accounts receivable") - ar0, 50000) and eq(led().get("closingBalance"), 50000),
+          f"{st} AR {tb('Accounts receivable') - ar0}")
+
+    st, d = http("PUT", url, base, token=token, body={"amount": -15000, "date": days_ago_iso(30)})
+    l = led()
+    check(suite, "paid ahead 15,000 -> closing -15,000, A/R -15,000",
+          st == 200 and eq(l.get("closingBalance"), -15000) and eq(tb("Accounts receivable") - ar0, -15000),
+          f"{st} {l.get('closingBalance')} AR {tb('Accounts receivable') - ar0}")
+
+    # A receipt settled against the opening invoice protects it.
+    st, d = http("PUT", url, base, token=token, body={"amount": 10000, "date": days_ago_iso(30)})
+    doc = (d or {}).get("documentId")
+    st, r = make_receipt(base, token, cid, client_id, 4000, allocations=[{"invoiceId": doc, "amount": 4000}])
+    check(suite, "a receipt can be applied to the opening balance", st in (200, 201), f"{st} {r}")
+    st, _ = http("PUT", url, base, token=token, body={"amount": 3000, "date": days_ago_iso(30)})
+    check(suite, "cannot go below what receipts settled", st == 400, f"got {st}")
+    st, _ = http("PUT", url, base, token=token, body={"amount": 0, "date": days_ago_iso(30)})
+    check(suite, "cannot remove it while settled", st == 400, f"got {st}")
+    http("DELETE", f"/api/payments/receipts/{(r or {}).get('id')}", base, token=token)
+
+    st, d = http("PUT", url, base, token=token, body={"amount": 0, "date": days_ago_iso(30)})
+    check(suite, "0 removes it: ledger, A/R and Retained earnings back where they started",
+          st == 200 and eq(led().get("closingBalance"), 0) and eq(tb("Accounts receivable"), ar0)
+          and eq(tb("Retained earnings"), re0), f"{st} {d}")
+
+
 # ── Setup / teardown ───────────────────────────────────────────────
 def make_company(base, token, name, gl=True):
     st, company = http("POST", "/api/companies", base, token=token, body={
@@ -733,7 +800,8 @@ def setup(base, user, pw):
     # One client per suite so the balances stay independent and readable.
     clients = {k: make_client(base, token, cid, f"Ledger {k} {sfx}")
                for k in ("scenario", "discount", "notes", "advance",
-                         "scopeA", "scopeB", "plain", "foreigncontact", "cashsale")}
+                         "scopeA", "scopeB", "plain", "foreigncontact", "cashsale",
+                         "opening")}
 
     other_cid = make_company(base, token, f"_test_customer_ledger_other {sfx}", gl=False)
     foreign = {
@@ -794,6 +862,7 @@ def main() -> int:
         suite_7_foreign_contact_cash(base, token, cid, clients["foreigncontact"],
                                      item_type_id, disc)
         suite_8_income_line(base, token, cid, clients["cashsale"], item_type_id, income)
+        suite_9_opening_balance(base, token, cid, clients["opening"], item_type_id)
     finally:
         teardown(base, token, [cid, foreign["company_id"]], args.keep)
 

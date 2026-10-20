@@ -125,4 +125,23 @@ namespace MyApp.Api.DTOs
         public decimal Advance { get; set; }
         public decimal Closing { get; set; }
     }
+    /// <summary>A client's opening balance (ClientOpeningBalanceService).
+    /// Amount is SIGNED: positive = the customer owes us, negative = they had
+    /// paid ahead. Zero = no opening balance.</summary>
+    public class ClientOpeningBalanceDto
+    {
+        public int ClientId { get; set; }
+        public decimal Amount { get; set; }
+        public DateTime? Date { get; set; }
+        /// <summary>Already settled by receipts against the opening invoice;
+        /// the amount cannot go below it.</summary>
+        public decimal AmountSettled { get; set; }
+        public int? DocumentId { get; set; }
+    }
+
+    public class SetClientOpeningBalanceDto
+    {
+        public decimal Amount { get; set; }
+        public DateTime Date { get; set; }
+    }
 }

@@ -1,4 +1,4 @@
-import { MdEdit, MdDelete, MdContentCopy } from "react-icons/md";
+import { MdEdit, MdDelete, MdContentCopy, MdAccountBalanceWallet } from "react-icons/md";
 import { deleteClient, getClientDeleteImpact } from "../api/clientApi";
 import { useConfirm } from "./ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -31,7 +31,7 @@ const EMPTY = {
   qtyToDeliver: 0, qtyToInvoice: 0, accountsReceivable: 0, withholdingTaxReceivable: 0, status: "Paid",
 };
 
-export default function ClientList({ clients, summaryById = {}, onEdit, onCopy, fetchClients, onOpenDetail, isCommon, sharedWith }) {
+export default function ClientList({ clients, summaryById = {}, onEdit, onCopy, onOpening, fetchClients, onOpenDetail, isCommon, sharedWith }) {
   // A client shared with other companies (grouped by NTN / name) is badged so
   // the operator knows its pencil edits every company's copy at once, and the
   // row names the other companies (within the operator's access) that share it.
@@ -50,7 +50,8 @@ export default function ClientList({ clients, summaryById = {}, onEdit, onCopy, 
   const canUpdate = has("clients.manage.update");
   const canDelete = has("clients.manage.delete");
   const canCopy = has("clients.manage.copy");
-  const showActions = canUpdate || canDelete || canCopy;
+  const canOpening = has("customerledger.opening.manage") && !!onOpening;
+  const showActions = canUpdate || canDelete || canCopy || canOpening;
 
   // A count/amount cell renders as a drill-down link (opens the detail popup
   // at `section`) when there's data behind it; otherwise plain text.
@@ -176,6 +177,9 @@ export default function ClientList({ clients, summaryById = {}, onEdit, onCopy, 
                   {canCopy && onCopy && (
                     <button style={{ ...styles.mIconBtn, ...styles.copy }} title="Copy to another company" onClick={() => onCopy(client)}><MdContentCopy size={17} /></button>
                   )}
+                  {canOpening && (
+                    <button style={{ ...styles.mIconBtn, ...styles.opening }} title="Opening balance" onClick={() => onOpening(client)}><MdAccountBalanceWallet size={18} /></button>
+                  )}
                   {canDelete && (
                     <button style={{ ...styles.mIconBtn, ...styles.del }} title="Delete" onClick={() => handleDelete(client)}><MdDelete size={18} /></button>
                   )}
@@ -265,6 +269,11 @@ export default function ClientList({ clients, summaryById = {}, onEdit, onCopy, 
                           <MdContentCopy size={15} />
                         </button>
                       )}
+                      {canOpening && (
+                        <button style={{ ...styles.iconBtn, ...styles.opening }} title="Opening balance" onClick={() => onOpening(client)}>
+                          <MdAccountBalanceWallet size={16} />
+                        </button>
+                      )}
                       {canDelete && (
                         <button style={{ ...styles.iconBtn, ...styles.del }} title="Delete" onClick={() => handleDelete(client)}>
                           <MdDelete size={16} />
@@ -316,6 +325,7 @@ const styles = {
   iconBtn: { display: "grid", placeItems: "center", width: 30, height: 30, padding: 0, borderRadius: 8, border: "none", cursor: "pointer" },
   edit: { background: "#e3f2fd", color: "#0d47a1" },
   copy: { background: "#ede7f6", color: "#4527a0" },
+  opening: { background: "#e8f5e9", color: "#2e7d32" },
   del: { background: "#ffebee", color: "#c62828" },
 
   // ── Mobile cards (<768px) ──

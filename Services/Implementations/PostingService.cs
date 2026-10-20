@@ -333,7 +333,14 @@ namespace MyApp.Api.Services.Implementations
 
             var accounts = await LoadAccountsAsync(invoice.CompanyId);
             var ar = await ResolveAsync(invoice.CompanyId, accounts, ControlType.AccountsReceivable, "accounts receivable");
-            var sales = await ResolveSalesAsync(invoice.CompanyId, accounts);
+            // A customer's opening balance was never a sale: it is brought forward
+            // from the old books, so its other side is equity (Retained earnings,
+            // else Suspense) -- the same anchor every other opening figure offsets to.
+            var isOpening = ClientOpeningBalance.IsOpening(invoice.ExternalRef);
+            var sales = isOpening
+                ? accounts.FirstOrDefault(a => a.ControlType == ControlType.RetainedEarnings)
+                    ?? await SuspenseAsync(invoice.CompanyId, accounts)
+                : await ResolveSalesAsync(invoice.CompanyId, accounts);
             var outputTax = invoice.GSTAmount != 0
                 ? await ResolveAsync(invoice.CompanyId, accounts, ControlType.OutputTax, "output tax")
                 : null;
@@ -348,7 +355,7 @@ namespace MyApp.Api.Services.Implementations
             // Credit Note (10) reverses the sale; invoice + Debit Note (9) post
             // in the sale direction.
             var isCreditNote = invoice.DocumentType == 10;
-            var label = invoice.DocumentType switch
+            var label = isOpening ? "Opening balance" : invoice.DocumentType switch
             {
                 10 => $"Credit Note #{invoice.InvoiceNumber}",
                 9 => $"Debit Note #{invoice.InvoiceNumber}",

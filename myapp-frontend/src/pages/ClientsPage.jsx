@@ -6,6 +6,7 @@ import ClientForm from "../Components/ClientForm";
 import CommonClientForm from "../Components/CommonClientForm";
 import CopyToCompaniesDialog from "../Components/CopyToCompaniesDialog";
 import ClientImportModal from "../Components/ClientImportModal";
+import ClientOpeningBalanceDialog from "../Components/ClientOpeningBalanceDialog";
 import { getClientsByCompany, getCommonClients, copyClientToCompanies, getClientSummary } from "../api/clientApi";
 import { notify } from "../utils/notify";
 import { dropdownStyles } from "../theme";
@@ -46,6 +47,7 @@ export default function ClientsPage() {
 
   // Copy-to-companies dialog: holds the source client when open, null when closed.
   const [copyingClient, setCopyingClient] = useState(null);
+  const [openingClient, setOpeningClient] = useState(null);
 
   // Customer drill-down popup: { client, section } when open (section is the
   // metric cell clicked, or null when the name was clicked), null when closed.
@@ -287,6 +289,7 @@ export default function ClientsPage() {
           sharedWith={sharedWith}
           onEdit={handleEdit}
           onCopy={(client) => setCopyingClient(client)}
+          onOpening={(client) => setOpeningClient(client)}
           fetchClients={() => fetchClients(selectedCompany?.id)}
           onOpenDetail={(client, section) => setDetailTarget({ client, section })}
         />
@@ -297,6 +300,17 @@ export default function ClientsPage() {
           modal. Excludes the source's own company from the picker so
           the operator can't accidentally try to copy a client onto
           itself (the backend also defends against this). */}
+      {/* Opening balance — what this customer owed (or had paid ahead) when
+          their books started here. Saved per client; the A/R column refreshes. */}
+      {openingClient && selectedCompany && (
+        <ClientOpeningBalanceDialog
+          companyId={selectedCompany.id}
+          client={openingClient}
+          onClose={() => setOpeningClient(null)}
+          onSaved={() => fetchClients(selectedCompany.id)}
+        />
+      )}
+
       {copyingClient && (
         <CopyToCompaniesDialog
           open={true}

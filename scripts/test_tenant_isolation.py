@@ -357,6 +357,7 @@ endpoints_to_test = [
     # Customer Ledger — derived money in/out trail (Task 6).
     ("GET",  "/api/customer-ledger/company/{cid}"),
     ("GET",  "/api/customer-ledger/company/{cid}/client/1"),
+    ("GET",  "/api/customer-ledger/company/{cid}/client/1/opening-balance"),
     # Accounting reports. Every one reads the general ledger, so a leak here
     # exposes another tenant's whole financial position — expenses, cash
     # balances, who they pay — not just one document.
@@ -1050,6 +1051,21 @@ assert status in (200, 201), f"seed beta ledger client: {status} {ledger_beta_cl
 s, _ = request("GET", f"/api/customer-ledger/company/{alpha['id']}/client/{ledger_beta_client['id']}",
                token=tokens["alice"])
 status_check(suite14, "alice GET ledger for beta-owned clientId under alpha companyId", s, 404)
+
+# Opening balance (2026-10-20) WRITES a document and a journal entry, so both
+# shapes of the cross-tenant write must be refused: Beta's client named under
+# Alpha (404, resolved inside Alpha) and Beta's company outright (403).
+ob_body = {"amount": 1000, "date": "2026-06-30"}
+s, _ = request("PUT", f"/api/customer-ledger/company/{alpha['id']}/client/{ledger_beta_client['id']}/opening-balance",
+               token=tokens["alice"], body=ob_body)
+status_check(suite14, "alice PUT opening balance for beta-owned clientId under alpha companyId", s, 404)
+s, _ = request("PUT", f"/api/customer-ledger/company/{beta['id']}/client/{ledger_beta_client['id']}/opening-balance",
+               token=tokens["alice"], body=ob_body)
+status_check(suite14, "alice PUT opening balance under beta companyId", s, 403)
+s, body = request("GET", f"/api/customer-ledger/company/{beta['id']}/client/{ledger_beta_client['id']}/opening-balance",
+                  token=tokens["bob"])
+check(suite14, "neither refused write left an opening balance on beta's client",
+      s == 200 and isinstance(body, dict) and float(body.get("amount") or 0) == 0, f"status {s}, body {body}")
 
 # Sanity: the same clientId under its OWN (Beta) company works for someone
 # with Beta access, proving the guard isn't just failing every request.

@@ -49,3 +49,14 @@ export const getCustomerLedgerSummary = (companyId, params = {}) =>
  */
 export const getCustomerLedgerEntries = (companyId, clientId, params = {}) =>
   httpClient.get(`/customer-ledger/company/${companyId}/customer/${clientId}`, { params });
+
+/**
+ * A customer's opening balance → ClientOpeningBalanceDto. `amount` is SIGNED:
+ * positive = they owe us, negative = they had paid ahead, 0 = none. Setting it
+ * REPLACES the earlier one (one opening document per client), never adds.
+ */
+export const getClientOpeningBalance = (companyId, clientId) =>
+  httpClient.get(`/customer-ledger/company/${companyId}/client/${clientId}/opening-balance`);
+
+export const setClientOpeningBalance = (companyId, clientId, body) =>
+  httpClient.put(`/customer-ledger/company/${companyId}/client/${clientId}/opening-balance`, body);

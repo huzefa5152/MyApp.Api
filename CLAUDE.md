@@ -1580,6 +1580,27 @@ Overview (`pages/DashboardPage.jsx`) and Accounting (`pages/AccountingDashboardP
 - **Theme tokens `--dash-*`** only (no hard-coded colours); cards stay light in OS dark mode like the rest of the app. Names line-clamp, never nowrap+ellipsis.
 - Suites: `scripts/test_dashboard_kpis.py` (live; `--db` for the DB-backed cases) and `node scripts/test_dashboard_ui.mjs` (offline).
 
+### 5b-21. A customer's opening balance is ONE document, posted to equity (2026-10-20)
+
+`PUT /api/customer-ledger/company/{id}/client/{clientId}/opening-balance`
+(`customerledger.opening.manage`, audited `CLIENT_OPENING_BALANCE`) ->
+`ClientOpeningBalanceService`. Signed amount: + owes us (a migrated invoice),
+- paid ahead (a migrated credit note), 0 removes.
+
+- **One document per client, keyed on `ExternalRef =
+  ledger-open:{company}:client-{id}`** (`Helpers/ClientOpeningBalance`). A second
+  save REPLACES it; never add a second opening.
+- **The `ledger-open:` prefix means "brought forward, not sold"** for the ledger
+  import's opening rows too: `PostingService.PostInvoiceAsync` credits Retained
+  earnings (else Suspense) instead of Sales, `DashboardSalesFilter` and Invoice
+  Sales Detail leave it out. It is a journal entry, not an edit of the A/R
+  account's opening figure, so a GL rebuild recreates it.
+- **Never use the customer-ledger import for this on a live company**: its commit
+  sets `GlLockDate` and REPLACES the A/R account's opening figure.
+- Receipts may be allocated to it; once they are, it cannot drop below them, be
+  removed, or flip to paid-ahead. The period lock applies to both dates.
+- Suites: `scripts/test_customer_ledger.py` suite 9, tenant suite 14.
+
 ### 5c. Customer Portal — the only anonymous surface
 
 `Controllers/PublicCustomerPortalController.cs` is one of just two

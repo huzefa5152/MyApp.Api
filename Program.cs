@@ -381,6 +381,7 @@ builder.Services.AddScoped<IPaymentService, PaymentService>();
 // The one implementation of a customer's derived money trail (ClientService's
 // statement delegates to it).
 builder.Services.AddScoped<ICustomerLedgerService, CustomerLedgerService>();
+builder.Services.AddScoped<IClientOpeningBalanceService, ClientOpeningBalanceService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<ICoaPresetSeeder, CoaPresetSeeder>();
 // General Ledger (Phase B): the posting engine, GL admin/reports/summary,

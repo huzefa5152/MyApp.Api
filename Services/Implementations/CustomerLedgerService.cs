@@ -34,6 +34,7 @@ namespace MyApp.Api.Services.Implementations
         public const string TypeInvoice = "Invoice";
         public const string TypeDebitNote = "Debit Note";
         public const string TypeCreditNote = "Credit Note";
+        public const string TypeOpening = "Opening Balance";
         public const string TypeReceipt = "Receipt";
         public const string TypeAdjustment = "Adjustment";
         /// <summary>Money paid back OUT to a customer against their own balance.
@@ -227,11 +228,27 @@ namespace MyApp.Api.Services.Implementations
             var docs = await _context.Invoices.AsNoTracking()
                 .Where(i => ids.Contains(i.ClientId) && i.CompanyId == companyId
                             && !i.IsDemo && !i.IsCancelled)
-                .Select(i => new { i.Id, i.InvoiceNumber, i.Date, i.GrandTotal, i.DocumentType })
+                .Select(i => new { i.Id, i.InvoiceNumber, i.Date, i.GrandTotal, i.DocumentType, i.ExternalRef })
                 .ToListAsync();
 
             foreach (var d in docs)
             {
+                // A brought-forward balance reads as one, not as a numbered bill.
+                if (ClientOpeningBalance.IsOpening(d.ExternalRef))
+                {
+                    var paidAhead = d.DocumentType == CreditNoteType;
+                    entries.Add(new CustomerLedgerEntryDto
+                    {
+                        Date = d.Date,
+                        Type = TypeOpening,
+                        Reference = paidAhead ? "Opening advance" : "Opening balance",
+                        DocId = d.Id,
+                        Debit = paidAhead ? d.GrandTotal : 0m,
+                        Credit = paidAhead ? 0m : d.GrandTotal,
+                    });
+                    continue;
+                }
+
                 // Invoice and Debit Note increase what the customer owes →
                 // Credit column. Credit Note reverses the sale → Debit column.
                 // Matches the GL: PostingService debits A/R for an invoice and a

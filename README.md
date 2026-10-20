@@ -298,6 +298,12 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-10-20 — Customer opening balances
+
+- **Enter a customer's opening balance by hand.** Customers list → the wallet button on a customer: whether they owe us or had paid ahead, the amount and the date. Saving again replaces the earlier figure; Remove clears it. New permission `customerledger.opening.manage`.
+- **It shows everywhere a balance does** — the customer ledger (as an "Opening balance" row), the statement, the A/R column and receipts, which can be applied against it. Once receipts are applied it cannot be lowered below them or removed.
+- **It is not a sale.** It posts to Accounts receivable against Retained earnings, never Sales, is never sent to FBR, and is left out of the dashboard sales figures (as the ledger import's opening rows already were in Invoice Sales Detail).
+
 ### 2026-10-18 — Dashboards redesigned: every figure opens what makes it
 
 - **Overview dashboard.** Net sales, landed cost of sales and margin, receivables, receipts, payables, stock and recoverable tax now sit in grouped tiles. Click any figure to see the rows behind it; the rows always add up to the tile, with a second level (customer to its invoices, tax line to its documents). Margin is sales less the landed cost of what left stock, not the declared cost of goods.

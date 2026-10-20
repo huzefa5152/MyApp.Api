@@ -30,14 +30,19 @@ namespace MyApp.Api.Controllers
     public class CustomerLedgerController : ControllerBase
     {
         private readonly ICustomerLedgerService _service;
+        private readonly IClientOpeningBalanceService _opening;
+        private readonly IAuditLogService _audit;
         private readonly ICompanyAccessGuard _access;
         private readonly ILogger<CustomerLedgerController> _logger;
 
         public CustomerLedgerController(
-            ICustomerLedgerService service, ICompanyAccessGuard access,
+            ICustomerLedgerService service, IClientOpeningBalanceService opening,
+            IAuditLogService audit, ICompanyAccessGuard access,
             ILogger<CustomerLedgerController> logger)
         {
             _service = service;
+            _opening = opening;
+            _audit = audit;
             _access = access;
             _logger = logger;
         }
@@ -131,6 +136,51 @@ namespace MyApp.Api.Controllers
             {
                 _logger.LogError(ex, "Customer ledger fetch failed for company {CompanyId}, customer {ClientId}", companyId, clientId);
                 return StatusCode(500, new { error = "Could not load the customer ledger." });
+            }
+        }
+            /// <summary>A customer's opening balance (signed: + owes, - paid ahead).
+        /// The client is resolved inside the company, so a foreign id 404s.</summary>
+        [HttpGet("company/{companyId}/client/{clientId}/opening-balance")]
+        [HasPermission("customerledger.list.view")]
+        public async Task<ActionResult<ClientOpeningBalanceDto>> GetOpening(int companyId, int clientId)
+        {
+            await _access.AssertAccessAsync(CurrentUserId, companyId);
+            try { return Ok(await _opening.GetAsync(companyId, clientId)); }
+            catch (KeyNotFoundException) { return NotFound(new { error = "Customer not found." }); }
+        }
+
+        /// <summary>Sets (or, with 0, removes) a customer's opening balance.
+        /// Replaces the earlier one; never adds a second. Audited.</summary>
+        [HttpPut("company/{companyId}/client/{clientId}/opening-balance")]
+        [HasPermission("customerledger.opening.manage")]
+        public async Task<ActionResult<ClientOpeningBalanceDto>> SetOpening(
+            int companyId, int clientId, [FromBody] SetClientOpeningBalanceDto dto)
+        {
+            await _access.AssertAccessAsync(CurrentUserId, companyId);
+            try
+            {
+                var before = await _opening.GetAsync(companyId, clientId);
+                var after = await _opening.SetAsync(companyId, clientId, dto);
+                await _audit.LogAsync(new MyApp.Api.Models.AuditLog
+                {
+                    Timestamp = DateTime.UtcNow,
+                    Level = "Information",
+                    UserName = User.Identity?.Name,
+                    HttpMethod = "PUT",
+                    RequestPath = $"/api/customer-ledger/company/{companyId}/client/{clientId}/opening-balance",
+                    StatusCode = 200,
+                    ExceptionType = "CLIENT_OPENING_BALANCE",
+                    Message = $"Opening balance of client {clientId} changed {before.Amount:N2} ({before.Date:dd-MM-yyyy}) -> {after.Amount:N2} ({after.Date:dd-MM-yyyy})",
+                    CompanyId = companyId,
+                });
+                return Ok(after);
+            }
+            catch (KeyNotFoundException) { return NotFound(new { error = "Customer not found." }); }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Opening balance save failed for company {CompanyId}, client {ClientId}", companyId, clientId);
+                return StatusCode(500, new { error = "Could not save the opening balance." });
             }
         }
     }

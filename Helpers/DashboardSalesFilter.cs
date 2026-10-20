@@ -15,7 +15,9 @@ namespace MyApp.Api.Helpers
             IQueryable<Invoice> q, int companyId, DateTime? from, DateTime? to)
         {
             q = q.Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
-                          && i.FbrCancelledAt == null);
+                          && i.FbrCancelledAt == null
+                          // A customer's opening balance is brought forward, not sold.
+                          && (i.ExternalRef == null || !i.ExternalRef.StartsWith(ClientOpeningBalance.Prefix)));
             if (from.HasValue) q = q.Where(i => i.Date >= from.Value);
             if (to.HasValue)   q = q.Where(i => i.Date < to.Value);
             return q;

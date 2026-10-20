@@ -148,6 +148,7 @@ namespace MyApp.Api.Helpers
             // same Accounting section next to Receipts/Payments.
             new("customerledger.list.view",  "CustomerLedger", "Customer Ledger", "View",  "View every customer's balance and their full money in/out ledger"),
             new("customerledger.list.print", "CustomerLedger", "Customer Ledger", "Print", "Print or download a customer statement"),
+            new("customerledger.opening.manage", "CustomerLedger", "Customer Ledger", "Opening balance", "Enter or correct a customer's opening balance"),
 
             // Chart of Accounts (the account tree postings land on). View to read
             // the tree; manage to add/edit/delete groups & accounts and seed a
