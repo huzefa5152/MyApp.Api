@@ -25,13 +25,15 @@
 
 export const PERMISSION_SECTIONS = [
   {
-    // Dashboard is the home page — sits at the top of the role editor
-    // so it's the first thing admins land on when curating roles.
-    // Five-tier model (one page perm + four KPI-section perms) gives a
-    // clean read in the editor: bookkeeper → Sales+Purchases, FBR officer
-    // → FBR, inventory manager → Inventory, etc.
-    section: "Dashboard",
-    modules: [{ key: "Dashboard" }],
+    // Mirrors the sidebar's Dashboards group: Overview, then Inventory (the
+    // stock dashboard, where every stock action is taken — so the whole
+    // Inventory module lives here, not under Purchases). Overview's
+    // five-tier model (one page perm + four KPI-section perms) gives a clean
+    // read: bookkeeper → Sales+Purchases, FBR officer → FBR, etc.
+    // The Accounting dashboard stays under Accounting → Ledger & Reports on
+    // purpose: it is Complete-edition only, and that boundary must stay visible.
+    section: "Dashboards",
+    modules: [{ key: "Dashboard", label: "Overview" }, { key: "Inventory" }],
   },
   {
     section: "Email Workspace",
@@ -58,7 +60,6 @@ export const PERMISSION_SECTIONS = [
       { key: "PurchaseBills", label: "Purchase Bills" },
       { key: "PurchaseDebitNotes", label: "Purchase Debit Notes" },
       { key: "GoodsReceipts", label: "Goods Receipts" },
-      { key: "Inventory" },
       // FBR Annexure-A purchase ledger import — Module name in
       // PermissionCatalog.cs is "FBR Import"; show it under Purchases
       // since the resulting Suppliers / PurchaseBills land here.
@@ -96,7 +97,9 @@ export const PERMISSION_SECTIONS = [
       { key: "Suppliers" },
       { key: "ItemTypes", label: "Item Types" },
       { key: "Onboarding Import", label: "Import Data" },
-      { key: "Configuration", label: "Lookups" },
+      // The sidebar's "Units" screen, plus the item-description and merge-field
+      // lists that have no screen of their own — named so Units can be found.
+      { key: "Configuration", label: "Units & Lookups" },
       { key: "POFormats", label: "Customer Document Formats" },
       { key: "ImportFeedback", label: "Import Feedback" },
       { key: "PrintTemplates", label: "Print Templates" },
