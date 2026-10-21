@@ -25,6 +25,12 @@ on:
   push:
     branches: [feat/importer-ledger-receipts]
 
+# One deploy at a time: a second push waits rather than racing the first
+# over the same FTP site.
+concurrency:
+  group: importer-production-deploy
+  cancel-in-progress: false
+
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
@@ -97,6 +103,9 @@ jobs:
           mkdir -p site-stage/admin
           cp landing/index.html site-stage/index.html
           cp -r myapp-frontend/dist/* site-stage/admin/
+          # The deployed commit, read by open pages (utils/serviceContinuity.js) so a
+          # new version is picked up on the operator's next page change.
+          echo "{\"version\":\"$GITHUB_SHA\"}" > site-stage/admin/version.json
           rm -rf site-stage/admin/images/products
 
       - name: Deploy frontend via FTP
@@ -146,6 +155,9 @@ jobs:
           mkdir -p wwwroot/admin
           cp landing/index.html wwwroot/index.html
           cp -r myapp-frontend/dist/* wwwroot/admin/
+          # The deployed commit, read by open pages (utils/serviceContinuity.js) so a
+          # new version is picked up on the operator's next page change.
+          echo "{\"version\":\"$GITHUB_SHA\"}" > wwwroot/admin/version.json
           rm -rf wwwroot/admin/images/products
 
       - name: Publish .NET API
@@ -156,21 +168,24 @@ jobs:
           mkdir -p ./publish/wwwroot
           cp -r wwwroot/* ./publish/wwwroot/
 
-      - name: Stop app (upload app_offline.htm)
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER_IMPORTER }}
-          username: ${{ secrets.FTP_USERNAME_IMPORTER }}
-          password: ${{ secrets.FTP_PASSWORD_IMPORTER }}
-          local-dir: ./.github/offline/
-          server-dir: /wwwroot/
-          # Shared with "Deploy via FTP": this step deletes what the last
-          # deploy recorded and that step uploads it all again. If a run dies
-          # mid-delete the server no longer matches the recorded state and
-          # every rerun fails ("550 CD issue"); changing this name on BOTH
-          # steps starts a fresh state, so the next deploy uploads everything.
-          state-name: .ftp-deploy-state-v2.json
-          dangerous-clean-slate: false
+      # Upload ONLY the offline page. The old step ran the FTP sync action on
+      # .github/offline/ with the main step's state file, so it first DELETED
+      # every file the last deploy had recorded -- the site 404'd until the
+      # main step uploaded them all again.
+      - name: Stop app (upload maintenance file only)
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER_IMPORTER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME_IMPORTER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD_IMPORTER }}
+        run: |
+          python3 - <<'PY'
+          import ftplib, os
+          with ftplib.FTP(os.environ["FTP_SERVER"], timeout=60) as ftp:
+              ftp.login(os.environ["FTP_USERNAME"], os.environ["FTP_PASSWORD"])
+              ftp.cwd("/wwwroot")
+              with open(".github/offline/app_offline.htm", "rb") as page:
+                  ftp.storbinary("STOR app_offline.htm", page)
+          PY
 
       - name: Wait for app to stop
         run: sleep 5
@@ -191,6 +206,7 @@ jobs:
           state-name: .ftp-deploy-state-v2.json
           dangerous-clean-slate: false
           exclude: |
+            **/app_offline.htm
             **/.pdb
             **/runtimes/linux-*/**
             **/runtimes/osx-*/**
@@ -203,3 +219,22 @@ jobs:
             # .example templates are dev-side documentation — no business
             # being on the prod server.
             **/appsettings.*.example.json
+
+      - name: Start app after successful upload
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER_IMPORTER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME_IMPORTER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD_IMPORTER }}
+        run: |
+          python3 - <<'PY'
+          import ftplib, os
+          with ftplib.FTP(os.environ["FTP_SERVER"], timeout=60) as ftp:
+              ftp.login(os.environ["FTP_USERNAME"], os.environ["FTP_PASSWORD"])
+              ftp.cwd("/wwwroot")
+              try:
+                  ftp.delete("app_offline.htm")
+              except ftplib.error_perm as e:
+                  # Already gone (the sync dropped it): the app is running.
+                  if not str(e).startswith("550"):
+                      raise
+          PY
