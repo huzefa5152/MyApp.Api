@@ -142,11 +142,15 @@ SALES, MCPA, MCPW, TADMIN = sysr["Sales Edition"], sysr["MCP Access"], sysr["MCP
 uids, tok = {}, {}
 
 
-def make(creator, uname, role_ids, cids, role_string="User"):
+def make(creator, uname, role_ids, cids, role_string="User", mcp_roles=()):
     s, u = http("POST", "/api/users", creator, {"username": uname, "password": PW, "fullName": uname, "role": role_string})
     assert s in (200, 201), f"{uname}: {s} {u}"
     uids[uname] = u["id"]
     assert http("PUT", f"/api/users/{u['id']}/roles", creator, {"roleIds": role_ids})[0] == 200
+    # MCP access is premium (dd519d5e, 2026-10-05): only the primary admin grants it. A tenant
+    # administrator creates the user and its business roles; the primary admin adds the MCP roles.
+    if mcp_roles:
+        assert http("PUT", f"/api/users/{u['id']}/roles", admin, {"roleIds": list(role_ids) + list(mcp_roles)})[0] == 200
     assert http("PUT", f"/api/usercompanies/user/{u['id']}", creator, {"companyIds": cids})[0] == 200
     tok[uname] = login(uname, PW)
 
@@ -154,9 +158,9 @@ def make(creator, uname, role_ids, cids, role_string="User"):
 make(admin, "mcpd_w", [SALES, MCPA, MCPW], [A["id"], B["id"]])
 make(admin, "mcpd_ta", [TADMIN, SALES, MCPA, MCPW], [A["id"]], "Administrator")
 s, r = http("POST", "/api/roles", tok["mcpd_ta"], {"name": "mcpd-challans-only", "description": "t", "permissionKeys":
-            ["mcp.access.use", "mcp.write.use", "clients.manage.view", "challans.list.view", "challans.manage.create"]})
+            ["clients.manage.view", "challans.list.view", "challans.manage.create"]})
 assert s in (200, 201), f"tenant role: {s} {r}"
-make(tok["mcpd_ta"], "mcpd_c", [r["id"]], [A["id"]])
+make(tok["mcpd_ta"], "mcpd_c", [r["id"]], [A["id"]], mcp_roles=[MCPA, MCPW])
 W, C = tok["mcpd_w"], tok["mcpd_c"]
 
 

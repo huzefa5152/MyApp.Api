@@ -148,6 +148,13 @@ read through the separate document print tool.
 - **Acts as the user.** Every call re-applies the user's permissions and company access.
 - **Narrowed, never widened.** A token names its companies and scopes; the stricter of the
   user's access and the token's limits wins.
+- **One company per call, owned records only.** Every company tool pins the company it is
+  given against the user's assignments and the token's list, then checks the STORED company of
+  every record it is handed by id (and of every linked record: client, item, challan line, bill
+  line, template, plan). Another company's id answers exactly like a missing one. Unassigning
+  a company closes it on the next call, the user's own activity history included.
+  `scripts/test_mcp_tenant_sweep.py` tries every listed tool against a company and records the
+  caller was never given, so a new tool is covered without editing the test.
 - **Dedicated profile catalog.** Profile → MCP Catalog Access holds access and write
   grants plus grouped tool choices. Only the seed admin manages grants for all accounts. A user's own choices can only narrow
   assigned grants. Normal role dialogs contain business roles only. Existing opt-in role

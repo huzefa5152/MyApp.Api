@@ -132,23 +132,27 @@ SALES, MCPA, TADMIN = sysr["Sales Edition"], sysr["MCP Access"], sysr["Tenant Ad
 uids, tok = {}, {}
 
 
-def make(creator, uname, role_ids, cids, role_string="User"):
+def make(creator, uname, role_ids, cids, role_string="User", mcp_roles=()):
     s, u = http("POST", "/api/users", creator, {"username": uname, "password": PW, "fullName": uname, "role": role_string})
     assert s in (200, 201), f"{uname}: {s} {u}"
     uids[uname] = u["id"]
     assert http("PUT", f"/api/users/{u['id']}/roles", creator, {"roleIds": role_ids})[0] == 200
+    # MCP access is premium (dd519d5e, 2026-10-05): only the primary admin grants it. A tenant
+    # administrator creates the user and its business roles; the primary admin adds the MCP roles.
+    if mcp_roles:
+        assert http("PUT", f"/api/users/{u['id']}/roles", admin, {"roleIds": list(role_ids) + list(mcp_roles)})[0] == 200
     assert http("PUT", f"/api/usercompanies/user/{u['id']}", creator, {"companyIds": cids})[0] == 200
     tok[uname] = login(uname, PW)
 
 
 make(admin, "mcpr_w", [SALES, MCPA], [A["id"], B["id"]])
 make(admin, "mcpr_ta", [TADMIN, SALES, MCPA], [A["id"]], "Administrator")
-KEYS_SALES_ONLY = ["mcp.access.use", "reports.sales.view", "clients.manage.view"]
-KEYS_LEDGER_NOPAY = ["mcp.access.use", "reports.outstanding.view", "clients.manage.view"]
+KEYS_SALES_ONLY = ["reports.sales.view", "clients.manage.view"]
+KEYS_LEDGER_NOPAY = ["reports.outstanding.view", "clients.manage.view"]
 for name, keys in (("mcpr-sales-only", KEYS_SALES_ONLY), ("mcpr-ledger-nopay", KEYS_LEDGER_NOPAY)):
     s, r = http("POST", "/api/roles", tok["mcpr_ta"], {"name": name, "description": "t", "permissionKeys": keys})
     assert s in (200, 201), f"role {name}: {s} {r}"
-    make(tok["mcpr_ta"], name.replace("-", "_"), [r["id"]], [A["id"]])
+    make(tok["mcpr_ta"], name.replace("-", "_"), [r["id"]], [A["id"]], mcp_roles=[MCPA])
 W, SO, LN = tok["mcpr_w"], tok["mcpr_sales_only"], tok["mcpr_ledger_nopay"]
 
 
@@ -225,9 +229,10 @@ for name, args in (
     ("item_rate_history", {"companyId": A["id"]}),
 ):
     err, m = tool(TSO, name, args)
-    check(f"…but {name} is refused without its permission", err and "Permission denied" in str(m), m)
+    # The per-tool grant (only eligible tools) refuses first now; either refusal proves the gate.
+    check(f"…but {name} is refused without its permission", err and ("Permission denied" in str(m) or "access denied" in str(m)), m)
 err, m = tool(TLN, "sales_summary", {"companyId": A["id"], "year": YEAR})
-check("a ledger-only user cannot run the sales report", err and "Permission denied" in str(m), m)
+check("a ledger-only user cannot run the sales report", err and ("Permission denied" in str(m) or "access denied" in str(m)), m)
 err, r = tool(TLN, "outstanding_ledger", {"companyId": A["id"], "clientId": A["client"]})
 check("a ledger-only user can run outstanding_ledger", not err, r)
 err, m = tool(TLN, "receivables_by_client", {"companyId": A["id"]})

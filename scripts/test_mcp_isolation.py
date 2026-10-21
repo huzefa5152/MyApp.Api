@@ -137,13 +137,18 @@ user_ids: dict[str, int] = {}
 tok: dict[str, str] = {}
 
 
-def make_user(creator_token, uname, role_ids, company_ids, role_string="User"):
+def make_user(creator_token, uname, role_ids, company_ids, role_string="User", mcp_roles=()):
     s, u = http("POST", "/api/users", creator_token,
                 {"username": uname, "password": PW, "fullName": uname, "role": role_string})
     assert s in (200, 201), f"create user {uname}: {s} {u}"
     user_ids[uname] = u["id"]
     s, d = http("PUT", f"/api/users/{u['id']}/roles", creator_token, {"roleIds": role_ids})
     assert s == 200, f"roles {uname}: {s} {d}"
+    # MCP access is premium (dd519d5e, 2026-10-05): only the primary admin grants it. A tenant
+    # administrator creates the user and its business roles; the primary admin adds the MCP roles.
+    if mcp_roles:
+        s, d = http("PUT", f"/api/users/{u['id']}/roles", admin, {"roleIds": list(role_ids) + list(mcp_roles)})
+        assert s == 200, f"MCP roles {uname}: {s} {d}"
     s, d = http("PUT", f"/api/usercompanies/user/{u['id']}", creator_token, {"companyIds": company_ids})
     assert s == 200, f"companies {uname}: {s} {d}"
     tok[uname] = login(uname, PW)
@@ -156,23 +161,24 @@ make_user(admin, "mcp_iso_ta", [TADMIN, SALES, MCP], [A["id"]], "Administrator")
 make_user(admin, "mcp_iso_ta_off", [TADMIN, SALES], [A["id"]], "Administrator")
 ta, ta_off = tok["mcp_iso_ta"], tok["mcp_iso_ta_off"]
 
-# Tenant 1 staff, created by the tenant administrator itself (real delegation path).
-make_user(ta, "mcp_iso_a", [SALES, MCP], [A["id"]])
-make_user(ta, "mcp_iso_none", [SALES, MCP], [])
+# Tenant 1 staff, created by the tenant administrator itself (real delegation path); the
+# primary admin adds MCP Access, the only grant path since MCP became premium.
+make_user(ta, "mcp_iso_a", [SALES], [A["id"]], mcp_roles=[MCP])
+make_user(ta, "mcp_iso_none", [SALES], [], mcp_roles=[MCP])
 make_user(ta, "mcp_iso_nomcp", [SALES], [A["id"]])
 s, r = http("POST", "/api/roles", ta, {"name": f"{TAG}-partial", "description": "test",
-                                       "permissionKeys": ["mcp.access.use", "clients.manage.view"]})
+                                       "permissionKeys": ["clients.manage.view"]})
 assert s in (200, 201), f"tenant admin builds a restricted role: {s} {r}"
 partial_role = r["id"]
-make_user(ta, "mcp_iso_partial", [partial_role], [A["id"]])
+make_user(ta, "mcp_iso_partial", [partial_role], [A["id"]], mcp_roles=[MCP])
 s, r = http("POST", "/api/roles", ta, {"name": f"{TAG}-nopay", "description": "test",
-                                       "permissionKeys": ["mcp.access.use", "bills.list.view"]})
+                                       "permissionKeys": ["bills.list.view"]})
 assert s in (200, 201), f"tenant admin builds a no-payment role: {s} {r}"
-make_user(ta, "mcp_iso_nopay", [r["id"]], [A["id"]])
+make_user(ta, "mcp_iso_nopay", [r["id"]], [A["id"]], mcp_roles=[MCP])
 
 # A second, unrelated tenant: its administrator is assigned B only.
 make_user(admin, "mcp_iso_tb", [TADMIN, SALES, MCP], [B["id"]], "Administrator")
-make_user(tok["mcp_iso_tb"], "mcp_iso_b", [SALES, MCP], [B["id"]])
+make_user(tok["mcp_iso_tb"], "mcp_iso_b", [SALES], [B["id"]], mcp_roles=[MCP])
 
 a, b, none, nomcp, partial = (tok[k] for k in ("mcp_iso_a", "mcp_iso_b", "mcp_iso_none", "mcp_iso_nomcp", "mcp_iso_partial"))
 
@@ -186,6 +192,10 @@ else:
     check("tenant admin without MCP Access cannot assign it to staff", False, f"setup user create {s} {d}")
 s, d = http("POST", "/api/roles", ta_off, {"name": f"{TAG}-sneak", "description": "x", "permissionKeys": ["mcp.access.use"]})
 check("tenant admin without MCP Access cannot mint a role that grants it", s == 400, f"{s} {d}")
+s, d = http("PUT", f"/api/users/{user_ids['mcp_iso_nomcp']}/roles", ta, {"roleIds": [SALES, MCP]})
+check("a tenant admin WITH MCP Access still cannot hand it to staff (premium, primary admin only)", s == 400, f"{s} {d}")
+s, d = http("POST", "/api/roles", ta, {"name": f"{TAG}-sneak2", "description": "x", "permissionKeys": ["mcp.access.use"]})
+check("…nor mint a role that grants it", s == 400, f"{s} {d}")
 s, d = http("GET", "/api/roles", admin)
 by = {r["name"]: r for r in d}
 check("neither edition carries mcp.access.use",
@@ -220,7 +230,7 @@ print("\n== catalogue ==")
 s, d = rpc(a, "tools/list")
 names = sorted(t["name"] for t in d["result"]["tools"])
 mandatory_reads = {"get_challan", "get_invoice", "get_stock", "list_companies", "search_challans", "search_clients", "search_invoices", "search_quotes", "item_rate_history", "outstanding_ledger", "receivables_by_client", "sales_summary", "tax_sheet_summary"}
-permitted_sales_reads = mandatory_reads | {"get_mcp_capabilities", "get_action_status", "get_onboarding_schema", "get_company_onboarding_status", "get_daily_work_queue", "get_quote", "search_sales_orders", "get_sales_order", "search_suppliers", "search_item_types", "search_purchase_bills", "get_purchase_bill", "search_goods_receipts", "search_receipts", "search_payments", "list_print_templates", "get_print_template", "get_print_contract", "get_document_print_data"}
+permitted_sales_reads = mandatory_reads | {"get_mcp_capabilities", "get_action_status", "get_onboarding_schema", "get_company_onboarding_status", "get_daily_work_queue", "get_quote", "search_sales_orders", "get_sales_order", "search_suppliers", "search_item_types", "search_purchase_bills", "get_purchase_bill", "search_goods_receipts", "search_receipts", "search_payments", "list_print_templates", "get_print_template", "get_print_contract", "get_document_print_data", "get_bill_tax_filing"}
 check("Sales login keeps mandatory reads and exposes only permitted read tools", mandatory_reads <= set(names) <= permitted_sales_reads and not any(name.startswith(("prepare_", "commit_", "cancel_")) for name in names), names)
 check("Sales login never exposes Complete-edition accounting tools", not set(names).intersection({"get_trial_balance", "get_profit_and_loss", "get_balance_sheet", "get_cash_book", "get_aged_payables", "get_party_ledger"}), names)
 check("every tool is annotated read-only", all(t["annotations"]["readOnlyHint"] and not t["annotations"]["destructiveHint"] for t in d["result"]["tools"]))
@@ -303,7 +313,8 @@ err, d = tool(partial, "search_clients", {"companyId": A["id"]})
 check("partial: permitted tool works", not err, d)
 for tname, targs in (("search_invoices", {}), ("get_stock", {}), ("search_quotes", {}), ("get_invoice", {"invoiceId": A["inv_id"]})):
     err, msg = tool(partial, tname, {"companyId": A["id"], **targs})
-    check(f"partial: {tname} refused without its permission key", err and "Permission denied" in str(msg), msg)
+    # The per-tool grant (only eligible tools) refuses first now; either refusal proves the gate.
+    check(f"partial: {tname} refused without its permission key", err and ("Permission denied" in str(msg) or "access denied" in str(msg)), msg)
 
 # ── revocation takes effect immediately ──────────────────────────────
 print("\n== revocation ==")

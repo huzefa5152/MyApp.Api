@@ -207,6 +207,9 @@ namespace MyApp.Api.Controllers
             await RequireWriterAsync(ScopeFor(prior.Kind));
             await Need(PermissionFor(prior.Kind));
             if (prior.Kind == "template.update") await Need("printtemplates.manage.view");
+            // An update plan echoes the record's stored details, so the read right its prepare
+            // required is needed again before the plan is shown back.
+            if (ReadPermissionFor(prior.Kind) is { } read) await Need(read);
             if (!await _permissions.HasMcpToolAccessAsync(CurrentUserId, PrepareToolFor(prior.Kind)))
                 throw new ToolError("Resource unavailable or access denied.");
             if (prior.CommittedAt != null)
@@ -382,6 +385,16 @@ namespace MyApp.Api.Controllers
             "itemtype.create" or "itemtype.update" => McpScopes.ItemTypes,
             "taxfiling.save" => McpScopes.TaxFiling,
             _ => throw new ToolError("Unknown plan type.")
+        };
+
+        /// <summary>The read right an update plan needs to be shown back, or null.</summary>
+        private static string? ReadPermissionFor(string kind) => kind switch
+        {
+            "client.update" => "clients.manage.view",
+            "supplier.update" => "suppliers.manage.view",
+            "itemtype.update" => "itemtypes.manage.view",
+            "taxfiling.save" => "invoices.list.view",
+            _ => null,
         };
 
         /// <summary>The screen permission a plan needs; holding any one of them is enough.</summary>
