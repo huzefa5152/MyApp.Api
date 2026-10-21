@@ -1746,13 +1746,10 @@ namespace MyApp.Api.Services.Implementations
 
                 // Arrivals dated inside a stock-sheet match leave it short until
                 // it is updated; count them so the screen can offer the fix.
-                // Whether their value actually moved is the Stock check's call
-                // (GET backdated-gds); this only says where to look.
+                // Items with a late GD. Whether their value actually moved is the
+                // Stock check's call (GET backdated-gds), which the result panel
+                // asks -- most such items are valued right, so no message here.
                 result.StockSheetMatchItems = (await BackdatedGdRestatement.FindAsync(_db, dto.CompanyId)).Count;
-                if (result.StockSheetMatchItems > 0)
-                    result.Messages.Add(
-                        $"{result.StockSheetMatchItems} item(s) received goods dated before their last stock-sheet match. " +
-                        "Check them below; if their value needs it, one button adds these GDs to that match.");
 
                 result.ImportRunId = run.Id;
                 result.ConsignmentsWritten = consignmentsByGd.Count;

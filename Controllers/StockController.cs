@@ -2503,9 +2503,14 @@ namespace MyApp.Api.Controllers
                 });
                 if (e2 != null) return (e2, null);
 
-                // Only what the update would change (or cannot do) is offered.
+                // Only what the update would change (or cannot do) is offered. A
+                // GD arrival's movement holds its unit cost at 4dp, so its value can
+                // sit qty x 0.00005 off the sheet's (CLAUDE.md 5b-15): paisa that are
+                // not a wrong value. Pak Trade's 8 untouched items differed by
+                // 0.01-0.04 and were listed as needing a fix until this tolerance.
                 var changed = full!.Items
-                    .Where(i => i.Error != null || Math.Abs(i.FifoValue - i.SheetValue) >= 0.01m)
+                    .Where(i => i.Error != null
+                                || Math.Abs(i.FifoValue - i.SheetValue) >= 1m + Math.Abs(i.SheetQuantity) * 0.0001m)
                     .ToList();
                 if (changed.Count == 0) continue;
                 var ids = changed.Select(i => i.ItemTypeId).ToHashSet();

@@ -1470,7 +1470,9 @@ GD panel and Excel export all say which GDs it took.
   date taken off the SHEET lines in the walk's FIFO order (a back-dated sale
   entered later has used them). `GET /api/stock/company/{id}/backdated-gds`
   lists only items whose value that would CHANGE (two preview passes through
-  `RestateFifo`, which never write); `POST .../backdated-gds/restate`
+  `RestateFifo`, which never write) by more than Rs 1 + qty x 0.0001 -- an
+  arrival holds its unit cost at 4dp, and the paisa that leaves are not a wrong
+  value (8 sound Pak items differed by 0.01-0.04); `POST .../backdated-gds/restate`
   (`stock.policy.manage`, preview unless `commit`) restates them on the
   match's own date in one transaction. The GD preview flags each line
   (`StockSheetMatchedOn`) and the commit result counts the items
