@@ -43,6 +43,13 @@ export const defaultQuoteTemplate = `<!DOCTYPE html><html><head><title>Quotation
   .cname { color:#0d47a1; }
   .doc .t { color:#00897b; }
   th { background:#0d47a1 !important; }
+  /* One A4 page tall, so the signature sits at the foot of the page: 1120px is
+     the PDF export's A4 canvas, 270mm what the 12mm print margins leave. The
+     export lifts print rules to screen, hence the separate screen height. */
+  body { display:flex; flex-direction:column; }
+  .sig { margin-top:auto; padding-top:46px; }
+  @media print { body { min-height:270mm; } }
+  @media screen { body { min-height:1120px; } }
 td.qpic{text-align:center;vertical-align:top;}
 .qimgbox{width:96px;height:96px;margin:0 auto;display:flex;align-items:flex-start;justify-content:center;overflow:hidden;}
 .qimgbox img{max-width:100%;max-height:100%;object-fit:contain;display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
