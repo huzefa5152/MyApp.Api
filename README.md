@@ -306,6 +306,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+- **2026-10-21:** The hosted MCP connector can prepare suppliers, catalog items and a bill's FBR classification, and validate a bill with FBR. `prepare_supplier`, `prepare_item_type` and `prepare_bill_tax_filing` (with `get_bill_tax_filing` to read the rows and version) use the same prepare / approve / commit cycle as the other writes and commit through the screens' own services. Each sits behind a new token scope (`suppliers.write`, `itemtypes.write`, `taxfiling.write`) and the screen permission. `validate_bill_fbr` needs an agent token with the separate `fbr.validate` scope, never submits, and is capped at 30 per user per hour. Pinned by `scripts/test_mcp_masters_taxfiling.py` (56 checks), including cross-company ids, the duplicate-item guard and the consultant quantity right at commit.
+
 - **2026-10-21:** The built-in Sales Quote default fills one A4 page, so its Authorized Signatory line sits at the foot of the page in both Print and Export PDF instead of right under the totals. A quote longer than a page keeps the signature once, after the totals on the last page. The page height is set twice: under `@media print` for the browser's 12mm margins, and under `@media screen` for the export, which lifts print rules into its 796px canvas.
 
 - **2026-10-21:** Sales quotes print an Image column only when a line has a photo. The quote print data carries `hasLineImages` (as on Customize); all 15 quote starters and the default wrap the column in `{{#if hasLineImages}}`, and drop their blank filler rows when photos are shown, since photo rows are tall. A photo-free quote prints exactly as before. Pinned by `myapp-frontend/src/utils/quoteImageColumn.test.js`.

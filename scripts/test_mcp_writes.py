@@ -185,9 +185,9 @@ def make_token(owner_token, name, cids, scopes, days=30):
 # ── scopes are offered only to those entitled to them ────────────────
 print("\n== who may be granted write scopes ==")
 s, st = http("GET", "/api/mcp/me/status", W)
-check("MCP Write + permissions -> implemented write and explicit print-read scopes offered", set(st["scopesAvailable"]) == {"read", "templates.read", "templates.write", "documents.read", "clients.write", "quotes.write", "challans.write", "bills.write"}, st["scopesAvailable"])
+check("MCP Write + permissions -> implemented write and explicit print-read scopes offered", set(st["scopesAvailable"]) == {"read", "templates.read", "templates.write", "documents.read", "clients.write", "quotes.write", "challans.write", "bills.write", "suppliers.write", "itemtypes.write", "taxfiling.write", "fbr.validate"}, st["scopesAvailable"])
 s, st = http("GET", "/api/mcp/me/status", R)
-check("MCP Access without MCP Write -> permitted read scopes, no write scopes", set(st["scopesAvailable"]) == {"read", "templates.read", "documents.read"}, st["scopesAvailable"])
+check("MCP Access without MCP Write -> permitted read scopes, no write scopes", set(st["scopesAvailable"]) == {"read", "templates.read", "documents.read", "fbr.validate"}, st["scopesAvailable"])
 s, st = http("GET", "/api/mcp/me/status", C)
 check("MCP Write but no quotation permission -> clients.write, not quotes.write", "clients.write" in st["scopesAvailable"] and "quotes.write" not in st["scopesAvailable"], st["scopesAvailable"])
 check("clients-only permissions never offer print-content or other write scopes", set(st["scopesAvailable"]) == {"read", "clients.write"}, st["scopesAvailable"])
@@ -216,7 +216,7 @@ TC = d["secret"]
 
 print("\n== tool catalogue follows the token ==")
 READ6 = ["get_challan", "get_invoice", "get_stock", "list_companies", "search_challans", "search_clients", "search_invoices", "search_quotes", "item_rate_history", "outstanding_ledger", "receivables_by_client", "sales_summary", "tax_sheet_summary"]
-SALES_READS = set(READ6) | {"get_mcp_capabilities", "get_action_status", "get_onboarding_schema", "get_company_onboarding_status", "get_daily_work_queue", "get_quote", "search_sales_orders", "get_sales_order", "search_suppliers", "search_item_types", "search_purchase_bills", "get_purchase_bill", "search_goods_receipts", "search_receipts", "search_payments"}
+SALES_READS = set(READ6) | {"get_mcp_capabilities", "get_action_status", "get_onboarding_schema", "get_company_onboarding_status", "get_daily_work_queue", "get_quote", "search_sales_orders", "get_sales_order", "search_suppliers", "search_item_types", "search_purchase_bills", "get_purchase_bill", "search_goods_receipts", "search_receipts", "search_payments", "get_bill_tax_filing"}
 PRINT_READS = {"list_print_templates", "get_print_template", "get_print_contract", "get_document_print_data"}
 ACCOUNTING_READS = {"get_trial_balance", "get_profit_and_loss", "get_balance_sheet", "get_cash_book", "get_aged_payables", "get_party_ledger"}
 

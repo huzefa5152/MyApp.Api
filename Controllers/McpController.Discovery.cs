@@ -35,6 +35,8 @@ public partial class McpController
         AddOnboardingTools(tools);
         AddOperationsTools(tools);
         AddEmailTools(tools);
+        AddMasterTools(tools);
+        AddTaxFilingTools(tools);
         return tools.ToArray();
     }
 
@@ -44,6 +46,9 @@ public partial class McpController
         if (tool.SeedOnly && !_permissions.IsSeedAdmin(CurrentUserId)) return false;
         if (!await _permissions.HasMcpToolAccessAsync(CurrentUserId, tool.Name)) return false;
         if (Agent != null && !Agent.HasScope(tool.Scope)) return false;
+        // FBR validation reaches PRAL and refreshes the bill's lines, so like a write it needs an
+        // agent token carrying its explicit scope; a plain login token never gets it.
+        if (tool.Scope == McpScopes.FbrValidate && Agent == null) return false;
         if (tool.Writes && (Agent is not { AllowWrites: true }
             || !await _permissions.HasPermissionAsync(CurrentUserId, "mcp.write.use"))) return false;
         if (tool.Permissions.Length == 0) return true;
@@ -100,6 +105,8 @@ public partial class McpController
             "list_print_templates" or "get_print_template" or "get_print_contract" or "prepare_print_template_update" => await CallPrintToolAsync(name, args),
             "get_document_print_data" => await CallDocumentPrintToolAsync(name, args),
             "get_onboarding_schema" or "get_company_onboarding_status" => await CallOnboardingToolAsync(name, args),
+            "prepare_supplier" or "prepare_item_type" => await CallMasterToolAsync(name, args),
+            "get_bill_tax_filing" or "prepare_bill_tax_filing" or "validate_bill_fbr" => await CallTaxFilingToolAsync(name, args),
             _ => await CallOperationsToolAsync(name, args)
         };
     }

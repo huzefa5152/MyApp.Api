@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
 using MyApp.Api.Models;
+using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Controllers
 {
@@ -22,7 +23,7 @@ namespace MyApp.Api.Controllers
         private string _resultRef = "";
         private string _resultSummary = "";
 
-        private static readonly string[] WriteToolNameList = { "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "prepare_email_decision", "prepare_email_quotation", "prepare_print_template_update", "commit_action", "cancel_action" };
+        private static readonly string[] WriteToolNameList = { "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "prepare_email_decision", "prepare_email_quotation", "prepare_print_template_update", "prepare_supplier", "prepare_item_type", "prepare_bill_tax_filing", "commit_action", "cancel_action" };
         private static bool IsWriteTool(string name) => WriteToolNameList.Contains(name, StringComparer.Ordinal);
 
         private static string PrepareToolFor(string kind) => kind switch
@@ -34,6 +35,9 @@ namespace MyApp.Api.Controllers
             "email.quote" => "prepare_email_quotation",
             "challan.create" => "prepare_challan",
             "bill.create" or "bill.standalone" => "prepare_bill",
+            "supplier.create" or "supplier.update" => "prepare_supplier",
+            "itemtype.create" or "itemtype.update" => "prepare_item_type",
+            "taxfiling.save" => "prepare_bill_tax_filing",
             _ => throw new ToolError("Unknown action kind.")
         };
 
@@ -374,20 +378,29 @@ namespace MyApp.Api.Controllers
             "quote.create" => McpScopes.Quotes,
             "email.quote" => McpScopes.Quotes,
             "email.decision" => McpScopes.Email,
+            "supplier.create" or "supplier.update" => McpScopes.Suppliers,
+            "itemtype.create" or "itemtype.update" => McpScopes.ItemTypes,
+            "taxfiling.save" => McpScopes.TaxFiling,
             _ => throw new ToolError("Unknown plan type.")
         };
 
-        private static string PermissionFor(string kind) => kind switch
+        /// <summary>The screen permission a plan needs; holding any one of them is enough.</summary>
+        private static string[] PermissionFor(string kind) => kind switch
         {
-            "template.update" => "printtemplates.manage.update",
-            "client.create" => "clients.manage.create",
-            "client.update" => "clients.manage.update",
-            "challan.create" => "challans.manage.create",
-            "bill.create" => "bills.manage.create",
-            "bill.standalone" => "bills.manage.create.standalone",
-            "quote.create" => "salesquotes.manage.create",
-            "email.quote" => "salesquotes.manage.create",
-            "email.decision" => "email.inbox.manage",
+            "template.update" => new[] { "printtemplates.manage.update" },
+            "client.create" => new[] { "clients.manage.create" },
+            "client.update" => new[] { "clients.manage.update" },
+            "challan.create" => new[] { "challans.manage.create" },
+            "bill.create" => new[] { "bills.manage.create" },
+            "bill.standalone" => new[] { "bills.manage.create.standalone" },
+            "quote.create" => new[] { "salesquotes.manage.create" },
+            "email.quote" => new[] { "salesquotes.manage.create" },
+            "email.decision" => new[] { "email.inbox.manage" },
+            "supplier.create" => new[] { "suppliers.manage.create" },
+            "supplier.update" => new[] { "suppliers.manage.update" },
+            "itemtype.create" => new[] { "itemtypes.manage.create" },
+            "itemtype.update" => new[] { "itemtypes.manage.update" },
+            "taxfiling.save" => new[] { "invoices.manage.update.itemtype", "invoices.manage.update.itemtype.qty" },
             _ => throw new ToolError("Unknown plan type.")
         };
 
@@ -491,6 +504,37 @@ namespace MyApp.Api.Controllers
                         var created = await _invoices.CreateStandaloneAsync(StandaloneBillFromPlan(p, plan.CompanyId));
                         (resultRef, resultSummary) = ($"Invoice:{created.Id}",
                             $"Created bill #{created.InvoiceNumber} (id {created.Id}) for \"{created.ClientName}\", total {CommercialTotalCalculator.Total(created.GrandTotal, created.FreightCharges):0.00} PKR. Not submitted to FBR");
+                        break;
+                    }
+                    case "supplier.create":
+                    {
+                        var created = await OperationService<ISupplierService>().CreateAsync(SupplierFromPlan(p));
+                        (resultRef, resultSummary) = ($"Supplier:{created.Id}", $"Created supplier #{created.Id} \"{created.Name}\"");
+                        break;
+                    }
+                    case "supplier.update":
+                    {
+                        var updated = await OperationService<ISupplierService>().UpdateAsync(SupplierFromPlan(p));
+                        (resultRef, resultSummary) = ($"Supplier:{updated.Id}", $"Updated supplier #{updated.Id} \"{updated.Name}\"");
+                        break;
+                    }
+                    case "itemtype.create":
+                    {
+                        var created = await OperationService<IItemTypeService>().CreateAsync(ItemTypeFromPlan(p), plan.CompanyId);
+                        (resultRef, resultSummary) = ($"ItemType:{created.Id}", $"Created item #{created.Id} \"{created.Name}\" (HS {created.HSCode ?? "none"})");
+                        break;
+                    }
+                    case "itemtype.update":
+                    {
+                        var item = ItemTypeFromPlan(p);
+                        var updated = await OperationService<IItemTypeService>().UpdateAsync(item.Id, item, plan.CompanyId)
+                            ?? throw new KeyNotFoundException("The item no longer exists.");
+                        (resultRef, resultSummary) = ($"ItemType:{updated.Id}", $"Updated item #{updated.Id} \"{updated.Name}\" (HS {updated.HSCode ?? "none"})");
+                        break;
+                    }
+                    case "taxfiling.save":
+                    {
+                        (resultRef, resultSummary) = await CommitTaxFilingAsync(plan.CompanyId, p);
                         break;
                     }
                     default: throw new ToolError("Unknown plan type.");

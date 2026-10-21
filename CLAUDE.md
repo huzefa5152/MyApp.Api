@@ -360,6 +360,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | MCP primary admin across all tenants, with tenant users still confined (needs `sqlcmd`-free; creates one throwaway company) | `python scripts/test_mcp_seed_admin.py --base <url>` | `52/52 checks passed` |
 | MCP report tools: figures equal the screens' own reports, bounded output, per-tool permission, no payment details | `python scripts/test_mcp_reports.py --base <url>` | `79/79 checks passed` |
 | MCP challans and bills: find, prepare, commit, bill a challan in full, rounding, hourly ceiling, never submitted to FBR (needs `sqlcmd`; locally marks its own challan Pending) | `python scripts/test_mcp_documents.py --base <url>` | `94/94 checks passed` |
+| MCP suppliers, catalog items, a bill's FBR classification and FBR validation: prepare / commit, cross-company ids, duplicate-item guard, consultant quantity right at commit | `python scripts/test_mcp_masters_taxfiling.py --base <url> --sql-db <local db>` | `57/57 masters and tax filing checks passed` |
 | Every company-scoped action asserts the companyId it was handed (offline) | `python scripts/verify_tenant_scope.py` | `every company-scoped action is guarded` |
 | Bill print merges the same item across challans of one PO (print data only; lines stay per challan) | `python scripts/test_bill_print_merge.py --base <url>` | `8/8 bill print merge checks passed` |
 | HS code on both prints + FBR-ready without a quantity adjustment | `python scripts/test_hscode_on_prints.py` | `21/21 checks` |

@@ -33,6 +33,24 @@ names and `get_action_status` after an uncertain action result.
 | `challans.write` | `prepare_challan` | `challans.manage.create`, `challans.list.view` |
 | `bills.write` | `prepare_bill` (from challans, or standalone) | `bills.manage.create` and/or `bills.manage.create.standalone`, `challans.list.view` |
 | `templates.write` | `prepare_print_template_update` | Both `printtemplates.manage.view` and `printtemplates.manage.update` |
+| `suppliers.write` | `prepare_supplier` (create or update) | `suppliers.manage.create` and `.update` |
+| `itemtypes.write` | `prepare_item_type` (create or update a catalog item) | `itemtypes.manage.view`, and `.create` and/or `.update` |
+| `taxfiling.write` | `prepare_bill_tax_filing` (a bill's FBR filing rows) | `invoices.list.view`, and `invoices.manage.update.itemtype` and/or `.itemtype.qty` |
+
+`fbr.validate` is a separate, non-write scope for `validate_bill_fbr` (needs
+`invoices.fbr.validate`). It asks PRAL to validate a bill with the company's own FBR token,
+returns FBR's verdict and item errors, and never submits. Like the screen's Validate button,
+it first refreshes the bill lines' HS code, unit and sale type from the catalog. It is capped
+at 30 validations per user per hour, because every call spends the company's PRAL quota.
+
+**Classifying a bill for FBR.** `get_bill_tax_filing` (needs `invoices.list.view`) returns
+the bill lines, the current filing rows and a `version`. `prepare_bill_tax_filing` takes that
+version and rows that cover every bill line exactly once, each naming an item from the
+company's own catalog with a complete HS code. Commit runs the Invoices screen's own save
+(`InvoiceService.SaveTaxFilingAsync`): the version is checked again under a lock, changing
+quantities or amounts needs `invoices.manage.update.itemtype.qty` at commit time, rows FBR
+would treat as duplicates are refused, and stock follows the effective item type. The
+commercial bill never changes, and a bill whose submission has started is refused.
 
 Writes are two steps. `prepare_*` validates and prices a plan and saves **nothing**;
 `commit_action(planId)` then runs it once, through the same service the web screen uses,
@@ -118,7 +136,8 @@ single-use creation. Also run the existing MCP authentication/OAuth suites befor
 Synthetic local tests do not prove a live ChatGPT or Gmail connection.
 
 A bill takes the next number of the company's legal invoice sequence and may reduce stock, so
-a token may commit at most 10 bills and 30 challans per hour, and a challan is billed in full
+a token may commit at most 10 bills and 30 challans per hour (30 each for supplier changes,
+item changes and FBR classifications), and a challan is billed in full
 or not at all (every line priced). Bills are never dated in the future and are never submitted
 to FBR. FBR submission, voiding, deleting, creating credit/debit notes, and changing users,
 roles or company settings are not exposed as MCP writes. Authorized note print data can be
