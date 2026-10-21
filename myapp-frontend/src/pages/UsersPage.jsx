@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import UserSessionsPanel from "../Components/UserSessionsPanel";
 import { useState, useEffect } from "react";
 import {
   MdPeople,
@@ -13,6 +14,7 @@ import {
   MdBadge,
   MdShield,
   MdAdminPanelSettings,
+  MdDevices,
 } from "react-icons/md";
 import { getUsers, createUser, updateUser, deleteUser, unlockUser } from "../api/usersApi";
 import { getRoles, getUserRoles, assignUserRoles } from "../api/rbacApi";
@@ -50,6 +52,9 @@ export default function UsersPage() {
   const canCreate = has("users.manage.create");
   const canUpdate = has("users.manage.update");
   const canDelete = has("users.manage.delete");
+  // Sessions & devices: the server scopes it to the caller's own management tree.
+  const canSeeSessions = has("users.manage.view");
+  const [tab, setTab] = useState("users");
   const canAssignRoles = has("rbac.userroles.assign");
   // One-step provisioning: an operator who can assign tenant access gets a
   // company multi-select in the create dialog, so a new user has company
@@ -327,6 +332,22 @@ export default function UsersPage() {
         )}
       </div>
 
+      {canSeeSessions && (
+        <div role="tablist" aria-label="User management sections" style={styles.tabs}>
+          {[["users", "Users", MdPeople], ["sessions", "Sessions & devices", MdDevices]].map(([key, label, Icon]) => (
+            <button key={key} role="tab" id={`users-tab-${key}`} aria-selected={tab === key} aria-controls={`users-panel-${key}`}
+              style={{ ...styles.tab, ...(tab === key ? styles.tabActive : {}) }} onClick={() => setTab(key)}>
+              <Icon style={{ fontSize: "1.1rem" }} aria-hidden />{label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {canSeeSessions && tab === "sessions" && (
+        <div role="tabpanel" id="users-panel-sessions" aria-labelledby="users-tab-sessions"><UserSessionsPanel /></div>
+      )}
+
+      <div role="tabpanel" id="users-panel-users" hidden={canSeeSessions && tab !== "users"}>
       {isSeedAdmin && <div role="status" style={{ display:"flex", gap:12, alignItems:"center", flexWrap:"wrap", marginBottom:16 }}>
         <strong>{blockedCount} blocked {blockedCount === 1 ? "user" : "users"}</strong>
         <label style={{ display:"flex", gap:8, alignItems:"center", minHeight:44 }}><input type="checkbox" checked={blockedOnly} onChange={e => setBlockedOnly(e.target.checked)} />Show blocked users only</label>
@@ -421,6 +442,7 @@ export default function UsersPage() {
       <p style={{ color: colors.textSecondary, fontSize: "0.85rem", marginTop: "1rem" }}>
         {filtered.length} user{filtered.length !== 1 ? "s" : ""} total
       </p>
+      </div>
 
       {/* ---- Create/Edit Modal ---- */}
       {showModal && (
@@ -731,6 +753,34 @@ export default function UsersPage() {
 
 /* ---------- Styles ---------- */
 const styles = {
+  tabs: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "0.4rem",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+    marginBottom: "1.25rem",
+  },
+  tab: {
+    minHeight: 44,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    padding: "0.5rem 1.1rem",
+    background: "transparent",
+    color: colors.textSecondary,
+    border: "none",
+    borderBottom: "3px solid transparent",
+    borderRadius: "8px 8px 0 0",
+    fontSize: "0.9rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    boxShadow: "none",
+  },
+  tabActive: {
+    color: colors.blue,
+    borderBottomColor: colors.blue,
+    background: "rgba(13,71,161,0.06)",
+  },
   header: {
     display: "flex",
     alignItems: "center",

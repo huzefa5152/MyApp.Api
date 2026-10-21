@@ -241,7 +241,24 @@ builder.Services.AddAuthentication(options =>
             if (currentStamp == null || !string.Equals(currentStamp, stamp, StringComparison.Ordinal))
             {
                 context.Fail("Token has been revoked");
+                return;
             }
+            // A token minted with a session must still have a live session row. Tokens
+            // from before sessions existed carry no sid and age out on their own expiry.
+            var sessionId = principal.FindFirstValue("sid");
+            if (sessionId == null) return;
+            var now = DateTime.UtcNow;
+            var session = await db.UserSessions.AsNoTracking().Where(s => s.Id == sessionId)
+                .Select(s => new { s.UserId, s.IsRevoked, s.ExpiresAt, s.LastSeenAt }).FirstOrDefaultAsync();
+            if (session == null || session.UserId != userId || session.IsRevoked || session.ExpiresAt <= now)
+            {
+                context.Fail("Session expired or revoked");
+                return;
+            }
+            // At most one activity write per minute; no request detail is stored.
+            if (session.LastSeenAt < now.AddMinutes(-1))
+                await db.UserSessions.Where(s => s.Id == sessionId && !s.IsRevoked && s.LastSeenAt < now.AddMinutes(-1))
+                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.LastSeenAt, now));
         }
     };
 })

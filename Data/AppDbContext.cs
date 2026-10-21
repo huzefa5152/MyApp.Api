@@ -198,6 +198,7 @@ namespace MyApp.Api.Data
         public DbSet<StockMovement> StockMovements { get; set; }
         public DbSet<OpeningStockBalance> OpeningStockBalances { get; set; }
 
+                public DbSet<UserSession> UserSessions { get; set; }
                 public DbSet<McpAgentToken> McpAgentTokens { get; set; }
         public DbSet<McpUserAccessPolicy> McpUserAccessPolicies { get; set; }
         public DbSet<McpActivity> McpActivities { get; set; }
@@ -226,6 +227,13 @@ namespace MyApp.Api.Data
             });
             // Hosted MCP: per-agent credentials (hash only) and the append-only
             // activity record. Activities carry no foreign keys on purpose.
+            // One row per browser sign-in, for Sessions & devices. No foreign key:
+            // the list joins Users, so a deleted user's rows simply drop out.
+            modelBuilder.Entity<UserSession>().Property(s => s.SecurityStamp).HasMaxLength(64);
+            modelBuilder.Entity<UserSession>().Property(s => s.UserAgent).HasMaxLength(512);
+            modelBuilder.Entity<UserSession>().Property(s => s.IpAddress).HasMaxLength(64);
+            modelBuilder.Entity<UserSession>().HasIndex(s => new { s.UserId, s.IsRevoked, s.ExpiresAt });
+            modelBuilder.Entity<UserSession>().HasIndex(s => s.LastSeenAt);
             modelBuilder.Entity<McpAgentToken>(e =>
             {
                 e.Property(t => t.Name).HasMaxLength(100);

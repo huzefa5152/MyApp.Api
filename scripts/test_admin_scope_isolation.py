@@ -390,6 +390,68 @@ s, d = request("GET", "/api/auth/me", token=tUA1)
 check("revoke", "userA1 still authenticated (/auth/me 200)", s == 200, str(s))
 
 # ─────────────────────────────────────────────────────────────────────
+print("\n=== Sessions & devices follow the management tree ===")
+tUB1 = login("scopeUserB1", PW)   # each login is its own device session
+tUA1b = login("scopeUserA1", PW)
+
+
+def session_rows(tok: str) -> list:
+    s, d = request("GET", "/api/user-sessions?status=all&pageSize=100", token=tok)
+    assert s == 200, f"sessions list: {s} {d}"
+    return d["items"]
+
+
+def owners(tok: str) -> set:
+    return {r["userId"] for r in session_rows(tok)}
+
+
+seen = owners(seed)
+check("sessions", "seed sees A, B and both users",
+      {A["id"], B["id"], uA1["id"], uB1["id"]} <= seen, str(seen))
+seen = owners(tA)
+check("sessions", "A sees itself and userA1", {A["id"], uA1["id"]} <= seen, str(seen))
+check("sessions", "A sees nobody else (no seed, no B, no B's user)",
+      seen <= {A["id"], uA1["id"]}, str(seen))
+seen = owners(tB)
+check("sessions", "B sees itself and userB1 only", seen == {B["id"], uB1["id"]}, str(seen))
+s, d = request("GET", "/api/user-sessions?status=all&pageSize=100", token=tA)
+check("sessions", "A's summary counts only its own tree", d["summary"]["totalUsers"] == 2, str(d["summary"]))
+s, d = request("GET", f"/api/user-sessions?status=all&userId={SEED_ID}", token=tA)
+check("sessions", "A filtering by the seed admin's id gets nothing", s == 200 and d["items"] == [], f"{s} {d}")
+s, _ = request("GET", "/api/user-sessions", token=tUA1)
+check("sessions", "a user without users.manage.view is refused", s == 403, str(s))
+
+seed_session = next(r["id"] for r in session_rows(seed) if r["userId"] == SEED_ID)
+b_session = next(r["id"] for r in session_rows(tB) if r["userId"] == B["id"])
+ub1_session = next(r["id"] for r in session_rows(tB) if r["userId"] == uB1["id"])
+for label, sid in (("the seed admin's", seed_session), ("B's", b_session), ("userB1's", ub1_session)):
+    s, _ = request("POST", f"/api/user-sessions/{sid}/revoke", token=tA)
+    check("sessions", f"A cannot sign out {label} session (404)", s == 404, str(s))
+for label, uid in (("the seed admin", SEED_ID), ("B", B["id"]), ("userB1", uB1["id"])):
+    s, _ = request("POST", f"/api/user-sessions/user/{uid}/revoke", token=tA)
+    check("sessions", f"A cannot sign out every device of {label} (404)", s == 404, str(s))
+s, _ = request("GET", "/api/auth/me", token=tB)
+check("sessions", "B is still signed in after A's attempts", s == 200, str(s))
+s, _ = request("GET", "/api/auth/me", token=tUB1)
+check("sessions", "userB1 is still signed in after A's attempts", s == 200, str(s))
+
+# A ends one device of its own user: only that token stops working
+newest = max((r for r in session_rows(tA) if r["userId"] == uA1["id"] and r["status"] != "Revoked"),
+             key=lambda r: r["createdAt"])
+s, _ = request("POST", f"/api/user-sessions/{newest['id']}/revoke", token=tA)
+check("sessions", "A signs out one device of userA1", s == 200, str(s))
+stopped = [request("GET", "/api/auth/me", token=t)[0] for t in (tUA1, tUA1b)]
+check("sessions", "exactly that device is signed out", sorted(stopped) == [200, 401], str(stopped))
+tUA1 = tUA1 if stopped[0] == 200 else login("scopeUserA1", PW)
+
+# B ends every device of its own user
+s, _ = request("POST", f"/api/user-sessions/user/{uB1['id']}/revoke", token=tB)
+check("sessions", "B signs out every device of userB1", s == 200, str(s))
+s, _ = request("GET", "/api/auth/me", token=tUB1)
+check("sessions", "userB1's token no longer works", s == 401, str(s))
+check("sessions", "B's view shows userB1 revoked",
+      all(r["status"] == "Revoked" for r in session_rows(tB) if r["userId"] == uB1["id"]))
+
 print("\n=== Premium MCP management is seed-only ===")
 s, catalog = request("GET", f"/api/mcp/catalog/{uA1['id']}", token=seed)
 check("mcp", "seed reads worker grants", s == 200 and catalog.get("canManageGrants") is True, str(s))

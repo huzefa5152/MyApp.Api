@@ -133,9 +133,20 @@ namespace MyApp.Api.Controllers
                     .SetProperty(u => u.LockoutUntil, (DateTime?)null).SetProperty(u => u.LastFailedLogin, (DateTime?)null));
             if (cleared == 0) return LoginFailure();
 
-            var token = GenerateJwtToken(user);
             var expiration = DateTime.UtcNow.AddHours(
                 double.Parse(_configuration["Jwt:ExpirationHours"] ?? "8"));
+            // One row per sign-in, so an administrator can see and end it.
+            var agent = Request.Headers.UserAgent.ToString();
+            var session = new Models.UserSession
+            {
+                Id = Guid.NewGuid().ToString("N"), UserId = user.Id, SecurityStamp = user.SecurityStamp ?? "",
+                CreatedAt = now, LastSeenAt = now, ExpiresAt = expiration, TokenExpiresAt = expiration,
+                UserAgent = agent[..Math.Min(agent.Length, 512)],
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? ""
+            };
+            _context.UserSessions.Add(session);
+            await _context.SaveChangesAsync();
+            var token = GenerateJwtToken(user, session.Id);
 
             _logger.LogInformation("User {UserId} ({Username}) signed in", user.Id, user.Username);
 
@@ -204,7 +215,8 @@ namespace MyApp.Api.Controllers
             await _context.SaveChangesAsync();
 
             // Return new token with updated claims
-            var newToken = GenerateJwtToken(user);
+            // Same device, same session: the renamed token keeps this sign-in's id.
+            var newToken = GenerateJwtToken(user, User.FindFirstValue("sid"));
             return Ok(new
             {
                 token = newToken,
@@ -333,13 +345,13 @@ namespace MyApp.Api.Controllers
             return Ok(new { message = "Avatar removed" });
         }
 
-        private string GenerateJwtToken(Models.User user)
+        private string GenerateJwtToken(Models.User user, string? sessionId)
         {
             var key = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
             var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-            var claims = new[]
+            var claims = new List<Claim>
             {
                 new Claim(ClaimTypes.Name, user.Username),
                 new Claim(ClaimTypes.Role, user.Role),
@@ -349,6 +361,7 @@ namespace MyApp.Api.Controllers
                 // Token-revocation marker. Audit C-6 (2026-05-13).
                 new Claim("stamp", user.SecurityStamp ?? "")
             };
+            if (sessionId != null) claims.Add(new Claim("sid", sessionId));
 
             var token = new JwtSecurityToken(
                 issuer: _configuration["Jwt:Issuer"],
@@ -377,6 +390,9 @@ namespace MyApp.Api.Controllers
             {
                 user.SecurityStamp = Guid.NewGuid().ToString("N");
                 await _context.SaveChangesAsync();
+                // The new stamp ends every device, so every session row ends with it.
+                await _context.UserSessions.Where(s => s.UserId == user.Id && !s.IsRevoked)
+                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsRevoked, true).SetProperty(x => x.RevokedAt, DateTime.UtcNow));
                 _cache.Remove($"user-stamp:{user.Id}");
                 _logger.LogInformation("User {UserId} signed out — security stamp rotated", user.Id);
             }
