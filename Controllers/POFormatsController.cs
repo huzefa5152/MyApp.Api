@@ -138,6 +138,11 @@ namespace MyApp.Api.Controllers
         [RequestSizeLimit(10 * 1024 * 1024)]
         public async Task<ActionResult<FingerprintPdfResponseDto>> FingerprintPdf(IFormFile file, [FromQuery] int? companyId)
         {
+            // Without a company the match runs over every tenant's saved formats
+            // and returns the matched one, its company and customer included.
+            if (companyId is not > 0)
+                return BadRequest(new { error = "Choose a company before uploading a sample." });
+            await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
             if (file == null || file.Length == 0)
                 return BadRequest(new { error = "No file uploaded." });
 

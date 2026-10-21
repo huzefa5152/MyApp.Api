@@ -1494,6 +1494,27 @@ check(suite20, "alice sees no PO archive rows for another tenant",
       f"status {s}, rows {(arch20 or {}).get('rows')}")
 s, _ = request("GET", "/api/poimport/archives/999999999/file", token=tokens["alice"])
 status_check(suite20, "alice downloads an unknown archive file", s, 404)
+s, _ = request("GET", f"/api/poimport/archives?companyId={beta['id']}&page=1&pageSize=5", token=tokens["alice"])
+status_check(suite20, "alice lists another tenant's PO archive by companyId", s, 403)
+
+# PO parsing and format fingerprinting. The company chooses whose saved formats are
+# matched, and the match comes back with its company and customer, so a missing
+# company used to mean "every tenant's formats".
+s, _ = request("POST", f"/api/poimport/parse-text?companyId={beta['id']}", token=tokens["alice"], body={"text": "PO 1\nItem 2 Pcs"})
+status_check(suite20, "alice parses PO text against another tenant's formats", s, 403)
+s, b20 = request("POST", "/api/poimport/parse-text", token=tokens["alice"], body={"text": "PO 1\nItem 2 Pcs"})
+check(suite20, "parsing PO text without a company is refused, not run over every tenant",
+      s == 400 and "company" in json.dumps(b20).lower(), f"status {s} {b20}")
+s, _ = upload_file(f"/api/poimport/parse-pdf?companyId={beta['id']}", tokens["alice"], "po.pdf", b"%PDF-1.4\n%%EOF\n", "application/pdf")
+status_check(suite20, "alice parses a PO PDF against another tenant's formats", s, 403)
+s, b20 = upload_file("/api/poimport/parse-pdf", tokens["alice"], "po.pdf", b"%PDF-1.4\n%%EOF\n", "application/pdf")
+check(suite20, "parsing a PO PDF without a company is refused", s == 400 and "company" in json.dumps(b20).lower(), f"status {s} {b20}")
+s, _ = upload_file(f"/api/poformats/fingerprint-pdf?companyId={beta['id']}", tokens["alice"], "po.pdf", b"%PDF-1.4\n%%EOF\n", "application/pdf")
+status_check(suite20, "alice fingerprints a sample against another tenant's formats", s, 403)
+s, b20 = upload_file("/api/poformats/fingerprint-pdf", tokens["alice"], "po.pdf", b"%PDF-1.4\n%%EOF\n", "application/pdf")
+check(suite20, "fingerprinting a sample without a company is refused", s == 400 and "company" in json.dumps(b20).lower(), f"status {s} {b20}")
+s, _ = request("POST", f"/api/poimport/parse-text?companyId={beta['id']}", token=tokens["bob"], body={"text": "PO 1\nItem 2 Pcs"})
+check(suite20, "bob (Beta access) reaches the same parse route, so the 403 above is the tenant guard", s not in (401, 403), f"status {s}")
 
 # The two HS hint lookups. The ANSWER is tariff reference data, but resolving it
 # can fall back to that company's own FBR token (audit H-9).

@@ -98,6 +98,11 @@ namespace MyApp.Api.Controllers
         [EnableRateLimiting("import")]
         public async Task<IActionResult> ParsePdf(IFormFile file, [FromQuery] int? companyId)
         {
+            // The company chooses which saved PO formats the parser matches
+            // against, so without one it reads every tenant's layouts.
+            if (companyId is not > 0)
+                return BadRequest(new { error = "Choose a company before importing a PO." });
+            await _access.AssertAccessAsync(CurrentUserId() ?? 0, companyId.Value);
             if (file == null || file.Length == 0)
                 return BadRequest(new { error = "No file uploaded." });
 
@@ -105,9 +110,6 @@ namespace MyApp.Api.Controllers
                 !file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
                 return BadRequest(new { error = "Only PDF files are supported." });
 
-            // The company decides which saved formats are tried AND owns the
-            // archive row this write leaves behind.
-            if (companyId.HasValue && !await CanReachAsync(companyId.Value)) return Forbid();
 
             // Pull the upload into memory once so we can both save the
             // bytes to disk AND re-read them for the parser without paying
@@ -172,10 +174,12 @@ namespace MyApp.Api.Controllers
         [HasPermission("poformats.import.create")]
         public async Task<IActionResult> ParseText([FromBody] ParseTextRequest request, [FromQuery] int? companyId)
         {
+            // Same as ParsePdf: the company selects whose saved formats match.
+            if (companyId is not > 0)
+                return BadRequest(new { error = "Choose a company before importing a PO." });
+            await _access.AssertAccessAsync(CurrentUserId() ?? 0, companyId.Value);
             if (string.IsNullOrWhiteSpace(request.Text))
                 return BadRequest(new { error = "No text provided." });
-
-            if (companyId.HasValue && !await CanReachAsync(companyId.Value)) return Forbid();
 
             // No PDF to archive in the text-only path — operator pasted
             // raw text, nothing to retain. Keep this lean and skip the
@@ -418,13 +422,16 @@ namespace MyApp.Api.Controllers
             var allowed = await _access.GetAccessibleCompanyIdsAsync(uid.Value);
 
             var q = _context.PoImportArchives.AsNoTracking().AsQueryable();
-            // Scope FIRST, then apply the caller's own filter. A companyId the
-            // caller cannot reach narrows an already-narrowed set to nothing,
-            // which is the honest answer -- there is nothing there for them.
-            // Rows with no company (an operator parsing a PDF before choosing
-            // one) belong to whoever can see the archive at all.
-            q = q.Where(a => a.CompanyId == null || allowed.Contains(a.CompanyId.Value));
-            if (companyId.HasValue) q = q.Where(a => a.CompanyId == companyId.Value);
+            // A named company must be reachable; without one, the caller's own set.
+            // Rows with no company (left by uploads made before a company was
+            // required) belong to no tenant, so nobody lists them.
+            if (companyId.HasValue)
+            {
+                await _access.AssertAccessAsync(uid.Value, companyId.Value);
+                q = q.Where(a => a.CompanyId == companyId.Value);
+            }
+            else
+                q = q.Where(a => a.CompanyId != null && allowed.Contains(a.CompanyId.Value));
             if (!string.IsNullOrWhiteSpace(outcome)) q = q.Where(a => a.ParseOutcome == outcome);
             if (from.HasValue) q = q.Where(a => a.UploadedAt >= from.Value);
             if (to.HasValue) q = q.Where(a => a.UploadedAt < to.Value);
@@ -465,7 +472,8 @@ namespace MyApp.Api.Controllers
 
             // 404, not 403: a distinct answer for "exists but not yours" is an
             // enumeration oracle over other tenants' uploads.
-            if (row.CompanyId.HasValue && !await CanReachAsync(row.CompanyId.Value))
+            // A row with no company belongs to no tenant, so it is nobody's to download.
+            if (row.CompanyId is not { } owner || !await CanReachAsync(owner))
                 return NotFound();
 
             var abs = Path.Combine(GetArchiveRoot(), row.StoredPath.Replace('/', Path.DirectorySeparatorChar));

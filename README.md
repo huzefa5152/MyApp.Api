@@ -298,6 +298,12 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-10-21 — PO import and PO formats need a company you hold
+
+- **PO parsing and format samples now require a company, and check it.** Parsing a PO (PDF or pasted text) and uploading a sample on the PO Format screen matched against the saved formats of the company given, or of every company when none was given. The match comes back with its company and customer, so another tenant's names could be read. Both now refuse to run without a company and refuse one the user does not hold.
+- **The PO archive lists and downloads only your companies' uploads.** Naming another company is refused, and an upload with no company is shown to nobody. Production had no such uploads.
+- Pinned in `scripts/test_tenant_isolation.py` ("unguarded companyId routes").
+
 ### 2026-10-21 — AI agents (MCP) for the importer
 
 - **Connect Claude, Codex or ChatGPT to the ERP.** The site now serves a hosted MCP endpoint at `/mcp`: an agent signs in as one user (a token from Profile, or "sign in to connect" with company and scope choice) and can do exactly what that user can, in the companies they hold, and nothing else.
