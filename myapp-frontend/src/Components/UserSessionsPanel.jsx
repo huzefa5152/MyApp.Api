@@ -13,9 +13,10 @@ import { colors, cardStyles } from "../theme";
 // end a session. The API is seed-admin only; this panel renders nothing for
 // anyone else. A session is a browser login, not a physical device.
 
-// The ERP sidebar takes ~240px of the viewport, so the table needs a wider
-// breakpoint than the page-level 760px: below it, cards.
-const NARROW = 980;
+// Measured on the panel itself, not the window: the sidebar's width varies,
+// and the table needs this much room to fit with no sideways scroll.
+const TABLE_MIN = 1000;
+const PHONE = 760;
 const STATUS_TONE = {
   "Recently active": { bg: "#eafbef", fg: "#1b6e34", dot: "#28a745" },
   "Signed in": { bg: "#e7f0fb", fg: "#0d47a1", dot: "#1565c0" },
@@ -38,19 +39,29 @@ function relative(value) {
   if (s < 7 * 86400) return `${Math.floor(s / 86400)} d ago`;
   return d.toLocaleDateString();
 }
+function until(value) {
+  const d = asDate(value);
+  if (!d) return "Unknown";
+  const s = Math.round((d.getTime() - Date.now()) / 1000);
+  if (s <= 0) return d.toLocaleDateString();
+  if (s < 3600) return `in ${Math.max(1, Math.floor(s / 60))} min`;
+  if (s < 86400) return `in ${Math.floor(s / 3600)} h`;
+  return `in ${Math.floor(s / 86400)} d`;
+}
 function device(agent = "") {
   const browser = /Edg\//.test(agent) ? "Edge" : /Firefox\//.test(agent) ? "Firefox" : /Chrome\//.test(agent) ? "Chrome" : /Safari\//.test(agent) ? "Safari" : "Other browser";
   const os = /Android/.test(agent) ? "Android" : /iPhone|iPad/.test(agent) ? "iOS" : /Windows/.test(agent) ? "Windows" : /Macintosh/.test(agent) ? "macOS" : /Linux/.test(agent) ? "Linux" : "Unknown system";
   return { browser, os, mobile: /Android|iPhone|iPad|Mobile/.test(agent) };
 }
-function useNarrow() {
-  const [narrow, setNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < NARROW);
+function useWidth(ref) {
+  const [width, setWidth] = useState(0);
   useEffect(() => {
-    const on = () => setNarrow(window.innerWidth < NARROW);
-    window.addEventListener("resize", on);
-    return () => window.removeEventListener("resize", on);
-  }, []);
-  return narrow;
+    if (!ref.current) return;
+    const ro = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, [ref]);
+  return width;
 }
 
 function StatusBadge({ status }) {
@@ -75,7 +86,10 @@ function DeviceCell({ session }) {
 export default function UserSessionsPanel() {
   const { user } = useAuth();
   const confirm = useConfirm();
-  const narrow = useNarrow();
+  const wrapRef = useRef(null);
+  const width = useWidth(wrapRef);
+  const narrow = width < TABLE_MIN;
+  const phone = typeof window !== "undefined" && window.innerWidth < PHONE;
   const requestId = useRef(0);
   const [data, setData] = useState(null);
   const [status, setStatus] = useState("signed-in");
@@ -149,18 +163,12 @@ export default function UserSessionsPanel() {
 
   const actions = session => live(session) && <div style={s.actions}>
     <button style={s.ghostDanger} disabled={busy} title="Sign out this device" onClick={() => revoke(session, false)}><MdLogout aria-hidden /> Sign out</button>
-    <button style={s.ghost} disabled={busy} title="Sign out every device this user is signed in on" onClick={() => revoke(session, true)}>Sign out all</button>
+    <button style={s.ghost} disabled={busy} title="Sign out every device this user is signed in on" aria-label={`Sign out all devices for @${session.username}`} onClick={() => revoke(session, true)}>All devices</button>
   </div>;
 
-  return <section style={s.wrap} aria-label="User sessions and devices">
+  return <section ref={wrapRef} style={s.wrap} aria-label="User sessions and devices">
     <div style={s.head}>
-      <div style={s.headLeft}>
-        <div style={s.headIcon}><MdDevices style={{ fontSize: "1.4rem", color: "#fff" }} /></div>
-        <div>
-          <h3 style={s.title}>Sessions &amp; devices</h3>
-          <p style={s.sub}>Who is signed in, from which browser, and when they were last active. Visible to the primary admin only.</p>
-        </div>
-      </div>
+      <p style={s.sub}>Who is signed in, from which browser, and when they were last active. Visible to the primary admin only.</p>
       <div style={s.headRight}>
         <span style={s.muted}>{data ? `Updated ${relative(data.observedAt)} · refreshes every 30 s` : "Loading…"}</span>
         <button style={s.iconBtn} onClick={load} aria-label="Refresh sessions" title="Refresh"><MdRefresh /></button>
@@ -186,7 +194,8 @@ export default function UserSessionsPanel() {
 
     {error && <div role="alert" style={s.alert}>{error} <button style={s.link} onClick={load}>Try again</button></div>}
     {!data && !error && <div style={s.empty}>Loading sessions…</div>}
-    <RecordsViewport label="Session records">{data && data.items.length === 0 && <div style={s.empty}>No sessions match these filters.</div>}
+    {/* On a phone the header and KPIs fill the screen, so the page scrolls instead of a nested box. */}
+    <RecordsViewport label="Session records" enabled={!phone}>{data && data.items.length === 0 && <div style={s.empty}>No sessions match these filters.</div>}
 
     {data && data.items.length > 0 && (narrow
       ? <div style={s.cards}>{data.items.map(session => <article key={session.id} style={s.card}>
@@ -208,7 +217,7 @@ export default function UserSessionsPanel() {
           {actions(session)}
         </article>)}</div>
       : <div data-admin-table-region="" style={s.tableWrap}><table style={s.table}>
-          <thead><tr>{["User", "Device", "Status", "Signed in", "Last activity", "Session ends", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+          <thead><tr>{["User", "Device", "Status", "Activity", "Session ends", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
           <tbody>{data.items.map(session => <tr key={session.id} style={s.tr}>
             <td style={s.td}>
               <div style={s.strong}>{session.fullName || session.username}</div>
@@ -216,9 +225,11 @@ export default function UserSessionsPanel() {
             </td>
             <td style={s.td}><DeviceCell session={session} /></td>
             <td style={s.td}><StatusBadge status={session.status} /></td>
-            <td style={{ ...s.td, whiteSpace: "nowrap" }} title={absolute(session.createdAt)}>{relative(session.createdAt)}</td>
-            <td style={{ ...s.td, whiteSpace: "nowrap" }} title={absolute(session.lastSeenAt)}>{relative(session.lastSeenAt)}</td>
-            <td style={s.td} title={session.revokedAt ? `Revoked ${absolute(session.revokedAt)}` : undefined}>{absolute(session.expiresAt)}</td>
+            <td style={{ ...s.td, whiteSpace: "nowrap" }}>
+              <div title={`Last activity ${absolute(session.lastSeenAt)}`}>{relative(session.lastSeenAt)}</div>
+              <div style={s.muted} title={absolute(session.createdAt)}>signed in {relative(session.createdAt)}</div>
+            </td>
+            <td style={{ ...s.td, whiteSpace: "nowrap" }} title={session.revokedAt ? `Revoked ${absolute(session.revokedAt)}` : absolute(session.expiresAt)}>{session.revokedAt ? `Revoked ${relative(session.revokedAt)}` : until(session.expiresAt)}</td>
             <td style={{ ...s.td, textAlign: "right" }}>{actions(session)}</td>
           </tr>)}</tbody>
         </table></div>)}</RecordsViewport>
@@ -236,19 +247,16 @@ export default function UserSessionsPanel() {
 const btnBase = { minHeight: 44, padding: "0.4rem 0.9rem", borderRadius: 8, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", boxShadow: "none", display: "inline-flex", alignItems: "center", gap: "0.35rem" };
 const s = {
   wrap: { minWidth: 0 },
-  head: { display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.8rem", marginBottom: "1.1rem" },
-  headLeft: { display: "flex", alignItems: "center", gap: "0.9rem", minWidth: 0, flex: "1 1 320px" },
-  headIcon: { width: 44, height: 44, borderRadius: 12, flexShrink: 0, display: "grid", placeItems: "center", background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})` },
-  title: { margin: 0, fontSize: "1.15rem", fontWeight: 700, color: colors.textPrimary },
-  sub: { margin: "0.15rem 0 0", fontSize: "0.84rem", color: colors.textSecondary, lineHeight: 1.45 },
+  head: { display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.6rem 0.8rem", marginBottom: "0.8rem" },
+  sub: { margin: 0, flex: "1 1 320px", minWidth: 0, fontSize: "0.84rem", color: colors.textSecondary, lineHeight: 1.45 },
   headRight: { display: "flex", alignItems: "center", gap: "0.6rem" },
   iconBtn: { width: 44, height: 44, padding: 0, display: "grid", placeItems: "center", boxShadow: "none", background: colors.inputBg, color: colors.blue, border: `1px solid ${colors.inputBorder}`, borderRadius: 8, fontSize: "1.3rem", cursor: "pointer" },
-  kpiGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(150px, 100%), 1fr))", gap: "0.8rem", marginBottom: "1.1rem" },
-  kpi: { ...cardStyles.card, display: "flex", alignItems: "center", gap: "0.8rem", padding: "0.85rem 1rem", minWidth: 0 },
-  kpiIcon: { width: 38, height: 38, borderRadius: 10, flexShrink: 0, display: "grid", placeItems: "center", fontSize: "1.2rem", color: colors.blue, background: "linear-gradient(135deg, rgba(13,71,161,0.08), rgba(0,137,123,0.10))" },
-  kpiValue: { fontSize: "1.45rem", fontWeight: 800, color: colors.blue, lineHeight: 1.1, letterSpacing: "-0.01em" },
+  kpiGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(150px, 100%), 1fr))", gap: "0.6rem", marginBottom: "0.8rem" },
+  kpi: { ...cardStyles.card, display: "flex", alignItems: "center", gap: "0.7rem", padding: "0.6rem 0.85rem", minWidth: 0 },
+  kpiIcon: { width: 34, height: 34, borderRadius: 10, flexShrink: 0, display: "grid", placeItems: "center", fontSize: "1.2rem", color: colors.blue, background: "linear-gradient(135deg, rgba(13,71,161,0.08), rgba(0,137,123,0.10))" },
+  kpiValue: { fontSize: "1.3rem", fontWeight: 800, color: colors.blue, lineHeight: 1.1, letterSpacing: "-0.01em" },
   kpiLabel: { fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary, marginTop: 2 },
-  toolbar: { display: "flex", flexWrap: "wrap", gap: "0.7rem", alignItems: "center", marginBottom: "1rem" },
+  toolbar: { display: "flex", flexWrap: "wrap", gap: "0.6rem", alignItems: "center", marginBottom: "0.8rem" },
   searchWrap: { display: "flex", alignItems: "center", gap: "0.6rem", padding: "0 0.9rem", minHeight: 44, flex: "1 1 240px", minWidth: 0, background: colors.inputBg, border: `1px solid ${colors.cardBorder}`, borderRadius: 8 },
   searchInput: { flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: "0.9rem", color: colors.textPrimary, boxShadow: "none" },
   pills: { display: "flex", flexWrap: "wrap", gap: "0.4rem" },
@@ -263,10 +271,10 @@ const s = {
   deviceIcon: { fontSize: "1.5rem", color: colors.textSecondary, flexShrink: 0 },
   tableWrap: { ...cardStyles.card, overflow: "hidden" },
   table: { width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", color: colors.textPrimary },
-  th: { textAlign: "left", padding: "0.7rem 0.9rem", fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary, background: colors.inputBg, borderBottom: `1px solid ${colors.cardBorder}` },
+  th: { textAlign: "left", whiteSpace: "nowrap", padding: "0.7rem 0.9rem", fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary, background: colors.inputBg, borderBottom: `1px solid ${colors.cardBorder}` },
   tr: { borderBottom: `1px solid ${colors.cardBorder}` },
-  td: { padding: "0.75rem 0.9rem", verticalAlign: "middle" },
-  actions: { display: "flex", flexWrap: "wrap", gap: "0.5rem", justifyContent: "flex-end", whiteSpace: "nowrap" },
+  td: { padding: "0.6rem 0.9rem", verticalAlign: "middle" },
+  actions: { display: "flex", flexWrap: "nowrap", gap: "0.4rem", justifyContent: "flex-end", whiteSpace: "nowrap" },
   ghost: { ...btnBase, background: "#fff", color: colors.blue, border: `1px solid ${colors.inputBorder}` },
   ghostDanger: { ...btnBase, background: colors.dangerLight, color: colors.danger, border: `1px solid ${colors.danger}30` },
   cards: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))", gap: "0.8rem" },
@@ -275,7 +283,7 @@ const s = {
   metaGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(130px, 100%), 1fr))", gap: "0.5rem 1rem" },
   metaLabel: cardStyles.metaLabel,
   metaValue: cardStyles.metaValue,
-  pager: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.8rem", marginTop: "1rem" },
+  pager: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.8rem", marginTop: "0.6rem" },
   empty: { ...cardStyles.card, padding: "2rem 1rem", textAlign: "center", color: colors.textSecondary, fontSize: "0.9rem" },
   alert: { padding: "0.7rem 1rem", marginBottom: "0.8rem", borderRadius: 8, background: colors.dangerLight, color: "#842029", border: "1px solid #f5c6cb", fontSize: "0.88rem" },
   link: { background: "none", border: "none", padding: 0, boxShadow: "none", color: colors.blue, fontWeight: 700, textDecoration: "underline", cursor: "pointer", minHeight: 0 },

@@ -4,7 +4,7 @@
  .dl-content-wrapper:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *)) { height:100dvh; min-height:0; }
  .dl-content-wrapper:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *))>.dl-topbar { flex-shrink:0; }
  .dl-main:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *)) { display:flex; flex-direction:column; height:calc(100dvh - var(--topbar-height,0px)); min-height:0; overflow:hidden; }
- .dl-main :is(div,section,article,main):has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *)) { display:flex !important; flex-direction:column !important; flex:1 1 auto; min-height:0 !important; min-width:0; }
+ .dl-main :is(div,section,article,main):not([hidden]):has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *)) { display:flex !important; flex-direction:column !important; flex:1 1 auto; min-height:0 !important; min-width:0; }
  .dl-main :is(div,section,article,main):has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *))> :not(:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *))):not([data-records-viewport]) { flex-shrink:0; }
  .records-viewport { position:relative; flex:1 1 auto; min-height:0; min-width:0; overflow:auto; overscroll-behavior:contain; scrollbar-gutter:stable; padding:2px 4px 12px 2px; outline-offset:-2px; }
  .records-viewport:focus-visible { outline:2px solid #0d47a1; }

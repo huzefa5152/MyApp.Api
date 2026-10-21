@@ -346,7 +346,7 @@ export default function UsersPage() {
 
       {/* Users List */}
       <div>
-        <RecordsViewport label="Users records">{loading ? (
+        <RecordsViewport label="Users records" enabled={!(isSeedAdmin && tab !== "users")}>{loading ? (
           <p style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
             Loading users...
           </p>
