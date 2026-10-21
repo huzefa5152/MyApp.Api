@@ -1,6 +1,7 @@
 import { MdVisibility, MdEdit, MdDelete, MdPayments, MdPrint, MdPictureAsPdf, MdCopyAll } from "react-icons/md";
 import CardActions from "./CardActions";
 import DataTable from "./DataTable";
+import AttachmentBadge from "./AttachmentBadge";
 import StatusBadge from "./StatusBadge";
 
 // Payment-status pill (mirror of InvoiceTable's): Paid / Partial / Overdue / Unpaid.
@@ -12,14 +13,19 @@ function paymentStatusBadge(b) {
   return <StatusBadge tone="neutral">Unpaid</StatusBadge>;
 }
 
-export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDelete, onCopy, onRecordPayment, onShowPayments, onPrint, onExportPdf, exportingId, printDisabled = false, printDisabledReason = "" }) {
+export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDelete, onCopy, onRecordPayment, onShowPayments, onPrint, onExportPdf, exportingId, printDisabled = false, printDisabledReason = "", attachCounts = {}, onAttach }) {
   const columns = [
     {
       key: "purchaseBillNumber",
       header: "PB #",
       width: 110,
       accessor: (b) => Number(b.purchaseBillNumber) || b.purchaseBillNumber,
-      render: (b) => <strong>{b.purchaseBillNumber}</strong>,
+      render: (b) => (
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <strong>{b.purchaseBillNumber}</strong>
+          <AttachmentBadge count={attachCounts?.[b.id]} onClick={() => onAttach?.(b)} />
+        </div>
+      ),
     },
     {
       key: "supplierName",

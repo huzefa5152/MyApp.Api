@@ -20,6 +20,9 @@ import LinkChallanModal from "../Components/LinkChallanModal";
 import CorrectionWizard from "../Components/CorrectionWizard";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
+import AttachmentBadge from "../Components/AttachmentBadge";
+import AttachmentQuickModal from "../Components/AttachmentQuickModal";
+import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice, deleteInvoice, cancelInvoice, setInvoiceFbrExcluded } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { submitInvoiceToFbr, validateInvoiceWithFbr } from "../api/fbrApi";
@@ -223,6 +226,8 @@ export default function InvoicePage({ mode = "invoices" }) {
   const [bulkPrintOpen, setBulkPrintOpen] = useState(false);
   const [clients, setClients] = useState([]);
   const [invoices, setInvoices] = useState([]);
+  const [attachTarget, setAttachTarget] = useState(null);
+  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "Invoice", invoices.map((r) => r.id));
   // Bill currently open in the correction wizard (null when closed). Opens the
   // post-sale CorrectionWizard the same way Reverse-etc modals open from a row.
   const [correctTarget, setCorrectTarget] = useState(null);
@@ -1058,6 +1063,8 @@ export default function InvoicePage({ mode = "invoices" }) {
               onVoid={handleVoidInvoice}
               onReverse={handleReverseInvoice}
               onCorrect={setCorrectTarget}
+              attachCounts={attachCounts}
+              onAttach={(inv) => setAttachTarget(inv)}
             />
           ) : (
           <div className="card-grid">
@@ -1073,6 +1080,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                     <h5 style={cardStyles.title}>
                       <MdReceipt style={{ color: colors.blue, marginRight: 6 }} />
                       {isNotesMode ? noteLabel : isBillsMode ? "Bill" : "Invoice"} #{inv.invoiceNumber}
+                      {" "}<AttachmentBadge count={attachCounts[inv.id]} onClick={() => setAttachTarget(inv)} />
                     </h5>
                     <p style={cardStyles.text}><strong>Client:</strong> {inv.clientName}</p>
                     {inv.divisionName && (
@@ -1583,6 +1591,15 @@ export default function InvoicePage({ mode = "invoices" }) {
           supp → new unclassified delta bill (navigate to it on the Invoices
           tab to classify); credit/debit → a note against the original (refresh
           so the original's Reversed/Adjusted badge appears). */}
+      {attachTarget && selectedCompany?.id && (
+        <AttachmentQuickModal
+          companyId={selectedCompany?.id}
+          entityType="Invoice"
+          entityId={attachTarget.id}
+          title={`${isNotesMode ? noteLabel : isBillsMode ? "Bill" : "Invoice"} #${attachTarget.invoiceNumber} — Attachments`}
+          onClose={() => { setAttachTarget(null); refreshAttachCounts(); }}
+        />
+      )}
       {copy.source && (
         <CopyDocumentModal
           sourceType={DOC_COPY_TYPES.bill}

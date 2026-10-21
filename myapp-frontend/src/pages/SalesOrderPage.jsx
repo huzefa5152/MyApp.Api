@@ -7,6 +7,9 @@ import SalesOrderForm from "../Components/SalesOrderForm";
 import CopyDocumentModal from "../Components/CopyDocumentModal";
 import { DOC_COPY_TYPES } from "../api/documentCopyApi";
 import { useDocumentCopy } from "../hooks/useDocumentCopy";
+import AttachmentBadge from "../Components/AttachmentBadge";
+import AttachmentQuickModal from "../Components/AttachmentQuickModal";
+import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import CreateChallanFromOrderModal from "../Components/CreateChallanFromOrderModal";
 import AttachChallanToOrderModal from "../Components/AttachChallanToOrderModal";
 import SalesOrderDetailModal from "../Components/SalesOrderDetailModal";
@@ -66,6 +69,8 @@ export default function SalesOrderPage() {
   const viewChallans = (o) => navigate(`/challans?salesOrderId=${o.id}`);
 
   const [orders, setOrders] = useState([]);
+  const [attachTarget, setAttachTarget] = useState(null);
+  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "SalesOrder", orders.map((r) => r.id));
   const [exportingId, setExportingId] = useState(null);
   const [showImport, setShowImport] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -299,7 +304,10 @@ export default function SalesOrderPage() {
                 <div key={o.id} style={st.card}>
                   <div style={st.cardTop}>
                     <span style={st.oNum}>SO #{o.salesOrderNumber}</span>
-                    <span style={{ ...st.badge, background: `${FULFIL_COLORS[o.fulfillmentStatus] || "#5f6d7e"}18`, color: FULFIL_COLORS[o.fulfillmentStatus] || "#5f6d7e" }}>{o.fulfillmentStatus}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <AttachmentBadge count={attachCounts[o.id]} onClick={() => setAttachTarget(o)} />
+                      <span style={{ ...st.badge, background: `${FULFIL_COLORS[o.fulfillmentStatus] || "#5f6d7e"}18`, color: FULFIL_COLORS[o.fulfillmentStatus] || "#5f6d7e" }}>{o.fulfillmentStatus}</span>
+                    </div>
                   </div>
                   <div style={st.client}>{o.clientName}</div>
                   <div style={st.metaRow}><span>{fmtDate(o.orderDate)}</span><span>{o.items?.length || 0} item{(o.items?.length || 0) !== 1 ? "s" : ""}</span></div>
@@ -401,6 +409,15 @@ export default function SalesOrderPage() {
           companyId={selectedCompany.id}
           onClose={() => setShowImport(false)}
           onSaved={() => { setShowImport(false); reload(); notify("Sales Order created from PO.", "success"); }}
+        />
+      )}
+      {attachTarget && selectedCompany?.id && (
+        <AttachmentQuickModal
+          companyId={selectedCompany?.id}
+          entityType="SalesOrder"
+          entityId={attachTarget.id}
+          title={`SO #${attachTarget.salesOrderNumber} — Attachments`}
+          onClose={() => { setAttachTarget(null); refreshAttachCounts(); }}
         />
       )}
       {copy.source && (

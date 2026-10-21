@@ -1,15 +1,21 @@
 import { MdVisibility, MdEdit, MdDelete, MdPrint, MdPictureAsPdf, MdCopyAll } from "react-icons/md";
 import DataTable from "./DataTable";
+import AttachmentBadge from "./AttachmentBadge";
 import StatusBadge from "./StatusBadge";
 
-export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onDelete, onCopy, onPrint, onExportPdf, exportingId, printDisabled = false, printDisabledReason = "" }) {
+export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onDelete, onCopy, onPrint, onExportPdf, exportingId, printDisabled = false, printDisabledReason = "", attachCounts = {}, onAttach }) {
   const columns = [
     {
       key: "goodsReceiptNumber",
       header: "GR #",
       width: 110,
       accessor: (g) => Number(g.goodsReceiptNumber) || g.goodsReceiptNumber,
-      render: (g) => <strong>{g.goodsReceiptNumber}</strong>,
+      render: (g) => (
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <strong>{g.goodsReceiptNumber}</strong>
+          <AttachmentBadge count={attachCounts?.[g.id]} onClick={() => onAttach?.(g)} />
+        </div>
+      ),
     },
     {
       key: "supplierName",

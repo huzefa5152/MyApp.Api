@@ -1,6 +1,6 @@
 import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
-import { MdRequestQuote, MdAdd, MdBusiness, MdSearch, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdSwapHoriz, MdAttachFile, MdVisibility, MdUploadFile, MdCopyAll } from "react-icons/md";
+import { MdRequestQuote, MdAdd, MdBusiness, MdSearch, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdSwapHoriz, MdVisibility, MdUploadFile, MdCopyAll } from "react-icons/md";
 import SalesQuoteForm from "../Components/SalesQuoteForm";
 import CopyDocumentModal from "../Components/CopyDocumentModal";
 import SalesQuoteDetailModal from "../Components/SalesQuoteDetailModal";
@@ -9,7 +9,9 @@ import {
   getPagedSalesQuotesByCompany, createSalesQuote, updateSalesQuote,
   deleteSalesQuote, convertQuoteToOrder, getSalesQuotePrintData,
 } from "../api/salesQuoteApi";
-import { getEntityAttachmentCounts } from "../api/attachmentApi";
+import AttachmentBadge from "../Components/AttachmentBadge";
+import AttachmentQuickModal from "../Components/AttachmentQuickModal";
+import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import { DOC_COPY_TYPES } from "../api/documentCopyApi";
 import { useDocumentCopy } from "../hooks/useDocumentCopy";
 import { getClientsByCompany } from "../api/clientApi";
@@ -51,10 +53,10 @@ export default function SalesQuotePage() {
   // destination the user cannot create.
   const canCopy = canCreate || canConvert;
   const canImportPo = canCreate && has("poformats.import.create");
-  const canSeeAttachments = has("attachments.list.view");
 
   const [quotes, setQuotes] = useState([]);
-  const [attachCounts, setAttachCounts] = useState({}); // { quoteId: attachmentCount }
+  const [attachTarget, setAttachTarget] = useState(null);
+  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "SalesQuote", quotes.map((r) => r.id));
   const [viewQuote, setViewQuote] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -93,17 +95,9 @@ export default function SalesQuotePage() {
       setQuotes(data.items);
       setTotalCount(data.totalCount);
       setTotalPages(data.totalPages);
-      // One batched call for the whole page's attachment counts (card badges).
-      if (canSeeAttachments && data.items?.length) {
-        getEntityAttachmentCounts(companyId, "SalesQuote", data.items.map((q) => q.id))
-          .then(({ data: c }) => setAttachCounts(c || {}))
-          .catch(() => { /* no attachment-view perm / unavailable — skip badges */ });
-      } else {
-        setAttachCounts({});
-      }
     } catch { setQuotes([]); setTotalCount(0); setTotalPages(0); }
     finally { setLoading(false); }
-  }, [page, size, search, statusFilter, divisionFilter, clientFilter, canSeeAttachments]);
+  }, [page, size, search, statusFilter, divisionFilter, clientFilter]);
 
   // Reset paging + filters and load the client list when the company changes.
   useEffect(() => {
@@ -274,14 +268,14 @@ export default function SalesQuotePage() {
               <div key={q.id} style={st.card}>
                 <div style={st.cardTop}>
                   <span style={st.qNum}>Quote #{q.quoteNumber}</span>
-                  <span style={{ ...st.badge, background: `${STATUS_COLORS[q.status] || "#5f6d7e"}18`, color: STATUS_COLORS[q.status] || "#5f6d7e" }}>{q.status}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <AttachmentBadge count={attachCounts[q.id]} onClick={() => setAttachTarget(q)} />
+                    <span style={{ ...st.badge, background: `${STATUS_COLORS[q.status] || "#5f6d7e"}18`, color: STATUS_COLORS[q.status] || "#5f6d7e" }}>{q.status}</span>
+                  </div>
                 </div>
                 <div style={st.client}>{q.clientName}</div>
                 <div style={st.metaRow}><span>{fmtDate(q.date)}</span><span>{q.items?.length || 0} item{(q.items?.length || 0) !== 1 ? "s" : ""}</span></div>
                 {q.divisionName && <span style={st.divisionChip}>{q.divisionName}</span>}
-                {attachCounts[q.id] > 0 && (
-                  <span style={st.attachChip}><MdAttachFile size={12} /> {attachCounts[q.id]} attachment{attachCounts[q.id] !== 1 ? "s" : ""}</span>
-                )}
                 {q.customerEnquiryRef && <div style={st.meta}>Enquiry: {q.customerEnquiryRef}</div>}
                 {q.validUntil && <div style={st.meta}>Valid until: {fmtDate(q.validUntil)}</div>}
                 <div style={st.total}>Rs {Number(q.grandTotal).toLocaleString()}</div>
@@ -326,6 +320,15 @@ export default function SalesQuotePage() {
         />
       )}
 
+      {attachTarget && selectedCompany?.id && (
+        <AttachmentQuickModal
+          companyId={selectedCompany?.id}
+          entityType="SalesQuote"
+          entityId={attachTarget.id}
+          title={`Quote #${attachTarget.quoteNumber} — Attachments`}
+          onClose={() => { setAttachTarget(null); refreshAttachCounts(); }}
+        />
+      )}
       {copy.source && (
         <CopyDocumentModal
           sourceType={DOC_COPY_TYPES.salesQuote}
@@ -369,7 +372,6 @@ const st = {
   metaRow: { display: "flex", justifyContent: "space-between", marginTop: "0.35rem", fontSize: "0.8rem", color: colors.textSecondary },
   meta: { marginTop: "0.2rem", fontSize: "0.78rem", color: colors.textSecondary },
   divisionChip: { display: "inline-block", marginTop: "0.35rem", fontSize: "0.72rem", fontWeight: 700, color: colors.blue, background: "#e3f0ff", padding: "0.12rem 0.55rem", borderRadius: 6 },
-  attachChip: { display: "inline-flex", alignItems: "center", gap: 4, marginTop: "0.35rem", marginLeft: 6, fontSize: "0.72rem", fontWeight: 700, color: colors.teal, background: "#e0f2f1", padding: "0.12rem 0.55rem", borderRadius: 6 },
   total: { marginTop: "0.5rem", fontWeight: 800, fontSize: "1.1rem", color: colors.textPrimary },
   subMeta: { marginTop: "0.1rem", fontSize: "0.74rem", color: colors.textSecondary },
   converted: { marginTop: "0.3rem", fontSize: "0.78rem", color: colors.teal, fontWeight: 600 },

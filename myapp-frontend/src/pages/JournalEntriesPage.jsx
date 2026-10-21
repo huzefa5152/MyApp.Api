@@ -11,6 +11,9 @@ import { notify } from "../utils/notify";
 import { colors, formStyles, modalSizes, dropdownStyles } from "../theme";
 import StatusBadge from "../Components/StatusBadge";
 import AttachmentManager from "../Components/AttachmentManager";
+import AttachmentBadge from "../Components/AttachmentBadge";
+import AttachmentQuickModal from "../Components/AttachmentQuickModal";
+import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import {
   getJournalEntriesPaged, getJournalEntry, createJournalEntry,
   updateJournalEntry, deleteJournalEntry, getJournalEntryPrintData,
@@ -107,6 +110,8 @@ export default function JournalEntriesPage() {
   };
 
   const [rows, setRows] = useState([]);
+  const [attachTarget, setAttachTarget] = useState(null);
+  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "JournalEntry", rows.map((r) => r.id));
   const [page, setPage] = useState(1);
   const [size, setSize] = usePageSize("journalEntries");
   const [serverPageSize, setServerPageSize] = useState(null);
@@ -251,6 +256,8 @@ export default function JournalEntriesPage() {
                   onDelete={() => handleDelete(e)}
                   onPrint={() => handlePrint(e)}
                   onExportPdf={() => handleExportPdf(e)}
+                  attachCount={attachCounts[e.id]}
+                  onAttach={() => setAttachTarget(e)}
                 />
               ))}
             </div>
@@ -284,6 +291,16 @@ export default function JournalEntriesPage() {
         />
       )}
 
+      {attachTarget && companyId && (
+        <AttachmentQuickModal
+          companyId={companyId}
+          entityType="JournalEntry"
+          entityId={attachTarget.id}
+          title={`Journal ${attachTarget.reference} — Attachments`}
+          onClose={() => { setAttachTarget(null); refreshAttachCounts(); }}
+        />
+      )}
+
       {viewing && (
         <JournalViewDialog entry={viewing} companyId={companyId} onClose={() => setViewing(null)} />
       )}
@@ -296,7 +313,7 @@ export default function JournalEntriesPage() {
  * desktop (reads like a table row), stacked one-per-line at 375px — no media
  * queries. Edit/Delete only on manual rows; system rows are view-only.
  */
-function EntryRow({ entry: e, canEdit, canDelete, canPrint, tplPicker, exportingId, onView, onEdit, onDelete, onPrint, onExportPdf }) {
+function EntryRow({ entry: e, canEdit, canDelete, canPrint, tplPicker, exportingId, onView, onEdit, onDelete, onPrint, onExportPdf, attachCount, onAttach }) {
   const src = sourceMeta(e.sourceDocType);
   const balanced = r2(e.totalDebit) === r2(e.totalCredit);
 
@@ -310,6 +327,7 @@ function EntryRow({ entry: e, canEdit, canDelete, canPrint, tplPicker, exporting
             <div style={st.refLine}>
               <span style={st.ref}>{e.reference}</span>
               <StatusBadge tone={src.tone}>{src.label}</StatusBadge>
+              <AttachmentBadge count={attachCount} onClick={onAttach} />
             </div>
             <div style={st.dateLine}>
               {fmtDate(e.date)}

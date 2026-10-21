@@ -32,6 +32,9 @@ import { useDocumentCopy } from "../hooks/useDocumentCopy";
 import StatusBadge from "../Components/StatusBadge";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
+import AttachmentBadge from "../Components/AttachmentBadge";
+import AttachmentQuickModal from "../Components/AttachmentQuickModal";
+import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
 import useIsNarrow from "../hooks/useIsNarrow";
@@ -78,6 +81,8 @@ export default function PurchaseBillsPage() {
   const isNarrow = useIsNarrow();
 
   const [bills, setBills] = useState([]);
+  const [attachTarget, setAttachTarget] = useState(null);
+  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "PurchaseBill", bills.map((r) => r.id));
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -496,6 +501,8 @@ export default function PurchaseBillsPage() {
                   exportingId={exportingId}
                   printDisabled={tplPicker.noTemplate}
                   printDisabledReason={tplPicker.noTemplateReason}
+                  attachCounts={attachCounts}
+                  onAttach={(b) => setAttachTarget(b)}
                 />
               ) : (
               <div className="card-grid">
@@ -508,6 +515,7 @@ export default function PurchaseBillsPage() {
                         <h5 style={cardStyles.title}>
                           <MdShoppingCart style={{ color: colors.purple, marginRight: 6 }} />
                           PB #{b.purchaseBillNumber}
+                          {" "}<AttachmentBadge count={attachCounts[b.id]} onClick={() => setAttachTarget(b)} />
                         </h5>
                         {b.divisionName && <span style={styles.divisionChip}>{b.divisionName}</span>}
                         <p style={cardStyles.text}><strong>Supplier:</strong> {b.supplierName}</p>
@@ -616,6 +624,15 @@ export default function PurchaseBillsPage() {
         />
       )}
 
+      {attachTarget && selectedCompany?.id && (
+        <AttachmentQuickModal
+          companyId={selectedCompany?.id}
+          entityType="PurchaseBill"
+          entityId={attachTarget.id}
+          title={`Purchase Bill #${attachTarget.purchaseBillNumber} — Attachments`}
+          onClose={() => { setAttachTarget(null); refreshAttachCounts(); }}
+        />
+      )}
       {copy.source && (
         <CopyDocumentModal
           sourceType={DOC_COPY_TYPES.purchaseBill}

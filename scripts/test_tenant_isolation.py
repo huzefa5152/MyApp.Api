@@ -335,6 +335,7 @@ endpoints_to_test = [
     ("GET",  "/api/folders/company/{cid}/paged"),
     ("GET",  "/api/attachments/company/{cid}/entity/SalesQuote/1"),
     ("GET",  "/api/attachments/company/{cid}/folder/1"),
+    ("GET",  "/api/attachments/company/{cid}/entity-counts/SalesQuote?ids=1"),
     # Payments / Receipts (AR/AP subledger — design §11.5).
     ("GET",  "/api/payments/receipts/company/{cid}/paged"),
     ("GET",  "/api/payments/payments/company/{cid}/paged"),
@@ -911,6 +912,25 @@ if isinstance(good_quote, dict) and good_quote.get("items"):
     # alice must not read Beta's quote print data (id-based guard)
     s, _ = request("GET", f"/api/salesquotes/{good_quote['id']}/print", token=tokens["alice"])
     status_check(suite11, "alice GET /salesquotes/{betaId}/print", s, 403)
+
+    # List paperclip badges: entity-counts reads only the route company's
+    # attachments, refuses a company the caller was never given, and never
+    # counts another company's record even when its id is sent.
+    qid = good_quote["id"]
+    s, qatt = upload_file(f"/api/attachments/company/{beta['id']}", admin, "q.pdf", b"%PDF-1.4 q",
+                          "application/pdf", {"entityType": "SalesQuote", "entityId": qid})
+    status_check(suite11, "admin attach file to Beta quote", s, 200)
+    counts_path = "/api/attachments/company/{cid}/entity-counts/SalesQuote?ids=" + str(qid)
+    s, c = request("GET", counts_path.format(cid=beta["id"]), token=tokens["carol"])
+    check(suite11, "carol (Alpha+Beta) counts Beta quote == 1",
+          s == 200 and isinstance(c, dict) and c.get(str(qid)) == 1, f"status {s}, body {c}")
+    s, _ = request("GET", counts_path.format(cid=beta["id"]), token=tokens["alice"])
+    status_check(suite11, "alice entity-counts on Beta", s, 403)
+    s, c = request("GET", counts_path.format(cid=alpha["id"]), token=tokens["alice"])
+    check(suite11, "alice counts Beta quote id under Alpha == {}",
+          s == 200 and c == {}, f"status {s}, body {c}")
+    if isinstance(qatt, dict) and qatt.get("id"):
+        request("DELETE", f"/api/attachments/{qatt['id']}", token=admin)
     request("DELETE", f"/api/salesquotes/{good_quote['id']}", token=admin)
 
 

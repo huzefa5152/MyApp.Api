@@ -23,6 +23,9 @@ import { DOC_COPY_TYPES } from "../api/documentCopyApi";
 import { useDocumentCopy } from "../hooks/useDocumentCopy";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
+import AttachmentBadge from "../Components/AttachmentBadge";
+import AttachmentQuickModal from "../Components/AttachmentQuickModal";
+import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
 
@@ -48,6 +51,8 @@ export default function GoodsReceiptsPage() {
   const [viewMode, setViewMode, isBigScreen] = useListViewMode("goodsReceipts");
 
   const [receipts, setReceipts] = useState([]);
+  const [attachTarget, setAttachTarget] = useState(null);
+  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "GoodsReceipt", receipts.map((r) => r.id));
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -224,6 +229,8 @@ export default function GoodsReceiptsPage() {
                   printDisabled={tplPicker.noTemplate}
                   printDisabledReason={tplPicker.noTemplateReason}
                   exportingId={exportingId}
+                  attachCounts={attachCounts}
+                  onAttach={(g) => setAttachTarget(g)}
                 />
               ) : (
               <div className="card-grid">
@@ -236,6 +243,7 @@ export default function GoodsReceiptsPage() {
                         <h5 style={cardStyles.title}>
                           <MdInventory2 style={{ color: colors.teal, marginRight: 6 }} />
                           GR #{gr.goodsReceiptNumber}
+                          {" "}<AttachmentBadge count={attachCounts[gr.id]} onClick={() => setAttachTarget(gr)} />
                         </h5>
                         <p style={cardStyles.text}><strong>Supplier:</strong> {gr.supplierName}</p>
                         <p style={cardStyles.text}><strong>Date:</strong> {new Date(gr.receiptDate).toLocaleDateString()}</p>
@@ -270,6 +278,15 @@ export default function GoodsReceiptsPage() {
         </>
       )}
 
+      {attachTarget && selectedCompany?.id && (
+        <AttachmentQuickModal
+          companyId={selectedCompany?.id}
+          entityType="GoodsReceipt"
+          entityId={attachTarget.id}
+          title={`Goods Receipt #${attachTarget.goodsReceiptNumber} — Attachments`}
+          onClose={() => { setAttachTarget(null); refreshAttachCounts(); }}
+        />
+      )}
       {copy.source && (
         <CopyDocumentModal
           sourceType={DOC_COPY_TYPES.goodsReceipt}

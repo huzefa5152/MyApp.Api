@@ -7,6 +7,7 @@ import {
   MdAddLink, MdLinkOff,
 } from "react-icons/md";
 import DataTable from "./DataTable";
+import AttachmentBadge from "./AttachmentBadge";
 import StatusBadge from "./StatusBadge";
 import { isFutureDocDate } from "../utils/dateInput";
 
@@ -112,6 +113,8 @@ export default function InvoiceTable({
   onReverse,
   onCorrect,
   onLinkChallan,
+  attachCounts = {},
+  onAttach,
 }) {
   const navigate = useNavigate();
 
@@ -123,7 +126,10 @@ export default function InvoiceTable({
       accessor: (i) => Number(i.invoiceNumber) || i.invoiceNumber,
       render: (i) => (
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <strong>{i.invoiceNumber}</strong>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <strong>{i.invoiceNumber}</strong>
+            <AttachmentBadge count={attachCounts?.[i.id]} onClick={() => onAttach?.(i)} />
+          </div>
           {(i.documentType === 9 || i.documentType === 10) && (
             <span
               style={{

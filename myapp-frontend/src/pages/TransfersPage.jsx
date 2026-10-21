@@ -12,6 +12,9 @@ import { colors, dropdownStyles, formStyles, modalSizes } from "../theme";
 import BankCashSelect from "../Components/BankCashSelect";
 import DivisionSelect from "../Components/DivisionSelect";
 import AttachmentManager from "../Components/AttachmentManager";
+import AttachmentBadge from "../Components/AttachmentBadge";
+import AttachmentQuickModal from "../Components/AttachmentQuickModal";
+import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import { getTransfersPaged, createTransfer, updateTransfer, deleteTransfer, getTransferPrintData } from "../api/accountingApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
@@ -57,6 +60,8 @@ export default function TransfersPage() {
   const [exportingId, setExportingId] = useState(null);
 
   const [rows, setRows] = useState([]);
+  const [attachTarget, setAttachTarget] = useState(null);
+  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "AccountTransfer", rows.map((r) => r.id));
   const [page, setPage] = useState(1);
   const [size, setSize] = usePageSize("transfers");
   const [serverPageSize, setServerPageSize] = useState(null);
@@ -221,6 +226,8 @@ export default function TransfersPage() {
                   onDelete={() => handleDelete(t)}
                   onPrint={() => handlePrint(t)}
                   onExportPdf={() => handleExportPdf(t)}
+                  attachCount={attachCounts[t.id]}
+                  onAttach={() => setAttachTarget(t)}
                 />
               ))}
             </div>
@@ -254,6 +261,16 @@ export default function TransfersPage() {
         />
       )}
 
+      {attachTarget && companyId && (
+        <AttachmentQuickModal
+          companyId={companyId}
+          entityType="AccountTransfer"
+          entityId={attachTarget.id}
+          title={`Transfer ${attachTarget.reference} — Attachments`}
+          onClose={() => { setAttachTarget(null); refreshAttachCounts(); }}
+        />
+      )}
+
       {viewing && (
         <ViewTransferModal
           t={viewing}
@@ -267,7 +284,7 @@ export default function TransfersPage() {
 }
 
 /** One transfer card: reference, amount, from → to, date/division meta, description. */
-function TransferCard({ t, canEdit, canDelete, canPrint, tplPicker, exportingId, onView, onEdit, onDelete, onPrint, onExportPdf }) {
+function TransferCard({ t, canEdit, canDelete, canPrint, tplPicker, exportingId, onView, onEdit, onDelete, onPrint, onExportPdf, attachCount, onAttach }) {
   const noTpl = tplPicker?.noTemplate;
   const noTplReason = tplPicker?.noTemplateReason;
   return (
@@ -276,6 +293,7 @@ function TransferCard({ t, canEdit, canDelete, canPrint, tplPicker, exportingId,
       <div style={st.cardBody}>
         <div style={st.cardTop}>
           <span style={{ ...st.ref, color: accent }}>{t.reference}</span>
+          <AttachmentBadge count={attachCount} onClick={onAttach} />
         </div>
 
         <div style={{ ...st.amount, color: accent }}>

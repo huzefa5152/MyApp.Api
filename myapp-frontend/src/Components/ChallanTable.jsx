@@ -5,6 +5,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import DataTable from "./DataTable";
 import StatusBadge, { toneForStatus } from "./StatusBadge";
 import ChallanModal from "./ChallanModal";
+import AttachmentBadge from "./AttachmentBadge";
 
 // Mirror of ChallanList's eligibility checks so the table view enforces the
 // exact same business rules around editability / cancel / delete / duplicate.
@@ -39,6 +40,8 @@ export default function ChallanTable({
   printDisabled = false,
   printDisabledReason = "",
   companyFbrOff = false,
+  attachCounts = {},
+  onAttach,
 }) {
   const { has } = usePermissions();
   const perms = {
@@ -71,6 +74,7 @@ export default function ChallanTable({
               <MdWarning size={14} />
             </span>
           )}
+          <AttachmentBadge count={attachCounts?.[c.id]} onClick={() => onAttach?.(c)} />
         </div>
       ),
     },

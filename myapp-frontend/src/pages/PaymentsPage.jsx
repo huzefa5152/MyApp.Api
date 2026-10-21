@@ -14,6 +14,9 @@ import StatusBadge from "../Components/StatusBadge";
 import PaymentForm from "../Components/PaymentForm";
 import RichText from "../Components/RichText";
 import AttachmentManager from "../Components/AttachmentManager";
+import AttachmentBadge from "../Components/AttachmentBadge";
+import AttachmentQuickModal from "../Components/AttachmentQuickModal";
+import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import { getPagedPayments, deletePayment, getPaymentPrintData } from "../api/paymentApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
@@ -66,6 +69,8 @@ export default function PaymentsPage({ mode = "receipts" }) {
   const resolveTpl = (p) => tplPicker.resolveTemplate(p)?.htmlContent || defaultTpl;
 
   const [rows, setRows] = useState([]);
+  const [attachTarget, setAttachTarget] = useState(null);
+  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "Payment", rows.map((r) => r.id));
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
@@ -237,6 +242,8 @@ export default function PaymentsPage({ mode = "receipts" }) {
                   onView={() => setViewing(p)}
                   onPrint={() => handlePrint(p)}
                   onExportPdf={() => handleExportPdf(p)}
+                  attachCount={attachCounts[p.id]}
+                  onAttach={() => setAttachTarget(p)}
                 />
               ))}
             </div>
@@ -267,6 +274,16 @@ export default function PaymentsPage({ mode = "receipts" }) {
         />
       )}
 
+      {attachTarget && companyId && (
+        <AttachmentQuickModal
+          companyId={companyId}
+          entityType="Payment"
+          entityId={attachTarget.id}
+          title={`${isReceipt ? "Receipt" : "Payment"} ${attachTarget.reference} — Attachments`}
+          onClose={() => { setAttachTarget(null); refreshAttachCounts(); }}
+        />
+      )}
+
       {viewing && (
         <PaymentViewDialog p={viewing} companyId={companyId} accent={accent} docNoun={docNoun} onClose={() => setViewing(null)} />
       )}
@@ -279,7 +296,7 @@ export default function PaymentsPage({ mode = "receipts" }) {
  * settled-document breakdown is collapsed behind an expander so a 10-invoice
  * receipt and a 1-invoice receipt take the same space until you drill in.
  */
-function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, exportingId, onDelete, onEdit, onView, onPrint, onExportPdf }) {
+function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, exportingId, onDelete, onEdit, onView, onPrint, onExportPdf, attachCount, onAttach }) {
   const [open, setOpen] = useState(false);
   const allocs = p.allocations || [];
   const count = allocs.length;
@@ -295,6 +312,7 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, 
         <div style={st.cardTop}>
           <span style={{ ...st.ref, color: accent }}>{p.reference}</span>
           <div style={st.badges}>
+            <AttachmentBadge count={attachCount} onClick={onAttach} />
             {p.isCancelled && <StatusBadge tone="danger">Cancelled</StatusBadge>}
             {p.isPostDated && <StatusBadge tone="warning">PDC</StatusBadge>}
             {isCheque && p.chequeStatus && p.chequeStatus !== "None" && (

@@ -14,6 +14,8 @@ import DivisionSelect from "../Components/DivisionSelect";
 import InvoiceForm from "../Components/InvoiceForm";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
+import AttachmentQuickModal from "../Components/AttachmentQuickModal";
+import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import {
   getPagedChallansByCompany,
   createDeliveryChallan,
@@ -79,6 +81,8 @@ export default function ChallanPage() {
   const [clients, setClients] = useState([]);
   const [salesOrders, setSalesOrders] = useState([]);
   const [challans, setChallans] = useState([]);
+  const [attachTarget, setAttachTarget] = useState(null);
+  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "DeliveryChallan", challans.map((r) => r.id));
   const [showModal, setShowModal] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [editChallan, setEditChallan] = useState(null);
@@ -559,6 +563,8 @@ export default function ChallanPage() {
               exportingId={exportingId}
               duplicatingId={duplicatingId}
               companyFbrOff={selectedCompany?.fbrEnabled === false}
+              attachCounts={attachCounts}
+              onAttach={(c) => setAttachTarget(c)}
             />
           ) : (
             <ChallanList
@@ -577,6 +583,8 @@ export default function ChallanPage() {
               exportingId={exportingId}
               duplicatingId={duplicatingId}
               companyFbrOff={selectedCompany?.fbrEnabled === false}
+              attachCounts={attachCounts}
+              onAttach={(c) => setAttachTarget(c)}
             />
           )}
           {/* Pagination */}
@@ -589,6 +597,16 @@ export default function ChallanPage() {
             onPageSize={(n) => { setSize(n); setPage(1); }}
           />
         </>
+      )}
+
+      {attachTarget && selectedCompany?.id && (
+        <AttachmentQuickModal
+          companyId={selectedCompany?.id}
+          entityType="DeliveryChallan"
+          entityId={attachTarget.id}
+          title={`Challan #${attachTarget.challanNumber} — Attachments`}
+          onClose={() => { setAttachTarget(null); refreshAttachCounts(); }}
+        />
       )}
 
       {copy.source && (

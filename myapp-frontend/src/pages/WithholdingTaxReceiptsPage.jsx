@@ -7,6 +7,9 @@ import {
 } from "../api/withholdingTaxApi";
 import WithholdingTaxReceiptForm from "../Components/WithholdingTaxReceiptForm";
 import AttachmentManager from "../Components/AttachmentManager";
+import AttachmentBadge from "../Components/AttachmentBadge";
+import AttachmentQuickModal from "../Components/AttachmentQuickModal";
+import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import DivisionSelect from "../Components/DivisionSelect";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { useConfirm } from "../Components/ConfirmDialog";
@@ -38,6 +41,8 @@ export default function WithholdingTaxReceiptsPage() {
   const isNarrow = useIsNarrow();
 
   const [receipts, setReceipts] = useState([]);
+  const [attachTarget, setAttachTarget] = useState(null);
+  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "WithholdingTaxReceipt", receipts.map((r) => r.id));
   const [loading, setLoading] = useState(false);
   const [exportingId, setExportingId] = useState(null);
   const [search, setSearch] = useState("");
@@ -204,6 +209,7 @@ export default function WithholdingTaxReceiptsPage() {
             <div key={r.id} style={styles.card}>
               <div style={cardStyles.cardHeader}>
                 <span style={styles.cardNum}>#{r.receiptNumber}</span>
+                <AttachmentBadge count={attachCounts[r.id]} onClick={() => setAttachTarget(r)} />
                 <span style={styles.cardDate}>{fmtDate(r.date)}</span>
               </div>
               <div style={cardStyles.cardLead}>
@@ -263,7 +269,7 @@ export default function WithholdingTaxReceiptsPage() {
             <tbody>
               {filtered.map((r) => (
                 <tr key={r.id} style={styles.tr}>
-                  <td style={styles.tdNum}>{r.receiptNumber}</td>
+                  <td style={styles.tdNum}>{r.receiptNumber}{" "}<AttachmentBadge count={attachCounts[r.id]} onClick={() => setAttachTarget(r)} /></td>
                   <td style={styles.td}>{fmtDate(r.date)}</td>
                   <td style={{ ...styles.td, fontWeight: 600 }}>
                     {r.clientName}{r.divisionName ? <span style={styles.divTag}>{r.divisionName}</span> : null}
@@ -314,6 +320,16 @@ export default function WithholdingTaxReceiptsPage() {
           defaultDivisionId={divisionFilter || null}
           onClose={() => { setShowForm(false); setEditReceipt(null); }}
           onSaved={handleSave}
+        />
+      )}
+
+      {attachTarget && selectedCompany?.id && (
+        <AttachmentQuickModal
+          companyId={selectedCompany?.id}
+          entityType="WithholdingTaxReceipt"
+          entityId={attachTarget.id}
+          title={`Withholding Tax Receipt #${attachTarget.receiptNumber} — Attachments`}
+          onClose={() => { setAttachTarget(null); refreshAttachCounts(); }}
         />
       )}
 
