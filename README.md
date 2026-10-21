@@ -306,6 +306,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+- **2026-10-21:** Sales quotes print an Image column only when a line has a photo. The quote print data carries `hasLineImages` (as on Customize); all 15 quote starters and the default wrap the column in `{{#if hasLineImages}}`, and drop their blank filler rows when photos are shown, since photo rows are tall. A photo-free quote prints exactly as before. Pinned by `myapp-frontend/src/utils/quoteImageColumn.test.js`.
+
 - **2026-10-20:** Tax filing rows that FBR cannot tell apart are caught before FBR sees them. Two rows with the same HS code, description, unit, sale type and SRO (differing only in quantity and amount) are refused when the consultant saves them, with the rows to merge named; the same check runs on the final payload before preview, validation or submission. FBR's own "DUPLICATE INVOICE EXISTS" item error now says it means a repeated item, not a repeated bill number (Hakimi INV-3973). Rule in `Helpers/FbrDuplicateItems.cs`, pinned by `FbrDuplicateItemsTests` and the filing-rows SQL test.
 
 - **2026-10-20:** Fixes the Bills / Invoices list failing to show a commercial (No tax or SRB) bill: its "Outside FBR" status pill used an icon that was never imported.

@@ -313,6 +313,12 @@ namespace MyApp.Api.DTOs
         public decimal GrandTotal { get; set; }
         public string AmountInWords { get; set; } = "";
         public string? Notes { get; set; }
+        /// <summary>
+        /// True when at least one line carries a product photo. Templates wrap
+        /// the image column in {{#if hasLineImages}} so a photo-free quote
+        /// prints without an empty Image column.
+        /// </summary>
+        public bool HasLineImages { get; set; }
         public List<PrintQuoteItemDto> Items { get; set; } = new();
     }
 

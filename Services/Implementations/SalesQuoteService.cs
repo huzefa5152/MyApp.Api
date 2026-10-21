@@ -439,6 +439,7 @@ namespace MyApp.Api.Services.Implementations
                 GrandTotal = q.GrandTotal,
                 AmountInWords = q.AmountInWords,
                 Notes = q.Notes,
+                HasLineImages = q.Items.Any(i => !string.IsNullOrWhiteSpace(i.ImagePath)),
                 Items = q.Items.Select(i => new PrintQuoteItemDto
                 {
                     SNo = ++sNo,

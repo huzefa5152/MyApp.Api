@@ -24,6 +24,13 @@ import { goodsReceiptStarters } from "./starters/goodsReceipt";
 import { receiptStarters } from "./starters/receipt";
 import { paymentStarters } from "./starters/payment";
 
+// Placeholder line photos for the Sales Quote preview — inline SVG data URIs
+// so the starter gallery / editor preview shows the Image column without
+// depending on any uploaded file. Deliberately different aspect ratios: they
+// prove a template letterboxes photos instead of stretching rows.
+const SAMPLE_LINE_PHOTO = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMjAiIGhlaWdodD0iMjQwIiB2aWV3Qm94PSIwIDAgMzIwIDI0MCI+PHJlY3Qgd2lkdGg9IjMyMCIgaGVpZ2h0PSIyNDAiIHJ4PSI2IiBmaWxsPSJyZ2IoMzgsODYsMTQ1KSIvPjxjaXJjbGUgY3g9IjEwMiIgY3k9Ijg2IiByPSIyNiIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwuNzUpIi8+PHBhdGggZD0iTTM4IDE5NiBMMTM0IDExMCBMMTk4IDE2MyBMMjQzIDEzMiBMMjg4IDE5NiBaIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LC44NSkiLz48dGV4dCB4PSI1MCUiIHk9IjIyOCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjMxIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LC45NSkiPlNBTVBMRSBQSE9UTzwvdGV4dD48L3N2Zz4=";
+const SAMPLE_LINE_PHOTO_TALL = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgMjAwIDMwMCI+PHJlY3Qgd2lkdGg9IjIwMCIgaGVpZ2h0PSIzMDAiIHJ4PSI2IiBmaWxsPSJyZ2IoMTUwLDcyLDQyKSIvPjxjaXJjbGUgY3g9IjY0IiBjeT0iMTA4IiByPSIyMiIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwuNzUpIi8+PHBhdGggZD0iTTI0IDI0NSBMODQgMTM4IEwxMjQgMjA0IEwxNTIgMTY1IEwxODAgMjQ1IFoiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsLjg1KSIvPjx0ZXh0IHg9IjUwJSIgeT0iMjg1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMjYiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsLjk1KSI+VEFMTCBQSE9UTzwvdGV4dD48L3N2Zz4=";
+
 export const TEMPLATE_TYPES = [
   { value: "Challan", label: "Delivery Challan" },
   { value: "Bill", label: "Bill / Invoice" },
@@ -224,9 +231,10 @@ export const SAMPLE_DATA = {
     grandTotal: 165200,
     amountInWords: "One Hundred Sixty Five Thousand Two Hundred Rupees Only",
     notes: "Prices valid for 15 days. Delivery within 2 weeks of confirmed order.",
+    hasLineImages: true,
     items: [
-      { sNo: 1, description: "Sample Item One", quantity: 10, uom: "Pcs", unitPrice: 8000, lineTotal: 80000, grossAmount: 80000, discountAmount: 0, discountNote: null },
-      { sNo: 2, description: "Sample Item Two", quantity: 5, uom: "Pcs", unitPrice: 14000, lineTotal: 63000, grossAmount: 70000, discountAmount: 7000, discountReason: "Old item taken in exchange", discountNote: "Less 10% (Rs 7,000): Old item taken in exchange" },
+      { sNo: 1, description: "Sample Item One", quantity: 10, uom: "Pcs", unitPrice: 8000, lineTotal: 80000, grossAmount: 80000, discountAmount: 0, discountNote: null, imagePath: SAMPLE_LINE_PHOTO },
+      { sNo: 2, description: "Sample Item Two", quantity: 5, uom: "Pcs", unitPrice: 14000, lineTotal: 63000, grossAmount: 70000, discountAmount: 7000, discountReason: "Old item taken in exchange", discountNote: "Less 10% (Rs 7,000): Old item taken in exchange", imagePath: SAMPLE_LINE_PHOTO_TALL },
     ],
   },
   SalesOrder: {

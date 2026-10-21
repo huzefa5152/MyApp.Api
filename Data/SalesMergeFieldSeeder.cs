@@ -62,6 +62,7 @@ namespace MyApp.Api.Data
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{fmt this.discountAmount}}", Label = "Item discount amount (in loop)", Category = "Items", SortOrder = 49 },
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{#if discountAmount}}", Label = "If: Has Whole-Quote Discount", Category = "Conditionals", SortOrder = 55 },
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{#if this.discountNote}}", Label = "If: Item Has Discount (in loop)", Category = "Conditionals", SortOrder = 55 },
+                new() { TemplateType = "SalesQuote", FieldExpression = "{{#if hasLineImages}}", Label = "If: Any Line Has An Image", Category = "Conditionals", SortOrder = 55 },
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{#if companyLogoPath}}", Label = "If: Has Logo", Category = "Conditionals", SortOrder = 50 },
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{#if validUntil}}", Label = "If: Has Valid Until", Category = "Conditionals", SortOrder = 51 },
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{#if customerEnquiryRef}}", Label = "If: Has Enquiry Ref", Category = "Conditionals", SortOrder = 52 },
