@@ -298,7 +298,8 @@ refused, text = call(TA, "list_companies", {})
 check("after the company is unassigned, every company tool refuses it", not bad, bad)
 check("…and list_companies is empty", not refused and json.loads(text)["companies"] == [], text)
 s, act = http("GET", "/api/mcp/me/activity?pageSize=100", tok["mcpsw_a"])
-check("…and the user's own MCP history no longer shows that company's rows", s == 200 and act["items"] and all(r["companyId"] != A["id"] for r in act["items"]),
+check("…and the user's own MCP history no longer shows that company's rows", s == 200 and act["items"] and all(r["companyId"] != A["id"] for r in act["items"])
+      and not any(f"MCP sweep client {RUN}" in (r.get("detail") or "") for r in act["items"]),
       [r for r in act.get("items", []) if r["companyId"] == A["id"]][:3] if isinstance(act, dict) else act)
 http("PUT", f"/api/usercompanies/user/{uids['mcpsw_a']}", admin, {"companyIds": [A["id"]]})
 

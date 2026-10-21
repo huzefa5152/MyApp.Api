@@ -22,6 +22,9 @@ namespace MyApp.Api.Controllers
     {
         private string _resultRef = "";
         private string _resultSummary = "";
+        // The company of the plan a planId-only call (commit, cancel, status) acted on, so its
+        // activity row is filed under that company like every companyId call.
+        private int? _activityCompanyId;
 
         private static readonly string[] WriteToolNameList = { "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "prepare_email_decision", "prepare_email_quotation", "prepare_print_template_update", "prepare_supplier", "prepare_item_type", "prepare_bill_tax_filing", "commit_action", "cancel_action" };
         private static bool IsWriteTool(string name) => WriteToolNameList.Contains(name, StringComparer.Ordinal);
@@ -425,6 +428,7 @@ namespace MyApp.Api.Controllers
             // Someone else's plan id answers exactly like a missing one.
             if (plan == null || plan.AgentTokenId != agent.Id || plan.UserId != CurrentUserId)
                 throw new ToolError("That plan was not found. It may have expired.");
+            _activityCompanyId = plan.CompanyId;
             return plan;
         }
 

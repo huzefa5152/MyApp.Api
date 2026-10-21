@@ -307,7 +307,7 @@ namespace MyApp.Api.Controllers
                     UserId = CurrentUserId,
                     Username = Trunc(username, 100),
                     Tool = Trunc(tool, 60),
-                    CompanyId = IntArg(args, "companyId"),
+                    CompanyId = IntArg(args, "companyId") ?? _activityCompanyId,
                     Arguments = Trunc(_redactor.Scrub(args.ValueKind == JsonValueKind.Object ? args.GetRawText() : ""), 2000),
                     Outcome = outcome,
                     Detail = Trunc(detail, 300),
