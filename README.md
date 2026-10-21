@@ -298,6 +298,14 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-10-21 — AI agents (MCP) for the importer
+
+- **Connect Claude, Codex or ChatGPT to the ERP.** The site now serves a hosted MCP endpoint at `/mcp`: an agent signs in as one user (a token from Profile, or "sign in to connect" with company and scope choice) and can do exactly what that user can, in the companies they hold, and nothing else.
+- **What an agent can read:** customers, suppliers, items (with your company's own names), quotes, sales orders, challans, bills, purchase bills, goods receipts, receipts and payments, GDs with their lines and charges, letters of credit, the GD register and input-tax worksheet, stock quantities and opening balances, the Sales report and Tax Sheet, customer and supplier balances, trial balance, profit and loss, balance sheet, cash book, payables ageing, party ledgers, print templates and print data. Payment status and bank details are never shown.
+- **What an agent can prepare** (each saved only after a person approves the plan, and checked again at that moment): customers, suppliers, items, quotations, sales orders, challans (also from an order), bills, FBR validation (never submission), purchase bills, goods receipts, customer receipts, supplier payments, hand-entered GD costings, GD charges and line corrections, claim months, letters of credit, opening balances and journal entries. Deleting, voiding, FBR submission, notes and company or user changes stay manual.
+- **A premium switch held by the primary admin.** Nobody has MCP until the primary admin grants it (Profile, Manage MCP Access), the Administrator role does not carry it, and other administrators cannot grant it. Each user's agents have an hourly ceiling per kind of change, and every call is in an activity log.
+- The opening-balance, claim-month and letter-of-credit screens now share their code with the agent tools, unchanged in behaviour. Migration `AddMcpAgentAccess` adds six tables. Reference: `docs/MCP_AGENT_ACCESS.md`.
+
 ### 2026-10-21 — A late GD no longer leaves the stock value wrong
 
 - **Updates no longer interrupt work.** A deploy used to remove the site's files before uploading them again, so anyone using the ERP during an update saw a missing page. Now only a short "One moment" pause is shown while the new version goes on; an open screen shows a small "Reconnecting…" note, keeps what was typed, and carries on by itself, and the new version is picked up on the next page change instead of reloading the screen being worked on (the same deploy the Trader and Customize installations already use).

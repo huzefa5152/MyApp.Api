@@ -2191,6 +2191,9 @@ them can be resolved from FBR.
 | Dashboards (shared sale filter, receivables, landed margin, tax position, drills tie, permissions) | `python scripts/test_dashboard_kpis.py` (add `--db "<conn>"` for the DB-backed cases); `node scripts/test_dashboard_ui.mjs` | `197/197 checks passed` (with `--db`); `20 passed, 0 failed` |
 | GD charges, customs units, letters of credit | `python scripts/test_import_charges_units_lcs.py` | `24/24 checks passed` |
 | Inventory Overlay (two books, one total; normal mode unchanged) | `python scripts/test_inventory_overlay.py` (add `--db <branch db>` for the submitted-lock case) | `71/71 checks passed` (1 skipped without `--db`) |
+| Hosted MCP: door, premium grant, company / division isolation, catalog, activity | `python scripts/test_mcp_isolation.py --base <url> --db <local db>` | `45/45 isolation checks passed` |
+| Hosted MCP writes: prepare saves nothing, commit once, gates re-checked at commit, every write tool, cross-company links refused | `python scripts/test_mcp_writes.py --base <url> --db <local db>` | `88/88 MCP write checks passed` (89 when the company has a bank or cash account) |
+| Hosted MCP reads equal the screens, every tool swept against another company, tokens, self service, OAuth | `python scripts/test_mcp_reads.py`; `test_mcp_tenant_sweep.py`; `test_mcp_agent_tokens.py`; `test_mcp_self_service.py`; `test_mcp_oauth.py` (see `docs/MCP_AGENT_ACCESS.md`) | `24/24`; `14/14`; `55/55`; `33/33`; `69/69` |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
 | No production identifiers in tracked files | `python scripts/verify_no_production_identifiers.py` | `no production identifiers in tracked files` |
