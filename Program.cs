@@ -445,6 +445,9 @@ builder.Services.AddScoped<IFbrLookupService, FbrLookupService>();
 // All write operations are no-ops when Company.InventoryTrackingEnabled
 // is false, so existing tenants keep working unchanged.
 builder.Services.AddScoped<IStockService, StockService>();
+// Opening balances and GD claim months: one implementation for the stock screen and MCP.
+builder.Services.AddScoped<StockRecordService>();
+builder.Services.AddScoped<ImportLcService>();
 // Derived inventory read model (V2): computes Committed/ToDeliver/Delivered/
 // Incoming buckets from live document state (nothing persisted, so nothing
 // drifts). Read-only; used by the inventory summary + availability guard.

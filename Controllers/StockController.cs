@@ -30,6 +30,7 @@ namespace MyApp.Api.Controllers
         private readonly IPermissionService _permission;
         private readonly IStockCostAuditService _costAudit;
         private readonly IPostingService _posting;
+        private readonly MyApp.Api.Services.Implementations.StockRecordService _records;
         private readonly ILogger<StockController> _logger;
         private readonly int _defaultPageSize;
 
@@ -37,8 +38,10 @@ namespace MyApp.Api.Controllers
             IAuditLogService audit, ICompanyAccessGuard access,
             IDivisionAccessGuard divisionAccess, IPermissionService permission,
             IStockCostAuditService costAudit, IPostingService posting,
+            MyApp.Api.Services.Implementations.StockRecordService records,
             ILogger<StockController> logger, IConfiguration configuration)
         {
+            _records = records;
             _context = context;
             _stock = stock;
             _inventory = inventory;
@@ -116,45 +119,9 @@ namespace MyApp.Api.Controllers
             // A claim month changes company-level stock costing (FIFO order), so
             // a division-restricted user may not write it (policy D2).
             await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, companyId, null);
-            var number = dto.GdNumber?.Trim() ?? "";
-            if (number.Length == 0 || number.Length > 100)
-                return BadRequest(new { error = "Enter a valid GD number." });
-            if (dto.ClaimMonth is { } month && (month.Day != 1 || month.TimeOfDay != TimeSpan.Zero))
-                return BadRequest(new { error = "Claim month must be the first day of the month." });
-
-            var known = await _context.ImportConsignments.AnyAsync(c => c.CompanyId == companyId && c.GdNumber == number)
-                || await _context.OpeningStockLots.AnyAsync(l =>
-                    l.OpeningStockBalance.CompanyId == companyId && l.LotRef == number);
-            if (!known) return NotFound(new { error = "This company has no stock GD with that number." });
-
-            var existing = await _context.GdClaimPeriods
-                .FirstOrDefaultAsync(x => x.CompanyId == companyId && x.GdNumber == number);
-            if (dto.ClaimMonth == null)
-            {
-                if (existing != null) _context.GdClaimPeriods.Remove(existing);
-            }
-            else if (existing == null)
-            {
-                _context.GdClaimPeriods.Add(new GdClaimPeriod
-                {
-                    CompanyId = companyId, GdNumber = number, ClaimMonth = dto.ClaimMonth.Value,
-                });
-            }
-            else existing.ClaimMonth = dto.ClaimMonth.Value;
-
-            await _context.SaveChangesAsync();
-            await _audit.LogAsync(new AuditLog
-            {
-                Timestamp = DateTime.UtcNow,
-                Level = "Information",
-                UserName = User.Identity?.Name,
-                HttpMethod = "PUT",
-                RequestPath = $"/api/stock/company/{companyId}/gd-claim-month",
-                StatusCode = 204,
-                ExceptionType = "GD_CLAIM_MONTH_CHANGE",
-                Message = $"GD {number} claim month {(dto.ClaimMonth.HasValue ? "set" : "cleared")} for company {companyId}",
-                CompanyId = companyId,
-            });
+            try { await _records.SetGdClaimMonthAsync(companyId, dto.GdNumber, dto.ClaimMonth, User.Identity?.Name); }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+            catch (KeyNotFoundException ex) { return NotFound(new { error = ex.Message }); }
             return NoContent();
         }
 
@@ -170,43 +137,9 @@ namespace MyApp.Api.Controllers
             // A claim month changes company-level stock costing (FIFO order), so
             // a division-restricted user may not write it (policy D2).
             await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, companyId, null);
-            if (dto.ClaimMonth is { } month && (month.Day != 1 || month.TimeOfDay != TimeSpan.Zero))
-                return BadRequest(new { error = "Claim month must be the first day of the month." });
-            if ((dto.LotId == null) == (dto.ConsignmentLineId == null))
-                return BadRequest(new { error = "Choose one stock line." });
-
-            // Scoped by the line's OWN company, never the route's alone: an id
-            // from another tenant must read as unknown, not be written.
-            string? gd; int row;
-            if (dto.LotId is { } lotId)
-            {
-                var lot = await _context.OpeningStockLots
-                    .FirstOrDefaultAsync(l => l.Id == lotId && l.OpeningStockBalance.CompanyId == companyId);
-                if (lot == null) return NotFound(new { error = "This company has no such stock line." });
-                lot.ClaimMonth = dto.ClaimMonth;
-                gd = lot.LotRef; row = lot.SourceRow;
-            }
-            else
-            {
-                var line = await _context.ImportConsignmentLines.Include(l => l.ImportConsignment)
-                    .FirstOrDefaultAsync(l => l.Id == dto.ConsignmentLineId && l.ImportConsignment.CompanyId == companyId);
-                if (line == null) return NotFound(new { error = "This company has no such stock line." });
-                line.ClaimMonth = dto.ClaimMonth;
-                gd = line.ImportConsignment.GdNumber; row = line.SourceRow;
-            }
-            await _context.SaveChangesAsync();
-            await _audit.LogAsync(new AuditLog
-            {
-                Timestamp = DateTime.UtcNow,
-                Level = "Information",
-                UserName = User.Identity?.Name,
-                HttpMethod = "PUT",
-                RequestPath = $"/api/stock/company/{companyId}/line-claim-month",
-                StatusCode = 204,
-                ExceptionType = "LINE_CLAIM_MONTH_CHANGE",
-                Message = $"GD {gd} row {row} claim month {(dto.ClaimMonth.HasValue ? "set" : "cleared")} for company {companyId}",
-                CompanyId = companyId,
-            });
+            try { await _records.SetLineClaimMonthAsync(companyId, dto.LotId, dto.ConsignmentLineId, dto.ClaimMonth, User.Identity?.Name); }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+            catch (KeyNotFoundException ex) { return NotFound(new { error = ex.Message }); }
             return NoContent();
         }
 
@@ -1411,96 +1344,8 @@ namespace MyApp.Api.Controllers
             // Opening balances are company-level inventory state — a
             // division-restricted user may not write that scope (policy D2).
             await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, dto.CompanyId, null);
-            // The item must already be one this company may see (CLAUDE.md
-            // §5b-2b). Writing a balance or movement against another tenant's
-            // item would REGISTER it here and pull it into this company's pickers.
-            if (!await ItemTypeMembership.IsVisibleAsync(_context, dto.ItemTypeId, new[] { dto.CompanyId }))
-                return NotFound(new { error = "Item type not found." });
-            var existing = await _context.OpeningStockBalances
-                .FirstOrDefaultAsync(o => o.CompanyId == dto.CompanyId && o.ItemTypeId == dto.ItemTypeId);
-            // Snapshot BEFORE anything is assigned. A new row starts at zero on
-            // all three figures, which is exactly what "not known" has always
-            // meant here, so a first entry reads as 0 -> the figure entered
-            // rather than as a change out of nowhere.
-            var before = existing == null
-                ? new StockFigures(0m, 0m, 0m)
-                : new StockFigures(existing.Quantity, existing.ActualCostExcludingTax, existing.ValueExcludingTax);
-            var isNew = existing == null;
-
-            if (existing == null)
-            {
-                existing = new OpeningStockBalance
-                {
-                    CompanyId = dto.CompanyId,
-                    ItemTypeId = dto.ItemTypeId,
-                    Quantity = dto.Quantity,
-                    ValueExcludingTax = dto.ValueExcludingTax,
-                    SalesTaxRate = dto.SalesTaxRate,
-                    ActualCostExcludingTax = dto.ActualCostExcludingTax ?? 0m,
-                    AsOfDate = dto.AsOfDate.Date,
-                    Notes = dto.Notes,
-                    CreatedAt = DateTime.UtcNow,
-                };
-                _context.OpeningStockBalances.Add(existing);
-            }
-            else
-            {
-                existing.Quantity = dto.Quantity;
-                existing.ValueExcludingTax = dto.ValueExcludingTax;
-                existing.SalesTaxRate = dto.SalesTaxRate;
-                // Nullable: null means the caller did not mention cost, so the
-                // row keeps whatever it already had. Only a supplied value
-                // (including 0, which clears it) overwrites.
-                if (dto.ActualCostExcludingTax is decimal actual)
-                    existing.ActualCostExcludingTax = actual;
-                existing.AsOfDate = dto.AsOfDate.Date;
-                existing.Notes = dto.Notes;
-            }
-
-            // Recorded in the SAME SaveChanges as the change itself, so a
-            // history entry can never survive a write that rolled back.
-            await _costAudit.RecordAsync(
-                dto.CompanyId, dto.ItemTypeId, existing.Id, CurrentUserId,
-                StockCostChangeSources.OpeningBalanceEdit,
-                isNew ? "Created" : "Edited",
-                before,
-                new StockFigures(existing.Quantity, existing.ActualCostExcludingTax, existing.ValueExcludingTax),
-                note: isNew
-                    ? "Opening balance entered on the Opening Balances tab."
-                    : "Opening balance edited on the Opening Balances tab.");
-
-            await _context.SaveChangesAsync();
-
-            // Opening stock entered by hand has to reach the Inventory control
-            // account, exactly as the two spreadsheet importers' does. Without
-            // this the account sits below what the stock walk says the goods are
-            // worth, which is the same defect the costing import had — found
-            // here by the COGS invariant test on 2026-09-17.
-            //
-            // The DELTA, not the value: this is an upsert, so an edit from
-            // 100,000 to 120,000 moves the account by 20,000.
-            await _posting.AdjustInventoryOpeningAsync(
-                dto.CompanyId, existing.ValueExcludingTax - before.Value);
-
-            // A new opening position re-prices every sale after it.
-            await _stock.RepostInventoryPeriodsAsync(dto.CompanyId, null);
-
-            var it = await _context.ItemTypes.FindAsync(existing.ItemTypeId);
-            return Ok(new OpeningStockBalanceDto
-            {
-                Id = existing.Id,
-                CompanyId = existing.CompanyId,
-                ItemTypeId = existing.ItemTypeId,
-                ItemTypeName = CompanyItemNames.Pick(
-                    await CompanyItemNames.ForCompanyAsync(_context, existing.CompanyId, new[] { existing.ItemTypeId }),
-                    existing.ItemTypeId, it?.Name ?? ""),
-                Quantity = existing.Quantity,
-                ValueExcludingTax = existing.ValueExcludingTax,
-                SalesTaxRate = existing.SalesTaxRate,
-                ActualCostExcludingTax = existing.ActualCostExcludingTax,
-                AsOfDate = existing.AsOfDate,
-                Notes = existing.Notes,
-            });
+            try { return Ok(await _records.UpsertOpeningBalanceAsync(dto, CurrentUserId)); }
+            catch (KeyNotFoundException ex) { return NotFound(new { error = ex.Message }); }
         }
 
         [HttpDelete("opening/{id}")]
