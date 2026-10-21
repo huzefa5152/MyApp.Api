@@ -27,20 +27,83 @@ namespace MyApp.Api.Services.Implementations
 
         public bool IsSeedAdmin(int userId) => userId == _seedAdminUserId;
 
+        // The two MCP keys are a premium opt-in, not a business permission: they follow the
+        // account's MCP access policy on every request (never the cross-request cache), and
+        // the seed admin is NOT short-circuited for them, so even the primary admin's agents
+        // can be switched off.
+        private static bool IsMcpKey(string key) =>
+            string.Equals(key, "mcp.access.use", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(key, "mcp.write.use", StringComparison.OrdinalIgnoreCase);
+
+        private readonly Dictionary<int, MyApp.Api.Models.McpUserAccessPolicy?> _requestMcpPolicies = new();
+        private readonly Dictionary<int, HashSet<string>> _requestPermissions = new();
+
+        private async Task<MyApp.Api.Models.McpUserAccessPolicy?> McpPolicyAsync(int userId)
+        {
+            if (!_requestMcpPolicies.TryGetValue(userId, out var policy))
+                _requestMcpPolicies[userId] = policy = await _context.McpUserAccessPolicies.AsNoTracking().SingleOrDefaultAsync(p => p.UserId == userId);
+            return policy;
+        }
+
         public async Task<bool> HasPermissionAsync(int userId, string permissionKey)
         {
-            if (IsSeedAdmin(userId)) return true;
+            if (IsSeedAdmin(userId) && !IsMcpKey(permissionKey)) return true;
             var perms = await GetUserPermissionsAsync(userId);
             return perms.Contains(permissionKey);
         }
 
         public async Task<IReadOnlyCollection<string>> GetUserPermissionsAsync(int userId)
         {
+            if (userId <= 0) return Array.Empty<string>();
+            if (_requestPermissions.TryGetValue(userId, out var done)) return done;
+            var set = new HashSet<string>(await RolePermissionsAsync(userId), StringComparer.OrdinalIgnoreCase);
             if (IsSeedAdmin(userId))
             {
-                // Seed admin implicitly has every catalog key — no DB hit needed.
-                return PermissionCatalog.All.Select(p => p.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                // Every business key, but the MCP keys only through a real grant.
+                var viaRoles = set.Where(IsMcpKey).ToList();
+                set = PermissionCatalog.All.Select(p => p.Key).Where(k => !IsMcpKey(k)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                set.UnionWith(viaRoles);
             }
+            var policy = await McpPolicyAsync(userId);
+            if (policy != null)
+            {
+                set.RemoveWhere(IsMcpKey);
+                if (policy.AccessGranted && policy.AccessEnabled)
+                {
+                    set.Add("mcp.access.use");
+                    if (policy.WritesGranted && policy.WritesEnabled) set.Add("mcp.write.use");
+                }
+            }
+            _requestPermissions[userId] = set;
+            return set;
+        }
+
+        public async Task<bool> HasMcpToolAccessAsync(int userId, string toolName)
+        {
+            var tool = McpToolAccessCatalog.Find(toolName);
+            if (tool == null || !await HasPermissionAsync(userId, "mcp.access.use")) return false;
+            if (tool.SeedOnly && !IsSeedAdmin(userId)) return false;
+            if (tool.Write && !await HasPermissionAsync(userId, "mcp.write.use")) return false;
+            if (tool.Permissions.Length > 0)
+            {
+                var eligible = false;
+                foreach (var key in tool.Permissions)
+                {
+                    var granted = await HasPermissionAsync(userId, key);
+                    if (tool.RequireAll && !granted) return false;
+                    if (granted) { eligible = true; if (!tool.RequireAll) break; }
+                }
+                if (!eligible) return false;
+            }
+            if (!tool.Configurable) return true;
+            var policy = await McpPolicyAsync(userId);
+            return policy == null || (McpUserAccessService.Names(policy.GrantedTools).Contains(toolName)
+                && (policy.SelectedTools == null || McpUserAccessService.Names(policy.SelectedTools).Contains(toolName)));
+        }
+
+        /// <summary>The keys the user's roles carry (cached across requests for a short TTL).</summary>
+        private async Task<HashSet<string>> RolePermissionsAsync(int userId)
+        {
 
             var generation = _cache.GetOrCreate(GenerationKey, e =>
             {
@@ -69,6 +132,8 @@ namespace MyApp.Api.Services.Implementations
 
         public void InvalidateUser(int userId)
         {
+            _requestPermissions.Remove(userId);
+            _requestMcpPolicies.Remove(userId);
             // Current-generation key is removed; older-generation keys expire naturally.
             if (_cache.TryGetValue<long>(GenerationKey, out var gen))
             {
@@ -78,6 +143,8 @@ namespace MyApp.Api.Services.Implementations
 
         public void InvalidateAll()
         {
+            _requestPermissions.Clear();
+            _requestMcpPolicies.Clear();
             // Bumping the generation invalidates every per-user cache entry at once.
             var gen = _cache.GetOrCreate(GenerationKey, e =>
             {

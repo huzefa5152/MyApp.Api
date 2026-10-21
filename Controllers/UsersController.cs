@@ -1,3 +1,4 @@
+using MyApp.Api.Helpers;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
@@ -323,6 +324,9 @@ namespace MyApp.Api.Controllers
             }
 
             await _context.SaveChangesAsync();
+            // An admin password reset also ends the user's AI agent tokens.
+            if (!string.IsNullOrWhiteSpace(dto.Password))
+                await McpTokenRevocation.RevokeAllForUserAsync(_context, user.Id, CurrentUserId);
 
             return Ok(new
             {

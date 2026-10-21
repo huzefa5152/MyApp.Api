@@ -461,6 +461,18 @@ namespace MyApp.Api.Helpers
             // company to every authenticated user.
             new("tenantaccess.manage.update", "Tenant Access", "Company access", "Edit",
                 "Toggle Company.IsTenantIsolated (changes who can see a company)"),
+            // ── AI agents (hosted MCP) ─────────────────────────────────────
+            // Gate for POST /mcp. Each tool still demands the same permission
+            // and company access its screen does; these keys only open the door.
+            // Premium: only the primary admin may grant them (RolesController /
+            // UserRolesController), the Administrator role does not carry them,
+            // and they follow the per-user MCP access policy (PermissionService).
+            new("mcp.access.use",   "Tenant Access", "AI agents (MCP)", "Use",
+                "Connect AI agents (Claude, Codex, ChatGPT) to this system through the hosted MCP endpoint, with the same access this user has"),
+            new("mcp.write.use",    "Tenant Access", "AI agents (MCP)", "Make changes",
+                "Let connected AI agents prepare records (customers, bills, GDs, receipts ...) that a person approves before they are saved"),
+            new("mcp.admin.manage", "Tenant Access", "AI agents (MCP)", "Issue tokens",
+                "Create and revoke AI agent tokens for any user and read every agent's activity (primary admin console)"),
             // ── Division Access (user → division assignments) ────────────────
             // The layer below Tenant Access: within a company the user can
             // reach, optionally restrict them to specific divisions

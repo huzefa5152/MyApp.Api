@@ -192,6 +192,28 @@ builder.Services.AddAuthentication(options =>
     // 60s per user so the per-request overhead is one in-memory hit.
     options.Events = new JwtBearerEvents
     {
+        OnMessageReceived = context =>
+        {
+            // "Bearer tmcp_..." is an MCP agent credential, not a JWT. Step aside:
+            // the McpAgent scheme (used only by /mcp) owns it, so on every other
+            // route an agent token simply fails to authenticate.
+            if (McpAgentAuthHandler.IsAgentHeader(context.Request.Headers.Authorization.ToString()))
+                context.NoResult();
+            return Task.CompletedTask;
+        },
+        // An unauthenticated call to /mcp is answered the way the MCP authorization spec
+        // asks, so an AI client learns where to start the sign-in flow from the 401 itself.
+        OnChallenge = context =>
+        {
+            if (!context.Request.Path.StartsWithSegments("/mcp")) return Task.CompletedTask;
+            context.HandleResponse();
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            var error = context.AuthenticateFailure != null || McpAgentAuthHandler.IsAgentHeader(context.Request.Headers.Authorization.ToString())
+                ? ", error=\"invalid_token\"" : "";
+            context.Response.Headers.WWWAuthenticate =
+                $"Bearer realm=\"importer-mcp\", resource_metadata=\"{McpPublicUrl.ProtectedResourceMetadata(context.HttpContext)}\"{error}";
+            return Task.CompletedTask;
+        },
         OnTokenValidated = async context =>
         {
             var principal = context.Principal;
@@ -241,7 +263,9 @@ builder.Services.AddAuthentication(options =>
             }
         }
     };
-});
+})
+// Per-agent MCP credentials. Referenced only by [Authorize(AuthenticationSchemes = ...)] on /mcp.
+.AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, McpAgentAuthHandler>(McpAgentAuthHandler.Scheme, null);
 
 // Rate limiter — applied selectively to /api/auth/login + the
 // expensive endpoints flagged by audit H-6 (2026-05-13). Other
@@ -318,6 +342,34 @@ builder.Services.AddRateLimiter(options =>
     // unthrottled anonymous endpoint that runs a paged query per hit is cheap
     // CPU amplification. Generous enough that a customer clicking through their
     // invoices never notices.
+    // Hosted MCP endpoint. The limiter runs before authentication, so the user
+    // id is not known yet: partition on a hash of the bearer credential (never
+    // the raw token), falling back to the remote address for anonymous calls.
+    options.AddPolicy("mcp", httpContext =>
+    {
+        var auth = httpContext.Request.Headers.Authorization.ToString();
+        var key = string.IsNullOrEmpty(auth)
+            ? "ip:" + (httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown")
+            : "tok:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(auth)));
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 120,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+        });
+    });
+
+    // OAuth sign-in connect: open dynamic registration plus the authorize and token
+    // endpoints. Anonymous by nature, so partitioned by remote address.
+    options.AddPolicy("oauth", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            "oauth:" + (httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"), _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 60,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+        }));
+
     options.AddPolicy("portal", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(PortalPartitionKey(httpContext), _ => new FixedWindowRateLimiterOptions
         {
@@ -580,6 +632,8 @@ builder.Services.AddSingleton<MyApp.Api.Helpers.IFbrTokenProtector, MyApp.Api.He
 // permission-set TTL.
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
+// Hosted MCP: per-user tool catalog (request-scoped, so a change applies on the next call).
+builder.Services.AddScoped<McpUserAccessService>();
 
 // Tenant-scope guard — answers "may this user touch this company?"
 // in addition to RBAC's "may this user perform this action?". Fail-closed:

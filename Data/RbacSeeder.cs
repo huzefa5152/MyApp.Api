@@ -25,6 +25,7 @@ namespace MyApp.Api.Data
         {
             await UpsertPermissionsAsync(db);
             await EnsureAdministratorRoleAsync(db, seedAdminUserId);
+            await EnsureMcpRolesAsync(db, seedAdminUserId);
             await EnsureStarterRolesAsync(db, seedAdminUserId);
             await BootstrapExistingAdminUsersAsync(db);
         }
@@ -217,9 +218,45 @@ namespace MyApp.Api.Data
             await db.SaveChangesAsync();
         }
 
+        public const string McpAccessRoleName = "MCP Access";
+        public const string McpWriteRoleName = "MCP Write";
+
+        /// <summary>
+        /// The opt-in AI agent roles. System roles (immutable), each carrying exactly one
+        /// key; only the primary admin may assign them (UserRolesController). They grant no
+        /// business feature: every MCP tool still needs the screen's own permission.
+        /// </summary>
+        private static async Task EnsureMcpRolesAsync(AppDbContext db, int seedAdminUserId)
+        {
+            foreach (var (name, key, description) in new[]
+            {
+                (McpAccessRoleName, "mcp.access.use", "MCP Access: lets a user connect AI agents to the hosted /mcp endpoint. Holds no product features: every tool still needs the user's own permission and company access. Assigned by the primary admin. Built-in."),
+                (McpWriteRoleName, "mcp.write.use", "MCP Write: lets a user's connected AI agents prepare records that a person approves before they are saved. Assign alongside MCP Access. Built-in."),
+            })
+            {
+                var permissionId = await db.Permissions.Where(p => p.Key == key).Select(p => (int?)p.Id).FirstOrDefaultAsync();
+                if (permissionId == null) continue;
+                var role = await db.Roles.Include(r => r.RolePermissions).FirstOrDefaultAsync(r => r.Name == name);
+                if (role == null)
+                {
+                    role = new Role { Name = name, Description = description, IsSystemRole = true, CreatedAt = DateTime.UtcNow, CreatedByUserId = seedAdminUserId };
+                    db.Roles.Add(role);
+                    await db.SaveChangesAsync();
+                }
+                role.IsSystemRole = true;
+                role.Description = description;
+                db.RolePermissions.RemoveRange(role.RolePermissions.Where(rp => rp.PermissionId != permissionId));
+                if (!role.RolePermissions.Any(rp => rp.PermissionId == permissionId))
+                    db.RolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = permissionId.Value });
+                await db.SaveChangesAsync();
+            }
+        }
+
         private static async Task EnsureAdministratorRoleAsync(AppDbContext db, int seedAdminUserId)
         {
-            var allPermissionIds = await db.Permissions.Select(p => p.Id).ToListAsync();
+            // Every key EXCEPT the AI agent ones: MCP is granted per user by the primary
+            // admin, never inherited from a role an administrator can hand out.
+            var allPermissionIds = await db.Permissions.Where(p => !p.Key.StartsWith("mcp.")).Select(p => p.Id).ToListAsync();
 
             var adminRole = await db.Roles
                 .Include(r => r.RolePermissions)

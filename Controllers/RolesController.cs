@@ -156,6 +156,7 @@ namespace MyApp.Api.Controllers
             if (await _context.Roles.AnyAsync(r => r.Name == name))
                 return Conflict(new { message = "A role with this name already exists" });
 
+            if (McpKeyRefused(dto.PermissionKeys)) return BadRequest(new { message = McpKeyMessage });
             // Only permission keys that exist in the catalog are accepted.
             var validPermIds = await ResolvePermissionIdsAsync(dto.PermissionKeys);
 
@@ -219,6 +220,8 @@ namespace MyApp.Api.Controllers
             if (dto.Description != null)
                 role.Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim();
 
+            if (McpKeyRefused(dto.PermissionKeys)) return BadRequest(new { message = McpKeyMessage });
+
             if (dto.PermissionKeys != null)
             {
                 var targetIds = await ResolvePermissionIdsAsync(dto.PermissionKeys);
@@ -264,6 +267,16 @@ namespace MyApp.Api.Controllers
 
             return Ok(new { message = "Role deleted" });
         }
+
+        internal const string McpKeyMessage = "AI agent (MCP) access is granted by the primary admin only.";
+
+        /// <summary>
+        /// The AI agent keys are premium: only the primary admin may put them into a role.
+        /// Anyone else holding rbac.roles.* would otherwise switch MCP on for themselves.
+        /// </summary>
+        private bool McpKeyRefused(IEnumerable<string>? keys) =>
+            !_scope.IsSeedAdmin(CurrentUserId() ?? 0)
+            && (keys ?? Enumerable.Empty<string>()).Any(k => k != null && k.Trim().StartsWith("mcp.", StringComparison.OrdinalIgnoreCase));
 
         private async Task<HashSet<int>> ResolvePermissionIdsAsync(IEnumerable<string>? keys)
         {

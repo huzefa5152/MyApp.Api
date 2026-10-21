@@ -107,6 +107,20 @@ namespace MyApp.Api.Controllers
                     return BadRequest(new { message = "One or more role IDs are invalid" });
             }
 
+            // AI agent (MCP) roles are premium: only the primary admin adds or removes a role
+            // that carries an mcp.* key. Keeping one the user already holds is not a new grant.
+            if (!_scope.IsSeedAdmin(CurrentUserId() ?? 0))
+            {
+                var mcpRoleIds = await _context.Roles
+                    .Where(r => r.RolePermissions.Any(rp => rp.Permission!.Key.StartsWith("mcp.")))
+                    .Select(r => r.Id).ToListAsync();
+                var held = await _context.UserRoles.Where(ur => ur.UserId == userId && mcpRoleIds.Contains(ur.RoleId))
+                    .Select(ur => ur.RoleId).ToListAsync();
+                var wanted = targetRoleIds.Where(mcpRoleIds.Contains).ToHashSet();
+                if (!wanted.SetEquals(held))
+                    return BadRequest(new { message = RolesController.McpKeyMessage });
+            }
+
             // Roles the target already holds that the caller cannot see stay
             // untouched -- the caller is editing the part of the set it can see.
             var hiddenExisting = new HashSet<int>();

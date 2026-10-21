@@ -21,5 +21,11 @@ namespace MyApp.Api.Services.Interfaces
 
         /// <summary>True when the given userId is the configured seed-admin user.</summary>
         bool IsSeedAdmin(int userId);
+
+        /// <summary>
+        /// True when the user may use the named MCP tool: MCP access is on for them, the tool's
+        /// business permission is held, and the tool is in their granted and selected catalog.
+        /// </summary>
+        Task<bool> HasMcpToolAccessAsync(int userId, string toolName);
     }
 }

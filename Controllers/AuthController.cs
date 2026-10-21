@@ -1,3 +1,4 @@
+using MyApp.Api.Helpers;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -224,6 +225,8 @@ namespace MyApp.Api.Controllers
             user.SecurityStamp = Guid.NewGuid().ToString("N");
             await _context.SaveChangesAsync();
             _cache.Remove($"user-stamp:{user.Id}");
+            // A token minted by whoever knew the old password stops on its next call.
+            await McpTokenRevocation.RevokeAllForUserAsync(_context, user.Id, user.Id);
 
             return Ok(new { message = "Password changed successfully" });
         }
