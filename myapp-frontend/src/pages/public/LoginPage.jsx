@@ -3,7 +3,7 @@
 // (right). Brand-neutral — both deployments (master "/", customize
 // "/admin") share this screen, so no tenant-specific naming here.
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import BrandMark from "../../Components/BrandMark";
 import "./LoginPage.css";
@@ -61,7 +61,7 @@ export default function LoginPage() {
       let returnTo = "/dashboard";
       try {
         const stored = sessionStorage.getItem("postLoginReturnTo");
-        if (stored && stored.startsWith("/") && stored !== "/" && !stored.startsWith("/login")) {
+        if (stored && stored.startsWith("/") && !stored.startsWith("//") && stored !== "/" && !stored.startsWith("/login")) {
           returnTo = stored;
         }
         sessionStorage.removeItem("postLoginReturnTo");
@@ -247,6 +247,7 @@ export default function LoginPage() {
             </button>
           </form>
 
+          <p style={{textAlign:"center", padding:"0 16px"}}><Link to="/mcp-guide">Connect ChatGPT, Claude or a coding agent — MCP setup guide</Link></p>
           <div className="ht-form-footer">
             {/* Plain anchor to the SITE root, not a router Link: each
                 deployment's landing page lives at the real "/" — master's

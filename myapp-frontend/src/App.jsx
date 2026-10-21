@@ -60,6 +60,7 @@ import FbrMonitorPage from "./pages/FbrMonitorPage";
 import NavigationMenuPage from "./pages/NavigationMenuPage";
 import WithholdingTaxReceiptsPage from "./pages/WithholdingTaxReceiptsPage";
 import LoginPage from "./pages/public/LoginPage";
+import McpGuidePage from "./pages/public/McpGuidePage";
 import LandingPage from "./pages/public/LandingPage";
 import ProtectedRoute from "./Components/ProtectedRoute";
 import RequirePermission from "./Components/RequirePermission";
@@ -68,6 +69,8 @@ import "./App.css";
 // Lazy so Recharts (used only by these two pages) stays out of the main chunk.
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const AccountingDashboardPage = lazy(() => import("./pages/AccountingDashboardPage"));
+// The AI-connection consent screen is reached only from an AI app's sign-in hand-off.
+const McpConnectPage = lazy(() => import("./pages/McpConnectPage"));
 
 const pageFallback = (
   <div className="d-flex justify-content-center align-items-center vh-100">
@@ -96,6 +99,8 @@ export default function App() {
 
       {/* Auth */}
       <Route path="/login" element={<LoginPage />} />
+      {/* How to connect an AI assistant over MCP. Explains the product only, no company data. */}
+      <Route path="/mcp-guide" element={<McpGuidePage />} />
 
       {/* Protected app routes – auth guard + DashboardLayout */}
       <Route element={<ProtectedRoute />}>
@@ -194,6 +199,10 @@ export default function App() {
               screen uses. Its own Reports-module keys (reports.clientledger.*). */}
           <Route path="/reports/client-ledger" element={<RequirePermission anyPrefix="reports.clientledger"><ClientLedgerReportPage /></RequirePermission>} />
           <Route path="/profile" element={<ProfilePage />} />
+          {/* "Sign in to connect" consent screen for AI applications (/oauth/authorize
+              redirects to /admin/connect). Every signed-in user may open it: it says so
+              itself when their MCP access is off, and the API decides what is granted. */}
+          <Route path="/connect" element={<Suspense fallback={pageFallback}><McpConnectPage /></Suspense>} />
           <Route path="/users" element={<RequirePermission anyPrefix="users."><UsersPage /></RequirePermission>} />
           <Route path="/roles" element={<RequirePermission anyPrefix="rbac."><RolesPage /></RequirePermission>} />
           <Route path="/tenant-access" element={<RequirePermission anyPrefix={["tenantaccess.", "divisionaccess."]}><TenantAccessPage /></RequirePermission>} />

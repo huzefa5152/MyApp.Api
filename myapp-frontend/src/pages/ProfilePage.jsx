@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   MdAccountCircle,
   MdEdit,
@@ -12,10 +13,15 @@ import {
   MdShield,
   MdDelete,
   MdCloudUpload,
+  MdSmartToy,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { updateProfile, changePassword, uploadAvatar, removeAvatar } from "../api/authApi";
 import { getAvatarUrl } from "../utils/avatarUrl";
+import McpMyAccessPanel from "../Components/McpMyAccessPanel";
+import McpAccessManagementPanel from "../Components/McpAccessManagementPanel";
+import McpAgentsPanel from "../Components/McpAgentsPanel";
+import { usePermissions } from "../contexts/PermissionsContext";
 
 const colors = {
   blue: "#0d47a1",
@@ -55,6 +61,28 @@ function validateImage(file) {
 
 export default function ProfilePage() {
   const { user, refreshUser, setToken, avatarVersion } = useAuth();
+  const { has } = usePermissions();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const canAdministerMcp = user?.isSeedAdmin === true && has("mcp.admin.manage");
+  const rawTargetUserId = searchParams.get("userId");
+  const parsedTargetUserId = Number(rawTargetUserId);
+  const targetUserId = /^[1-9]\d*$/.test(rawTargetUserId || "") && Number.isSafeInteger(parsedTargetUserId)
+    ? parsedTargetUserId : undefined;
+  const requestedTab = searchParams.get("tab");
+  const tab = requestedTab === "mcp" ? "mcp-connections"
+    : requestedTab === "mcp-connections" ? requestedTab
+    : requestedTab === "mcp-catalog" && canAdministerMcp ? requestedTab
+    : requestedTab === "mcp-admin" && canAdministerMcp ? "mcp-admin" : "profile";
+  const setTab = (nextTab) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", nextTab);
+    if (nextTab !== "mcp-catalog") next.delete("userId");
+    setSearchParams(next);
+  };
+  const tabs = [["profile", "Profile", MdAccountCircle],
+    ...(canAdministerMcp ? [["mcp-catalog", "Manage MCP Access", MdShield]] : []),
+    ["mcp-connections", "MCP Connections", MdSmartToy],
+    ...(canAdministerMcp ? [["mcp-admin", "MCP Administration", MdShield]] : [])];
   const fileRef = useRef(null);
 
   // Edit profile state
@@ -289,6 +317,23 @@ export default function ProfilePage() {
           <p style={styles.pageSubtitle}>Manage your account settings</p>
         </div>
       </div>
+
+      <div role="tablist" aria-label="Profile sections" style={styles.tabs}>
+        {tabs.map(([key, label, Icon]) => (
+          <button key={key} role="tab" id={`profile-tab-${key}`} aria-selected={tab === key} aria-controls={`profile-panel-${key}`}
+            style={{ ...styles.tab, ...(tab === key ? styles.tabActive : {}) }} onClick={() => setTab(key)}>
+            <Icon style={{ fontSize: "1.1rem" }} aria-hidden />{label}
+          </button>
+        ))}
+      </div>
+      {tab === "mcp-catalog" && canAdministerMcp ? (
+        <div role="tabpanel" id="profile-panel-mcp-catalog" aria-labelledby="profile-tab-mcp-catalog"><McpAccessManagementPanel key={targetUserId ?? "picker"} targetUserId={targetUserId} /></div>
+      ) : tab === "mcp-connections" ? (
+        <div role="tabpanel" id="profile-panel-mcp-connections" aria-labelledby="profile-tab-mcp-connections"><McpMyAccessPanel /></div>
+      ) : tab === "mcp-admin" && canAdministerMcp ? (
+        <div role="tabpanel" id="profile-panel-mcp-admin" aria-labelledby="profile-tab-mcp-admin"><McpAgentsPanel /></div>
+      ) : (
+      <div role="tabpanel" id="profile-panel-profile" aria-labelledby="profile-tab-profile">
 
       {/* Avatar + Info Card */}
       <div style={styles.profileCard}>
@@ -533,11 +578,16 @@ export default function ProfilePage() {
           </div>
         </form>
       </div>
+      </div>
+      )}
     </div>
   );
 }
 
 const styles = {
+  tabs: { display: "flex", flexWrap: "wrap", gap: "0.4rem", borderBottom: `1px solid ${colors.cardBorder}`, marginBottom: "1.25rem" },
+  tab: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.5rem 1.1rem", background: "transparent", color: colors.textSecondary, border: "none", borderBottom: "3px solid transparent", borderRadius: "8px 8px 0 0", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
+  tabActive: { color: colors.blue, borderBottomColor: colors.blue, background: "rgba(13,71,161,0.06)" },
   pageHeader: {
     display: "flex",
     alignItems: "center",

@@ -12,7 +12,9 @@ import {
   MdBadge,
   MdShield,
   MdAdminPanelSettings,
+  MdSmartToy,
 } from "react-icons/md";
+import { useNavigate } from "react-router-dom";
 import { getUsers, createUser, updateUser, deleteUser } from "../api/usersApi";
 import { getRoles, getUserRoles, assignUserRoles } from "../api/rbacApi";
 import { getCompanies } from "../api/companyApi";
@@ -24,6 +26,10 @@ import { notify } from "../utils/notify";
 // behaviour stay consistent.
 import { formStyles, modalSizes } from "../theme";
 import usePersistentFilter from "../hooks/usePersistentFilter";
+
+// The two built-in AI-agent roles are granted from the profile's MCP tabs, never
+// from the role pickers here, and a role edit below keeps them.
+const isMcpRole = (role) => role.isSystemRole && ["MCP Access", "MCP Write"].includes(role.name);
 
 const colors = {
   blue: "#0d47a1",
@@ -45,6 +51,8 @@ const colors = {
 export default function UsersPage() {
   const { user: currentUser } = useAuth();
   const { has } = usePermissions();
+  const navigate = useNavigate();
+  const canAdministerMcp = currentUser?.isSeedAdmin === true && has("mcp.admin.manage");
   const seedAdminUserId = currentUser?.seedAdminUserId;
   const canCreate = has("users.manage.create");
   const canUpdate = has("users.manage.update");
@@ -102,7 +110,7 @@ export default function UsersPage() {
     // Best-effort — non-admin users may not have rbac.roles.view, in which
     // case the dropdown falls back to free-typing the legacy role name.
     getRoles()
-      .then(({ data }) => setAvailableRoles(data || []))
+      .then(({ data }) => setAvailableRoles((data || []).filter((role) => !isMcpRole(role))))
       .catch(() => setAvailableRoles([]));
     // Companies for the create dialog's access multi-select — best-effort,
     // only when the operator can actually grant tenant access.
@@ -166,7 +174,9 @@ export default function UsersPage() {
           (r) => r.name?.toLowerCase() === form.role?.toLowerCase());
         if (matchingRole?.id && canAssignRoles) {
           try {
-            await assignUserRoles(editUser.id, [matchingRole.id]);
+            const { data: existing } = await getUserRoles(editUser.id);
+            const mcpIds = existing.roles.filter(isMcpRole).map((role) => role.id);
+            await assignUserRoles(editUser.id, [...new Set([matchingRole.id, ...mcpIds])]);
             setMsg({ type: "success", text: `User updated and role "${matchingRole.name}" applied.` });
           } catch {
             setMsg({
@@ -228,8 +238,8 @@ export default function UsersPage() {
     setRolesLoading(true);
     try {
       const [rolesRes, userRolesRes] = await Promise.all([getRoles(), getUserRoles(u.id)]);
-      setAllRoles(rolesRes.data);
-      setAssignedRoleIds(new Set(userRolesRes.data.roles.map((r) => r.id)));
+      setAllRoles(rolesRes.data.filter((role) => !isMcpRole(role)));
+      setAssignedRoleIds(new Set(userRolesRes.data.roles.filter((r) => !isMcpRole(r)).map((r) => r.id)));
     } catch {
       setRolesMsg({ type: "error", text: "Failed to load roles" });
     } finally {
@@ -258,7 +268,10 @@ export default function UsersPage() {
     setRolesSaving(true);
     setRolesMsg(null);
     try {
-      await assignUserRoles(rolesModalUser.id, Array.from(assignedRoleIds));
+      const { data: current } = await getUserRoles(rolesModalUser.id);
+      // MCP roles are not in this picker; keep exactly the ones the user holds now.
+      const mcpIds = current.roles.filter(isMcpRole).map((role) => role.id);
+      await assignUserRoles(rolesModalUser.id, [...new Set([...assignedRoleIds, ...mcpIds])]);
       setRolesMsg({ type: "success", text: "Roles updated" });
       setTimeout(closeRolesModal, 700);
     } catch (err) {
@@ -356,6 +369,13 @@ export default function UsersPage() {
                   <span style={{ color: colors.textSecondary, fontSize: "0.82rem" }}>
                     Joined {new Date(u.createdAt).toLocaleDateString()}
                   </span>
+                  {canAdministerMcp && (
+                    <button style={{ ...styles.rolesBtn, minHeight: 44 }}
+                      onClick={() => navigate(`/profile?tab=mcp-catalog&userId=${u.id}`)} title={`MCP access for ${u.fullName}`}>
+                      <MdSmartToy aria-hidden style={{ fontSize: "1rem" }} />
+                      <span>MCP access</span>
+                    </button>
+                  )}
                   {u.id !== seedAdminUserId && (canAssignRoles || canUpdate || canDelete) && (
                     <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                       {canAssignRoles && (

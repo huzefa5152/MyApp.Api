@@ -28,6 +28,14 @@ import { notify } from "../utils/notify";
 // Shared modal baseline — gradient header, blurred backdrop, size tiers,
 // non-movable. See comment in theme.js modalSizes for tier guidance.
 import { formStyles, modalSizes } from "../theme";
+
+const isMcpRole = (role) => role.isSystemRole && ["MCP Access", "MCP Write"].includes(role.name);
+const productKeyCount = (role) => role.permissionKeys.filter((key) => !key.startsWith("mcp.")).length;
+const withoutMcpKeys = (tree) => (tree || [])
+  .map((mod) => ({ ...mod, pages: (mod.pages || [])
+    .map((pg) => ({ ...pg, permissions: (pg.permissions || []).filter((p) => !p.key.startsWith("mcp.")) }))
+    .filter((pg) => pg.permissions.length > 0) }))
+  .filter((mod) => mod.pages.length > 0);
 // Section layout config — maps catalog modules to navbar super-groups.
 // Edit this file to add a new module/screen; nothing else here needs to change.
 import { groupTreeBySections, getModuleLabel } from "../config/permissionSections";
@@ -78,8 +86,10 @@ export default function RolesPage() {
     setLoading(true);
     try {
       const [rolesRes, treeRes] = await Promise.all([getRoles(), getPermissionTree()]);
-      setRoles(rolesRes.data);
-      setTree(treeRes.data);
+      // AI-agent (MCP) access is granted per user from the profile, not through
+      // product roles: hide its two built-in roles and its keys from this editor.
+      setRoles(rolesRes.data.filter((role) => !isMcpRole(role)));
+      setTree(withoutMcpKeys(treeRes.data));
     } catch {
       notify("Failed to load roles and permissions", "error");
     } finally {
@@ -356,7 +366,7 @@ export default function RolesPage() {
               <div style={styles.cardMeta}>
                 <span style={styles.metaChip}>
                   <MdAdminPanelSettings style={{ fontSize: "0.95rem" }} />
-                  {role.permissionKeys.length} permission{role.permissionKeys.length !== 1 ? "s" : ""}
+                  {productKeyCount(role)} permission{productKeyCount(role) !== 1 ? "s" : ""}
                 </span>
                 <span style={styles.metaChip}>
                   <MdPeople style={{ fontSize: "0.95rem" }} />
