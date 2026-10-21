@@ -28,8 +28,9 @@ try:
     uid,worker=f.user(manager,'worker',[system['Sales Edition']],[own])
     check('disabled user cannot create an agent token',f.http('POST','/api/mcp/me/tokens',worker,{'name':'Blocked','companyIds':[own],'scopes':['read'],'expiresInDays':1})[0]==403)
     grants=['search_clients','search_invoices','get_invoice']
-    profile=f.profile(worker,uid)
-    check('user cannot self grant',f.http('PUT',f'/api/mcp/catalog/{uid}',worker,f.body(profile,accessGranted=True,grantedTools=grants,selectedTools=grants))[0]==403)
+    # The catalog is the seed admin's alone: a user cannot even read their own (404).
+    profile=f.profile(f.admin,uid)
+    check('user cannot self grant',f.http('PUT',f'/api/mcp/catalog/{uid}',worker,f.body(profile,accessGranted=True,grantedTools=grants,selectedTools=grants))[0] in (403,404))
     f.save(f.admin,aid,accessGranted=True,grantedTools=grants,selectedTools=grants)
     check('enabled tenant manager cannot read another catalog',f.http('GET',f'/api/mcp/catalog/{uid}',manager)[0]==404)
     check('enabled tenant manager cannot grant another user',f.http('PUT',f'/api/mcp/catalog/{uid}',manager,f.body(profile,accessGranted=True,grantedTools=grants,selectedTools=grants))[0]==404)
