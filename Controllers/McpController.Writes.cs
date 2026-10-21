@@ -21,6 +21,9 @@ namespace MyApp.Api.Controllers
     {
         private string _resultRef = "";
         private string _resultSummary = "";
+        // The company of the plan a planId-only call (commit, cancel, status) acted on, so its
+        // activity row is filed under that company like every companyId call.
+        private int? _activityCompanyId;
 
         private static readonly string[] WriteToolNameList = { "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "commit_action", "cancel_action" };
         private static bool IsWriteTool(string name) => WriteToolNameList.Contains(name, StringComparer.Ordinal);
@@ -199,6 +202,9 @@ namespace MyApp.Api.Controllers
             await PinCompanyAsync(prior.CompanyId);
             await RequireWriterAsync(ScopeFor(prior.Kind));
             await Need(PermissionFor(prior.Kind));
+            // An update plan echoes the record's stored details, so the read right its prepare
+            // required is needed again before the plan is shown back.
+            if (ReadPermissionFor(prior.Kind) is { } read) await Need(read);
             if (!await _permissions.HasMcpToolAccessAsync(CurrentUserId, PrepareToolFor(prior.Kind)))
                 throw new ToolError("Resource unavailable or access denied.");
             if (prior.CommittedAt != null)
@@ -369,6 +375,13 @@ namespace MyApp.Api.Controllers
             _ => throw new ToolError("Unknown plan type.")
         };
 
+        /// <summary>The read right an update plan needs to be shown back, or null.</summary>
+        private static string? ReadPermissionFor(string kind) => kind switch
+        {
+            "client.update" => "clients.manage.view",
+            _ => null,
+        };
+
         private static string PermissionFor(string kind) => kind switch
         {
             "client.create" => "clients.manage.create",
@@ -388,6 +401,7 @@ namespace MyApp.Api.Controllers
             // Someone else's plan id answers exactly like a missing one.
             if (plan == null || plan.AgentTokenId != agent.Id || plan.UserId != CurrentUserId)
                 throw new ToolError("That plan was not found. It may have expired.");
+            _activityCompanyId = plan.CompanyId;
             return plan;
         }
 
