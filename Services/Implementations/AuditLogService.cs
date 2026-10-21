@@ -95,8 +95,17 @@ namespace MyApp.Api.Services.Implementations
                 // miss the existing row and insert duplicate parents. The
                 // window is tiny (one read + one write) so the SERIALIZABLE
                 // contention cost stays bounded.
-                await using var tx = await _db.Database.BeginTransactionAsync(
-                    System.Data.IsolationLevel.Serializable);
+                //
+                // Inside a CALLER's transaction a second BeginTransaction
+                // throws, and the catch below swallowed it: every audit row
+                // written from inside one was silently lost (stock
+                // restatements run by Reconcile and by the late-GD fix,
+                // 2026-10-21). Join that transaction instead, so the row
+                // commits -- or rolls back -- with the work it describes.
+                var ownTx = _db.Database.CurrentTransaction == null;
+                await using var tx = ownTx
+                    ? await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable)
+                    : null;
                 try
                 {
                     var since = log.Timestamp - DedupWindow;
@@ -110,16 +119,16 @@ namespace MyApp.Api.Services.Implementations
                         existing.OccurrenceCount += 1;
                         existing.LastOccurrence = log.Timestamp;
                         await _db.SaveChangesAsync();
-                        await tx.CommitAsync();
+                        if (tx != null) await tx.CommitAsync();
                         return;
                     }
 
                     await _repository.CreateAsync(log);
-                    await tx.CommitAsync();
+                    if (tx != null) await tx.CommitAsync();
                 }
                 catch
                 {
-                    await tx.RollbackAsync();
+                    if (tx != null) await tx.RollbackAsync();
                     throw;
                 }
             }

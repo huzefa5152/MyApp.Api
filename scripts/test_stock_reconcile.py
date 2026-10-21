@@ -141,6 +141,13 @@ def main():
         req["useSheetQuantityItemTypeIds"] = [valve]
         r = requests.post(f"{api}/stock/company/{cid}/reconcile/apply", headers=h, json=req, timeout=300)
         check("Apply succeeds", r.ok and r.json().get("applied") is True, f"http {r.status_code}: {r.text[:300]}")
+        # Both the apply and the restatement it runs inside its transaction are
+        # audited (2026-10-21: the inner one used to be lost silently).
+        al = requests.get(f"{api}/auditlogs", headers=h, timeout=60,
+                          params={"search": f"company {cid}", "pageSize": 50}).json().get("items", [])
+        kinds = {a.get("exceptionType") for a in al}
+        check("the apply and its restatement each wrote an audit row",
+              {"STOCK_RECONCILE_APPLY", "STOCK_FIFO_RESTATEMENT"} <= kinds, str(sorted(k for k in kinds if k)))
         oh = {x["itemTypeId"]: x for x in requests.get(f"{api}/stock/company/{cid}/onhand", headers=h, timeout=60).json()}
         check("VALVE corrected to 90 / 9,000", near(oh[valve]["onHand"], 90, 1e-4) and near(oh[valve]["valueExcludingTax"], 9000),
               f"{oh[valve]['onHand']} / {oh[valve]['valueExcludingTax']}")

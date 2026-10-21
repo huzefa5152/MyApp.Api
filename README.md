@@ -300,6 +300,7 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-10-21 — A late GD no longer leaves the stock value wrong
 
+- **Every stock-sheet match is now in the audit log.** A match applied through *Reconcile to my stock sheet* or *Add these GDs to the stock-sheet match* was saved without its audit entry; both the action and each restatement it makes are now recorded, with who ran them, and two on the same day are no longer folded into one entry.
 - **Spotted when it happens.** A GD dated before the last stock-sheet match ("Reconcile to my stock sheet") is marked line by line in the GD import review, and the import result says how many items it affects. Until now such a GD left those items' value off with nothing on screen to say so (quantities were always right).
 - **Put right in one step.** The Stock page (and the GD import result) lists only the items whose value would actually change, with the GDs involved. *Check what it will change* shows the value before and after without saving; *Add these GDs to the stock-sheet match* applies it on the match's own date. Quantities never move. Needs the "Stock rules: Change" permission.
 

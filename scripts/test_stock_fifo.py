@@ -506,6 +506,11 @@ def main():
         check("the check wrote nothing", near(onhand(api, h, cid, iid)["valueExcludingTax"], after["valueExcludingTax"]))
         r = call("POST", f"{api}/stock/company/{cid}/backdated-gds/restate", h, json={"commit": True})
         check("the update commits", r.ok and r.json().get("committed"), r.text[:300])
+        al = call("GET", f"{api}/auditlogs", h, params={"search": f"company {cid}", "pageSize": 100}).json().get("items", [])
+        late_rows = [a for a in al if a.get("exceptionType") == "STOCK_LATE_GD_RESTATE" and late_gd in (a.get("message") or "")]
+        restates = [a for a in al if a.get("exceptionType") == "STOCK_FIFO_RESTATEMENT"]
+        check("the update is audited, and so is the restatement it ran inside its transaction",
+              len(late_rows) == 1 and len(restates) >= 3, f"late={len(late_rows)} restatements={len(restates)}")
         fixed = onhand(api, h, cid, iid)
         check("now 5 worth 2,150: the sheet line plus the late GD",
               near(fixed["onHand"], 5, 1e-4) and near(fixed["valueExcludingTax"], 2150),

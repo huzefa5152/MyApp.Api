@@ -1904,7 +1904,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 ### 7. Error handling
 
 - Never return `ex.Message` to the client — log via `_logger.LogError(ex, "...")`, return a generic operator-friendly message.
-- Audit-log writes go through `AuditLogService.LogAsync` which fingerprints + dedups inside a SERIALIZABLE transaction.
+- Audit-log writes go through `AuditLogService.LogAsync` which fingerprints + dedups inside a SERIALIZABLE transaction -- or, when the caller already holds one, JOINS it (2026-10-21): opening a second one threw and the catch swallowed it, so every audit row written inside a transaction (restatements under Reconcile and the late-GD fix) was silently lost. A business action that must keep its own row sets `Fingerprint = Guid.NewGuid().ToString("N")`: the 24h dedup (digits stripped) was built for error floods and folds two same-day actions into one.
 - Sensitive fields in request bodies: extend `Helpers/SensitiveDataRedactor.cs` (it already covers password, token, NTN, CNIC, STRN, address, phone, email).
 
 ### 8. Uploads

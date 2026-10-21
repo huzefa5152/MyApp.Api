@@ -2268,6 +2268,9 @@ namespace MyApp.Api.Controllers
                 RequestPath = $"/api/stock/company/{companyId}/fifo-restatement",
                 StatusCode = 200,
                 ExceptionType = "STOCK_FIFO_RESTATEMENT",
+                // Each is its own action: never folded into an earlier row by
+                // the 24h dedup (built for error floods).
+                Fingerprint = Guid.NewGuid().ToString("N"),
                 Message = $"FIFO restatement for company {companyId}: {plans.Count} items, {req.Lines.Count} GD lines, " +
                           $"value {result.FifoValueBefore:0.00} -> sheet {result.SheetValue:0.00}{(file != null ? $" from {file}" : "")}",
                 CompanyId = companyId,
@@ -2355,6 +2358,22 @@ namespace MyApp.Api.Controllers
             }
             plan.Applied = true;
             plan.Messages.Add($"{adjust.Count} quantity correction(s) and {plan.Items.Count(i => i.Error == null)} item(s) restated to the sheet.");
+            await _audit.LogAsync(new AuditLog
+            {
+                Timestamp = DateTime.UtcNow,
+                Level = "Information",
+                UserName = User.Identity?.Name,
+                HttpMethod = "POST",
+                RequestPath = $"/api/stock/company/{companyId}/reconcile/apply",
+                StatusCode = 200,
+                ExceptionType = "STOCK_RECONCILE_APPLY",
+                // Each is its own action: never folded into an earlier row by
+                // the 24h dedup (built for error floods).
+                Fingerprint = Guid.NewGuid().ToString("N"),
+                Message = $"Reconciled company {companyId} to {file} as at {plan.AsOf:yyyy-MM-dd}: " +
+                          $"{adjust.Count} quantity correction(s), {plan.Items.Count(i => i.Error == null)} item(s) restated",
+                CompanyId = companyId,
+            });
             return Ok(plan);
         }
 
@@ -2436,6 +2455,22 @@ namespace MyApp.Api.Controllers
             result.Committed = true;
             var gds = string.Join(", ", plan.Affected.SelectMany(a => a.Lines.Select(l => l.GdNumber)).Distinct().OrderBy(g => g));
             result.Messages.Add($"{plan.Items.Count} item(s) brought back in line with the stock sheet, now including GD {gds}. Quantities did not change.");
+            await _audit.LogAsync(new AuditLog
+            {
+                Timestamp = DateTime.UtcNow,
+                Level = "Information",
+                UserName = User.Identity?.Name,
+                HttpMethod = "POST",
+                RequestPath = $"/api/stock/company/{companyId}/backdated-gds/restate",
+                StatusCode = 200,
+                ExceptionType = "STOCK_LATE_GD_RESTATE",
+                // Each is its own action: never folded into an earlier row by
+                // the 24h dedup (built for error floods).
+                Fingerprint = Guid.NewGuid().ToString("N"),
+                Message = $"Late GD {gds} added to the stock-sheet match for {plan.Items.Count} item(s) of company {companyId}: " +
+                          $"value {result.ValueBefore:0.00} -> {result.ValueAfter:0.00}",
+                CompanyId = companyId,
+            });
             return Ok(result);
         }
 
