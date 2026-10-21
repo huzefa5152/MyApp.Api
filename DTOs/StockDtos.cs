@@ -378,6 +378,41 @@
         public string? Error { get; set; }
     }
 
+    /// <summary>An item whose latest stock-sheet match is missing a GD that was
+    /// entered after it but dated on or before it (Helpers.BackdatedGdRestatement).</summary>
+    public class BackdatedGdItemDto
+    {
+        public int ItemTypeId { get; set; }
+        public string ItemTypeName { get; set; } = "";
+        public DateTime MatchedOn { get; set; }
+        public List<BackdatedGdLineDto> Lines { get; set; } = new();
+    }
+
+    public class BackdatedGdLineDto
+    {
+        public string GdNumber { get; set; } = "";
+        public DateTime GdDate { get; set; }
+        public decimal Quantity { get; set; }
+        public decimal ValueExcludingTax { get; set; }
+    }
+
+    public class BackdatedGdRestateRequestDto
+    {
+        /// <summary>False = preview only (writes nothing).</summary>
+        public bool Commit { get; set; }
+    }
+
+    public class BackdatedGdRestateResultDto
+    {
+        public bool Committed { get; set; }
+        public bool CanCommit { get; set; }
+        public List<FifoRestatementItemDto> Items { get; set; } = new();
+        /// <summary>The listed items' value now, and after the update.</summary>
+        public decimal ValueBefore { get; set; }
+        public decimal ValueAfter { get; set; }
+        public List<string> Messages { get; set; } = new();
+    }
+
     public class FifoRestatementResultDto
     {
         public bool Committed { get; set; }

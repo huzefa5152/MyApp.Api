@@ -84,7 +84,13 @@ function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose, onConfi
   const note = extraNote(line, mode);
   const t = o.blocking ? tone.fix : tone[o.kind] || tone.cost;
   const problems = line.problems || [];
-  const warnings = [line.overwriteWarning, line.costPlausibilityWarning, line.rateWarning].filter(Boolean);
+  const warnings = [
+    line.overwriteWarning, line.costPlausibilityWarning, line.rateWarning,
+    // Dated on or before the last stock-sheet match: the value is off until
+    // the match is updated (one button after saving).
+    line.stockSheetMatchedOn &&
+      `This GD is dated before the stock-sheet match of ${new Date(line.stockSheetMatchedOn).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}. After saving, add it to that match so the item's value stays right.`,
+  ].filter(Boolean);
   const selling = line.sheetSellingValue ?? line.sellingValue;
 
   return (

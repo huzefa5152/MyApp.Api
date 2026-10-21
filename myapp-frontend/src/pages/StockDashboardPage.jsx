@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
+import LateGdMatchPanel from "../Components/stock/LateGdMatchPanel";
 import { Link } from "react-router-dom";
 import { MdInventory, MdSearch, MdAdd, MdHistory, MdClose, MdSwapHoriz, MdExpandMore, MdChevronRight, MdFileDownload, MdEdit, MdBuild } from "react-icons/md";
 import StockMenu, { StockMenuItem } from "../Components/stock/StockMenu";
@@ -901,6 +902,8 @@ export default function StockDashboardPage() {
         <div className="stk-empty">No companies available.</div>
       ) : (
         <>
+          {/* GDs dated before the last stock-sheet match: one-step fix. */}
+          {selectedCompany && <LateGdMatchPanel companyId={selectedCompany.id} onDone={fetchAll} />}
           {selectedCompany && !selectedCompany.inventoryTrackingEnabled && (
             <div className="stk-banner" role="status">
               ⚠ Inventory tracking is OFF for this company. Stock IN / OUT movements are not being recorded automatically.

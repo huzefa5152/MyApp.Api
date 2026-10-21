@@ -90,3 +90,12 @@ export const getStockCostChanges = (companyId, params = {}) =>
 // screen only reads it (the Stock Dashboard's costing pill).
 export const getCostingMethod = (companyId) =>
   http.get(`/stock/company/${companyId}/costing-method`);
+
+// Items whose last stock-sheet match is missing a GD dated on or before it
+// (Helpers/BackdatedGdRestatement). Read only.
+export const getBackdatedGds = (companyId) =>
+  http.get(`/stock/company/${companyId}/backdated-gds`);
+
+// Add those GDs to the match. commit=false previews and writes nothing.
+export const restateBackdatedGds = (companyId, commit) =>
+  http.post(`/stock/company/${companyId}/backdated-gds/restate`, { commit });

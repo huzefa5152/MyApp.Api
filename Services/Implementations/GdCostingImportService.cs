@@ -369,6 +369,24 @@ namespace MyApp.Api.Services.Implementations
             preview.CostPlausibilityWarningCount = preview.Lines.Count(l => l.CostPlausibilityWarning != null);
             preview.RateWarningCount = preview.Lines.Count(l => l.RateWarning != null);
             preview.ProblemLineCount = preview.Lines.Count(l => !l.LeaveOut && l.Problems.Count > 0);
+
+            // A GD dated on or before an item's latest stock-sheet match lands
+            // BEFORE that match in the walk, so the match's lines no longer cover
+            // the stock and the item's value goes wrong (Pak Trade, 2026-10-21).
+            // Say so per line; the fix is one button on the commit result.
+            if (newArrivalsMode)
+            {
+                var itemIds = preview.Lines.Where(l => !l.LeaveOut && l.ItemTypeId.HasValue && l.GdDate.HasValue)
+                    .Select(l => l.ItemTypeId!.Value).Distinct().ToList();
+                if (itemIds.Count > 0)
+                {
+                    var sheetMatches = await BackdatedGdRestatement.LatestAsync(_db, companyId, itemIds);
+                    foreach (var l in preview.Lines.Where(l => !l.LeaveOut && l.ItemTypeId.HasValue && l.GdDate.HasValue))
+                        if (sheetMatches.TryGetValue(l.ItemTypeId!.Value, out var sm) && l.GdDate!.Value.Date <= sm.Date)
+                            l.StockSheetMatchedOn = sm.Date;
+                }
+                preview.StockSheetMatchCount = preview.Lines.Count(l => l.StockSheetMatchedOn != null);
+            }
             preview.LeftOutCount = preview.Lines.Count(l => l.LeaveOut);
 
             // A GD this company already has a consignment for has no upsert
@@ -1725,6 +1743,16 @@ namespace MyApp.Api.Services.Implementations
                 }
 
                 await tx.CommitAsync();
+
+                // Arrivals dated inside a stock-sheet match leave it short until
+                // it is updated; count them so the screen can offer the fix.
+                // Whether their value actually moved is the Stock check's call
+                // (GET backdated-gds); this only says where to look.
+                result.StockSheetMatchItems = (await BackdatedGdRestatement.FindAsync(_db, dto.CompanyId)).Count;
+                if (result.StockSheetMatchItems > 0)
+                    result.Messages.Add(
+                        $"{result.StockSheetMatchItems} item(s) received goods dated before their last stock-sheet match. " +
+                        "Check them below; if their value needs it, one button adds these GDs to that match.");
 
                 result.ImportRunId = run.Id;
                 result.ConsignmentsWritten = consignmentsByGd.Count;

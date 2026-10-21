@@ -358,6 +358,9 @@ endpoints_to_test = [
     ("GET",  "/api/customer-ledger/company/{cid}"),
     ("GET",  "/api/customer-ledger/company/{cid}/client/1"),
     ("GET",  "/api/customer-ledger/company/{cid}/client/1/opening-balance"),
+    # Late GDs outside their stock-sheet match (2026-10-21): the POST restates stock.
+    ("GET",  "/api/stock/company/{cid}/backdated-gds"),
+    ("POST", "/api/stock/company/{cid}/backdated-gds/restate"),
     # Accounting reports. Every one reads the general ledger, so a leak here
     # exposes another tenant's whole financial position — expenses, cash
     # balances, who they pay — not just one document.

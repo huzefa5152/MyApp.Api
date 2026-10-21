@@ -298,6 +298,11 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-10-21 — A late GD no longer leaves the stock value wrong
+
+- **Spotted when it happens.** A GD dated before the last stock-sheet match ("Reconcile to my stock sheet") is marked line by line in the GD import review, and the import result says how many items it affects. Until now such a GD left those items' value off with nothing on screen to say so (quantities were always right).
+- **Put right in one step.** The Stock page (and the GD import result) lists only the items whose value would actually change, with the GDs involved. *Check what it will change* shows the value before and after without saving; *Add these GDs to the stock-sheet match* applies it on the match's own date. Quantities never move. Needs the "Stock rules: Change" permission.
+
 ### 2026-10-20 — Roles & Permissions tree regrouped; opening balance in the Opening column
 
 - **The permission editor now follows the sidebar.** Sections are Dashboards, Stock, Sales, Purchases, Accounting, Reports, Master Data, Settings and Administration; each module is named as its menu item, and every action is in plain words ("See list", "Add", "Edit", "Submit to FBR", "Sell more than is in stock"). Actions appear in the order you meet them, not alphabetically. No permission was added, removed or renamed: every role keeps exactly what it had.

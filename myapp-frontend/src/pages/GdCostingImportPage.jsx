@@ -16,6 +16,7 @@ import BillStep from "../Components/bill/BillStep";
 import BillChecklist from "../Components/bill/BillChecklist";
 import { billColors } from "../Components/bill/billTheme";
 import GdLineEditor from "../Components/costing/GdLineEditor";
+import LateGdMatchPanel from "../Components/stock/LateGdMatchPanel";
 import GdReviewLines from "../Components/costing/GdReviewLines";
 import {
   MODE_NEW_ARRIVALS, COSTING_ANCHORS, lineProblems, blankLine, nextLineFrom,
@@ -501,6 +502,11 @@ export default function GdCostingImportPage() {
               {result.messages.map((m, i) => <li key={i}>{m}</li>)}
             </ul>
           )}
+          {result.stockSheetMatchItems > 0 && (
+            <div style={{ marginTop: "0.7rem" }}>
+              <LateGdMatchPanel companyId={Number(companyId)} />
+            </div>
+          )}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: "0.7rem" }}>
             <button type="button" onClick={resetAll} style={btn(billColors.teal, false)}>
               <MdRestartAlt size={18} /> Import another GD
@@ -658,6 +664,13 @@ export default function GdCostingImportPage() {
         {preview && (
           <>
             {(preview.blockingErrors || []).map((e, i) => <Banner key={i} tone="error">{e}</Banner>)}
+            {preview.stockSheetMatchCount > 0 && (
+              <Banner tone="warn">
+                {preview.stockSheetMatchCount} line{preview.stockSheetMatchCount === 1 ? " is" : "s are"} dated before the
+                item's last stock-sheet match. Save as usual, then use "Add these GDs to the stock-sheet match" on the
+                result (or on the Stock page) so the value of those items stays right.
+              </Banner>
+            )}
             {(preview.overwriteWarningCount > 0 || preview.costPlausibilityWarningCount > 0 || preview.rateWarningCount > 0) && (
               <Banner tone="warn">
                 Worth a look before bringing it in (the lines say why):

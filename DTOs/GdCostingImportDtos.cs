@@ -266,6 +266,12 @@ namespace MyApp.Api.DTOs
         /// </summary>
         public string? RateWarning { get; set; }
 
+        /// <summary>New Arrivals only: the date of the item's latest stock-sheet
+        /// match when this GD is dated on or before it. The match never had these
+        /// units, so the item's value is off until the match is updated (Stock ->
+        /// "Add late GDs to the stock-sheet match"). Null when it does not apply.</summary>
+        public DateTime? StockSheetMatchedOn { get; set; }
+
         // ── Entry rules and the operator's decisions (2026-09-25) ───────────
 
         /// <summary>
@@ -506,6 +512,9 @@ namespace MyApp.Api.DTOs
         /// refuses every such line that would write.</summary>
         public int ProblemLineCount { get; set; }
 
+        /// <summary>Lines carrying <see cref="GdCostingLineDto.StockSheetMatchedOn"/>.</summary>
+        public int StockSheetMatchCount { get; set; }
+
         /// <summary>Lines left out (by the operator, or by the mode's default).</summary>
         public int LeftOutCount { get; set; }
 
@@ -607,6 +616,11 @@ namespace MyApp.Api.DTOs
         /// not yet IsFavorite) adopted rather than duplicated, because their
         /// name already matched the sheet's line.</summary>
         public int ItemTypesAdopted { get; set; }
+
+        /// <summary>Items this commit left outside their stock-sheet match (a GD
+        /// dated on or before it). Non-zero = offer "Add late GDs to the
+        /// stock-sheet match" (POST /api/stock/company/{id}/backdated-gds/restate).</summary>
+        public int StockSheetMatchItems { get; set; }
 
         /// <summary>New OpeningStockBalance rows created for unmatched lines.</summary>
         public int OpeningBalancesCreated { get; set; }
