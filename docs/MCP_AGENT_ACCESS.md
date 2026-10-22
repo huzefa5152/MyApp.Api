@@ -110,6 +110,14 @@ legacy / Manager imports, the customer-ledger import. A GD costing **spreadsheet
 through MCP: the agent reads the sheet and sends its lines to `prepare_gd_costing`, which applies the
 same match and cost rules as the GD Costing screen.
 
+**Not yet offered (pending the maintainer's decision):** staff accounts, roles, company and
+division access, company settings and divisions. Even when added, no password or FBR token will
+travel through an agent (a pending plan stores its arguments until commit).
+
+**Print designs** written by an agent may not contain active content (script, event handlers,
+`javascript:` links, frames, embedded objects): this line has no server-side script stripping and
+no print-time CSP, and designs print in a same-origin window.
+
 ## Tools
 
 Reads (each behind the screen's key; most also accept any key of the documents that use them as a
@@ -150,6 +158,7 @@ picker):
 | `get_fbr_preview` | `invoices.fbr.preview` | `FbrController.PreviewPayload` (builds the JSON, sends nothing) |
 | `get_fbr_log`, `get_fbr_summary` | `fbrmonitor.view` | `FbrMonitorController`, always for the named company |
 | `search_account_transfers` | `accounting.transfers.view` | `AccountTransfersController.GetPaged` |
+| `search_attachments`, `get_attachment` | `attachments.list.view` | `AttachmentsController` lists; download returns base64 up to 4 MB |
 | `get_accounting_report` | `accounting.reports.view` | any of the 47 Accounting Reports screen reports (`AccountingReportsController`), with the screen's filters; every account, group, customer, supplier, payee, item and division filter must be this company's. Balances, ageing, outstanding, statements and cheque registers come from here (ledger-sourced) |
 | `get_invoice_sales_detail`, `get_client_ledger` | `reports.invoicedetail.view` / `reports.clientledger.view` | `ReportsController` |
 | `search_purchase_debit_notes`, `get_purchase_debit_note` | `purchasedebitnotes.list.view` | `PurchaseDebitNotesController` |
@@ -189,6 +198,8 @@ Writes (scope in brackets; the commit calls the service shown):
 | `prepare_purchase_debit_note` (`purchases.write`) | `purchasedebitnotes.manage.create`; with `purchaseDebitNoteId` `.update` | `PurchaseDebitNotesController.Create` / `Update` |
 | `prepare_bank_clear`, `prepare_bank_reconciliation_lock`, `prepare_bank_statement_import`, `prepare_bank_statement_line` (`banking.write`) | `accounting.reconciliation.manage` | `BankReconciliationController.SetPaymentCleared` / `SetTransferCleared` / `Lock`, `BankStatementController.Import` / `Categorize` / `Ignore`; every account, payment, transfer, line and party must be this company's |
 | `prepare_stock_reconcile` (`stock.write`) | `stock.policy.manage` (+ `stock.adjust.create` for quantity corrections, checked by the screen) | `StockController.PlanReconcile` at prepare (must be applicable), `ApplyReconcile` at commit; rows are the sheet's, chosen items must be this company's |
+| `prepare_attachment` (`attachments.write`) | `attachments.manage.upload` / `.delete` | `AttachmentsController.Upload` (base64, up to 4 MB; the document or folder must be this company's) / `Delete` |
+| `prepare_print_template` (`templates.write`) | `printtemplates.manage.update` (+ `.delete`) | `PrintTemplatesController.Create` / `Update` / `SetDefault` / `Delete`; active content refused |
 | `prepare_stock_adjustment` (`stock.write`) | `stock.adjust.create` | `StockController.AdjustStock` (company-level; the plan reminds that a sold item needs its bill) |
 | `prepare_withholding_receipt` (`receipts.write`) | `withholdingtax.manage.create`; with `withholdingReceiptId` `.update` | `IWithholdingTaxReceiptService.CreateAsync` / `UpdateAsync` |
 | `prepare_receipt_allocation` (`receipts.write`) | `accounting.receipts.create` | `IPaymentService.AllocateAsync` (lines), `AutoAllocateAsync` (auto), `ApplyClientAdvancesAsync` (advances); every bill must be the receipt's customer's in this company |

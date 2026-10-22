@@ -21,6 +21,8 @@ export const SCOPE_INFO = {
   "stock.write": { label: "Update stock", help: "Opening stock, stock adjustments, reconciling to your stock sheet and the late-GD value fix. Each change is shown to you first." },
   "journal.write": { label: "Create and edit journal entries", help: "Manual journal entries in the accounts. Each entry is shown to you first." },
   "delete.write": { label: "Delete and cancel documents", help: "Delete records, cancel challans and void bills, where the ERP allows it. Cannot be undone. Each one is shown to you first." },
+  "templates.write": { label: "Edit print designs", help: "Create, edit and delete print designs. Scripts are removed on save. Each change is shown to you first." },
+  "attachments.write": { label: "Attach and remove files", help: "Attach files to documents and folders, or remove them. Each change is shown to you first." },
   "banking.write": { label: "Transfers and bank reconciliation", help: "Move money between your own bank and cash accounts, import bank statements, mark items cleared and close reconciliations. Each change is shown to you first." },
   "fbr.submit": { label: "File bills with FBR", help: "Submits bills to FBR with your company's token. FBR issues a legal invoice number that cannot be undone. Each bill is shown to you first." },
 };

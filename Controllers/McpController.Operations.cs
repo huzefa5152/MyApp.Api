@@ -53,6 +53,9 @@ namespace MyApp.Api.Controllers
             };
         }
 
+        private static Task<object> ScreenAsync(Func<Task<ActionResult>> run) =>
+            ScreenAsync(async () => (IActionResult)await run());
+
         private static Task<object> ScreenAsync<TOut>(Func<Task<ActionResult<TOut>>> run) =>
             ScreenAsync(async () =>
             {

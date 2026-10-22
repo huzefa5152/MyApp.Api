@@ -37,9 +37,13 @@ public static class McpScopes
     public const string FbrSubmit = "fbr.submit";
     /// <summary>Account transfers, bank reconciliation and bank statements.</summary>
     public const string Banking = "banking.write";
+    /// <summary>Print designs.</summary>
+    public const string TemplatesWrite = "templates.write";
+    /// <summary>Files attached to documents and folders.</summary>
+    public const string Attachments = "attachments.write";
 
     public static readonly string[] Write =
-        { Clients, Suppliers, ItemTypes, Quotes, Orders, Challans, Bills, Purchases, Receipts, Payments, Gds, Lcs, Stock, Journal, Delete, FbrSubmit, Banking };
+        { Clients, Suppliers, ItemTypes, Quotes, Orders, Challans, Bills, Purchases, Receipts, Payments, Gds, Lcs, Stock, Journal, Delete, FbrSubmit, Banking, TemplatesWrite, Attachments };
     public static readonly string[] Implemented = new[] { Read, TemplatesRead, DocumentsRead, FbrValidate }.Concat(Write).ToArray();
 
     /// <summary>

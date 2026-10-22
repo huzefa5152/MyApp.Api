@@ -404,6 +404,43 @@ check("client ledger answers for A", read(T, "get_client_ledger", {"companyId": 
 refused(T, "invoice sales detail for company B", "get_invoice_sales_detail", {"companyId": B, "period": "thisyear"})
 refused(T, "client ledger of B's customer", "get_client_ledger", {"companyId": A, "year": date.today().year, "clientId": client_b})
 
+# ── phase 5 ──────────────────────────────────────────────────────────
+print("\n== Phase 5: attachments and print designs ==")
+listed = set(tools(T))
+check("every phase 5 tool is listed", {"search_attachments", "get_attachment", "prepare_attachment", "prepare_print_template"} <= listed,
+      sorted({"search_attachments", "get_attachment", "prepare_attachment", "prepare_print_template"} - listed))
+PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+r = run(T, "attach a file to A's bill", "prepare_attachment", {"companyId": A, "action": "upload", "fileName": "mcpp.png", "contentType": "image/png",
+        "contentBase64": PNG, "entityType": "Invoice", "entityId": b_a})
+att = one(f"SELECT TOP 1 Id FROM Attachments WHERE CompanyId = {A} AND FileName = 'mcpp.png' ORDER BY Id DESC")
+check("the attachment is on file", att, r)
+lst = read(T, "search_attachments", {"companyId": A, "entityType": "Invoice", "entityId": b_a}) or []
+check("search finds it on the bill", any(x.get("id") == att for x in lst), lst)
+got = read(T, "get_attachment", {"companyId": A, "attachmentId": att}) or {}
+check("download returns the same bytes", got.get("contentBase64") == PNG, str(got)[:200])
+refused(T, "attach to B's bill", "prepare_attachment", {"companyId": A, "action": "upload", "fileName": "x.png", "contentType": "image/png", "contentBase64": PNG, "entityType": "Invoice", "entityId": b_b})
+att_b = one(f"SELECT TOP 1 Id FROM Attachments WHERE CompanyId = {B} ORDER BY Id DESC")
+if att_b:
+    refused(T, "download B's attachment", "get_attachment", {"companyId": A, "attachmentId": att_b})
+    refused(T, "delete B's attachment", "prepare_attachment", {"companyId": A, "action": "delete", "attachmentId": att_b})
+refused(T, "attachments of company B", "search_attachments", {"companyId": B})
+run(T, "attachment deleted", "prepare_attachment", {"companyId": A, "action": "delete", "attachmentId": att})
+check("the attachment is gone", one(f"SELECT COUNT(*) FROM Attachments WHERE Id = {att}") == 0)
+
+for bad in ("<div><script>alert(1)</script></div>", "<img src=x onerror=alert(1)>", "<a href='javascript:alert(1)'>x</a>", "<iframe src='//x'></iframe>"):
+    refused(T, f"a design with active content ({bad[:24]})", "prepare_print_template", {"companyId": A, "action": "create", "templateType": "Bill", "name": "bad", "htmlContent": bad})
+run(T, "print design created", "prepare_print_template", {"companyId": A, "action": "create", "templateType": "Bill", "name": "mcpp design", "htmlContent": "<div>{{companyName}} MCPP design</div>"})
+tpl = one(f"SELECT TOP 1 Id FROM PrintTemplates WHERE CompanyId = {A} AND Name = 'mcpp design' ORDER BY Id DESC")
+check("the design is on file", tpl)
+run(T, "print design edited", "prepare_print_template", {"companyId": A, "action": "update", "templateId": tpl, "name": "mcpp design 2", "htmlContent": "<div>v2</div>"})
+check("the design now reads v2", "v2" in (val(f"SELECT HtmlContent FROM PrintTemplates WHERE Id = {tpl}") or ""))
+tpl_b = one(f"SELECT TOP 1 Id FROM PrintTemplates WHERE CompanyId = {B} ORDER BY Id DESC")
+if tpl_b:
+    refused(T, "edit B's print design", "prepare_print_template", {"companyId": A, "action": "update", "templateId": tpl_b, "htmlContent": "<div>x</div>"})
+    refused(T, "delete B's print design", "prepare_print_template", {"companyId": A, "action": "delete", "templateId": tpl_b})
+run(T, "print design deleted", "prepare_print_template", {"companyId": A, "action": "delete", "templateId": tpl})
+check("the design is gone", one(f"SELECT COUNT(*) FROM PrintTemplates WHERE Id = {tpl}") == 0)
+
 fails = [r for r in results if not r[1]]
 print(f"\n{len(results) - len(fails)}/{len(results)} parity checks passed")
 sys.exit(1 if fails else 0)

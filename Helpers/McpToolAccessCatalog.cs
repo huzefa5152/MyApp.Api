@@ -116,6 +116,10 @@ public static class McpToolAccessCatalog
         new("get_accounting_report", "Accounting", "Read any accounting report", new[] { "accounting.reports.view" }),
         new("get_invoice_sales_detail", "Reports", "Read the Invoice Sales Detail report", new[] { "reports.invoicedetail.view" }),
         new("get_client_ledger", "Reports", "Read the Client Ledger report", new[] { "reports.clientledger.view" }),
+        new("search_attachments", "Attachments", "Find attachments", new[] { "attachments.list.view" }),
+        new("get_attachment", "Attachments", "Download an attachment", new[] { "attachments.list.view" }),
+        new("prepare_attachment", "Attachments", "Prepare attaching or deleting a file", new[] { "attachments.manage.upload", "attachments.manage.delete" }, McpScopes.Attachments, Write: true),
+        new("prepare_print_template", "Print templates", "Prepare a print design change", new[] { "printtemplates.manage.update" }, McpScopes.TemplatesWrite, Write: true),
         new("find_late_gd_value_fixes", "Stock", "Find items valued wrong by a late GD", new[] { "stock.policy.manage" }),
         new("prepare_late_gd_value_fix", "Stock", "Prepare the late GD value fix", new[] { "stock.policy.manage" }, McpScopes.Stock, Write: true),
 
