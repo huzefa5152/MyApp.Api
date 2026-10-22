@@ -169,6 +169,7 @@ export default function McpAgentsPanel() {
   const [page, setPage] = useState(1);
   const [showNew, setShowNew] = useState(false);
   const [created, setCreated] = useState(null);
+  const [showInactive, setShowInactive] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const loadTokens = useCallback(async () => {
@@ -201,6 +202,9 @@ export default function McpAgentsPanel() {
   };
 
   const refresh = () => { loadTokens(); loadActivity(); };
+  // Revoked and expired tokens stay on record but sit behind one click.
+  const inactiveCount = tokens ? tokens.filter(t => t.status !== "Active").length : 0;
+  const shown = tokens ? tokens.filter(t => showInactive || t.status === "Active") : [];
   const from = activity && activity.total ? (activity.page - 1) * activity.pageSize + 1 : 0;
   const to = activity ? Math.min(activity.page * activity.pageSize, activity.total) : 0;
   const chips = t => [...(t.allCompanies ? [<span key="all" style={{ ...s.chip, color: "#8a4b00", background: "#fff4e5" }}>All companies</span>] : t.companies.map(c => <span key={`c${c.id}`} style={s.chip}>{c.name}</span>)),
@@ -225,9 +229,11 @@ export default function McpAgentsPanel() {
     <h4 style={s.h4}><MdVpnKey aria-hidden /> Agent tokens</h4>
     {tokenError && <div role="alert" style={s.alert}>{tokenError}</div>}
     {!tokens && !tokenError && <div style={s.empty}>Loading…</div>}
-    {tokens && tokens.length === 0 && <div style={s.empty}>No agent tokens yet. Create one to connect Codex or Claude.</div>}
-    {tokens && tokens.length > 0 && (narrow
-      ? <div style={s.cards}>{tokens.map(t => <article key={t.id} style={s.card}>
+    {tokens && shown.length === 0 && <div style={s.empty}>{inactiveCount ? "No active agent tokens." : "No agent tokens yet."} Create one to connect Codex or Claude.</div>}
+    {inactiveCount > 0 && <button type="button" style={{ ...s.ghost, margin: "0.8rem 0" }} aria-expanded={showInactive}
+      onClick={() => setShowInactive(v => !v)}>{showInactive ? "Hide" : "Show"} {inactiveCount} revoked or expired</button>}
+    {tokens && shown.length > 0 && (narrow
+      ? <div style={s.cards}>{shown.map(t => <article key={t.id} style={s.card}>
           <div style={s.cardTop}><div style={{ minWidth: 0 }}><div style={s.strong}>{t.name}</div><div style={s.muted}>@{t.username} · <code>{t.hint}…</code></div></div>
             <Badge tone={TOKEN_TONE[t.status]}>{t.status}</Badge></div>
           <div style={s.chips}>{chips(t)}</div>
@@ -239,7 +245,7 @@ export default function McpAgentsPanel() {
         </article>)}</div>
       : <div data-admin-table-region="" style={s.tableWrap}><table style={s.table}>
           <thead><tr>{["Agent", "Runs as", "Companies", "Status", "Last used", "Expires", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
-          <tbody>{tokens.map(t => <tr key={t.id} style={s.tr}>
+          <tbody>{shown.map(t => <tr key={t.id} style={s.tr}>
             <td style={s.td}><div style={s.strong}>{t.name}</div><div style={s.muted}><code>{t.hint}…</code></div></td>
             <td style={s.td}><div style={s.strong}>{t.fullName}</div><div style={s.muted}>@{t.username}</div></td>
             <td style={s.td}><div style={s.chips}>{chips(t)}</div></td>

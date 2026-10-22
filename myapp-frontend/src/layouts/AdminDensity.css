@@ -79,7 +79,7 @@ body.admin-ui [data-admin-dialog] [data-admin-close]:has(svg), body.admin-ui [da
 body.admin-ui [data-admin-popup] { max-width: calc(100vw - 16px); }
 body.admin-ui .dl-user-menu { max-width: calc(100vw - 24px); }
 body.admin-ui .dl-group__body[inert] { visibility: hidden; }
-body.admin-ui .dl-main [role=tablist] { flex-wrap: wrap; }
+body.admin-ui .dl-main [role=tablist]:not([data-scroll-tabs]) { flex-wrap: wrap; }
 body.admin-ui .dl-main :is(.form-grid-2col,.form-grid-3col,.responsive-grid-3col) > * { min-width: 0; }
 @media (max-width: 991.98px) {
  body.admin-ui .dl-topbar { min-height: 56px; }

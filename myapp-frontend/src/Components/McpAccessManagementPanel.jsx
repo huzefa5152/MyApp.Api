@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { MdShield, MdPersonSearch } from "react-icons/md";
 import httpClient from "../api/httpClient";
 import { useAuth } from "../contexts/AuthContext";
 import { useConfirm } from "./ConfirmDialog";
@@ -38,26 +39,36 @@ export default function McpAccessManagementPanel({ targetUserId }) {
     if (dirty && !await confirm({title:"Discard unsaved MCP settings?",message:"The current account has unsaved changes. Discard them before choosing another user?",variant:"warning",confirmText:"Discard changes"})) return;
     setDirty(false); setSelected(id);
   };
+  const initials = (account?.fullName || account?.username || "?").split(" ").filter(Boolean).map(w => w[0].toUpperCase()).slice(0, 2).join("");
   return <section className="mcp-catalog" aria-label="Manage user MCP access">
-    <h2>Manage MCP access</h2>
-    <p>Choose a user, review their company access, then allow the AI actions they need. Only the seed administrator can configure these settings.</p>
+    <div className="mcp-head"><div className="mcp-head-left">
+      <div className="mcp-head-icon"><MdShield aria-hidden /></div>
+      <div><h2>Manage MCP access</h2>
+        <p>Choose a user, review their company access, then allow the AI actions they need. Only the seed administrator can configure these settings.</p></div>
+    </div></div>
     {error && <p className="mcp-catalog-alert" role="alert">{error}</p>}
-    <div className="mcp-catalog-switches">
-      <label className="mcp-catalog-search">Find a user<input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search name or username" /></label>
+    <div className="mcp-card mcp-picker">
+      <label className="mcp-catalog-search">Find a user<input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search name or username" /></label>
       <label className="mcp-catalog-search">User receiving MCP access<select aria-label="User receiving MCP access" value={selected} onChange={e => choose(e.target.value)} disabled={loading}>
-        <option value="">{loading ? "Loading users…" : "Choose a user"}</option>
+        <option value="">{loading ? "Loading users…" : `Choose a user (${filtered.length})`}</option>
         {filtered.map(u => <option key={u.id} value={u.id}>{u.fullName || u.username} · @{u.username} · #{u.id}</option>)}
       </select></label>
     </div>
     {selected && !loading && !account && <p role="alert" className="mcp-catalog-alert">This user is unavailable. Choose another user.</p>}
     {account && <>
       <div className="mcp-catalog-selected-account">
-        <strong>Configuring: {account.fullName || account.username}</strong>
-        <div>@{account.username} · User #{account.id} · {account.role || "User"}</div>
-        <p>{companyError ? "Company access could not be loaded." : companies === null ? "Loading company access…" : companies.length ? `Assigned companies: ${companies.join(", ")}` : "No companies assigned. MCP cannot access company data until a company is assigned."}</p>
+        <span className="mcp-avatar" aria-hidden>{initials}</span>
+        <div>
+          <strong>Configuring: {account.fullName || account.username}</strong>
+          <span className="mcp-catalog-help">@{account.username} · User #{account.id} · {account.role || "User"}</span>
+          {companyError ? <span className="mcp-catalog-help">Company access could not be loaded.</span>
+            : companies === null ? <span className="mcp-catalog-help">Loading company access…</span>
+            : companies.length ? <div className="mcp-chips" aria-label="Assigned companies">{companies.map(c => <span key={c} className="mcp-chip">{c}</span>)}</div>
+            : <span className="mcp-chip is-warn">No companies assigned. MCP cannot access company data until a company is assigned.</span>}
+        </div>
       </div>
       <McpCatalogAccessPanel key={account.id} targetUserId={account.id} onDirtyChange={setDirty} />
     </>}
-    {!selected && <p className="mcp-catalog-note">Select a user to review and configure their MCP access. No account is selected automatically.</p>}
+    {!selected && <div className="mcp-card mcp-empty"><MdPersonSearch aria-hidden />Select a user to review and configure their MCP access. No account is selected automatically.</div>}
   </section>;
 }
