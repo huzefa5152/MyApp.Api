@@ -2240,6 +2240,7 @@ namespace MyApp.Api.Controllers
                 ItemTypeId = a.ItemTypeId,
                 ItemTypeName = plan.Items.FirstOrDefault(i => i.ItemTypeId == a.ItemTypeId)?.ItemTypeName ?? "",
                 MatchedOn = a.Restatement.Date,
+                AfterValueCorrection = !a.Restatement.IsSheetMatch,
                 Lines = a.Lines.Select(l => new BackdatedGdLineDto
                 {
                     GdNumber = l.GdNumber, GdDate = l.GdDate, Quantity = l.Quantity, ValueExcludingTax = l.ValueExcludingTax,
@@ -2351,8 +2352,27 @@ namespace MyApp.Api.Controllers
                         SourceRow = r.SourceRow, Description = r.Description, Quantity = r.Quantity,
                         ValueExcludingTax = r.ValueExcludingTax, SalesTaxRate = r.SalesTaxRate,
                     }).ToList());
+            // A value correction has no sheet: what it left the item holding is the
+            // walk's pools on its date without the late GDs. An item holding stock
+            // not traced to a GD cannot be restated that way and is listed with
+            // the reason instead.
+            var held = new Dictionary<int, IReadOnlyList<FifoRestatementLineDto>>();
+            var untraced = new List<(BackdatedGdRestatement.Affected A, FifoRestatementItemDto Item)>();
+            foreach (var a in affected.Where(a => !a.Restatement.IsSheetMatch).ToList())
+            {
+                var lines = await BackdatedGdRestatement.HeldLinesAsync(_context, companyId, a);
+                if (lines != null) { held[a.Restatement.MovementId] = lines; continue; }
+                affected.Remove(a);
+                untraced.Add((a, new FifoRestatementItemDto
+                {
+                    ItemTypeId = a.ItemTypeId,
+                    ItemTypeName = await _context.ItemTypes.AsNoTracking().Where(i => i.Id == a.ItemTypeId).Select(i => i.Name).FirstOrDefaultAsync() ?? "",
+                    Error = "Holds stock not traced to a GD, so the late GD cannot be added automatically. Restate it from your stock sheet.",
+                }));
+            }
             IReadOnlyList<FifoRestatementLineDto> SheetOf(BackdatedGdRestatement.Affected a) =>
-                sheet.GetValueOrDefault(a.Restatement.MovementId) ?? new List<FifoRestatementLineDto>();
+                (a.Restatement.IsSheetMatch ? sheet.GetValueOrDefault(a.Restatement.MovementId) : held.GetValueOrDefault(a.Restatement.MovementId))
+                ?? new List<FifoRestatementLineDto>();
 
             async Task<(ActionResult? Error, FifoRestatementResultDto? Res)> PreviewAsync(FifoRestatementRequestDto r)
             {
@@ -2398,13 +2418,15 @@ namespace MyApp.Api.Controllers
                 items.AddRange(changed);
                 requests.Add(new FifoRestatementRequestDto
                 {
-                    SourceFile = $"Stock-sheet match of {g.Key:dd MMM yyyy} with late GD " +
+                    SourceFile = $"{(g.All(a => a.Restatement.IsSheetMatch) ? "Stock-sheet match" : "Stock value correction")} of {g.Key:dd MMM yyyy} with late GD " +
                                  string.Join(", ", g.Where(a => ids.Contains(a.ItemTypeId))
                                      .SelectMany(a => a.Lines.Select(l => l.GdNumber)).Distinct().OrderBy(x => x)),
                     AsOf = g.Key,
                     Lines = lines.Where(kv => ids.Contains(kv.Key)).SelectMany(kv => kv.Value).ToList(),
                 });
             }
+            keep.AddRange(untraced.Select(u => u.A));
+            items.AddRange(untraced.Select(u => u.Item));
             return (null, new BackdatedPlan(keep, requests, items));
         }
 

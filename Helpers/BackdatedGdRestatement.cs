@@ -15,35 +15,48 @@ namespace MyApp.Api.Helpers
     /// redistributed (three items, 31,917 off). The fix is to restate the item
     /// again on the SAME date with the sheet's lines plus the late GD's lines;
     /// this is the one definition of which items need it and what to send.
+    ///
+    /// The same happens after a VALUE CORRECTION (a value-only Revaluation with
+    /// no sheet lines) entered before the GD but dated on or after it (AY,
+    /// 2026-10-22): a write-down meant for stock already sold landed on the late
+    /// GD's 5,400 units and valued them at nil. Such a correction is an anchor
+    /// too; what it "matched" is what the walk held right after it without the
+    /// late GDs (<see cref="HeldLinesAsync"/>).
     /// </summary>
     public static class BackdatedGdRestatement
     {
-        /// <summary>An item's latest stock-sheet match: the Revaluation movement
-        /// that owns its <c>StockRestatementLines</c>.</summary>
-        public sealed record Restatement(int MovementId, DateTime Date, DateTime CreatedAt);
+        /// <summary>An item's latest value anchor: a stock-sheet match (the Revaluation
+        /// movement that owns its <c>StockRestatementLines</c>) or a value correction
+        /// (a Revaluation that moved value and has no lines).</summary>
+        public sealed record Restatement(int MovementId, DateTime Date, DateTime CreatedAt, bool IsSheetMatch = true);
 
         /// <summary>A late GD line still missing from that match.</summary>
         public sealed record LateLine(
             int ItemTypeId, string GdNumber, DateTime GdDate, DateTime? ClaimMonth, int SourceRow,
-            string? Description, decimal Quantity, decimal ValueExcludingTax, decimal SalesTaxRate);
+            string? Description, decimal Quantity, decimal ValueExcludingTax, decimal SalesTaxRate, int MovementId = 0);
 
         public sealed record Affected(int ItemTypeId, Restatement Restatement, List<LateLine> Lines);
 
-        /// <summary>Latest match per item (by date, then id), optionally for some items only.</summary>
+        /// <summary>Latest anchor per item (by date, then id), optionally for some items only.</summary>
         public static async Task<Dictionary<int, Restatement>> LatestAsync(
             AppDbContext db, int companyId, ICollection<int>? itemTypeIds = null)
         {
             var q = db.StockMovements.AsNoTracking()
                 .Where(m => m.CompanyId == companyId && m.SourceType == StockMovementSourceType.Revaluation
-                         && db.StockRestatementLines.Any(r => r.StockMovementId == m.Id));
+                         && (db.StockRestatementLines.Any(r => r.StockMovementId == m.Id)
+                             || (m.ValueAdjustmentExcludingTax != null && m.ValueAdjustmentExcludingTax != 0m)));
             if (itemTypeIds != null) q = q.Where(m => itemTypeIds.Contains(m.ItemTypeId));
-            var rows = await q.Select(m => new { m.Id, m.ItemTypeId, m.MovementDate, m.CreatedAt }).ToListAsync();
+            var rows = await q.Select(m => new
+            {
+                m.Id, m.ItemTypeId, m.MovementDate, m.CreatedAt,
+                Sheet = db.StockRestatementLines.Any(r => r.StockMovementId == m.Id),
+            }).ToListAsync();
             return rows.GroupBy(r => r.ItemTypeId).ToDictionary(
                 g => g.Key,
                 g =>
                 {
                     var r = g.OrderByDescending(x => x.MovementDate).ThenByDescending(x => x.Id).First();
-                    return new Restatement(r.Id, r.MovementDate.Date, r.CreatedAt);
+                    return new Restatement(r.Id, r.MovementDate.Date, r.CreatedAt, r.Sheet);
                 });
         }
 
@@ -63,7 +76,7 @@ namespace MyApp.Api.Helpers
                       && m.SourceType == StockMovementSourceType.ImportConsignment
                 select new
                 {
-                    m.ItemTypeId, m.MovementDate, m.CreatedAt, m.Quantity,
+                    MovementId = m.Id, m.ItemTypeId, m.MovementDate, m.CreatedAt, m.Quantity,
                     c.GdNumber, c.GdDate, l.ClaimMonth, l.SourceRow, l.DescriptionOnSheet,
                     l.SellingValueExcludingTax, l.SalesTaxRate,
                 }).ToListAsync();
@@ -78,9 +91,44 @@ namespace MyApp.Api.Helpers
                     .OrderBy(a => a.GdDate).ThenBy(a => a.SourceRow)
                     .Select(a => new LateLine(a.ItemTypeId, a.GdNumber, a.GdDate.Date,
                         a.ClaimMonth, a.SourceRow, a.DescriptionOnSheet, a.Quantity,
-                        Math.Round(a.SellingValueExcludingTax, 2), a.SalesTaxRate))
+                        Math.Round(a.SellingValueExcludingTax, 2), a.SalesTaxRate, a.MovementId))
                     .ToList()))
                 .ToList();
+        }
+
+        /// <summary>
+        /// What a value correction left the item holding, as restatement lines:
+        /// the FIFO walk's pools on the correction's date, without the late GD
+        /// arrivals. Null when the company is not on FIFO by GD, or when stock
+        /// not traced to a GD is held (a restatement line needs a GD number):
+        /// that item needs restating from a stock sheet.
+        /// </summary>
+        public static async Task<IReadOnlyList<FifoRestatementLineDto>?> HeldLinesAsync(
+            AppDbContext db, int companyId, Affected a)
+        {
+            var id = a.ItemTypeId;
+            var late = a.Lines.Select(l => l.MovementId).ToHashSet();
+            var cutoff = a.Restatement.Date.AddDays(1);
+            var costing = await StockCosting.LoadAsync(db, companyId, new List<int> { id });
+            if (!costing.IsFifo) return null;
+            var o = await db.OpeningStockBalances.AsNoTracking()
+                .Where(x => x.CompanyId == companyId && x.ItemTypeId == id)
+                .GroupBy(x => x.ItemTypeId)
+                .Select(g => new { Q = g.Sum(x => x.Quantity), V = g.Sum(x => x.ValueExcludingTax), A = g.Sum(x => x.ActualCostExcludingTax), R = g.Max(x => x.SalesTaxRate) })
+                .FirstOrDefaultAsync();
+            var moves = await db.StockMovements.AsNoTracking()
+                .Where(m => m.CompanyId == companyId && m.ItemTypeId == id && m.MovementDate < cutoff && !late.Contains(m.Id))
+                .ToListAsync();
+            var walk = costing.Detailed(id, o?.Q ?? 0m, o?.V ?? 0m, o?.A ?? 0m, o?.R ?? 0m, moves);
+            var held = walk.Pools.Where(p => p.Quantity > 0.0001m).ToList();
+            if (held.Any(p => string.IsNullOrWhiteSpace(p.GdNumber))) return null;
+            return held.Select(p => new FifoRestatementLineDto
+            {
+                ItemTypeId = id, GdNumber = p.GdNumber!.Trim(), GdDate = p.OrderDate?.Date,
+                ClaimMonth = p.ClaimMonth is { } cm ? new DateTime(cm.Year, cm.Month, 1) : null,
+                SourceRow = p.Tiebreak, Description = p.Description, Quantity = p.Quantity,
+                ValueExcludingTax = Math.Round(p.Value, 2, MidpointRounding.AwayFromZero), SalesTaxRate = p.Rate,
+            }).ToList();
         }
 
         /// <summary>

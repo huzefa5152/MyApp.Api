@@ -523,6 +523,65 @@ def main():
         check("running it again changes nothing", r.ok and not r.json().get("committed")
               and near(onhand(api, h, cid, iid)["valueExcludingTax"], 2150), r.text[:300])
 
+        # ── 12d. A late GD dated before a value correction ──────────────
+        # (AY, 2026-10-22): stock written down to nothing, the sale behind it
+        # entered later with an earlier date, then a GD dated before the
+        # write-down. The walk spent the write-down on the GD's units and valued
+        # them at nil. The correction is an anchor like a sheet match.
+        print("\n-- 12d. A late GD dated before a value correction --")
+        r = call("POST", f"{api}/stock/adjust", h, json={
+            "companyId": cid, "itemTypeId": iid, "mode": "set",
+            "targetQuantity": 5, "targetValueExcludingTax": 0,
+            "movementDate": today_d.isoformat(), "notes": "write the old stock off"})
+        check("setup: the item is written down to 5 worth nothing", r.ok
+              and near(onhand(api, h, cid, iid)["valueExcludingTax"], 0), r.text[:200])
+        r = call("POST", f"{api}/stock/adjust", h, json={
+            "companyId": cid, "itemTypeId": iid, "mode": "delta", "delta": -5,
+            "movementDate": yesterday, "notes": "the sale behind the write-down, entered late"})
+        check("setup: the 5 leave, dated yesterday", r.ok and near(onhand(api, h, cid, iid)["onHand"], 0, 1e-4), r.text[:200])
+        r = call("GET", f"{api}/stock/company/{cid}/backdated-gds", h)
+        check("nothing is listed before the GD", r.ok and r.json() == [], r.text[:300])
+
+        late_gd2 = f"LATE2-{tag}"
+        r = requests.post(f"{api}/spreadsheet-import/gd-costing/preview-manual", headers=h, timeout=60,
+                          params={"companyId": cid, "mode": "new-arrivals"}, json={"lines": [{
+                              "gdNumber": late_gd2, "gdDate": yesterday, "description": name,
+                              "hsCode": "8481.1000", "quantity": 4, "unit": unit, "assessedValue": 1000,
+                              "customsDuty": 0, "acd": 0, "regulatoryDuty": 0, "others": 0, "salesTaxRate": 18,
+                              "astRate": 3, "incomeTaxRate": 6, "addOnProfit": 0, "sellingValue": 2000}]})
+        prev = r.json() if r.ok else {}
+        check("the GD preview flags the line as dated before the correction",
+              r.ok and (prev.get("lines") or [{}])[0].get("stockSheetMatchedOn") and prev.get("stockSheetMatchCount") == 1,
+              r.text[:400])
+        r = call("POST", f"{api}/spreadsheet-import/gd-costing/commit", h, json={
+            "companyId": cid, "fileSha256": prev.get("fileSha256"), "fileName": prev.get("fileName"),
+            "fileSizeBytes": prev.get("fileSizeBytes"), "importProfileId": prev.get("importProfileId"),
+            "profileVersion": prev.get("profileVersion"), "lines": prev.get("lines", []),
+            "createMissingStock": True, "mode": "new-arrivals"})
+        res = r.json() if r.ok else {}
+        check("the GD commits and reports the item", r.ok and res.get("stockSheetMatchItems") == 1, r.text[:400])
+        broken = onhand(api, h, cid, iid)
+        check("4 on hand but not worth the GD's 2,000 (the write-down ate it)",
+              near(broken["onHand"], 4, 1e-4) and not near(broken["valueExcludingTax"], 2000),
+              f"{broken['onHand']} / {broken['valueExcludingTax']}")
+        r = call("GET", f"{api}/stock/company/{cid}/backdated-gds", h)
+        lst = r.json() if r.ok else []
+        check("the item is listed as after a value correction, with the late GD",
+              len(lst) == 1 and lst[0]["itemTypeId"] == iid and lst[0].get("afterValueCorrection") is True
+              and lst[0]["lines"][0]["gdNumber"] == late_gd2, r.text[:300])
+        r = call("POST", f"{api}/stock/company/{cid}/backdated-gds/restate", h, json={"commit": False})
+        pv = r.json() if r.ok else {}
+        check("the check previews 2,000 and can apply",
+              r.ok and pv.get("canCommit") and near(pv.get("valueAfter"), 2000), r.text[:300])
+        r = call("POST", f"{api}/stock/company/{cid}/backdated-gds/restate", h, json={"commit": True})
+        check("the update commits", r.ok and r.json().get("committed"), r.text[:300])
+        fixed = onhand(api, h, cid, iid)
+        check("now 4 worth 2,000: what the GD brought in",
+              near(fixed["onHand"], 4, 1e-4) and near(fixed["valueExcludingTax"], 2000),
+              f"{fixed['onHand']} / {fixed['valueExcludingTax']}")
+        r = call("GET", f"{api}/stock/company/{cid}/backdated-gds", h)
+        check("nothing is listed afterwards", r.ok and r.json() == [], r.text[:300])
+
         # ── 12b. An empty company may still choose ───────────────────────
         print("\n-- 12b. A company that has never held stock may still choose the average --")
         r = call("POST", f"{api}/companies", h, json={

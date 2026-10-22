@@ -9,7 +9,8 @@ const money = (n) => Number(n || 0).toLocaleString(undefined, { minimumFractionD
 const day = (d) => (d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "");
 
 /**
- * "A GD came in dated before your last stock-sheet match." Lists the items
+ * "A GD came in dated before your last stock-sheet match" -- or before a
+ * value correction made before it was entered. Lists the items
  * whose value is off for that reason and fixes them in one step: Check
  * (preview, writes nothing) then Update. Renders nothing when no item needs it
  * or the user cannot restate stock (stock.policy.manage).
@@ -64,11 +65,11 @@ export default function LateGdMatchPanel({ companyId, refreshKey, onDone }) {
         <MdWarning size={20} style={{ color: billColors.warn, flexShrink: 0 }} />
         <div style={{ minWidth: 0 }}>
           <div style={s.title}>
-            {items.length} item{items.length === 1 ? "" : "s"} got goods dated before the last stock-sheet match
+            {items.length} item{items.length === 1 ? "" : "s"} got goods dated before their last stock-sheet match or value correction
           </div>
           <div style={s.help}>
-            The match never had these units, so the value of these items is off. Quantities are right.
-            Add the GDs to the match to put the value right.
+            The match or correction was made before these units were on the books, so the value of
+            these items is off. Quantities are right. Add the GDs to put the value right.
           </div>
         </div>
       </div>
@@ -78,7 +79,7 @@ export default function LateGdMatchPanel({ companyId, refreshKey, onDone }) {
           <li key={it.itemTypeId} style={s.row}>
             <span style={s.name}>{it.itemTypeName}</span>
             <span style={s.sub}>
-              match of {day(it.matchedOn)} · {it.lines.map((l) => `${l.gdNumber} (${day(l.gdDate)}, ${Number(l.quantity).toLocaleString()} units)`).join(", ")}
+              {it.afterValueCorrection ? "value correction" : "match"} of {day(it.matchedOn)} · {it.lines.map((l) => `${l.gdNumber} (${day(l.gdDate)}, ${Number(l.quantity).toLocaleString()} units)`).join(", ")}
             </span>
           </li>
         ))}
@@ -106,7 +107,7 @@ export default function LateGdMatchPanel({ companyId, refreshKey, onDone }) {
         ) : (
           <>
             <button type="button" style={s.btn(billColors.teal, true)} disabled={busy || !preview.canCommit} onClick={() => run(true)}>
-              <MdCheckCircle size={18} /> {busy ? "Updating…" : "Add these GDs to the stock-sheet match"}
+              <MdCheckCircle size={18} /> {busy ? "Updating…" : "Add these GDs and put the value right"}
             </button>
             <button type="button" style={s.btn(billColors.blue, false)} disabled={busy} onClick={() => setPreview(null)}>Cancel</button>
           </>

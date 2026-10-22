@@ -385,6 +385,8 @@
         public int ItemTypeId { get; set; }
         public string ItemTypeName { get; set; } = "";
         public DateTime MatchedOn { get; set; }
+        /// <summary>The anchor is a value correction, not a stock-sheet match.</summary>
+        public bool AfterValueCorrection { get; set; }
         public List<BackdatedGdLineDto> Lines { get; set; } = new();
     }
 
