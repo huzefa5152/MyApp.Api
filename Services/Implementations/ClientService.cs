@@ -74,6 +74,8 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<ClientDto> CreateAsync(ClientDto dto)
         {
+            dto.Name = dto.Name?.Trim() ?? "";
+            await using var nameLock = await PartyNameLock.AcquireAsync(_context, "client", dto.CompanyId);
             if (await _repo.ExistsWithNameAsync(dto.Name, dto.CompanyId))
                 throw new InvalidOperationException("Client with this name already exists for this company.");
 
@@ -94,6 +96,7 @@ namespace MyApp.Api.Services.Implementations
             };
 
             var created = await _repo.CreateAsync(client);
+            if (nameLock != null) await nameLock.CommitAsync();
 
             // Attach to a Common Client group — find-or-create by NTN
             // (or normalised name fallback). Idempotent and runs after the
@@ -148,6 +151,8 @@ namespace MyApp.Api.Services.Implementations
                     // Same name-collision rule the per-company CreateAsync
                     // enforces — record as a skip instead of throwing so the
                     // remaining companies still get the row.
+                    dto.Name = dto.Name?.Trim() ?? "";
+                    await PartyNameLock.AcquireAsync(_context, "client", companyId); // joins the batch transaction
                     if (await _repo.ExistsWithNameAsync(dto.Name, companyId))
                     {
                         result.SkippedReasons.Add(
@@ -254,6 +259,8 @@ namespace MyApp.Api.Services.Implementations
             var client = await _repo.GetByIdAsync(dto.Id.Value);
             if (client == null) throw new KeyNotFoundException("Client not found.");
 
+            dto.Name = dto.Name?.Trim() ?? "";
+            await using var nameLock = await PartyNameLock.AcquireAsync(_context, "client", client.CompanyId);
             if (await _repo.ExistsWithNameAsync(dto.Name, client.CompanyId, dto.Id))
                 throw new InvalidOperationException("Client with this name already exists for this company.");
 
@@ -270,6 +277,7 @@ namespace MyApp.Api.Services.Implementations
 
             var hasInvoices = await _invoiceRepo.HasInvoicesForClientAsync(client.Id);
             await _repo.UpdateAsync(client);
+            if (nameLock != null) await nameLock.CommitAsync();
 
             // Re-evaluate Common Client grouping. NTN / Name might have
             // just changed, which moves the client from one group to

@@ -441,6 +441,8 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Manage bill challans + partial bills: leave lines out, merge-back, release paths, delivered-quantity restore, FBR lock, GL lock, receipts cover, tenant | `python scripts/test_partial_billing.py --base <url> --database <local *_Test db>` | `58/58 partial billing checks passed` |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
 | Bill / invoice numbering — Auto vs a hand-typed number, both create paths, per division + renumbering on edit | `python scripts/test_custom_bill_number.py` (add `--db "<conn>"` for the FBR-filed lock suite) | `52/52 checks passed` (4 skipped without `--db`) |
+| One customer / supplier per name per company: simultaneous saves, case and outer spaces, rename | `python scripts/test_party_name_guard.py --base <url>` | `8/8 party name guard checks passed` |
+| FBR purchase import creates one supplier per seller, even with many invoices from a new seller in one file | `python scripts/test_fbr_import_supplier_reuse.py --base <url>` | `10/10 FBR import supplier reuse checks passed` |
 | Stock item-type reflow (V1) | `python scripts/test_stock_itemtype_reflow.py` | `76/76 checks passed` |
 | Unreadable FBR token survives Company saves | `python scripts/test_fbr_token_unreadable_survives_save.py --db "<conn>"` | `22/22 checks passed` |
 | Inventory V2 lifecycle | `python scripts/test_stock_v2_lifecycle.py` | `29/29 checks passed` |
