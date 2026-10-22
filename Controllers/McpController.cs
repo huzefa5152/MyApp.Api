@@ -201,6 +201,7 @@ namespace MyApp.Api.Controllers
             AddOperationTools(list);
             AddLifecycleTools(list);
             AddAccountingWriteTools(list);
+            AddReportTools(list);
             AddImportWriteTools(list);
             return list;
         }

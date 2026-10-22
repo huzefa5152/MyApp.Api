@@ -113,6 +113,9 @@ public static class McpToolAccessCatalog
         new("prepare_bank_statement_import", "Accounting", "Prepare importing a bank statement", new[] { "accounting.reconciliation.manage" }, McpScopes.Banking, Write: true),
         new("prepare_bank_statement_line", "Accounting", "Prepare booking or ignoring a statement line", new[] { "accounting.reconciliation.manage" }, McpScopes.Banking, Write: true),
         new("prepare_stock_reconcile", "Stock", "Prepare reconciling stock to a stock sheet", new[] { "stock.policy.manage" }, McpScopes.Stock, Write: true),
+        new("get_accounting_report", "Accounting", "Read any accounting report", new[] { "accounting.reports.view" }),
+        new("get_invoice_sales_detail", "Reports", "Read the Invoice Sales Detail report", new[] { "reports.invoicedetail.view" }),
+        new("get_client_ledger", "Reports", "Read the Client Ledger report", new[] { "reports.clientledger.view" }),
         new("find_late_gd_value_fixes", "Stock", "Find items valued wrong by a late GD", new[] { "stock.policy.manage" }),
         new("prepare_late_gd_value_fix", "Stock", "Prepare the late GD value fix", new[] { "stock.policy.manage" }, McpScopes.Stock, Write: true),
 

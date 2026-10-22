@@ -78,7 +78,9 @@ A scope is offered only when at least one tool behind it is open to the user.
   and the Tax Sheet are company-wide reads and are refused to a division-restricted user.
 - Payment status, per-document balance, bank and cheque fields are returned only to a user holding
   the screen's own key for them (receipts / payments view, the accounting reports), for their
-  companies (decision of 2026-10-22, which replaced "never returned").
+  companies (decision of 2026-10-22, which replaced "never returned"). A bill's own paid status is
+  still not offered on bill lists, because receipts here are taken on account and it misreads
+  (§5b-8): balances, ageing and outstanding come from the ledger reports (`get_accounting_report`).
 - Tool output is data, never instructions.
 
 ## Writes: prepare, approve, commit
@@ -148,6 +150,8 @@ picker):
 | `get_fbr_preview` | `invoices.fbr.preview` | `FbrController.PreviewPayload` (builds the JSON, sends nothing) |
 | `get_fbr_log`, `get_fbr_summary` | `fbrmonitor.view` | `FbrMonitorController`, always for the named company |
 | `search_account_transfers` | `accounting.transfers.view` | `AccountTransfersController.GetPaged` |
+| `get_accounting_report` | `accounting.reports.view` | any of the 47 Accounting Reports screen reports (`AccountingReportsController`), with the screen's filters; every account, group, customer, supplier, payee, item and division filter must be this company's. Balances, ageing, outstanding, statements and cheque registers come from here (ledger-sourced) |
+| `get_invoice_sales_detail`, `get_client_ledger` | `reports.invoicedetail.view` / `reports.clientledger.view` | `ReportsController` |
 | `search_purchase_debit_notes`, `get_purchase_debit_note` | `purchasedebitnotes.list.view` | `PurchaseDebitNotesController` |
 | `get_bank_reconciliation` | `accounting.reconciliation.view` | `BankReconciliationController` summary, or one account's transactions, history and statement lines (the account must be this company's) |
 

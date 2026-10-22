@@ -376,6 +376,34 @@ if not r:
     call(T, "cancel_action", {"planId": json.loads(text)["planId"]})
 refused(T, "stock reconcile choosing B's item", "prepare_stock_reconcile", {"companyId": A, "asOf": TODAY, "rows": [{"sourceRow": 1, "itemNameOnSheet": "x", "balanceQuantity": "1", "balanceValueExcludingTax": "1", "chosenItemTypeId": bolt_b}]})
 
+# ── phase 4 ──────────────────────────────────────────────────────────
+print("\n== Phase 4: every accounting report, sales detail, client ledger ==")
+listed = set(tools(T))
+check("every phase 4 tool is listed", {"get_accounting_report", "get_invoice_sales_detail", "get_client_ledger"} <= listed)
+schema = next((x for x in fx.mcp(T, "tools/list")[1]["result"]["tools"] if x["name"] == "get_accounting_report"), {})
+reports = schema.get("inputSchema", {}).get("properties", {}).get("report", {}).get("enum", [])
+check("the report tool offers all 47 screen reports", len(reports) == 47, len(reports))
+needs_client = {"customer-ledger", "customer-statement"}
+needs_supplier = {"supplier-ledger", "supplier-statement"}
+broken = []
+for rep in reports:
+    extra = {"clientId": client_a} if rep in needs_client else {"supplierId": supplier_a} if rep in needs_supplier else {}
+    r, text = call(T, "get_accounting_report", {"companyId": A, "report": rep, "period": "thisyear", **extra})
+    if r:
+        broken.append((rep, text[:120]))
+check("every report answers for company A", not broken, broken)
+mine = read(T, "get_accounting_report", {"companyId": A, "report": "customer-balances", "period": "thisyear"})
+old = read(T, "get_customer_balances", {"companyId": A})
+check("customer balances agree with the existing balances tool", mine is not None and old is not None and
+      json.dumps(mine.get("totals", mine.get("total")), sort_keys=True, default=str) == json.dumps(old.get("totals", old.get("total")), sort_keys=True, default=str), (mine and list(mine)[:6], old and list(old)[:6]))
+refused(T, "a report for company B", "get_accounting_report", {"companyId": B, "report": "trial-balance"})
+refused(T, "a statement of B's customer", "get_accounting_report", {"companyId": A, "report": "customer-statement", "clientId": client_b})
+refused(T, "a ledger filtered on B's bank account", "get_accounting_report", {"companyId": A, "report": "bank-book", "accountId": bank_b})
+check("invoice sales detail answers for A", read(T, "get_invoice_sales_detail", {"companyId": A, "period": "thisyear"}) is not None)
+check("client ledger answers for A", read(T, "get_client_ledger", {"companyId": A, "year": date.today().year}) is not None)
+refused(T, "invoice sales detail for company B", "get_invoice_sales_detail", {"companyId": B, "period": "thisyear"})
+refused(T, "client ledger of B's customer", "get_client_ledger", {"companyId": A, "year": date.today().year, "clientId": client_b})
+
 fails = [r for r in results if not r[1]]
 print(f"\n{len(results) - len(fails)}/{len(results)} parity checks passed")
 sys.exit(1 if fails else 0)
