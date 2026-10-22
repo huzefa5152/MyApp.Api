@@ -99,10 +99,12 @@ user's agents have an hourly ceiling per tool (bills and purchase bills 10, GD c
 entries 10, receipts and payments 20, most others 30, claim months 50), counted per user so a
 second token does not reset it.
 
-**Never exposed:** FBR submission, deleting or voiding or cancelling any document, credit and debit
-notes, users / roles / companies, GL lock date and rebuild, the costing-method switch, FIFO and
-backdated restatement, stock reconcile, flow version, legacy / Manager imports, the customer-ledger
-import. Removing a GD **charge** is offered (it is a correction of the GD's landed cost).
+**Scope of the agent (decision of 2026-10-22).** An administrator's agent may do what the
+administrator can do on the screens, for the companies the user holds: including deleting,
+cancelling and voiding (scope `delete.write`), credit and debit notes, and filing with FBR (scope
+`fbr.submit`), each granted on its own and each shown as a plan a person approves. **Still never
+exposed:** GL lock date and rebuild, the costing-method switch, raw FIFO restatement, flow version,
+legacy / Manager imports, the customer-ledger import.
 
 ## Tools
 
@@ -141,6 +143,8 @@ picker):
 | `list_print_templates`, `get_print_template`, `get_print_contract` | `printtemplates.manage.view` (scope `templates.read`) | print template repository |
 | `get_document_print_data` | the document's print key (scope `documents.read`) | each document's print data service |
 | `validate_bill_fbr` | `invoices.fbr.validate` (scope `fbr.validate`, agent token, 30 per hour) | `IFbrService.ValidateInvoiceAsync` |
+| `get_fbr_preview` | `invoices.fbr.preview` | `FbrController.PreviewPayload` (builds the JSON, sends nothing) |
+| `get_fbr_log`, `get_fbr_summary` | `fbrmonitor.view` | `FbrMonitorController`, always for the named company |
 
 Writes (scope in brackets; the commit calls the service shown):
 
@@ -165,6 +169,13 @@ Writes (scope in brackets; the commit calls the service shown):
 | `prepare_opening_stock` (`stock.write`) | `stock.opening.manage` | `StockRecordService.UpsertOpeningBalanceAsync` (plan shows before and after) |
 | `prepare_late_gd_value_fix` (`stock.write`) | `stock.policy.manage` | `StockRestatementService.RestateLateGdsAsync`, the Stock screen's own fix, preview at prepare and commit at commit; takes only the company, the ERP works out every line; quantities never move. A GD committed through `prepare_gd_costing` re-matches its own late items by itself |
 | `prepare_journal_entry` (`journal.write`) | `accounting.journal.create` | `IJournalEntryService.CreateManualAsync`, or `UpdateManualAsync` with `journalEntryId` (manual entries only; balanced; bank and cash accounts refused, as by the service) |
+| `prepare_delete` (`delete.write`) | the screen's delete key for the kind (quote, sales order, challan, bill, purchase bill, goods receipt, receipt, payment, journal entry, withholding receipt, GD, LC, opening balance, customer, supplier, item) | that screen's own Delete action; its rules decide (a filed bill, a billed challan, stock still held are refused) |
+| `prepare_void` (`delete.write`) | `challans.manage.update` (cancel a challan) / `bills.manage.void` (void a bill; record a filed bill as withdrawn on FBR's portal) | `DeliveryChallansController.Cancel`, `InvoicesController.Cancel` / `MarkFbrCancelled` |
+| `prepare_quote_status`, `prepare_sales_order_status` (`quotes.write` / `orders.write`) | `.manage.update` | the screens' SetStatus |
+| `prepare_note` (`bills.write`) | `invoices.note.create` | `InvoicesController.Reverse` (full credit), `CreateNote` (credit / debit lines of this bill), `Supplement`; never sent to FBR |
+| `prepare_fbr_submit` (`fbr.submit`) | `invoices.fbr.submit` | `FbrController.SubmitInvoice`; refused at prepare for a bill already filed; the plan warns the IRN cannot be undone |
+| `prepare_fbr_reset` (`fbr.submit`) | `invoices.fbr.reset` | `FbrController.ResetSubmission` (never contacts FBR; reason required) |
+| `prepare_fbr_exclusion` (`bills.write`) | `invoices.fbr.exclude` | `InvoicesController.SetFbrExcluded` |
 | `prepare_stock_adjustment` (`stock.write`) | `stock.adjust.create` | `StockController.AdjustStock` (company-level; the plan reminds that a sold item needs its bill) |
 | `prepare_withholding_receipt` (`receipts.write`) | `withholdingtax.manage.create`; with `withholdingReceiptId` `.update` | `IWithholdingTaxReceiptService.CreateAsync` / `UpdateAsync` |
 | `prepare_receipt_allocation` (`receipts.write`) | `accounting.receipts.create` | `IPaymentService.AllocateAsync` (lines), `AutoAllocateAsync` (auto), `ApplyClientAdvancesAsync` (advances); every bill must be the receipt's customer's in this company |

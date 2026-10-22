@@ -199,6 +199,7 @@ namespace MyApp.Api.Controllers
             AddPrintTools(list);
             AddSalesWriteTools(list);
             AddOperationTools(list);
+            AddLifecycleTools(list);
             AddImportWriteTools(list);
             return list;
         }

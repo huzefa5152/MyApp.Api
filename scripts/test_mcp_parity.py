@@ -113,7 +113,10 @@ def latest(table, company):
     return one(f"SELECT TOP 1 Id FROM {table} WHERE CompanyId = {company} ORDER BY Id DESC")
 
 # quotation edit
-q_a, q_b = latest("SalesQuotes", A), latest("SalesQuotes", B)
+run(T, "quotation to edit", "prepare_quote", {"companyId": A, "clientId": client_a, "notes": "mcpp edit me",
+    "items": [{"description": "first", "quantity": "1", "unit": "Pcs", "unitPrice": "600", "itemTypeId": bolt_a}]})
+q_a = one(f"SELECT TOP 1 Id FROM SalesQuotes WHERE CompanyId = {A} AND Notes = 'mcpp edit me' ORDER BY Id DESC")
+q_b = latest("SalesQuotes", B)
 qd = read(T, "get_quote", {"companyId": A, "quoteId": q_a})
 line = (qd or {}).get("lines", {}).get("items", [{}])[0] if qd else {}
 run(T, "quotation edit", "prepare_quote", {"companyId": A, "quoteId": q_a, "clientId": client_a,
@@ -124,7 +127,10 @@ refused(T, "a line of another quotation", "prepare_quote", {"companyId": A, "quo
     "items": [{"id": one(f"SELECT TOP 1 Id FROM SalesQuoteItems WHERE SalesQuoteId = {q_b}"), "description": "x", "quantity": "1", "unit": "Pcs", "unitPrice": "1"}]})
 
 # sales order edit
-o_a, o_b = latest("SalesOrders", A), latest("SalesOrders", B)
+run(T, "sales order to edit", "prepare_sales_order", {"companyId": A, "clientId": client_a, "notes": "mcpp edit me",
+    "items": [{"description": "first", "quantity": "1", "unit": "Pcs", "unitPrice": "600", "itemTypeId": bolt_a}]})
+o_a = one(f"SELECT TOP 1 Id FROM SalesOrders WHERE CompanyId = {A} AND Notes = 'mcpp edit me' ORDER BY Id DESC")
+o_b = latest("SalesOrders", B)
 od = read(T, "get_sales_order", {"companyId": A, "salesOrderId": o_a})
 oline = (od or {}).get("lines", {}).get("items", [{}])[0] if od else {}
 run(T, "sales order edit", "prepare_sales_order", {"companyId": A, "salesOrderId": o_a, "clientId": client_a,
@@ -225,6 +231,81 @@ refused(T, "adjust B's item", "prepare_stock_adjustment", {"companyId": A, "item
 for tool, args in [("get_stock_values", {}), ("get_stock_movements", {}), ("get_stock_tie_out", {}), ("search_withholding_receipts", {}),
                    ("get_stock_gd_details", {"itemTypeId": bolt_b})]:
     refused(T, f"{tool} for company B", tool, {"companyId": B, **args})
+
+# ── phase 2 ──────────────────────────────────────────────────────────
+print("\n== Phase 2: delete, cancel, status, notes, FBR ==")
+listed = set(tools(T))
+phase2 = {"prepare_delete", "prepare_void", "prepare_quote_status", "prepare_sales_order_status", "prepare_note",
+          "get_fbr_preview", "prepare_fbr_submit", "prepare_fbr_reset", "prepare_fbr_exclusion", "get_fbr_log", "get_fbr_summary"}
+check("every phase 2 tool is listed", phase2 <= listed, sorted(phase2 - listed))
+
+# delete: a quotation made for the purpose
+run(T, "throwaway quotation", "prepare_quote", {"companyId": A, "clientId": client_a, "notes": "mcpp delete me",
+    "items": [{"description": "to delete", "quantity": "1", "unit": "Pcs", "unitPrice": "1", "itemTypeId": bolt_a}]})
+dq = one(f"SELECT TOP 1 Id FROM SalesQuotes WHERE CompanyId = {A} AND Notes = 'mcpp delete me' ORDER BY Id DESC")
+plan, text = prepare(T, "prepare_delete", {"companyId": A, "kind": "quote", "id": dq})
+check("delete prepares and saves nothing", plan and one(f"SELECT COUNT(*) FROM SalesQuotes WHERE Id = {dq}") == 1, text)
+res, text = commit(T, plan) if plan else (None, text)
+check("delete removes the quotation", res and one(f"SELECT COUNT(*) FROM SalesQuotes WHERE Id = {dq}") == 0, text)
+refused(T, "delete B's quotation", "prepare_delete", {"companyId": A, "kind": "quote", "id": q_b})
+refused(T, "delete B's customer", "prepare_delete", {"companyId": A, "kind": "client", "id": client_b})
+refused(T, "delete B's item", "prepare_delete", {"companyId": A, "kind": "item_type", "id": bolt_b})
+refused(T, "delete B's GD", "prepare_delete", {"companyId": A, "kind": "gd", "id": latest("ImportConsignments", B)})
+
+# quote and order status
+run(T, "quotation marked Sent", "prepare_quote_status", {"companyId": A, "quoteId": q_a, "status": "Sent"})
+check("the quotation is Sent", val(f"SELECT Status FROM SalesQuotes WHERE Id = {q_a}") == "Sent")
+refused(T, "status of B's quotation", "prepare_quote_status", {"companyId": A, "quoteId": q_b, "status": "Sent"})
+refused(T, "status of B's sales order", "prepare_sales_order_status", {"companyId": A, "salesOrderId": o_b, "status": "Closed"})
+
+# cancel a challan made for the purpose
+run(T, "throwaway challan", "prepare_challan", {"companyId": A, "clientId": client_a, "deliveryDate": TODAY, "site": "mcpp cancel me",
+    "items": [{"description": "to cancel", "quantity": "1", "unit": "Pcs", "itemTypeId": bolt_a}]})
+cc = one(f"SELECT TOP 1 Id FROM DeliveryChallans WHERE CompanyId = {A} AND Site = 'mcpp cancel me' ORDER BY Id DESC")
+run(T, "challan cancelled", "prepare_void", {"companyId": A, "kind": "challan", "id": cc})
+check("the challan is Cancelled", val(f"SELECT Status FROM DeliveryChallans WHERE Id = {cc}") == "Cancelled")
+refused(T, "cancel B's challan", "prepare_void", {"companyId": A, "kind": "challan", "id": c_b})
+
+# a bill made for the purpose: credit note, exclusion, void
+run(T, "throwaway bill", "prepare_bill", {"companyId": A, "clientId": client_a, "paymentTerms": "mcpp note me",
+    "items": [{"description": "to note", "quantity": "2", "unit": "Pcs", "unitPrice": "500", "itemTypeId": bolt_a}]})
+nb = one(f"SELECT TOP 1 Id FROM Invoices WHERE CompanyId = {A} AND PaymentTerms = 'mcpp note me' ORDER BY Id DESC")
+nline = one(f"SELECT TOP 1 Id FROM InvoiceItems WHERE InvoiceId = {nb}")
+notes_before = one(f"SELECT COUNT(*) FROM Invoices WHERE OriginalInvoiceId = {nb}")
+r = run(T, "credit note for one unit", "prepare_note", {"companyId": A, "invoiceId": nb, "mode": "credit", "reason": "Goods returned",
+        "lines": [{"invoiceItemId": nline, "quantity": "1"}]})
+check("a note now points at the bill", one(f"SELECT COUNT(*) FROM Invoices WHERE OriginalInvoiceId = {nb}") == notes_before + 1, r)
+refused(T, "note on B's bill", "prepare_note", {"companyId": A, "invoiceId": b_b, "mode": "reverse"})
+refused(T, "note with another bill's line", "prepare_note", {"companyId": A, "invoiceId": nb, "mode": "credit",
+        "lines": [{"invoiceItemId": one(f"SELECT TOP 1 Id FROM InvoiceItems WHERE InvoiceId = {b_a}"), "quantity": "1"}]})
+run(T, "bill excluded from FBR", "prepare_fbr_exclusion", {"companyId": A, "invoiceId": b_a, "excluded": True})
+check("the bill is excluded", val(f"SELECT CAST(IsFbrExcluded AS INT) FROM Invoices WHERE Id = {b_a}") == "1")
+run(T, "bill included again", "prepare_fbr_exclusion", {"companyId": A, "invoiceId": b_a, "excluded": False})
+refused(T, "exclusion on B's bill", "prepare_fbr_exclusion", {"companyId": A, "invoiceId": b_b, "excluded": True})
+
+# FBR: preview answers (or the ERP's own pre-check message), submit prepares only, B refused everywhere
+r, text = call(T, "get_fbr_preview", {"companyId": A, "invoiceId": b_a})
+check("FBR preview answers without sending (or names what is missing)", not r or "denied" not in text.lower(), text)
+plan, text = prepare(T, "prepare_fbr_submit", {"companyId": A, "invoiceId": b_a})
+check("FBR submit prepares a plan with the warning (not committed here)", plan and "cannot be undone" in json.dumps(plan), text)
+if plan:
+    call(T, "cancel_action", {"planId": plan["planId"]})
+refused(T, "FBR preview of B's bill", "get_fbr_preview", {"companyId": A, "invoiceId": b_b})
+refused(T, "FBR submit of B's bill", "prepare_fbr_submit", {"companyId": A, "invoiceId": b_b})
+refused(T, "FBR reset of B's bill", "prepare_fbr_reset", {"companyId": A, "invoiceId": b_b, "mode": "retry", "reason": "x"})
+check("FBR log answers for A", read(T, "get_fbr_log", {"companyId": A}) is not None)
+check("FBR summary answers for A", read(T, "get_fbr_summary", {"companyId": A}) is not None)
+refused(T, "FBR log for company B", "get_fbr_log", {"companyId": B})
+refused(T, "FBR summary for company B", "get_fbr_summary", {"companyId": B})
+
+run(T, "throwaway bill voided", "prepare_void", {"companyId": A, "kind": "bill", "id": nb})
+check("the bill is cancelled", val(f"SELECT CAST(IsCancelled AS INT) FROM Invoices WHERE Id = {nb}") == "1")
+refused(T, "void B's bill", "prepare_void", {"companyId": A, "kind": "bill", "id": b_b})
+
+# a token without the delete scope cannot even prepare a deletion
+nodel = fx.token_for(jw, [A], scopes=[x for x in fx.http("GET", "/api/mcp/me/status", jw)[1]["scopesAvailable"] if x not in ("delete.write", "fbr.submit")])
+refused(nodel, "deletion with a token lacking delete.write", "prepare_delete", {"companyId": A, "kind": "quote", "id": q_a})
+refused(nodel, "FBR submit with a token lacking fbr.submit", "prepare_fbr_submit", {"companyId": A, "invoiceId": b_a})
 
 fails = [r for r in results if not r[1]]
 print(f"\n{len(results) - len(fails)}/{len(results)} parity checks passed")
