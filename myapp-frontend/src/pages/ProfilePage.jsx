@@ -14,6 +14,8 @@ import {
   MdDelete,
   MdCloudUpload,
   MdSmartToy,
+  MdManageAccounts,
+  MdAdminPanelSettings,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { updateProfile, changePassword, uploadAvatar, removeAvatar } from "../api/authApi";
@@ -80,9 +82,9 @@ export default function ProfilePage() {
     setSearchParams(next);
   };
   const tabs = [["profile", "Profile", MdAccountCircle],
-    ...(canAdministerMcp ? [["mcp-catalog", "Manage MCP Access", MdShield]] : []),
     ["mcp-connections", "MCP Connections", MdSmartToy],
-    ...(canAdministerMcp ? [["mcp-admin", "MCP Administration", MdShield]] : [])];
+    ...(canAdministerMcp ? [["mcp-catalog", "Manage MCP Access", MdManageAccounts],
+      ["mcp-admin", "MCP Administration", MdAdminPanelSettings]] : [])];
   const fileRef = useRef(null);
 
   // Edit profile state
@@ -306,7 +308,8 @@ export default function ProfilePage() {
   const hasServerAvatar = !!user?.avatarPath && !previewUrl;
 
   return (
-    <div style={{ maxWidth: 800, margin: "0 auto" }}>
+    // MCP tabs hold tables and catalogs, so they get the full content width.
+    <div style={{ maxWidth: tab === "profile" ? 800 : 1200, margin: "0 auto", minWidth: 0 }}>
       {/* Page header */}
       <div style={styles.pageHeader}>
         <div style={styles.headerIcon}>
@@ -314,11 +317,11 @@ export default function ProfilePage() {
         </div>
         <div>
           <h2 style={styles.pageTitle}>My Profile</h2>
-          <p style={styles.pageSubtitle}>Manage your account settings</p>
+          <p style={styles.pageSubtitle}>{tabs.length > 2 ? "Manage your account, AI connections and MCP access" : "Manage your account settings and AI connections"}</p>
         </div>
       </div>
 
-      <div role="tablist" aria-label="Profile sections" style={styles.tabs}>
+      <div role="tablist" data-scroll-tabs="" aria-label="Profile sections" style={styles.tabs}>
         {tabs.map(([key, label, Icon]) => (
           <button key={key} role="tab" id={`profile-tab-${key}`} aria-selected={tab === key} aria-controls={`profile-panel-${key}`}
             style={{ ...styles.tab, ...(tab === key ? styles.tabActive : {}) }} onClick={() => setTab(key)}>
@@ -585,8 +588,9 @@ export default function ProfilePage() {
 }
 
 const styles = {
-  tabs: { display: "flex", flexWrap: "wrap", gap: "0.4rem", borderBottom: `1px solid ${colors.cardBorder}`, marginBottom: "1.25rem" },
-  tab: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.5rem 1.1rem", background: "transparent", color: colors.textSecondary, border: "none", borderBottom: "3px solid transparent", borderRadius: "8px 8px 0 0", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
+  // One scrollable row: four tabs never wrap into a ragged second line on a phone.
+  tabs: { display: "flex", gap: "0.25rem", overflowX: "auto", scrollbarWidth: "none", borderBottom: `1px solid ${colors.cardBorder}`, marginBottom: "1.25rem" },
+  tab: { flexShrink: 0, whiteSpace: "nowrap", minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.5rem 1rem", background: "transparent", color: colors.textSecondary, border: "none", borderBottom: "3px solid transparent", borderRadius: "8px 8px 0 0", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
   tabActive: { color: colors.blue, borderBottomColor: colors.blue, background: "rgba(13,71,161,0.06)" },
   pageHeader: {
     display: "flex",
