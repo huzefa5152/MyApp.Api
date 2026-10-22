@@ -293,6 +293,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+- **2026-10-22:** A company can no longer end up with two customers, or two suppliers, of one name. Simultaneous saves of one name (a double-click) both passed the duplicate check and both inserted; the check and the save now run under a per-company lock (`Helpers/PartyNameLock.cs`), names are stored trimmed, and a name that differs only by case or outer spaces is refused on create, copy to companies and rename. FBR purchase import no longer creates one supplier per invoice when a file has several invoices from a new seller: it re-checks the company by NTN, then name, before creating. Customer ledger import no longer creates two clients when a workbook lists one customer twice, or names a customer the company already has: the commit matches by the same normalised name as the preview. `scripts/test_party_name_guard.py` (8 checks), `scripts/test_fbr_import_supplier_reuse.py` (10 checks), and a new case in `scripts/test_spreadsheet_import.py`.
+
 > This project evolves across many focused sessions. **Every session that ships a
 > feature or bug fix appends a dated entry here (newest first)** — README is the
 > running, incremental record of the product's evolution. (See the rule in

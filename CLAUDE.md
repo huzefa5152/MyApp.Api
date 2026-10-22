@@ -2204,6 +2204,8 @@ them can be resolved from FBR.
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` (92 checks) |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
+| One customer / supplier per name per company: simultaneous saves, case and outer spaces, rename | `python scripts/test_party_name_guard.py --base <url>` | `8/8 party name guard checks passed` |
+| FBR purchase import creates one supplier per seller, even with many invoices from a new seller in one file | `python scripts/test_fbr_import_supplier_reuse.py --base <url>` | `10/10 FBR import supplier reuse checks passed` |
 | Bill / invoice numbering — Auto vs a hand-typed number, both create paths, per division + renumbering on edit | `python scripts/test_custom_bill_number.py` (add `--db "<conn>"` for the FBR-filed lock suite) | `53/53 checks passed` (5 skipped without `--db`) |
 | Admin scope isolation (seed / Administrator trees, Tenant Access, IDOR) | `python scripts/test_admin_scope_isolation.py` | `all checks passed` (currently `115/115`) |
 | FBR cancellation + reversal releases challans | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `26/26 checks passed` |

@@ -1003,6 +1003,30 @@ def main():
               lp4.get("clientsOutOfBalance") == 1 and lp4.get("canCommit") is False,
               f"outOfBalance={lp4.get('clientsOutOfBalance')} canCommit={lp4.get('canCommit')}")
 
+        # ── 11b. One customer listed twice is one client ────────────────
+        # Two index rows that normalise to one name ("Echo Mills" and "Echo
+        # Mills (Pvt) Ltd") used to create two clients, because the commit
+        # inserted every unmatched row blindly.
+        twice = ledger_workbook([
+            {"name": f"Echo Mills {tag}", "tab": f"ECHO {tag}", "opening": 0.0,
+             "rows": [(d1, None, "EE-1", 0, 500.0)]},
+            {"name": f"Echo Mills (Pvt) Ltd {tag}", "tab": f"ECHO PVT {tag}", "opening": 0.0,
+             "rows": [(d1, None, "EE-2", 0, 300.0)]},
+        ])
+        r = upload(ledger_preview, h, twice, "twice.xlsx", lform, {"companyId": company})
+        lp5 = r.json() if r.ok else {}
+        r = requests.post(ledger_commit, headers=h, timeout=600, json={
+            "companyId": company, "fileSha256": lp5.get("fileSha256"), "fileName": "twice.xlsx",
+            "fileSizeBytes": lp5.get("fileSizeBytes"), "openingDate": lp5.get("openingDate"),
+            "periodEnd": lp5.get("periodEnd"), "setGlCutover": False,
+            "clients": lp5.get("clients", []), "invoices": lp5.get("invoices", []), "receipts": lp5.get("receipts", [])})
+        res5 = r.json() if r.ok else {}
+        echo = [c for c in requests.get(f"{api}/clients/company/{company}", headers=h, timeout=60).json()
+                if c["name"].lower().startswith("echo mills")]
+        check("a customer listed twice in one workbook becomes one client",
+              r.ok and res5.get("clientsCreated") == 1 and res5.get("clientsReused") == 1 and len(echo) == 1,
+              f"http {r.status_code} created={res5.get('clientsCreated')} reused={res5.get('clientsReused')} rows={len(echo)}")
+
         # ── 12. Built-in layouts ────────────────────────────────────────
         # The product ships a layout per kind so a first import never starts
         # from a blank mapping form.

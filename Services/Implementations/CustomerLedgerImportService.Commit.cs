@@ -103,6 +103,17 @@ namespace MyApp.Api.Services.Implementations
             CustomerLedgerCommitDto dto, CustomerLedgerCommitResultDto result)
         {
             var map = new Dictionary<int, int>();
+            // A row the preview left unmatched may still name a customer this
+            // company already has, or one an earlier row of this same file just
+            // created (two index rows for one customer). Match both by the same
+            // normalised name the preview uses, so one customer is one client.
+            var known = (await _db.Clients.AsNoTracking()
+                    .Where(c => c.CompanyId == dto.CompanyId)
+                    .Select(c => new { c.Id, c.Name })
+                    .ToListAsync())
+                .GroupBy(c => Normalise(c.Name))
+                .Where(g => g.Key.Length > 0)
+                .ToDictionary(g => g.Key, g => g.Min(c => c.Id));
 
             foreach (var row in dto.Clients)
             {
@@ -122,7 +133,15 @@ namespace MyApp.Api.Services.Implementations
                     continue;
                 }
 
-                var name = Truncate(string.IsNullOrWhiteSpace(row.SheetName) ? row.IndexName : row.SheetName, 200);
+                var name = Truncate((string.IsNullOrWhiteSpace(row.SheetName) ? row.IndexName : row.SheetName).Trim(), 200);
+                var key = Normalise(name);
+                if (key.Length > 0 && known.TryGetValue(key, out var knownId))
+                {
+                    map[row.IndexRow] = knownId;
+                    result.ClientsReused++;
+                    continue;
+                }
+
                 var client = new Client
                 {
                     Name = name,
@@ -138,6 +157,7 @@ namespace MyApp.Api.Services.Implementations
                 await _db.SaveChangesAsync();
 
                 map[row.IndexRow] = client.Id;
+                if (key.Length > 0) known[key] = client.Id;
                 result.ClientsCreated++;
             }
 
