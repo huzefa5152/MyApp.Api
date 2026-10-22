@@ -4,6 +4,7 @@ import httpClient from "../api/httpClient";
 import { useAuth } from "../contexts/AuthContext";
 import { useConfirm } from "./ConfirmDialog";
 import McpCatalogAccessPanel from "./McpCatalogAccessPanel";
+import SearchableSelect from "./SearchableSelect";
 import "./McpCatalogAccessPanel.css";
 
 export default function McpAccessManagementPanel({ targetUserId }) {
@@ -11,7 +12,6 @@ export default function McpAccessManagementPanel({ targetUserId }) {
   const confirm = useConfirm();
   const [users, setUsers] = useState([]);
   const [selected, setSelected] = useState(targetUserId ? String(targetUserId) : "");
-  const [query, setQuery] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [companies, setCompanies] = useState(null);
@@ -34,7 +34,8 @@ export default function McpAccessManagementPanel({ targetUserId }) {
     return () => { alive = false; };
   }, [selected, user]);
   const account = users.find(u => String(u.id) === selected);
-  const filtered = users.filter(u => `${u.fullName} ${u.username}`.toLowerCase().includes(query.toLowerCase()) || String(u.id) === selected);
+  // One searchable picker: type a name or username and pick from the matches.
+  const options = users.map(u => ({ id: String(u.id), label: `${u.fullName || u.username} · @${u.username} · #${u.id}`, fullName: u.fullName || "", username: u.username || "" }));
   const choose = async id => {
     if (dirty && !await confirm({title:"Discard unsaved MCP settings?",message:"The current account has unsaved changes. Discard them before choosing another user?",variant:"warning",confirmText:"Discard changes"})) return;
     setDirty(false); setSelected(id);
@@ -47,12 +48,13 @@ export default function McpAccessManagementPanel({ targetUserId }) {
         <p>Choose a user, review their company access, then allow the AI actions they need. Only the seed administrator can configure these settings.</p></div>
     </div></div>
     {error && <p className="mcp-catalog-alert" role="alert">{error}</p>}
-    <div className="mcp-card mcp-picker">
-      <label className="mcp-catalog-search">Find a user<input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search name or username" /></label>
-      <label className="mcp-catalog-search">User receiving MCP access<select aria-label="User receiving MCP access" value={selected} onChange={e => choose(e.target.value)} disabled={loading}>
-        <option value="">{loading ? "Loading users…" : `Choose a user (${filtered.length})`}</option>
-        {filtered.map(u => <option key={u.id} value={u.id}>{u.fullName || u.username} · @{u.username} · #{u.id}</option>)}
-      </select></label>
+    <div className="mcp-card">
+      {/* A div, not a label: a label re-dispatches the click and closes the dropdown it just opened. */}
+      <div className="mcp-user-picker"><span className="mcp-label">User receiving MCP access</span>
+        <SearchableSelect items={options} value={selected} labelKey="label" searchKeys={["fullName", "username", "label"]}
+          loading={loading} allowClear={false} onChange={id => { if (id && id !== selected) choose(id); }}
+          placeholder={loading ? "Loading users…" : `Search by name or username (${users.length} users)`} />
+      </div>
     </div>
     {selected && !loading && !account && <p role="alert" className="mcp-catalog-alert">This user is unavailable. Choose another user.</p>}
     {account && <>
