@@ -77,9 +77,7 @@ lcs_rest = http("GET", f"/api/import-lcs/company/{A}", admin)[1]
 check("search_lcs equals the Letters of Credit screen", j(T, "search_lcs", {"companyId": A})["totalCount"] == len(lcs_rest))
 reg = j(T, "get_gd_register", {"companyId": A, "limit": 100})
 check("get_gd_register lists the GD lines with claim status", reg["totalCount"] >= len(d_rest["lines"]) and all("claimStatus" in r for r in reg["items"]), reg["totalCount"])
-s, it_rest = http("GET", f"/api/importtax/company/{A}/input-tax", admin)
-if s != 200:
-    s, it_rest = http("GET", f"/api/import-tax/company/{A}/input-tax", admin)
+s, it_rest = http("GET", f"/api/import-tax/company/{A}/input-tax", admin)
 it_mcp = j(T, "get_input_tax_worksheet", {"companyId": A})
 check("get_input_tax_worksheet equals the Import Tax Desk", s == 200 and len(it_mcp["months"]) == len(it_rest["months"])
       and all(near(m["payable"], r["payable"]) for m, r in zip(it_mcp["months"], it_rest["months"])), (s, str(it_rest)[:200]))
