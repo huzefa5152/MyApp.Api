@@ -104,7 +104,9 @@ administrator can do on the screens, for the companies the user holds: including
 cancelling and voiding (scope `delete.write`), credit and debit notes, and filing with FBR (scope
 `fbr.submit`), each granted on its own and each shown as a plan a person approves. **Still never
 exposed:** GL lock date and rebuild, the costing-method switch, raw FIFO restatement, flow version,
-legacy / Manager imports, the customer-ledger import.
+legacy / Manager imports, the customer-ledger import. A GD costing **spreadsheet** is not uploaded
+through MCP: the agent reads the sheet and sends its lines to `prepare_gd_costing`, which applies the
+same match and cost rules as the GD Costing screen.
 
 ## Tools
 
@@ -145,6 +147,9 @@ picker):
 | `validate_bill_fbr` | `invoices.fbr.validate` (scope `fbr.validate`, agent token, 30 per hour) | `IFbrService.ValidateInvoiceAsync` |
 | `get_fbr_preview` | `invoices.fbr.preview` | `FbrController.PreviewPayload` (builds the JSON, sends nothing) |
 | `get_fbr_log`, `get_fbr_summary` | `fbrmonitor.view` | `FbrMonitorController`, always for the named company |
+| `search_account_transfers` | `accounting.transfers.view` | `AccountTransfersController.GetPaged` |
+| `search_purchase_debit_notes`, `get_purchase_debit_note` | `purchasedebitnotes.list.view` | `PurchaseDebitNotesController` |
+| `get_bank_reconciliation` | `accounting.reconciliation.view` | `BankReconciliationController` summary, or one account's transactions, history and statement lines (the account must be this company's) |
 
 Writes (scope in brackets; the commit calls the service shown):
 
@@ -176,6 +181,10 @@ Writes (scope in brackets; the commit calls the service shown):
 | `prepare_fbr_submit` (`fbr.submit`) | `invoices.fbr.submit` | `FbrController.SubmitInvoice`; refused at prepare for a bill already filed; the plan warns the IRN cannot be undone |
 | `prepare_fbr_reset` (`fbr.submit`) | `invoices.fbr.reset` | `FbrController.ResetSubmission` (never contacts FBR; reason required) |
 | `prepare_fbr_exclusion` (`bills.write`) | `invoices.fbr.exclude` | `InvoicesController.SetFbrExcluded` |
+| `prepare_account_transfer` (`banking.write`) | `accounting.transfers.create` | `AccountTransfersController.Create` / `Update` (both accounts must be this company's) |
+| `prepare_purchase_debit_note` (`purchases.write`) | `purchasedebitnotes.manage.create`; with `purchaseDebitNoteId` `.update` | `PurchaseDebitNotesController.Create` / `Update` |
+| `prepare_bank_clear`, `prepare_bank_reconciliation_lock`, `prepare_bank_statement_import`, `prepare_bank_statement_line` (`banking.write`) | `accounting.reconciliation.manage` | `BankReconciliationController.SetPaymentCleared` / `SetTransferCleared` / `Lock`, `BankStatementController.Import` / `Categorize` / `Ignore`; every account, payment, transfer, line and party must be this company's |
+| `prepare_stock_reconcile` (`stock.write`) | `stock.policy.manage` (+ `stock.adjust.create` for quantity corrections, checked by the screen) | `StockController.PlanReconcile` at prepare (must be applicable), `ApplyReconcile` at commit; rows are the sheet's, chosen items must be this company's |
 | `prepare_stock_adjustment` (`stock.write`) | `stock.adjust.create` | `StockController.AdjustStock` (company-level; the plan reminds that a sold item needs its bill) |
 | `prepare_withholding_receipt` (`receipts.write`) | `withholdingtax.manage.create`; with `withholdingReceiptId` `.update` | `IWithholdingTaxReceiptService.CreateAsync` / `UpdateAsync` |
 | `prepare_receipt_allocation` (`receipts.write`) | `accounting.receipts.create` | `IPaymentService.AllocateAsync` (lines), `AutoAllocateAsync` (auto), `ApplyClientAdvancesAsync` (advances); every bill must be the receipt's customer's in this company |

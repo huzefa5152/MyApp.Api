@@ -18,9 +18,10 @@ export const SCOPE_INFO = {
   "payments.write": { label: "Record supplier payments", help: "Money paid to suppliers. Each payment is shown to you first." },
   "gds.write": { label: "Update import costing", help: "GD costing, charges, line corrections and claim months. Each change is shown to you first." },
   "lcs.write": { label: "Update letters of credit", help: "Add and edit letters of credit. Each change is shown to you first." },
-  "stock.write": { label: "Update stock", help: "Opening stock, stock adjustments and the late-GD value fix. Each change is shown to you first." },
+  "stock.write": { label: "Update stock", help: "Opening stock, stock adjustments, reconciling to your stock sheet and the late-GD value fix. Each change is shown to you first." },
   "journal.write": { label: "Create and edit journal entries", help: "Manual journal entries in the accounts. Each entry is shown to you first." },
   "delete.write": { label: "Delete and cancel documents", help: "Delete records, cancel challans and void bills, where the ERP allows it. Cannot be undone. Each one is shown to you first." },
+  "banking.write": { label: "Transfers and bank reconciliation", help: "Move money between your own bank and cash accounts, import bank statements, mark items cleared and close reconciliations. Each change is shown to you first." },
   "fbr.submit": { label: "File bills with FBR", help: "Submits bills to FBR with your company's token. FBR issues a legal invoice number that cannot be undone. Each bill is shown to you first." },
 };
 

@@ -307,6 +307,75 @@ nodel = fx.token_for(jw, [A], scopes=[x for x in fx.http("GET", "/api/mcp/me/sta
 refused(nodel, "deletion with a token lacking delete.write", "prepare_delete", {"companyId": A, "kind": "quote", "id": q_a})
 refused(nodel, "FBR submit with a token lacking fbr.submit", "prepare_fbr_submit", {"companyId": A, "invoiceId": b_a})
 
+# ── phase 3 ──────────────────────────────────────────────────────────
+print("\n== Phase 3: transfers, supplier debit notes, bank reconciliation, stock reconcile ==")
+listed = set(tools(T))
+phase3 = {"search_account_transfers", "prepare_account_transfer", "search_purchase_debit_notes", "get_purchase_debit_note",
+          "prepare_purchase_debit_note", "get_bank_reconciliation", "prepare_bank_clear", "prepare_bank_reconciliation_lock",
+          "prepare_bank_statement_import", "prepare_bank_statement_line", "prepare_stock_reconcile"}
+check("every phase 3 tool is listed", phase3 <= listed, sorted(phase3 - listed))
+
+def bank_accounts(company):
+    return [int(x) for x in sql(f"SELECT Id FROM Accounts WHERE CompanyId = {company} AND ControlType = 4 AND IsActive = 1 ORDER BY Id")]
+
+banks_a = bank_accounts(A)
+if len(banks_a) < 2:
+    group = one(f"SELECT AccountGroupId FROM Accounts WHERE Id = {banks_a[0]}")
+    fx.http("POST", f"/api/accounts/company/{A}", admin, {"name": "MCPP Second Bank", "accountGroupId": group, "isControlAccount": True, "controlType": "BankCash"})
+    banks_a = bank_accounts(A)
+bank_b = bank_accounts(B)[0]
+if check("company A has two bank/cash accounts for a transfer", len(banks_a) >= 2, banks_a):
+    run(T, "account transfer", "prepare_account_transfer", {"companyId": A, "fromAccountId": banks_a[0], "toAccountId": banks_a[1], "amount": "250", "description": "mcpp transfer"})
+    tr = one(f"SELECT TOP 1 Id FROM AccountTransfers WHERE CompanyId = {A} AND Description = 'mcpp transfer' ORDER BY Id DESC")
+    check("the transfer is on file", tr)
+    run(T, "account transfer edit", "prepare_account_transfer", {"companyId": A, "transferId": tr, "fromAccountId": banks_a[0], "toAccountId": banks_a[1], "amount": "275", "description": "mcpp transfer"})
+    check("it now reads 275", val(f"SELECT CAST(Amount AS DECIMAL(18,0)) FROM AccountTransfers WHERE Id = {tr}") == "275")
+    check("search_account_transfers finds it", tr in [x.get("id") for x in (read(T, "search_account_transfers", {"companyId": A}) or {}).get("items", [])])
+    run(T, "transfer marked cleared", "prepare_bank_clear", {"companyId": A, "kind": "transfer", "id": tr, "cleared": True, "clearedDate": TODAY})
+    refused(T, "transfer to B's bank account", "prepare_account_transfer", {"companyId": A, "fromAccountId": banks_a[0], "toAccountId": bank_b, "amount": "1"})
+    br = read(T, "get_bank_reconciliation", {"companyId": A, "bankAccountId": banks_a[0]})
+    check("bank reconciliation of an A account answers", br and "transactions" in br, br)
+    plan, text = prepare(T, "prepare_bank_reconciliation_lock", {"companyId": A, "bankAccountId": banks_a[0], "statementDate": TODAY, "statementBalance": "0"})
+    check("closing a reconciliation prepares (not committed here)", plan, text)
+    if plan:
+        call(T, "cancel_action", {"planId": plan["planId"]})
+    plan, text = prepare(T, "prepare_bank_statement_import", {"companyId": A, "bankAccountId": banks_a[0], "fileName": "s.csv", "csvText": "Date,Description,Amount\n2026-10-01,Test,100"})
+    check("a statement import prepares (not committed here)", plan, text)
+    if plan:
+        call(T, "cancel_action", {"planId": plan["planId"]})
+check("bank reconciliation summary answers for A", read(T, "get_bank_reconciliation", {"companyId": A}) is not None)
+refused(T, "bank reconciliation for company B", "get_bank_reconciliation", {"companyId": B})
+refused(T, "B's bank account through company A", "get_bank_reconciliation", {"companyId": A, "bankAccountId": bank_b})
+refused(T, "close a reconciliation on B's account", "prepare_bank_reconciliation_lock", {"companyId": A, "bankAccountId": bank_b, "statementDate": TODAY, "statementBalance": "0"})
+refused(T, "import a statement into B's account", "prepare_bank_statement_import", {"companyId": A, "bankAccountId": bank_b, "csvText": "x"})
+refused(T, "clear B's receipt", "prepare_bank_clear", {"companyId": A, "kind": "payment", "id": r_b, "cleared": True})
+refused(T, "a statement line that is not A's", "prepare_bank_statement_line", {"companyId": A, "lineId": 999999999, "action": "ignore"})
+
+# supplier debit note
+run(T, "supplier debit note", "prepare_purchase_debit_note", {"companyId": A, "supplierId": supplier_a, "notes": "mcpp debit",
+    "items": [{"description": "returned", "quantity": "1", "unit": "Pcs", "unitPrice": "400", "itemTypeId": bolt_a}]})
+dn = one(f"SELECT TOP 1 Id FROM PurchaseDebitNotes WHERE CompanyId = {A} AND Notes = 'mcpp debit' ORDER BY Id DESC")
+check("the debit note is on file", dn)
+check("get_purchase_debit_note answers", read(T, "get_purchase_debit_note", {"companyId": A, "purchaseDebitNoteId": dn}))
+check("search finds it", any(x.get("id") == dn for x in (read(T, "search_purchase_debit_notes", {"companyId": A}) or {}).get("items", [])))
+run(T, "supplier debit note edit", "prepare_purchase_debit_note", {"companyId": A, "purchaseDebitNoteId": dn, "supplierId": supplier_a,
+    "items": [{"description": "returned", "quantity": "2", "unit": "Pcs", "unitPrice": "400", "itemTypeId": bolt_a}]})
+supplier_b = one(f"SELECT TOP 1 Id FROM Suppliers WHERE CompanyId = {B} ORDER BY Id")
+refused(T, "debit note on B's supplier", "prepare_purchase_debit_note", {"companyId": A, "supplierId": supplier_b, "items": [{"description": "x", "quantity": "1", "unitPrice": "1"}]})
+refused(T, "debit notes of company B", "search_purchase_debit_notes", {"companyId": B})
+
+# stock reconcile: rows taken from the item's own GD pools, so the plan is a no-op
+pools = read(T, "get_stock_gd_details", {"companyId": A, "itemTypeId": bolt_a}) or []
+name_a = val(f"SELECT Name FROM ItemTypes WHERE Id = {bolt_a}")
+rows = [{"sourceRow": i + 1, "itemNameOnSheet": name_a, "lotRef": p.get("gdNumber"), "balanceQuantity": str(p.get("remainingQuantity") or 0),
+         "balanceValueExcludingTax": str(p.get("remainingValueExcludingTax") or p.get("remainingValue") or 0), "balanceSalesTaxRate": "18", "chosenItemTypeId": bolt_a}
+        for i, p in enumerate(pools) if (p.get("remainingQuantity") or 0) > 0]
+r, text = call(T, "prepare_stock_reconcile", {"companyId": A, "asOf": TODAY, "sourceFile": "mcpp sheet", "rows": rows or [{"sourceRow": 1, "itemNameOnSheet": name_a, "balanceQuantity": "0", "balanceValueExcludingTax": "0", "chosenItemTypeId": bolt_a}]})
+check("stock reconcile prepares a plan, or says what to resolve (never a denial)", "denied" not in text.lower(), text)
+if not r:
+    call(T, "cancel_action", {"planId": json.loads(text)["planId"]})
+refused(T, "stock reconcile choosing B's item", "prepare_stock_reconcile", {"companyId": A, "asOf": TODAY, "rows": [{"sourceRow": 1, "itemNameOnSheet": "x", "balanceQuantity": "1", "balanceValueExcludingTax": "1", "chosenItemTypeId": bolt_b}]})
+
 fails = [r for r in results if not r[1]]
 print(f"\n{len(results) - len(fails)}/{len(results)} parity checks passed")
 sys.exit(1 if fails else 0)

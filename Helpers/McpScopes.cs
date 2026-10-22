@@ -35,9 +35,11 @@ public static class McpScopes
     public const string Delete = "delete.write";
     /// <summary>Filing bills with FBR (a legal invoice number that cannot be undone), resetting a stuck filing.</summary>
     public const string FbrSubmit = "fbr.submit";
+    /// <summary>Account transfers, bank reconciliation and bank statements.</summary>
+    public const string Banking = "banking.write";
 
     public static readonly string[] Write =
-        { Clients, Suppliers, ItemTypes, Quotes, Orders, Challans, Bills, Purchases, Receipts, Payments, Gds, Lcs, Stock, Journal, Delete, FbrSubmit };
+        { Clients, Suppliers, ItemTypes, Quotes, Orders, Challans, Bills, Purchases, Receipts, Payments, Gds, Lcs, Stock, Journal, Delete, FbrSubmit, Banking };
     public static readonly string[] Implemented = new[] { Read, TemplatesRead, DocumentsRead, FbrValidate }.Concat(Write).ToArray();
 
     /// <summary>
