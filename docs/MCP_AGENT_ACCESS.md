@@ -123,6 +123,7 @@ picker):
 | `search_lcs` | `importcosting.lc.view` | `ImportLcService` |
 | `get_gd_register`, `get_input_tax_worksheet` | `importcosting.taxdesk.view` | `IImportTaxWorksheetService` |
 | `get_stock` | `stock.dashboard.view` | quantities only (opening + movements in the user's divisions) |
+| `find_late_gd_value_fixes` | `stock.policy.manage` | items whose value a late GD left wrong (the Stock screen's late-GD list); whole-company access needed |
 | `get_opening_stock` | `stock.opening.manage` | opening balances |
 | `sales_summary`, `tax_sheet_summary` | `reports.sales.view`, `reports.taxsheet.view` | `IReportService` |
 | `get_customer_balances`, `get_supplier_balances`, `get_trial_balance`, `get_profit_and_loss`, `get_balance_sheet`, `get_cash_book`, `get_aged_payables`, `get_party_ledger` | `accounting.reports.view` | `IAccountingReportService`, run as `AccountingReportsController` runs it |
@@ -152,6 +153,7 @@ Writes (scope in brackets; the commit calls the service shown):
 | `prepare_gd_claim_month` (`gds.write`) | `stock.opening.manage` | `StockRecordService.SetGdClaimMonthAsync` / `SetLineClaimMonthAsync` (first day of a month) |
 | `prepare_lc` (`lcs.write`) | `importcosting.lc.manage` | `ImportLcService.Create/Update/LinkAsync` |
 | `prepare_opening_stock` (`stock.write`) | `stock.opening.manage` | `StockRecordService.UpsertOpeningBalanceAsync` (plan shows before and after) |
+| `prepare_late_gd_value_fix` (`stock.write`) | `stock.policy.manage` | `StockController.RestateBackdatedGds`, the Stock screen's own action, preview at prepare and commit at commit; takes only the company, the ERP works out every line; quantities never move |
 | `prepare_journal_entry` (`journal.write`) | `accounting.journal.create` | `IJournalEntryService.CreateManualAsync` (balanced; bank and cash accounts refused, as by the service) |
 
 `StockRecordService` and `ImportLcService` hold the logic that used to live inside

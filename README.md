@@ -298,6 +298,12 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-10-22 — A late GD no longer hides behind a value correction
+
+- **A write-down entered before a GD can no longer swallow that GD's value.** When stock was written down and a GD dated earlier was entered afterwards, the write-down landed on the GD's units: on production one item showed its new GD's units worth nil, and the Inventory account ran short of the stock sheet by the GD's value. The late-GD check that already covered stock-sheet matches now covers value corrections too: the GD import warns, and the Stock page's late-GD panel puts the value right in one step.
+- **Agents can find and fix these.** Two MCP tools, `find_late_gd_value_fixes` and `prepare_late_gd_value_fix`, run the Stock page's own check and fix. The agent passes only the company; the ERP works out every line, and the fix still needs approval before it commits.
+- Pinned in `scripts/test_stock_fifo.py` suite 12d.
+
 ### 2026-10-21 — PO import and PO formats need a company you hold
 
 - **PO parsing and format samples now require a company, and check it.** Parsing a PO (PDF or pasted text) and uploading a sample on the PO Format screen matched against the saved formats of the company given, or of every company when none was given. The match comes back with its company and customer, so another tenant's names could be read. Both now refuse to run without a company and refuse one the user does not hold.

@@ -78,6 +78,8 @@ public static class McpToolAccessCatalog
         new("get_stock", "Stock", "Read stock quantities", new[] { "stock.dashboard.view" }),
         new("get_opening_stock", "Stock", "Read opening balances", new[] { "stock.opening.manage" }),
         new("prepare_opening_stock", "Stock", "Prepare an opening balance", new[] { "stock.opening.manage" }, McpScopes.Stock, Write: true),
+        new("find_late_gd_value_fixes", "Stock", "Find items valued wrong by a late GD", new[] { "stock.policy.manage" }),
+        new("prepare_late_gd_value_fix", "Stock", "Prepare the late GD value fix", new[] { "stock.policy.manage" }, McpScopes.Stock, Write: true),
 
         new("sales_summary", "Reports", "Read filed sales totals", new[] { "reports.sales.view" }),
         new("tax_sheet_summary", "Reports", "Read tax sheet totals", new[] { "reports.taxsheet.view" }),

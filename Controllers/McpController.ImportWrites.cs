@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
@@ -16,8 +17,9 @@ namespace MyApp.Api.Controllers
     ///
     /// GD costing, GD charges and corrections, claim months and opening balances are
     /// company-level inventory state: a division-restricted user is refused, as on the screens
-    /// (policy D2). Deleting a GD, switching the costing method, restating FIFO and reconciling
-    /// stock are deliberately not offered.
+    /// (policy D2). Deleting a GD, switching the costing method, restating FIFO to agent-supplied
+    /// lines and reconciling stock are deliberately not offered. The one restatement offered is
+    /// the late-GD fix, whose lines the server works out exactly as the Stock screen's button does.
     /// </summary>
     public partial class McpController
     {
@@ -135,7 +137,69 @@ namespace MyApp.Api.Controllers
                         idempotencyKey = IdemProp,
                     }, "companyId", "date", "lines"),
                     Build: BuildJournalAsync, PerHour: 10, Noun: "journal entries"),
+                new("find_late_gd_value_fixes", "Items whose stock VALUE is off because a GD dated on or before their last stock-sheet match or value correction was entered after it. Quantities are right. Fix with prepare_late_gd_value_fix.",
+                    Obj(new { companyId = CompanyProp }, "companyId"), Read: FindLateGdFixesAsync),
+                new("prepare_late_gd_value_fix", "Prepare putting right the value of every item find_late_gd_value_fixes lists: each is restated on its match or correction date with the late GD lines added, worked out by the ERP. Quantities never change. Nothing is saved until commit_action.",
+                    Obj(new { companyId = CompanyProp, idempotencyKey = IdemProp }, "companyId"),
+                    Build: BuildLateGdFixAsync, PerHour: 5, Noun: "late GD value fixes"),
             });
+        }
+
+        // ── late GD value fix ──────────────────────────────────────────────
+
+        /// <summary>The Stock screen's own controller, for the late-GD plan and restatement:
+        /// one definition of which items need it, what is sent, the transaction and the audit.</summary>
+        private StockController StockScreen()
+        {
+            var c = ActivatorUtilities.CreateInstance<StockController>(HttpContext.RequestServices);
+            c.ControllerContext = new ControllerContext { HttpContext = HttpContext };
+            return c;
+        }
+
+        private static T ScreenResult<T>(ActionResult<T> r) where T : class =>
+            r.Value ?? (r.Result as ObjectResult)?.Value as T
+            ?? throw new ToolError((r.Result as ObjectResult)?.Value is { } v
+                ? $"The stock screen refused: {JsonSerializer.Serialize(v)}" : "The stock screen gave no answer.");
+
+        private async Task<object> FindLateGdFixesAsync(JsonElement args)
+        {
+            await Need("stock.policy.manage");
+            var companyId = await CompanyArg(args);
+            await AssertDivisionWriteAsync(companyId, null);
+            var items = ScreenResult(await StockScreen().GetBackdatedGds(companyId));
+            return new
+            {
+                totalCount = items.Count,
+                items = items.Select(i => new
+                {
+                    i.ItemTypeId, i.ItemTypeName, anchor = i.AfterValueCorrection ? "value correction" : "stock-sheet match",
+                    anchorDate = Ymd(i.MatchedOn), lateGds = i.Lines.Select(l => new { l.GdNumber, gdDate = Ymd(l.GdDate), l.Quantity, l.ValueExcludingTax }),
+                }),
+                currency = "PKR",
+            };
+        }
+
+        private async Task<Built> BuildLateGdFixAsync(int companyId, JsonElement args)
+        {
+            await Need("stock.policy.manage");
+            await AssertDivisionWriteAsync(companyId, null);
+            var plan = ScreenResult(await StockScreen().RestateBackdatedGds(companyId, new BackdatedGdRestateRequestDto { Commit = false }));
+            if (plan.Items.Count == 0) throw new ToolError("Nothing to fix: every item is already valued with its late GDs.");
+            if (!plan.CanCommit)
+                throw new ToolError(string.Join("; ", plan.Items.Where(i => i.Error != null).Select(i => $"{i.ItemTypeName}: {i.Error}")));
+            var preview = new
+            {
+                items = plan.Items.Select(i => new { i.ItemTypeId, i.ItemTypeName, i.OnHand, valueNow = i.FifoValue, valueAfter = i.SheetValue }),
+                valueBefore = plan.ValueBefore, valueAfter = plan.ValueAfter, quantitiesChange = false, currency = "PKR",
+            };
+            return new Built(preview,
+                $"Add late GDs to {plan.Items.Count} item(s) in company {companyId}: value {plan.ValueBefore:N2} -> {plan.ValueAfter:N2}",
+                async () =>
+                {
+                    var done = ScreenResult(await StockScreen().RestateBackdatedGds(companyId, new BackdatedGdRestateRequestDto { Commit = true }));
+                    if (!done.Committed) throw new ToolError(done.Messages.FirstOrDefault() ?? "The late GD fix was not applied.");
+                    return ($"LateGdFix:{companyId}", done.Messages.FirstOrDefault() ?? "Late GDs added.");
+                });
         }
 
         // ── purchases ──────────────────────────────────────────────────────

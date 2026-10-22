@@ -100,7 +100,8 @@ T = fx.token_for(jw, [A])
 listed = tools(T)
 check("a write token lists every importer write tool",
       all(n in listed for n in ("prepare_client", "prepare_bill", "prepare_gd_costing", "prepare_gd_claim_month", "prepare_lc",
-                                 "prepare_opening_stock", "prepare_receipt", "prepare_supplier_payment", "prepare_journal_entry", "commit_action")),
+                                 "prepare_opening_stock", "prepare_receipt", "prepare_supplier_payment", "prepare_journal_entry", "commit_action",
+                                 "find_late_gd_value_fixes", "prepare_late_gd_value_fix")),
       sorted(n for n in listed if n.startswith("prepare_")))
 
 client_a = one(f"SELECT TOP 1 Id FROM Clients WHERE CompanyId = {A} ORDER BY Id")
@@ -290,6 +291,11 @@ plan, text = prepare(T, "prepare_opening_stock", {"companyId": A, "itemTypeId": 
 check("opening balance plan shows the before and after", plan and plan["details"]["replaces"] and plan["details"]["after"]["quantity"] == 150, text)
 res, text = commit(T, plan) if plan else (None, text)
 check("opening balance replaced through the stock screen's service", res and sql(f"SELECT CAST(Quantity AS DECIMAL(18,2)) FROM OpeningStockBalances WHERE CompanyId = {A} AND ItemTypeId = {item_a}") == ["150.00"], (before, text))
+refused, text = call(T, "find_late_gd_value_fixes", {"companyId": A})
+check("the late GD finder answers through the stock screen's plan", not refused and "totalCount" in text, text)
+if not refused and json.loads(text)["totalCount"] == 0:
+    refused, text = call(T, "prepare_late_gd_value_fix", {"companyId": A})
+    check("a late GD fix with nothing to fix is refused at prepare", refused and "Nothing to fix" in text, text)
 res = cycle(T, "journal entry", "prepare_journal_entry", {**je_args, "narration": f"MCP journal {RUN}"}, "JournalEntries", f"CompanyId = {A} AND Narration = 'MCP journal {RUN}'")
 refused, text = call(T, "prepare_journal_entry", {**je_args, "lines": [{"accountId": cash["accountId"], "debit": "10"}, {"accountId": other["accountId"], "credit": "9"}]})
 check("an unbalanced journal entry is refused", refused and "equal" in text, text)
@@ -321,6 +327,8 @@ cases = [
     ("quotation line with an item only B holds", "prepare_quote", {"companyId": A, "clientId": client_a, "items": [{**line[0], "itemTypeId": item_b_only}]}),
     ("update of B's customer", "prepare_client", {"companyId": A, "clientId": client_b, "phone": "1"}),
     ("anything in company B itself", "prepare_client", {"companyId": B, "name": "x"}),
+    ("late GD finder for company B", "find_late_gd_value_fixes", {"companyId": B}),
+    ("late GD fix in company B", "prepare_late_gd_value_fix", {"companyId": B}),
 ]
 for label, tool, args in cases:
     refused, text = call(T, tool, args)

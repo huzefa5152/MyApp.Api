@@ -1478,6 +1478,18 @@ GD panel and Excel export all say which GDs it took.
   (`StockSheetMatchedOn`) and the commit result counts the items
   (`StockSheetMatchItems`); `Components/stock/LateGdMatchPanel` is the one
   screen piece (GD import result + Stock page). Suite: `test_stock_fifo.py` 12c.
+- **A value correction is an anchor too** (AY, 2026-10-22). A value-only
+  Revaluation (no sheet lines) entered before a GD but dated on or after it
+  applies to the GD's units once the GD is entered: a write-down of stock
+  whose sale was entered later with an earlier date valued the late GD's
+  5,400 units at nil. `LatestAsync` takes the latest of sheet match OR value
+  correction; for a correction the "sheet" is the walk's pools on its date
+  without the late GDs (`HeldLinesAsync`), so the same plan, preview, panel and
+  audit fix it. An item holding stock not traced to a GD is listed with the
+  reason and blocks the commit -- restate it from a sheet. MCP:
+  `find_late_gd_value_fixes` / `prepare_late_gd_value_fix`, which call the Stock
+  screen's action itself and take no lines from the agent. Suite:
+  `test_stock_fifo.py` 12d.
 - **A bill's stock movement carries the BILL's date**, never the day it was
   typed. 18 movements saved before the re-dating guard did not;
   `FIFO_RESTATE_BACKDATED_BACKFILL_V1` (Program.cs) re-dated them once and
