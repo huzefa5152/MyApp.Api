@@ -156,6 +156,7 @@ export default function McpCatalogAccessPanel({ targetUserId, onSaved, onDirtyCh
 
   const accountName = catalog.fullName || catalog.username || "Selected account";
   return <section className="mcp-catalog" aria-label={`AI access for ${accountName}`} aria-busy={saving}>
+    <div className="mcp-card">
     <div className="mcp-catalog-heading">
       <div><h3>{`MCP access for ${accountName}`}</h3>
         <p className="mcp-catalog-account">{accountName}{catalog.username && catalog.username !== accountName ? ` · ${catalog.username}` : ""}</p></div>
@@ -177,6 +178,7 @@ export default function McpCatalogAccessPanel({ targetUserId, onSaved, onDirtyCh
         }} /><span><strong>Allow changes through MCP</strong><small>Enable write actions. Keep this off for read-only access; changes still require approval.</small></span></label>
       </div>
     </fieldset>
+    </div>
 
     <div className="mcp-catalog-toolbar">
       <label className="mcp-catalog-search">Find an action<input type="search" placeholder="Search actions or groups" value={search} onChange={event => setSearch(event.target.value)} /></label>
@@ -192,7 +194,7 @@ export default function McpCatalogAccessPanel({ targetUserId, onSaved, onDirtyCh
         </div>
         <div className="mcp-catalog-tools">{tools.map(tool => <div className={`mcp-catalog-tool ${!tool.eligible ? "is-unavailable" : ""}`} key={tool.name}>
           <div className="mcp-catalog-tool-title"><strong>{toolLabel(tool)}</strong>
-            <span className="mcp-catalog-tool-kind">{tool.write ? "Write" : "Read"}</span></div>
+            <span className={`mcp-catalog-tool-kind ${tool.write ? "is-write" : ""}`}>{tool.write ? "Write" : "Read"}</span></div>
           {!tool.configurable ? <small className="mcp-catalog-help">Included automatically</small> : <div className="mcp-catalog-tool-choices">
             <label><input type="checkbox" checked={draft.grantedTools.has(tool.name) && draft.selectedTools.has(tool.name)} disabled={saving || conflict || !canGrantTool(tool)} onChange={event => changeTool(tool, event.target.checked, true)} /><span>Allow action</span></label>
             <small className={active(tool) ? "mcp-catalog-active-text" : "mcp-catalog-help"}>{active(tool) ? "Active" : "Inactive"}</small>
