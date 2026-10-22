@@ -298,6 +298,12 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-10-22 — A back-dated GD keeps the stock sheet in line by itself
+
+- **Saving a GD now fixes its own late items.** A GD dated before an item's last stock-sheet match or value correction is added to it while the GD is saved, so stock rises at the GD's value straight away and the books stay equal to the stock sheet. The import result says so; the Stock page's late-GD panel is only needed when the fix cannot run (a closed month, or stock with no GD behind it).
+- **The stock Adjustment asks "Were these goods sold?"** before taking quantity out or writing held stock down to nothing, and points to entering the sale bill instead.
+- Pinned in `scripts/test_stock_fifo.py` suites 12c and 12d and `scripts/test_stock_adjust_warning.mjs`.
+
 ### 2026-10-22 — A late GD no longer hides behind a value correction
 
 - **A write-down entered before a GD can no longer swallow that GD's value.** When stock was written down and a GD dated earlier was entered afterwards, the write-down landed on the GD's units: on production one item showed its new GD's units worth nil, and the Inventory account ran short of the stock sheet by the GD's value. The late-GD check that already covered stock-sheet matches now covers value corrections too: the GD import warns, and the Stock page's late-GD panel puts the value right in one step.

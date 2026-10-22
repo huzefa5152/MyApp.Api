@@ -6,6 +6,7 @@ import StockMenu, { StockMenuItem } from "../Components/stock/StockMenu";
 import "./StockDashboardPage.css";
 import CostHistoryDialog from "../Components/CostHistoryDialog";
 import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockMovements, getStockGdDetails, setLineClaimMonth, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock, exportStockOnHand, exportStockMonthly, exportAnnexH1, getTrackedItemTypes, getCostingMethod } from "../api/stockApi";
+import { adjustmentLooksLikeSale, SALE_WARNING } from "../utils/stockAdjustWarning";
 // Shared blob-save helper: it reads the filename off Content-Disposition and
 // revokes the object URL on the next tick. Generic, not accounting-specific —
 // a second copy here would only drift from it.
@@ -626,6 +627,10 @@ export default function StockDashboardPage() {
         && !parseFloat(adjustDraft.actualValueDelta))
       return notify("Give a quantity change, a value change, an actual-cost change, or some combination.", "error");
     if (saving) return;
+    if (adjustmentLooksLikeSale(adjustCurrent, adjustDraft)) {
+      const ok = await confirm({ title: "Were these goods sold?", message: SALE_WARNING, variant: "warning", confirmText: "Adjust anyway" });
+      if (!ok) return;
+    }
     setSaving(true);
     try {
       const setMode = adjustDraft.mode === "set";

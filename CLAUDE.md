@@ -1487,9 +1487,24 @@ GD panel and Excel export all say which GDs it took.
   without the late GDs (`HeldLinesAsync`), so the same plan, preview, panel and
   audit fix it. An item holding stock not traced to a GD is listed with the
   reason and blocks the commit -- restate it from a sheet. MCP:
-  `find_late_gd_value_fixes` / `prepare_late_gd_value_fix`, which call the Stock
-  screen's action itself and take no lines from the agent. Suite:
-  `test_stock_fifo.py` 12d.
+  `find_late_gd_value_fixes` / `prepare_late_gd_value_fix`, which take no lines
+  from the agent. Suite: `test_stock_fifo.py` 12d.
+- **A GD save re-matches its own late items itself** (2026-10-22). Every
+  importer GD is entered 10-26 days after its GD date, so "late" is the normal
+  case; leaving the fix to a panel nobody clicked was how the books drifted
+  from the client's sheet. `GdCostingImportService.CommitAsync` runs
+  `StockRestatementService.RestateLateGdsAsync` for the GD's items after its
+  transaction commits (screen and MCP alike; result
+  `StockSheetMatchesUpdated`). It needs no permission beyond the GD's own:
+  the lines are the plan's, quantities never move, and it is audited under the
+  GD save's path. If it cannot apply (closed month, untraced stock) the GD
+  stays saved and the Stock panel is the fallback. `StockRestatementService`
+  is the ONE home of `RestateAsync` and the late-GD plan; `StockController`
+  keeps thin wrappers.
+- **The Adjustment dialog asks "Were these goods sold?"** when a change takes
+  quantity out or leaves held stock worth nothing
+  (`utils/stockAdjustWarning.js`, `scripts/test_stock_adjust_warning.mjs`).
+  Sales adjusted out before their bill existed caused the AY write-down.
 - **A bill's stock movement carries the BILL's date**, never the day it was
   typed. 18 movements saved before the re-dating guard did not;
   `FIFO_RESTATE_BACKDATED_BACKFILL_V1` (Program.cs) re-dated them once and
