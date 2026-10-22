@@ -622,6 +622,11 @@ namespace MyApp.Api.DTOs
         /// stock-sheet match" (POST /api/stock/company/{id}/backdated-gds/restate).</summary>
         public int StockSheetMatchItems { get; set; }
 
+        /// <summary>Items this commit re-matched by itself: the GD was dated before
+        /// their stock-sheet match or value correction, so it was added to it.</summary>
+        public int StockSheetMatchesUpdated { get; set; }
+        public string? StockSheetMatchMessage { get; set; }
+
         /// <summary>New OpeningStockBalance rows created for unmatched lines.</summary>
         public int OpeningBalancesCreated { get; set; }
 

@@ -487,40 +487,26 @@ def main():
             "profileVersion": prev.get("profileVersion"), "lines": prev.get("lines", []),
             "createMissingStock": True, "mode": "new-arrivals"})
         res = r.json() if r.ok else {}
-        check("the GD commits and reports one item left outside its match",
-              r.ok and res.get("stockSheetMatchItems") == 1, r.text[:400])
-        after = onhand(api, h, cid, iid)
-        check("quantity is right (5) but the value is off (not 150 + 2,000)",
-              near(after["onHand"], 5, 1e-4) and not near(after["valueExcludingTax"], 2150),
-              f"{after['onHand']} / {after['valueExcludingTax']}")
-        r = call("GET", f"{api}/stock/company/{cid}/backdated-gds", h)
-        lst = r.json() if r.ok else []
-        check("the item is listed with the late GD",
-              len(lst) == 1 and lst[0]["itemTypeId"] == iid and lst[0]["lines"][0]["gdNumber"] == late_gd,
-              r.text[:300])
-        r = call("POST", f"{api}/stock/company/{cid}/backdated-gds/restate", h, json={"commit": False})
-        pv = r.json() if r.ok else {}
-        check("the check previews 150 + 2,000 = 2,150 and can apply",
-              r.ok and pv.get("canCommit") and not pv.get("committed") and near(pv.get("valueAfter"), 2150),
-              r.text[:300])
-        check("the check wrote nothing", near(onhand(api, h, cid, iid)["valueExcludingTax"], after["valueExcludingTax"]))
-        r = call("POST", f"{api}/stock/company/{cid}/backdated-gds/restate", h, json={"commit": True})
-        check("the update commits", r.ok and r.json().get("committed"), r.text[:300])
+        # Since 2026-10-22 the GD save re-matches its own late items itself; the
+        # Stock panel is only the fallback for what it cannot do.
+        check("the GD commits and re-matches its item by itself",
+              r.ok and res.get("stockSheetMatchesUpdated") == 1 and res.get("stockSheetMatchItems") == 0, r.text[:400])
+        fixed = onhand(api, h, cid, iid)
+        check("5 worth 2,150 straight away: the sheet line plus the late GD",
+              near(fixed["onHand"], 5, 1e-4) and near(fixed["valueExcludingTax"], 2150),
+              f"{fixed['onHand']} / {fixed['valueExcludingTax']}")
         al = call("GET", f"{api}/auditlogs", h, params={"search": f"company {cid}", "pageSize": 100}).json().get("items", [])
         late_rows = [a for a in al if a.get("exceptionType") == "STOCK_LATE_GD_RESTATE" and late_gd in (a.get("message") or "")]
         restates = [a for a in al if a.get("exceptionType") == "STOCK_FIFO_RESTATEMENT"]
-        check("the update is audited, and so is the restatement it ran inside its transaction",
-              len(late_rows) == 1 and len(restates) >= 3, f"late={len(late_rows)} restatements={len(restates)}")
-        fixed = onhand(api, h, cid, iid)
-        check("now 5 worth 2,150: the sheet line plus the late GD",
-              near(fixed["onHand"], 5, 1e-4) and near(fixed["valueExcludingTax"], 2150),
-              f"{fixed['onHand']} / {fixed['valueExcludingTax']}")
+        check("the re-match is audited under the GD save, and so is its restatement",
+              len(late_rows) == 1 and "gd-costing/commit" in (late_rows[0].get("requestPath") or "") and len(restates) >= 3,
+              f"late={[(a.get('requestPath'), a.get('message')) for a in late_rows]} restatements={len(restates)}")
         g = gd_rows(api, h, cid, iid)
         check("the GD panel holds the sheet line and the late GD", {"SHEET-R3", late_gd} <= set(g), str(list(g)))
         r = call("GET", f"{api}/stock/company/{cid}/backdated-gds", h)
-        check("nothing is listed afterwards", r.ok and r.json() == [], r.text[:300])
+        check("nothing is left for the Stock panel", r.ok and r.json() == [], r.text[:300])
         r = call("POST", f"{api}/stock/company/{cid}/backdated-gds/restate", h, json={"commit": True})
-        check("running it again changes nothing", r.ok and not r.json().get("committed")
+        check("the panel's update has nothing to change", r.ok and not r.json().get("committed")
               and near(onhand(api, h, cid, iid)["valueExcludingTax"], 2150), r.text[:300])
 
         # ── 12d. A late GD dated before a value correction ──────────────
@@ -559,28 +545,16 @@ def main():
             "profileVersion": prev.get("profileVersion"), "lines": prev.get("lines", []),
             "createMissingStock": True, "mode": "new-arrivals"})
         res = r.json() if r.ok else {}
-        check("the GD commits and reports the item", r.ok and res.get("stockSheetMatchItems") == 1, r.text[:400])
-        broken = onhand(api, h, cid, iid)
-        check("4 on hand but not worth the GD's 2,000 (the write-down ate it)",
-              near(broken["onHand"], 4, 1e-4) and not near(broken["valueExcludingTax"], 2000),
-              f"{broken['onHand']} / {broken['valueExcludingTax']}")
-        r = call("GET", f"{api}/stock/company/{cid}/backdated-gds", h)
-        lst = r.json() if r.ok else []
-        check("the item is listed as after a value correction, with the late GD",
-              len(lst) == 1 and lst[0]["itemTypeId"] == iid and lst[0].get("afterValueCorrection") is True
-              and lst[0]["lines"][0]["gdNumber"] == late_gd2, r.text[:300])
-        r = call("POST", f"{api}/stock/company/{cid}/backdated-gds/restate", h, json={"commit": False})
-        pv = r.json() if r.ok else {}
-        check("the check previews 2,000 and can apply",
-              r.ok and pv.get("canCommit") and near(pv.get("valueAfter"), 2000), r.text[:300])
-        r = call("POST", f"{api}/stock/company/{cid}/backdated-gds/restate", h, json={"commit": True})
-        check("the update commits", r.ok and r.json().get("committed"), r.text[:300])
+        check("the GD commits and re-matches its item by itself",
+              r.ok and res.get("stockSheetMatchesUpdated") == 1 and res.get("stockSheetMatchItems") == 0, r.text[:400])
         fixed = onhand(api, h, cid, iid)
-        check("now 4 worth 2,000: what the GD brought in",
+        check("4 worth 2,000 straight away: the write-down no longer eats the GD",
               near(fixed["onHand"], 4, 1e-4) and near(fixed["valueExcludingTax"], 2000),
               f"{fixed['onHand']} / {fixed['valueExcludingTax']}")
+        g = gd_rows(api, h, cid, iid)
+        check("the GD panel holds the late GD", late_gd2 in set(g), str(list(g)))
         r = call("GET", f"{api}/stock/company/{cid}/backdated-gds", h)
-        check("nothing is listed afterwards", r.ok and r.json() == [], r.text[:300])
+        check("nothing is left for the Stock panel", r.ok and r.json() == [], r.text[:300])
 
         # ── 12b. An empty company may still choose ───────────────────────
         print("\n-- 12b. A company that has never held stock may still choose the average --")

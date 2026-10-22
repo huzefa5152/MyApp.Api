@@ -22,6 +22,7 @@ namespace MyApp.Api.Services.Implementations
         private readonly ISpreadsheetImportService _imports;
         private readonly IPostingService _posting;
         private readonly IStockCostAuditService _costAudit;
+        private readonly StockRestatementService _restatements;
         private readonly ILogger<GdCostingImportService> _logger;
 
         /// <summary>A costing sheet with more lines than this is not a costing
@@ -43,8 +44,10 @@ namespace MyApp.Api.Services.Implementations
             ISpreadsheetImportService imports,
             IPostingService posting,
             IStockCostAuditService costAudit,
+            StockRestatementService restatements,
             ILogger<GdCostingImportService> logger)
         {
+            _restatements = restatements;
             _db = db;
             _accounts = accounts;
             _imports = imports;
@@ -1743,6 +1746,34 @@ namespace MyApp.Api.Services.Implementations
                 }
 
                 await tx.CommitAsync();
+
+                // A back-dated GD lands before its items' last stock-sheet match or
+                // value correction, which then leaves its units short or valued at
+                // nil (AY, 2026-10-22). Re-match this GD's own items now, with the
+                // same plan the Stock page's late-GD panel runs. It is part of
+                // entering the GD, so it needs no permission beyond the GD's own;
+                // quantities never move. If it cannot (a closed month, stock not
+                // traced to a GD), the GD stays saved and the panel is the fallback.
+                var gdItems = writtenLines.Where(l => l.StockMovementId != null && l.ItemTypeId != null)
+                    .Select(l => l.ItemTypeId!.Value).Distinct().ToList();
+                if (gdItems.Count > 0)
+                {
+                    try
+                    {
+                        var userName = await _db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => u.Username).FirstOrDefaultAsync();
+                        var fix = await _restatements.RestateLateGdsAsync(dto.CompanyId, userId, userName, commit: true,
+                            gdItems, "/api/spreadsheet-import/gd-costing/commit");
+                        if (fix.Committed)
+                        {
+                            result.StockSheetMatchesUpdated = fix.Items.Count;
+                            result.StockSheetMatchMessage = fix.Messages.FirstOrDefault();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Company {CompanyId}: the GD was saved but its late-GD re-match was not applied.", dto.CompanyId);
+                    }
+                }
 
                 // Arrivals dated inside a stock-sheet match leave it short until
                 // it is updated; count them so the screen can offer the fix.

@@ -502,6 +502,15 @@ export default function GdCostingImportPage() {
               {result.messages.map((m, i) => <li key={i}>{m}</li>)}
             </ul>
           )}
+          {result.stockSheetMatchesUpdated > 0 && (
+            <div style={{ marginTop: "0.7rem" }}>
+              <Banner tone="ok">
+                <strong>Stock value kept in line.</strong> This GD is dated before your last stock-sheet match or value
+                correction for {result.stockSheetMatchesUpdated} item{result.stockSheetMatchesUpdated === 1 ? "" : "s"}, so it
+                was added to it. Nothing for you to do.
+              </Banner>
+            </div>
+          )}
           {result.stockSheetMatchItems > 0 && (
             <div style={{ marginTop: "0.7rem" }}>
               <LateGdMatchPanel companyId={Number(companyId)} />

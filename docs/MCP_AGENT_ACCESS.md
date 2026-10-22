@@ -153,7 +153,7 @@ Writes (scope in brackets; the commit calls the service shown):
 | `prepare_gd_claim_month` (`gds.write`) | `stock.opening.manage` | `StockRecordService.SetGdClaimMonthAsync` / `SetLineClaimMonthAsync` (first day of a month) |
 | `prepare_lc` (`lcs.write`) | `importcosting.lc.manage` | `ImportLcService.Create/Update/LinkAsync` |
 | `prepare_opening_stock` (`stock.write`) | `stock.opening.manage` | `StockRecordService.UpsertOpeningBalanceAsync` (plan shows before and after) |
-| `prepare_late_gd_value_fix` (`stock.write`) | `stock.policy.manage` | `StockController.RestateBackdatedGds`, the Stock screen's own action, preview at prepare and commit at commit; takes only the company, the ERP works out every line; quantities never move |
+| `prepare_late_gd_value_fix` (`stock.write`) | `stock.policy.manage` | `StockRestatementService.RestateLateGdsAsync`, the Stock screen's own fix, preview at prepare and commit at commit; takes only the company, the ERP works out every line; quantities never move. A GD committed through `prepare_gd_costing` re-matches its own late items by itself |
 | `prepare_journal_entry` (`journal.write`) | `accounting.journal.create` | `IJournalEntryService.CreateManualAsync` (balanced; bank and cash accounts refused, as by the service) |
 
 `StockRecordService` and `ImportLcService` hold the logic that used to live inside
