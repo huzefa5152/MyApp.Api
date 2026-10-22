@@ -387,6 +387,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Valued stock entries (isolated local SQL only) | `py -3.14 scripts/test_stock_entry_workflow.py --base http://localhost:5191 --database <isolated-local-test-db>` | `41 stock-entry workflow checks passed` |
 | Commercial costs + local purchases: one pool for challan / bill / form / dialog, races, edits, sale-side floor, IDOR | `python scripts/test_trader_commercial_costs.py --base <url> --db "<conn>"` | `124/124 commercial cost checks passed` |
 | Costs book supplier purchases automatically: create/edit/move/clear, lock once paid or credited, entered bills win, closed period, cancel/delete, tenant | `python scripts/test_cost_purchase_sync.py --base <url> --db "<conn>"` | `49/49 cost purchase sync checks passed` |
+| One customer / supplier per name per company: simultaneous saves, case and outer spaces, rename | `python scripts/test_party_name_guard.py --base <url>` | `8/8 party name guard checks passed` |
 | FBR purchase import creates one supplier per seller, even with many invoices from a new seller in one file | `python scripts/test_fbr_import_supplier_reuse.py --base <url>` | `10/10 FBR import supplier reuse checks passed` |
 | Stock item-type reflow **(hard pre-push gate — see box above)** | `python scripts/test_stock_itemtype_reflow.py` | `all checks passed` (currently `250/250`) |
 | PDF export pagination | `python scripts/test_pdf_pagination.py` | `all checks passed` (230 cases) |

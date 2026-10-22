@@ -306,6 +306,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+- **2026-10-22:** A company can no longer end up with two customers, or two suppliers, of one name. Simultaneous saves of one name (a double-click) both passed the duplicate check and both inserted; the check and the save now run under a per-company lock (`Helpers/PartyNameLock.cs`), names are stored trimmed, and a name that differs only by case or outer spaces is refused on create, copy to companies and rename. `scripts/test_party_name_guard.py` (8 checks).
+
 - **2026-10-22:** FBR purchase import no longer creates the same supplier twice. The preview matched sellers against the suppliers that existed before the commit, so a file with several invoices from one new seller created one supplier per invoice (production had duplicate suppliers from this). The committer now re-checks the company by NTN, then name, before creating, and reuses what it finds. `scripts/test_fbr_import_supplier_reuse.py` (10 checks).
 
 - **2026-10-21:** The attachment clip with its count now also shows on Withholding Tax Receipts (cards and table) and Transfers, and tapping it opens that document's files. The clip on every list is now a full 44px tap target without making rows taller. Pinned by `myapp-frontend/src/Components/AttachmentBadge.test.jsx`.

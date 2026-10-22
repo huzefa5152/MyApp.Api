@@ -1,3 +1,4 @@
+using MyApp.Api.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
@@ -68,6 +69,8 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<SupplierDto> CreateAsync(SupplierDto dto)
         {
+            dto.Name = dto.Name?.Trim() ?? "";
+            await using var nameLock = await PartyNameLock.AcquireAsync(_context, "supplier", dto.CompanyId);
             if (await _repo.ExistsWithNameAsync(dto.Name, dto.CompanyId))
                 throw new InvalidOperationException("Supplier with this name already exists for this company.");
 
@@ -88,6 +91,7 @@ namespace MyApp.Api.Services.Implementations
             };
 
             var created = await _repo.CreateAsync(supplier);
+            if (nameLock != null) await nameLock.CommitAsync();
 
             // Attach to a Common Supplier group — find-or-create by NTN
             // (or normalised name fallback). Same defensive try/catch as
@@ -125,6 +129,8 @@ namespace MyApp.Api.Services.Implementations
                         continue;
                     }
 
+                    dto.Name = dto.Name?.Trim() ?? "";
+                    await PartyNameLock.AcquireAsync(_context, "supplier", companyId); // joins the batch transaction
                     if (await _repo.ExistsWithNameAsync(dto.Name, companyId))
                     {
                         result.SkippedReasons.Add(
@@ -216,6 +222,8 @@ namespace MyApp.Api.Services.Implementations
             var supplier = await _repo.GetByIdAsync(dto.Id.Value);
             if (supplier == null) throw new KeyNotFoundException("Supplier not found.");
 
+            dto.Name = dto.Name?.Trim() ?? "";
+            await using var nameLock = await PartyNameLock.AcquireAsync(_context, "supplier", supplier.CompanyId);
             if (await _repo.ExistsWithNameAsync(dto.Name, supplier.CompanyId, dto.Id))
                 throw new InvalidOperationException("Supplier with this name already exists for this company.");
 
@@ -232,6 +240,7 @@ namespace MyApp.Api.Services.Implementations
 
             var hasBills = await _repo.HasPurchaseBillsAsync(supplier.Id);
             await _repo.UpdateAsync(supplier);
+            if (nameLock != null) await nameLock.CommitAsync();
 
             // Re-evaluate Common Supplier grouping. NTN / Name might
             // have just changed, which moves the supplier from one

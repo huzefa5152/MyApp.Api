@@ -45,7 +45,7 @@ namespace MyApp.Api.Repositories.Implementations
         public async Task<bool> ExistsWithNameAsync(string name, int companyId, int? excludeId = null)
         {
             return await _db.Suppliers.AnyAsync(s =>
-                s.Name.ToLower() == name.ToLower() &&
+                s.Name.Trim().ToLower() == name.Trim().ToLower() &&
                 s.CompanyId == companyId &&
                 (excludeId == null || s.Id != excludeId));
         }
