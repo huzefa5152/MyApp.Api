@@ -80,7 +80,7 @@ public sealed class McpCatalogController(AppDbContext db, IPermissionService per
         if (userId != Actor && !manage) return Forbid();
         if (!await db.Users.AnyAsync(u => u.Id == userId)) return NotFound(new { message = "User not found." });
         if (request.GrantedTools == null || request.SelectedTools == null ||
-            request.GrantedTools.Count > 100 || request.SelectedTools.Count > 100)
+            request.GrantedTools.Count > McpToolAccessCatalog.All.Count || request.SelectedTools.Count > McpToolAccessCatalog.All.Count)
             return BadRequest(new { message = "Choose valid catalog entries." });
         var grants = request.GrantedTools.ToHashSet(StringComparer.Ordinal);
         var selected = request.SelectedTools.ToHashSet(StringComparer.Ordinal);
