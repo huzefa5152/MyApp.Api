@@ -1,0 +1,231 @@
+"""
+Importer MCP full parity (2026-10-22): the tools that let an administrator's agent do what the
+screens do, for the companies the user holds and no other.
+
+Every case runs twice in spirit: the company the user holds (A) works, and a record or company the
+user was never given (B) is refused, at prepare and therefore at commit. Results are checked in the
+database, not only in the tool's answer.
+
+  Phase 1. Edits of quotes, orders, challans, bills, purchase bills, goods receipts, receipts and
+           journals; receipt allocation; withholding tax receipts; stock values, movements, GD pools,
+           tie-out and adjustment; single-record reads.
+
+LOCAL only; needs sqlcmd. Uses the shared fixture companies and throwaway users "mcpp_*".
+
+Usage: python scripts/test_mcp_parity.py --base http://localhost:5191 --db MyApp_Importer_Local
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+from datetime import date
+
+import mcp_importer_fixture as fx
+from mcp_importer_fixture import call, login, tools
+
+ap = argparse.ArgumentParser()
+ap.add_argument("--base", default="http://localhost:5191")
+ap.add_argument("--sql-server", default=r".\MSSQLSERVER02")
+ap.add_argument("--db", default="MyApp_Importer_Local")
+ARGS = ap.parse_args()
+fx.set_base(ARGS.base)
+TODAY = date.today().isoformat()
+results = []
+
+
+def check(name, ok, detail=""):
+    results.append((name, bool(ok)))
+    print(("  PASS  " if ok else "  FAIL  ") + name + ("" if ok else f"  -> {str(detail)[:400]}"))
+    return ok
+
+
+def sql(q):
+    out = subprocess.run(["sqlcmd", "-S", ARGS.sql_server, "-d", ARGS.db, "-E", "-C", "-I", "-b", "-h", "-1", "-W", "-Q", "SET NOCOUNT ON; " + q],
+                         capture_output=True, text=True)
+    assert out.returncode == 0, out.stdout + out.stderr
+    return [l.strip() for l in out.stdout.splitlines() if l.strip()]
+
+
+def one(q):
+    r = sql(q)
+    return int(r[0]) if r and r[0].lstrip("-").isdigit() else None
+
+
+def val(q):
+    r = sql(q)
+    return r[0] if r else None
+
+
+def prepare(tok, name, args):
+    refused, text = call(tok, name, args)
+    return (None, text) if refused else (json.loads(text), text)
+
+
+def commit(tok, plan):
+    refused, text = call(tok, "commit_action", {"planId": plan["planId"]})
+    return (None, text) if refused else (json.loads(text), text)
+
+
+def run(tok, label, name, args):
+    plan, text = prepare(tok, name, args)
+    if not check(f"{label}: prepares", plan, text):
+        return None
+    res, text = commit(tok, plan)
+    check(f"{label}: commits", res and res.get("committed"), text)
+    return res
+
+
+def refused(tok, label, name, args):
+    r, text = call(tok, name, args)
+    check(f"refused: {label}", r, text)
+
+
+def read(tok, name, args):
+    r, text = call(tok, name, args)
+    return None if r else json.loads(text)
+
+
+print(f"Importer MCP parity against {fx.BASE}")
+admin = login("admin", "admin123")
+A, B = fx.companies(admin)
+fx.remove_users(admin, "mcpp_")
+sysr = fx.system_roles(admin)
+uid, jw = fx.make_user(admin, "mcpp_admin", [A], [fx.staff_role(admin), sysr["MCP Access"], sysr["MCP Write"]])
+T = fx.token_for(jw, [A])
+listed = set(tools(T))
+
+# ── phase 1 ──────────────────────────────────────────────────────────
+print("\n== Phase 1: edits, allocation, withholding tax, stock, single reads ==")
+phase1 = {"get_stock_values", "get_stock_movements", "get_stock_gd_details", "get_stock_tie_out", "prepare_stock_adjustment",
+          "search_withholding_receipts", "get_withholding_receipt", "prepare_withholding_receipt", "prepare_receipt_allocation",
+          "get_receipt", "get_payment", "get_goods_receipt", "get_journal_entry"}
+check("every phase 1 tool is listed for an administrator with MCP write", phase1 <= listed, sorted(phase1 - listed))
+
+client_a = one(f"SELECT TOP 1 Id FROM Clients WHERE CompanyId = {A} ORDER BY Id")
+client_b = one(f"SELECT TOP 1 Id FROM Clients WHERE CompanyId = {B} ORDER BY Id")
+supplier_a = one(f"SELECT TOP 1 Id FROM Suppliers WHERE CompanyId = {A} ORDER BY Id")
+bolt_a = one(f"SELECT TOP 1 m.ItemTypeId FROM StockMovements m JOIN ItemTypes t ON t.Id = m.ItemTypeId WHERE m.CompanyId = {A} AND t.Name LIKE '%BOLT' ORDER BY m.Id")
+bolt_b = one(f"SELECT TOP 1 m.ItemTypeId FROM StockMovements m JOIN ItemTypes t ON t.Id = m.ItemTypeId WHERE m.CompanyId = {B} AND t.Name LIKE '%BOLT' ORDER BY m.Id")
+
+def latest(table, company):
+    return one(f"SELECT TOP 1 Id FROM {table} WHERE CompanyId = {company} ORDER BY Id DESC")
+
+# quotation edit
+q_a, q_b = latest("SalesQuotes", A), latest("SalesQuotes", B)
+qd = read(T, "get_quote", {"companyId": A, "quoteId": q_a})
+line = (qd or {}).get("lines", {}).get("items", [{}])[0] if qd else {}
+run(T, "quotation edit", "prepare_quote", {"companyId": A, "quoteId": q_a, "clientId": client_a,
+    "items": [{"id": line.get("id"), "description": "Edited by MCP", "quantity": "7", "unit": "Pcs", "unitPrice": "655", "itemTypeId": bolt_a}]})
+check("the quotation line now reads 7 at 655", val(f"SELECT CONCAT(CAST(Quantity AS DECIMAL(18,0)), '@', CAST(UnitPrice AS DECIMAL(18,0))) FROM SalesQuoteItems WHERE SalesQuoteId = {q_a}") == "7@655")
+refused(T, "edit B's quotation", "prepare_quote", {"companyId": A, "quoteId": q_b, "clientId": client_a, "items": [{"description": "x", "quantity": "1", "unit": "Pcs", "unitPrice": "1"}]})
+refused(T, "a line of another quotation", "prepare_quote", {"companyId": A, "quoteId": q_a, "clientId": client_a,
+    "items": [{"id": one(f"SELECT TOP 1 Id FROM SalesQuoteItems WHERE SalesQuoteId = {q_b}"), "description": "x", "quantity": "1", "unit": "Pcs", "unitPrice": "1"}]})
+
+# sales order edit
+o_a, o_b = latest("SalesOrders", A), latest("SalesOrders", B)
+od = read(T, "get_sales_order", {"companyId": A, "salesOrderId": o_a})
+oline = (od or {}).get("lines", {}).get("items", [{}])[0] if od else {}
+run(T, "sales order edit", "prepare_sales_order", {"companyId": A, "salesOrderId": o_a, "clientId": client_a,
+    "items": [{"id": oline.get("id"), "description": "Order edited", "quantity": "6", "unit": "Pcs", "unitPrice": "640", "itemTypeId": bolt_a}]})
+check("the order line now reads 6", val(f"SELECT CAST(Quantity AS DECIMAL(18,0)) FROM SalesOrderItems WHERE SalesOrderId = {o_a}") == "6")
+refused(T, "edit B's sales order", "prepare_sales_order", {"companyId": A, "salesOrderId": o_b, "clientId": client_a, "items": [{"description": "x", "quantity": "1", "unit": "Pcs"}]})
+
+# challan edit
+c_a = one(f"SELECT TOP 1 Id FROM DeliveryChallans WHERE CompanyId = {A} AND InvoiceId IS NULL AND Status NOT IN ('Cancelled','Invoiced') ORDER BY Id DESC")
+c_b = latest("DeliveryChallans", B)
+cd = read(T, "get_challan", {"companyId": A, "challanId": c_a})
+cline = (cd or {}).get("lines", {}).get("items", [{}])[0] if cd else {}
+run(T, "challan edit", "prepare_challan", {"companyId": A, "challanId": c_a, "clientId": client_a, "deliveryDate": TODAY,
+    "items": [{"id": cline.get("id"), "description": "Challan edited", "quantity": "2", "unit": "Pcs", "itemTypeId": bolt_a}]})
+check("the challan line now reads 2", val(f"SELECT CAST(Quantity AS DECIMAL(18,0)) FROM DeliveryItems WHERE DeliveryChallanId = {c_a}") == "2")
+refused(T, "edit B's challan", "prepare_challan", {"companyId": A, "challanId": c_b, "clientId": client_a, "deliveryDate": TODAY, "items": [{"description": "x", "quantity": "1", "unit": "Pcs"}]})
+
+# bill edit
+b_a = one(f"SELECT TOP 1 Id FROM Invoices WHERE CompanyId = {A} AND FbrSubmittedAt IS NULL AND IsCancelled = 0 AND NoteKind = 0 ORDER BY Id DESC")
+b_b = latest("Invoices", B)
+bd = read(T, "get_invoice", {"companyId": A, "invoiceId": b_a})
+bline = (bd or {}).get("lines", {}).get("items", [{}])[0] if bd else {}
+run(T, "bill edit", "prepare_bill", {"companyId": A, "billId": b_a,
+    "items": [{"id": bline.get("id"), "description": "Bill edited", "quantity": str(bline.get("quantity") or 2), "unit": "Pcs", "unitPrice": "777", "itemTypeId": bolt_a}]})
+check("the bill line now reads 777", val(f"SELECT CAST(UnitPrice AS DECIMAL(18,0)) FROM InvoiceItems WHERE InvoiceId = {b_a}") == "777")
+refused(T, "edit B's bill", "prepare_bill", {"companyId": A, "billId": b_b, "items": [{"description": "x", "quantity": "1", "unit": "Pcs", "unitPrice": "1", "itemTypeId": bolt_a}]})
+refused(T, "a bill line with B's item", "prepare_bill", {"companyId": A, "billId": b_a, "items": [{"description": "x", "quantity": "1", "unit": "Pcs", "unitPrice": "1", "itemTypeId": bolt_b}]})
+
+# purchase bill edit
+p_a, p_b = latest("PurchaseBills", A), latest("PurchaseBills", B)
+pd = read(T, "get_purchase_bill", {"companyId": A, "purchaseBillId": p_a})
+pline = (pd or {}).get("lines", {}).get("items", [{}])[0] if pd else {}
+run(T, "purchase bill edit", "prepare_purchase_bill", {"companyId": A, "purchaseBillId": p_a, "supplierId": supplier_a,
+    "items": [{"id": pline.get("id"), "description": "PB edited", "quantity": "5", "unit": "Pcs", "unitPrice": "410", "itemTypeId": bolt_a}]})
+check("the purchase line now reads 410", val(f"SELECT CAST(UnitPrice AS DECIMAL(18,0)) FROM PurchaseItems WHERE PurchaseBillId = {p_a}") == "410")
+refused(T, "edit B's purchase bill", "prepare_purchase_bill", {"companyId": A, "purchaseBillId": p_b, "supplierId": supplier_a, "items": [{"description": "x", "quantity": "1", "unit": "Pcs", "unitPrice": "1", "itemTypeId": bolt_a}]})
+
+# goods receipt: create then edit
+res = run(T, "goods receipt create", "prepare_goods_receipt", {"companyId": A, "supplierId": supplier_a, "items": [{"description": "GR line", "quantity": 3, "unit": "Pcs", "itemTypeId": bolt_a}]})
+g_a = latest("GoodsReceipts", A)
+gd = read(T, "get_goods_receipt", {"companyId": A, "goodsReceiptId": g_a})
+check("get_goods_receipt answers with its lines", gd and gd.get("items"), gd)
+gline = (gd or {}).get("items", [{}])[0]
+run(T, "goods receipt edit", "prepare_goods_receipt", {"companyId": A, "goodsReceiptId": g_a, "supplierId": supplier_a,
+    "items": [{"id": gline.get("id"), "description": "GR edited", "quantity": 4, "unit": "Pcs", "itemTypeId": bolt_a}]})
+check("the goods receipt line now reads 4", val(f"SELECT Quantity FROM GoodsReceiptItems WHERE GoodsReceiptId = {g_a}") == "4")
+
+# receipt edit + allocation
+r_a = one(f"SELECT TOP 1 Id FROM Payments WHERE CompanyId = {A} AND Direction = 0 AND ContactId = {client_a} ORDER BY Id DESC")
+r_b = one(f"SELECT TOP 1 Id FROM Payments WHERE CompanyId = {B} AND Direction = 0 ORDER BY Id DESC")
+rd = read(T, "get_receipt", {"companyId": A, "receiptId": r_a})
+check("get_receipt answers", rd and rd.get("id") == r_a, rd)
+run(T, "receipt edit", "prepare_receipt", {"companyId": A, "receiptId": r_a, "clientId": client_a, "amount": "600", "method": "Cash"})
+check("the receipt is now 600", val(f"SELECT CAST(Amount AS DECIMAL(18,0)) FROM Payments WHERE Id = {r_a}") == "600")
+run(T, "receipt allocation to a bill", "prepare_receipt_allocation", {"companyId": A, "mode": "lines", "receiptId": r_a, "lines": [{"invoiceId": b_a, "amount": "100"}]})
+check("the allocation is on file", one(f"SELECT COUNT(*) FROM PaymentAllocations WHERE PaymentId = {r_a} AND InvoiceId = {b_a}") >= 1)
+refused(T, "allocate B's receipt", "prepare_receipt_allocation", {"companyId": A, "mode": "auto", "receiptId": r_b})
+refused(T, "allocate to B's bill", "prepare_receipt_allocation", {"companyId": A, "mode": "lines", "receiptId": r_a, "lines": [{"invoiceId": b_b, "amount": "1"}]})
+refused(T, "apply advances of B's customer", "prepare_receipt_allocation", {"companyId": A, "mode": "advances", "clientId": client_b})
+refused(T, "read B's receipt", "get_receipt", {"companyId": A, "receiptId": r_b})
+
+# journal: create then edit
+accts = read(T, "search_accounts", {"companyId": A, "limit": 200}) or {}
+acc = [a for a in accts.get("items", []) if a.get("type") in ("Expense", "Equity", "Income") and a.get("journalPostable")]
+if len(acc) >= 2:
+    jl = [{"accountId": acc[0]["accountId"], "debit": "50"}, {"accountId": acc[1]["accountId"], "credit": "50"}]
+    run(T, "journal create", "prepare_journal_entry", {"companyId": A, "date": TODAY, "narration": "mcpp journal", "lines": jl})
+    j_a = one(f"SELECT TOP 1 Id FROM JournalEntries WHERE CompanyId = {A} AND Narration = 'mcpp journal' ORDER BY Id DESC")
+    check("get_journal_entry answers", read(T, "get_journal_entry", {"companyId": A, "journalEntryId": j_a}))
+    run(T, "journal edit", "prepare_journal_entry", {"companyId": A, "journalEntryId": j_a, "date": TODAY, "narration": "mcpp journal edited",
+        "lines": [{"accountId": acc[0]["accountId"], "debit": "75"}, {"accountId": acc[1]["accountId"], "credit": "75"}]})
+    check("the journal now reads 75", val(f"SELECT CAST(SUM(Debit) AS DECIMAL(18,0)) FROM JournalLines WHERE JournalEntryId = {j_a}") == "75")
+    refused(T, "read B's journal", "get_journal_entry", {"companyId": A, "journalEntryId": latest("JournalEntries", B)})
+else:
+    check("journal accounts available", False, accts)
+
+# withholding tax receipt
+run(T, "withholding receipt create", "prepare_withholding_receipt", {"companyId": A, "clientId": client_a, "amount": "120", "description": "mcpp wht"})
+w_a = one(f"SELECT TOP 1 Id FROM WithholdingTaxReceipts WHERE CompanyId = {A} ORDER BY Id DESC")
+check("search finds it", any(x["id"] == w_a for x in (read(T, "search_withholding_receipts", {"companyId": A}) or {}).get("items", [])))
+run(T, "withholding receipt edit", "prepare_withholding_receipt", {"companyId": A, "withholdingReceiptId": w_a, "clientId": client_a, "amount": "130"})
+check("it now reads 130", val(f"SELECT CAST(Amount AS DECIMAL(18,0)) FROM WithholdingTaxReceipts WHERE Id = {w_a}") == "130")
+refused(T, "withholding receipt for B's customer", "prepare_withholding_receipt", {"companyId": A, "clientId": client_b, "amount": "1"})
+
+# stock
+sv = read(T, "get_stock_values", {"companyId": A})
+check("get_stock_values gives values", sv and sv.get("totalValueExcludingTax") is not None and sv.get("items"), sv)
+check("get_stock_movements answers", read(T, "get_stock_movements", {"companyId": A, "itemTypeId": bolt_a}))
+check("get_stock_gd_details answers", read(T, "get_stock_gd_details", {"companyId": A, "itemTypeId": bolt_a}) is not None)
+r, text = call(T, "get_stock_tie_out", {"companyId": A})
+check("get_stock_tie_out answers", not r and "stockValue" in text, text)
+before = val(f"SELECT COUNT(*) FROM StockMovements WHERE CompanyId = {A} AND ItemTypeId = {bolt_a} AND SourceType = 3")
+run(T, "stock adjustment (one damaged)", "prepare_stock_adjustment", {"companyId": A, "itemTypeId": bolt_a, "mode": "delta", "delta": "-1", "notes": "mcpp damaged"})
+check("an adjustment movement was written", int(val(f"SELECT COUNT(*) FROM StockMovements WHERE CompanyId = {A} AND ItemTypeId = {bolt_a} AND SourceType = 3")) == int(before) + 1)
+refused(T, "adjust B's item", "prepare_stock_adjustment", {"companyId": A, "itemTypeId": bolt_b, "mode": "delta", "delta": "-1"})
+
+# whole-company cross checks: every phase 1 read against company B itself
+for tool, args in [("get_stock_values", {}), ("get_stock_movements", {}), ("get_stock_tie_out", {}), ("search_withholding_receipts", {}),
+                   ("get_stock_gd_details", {"itemTypeId": bolt_b})]:
+    refused(T, f"{tool} for company B", tool, {"companyId": B, **args})
+
+fails = [r for r in results if not r[1]]
+print(f"\n{len(results) - len(fails)}/{len(results)} parity checks passed")
+sys.exit(1 if fails else 0)

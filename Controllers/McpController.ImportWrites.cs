@@ -30,7 +30,7 @@ namespace MyApp.Api.Controllers
             var purchaseLine = new
             {
                 type = "object", additionalProperties = false, required = new[] { "description", "quantity", "unitPrice" },
-                properties = new { description = Str(500), quantity = new { type = "string" }, unit = Str(50), unitPrice = MoneyProp, itemTypeId = Int(), hsCode = Str(20) },
+                properties = new { description = Str(500), quantity = new { type = "string" }, unit = Str(50), unitPrice = MoneyProp, itemTypeId = Int(), hsCode = Str(20), id = Int("When editing: the existing line's id.") },
             };
             var gdLine = new
             {
@@ -50,36 +50,36 @@ namespace MyApp.Api.Controllers
             };
             t.AddRange(new Tool[]
             {
-                new("prepare_purchase_bill", "Prepare a purchase bill from a supplier. Nothing is saved until commit_action.",
+                new("prepare_purchase_bill", "Prepare a purchase bill from a supplier, or an edit when purchaseBillId is given (send the whole bill; lines keep their id from get_purchase_bill). Nothing is saved until commit_action.",
                     Obj(new
                     {
-                        companyId = CompanyProp, supplierId = Int(), divisionId = DivisionProp, date = DateProp, supplierBillNumber = Str(100), supplierIRN = Str(100),
+                        companyId = CompanyProp, purchaseBillId = Int("Edit this purchase bill."), supplierId = Int(), divisionId = DivisionProp, date = DateProp, supplierBillNumber = Str(100), supplierIRN = Str(100),
                         gstRate = new { type = "string", description = "Percent. Default 18." }, paymentTerms = Str(200),
                         items = new { type = "array", minItems = 1, maxItems = MaxDocLines, items = purchaseLine }, idempotencyKey = IdemProp,
                     }, "companyId", "supplierId", "items"),
                     Build: BuildPurchaseBillAsync, PerHour: 10, Noun: "purchase bills"),
-                new("prepare_goods_receipt", "Prepare a goods receipt (goods in from a supplier, optionally against a purchase bill). Whole quantities. Nothing is saved until commit_action.",
+                new("prepare_goods_receipt", "Prepare a goods receipt (goods in from a supplier, optionally against a purchase bill), or an edit when goodsReceiptId is given (send the whole receipt; lines keep their id from get_goods_receipt). Whole quantities. Nothing is saved until commit_action.",
                     Obj(new
                     {
-                        companyId = CompanyProp, supplierId = Int(), divisionId = DivisionProp, receiptDate = DateProp, purchaseBillId = Int(), supplierChallanNumber = Str(100), site = Str(300),
-                        items = new { type = "array", minItems = 1, maxItems = MaxDocLines, items = new { type = "object", additionalProperties = false, required = new[] { "description", "quantity", "unit" }, properties = new { description = Str(500), quantity = new { type = "integer", minimum = 1 }, unit = Str(50), itemTypeId = Int() } } },
+                        companyId = CompanyProp, goodsReceiptId = Int("Edit this goods receipt."), supplierId = Int(), divisionId = DivisionProp, receiptDate = DateProp, purchaseBillId = Int(), supplierChallanNumber = Str(100), site = Str(300),
+                        items = new { type = "array", minItems = 1, maxItems = MaxDocLines, items = new { type = "object", additionalProperties = false, required = new[] { "description", "quantity", "unit" }, properties = new { description = Str(500), quantity = new { type = "integer", minimum = 1 }, unit = Str(50), itemTypeId = Int(), id = Int("When editing: the existing line's id.") } } },
                         idempotencyKey = IdemProp,
                     }, "companyId", "supplierId", "items"),
                     Build: BuildGoodsReceiptAsync, PerHour: 30, Noun: "goods receipts"),
-                new("prepare_receipt", "Prepare a customer receipt (money in): settle bills with allocations, and any remainder stays on the customer's account as an advance. Nothing is saved until commit_action.",
+                new("prepare_receipt", "Prepare a customer receipt (money in): settle bills with allocations, and any remainder stays on the customer's account as an advance. With receiptId it edits that receipt (send it whole). Nothing is saved until commit_action.",
                     Obj(new
                     {
-                        companyId = CompanyProp, clientId = Int(), divisionId = DivisionProp, date = DateProp, amount = MoneyProp,
+                        companyId = CompanyProp, receiptId = Int("Edit this receipt."), clientId = Int(), divisionId = DivisionProp, date = DateProp, amount = MoneyProp,
                         method = Str(50, "Cash, Cheque, Bank Transfer, Online ..."), bankAccountId = Int("A bank or cash account of this company (search_accounts)."),
                         description = Str(500),
                         allocations = new { type = "array", maxItems = 50, items = new { type = "object", additionalProperties = false, required = new[] { "invoiceId", "amount" }, properties = new { invoiceId = Int(), amount = MoneyProp } } },
                         idempotencyKey = IdemProp,
                     }, "companyId", "clientId", "amount"),
                     Build: (c, a) => BuildMoneyAsync(c, a, receipt: true), PerHour: 20, Noun: "receipts"),
-                new("prepare_supplier_payment", "Prepare a supplier payment (money out): settle purchase bills with allocations; any remainder is an advance on the supplier's account. Nothing is saved until commit_action.",
+                new("prepare_supplier_payment", "Prepare a supplier payment (money out): settle purchase bills with allocations; any remainder is an advance on the supplier's account. With paymentId it edits that payment (send it whole). Nothing is saved until commit_action.",
                     Obj(new
                     {
-                        companyId = CompanyProp, supplierId = Int(), divisionId = DivisionProp, date = DateProp, amount = MoneyProp,
+                        companyId = CompanyProp, paymentId = Int("Edit this payment."), supplierId = Int(), divisionId = DivisionProp, date = DateProp, amount = MoneyProp,
                         method = Str(50), bankAccountId = Int(), description = Str(500),
                         allocations = new { type = "array", maxItems = 50, items = new { type = "object", additionalProperties = false, required = new[] { "purchaseBillId", "amount" }, properties = new { purchaseBillId = Int(), amount = MoneyProp } } },
                         idempotencyKey = IdemProp,
@@ -129,10 +129,10 @@ namespace MyApp.Api.Controllers
                         salesTaxRate = new { type = "string", description = "Percent." }, actualCostExcludingTax = MoneyProp, asOfDate = DateProp, notes = Str(500), idempotencyKey = IdemProp,
                     }, "companyId", "itemTypeId", "quantity", "valueExcludingTax", "salesTaxRate", "asOfDate"),
                     Build: BuildOpeningStockAsync, PerHour: 30, Noun: "opening balances"),
-                new("prepare_journal_entry", "Prepare a manual journal entry: at least two lines, each a debit OR a credit to one of this company's accounts (search_accounts), debits equal to credits. Nothing is saved until commit_action.",
+                new("prepare_journal_entry", "Prepare a manual journal entry: at least two lines, each a debit OR a credit to one of this company's accounts (search_accounts), debits equal to credits. With journalEntryId it edits that manual entry (send it whole). Nothing is saved until commit_action.",
                     Obj(new
                     {
-                        companyId = CompanyProp, date = DateProp, narration = Str(500), divisionId = DivisionProp,
+                        companyId = CompanyProp, journalEntryId = Int("Edit this manual journal entry."), date = DateProp, narration = Str(500), divisionId = DivisionProp,
                         lines = new { type = "array", minItems = 2, maxItems = MaxDocLines, items = new { type = "object", additionalProperties = false, required = new[] { "accountId" }, properties = new { accountId = Int(), debit = MoneyProp, credit = MoneyProp, description = Str(300) } } },
                         idempotencyKey = IdemProp,
                     }, "companyId", "date", "lines"),
@@ -203,8 +203,10 @@ namespace MyApp.Api.Controllers
 
         private async Task<Built> BuildPurchaseBillAsync(int companyId, JsonElement args)
         {
-            await Need("purchasebills.manage.create");
+            var editId = OptId(args, "purchaseBillId");
+            await Need(editId == null ? "purchasebills.manage.create" : "purchasebills.manage.update");
             var supplierId = (await SupplierInCompanyAsync(args, companyId))!.Value;
+            var lineIds = new List<int?>();
             var division = OptId(args, "divisionId");
             await AssertDivisionWriteAsync(companyId, division);
             var items = new List<CreatePurchaseItemDto>();
@@ -212,6 +214,7 @@ namespace MyApp.Api.Controllers
             {
                 var desc = OptText(it, "description", 500);
                 if (string.IsNullOrEmpty(desc)) throw new ToolError("Item descriptions cannot be empty.");
+                lineIds.Add(OptId(it, "id"));
                 items.Add(new CreatePurchaseItemDto
                 {
                     Description = desc, Quantity = ReqDec(it, "quantity", 0m, 999_999_999m, 4, minInclusive: false), UOM = OptText(it, "unit", 50),
@@ -230,6 +233,7 @@ namespace MyApp.Api.Controllers
             var subtotal = Math.Round(items.Sum(i => i.Quantity * i.UnitPrice), 2, MidpointRounding.AwayFromZero);
             var preview = new { supplierId, supplierName = name, divisionId = division, date = Ymd(dto.Date), dto.SupplierBillNumber, gstRate = dto.GSTRate,
                 items = items.Select(i => new { i.Description, i.Quantity, unit = i.UOM, i.UnitPrice, i.ItemTypeId, hsCode = i.HSCode }), subtotalAbout = subtotal, currency = "PKR" };
+            if (editId is int pbid) return await EditPurchaseBillAsync(companyId, pbid, dto, lineIds, preview, args);
             return new Built(preview, $"Record a purchase bill from \"{name}\" in company {companyId}: {items.Count} line(s), subtotal about {subtotal:0.00} PKR, GST {dto.GSTRate}%",
                 async () =>
                 {
@@ -240,8 +244,10 @@ namespace MyApp.Api.Controllers
 
         private async Task<Built> BuildGoodsReceiptAsync(int companyId, JsonElement args)
         {
-            await Need("goodsreceipts.manage.create");
+            var editId = OptId(args, "goodsReceiptId");
+            await Need(editId == null ? "goodsreceipts.manage.create" : "goodsreceipts.manage.update");
             var supplierId = (await SupplierInCompanyAsync(args, companyId))!.Value;
+            var lineIds = new List<int?>();
             var division = OptId(args, "divisionId");
             await AssertDivisionWriteAsync(companyId, division);
             var billId = OptId(args, "purchaseBillId");
@@ -254,6 +260,7 @@ namespace MyApp.Api.Controllers
                 var unit = OptText(it, "unit", 50);
                 if (string.IsNullOrEmpty(desc) || string.IsNullOrEmpty(unit)) throw new ToolError("Each item needs a description and a unit.");
                 var qty = IntArg(it, "quantity") is int q and > 0 ? q : throw new ToolError("Goods receipt quantities are whole numbers above 0.");
+                lineIds.Add(OptId(it, "id"));
                 items.Add(new CreateGoodsReceiptItemDto { Description = desc, Quantity = qty, Unit = unit, ItemTypeId = await ItemInCompanyAsync(it, "itemTypeId", companyId) });
             }
             var dto = new CreateGoodsReceiptDto
@@ -264,6 +271,7 @@ namespace MyApp.Api.Controllers
             var name = await SupplierNameAsync(supplierId);
             var preview = new { supplierId, supplierName = name, divisionId = division, receiptDate = Ymd(dto.ReceiptDate), purchaseBillId = billId, dto.SupplierChallanNumber,
                 items = items.Select(i => new { i.Description, i.Quantity, i.Unit, i.ItemTypeId }) };
+            if (editId is int grid) return await EditGoodsReceiptAsync(companyId, grid, dto, lineIds, preview, args);
             return new Built(preview, $"Record a goods receipt from \"{name}\" in company {companyId}: {items.Count} line(s)",
                 async () =>
                 {
@@ -276,6 +284,7 @@ namespace MyApp.Api.Controllers
 
         private async Task<Built> BuildMoneyAsync(int companyId, JsonElement args, bool receipt)
         {
+            var editId = OptId(args, receipt ? "receiptId" : "paymentId");
             await Need(receipt ? "accounting.receipts.create" : "accounting.payments.create");
             var partyId = receipt ? (await ClientInCompanyAsync(args, companyId))!.Value : (await SupplierInCompanyAsync(args, companyId))!.Value;
             var division = OptId(args, "divisionId");
@@ -329,6 +338,7 @@ namespace MyApp.Api.Controllers
             var name = receipt ? await ClientNameAsync(partyId) : await SupplierNameAsync(partyId);
             var preview = new { direction = dto.Direction, partyId, partyName = name, divisionId = division, date = Ymd(dto.Date), amount, dto.Method, bankAccountId = bank,
                 allocations = shown, onAccount, currency = "PKR" };
+            if (editId is int mid) return await EditMoneyAsync(companyId, mid, dto, preview, receipt);
             var what = receipt ? "receipt from" : "payment to";
             return new Built(preview, $"Record a {what} \"{name}\" of {amount:0.00} PKR in company {companyId}: {shown.Count} document(s) settled, {onAccount:0.00} on account",
                 async () =>
@@ -658,6 +668,7 @@ namespace MyApp.Api.Controllers
             var preview = new { date = Ymd(dto.Date), dto.Narration, divisionId = division,
                 lines = lines.Select(l => new { l.AccountId, accounts[l.AccountId].Code, accounts[l.AccountId].Name, l.Debit, l.Credit, l.Description }),
                 total = lines.Sum(l => l.Debit), currency = "PKR" };
+            if (OptId(args, "journalEntryId") is int jeid) return await EditJournalAsync(companyId, jeid, dto, preview);
             return new Built(preview, $"Post a manual journal entry of {lines.Sum(l => l.Debit):0.00} PKR dated {Ymd(dto.Date)} in company {companyId}: {lines.Count} line(s)",
                 async () =>
                 {

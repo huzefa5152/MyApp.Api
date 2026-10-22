@@ -23,6 +23,7 @@ namespace MyApp.Api.Controllers
             {
                 description = Str(500), quantity = new { type = "string", description = "Greater than 0, up to 4 decimals." },
                 unit = Str(50), unitPrice = MoneyProp, itemTypeId = Int("From search_item_types."),
+                id = Int("When editing: the existing line's id (from the get_ tool) to keep that line; omit for a new line."),
             },
         };
 
@@ -46,27 +47,27 @@ namespace MyApp.Api.Controllers
                 new("prepare_item_type", "Prepare a new item for this company, or an update when itemTypeId is given. displayName is this company's own name for the item (other companies keep theirs). An item also held by a company outside your access cannot be changed here. Nothing is saved until commit_action.",
                     Obj(new { companyId = CompanyProp, itemTypeId = Int("Omit to create."), name = Str(200), displayName = Str(300, "This company's own name for the item; empty clears it."), hsCode = Str(20), uom = Str(50), saleType = Str(100), idempotencyKey = IdemProp }, "companyId"),
                     Build: BuildItemTypeAsync, PerHour: 30, Noun: "item changes"),
-                new("prepare_quote", "Prepare a sales quotation. Nothing is saved until commit_action.",
+                new("prepare_quote", "Prepare a sales quotation, or an edit of one when quoteId is given (send the whole quotation; lines keep their id from get_quote). Nothing is saved until commit_action.",
                     Obj(new
                     {
-                        companyId = CompanyProp, clientId = Int(), divisionId = DivisionProp, date = DateProp, validUntil = DateProp,
+                        companyId = CompanyProp, quoteId = Int("Edit this quotation."), clientId = Int(), divisionId = DivisionProp, date = DateProp, validUntil = DateProp,
                         customerEnquiryRef = Str(200), enquiryDate = DateProp, notes = Str(2000),
                         gstRate = new { type = "string", description = "Percent, up to 2 decimals. Default 18." },
                         items = new { type = "array", minItems = 1, maxItems = MaxDocLines, items = DocLine }, idempotencyKey = IdemProp,
                     }, "companyId", "clientId", "items"),
                     Build: BuildQuoteAsync, PerHour: 30, Noun: "quotations"),
-                new("prepare_sales_order", "Prepare a sales order: from items, or by converting a quotation (quoteId). Nothing is saved until commit_action.",
+                new("prepare_sales_order", "Prepare a sales order: from items, by converting a quotation (quoteId), or an edit when salesOrderId is given (send the whole order; lines keep their id from get_sales_order). Nothing is saved until commit_action.",
                     Obj(new
                     {
-                        companyId = CompanyProp, quoteId = Int("Convert this quotation instead of giving items."), clientId = Int(), divisionId = DivisionProp,
+                        companyId = CompanyProp, quoteId = Int("Convert this quotation instead of giving items."), salesOrderId = Int("Edit this sales order."), clientId = Int(), divisionId = DivisionProp,
                         orderDate = DateProp, requiredDate = DateProp, customerPoNumber = Str(100), customerPoDate = DateProp, site = Str(300), notes = Str(2000),
                         items = new { type = "array", minItems = 1, maxItems = MaxDocLines, items = DocLine }, idempotencyKey = IdemProp,
                     }, "companyId"),
                     Build: BuildSalesOrderAsync, PerHour: 30, Noun: "sales orders"),
-                new("prepare_challan", "Prepare a delivery challan (no prices): from items for a customer, or deliver lines of a sales order (salesOrderId + lines with salesOrderItemId from get_sales_order). Nothing is saved until commit_action.",
+                new("prepare_challan", "Prepare a delivery challan (no prices): from items for a customer, deliver lines of a sales order (salesOrderId + lines with salesOrderItemId from get_sales_order), or edit one when challanId is given (send its items; lines keep their id from get_challan). Nothing is saved until commit_action.",
                     Obj(new
                     {
-                        companyId = CompanyProp, clientId = Int(), divisionId = DivisionProp, deliveryDate = DateProp,
+                        companyId = CompanyProp, challanId = Int("Edit this challan."), clientId = Int(), divisionId = DivisionProp, deliveryDate = DateProp,
                         poNumber = Str(100, "Optional. A challan without a PO can be billed."), poDate = DateProp, indentNo = Str(100), site = Str(300),
                         items = new { type = "array", minItems = 1, maxItems = MaxDocLines, items = DocLine },
                         salesOrderId = Int("Deliver this sales order instead of giving items."),
@@ -74,10 +75,10 @@ namespace MyApp.Api.Controllers
                         idempotencyKey = IdemProp,
                     }, "companyId", "deliveryDate"),
                     Build: BuildChallanAsync, PerHour: 30, Noun: "challans"),
-                new("prepare_bill", "Prepare a sale bill. With challanIds it bills those challans (give a unitPrice for EVERY challan line, deliveryItemId from get_challan); without, a standalone bill from items. It takes the next number of the legal invoice sequence when committed and is never submitted to FBR here.",
+                new("prepare_bill", "Prepare a sale bill. With challanIds it bills those challans (give a unitPrice for EVERY challan line, deliveryItemId from get_challan); without, a standalone bill from items. With billId it edits that bill: send the whole bill as items, each existing line with its id from get_invoice. A new bill takes the next number of the legal invoice sequence when committed; nothing is submitted to FBR here.",
                     Obj(new
                     {
-                        companyId = CompanyProp, clientId = Int(), divisionId = DivisionProp,
+                        companyId = CompanyProp, billId = Int("Edit this bill."), clientId = Int(), divisionId = DivisionProp,
                         date = new { type = "string", format = "date", description = "Defaults to today (Pakistan time); never in the future." },
                         gstRate = new { type = "string", description = "Percent, up to 2 decimals. Default 18." },
                         paymentTerms = Str(200), paymentMode = Str(50), poNumber = Str(100), poDate = DateProp,
@@ -88,7 +89,7 @@ namespace MyApp.Api.Controllers
                         prices = new { type = "array", maxItems = 500, items = new { type = "object", additionalProperties = false, required = new[] { "deliveryItemId", "unitPrice" }, properties = new { deliveryItemId = Int(), unitPrice = new { type = "string" }, description = Str(500), itemTypeId = Int() } } },
                         items = new { type = "array", maxItems = MaxDocLines, items = DocLine },
                         idempotencyKey = IdemProp,
-                    }, "companyId", "clientId"),
+                    }, "companyId"),
                     Build: BuildBillAsync, PerHour: 10, Noun: "bills"),
                 new("validate_bill_fbr", "Validate a bill with FBR (PRAL's validate endpoint) and return FBR's verdict and item errors. Never submits and issues no FBR number. Uses the company's own FBR token, so it is capped per hour.",
                     Obj(new { companyId = CompanyProp, invoiceId = Int(), scenarioId = Str(10, "Optional FBR scenario such as SN001.") }, "companyId", "invoiceId"),
@@ -98,7 +99,7 @@ namespace MyApp.Api.Controllers
 
         // ── shared parsing ─────────────────────────────────────────────────
 
-        private sealed record Line(string Description, decimal Quantity, string Unit, decimal? UnitPrice, int? ItemTypeId);
+        private sealed record Line(string Description, decimal Quantity, string Unit, decimal? UnitPrice, int? ItemTypeId, int? Id = null);
 
         private async Task<List<Line>> DocLinesAsync(JsonElement args, int companyId, bool pricesRequired)
         {
@@ -111,7 +112,7 @@ namespace MyApp.Api.Controllers
                 if (string.IsNullOrEmpty(unit)) throw new ToolError("Item units cannot be empty.");
                 var qty = ReqDec(it, "quantity", 0m, 999_999_999m, 4, minInclusive: false);
                 var price = pricesRequired ? ReqDec(it, "unitPrice", 0m, 999_999_999m, 4, minInclusive: false) : OptDec(it, "unitPrice", 0m, 999_999_999m, 4);
-                lines.Add(new Line(desc, qty, unit, price, await ItemInCompanyAsync(it, "itemTypeId", companyId)));
+                lines.Add(new Line(desc, qty, unit, price, await ItemInCompanyAsync(it, "itemTypeId", companyId), OptId(it, "id")));
             }
             return lines;
         }
@@ -255,7 +256,8 @@ namespace MyApp.Api.Controllers
 
         private async Task<Built> BuildQuoteAsync(int companyId, JsonElement args)
         {
-            await Need("salesquotes.manage.create");
+            var editId = OptId(args, "quoteId");
+            await Need(editId == null ? "salesquotes.manage.create" : "salesquotes.manage.update");
             var clientId = (await ClientInCompanyAsync(args, companyId))!.Value;
             var division = OptId(args, "divisionId");
             await AssertDivisionWriteAsync(companyId, division);
@@ -271,6 +273,7 @@ namespace MyApp.Api.Controllers
             var name = await ClientNameAsync(clientId);
             var preview = new { clientId, clientName = name, divisionId = division, date = Ymd(dto.Date), validUntil = Ymd(dto.ValidUntil), dto.Notes, gstRate = gst,
                 items = dto.Items.Select(i => new { i.Description, i.Quantity, i.Unit, i.UnitPrice, i.ItemTypeId, i.LineTotal }), subtotal, gstAbout = Math.Round(subtotal * gst / 100m, 2), currency = "PKR" };
+            if (editId is int qid) return await EditQuoteAsync(companyId, qid, dto, lines, preview, args);
             return new Built(preview, $"Create a quotation for \"{name}\" in company {companyId}: {lines.Count} line(s), subtotal {subtotal:0.00} PKR, GST {gst}%",
                 async () =>
                 {
@@ -281,11 +284,12 @@ namespace MyApp.Api.Controllers
 
         private async Task<Built> BuildSalesOrderAsync(int companyId, JsonElement args)
         {
-            await Need("salesorders.manage.create");
+            var editId = OptId(args, "salesOrderId");
+            await Need(editId == null ? "salesorders.manage.create" : "salesorders.manage.update");
             var orders = Svc<ISalesOrderService>();
             if (OptId(args, "quoteId") is int quoteId)
             {
-                if (Has(args, "items") || Has(args, "clientId")) throw new ToolError("Converting a quotation takes quoteId only.");
+                if (Has(args, "items") || Has(args, "clientId") || editId != null) throw new ToolError("Converting a quotation takes quoteId only.");
                 var quote = await Svc<ISalesQuoteService>().GetByIdAsync(quoteId);
                 if (quote == null || quote.CompanyId != companyId) throw new ToolError(Denied);
                 // The new order inherits the quote's division: read access to it is the screen's gate.
@@ -312,6 +316,7 @@ namespace MyApp.Api.Controllers
             var name = await ClientNameAsync(clientId);
             var preview = new { clientId, clientName = name, divisionId = division, orderDate = Ymd(dto.OrderDate), requiredDate = Ymd(dto.RequiredDate), dto.CustomerPoNumber,
                 items = dto.Items.Select(i => new { i.Description, i.Quantity, i.Unit, i.UnitPrice, i.ItemTypeId }) };
+            if (editId is int oid) return await EditSalesOrderAsync(companyId, oid, dto, lines, preview, args);
             return new Built(preview, $"Create a sales order for \"{name}\" in company {companyId}: {lines.Count} line(s)",
                 async () =>
                 {
@@ -322,10 +327,12 @@ namespace MyApp.Api.Controllers
 
         private async Task<Built> BuildChallanAsync(int companyId, JsonElement args)
         {
-            await Need("challans.manage.create");
+            var editId = OptId(args, "challanId");
+            await Need(editId == null ? "challans.manage.create" : "challans.manage.update");
             var delivery = DateArg(args, "deliveryDate") ?? throw new ToolError("deliveryDate is required.");
             if (OptId(args, "salesOrderId") is int orderId)
             {
+                if (editId != null) throw new ToolError("Editing a challan takes its items, not a sales order.");
                 if (Has(args, "items") || Has(args, "clientId")) throw new ToolError("Delivering a sales order takes salesOrderId and lines, not items.");
                 var orders = Svc<ISalesOrderService>();
                 var order = await orders.GetByIdAsync(orderId);
@@ -368,6 +375,7 @@ namespace MyApp.Api.Controllers
             var name = await ClientNameAsync(clientId);
             var preview = new { clientId, clientName = name, divisionId = division, deliveryDate = Ymd(delivery), poNumber = po, poDate = Ymd(dto.PoDate), dto.Site,
                 items = dto.Items.Select(i => new { i.Description, i.Quantity, i.Unit, i.ItemTypeId }) };
+            if (editId is int chid) return await EditChallanAsync(companyId, chid, dto, lines, preview, args);
             return new Built(preview, $"Create a delivery challan for \"{name}\" in company {companyId}: {lines.Count} line(s), delivery {Ymd(delivery)}, " + (po.Length > 0 ? $"PO {po}" : "no PO"),
                 async () =>
                 {
@@ -380,6 +388,7 @@ namespace MyApp.Api.Controllers
 
         private async Task<Built> BuildBillAsync(int companyId, JsonElement args)
         {
+            if (OptId(args, "billId") is int billId) return await EditBillAsync(companyId, billId, args);
             var fromChallans = Has(args, "challanIds");
             await Need(fromChallans ? "bills.manage.create" : "bills.manage.create.standalone");
             var company = await _context.Companies.AsNoTracking().Where(c => c.Id == companyId).Select(c => new { c.StartingInvoiceNumber }).FirstOrDefaultAsync()

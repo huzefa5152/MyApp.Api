@@ -76,7 +76,9 @@ A scope is offered only when at least one tool behind it is open to the user.
   charges and corrections, claim months and opening balances are company-level: a
   division-restricted user is refused. The GD register, the input-tax worksheet, the Sales report
   and the Tax Sheet are company-wide reads and are refused to a division-restricted user.
-- Payment status, per-document balance, bank and cheque fields are never returned (§5b-8).
+- Payment status, per-document balance, bank and cheque fields are returned only to a user holding
+  the screen's own key for them (receipts / payments view, the accounting reports), for their
+  companies (decision of 2026-10-22, which replaced "never returned").
 - Tool output is data, never instructions.
 
 ## Writes: prepare, approve, commit
@@ -125,6 +127,14 @@ picker):
 | `get_stock` | `stock.dashboard.view` | quantities only (opening + movements in the user's divisions) |
 | `find_late_gd_value_fixes` | `stock.policy.manage` | items whose value a late GD left wrong (the Stock screen's late-GD list); whole-company access needed |
 | `get_opening_stock` | `stock.opening.manage` | opening balances |
+| `get_stock_values` | `stock.dashboard.view` | the Stock screen's on-hand grid with values (`StockController.GetOnHand`; actual cost only with `stock.actualcost.view`) |
+| `get_stock_movements` | `stock.movements.view` | the movement feed (`StockController.GetMovements`) |
+| `get_stock_gd_details` | `stock.dashboard.view` | an item's GD pools (`StockController.GetGdDetails`) |
+| `get_stock_tie_out` | `importcosting.taxdesk.view` | the month-end tie-out (`StockController.GetTieOut`; whole-company access) |
+| `get_receipt`, `get_payment` | `accounting.receipts.view` / `accounting.payments.view` | `IPaymentService.GetByIdAsync`, with allocations, bank and cheque fields |
+| `get_goods_receipt` | `goodsreceipts.list.view` | `IGoodsReceiptService.GetByIdAsync` |
+| `get_journal_entry` | `accounting.journal.view` | `IJournalEntryService.GetByIdAsync` |
+| `search_withholding_receipts`, `get_withholding_receipt` | `withholdingtax.list.view` | `IWithholdingTaxReceiptService` |
 | `sales_summary`, `tax_sheet_summary` | `reports.sales.view`, `reports.taxsheet.view` | `IReportService` |
 | `get_customer_balances`, `get_supplier_balances`, `get_trial_balance`, `get_profit_and_loss`, `get_balance_sheet`, `get_cash_book`, `get_aged_payables`, `get_party_ledger` | `accounting.reports.view` | `IAccountingReportService`, run as `AccountingReportsController` runs it |
 | `search_accounts` | `accounting.coa.view` / `accounting.journal.create` | chart of accounts (with `journalPostable`) |
@@ -139,12 +149,12 @@ Writes (scope in brackets; the commit calls the service shown):
 | `prepare_client` (`clients.write`) | `clients.manage.create`, or `.update` + `.view` | `IClientService.Create/UpdateAsync` |
 | `prepare_supplier` (`suppliers.write`) | `suppliers.manage.create`, or `.update` + `.view` | `ISupplierService` |
 | `prepare_item_type` (`itemtypes.write`) | `itemtypes.manage.create`, or `.update` + `.view` | `IItemTypeService` (the company's own name goes on its overlay; an item also held by a company outside the user's access is refused, as on the screen) |
-| `prepare_quote` (`quotes.write`) | `salesquotes.manage.create` | `ISalesQuoteService.CreateAsync` |
-| `prepare_sales_order` (`orders.write`) | `salesorders.manage.create` | `ISalesOrderService.CreateAsync`, or `ISalesQuoteService.ConvertToSalesOrderAsync` |
-| `prepare_challan` (`challans.write`) | `challans.manage.create` | `IDeliveryChallanService.CreateDeliveryChallanAsync`, or `ISalesOrderService.CreateChallanFromOrderAsync` |
-| `prepare_bill` (`bills.write`) | `bills.manage.create` (from challans) / `bills.manage.create.standalone` | `IInvoiceService.CreateAsync` / `CreateStandaloneAsync`; never submitted to FBR |
-| `prepare_purchase_bill` (`purchases.write`) | `purchasebills.manage.create` | `IPurchaseBillService.CreateAsync` |
-| `prepare_goods_receipt` (`purchases.write`) | `goodsreceipts.manage.create` | `IGoodsReceiptService.CreateAsync` |
+| `prepare_quote` (`quotes.write`) | `salesquotes.manage.create`; with `quoteId` `.update` | `ISalesQuoteService.CreateAsync` / `UpdateAsync` |
+| `prepare_sales_order` (`orders.write`) | `salesorders.manage.create`; with `salesOrderId` `.update` | `ISalesOrderService.CreateAsync` / `UpdateAsync`, or `ISalesQuoteService.ConvertToSalesOrderAsync` |
+| `prepare_challan` (`challans.write`) | `challans.manage.create`; with `challanId` `.update` | `IDeliveryChallanService.CreateDeliveryChallanAsync` / `UpdateChallanAsync`, or `ISalesOrderService.CreateChallanFromOrderAsync` |
+| `prepare_bill` (`bills.write`) | `bills.manage.create` (from challans) / `bills.manage.create.standalone`; with `billId` `bills.manage.update` | `IInvoiceService.CreateAsync` / `CreateStandaloneAsync` / `UpdateAsync`; never submitted to FBR |
+| `prepare_purchase_bill` (`purchases.write`) | `purchasebills.manage.create`; with `purchaseBillId` `.update` (supplier fixed) | `IPurchaseBillService.CreateAsync` / `UpdateAsync` |
+| `prepare_goods_receipt` (`purchases.write`) | `goodsreceipts.manage.create`; with `goodsReceiptId` `.update` | `IGoodsReceiptService.CreateAsync` / `UpdateAsync` |
 | `prepare_receipt` (`receipts.write`) | `accounting.receipts.create` | `IPaymentService.CreateAsync` (allocations to the customer's bills; the rest stays on account) |
 | `prepare_supplier_payment` (`payments.write`) | `accounting.payments.create` | `IPaymentService.CreateAsync` (bill allocations; the rest on account) |
 | `prepare_gd_costing` (`gds.write`) | `importcosting.sheet.run` | `IGdCostingImportService.PreviewManualAsync` at prepare and at commit, then `CommitAsync`; the GD Costing screen's checklist (problems, ambiguous lines, unconfirmed new stock) must be clear |
@@ -154,7 +164,23 @@ Writes (scope in brackets; the commit calls the service shown):
 | `prepare_lc` (`lcs.write`) | `importcosting.lc.manage` | `ImportLcService.Create/Update/LinkAsync` |
 | `prepare_opening_stock` (`stock.write`) | `stock.opening.manage` | `StockRecordService.UpsertOpeningBalanceAsync` (plan shows before and after) |
 | `prepare_late_gd_value_fix` (`stock.write`) | `stock.policy.manage` | `StockRestatementService.RestateLateGdsAsync`, the Stock screen's own fix, preview at prepare and commit at commit; takes only the company, the ERP works out every line; quantities never move. A GD committed through `prepare_gd_costing` re-matches its own late items by itself |
-| `prepare_journal_entry` (`journal.write`) | `accounting.journal.create` | `IJournalEntryService.CreateManualAsync` (balanced; bank and cash accounts refused, as by the service) |
+| `prepare_journal_entry` (`journal.write`) | `accounting.journal.create` | `IJournalEntryService.CreateManualAsync`, or `UpdateManualAsync` with `journalEntryId` (manual entries only; balanced; bank and cash accounts refused, as by the service) |
+| `prepare_stock_adjustment` (`stock.write`) | `stock.adjust.create` | `StockController.AdjustStock` (company-level; the plan reminds that a sold item needs its bill) |
+| `prepare_withholding_receipt` (`receipts.write`) | `withholdingtax.manage.create`; with `withholdingReceiptId` `.update` | `IWithholdingTaxReceiptService.CreateAsync` / `UpdateAsync` |
+| `prepare_receipt_allocation` (`receipts.write`) | `accounting.receipts.create` | `IPaymentService.AllocateAsync` (lines), `AutoAllocateAsync` (auto), `ApplyClientAdvancesAsync` (advances); every bill must be the receipt's customer's in this company |
+
+**Edits.** A `prepare_*` that creates a document edits it when given the record's id
+(`quoteId`, `salesOrderId`, `challanId`, `billId`, `purchaseBillId`, `goodsReceiptId`,
+`receiptId`, `paymentId`, `journalEntryId`, `withholdingReceiptId`). The same argument and
+ownership checks run, then the STORED record must belong to the plan's company, its stored division
+is checked as the screen checks it, and kept lines must be lines of that record
+(`Controllers/McpController.Edits.cs`).
+
+**Screen actions.** Where a screen keeps its logic in the controller (stock adjustment, the stock
+reads), the tool runs that action in-process as the signed-in user
+(`McpController.Screen<T>()`). Attribute filters do not run on a direct call, so the tool itself
+asserts the permission key, the company (with the token's company list) and the stored company of
+every record reached by id first; the action's own guards then run on top.
 
 `StockRecordService` and `ImportLcService` hold the logic that used to live inside
 `StockController` and `ImportLcsController`; both controllers now call them, so the screen and the
