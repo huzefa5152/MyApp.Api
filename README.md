@@ -298,6 +298,13 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-10-22 — AI agents can run the importer end to end
+
+- **An agent can now do what you do on the screens, for your companies only.** Edit any document (quotations, orders, challans, bills, purchase bills, goods receipts, receipts, payments, journals), allocate money received to bills, record withholding tax certificates, adjust stock and read its values, movements and month-end tie-out, delete and cancel documents, raise credit and debit notes, file bills with FBR, move money between your accounts, reconcile the bank and your stock sheet, raise supplier debit notes, run every accounting report, attach files and edit print designs.
+- **Every change is still a plan you approve first**, and deleting, FBR filing, banking, files and print designs are each a separate permission you grant on the token. Every tool checks that each record it touches belongs to a company you hold.
+- Staff accounts, roles and company access are not offered to agents yet.
+- Pinned in `scripts/test_mcp_parity.py` (189 checks) alongside the existing MCP suites.
+
 ### 2026-10-22 — A back-dated GD keeps the stock sheet in line by itself
 
 - **Saving a GD now fixes its own late items.** A GD dated before an item's last stock-sheet match or value correction is added to it while the GD is saved, so stock rises at the GD's value straight away and the books stay equal to the stock sheet. The import result says so; the Stock page's late-GD panel is only needed when the fix cannot run (a closed month, or stock with no GD behind it).
