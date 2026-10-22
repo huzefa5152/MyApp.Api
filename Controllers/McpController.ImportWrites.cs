@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text.Json;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
@@ -19,7 +18,8 @@ namespace MyApp.Api.Controllers
     /// company-level inventory state: a division-restricted user is refused, as on the screens
     /// (policy D2). Deleting a GD, switching the costing method, restating FIFO to agent-supplied
     /// lines and reconciling stock are deliberately not offered. The one restatement offered is
-    /// the late-GD fix, whose lines the server works out exactly as the Stock screen's button does.
+    /// the late-GD fix, whose lines the server works out exactly as the Stock screen's button does
+    /// (StockRestatementService, shared with the screen and the GD save).
     /// </summary>
     public partial class McpController
     {
@@ -147,33 +147,27 @@ namespace MyApp.Api.Controllers
 
         // ── late GD value fix ──────────────────────────────────────────────
 
-        /// <summary>The Stock screen's own controller, for the late-GD plan and restatement:
-        /// one definition of which items need it, what is sent, the transaction and the audit.</summary>
-        private StockController StockScreen()
+        /// <summary>The late-GD service the Stock screen and the GD save use; its refusals become tool errors.</summary>
+        private async Task<T> LateGd<T>(Func<StockRestatementService, Task<T>> run)
         {
-            var c = ActivatorUtilities.CreateInstance<StockController>(HttpContext.RequestServices);
-            c.ControllerContext = new ControllerContext { HttpContext = HttpContext };
-            return c;
+            try { return await run(Svc<StockRestatementService>()); }
+            catch (StockRestatementRefusedException ex) { throw new ToolError(ex.Message); }
         }
-
-        private static T ScreenResult<T>(ActionResult<T> r) where T : class =>
-            r.Value ?? (r.Result as ObjectResult)?.Value as T
-            ?? throw new ToolError((r.Result as ObjectResult)?.Value is { } v
-                ? $"The stock screen refused: {JsonSerializer.Serialize(v)}" : "The stock screen gave no answer.");
 
         private async Task<object> FindLateGdFixesAsync(JsonElement args)
         {
             await Need("stock.policy.manage");
             var companyId = await CompanyArg(args);
             await AssertDivisionWriteAsync(companyId, null);
-            var items = ScreenResult(await StockScreen().GetBackdatedGds(companyId));
+            var plan = await LateGd(svc => svc.PlanLateGdsAsync(companyId, CurrentUserId));
             return new
             {
-                totalCount = items.Count,
-                items = items.Select(i => new
+                totalCount = plan.Affected.Count,
+                items = plan.Affected.Select(a => new
                 {
-                    i.ItemTypeId, i.ItemTypeName, anchor = i.AfterValueCorrection ? "value correction" : "stock-sheet match",
-                    anchorDate = Ymd(i.MatchedOn), lateGds = i.Lines.Select(l => new { l.GdNumber, gdDate = Ymd(l.GdDate), l.Quantity, l.ValueExcludingTax }),
+                    a.ItemTypeId, itemTypeName = plan.Items.FirstOrDefault(i => i.ItemTypeId == a.ItemTypeId)?.ItemTypeName ?? "",
+                    anchor = a.Restatement.IsSheetMatch ? "stock-sheet match" : "value correction", anchorDate = Ymd(a.Restatement.Date),
+                    lateGds = a.Lines.Select(l => new { l.GdNumber, gdDate = Ymd(l.GdDate), l.Quantity, l.ValueExcludingTax }),
                 }),
                 currency = "PKR",
             };
@@ -183,7 +177,7 @@ namespace MyApp.Api.Controllers
         {
             await Need("stock.policy.manage");
             await AssertDivisionWriteAsync(companyId, null);
-            var plan = ScreenResult(await StockScreen().RestateBackdatedGds(companyId, new BackdatedGdRestateRequestDto { Commit = false }));
+            var plan = await LateGd(svc => svc.RestateLateGdsAsync(companyId, CurrentUserId, null, commit: false));
             if (plan.Items.Count == 0) throw new ToolError("Nothing to fix: every item is already valued with its late GDs.");
             if (!plan.CanCommit)
                 throw new ToolError(string.Join("; ", plan.Items.Where(i => i.Error != null).Select(i => $"{i.ItemTypeName}: {i.Error}")));
@@ -196,7 +190,7 @@ namespace MyApp.Api.Controllers
                 $"Add late GDs to {plan.Items.Count} item(s) in company {companyId}: value {plan.ValueBefore:N2} -> {plan.ValueAfter:N2}",
                 async () =>
                 {
-                    var done = ScreenResult(await StockScreen().RestateBackdatedGds(companyId, new BackdatedGdRestateRequestDto { Commit = true }));
+                    var done = await LateGd(svc => svc.RestateLateGdsAsync(companyId, CurrentUserId, User.Identity?.Name, commit: true));
                     if (!done.Committed) throw new ToolError(done.Messages.FirstOrDefault() ?? "The late GD fix was not applied.");
                     return ($"LateGdFix:{companyId}", done.Messages.FirstOrDefault() ?? "Late GDs added.");
                 });

@@ -499,6 +499,7 @@ builder.Services.AddScoped<IFbrLookupService, FbrLookupService>();
 builder.Services.AddScoped<IStockService, StockService>();
 // Opening balances and GD claim months: one implementation for the stock screen and MCP.
 builder.Services.AddScoped<StockRecordService>();
+builder.Services.AddScoped<StockRestatementService>();
 builder.Services.AddScoped<ImportLcService>();
 // Derived inventory read model (V2): computes Committed/ToDeliver/Delivered/
 // Incoming buckets from live document state (nothing persisted, so nothing

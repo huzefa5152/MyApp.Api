@@ -8,6 +8,7 @@ using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
 using MyApp.Api.Middleware;
 using MyApp.Api.Models;
+using MyApp.Api.Services.Implementations;
 using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Controllers
@@ -31,6 +32,7 @@ namespace MyApp.Api.Controllers
         private readonly IStockCostAuditService _costAudit;
         private readonly IPostingService _posting;
         private readonly MyApp.Api.Services.Implementations.StockRecordService _records;
+        private readonly StockRestatementService _restatements;
         private readonly ILogger<StockController> _logger;
         private readonly int _defaultPageSize;
 
@@ -39,8 +41,10 @@ namespace MyApp.Api.Controllers
             IDivisionAccessGuard divisionAccess, IPermissionService permission,
             IStockCostAuditService costAudit, IPostingService posting,
             MyApp.Api.Services.Implementations.StockRecordService records,
+            StockRestatementService restatements,
             ILogger<StockController> logger, IConfiguration configuration)
         {
+            _restatements = restatements;
             _records = records;
             _context = context;
             _stock = stock;
@@ -1963,165 +1967,8 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<FifoRestatementResultDto>> RestateFifo(
             int companyId, [FromBody] FifoRestatementRequestDto req)
         {
-            if (req?.Lines == null || req.Lines.Count == 0)
-                return BadRequest(new { error = "Send the sheet's lines." });
-            if (!await StockCostingMethod.IsGdFifoAsync(_context, companyId))
-                return BadRequest(new { error = "Restating to GD lines needs the company on FIFO by GD." });
-            // A division-restricted caller sees part of the movements; a
-            // restatement must be measured against the whole company's stock.
-            if (await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId) != null)
-                return StatusCode(403, new { error = "Restating stock needs access to every division." });
-            foreach (var l in req.Lines)
-            {
-                if (string.IsNullOrWhiteSpace(l.GdNumber) || l.GdNumber.Trim().Length > 100)
-                    return BadRequest(new { error = $"Row {l.SourceRow}: a GD number is required." });
-                if (l.Quantity <= 0m || l.ValueExcludingTax < 0m || l.SalesTaxRate < 0m || l.SalesTaxRate >= 100m)
-                    return BadRequest(new { error = $"Row {l.SourceRow}: quantity must be above zero, value not negative, rate 0 to under 100." });
-                if (l.ClaimMonth is { } cm && (cm.Day != 1 || cm.TimeOfDay != TimeSpan.Zero))
-                    return BadRequest(new { error = $"Row {l.SourceRow}: claim month must be the first day of the month." });
-            }
-
-            var openings = await _context.OpeningStockBalances.AsNoTracking()
-                .Where(o => o.CompanyId == companyId)
-                .GroupBy(o => o.ItemTypeId)
-                .Select(g => new
-                {
-                    ItemTypeId = g.Key, Qty = g.Sum(o => o.Quantity), Value = g.Sum(o => o.ValueExcludingTax),
-                    ActualCost = g.Sum(o => o.ActualCostExcludingTax), Rate = g.Max(o => o.SalesTaxRate),
-                }).ToDictionaryAsync(x => x.ItemTypeId);
-            // A restatement is dated on the day its sheet describes (2026-10-05).
-            // Dated "today" it sat after the month it restated, so the month's
-            // own sheet, Annex-H1 and tie-out never saw it (Alpha, Sep 2026).
-            // Quantities are checked as they stood on that day, so a sale made
-            // since does not refuse a sheet that was right when it was taken.
-            var restateOn = (req.AsOf ?? PakistanClock.Today).Date;
-            if (restateOn > PakistanClock.Today)
-                return BadRequest(new { message = "The sheet's date is in the future." });
-            var cutoff = restateOn.AddDays(1);
-            var allMoves = await _context.StockMovements.AsNoTracking()
-                .Where(m => m.CompanyId == companyId).ToListAsync();
-            var moves = allMoves.Where(m => m.MovementDate < cutoff)
-                .GroupBy(m => m.ItemTypeId).ToDictionary(g => g.Key, g => g.ToList());
-            var held = openings.Keys.Union(allMoves.Select(m => m.ItemTypeId)).Distinct().ToList();
-            var names = await _context.ItemTypes.AsNoTracking().Where(i => held.Contains(i.Id))
-                .Select(i => new { i.Id, i.Name, i.HSCode }).ToDictionaryAsync(i => i.Id);
-            var costing = await StockCosting.LoadAsync(_context, companyId, held);
-
-            var result = new FifoRestatementResultDto();
-            var plans = new List<(FifoRestatementItemDto Item, List<FifoRestatementLineDto> Lines, decimal WaValue)>();
-            foreach (var g in req.Lines.GroupBy(l => l.ItemTypeId))
-            {
-                var id = g.Key;
-                var item = new FifoRestatementItemDto
-                {
-                    ItemTypeId = id, LineCount = g.Count(),
-                    SheetQuantity = g.Sum(l => l.Quantity),
-                    SheetValue = Money(g.Sum(l => l.ValueExcludingTax)),
-                };
-                if (!names.TryGetValue(id, out var n))
-                {
-                    item.Error = "This company holds no stock record for that item.";
-                    result.Items.Add(item);
-                    continue;
-                }
-                item.ItemTypeName = n.Name; item.HsCode = n.HSCode;
-                var o = openings.GetValueOrDefault(id);
-                var ms = moves.GetValueOrDefault(id) ?? new List<StockMovement>();
-                var wa = StockValuation.Compute(o?.Qty ?? 0m, o?.Value ?? 0m, o?.ActualCost ?? 0m, o?.Rate ?? 0m, ms);
-                var fifo = costing.Compute(id, o?.Qty ?? 0m, o?.Value ?? 0m, o?.ActualCost ?? 0m, o?.Rate ?? 0m, ms);
-                item.OnHand = fifo.Quantity;
-                item.FifoValue = fifo.ValueExcludingTax;
-                item.WeightedAverageValue = wa.ValueExcludingTax;
-                item.LandedValue = wa.ActualValueExcludingTax;
-                if (Math.Abs(item.SheetQuantity - item.OnHand) > 0.0001m)
-                    item.Error = $"The sheet has {item.SheetQuantity:0.####} but {item.OnHand:0.####} is on hand. " +
-                                 "Correct the quantity first (a stock adjustment); a restatement never moves quantity.";
-                result.Items.Add(item);
-                plans.Add((item, g.OrderBy(l => l.SourceRow).ToList(), wa.ValueExcludingTax));
-            }
-            var listed = req.Lines.Select(l => l.ItemTypeId).ToHashSet();
-            foreach (var id in held.Where(i => !listed.Contains(i)))
-            {
-                var o = openings.GetValueOrDefault(id);
-                var ms = moves.GetValueOrDefault(id) ?? new List<StockMovement>();
-                var p = costing.Compute(id, o?.Qty ?? 0m, o?.Value ?? 0m, o?.ActualCost ?? 0m, o?.Rate ?? 0m, ms);
-                if (Math.Abs(p.Quantity) <= 0.0001m && Math.Abs(p.ValueExcludingTax) <= 0.005m) continue;
-                result.NotInSheet.Add(new FifoRestatementItemDto
-                {
-                    ItemTypeId = id, ItemTypeName = names.GetValueOrDefault(id)?.Name ?? "",
-                    HsCode = names.GetValueOrDefault(id)?.HSCode, OnHand = p.Quantity, FifoValue = p.ValueExcludingTax,
-                });
-            }
-            result.FifoValueBefore = Money(result.Items.Sum(i => i.FifoValue) + result.NotInSheet.Sum(i => i.FifoValue));
-            result.SheetValue = Money(result.Items.Sum(i => i.SheetValue));
-            result.CanCommit = result.Items.Count > 0 && result.Items.All(i => i.Error == null);
-            if (!req.Commit || !result.CanCommit) return Ok(result);
-
-            var file = string.IsNullOrWhiteSpace(req.SourceFile) ? null
-                : Path.GetFileName(req.SourceFile.Trim()) is var f && f.Length > 260 ? f[..260] : Path.GetFileName(req.SourceFile.Trim());
-            // Joins a caller's transaction when there is one (Reconcile to sheet).
-            await using (var tx = _context.Database.CurrentTransaction == null
-                             ? await _context.Database.BeginTransactionAsync() : null)
-            {
-                foreach (var (item, lines, waValue) in plans)
-                {
-                    // The same movement lands the weighted average on the sheet's
-                    // total, so switching method back keeps the sheet's figure.
-                    var movement = new StockMovement
-                    {
-                        CompanyId = companyId, ItemTypeId = item.ItemTypeId,
-                        Direction = StockMovementDirection.In, Quantity = 0m,
-                        SourceType = StockMovementSourceType.Revaluation, MovementDate = restateOn,
-                        ValueAdjustmentExcludingTax = Money(item.SheetValue - waValue) is var d && d != 0m ? d : null,
-                        Notes = $"FIFO restatement to stock sheet{(file != null ? $" {file}" : "")}: {lines.Count} GD lines",
-                    };
-                    _context.StockMovements.Add(movement);
-                    await _context.SaveChangesAsync();
-
-                    // The item's landed value at the restatement, spread over its
-                    // lines by value -- the sheet's own cost columns are formulas.
-                    var basis = lines.Sum(l => l.ValueExcludingTax);
-                    decimal given = 0m;
-                    for (var i = 0; i < lines.Count; i++)
-                    {
-                        var l = lines[i];
-                        var actual = i == lines.Count - 1 ? Money(item.LandedValue) - given
-                            : basis > 0m ? Money(item.LandedValue * l.ValueExcludingTax / basis) : 0m;
-                        given += actual;
-                        _context.StockRestatementLines.Add(new StockRestatementLine
-                        {
-                            CompanyId = companyId, ItemTypeId = item.ItemTypeId, StockMovementId = movement.Id,
-                            GdNumber = l.GdNumber.Trim(), GdDate = l.GdDate?.Date, ClaimMonth = l.ClaimMonth,
-                            SourceRow = l.SourceRow, Description = l.Description?.Trim() is { Length: > 300 } s ? s[..300] : l.Description?.Trim(),
-                            Quantity = l.Quantity, ValueExcludingTax = Money(l.ValueExcludingTax),
-                            ActualValueExcludingTax = actual, SalesTaxRate = l.SalesTaxRate, SourceFile = file,
-                        });
-                    }
-                    await _context.SaveChangesAsync();
-                }
-                if (tx != null) await tx.CommitAsync();
-            }
-
-            // The value change is an adjustment in the relief of the sheet's month.
-            await _posting.PostInventoryPeriodsAsync(companyId, restateOn);
-            await _audit.LogAsync(new AuditLog
-            {
-                Timestamp = DateTime.UtcNow,
-                Level = "Information",
-                UserName = User.Identity?.Name,
-                HttpMethod = "POST",
-                RequestPath = $"/api/stock/company/{companyId}/fifo-restatement",
-                StatusCode = 200,
-                ExceptionType = "STOCK_FIFO_RESTATEMENT",
-                // Each is its own action: never folded into an earlier row by
-                // the 24h dedup (built for error floods).
-                Fingerprint = Guid.NewGuid().ToString("N"),
-                Message = $"FIFO restatement for company {companyId}: {plans.Count} items, {req.Lines.Count} GD lines, " +
-                          $"value {result.FifoValueBefore:0.00} -> sheet {result.SheetValue:0.00}{(file != null ? $" from {file}" : "")}",
-                CompanyId = companyId,
-            });
-            result.Committed = true;
-            return Ok(result);
+            try { return Ok(await _restatements.RestateAsync(companyId, CurrentUserId, User.Identity?.Name, req)); }
+            catch (StockRestatementRefusedException ex) { return StatusCode(ex.Status, new { error = ex.Message, message = ex.Message }); }
         }
 
         /// <summary>
@@ -2233,9 +2080,10 @@ namespace MyApp.Api.Controllers
         [AuthorizeCompany]
         public async Task<ActionResult<List<BackdatedGdItemDto>>> GetBackdatedGds(int companyId)
         {
-            var (error, plan) = await PlanBackdatedGdsAsync(companyId);
-            if (error != null) return error;
-            return Ok(plan!.Affected.Select(a => new BackdatedGdItemDto
+            LateGdPlan plan;
+            try { plan = await _restatements.PlanLateGdsAsync(companyId, CurrentUserId); }
+            catch (StockRestatementRefusedException ex) { return StatusCode(ex.Status, new { error = ex.Message, message = ex.Message }); }
+            return Ok(plan.Affected.Select(a => new BackdatedGdItemDto
             {
                 ItemTypeId = a.ItemTypeId,
                 ItemTypeName = plan.Items.FirstOrDefault(i => i.ItemTypeId == a.ItemTypeId)?.ItemTypeName ?? "",
@@ -2261,173 +2109,8 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<BackdatedGdRestateResultDto>> RestateBackdatedGds(
             int companyId, [FromBody] BackdatedGdRestateRequestDto? req)
         {
-            var commit = req?.Commit == true;
-            var (error, plan) = await PlanBackdatedGdsAsync(companyId);
-            if (error != null) return error;
-            var result = new BackdatedGdRestateResultDto
-            {
-                Items = plan!.Items,
-                CanCommit = plan.Items.Count > 0 && plan.Items.All(i => i.Error == null),
-                ValueBefore = plan.Items.Sum(i => i.FifoValue),
-                ValueAfter = plan.Items.Sum(i => i.SheetValue),
-            };
-            if (plan.Items.Count == 0)
-            {
-                result.Messages.Add("Nothing to update: every item is already valued with its late GDs.");
-                return Ok(result);
-            }
-            if (!commit || !result.CanCommit) return Ok(result);
-
-            await using var tx = await _context.Database.BeginTransactionAsync();
-            try
-            {
-                foreach (var r in plan.Requests)
-                {
-                    r.Commit = true;
-                    var rr = await RestateFifo(companyId, r);
-                    var res = (rr.Result as OkObjectResult)?.Value as FifoRestatementResultDto ?? rr.Value;
-                    if (res == null || !res.Committed)
-                        throw new InvalidOperationException("The stock-sheet match could not be updated: "
-                            + (res == null ? DescribeResult(rr.Result)
-                               : string.Join("; ", res.Items.Where(i => i.Error != null).Select(i => $"{i.ItemTypeName}: {i.Error}"))) + ".");
-                }
-                await tx.CommitAsync();
-            }
-            catch (InvalidOperationException ex)
-            {
-                await tx.RollbackAsync();
-                return BadRequest(new { message = ex.Message + " Nothing was changed." });
-            }
-            result.Committed = true;
-            var gds = string.Join(", ", plan.Affected.SelectMany(a => a.Lines.Select(l => l.GdNumber)).Distinct().OrderBy(g => g));
-            result.Messages.Add($"{plan.Items.Count} item(s) brought back in line with the stock sheet, now including GD {gds}. Quantities did not change.");
-            await _audit.LogAsync(new AuditLog
-            {
-                Timestamp = DateTime.UtcNow,
-                Level = "Information",
-                UserName = User.Identity?.Name,
-                HttpMethod = "POST",
-                RequestPath = $"/api/stock/company/{companyId}/backdated-gds/restate",
-                StatusCode = 200,
-                ExceptionType = "STOCK_LATE_GD_RESTATE",
-                // Each is its own action: never folded into an earlier row by
-                // the 24h dedup (built for error floods).
-                Fingerprint = Guid.NewGuid().ToString("N"),
-                Message = $"Late GD {gds} added to the stock-sheet match for {plan.Items.Count} item(s) of company {companyId}: " +
-                          $"value {result.ValueBefore:0.00} -> {result.ValueAfter:0.00}",
-                CompanyId = companyId,
-            });
-            return Ok(result);
-        }
-
-        private sealed record BackdatedPlan(
-            List<BackdatedGdRestatement.Affected> Affected,
-            List<FifoRestatementRequestDto> Requests,
-            List<FifoRestatementItemDto> Items);
-
-        /// <summary>
-        /// The restatements that would put every late-GD item right, kept to
-        /// the items whose value they would actually change (or that cannot be
-        /// restated -- those carry the error). Writes nothing: every call to
-        /// RestateFifo here is a preview. One request per match date. Pass 1
-        /// learns each item's on-hand on that date; pass 2 trims the sheet
-        /// lines to it (BackdatedGdRestatement.BuildLines).
-        /// </summary>
-        private async Task<(ActionResult? Error, BackdatedPlan? Plan)> PlanBackdatedGdsAsync(int companyId)
-        {
-            var affected = await BackdatedGdRestatement.FindAsync(_context, companyId);
-            var empty = new BackdatedPlan(new(), new(), new());
-            if (affected.Count == 0) return (null, empty);
-
-            var matchIds = affected.Select(a => a.Restatement.MovementId).ToList();
-            var sheet = (await _context.StockRestatementLines.AsNoTracking()
-                    .Where(r => r.CompanyId == companyId && matchIds.Contains(r.StockMovementId))
-                    .ToListAsync())
-                .GroupBy(r => r.StockMovementId)
-                .ToDictionary(g => g.Key, g => (IReadOnlyList<FifoRestatementLineDto>)g
-                    .OrderBy(r => r.SourceRow).ThenBy(r => r.Id)
-                    .Select(r => new FifoRestatementLineDto
-                    {
-                        ItemTypeId = r.ItemTypeId, GdNumber = r.GdNumber, GdDate = r.GdDate, ClaimMonth = r.ClaimMonth,
-                        SourceRow = r.SourceRow, Description = r.Description, Quantity = r.Quantity,
-                        ValueExcludingTax = r.ValueExcludingTax, SalesTaxRate = r.SalesTaxRate,
-                    }).ToList());
-            // A value correction has no sheet: what it left the item holding is the
-            // walk's pools on its date without the late GDs. An item holding stock
-            // not traced to a GD cannot be restated that way and is listed with
-            // the reason instead.
-            var held = new Dictionary<int, IReadOnlyList<FifoRestatementLineDto>>();
-            var untraced = new List<(BackdatedGdRestatement.Affected A, FifoRestatementItemDto Item)>();
-            foreach (var a in affected.Where(a => !a.Restatement.IsSheetMatch).ToList())
-            {
-                var lines = await BackdatedGdRestatement.HeldLinesAsync(_context, companyId, a);
-                if (lines != null) { held[a.Restatement.MovementId] = lines; continue; }
-                affected.Remove(a);
-                untraced.Add((a, new FifoRestatementItemDto
-                {
-                    ItemTypeId = a.ItemTypeId,
-                    ItemTypeName = await _context.ItemTypes.AsNoTracking().Where(i => i.Id == a.ItemTypeId).Select(i => i.Name).FirstOrDefaultAsync() ?? "",
-                    Error = "Holds stock not traced to a GD, so the late GD cannot be added automatically. Restate it from your stock sheet.",
-                }));
-            }
-            IReadOnlyList<FifoRestatementLineDto> SheetOf(BackdatedGdRestatement.Affected a) =>
-                (a.Restatement.IsSheetMatch ? sheet.GetValueOrDefault(a.Restatement.MovementId) : held.GetValueOrDefault(a.Restatement.MovementId))
-                ?? new List<FifoRestatementLineDto>();
-
-            async Task<(ActionResult? Error, FifoRestatementResultDto? Res)> PreviewAsync(FifoRestatementRequestDto r)
-            {
-                r.Commit = false;
-                var rr = await RestateFifo(companyId, r);
-                var res = (rr.Result as OkObjectResult)?.Value as FifoRestatementResultDto ?? rr.Value;
-                return res == null ? (rr.Result ?? BadRequest(new { message = "The stock-sheet match could not be read." }), null) : (null, res);
-            }
-
-            var keep = new List<BackdatedGdRestatement.Affected>();
-            var requests = new List<FifoRestatementRequestDto>();
-            var items = new List<FifoRestatementItemDto>();
-            foreach (var g in affected.GroupBy(a => a.Restatement.Date).OrderBy(g => g.Key))
-            {
-                var (e1, probe) = await PreviewAsync(new FifoRestatementRequestDto
-                {
-                    AsOf = g.Key,
-                    Lines = g.SelectMany(a => BackdatedGdRestatement.BuildLines(
-                        a.ItemTypeId, g.Key, SheetOf(a), a.Lines, decimal.MaxValue)).ToList(),
-                });
-                if (e1 != null) return (e1, null);
-                var onHand = probe!.Items.ToDictionary(i => i.ItemTypeId, i => i.OnHand);
-                var lines = g.ToDictionary(a => a.ItemTypeId, a => BackdatedGdRestatement.BuildLines(
-                    a.ItemTypeId, g.Key, SheetOf(a), a.Lines, onHand.GetValueOrDefault(a.ItemTypeId)));
-                var (e2, full) = await PreviewAsync(new FifoRestatementRequestDto
-                {
-                    AsOf = g.Key, Lines = lines.Values.SelectMany(l => l).ToList(),
-                });
-                if (e2 != null) return (e2, null);
-
-                // Only what the update would change (or cannot do) is offered. A
-                // GD arrival's movement holds its unit cost at 4dp, so its value can
-                // sit qty x 0.00005 off the sheet's (CLAUDE.md 5b-15): paisa that are
-                // not a wrong value. Pak Trade's 8 untouched items differed by
-                // 0.01-0.04 and were listed as needing a fix until this tolerance.
-                var changed = full!.Items
-                    .Where(i => i.Error != null
-                                || Math.Abs(i.FifoValue - i.SheetValue) >= 1m + Math.Abs(i.SheetQuantity) * 0.0001m)
-                    .ToList();
-                if (changed.Count == 0) continue;
-                var ids = changed.Select(i => i.ItemTypeId).ToHashSet();
-                keep.AddRange(g.Where(a => ids.Contains(a.ItemTypeId)));
-                items.AddRange(changed);
-                requests.Add(new FifoRestatementRequestDto
-                {
-                    SourceFile = $"{(g.All(a => a.Restatement.IsSheetMatch) ? "Stock-sheet match" : "Stock value correction")} of {g.Key:dd MMM yyyy} with late GD " +
-                                 string.Join(", ", g.Where(a => ids.Contains(a.ItemTypeId))
-                                     .SelectMany(a => a.Lines.Select(l => l.GdNumber)).Distinct().OrderBy(x => x)),
-                    AsOf = g.Key,
-                    Lines = lines.Where(kv => ids.Contains(kv.Key)).SelectMany(kv => kv.Value).ToList(),
-                });
-            }
-            keep.AddRange(untraced.Select(u => u.A));
-            items.AddRange(untraced.Select(u => u.Item));
-            return (null, new BackdatedPlan(keep, requests, items));
+            try { return Ok(await _restatements.RestateLateGdsAsync(companyId, CurrentUserId, User.Identity?.Name, req?.Commit == true)); }
+            catch (StockRestatementRefusedException ex) { return StatusCode(ex.Status, new { error = ex.Message, message = ex.Message }); }
         }
 
         private static string DescribeResult(IActionResult? r) => r switch
