@@ -187,7 +187,7 @@ def _build_company(admin, name, tag):
     s, supplier = http("POST", "/api/suppliers", admin, {"companyId": cid, "name": f"{tag} Supplier One", "registrationType": "Unregistered"})
     assert s == 200, (s, supplier)
     gd = f"KAPE-HC-{abs(hash(tag)) % 90000 + 10000}"
-    lines = [_gd_line(gd, "2026-08-03", "7318.1510", f"{tag} BOLT", 100, 50000), _gd_line(gd, "2026-08-03", "7318.1600", f"{tag} NUT", 200, 20000)]
+    lines = [_gd_line(gd, "2026-08-03", "7318.1510", f"{tag} BOLT", 100, 50000), _gd_line(gd, "2026-08-03", "7318.1610", f"{tag} NUT", 200, 20000)]
     s, pv = http("POST", f"/api/spreadsheet-import/gd-costing/preview-manual?companyId={cid}&mode=new-arrivals", admin, {"lines": lines})
     assert s == 200, (s, pv)
     s, r = http("POST", "/api/spreadsheet-import/gd-costing/commit", admin, {"companyId": cid, "fileSha256": pv["fileSha256"], "fileName": pv["fileName"],
