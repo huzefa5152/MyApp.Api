@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MdExpandMore } from "react-icons/md";
 import httpClient from "../api/httpClient";
 import { useAuth } from "../contexts/AuthContext";
 import "./McpCatalogAccessPanel.css";
@@ -32,6 +33,8 @@ export default function McpCatalogAccessPanel({ targetUserId, onSaved, onDirtyCh
   const [conflict, setConflict] = useState(false);
   const [saved, setSaved] = useState(false);
   const [search, setSearch] = useState("");
+  // Groups start collapsed: the catalog is long, and the seed admin works one area at a time.
+  const [open, setOpen] = useState(() => new Set());
   const requestId = useRef(0);
 
   const load = useCallback(async () => {
@@ -150,6 +153,8 @@ export default function McpCatalogAccessPanel({ targetUserId, onSaved, onDirtyCh
     <button type="button" className="mcp-catalog-button" onClick={load}>Load again</button>
   </div>;
 
+  const searching = search.trim() !== "";
+  const allOpen = groups.length > 0 && groups.every(([label]) => open.has(label));
   const accountName = catalog.fullName || catalog.username || "Selected account";
   return <section className="mcp-catalog" aria-label={`AI access for ${accountName}`} aria-busy={saving}>
     <div className="mcp-card">
@@ -178,27 +183,46 @@ export default function McpCatalogAccessPanel({ targetUserId, onSaved, onDirtyCh
 
     <div className="mcp-catalog-toolbar">
       <label className="mcp-catalog-search">Find an action<input type="search" placeholder="Search actions or groups" value={search} onChange={event => setSearch(event.target.value)} /></label>
-      <p className="mcp-catalog-help">{catalog.tools.filter(active).length} actions active{dirty ? " after saving" : ""}</p>
+      <div className="mcp-toolbar-right">
+        <span className="mcp-chip">{catalog.tools.filter(active).length} of {catalog.tools.length} active{dirty ? " after saving" : ""}</span>
+        <button type="button" className="mcp-catalog-button" disabled={searching} onClick={() => setOpen(allOpen ? new Set() : new Set(groups.map(([label]) => label)))}>
+          {allOpen ? "Collapse all" : "Expand all"}</button>
+      </div>
     </div>
-    <div className="mcp-catalog-groups">
-      {groups.map(([label, tools]) => <article className="mcp-catalog-group" key={label}>
-        <div className="mcp-catalog-group-heading"><h4>{label}</h4>
-          <span>{tools.filter(tool => !tool.configurable || (canManage ? draft.grantedTools.has(tool.name) : draft.selectedTools.has(tool.name))).length}/{tools.length}</span></div>
-        <div className="mcp-catalog-group-actions" role="group" aria-label={`${label} choices`}>
-          <button type="button" className="mcp-catalog-button" disabled={saving || conflict || !tools.some(canManage ? canGrantTool : canSelectTool)} onClick={() => changeGroup(tools, true)}>Allow shown actions</button>
-          <button type="button" className="mcp-catalog-button" disabled={saving || conflict || !tools.some(canManage ? canGrantTool : canSelectTool)} onClick={() => changeGroup(tools, false)}>Remove shown actions</button>
-        </div>
-        <div className="mcp-catalog-tools">{tools.map(tool => <div className={`mcp-catalog-tool ${!tool.eligible ? "is-unavailable" : ""}`} key={tool.name}>
-          <div className="mcp-catalog-tool-title"><strong>{toolLabel(tool)}</strong>
-            <span className={`mcp-catalog-tool-kind ${tool.write ? "is-write" : ""}`}>{tool.write ? "Write" : "Read"}</span></div>
-          {!tool.configurable ? <small className="mcp-catalog-help">Included automatically</small> : <div className="mcp-catalog-tool-choices">
-            <label><input type="checkbox" checked={draft.grantedTools.has(tool.name) && draft.selectedTools.has(tool.name)} disabled={saving || conflict || !canGrantTool(tool)} onChange={event => changeTool(tool, event.target.checked, true)} /><span>Allow action</span></label>
-            <small className={active(tool) ? "mcp-catalog-active-text" : "mcp-catalog-help"}>{active(tool) ? "Active" : "Inactive"}</small>
-          </div>}
-          {!tool.eligible && <small className="mcp-catalog-help">Unavailable with this account’s permissions.</small>}
-          {canManage && tool.configurable && tool.eligible && !tool.grantable && <small className="mcp-catalog-help">This action is outside your management access.</small>}
-        </div>)}</div>
-      </article>)}
+    <div className="mcp-accordion">
+      {groups.map(([label, tools]) => {
+        const changeable = tools.filter(canManage ? canGrantTool : canSelectTool);
+        const on = tools.filter(tool => !tool.configurable || (canManage ? draft.grantedTools.has(tool.name) : draft.selectedTools.has(tool.name))).length;
+        const allOn = changeable.length > 0 && changeable.every(tool => draft.grantedTools.has(tool.name) && draft.selectedTools.has(tool.name));
+        const someOn = changeable.some(tool => draft.grantedTools.has(tool.name) && draft.selectedTools.has(tool.name));
+        const expanded = searching || open.has(label);
+        const id = `mcp-group-${label.replace(/\W+/g, "-")}`;
+        return <article className={`mcp-group ${expanded ? "is-open" : ""}`} key={label}>
+          <div className="mcp-group-head">
+            <input type="checkbox" aria-label={`Allow every ${label} action`} title={changeable.length ? "Allow or remove every action in this group" : "Nothing to change in this group"}
+              checked={allOn} ref={el => { if (el) el.indeterminate = someOn && !allOn; }}
+              disabled={saving || conflict || !changeable.length} onChange={() => changeGroup(tools, !allOn)} />
+            <button type="button" className="mcp-group-toggle" aria-expanded={expanded} aria-controls={id} disabled={searching}
+              onClick={() => setOpen(previous => { const next = new Set(previous); next.has(label) ? next.delete(label) : next.add(label); return next; })}>
+              <span className="mcp-group-name">{label}</span>
+              <span className={`mcp-group-count ${on === tools.length ? "is-full" : on ? "" : "is-empty"}`}>{on}/{tools.length}</span>
+              <MdExpandMore className="mcp-group-chevron" aria-hidden />
+            </button>
+          </div>
+          {expanded && <div className="mcp-group-body" id={id}>{tools.map(tool => {
+            const checked = !tool.configurable || (draft.grantedTools.has(tool.name) && draft.selectedTools.has(tool.name));
+            const note = !tool.eligible ? "Unavailable with this account’s permissions."
+              : canManage && tool.configurable && !tool.grantable ? "Outside your management access." : null;
+            return <label className={`mcp-tool ${!tool.eligible ? "is-unavailable" : ""} ${tool.configurable ? "" : "is-fixed"}`} key={tool.name}>
+              <input type="checkbox" checked={checked} disabled={!tool.configurable || saving || conflict || !canGrantTool(tool)}
+                onChange={event => changeTool(tool, event.target.checked, true)} aria-label={`Allow ${toolLabel(tool)}`} />
+              <span className="mcp-tool-text"><span className="mcp-tool-name">{toolLabel(tool)}</span>
+                <small>{note || (!tool.configurable ? "Included automatically" : active(tool) ? "Active" : "Inactive")}</small></span>
+              <span className={`mcp-catalog-tool-kind ${tool.write ? "is-write" : ""}`}>{tool.write ? "Write" : "Read"}</span>
+            </label>;
+          })}</div>}
+        </article>;
+      })}
     </div>
     {groups.length === 0 && <p className="mcp-catalog-note">No actions match this search.</p>}
     {error && <p className="mcp-catalog-alert" role="alert">{error}</p>}
