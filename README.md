@@ -306,6 +306,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+- **2026-10-22:** FBR purchase import no longer creates the same supplier twice. The preview matched sellers against the suppliers that existed before the commit, so a file with several invoices from one new seller created one supplier per invoice (production had duplicate suppliers from this). The committer now re-checks the company by NTN, then name, before creating, and reuses what it finds. `scripts/test_fbr_import_supplier_reuse.py` (10 checks).
+
 - **2026-10-21:** The attachment clip with its count now also shows on Withholding Tax Receipts (cards and table) and Transfers, and tapping it opens that document's files. The clip on every list is now a full 44px tap target without making rows taller. Pinned by `myapp-frontend/src/Components/AttachmentBadge.test.jsx`.
 
 - **2026-10-21:** MCP tenant isolation is swept end to end. `scripts/test_mcp_tenant_sweep.py` reads the full tool list and tries every tool against a company the caller was never assigned, every id argument with another company's record, scans every read for the other company's names, and checks plan theft and revocation. Two gaps closed: a user's own MCP activity history no longer shows a company once it is unassigned, and a repeated idempotency key re-requires the read right before showing a stored update plan. The isolation, documents and reports suites run again: since MCP access became premium, the primary admin, not a tenant administrator, adds the MCP roles in their setup.

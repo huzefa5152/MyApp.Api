@@ -293,15 +293,25 @@ namespace MyApp.Api.Services.Implementations
                 return existing;
             }
 
-            // Slow path: create. We could re-check by NTN here against a
-            // race condition where two operators commit the same FBR
-            // file simultaneously, but that's vanishingly rare and the
-            // unique-NTN-per-company constraint (if any) would catch it.
+            // The preview matched against the suppliers that existed BEFORE the
+            // commit, so two invoices from one new seller in the same file both
+            // arrive unmatched. Re-check now, by NTN then name, the same order
+            // as the matcher, so the second invoice reuses the supplier the
+            // first one created (a tenant got duplicate suppliers on 2026-05-19
+            // from exactly this). A supplier is never created twice per company.
+            var ntn = invoice.SupplierNtn?.Trim();
+            var name = string.IsNullOrWhiteSpace(invoice.SupplierName) ? $"Supplier NTN {ntn}" : invoice.SupplierName.Trim();
+            var found = string.IsNullOrEmpty(ntn) ? null
+                : await _context.Suppliers.OrderBy(s => s.Id).FirstOrDefaultAsync(s => s.CompanyId == companyId && s.NTN != null && s.NTN.Trim() == ntn);
+            found ??= await _context.Suppliers.OrderBy(s => s.Id)
+                .FirstOrDefaultAsync(s => s.CompanyId == companyId && s.Name.Trim().ToLower() == name.ToLower());
+            if (found != null) return found;
+
             var supplier = new Supplier
             {
                 CompanyId = companyId,
-                Name = string.IsNullOrWhiteSpace(invoice.SupplierName) ? $"Supplier NTN {invoice.SupplierNtn}" : invoice.SupplierName,
-                NTN = invoice.SupplierNtn,
+                Name = name,
+                NTN = ntn,
                 RegistrationType = "Registered",  // Annexure-A only carries registered sellers
             };
             _context.Suppliers.Add(supplier);
