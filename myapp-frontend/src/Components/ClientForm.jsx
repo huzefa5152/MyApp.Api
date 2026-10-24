@@ -101,17 +101,22 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
   // province, and an NTN/CNIC for a REGISTERED buyer. STRN is never sent
   // to FBR, and an unregistered buyer's CNIC is optional. So:
   //   • Registered    — NTN (7 digits) required. STRN optional.
-  //   • FTN           — Federal Tax Number lives in the NTN column; required.
-  //   • Unregistered  — no NTN; CNIC optional (13 digits when given).
+  //   • FTN           — Federal Tax Number lives in the NTN column; optional.
+  //   • Unregistered  — NTN optional; CNIC optional (13 digits when given).
   //   • CNIC          — same as Unregistered for the form's purposes.
+  // An NTN typed for a non-Registered buyer is kept and prints through the
+  // NTN merge fields like any other.
   // Blank — pick the type first.
   const regType = formData.registrationType;
-  const showNtn  = regType === "Registered" || regType === "FTN";
+  const showNtn  = !!regType;
+  const ntnRequired = regType === "Registered";
   const showStrn = regType === "Registered"; // shown, but optional
   // CNIC shows for every type once one is picked; optional throughout —
   // the server files under the NTN when there is one, else the CNIC.
   const showCnic = !!regType;
-  const ntnLabel = regType === "FTN" ? "FTN *" : "NTN *";
+  const ntnLabel = ntnRequired
+    ? "NTN *"
+    : <>{regType === "FTN" ? "FTN" : "NTN"} <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional)</span></>;
 
   // "Check with FBR": FBR's Get_Reg_Type answer for the typed NTN/CNIC.
   // A buyer recorded as Registered whom FBR holds as Unregistered is
@@ -144,10 +149,8 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
     if (!formData.registrationType) newErrors.registrationType = "Registration Type is required";
     if (!formData.fbrProvinceCode && formData.fbrProvinceCode !== 0) newErrors.fbrProvinceCode = "Province is required";
 
-    // NTN/STRN: required only for Registered and (NTN only) FTN. The
-    // form-level fields are still in state — if the operator switched
-    // type they get blanked on switch, so this stays in sync.
-    if (showNtn && !formData.ntn.trim()) newErrors.ntn = regType === "FTN" ? "FTN is required" : "NTN is required";
+    // NTN: required only for Registered; optional for every other type.
+    if (ntnRequired && !formData.ntn.trim()) newErrors.ntn = "NTN is required";
     // STRN is deliberately NOT required: the FBR buyer block carries
     // NTN/CNIC, name, province, address and registration type — no STRN —
     // and demanding one here kept real buyers out of FBR. A CNIC is
@@ -173,7 +176,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
     // Registered keeps the new (empty) state until the operator types.
     if (name === "registrationType") {
       const next = { ...formData, registrationType: value };
-      const willShowNtn  = value === "Registered" || value === "FTN";
+      const willShowNtn  = !!value;
       const willShowStrn = value === "Registered";
       if (!willShowNtn)  next.ntn  = "";
       if (!willShowStrn) next.strn = "";

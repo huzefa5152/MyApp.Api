@@ -268,7 +268,7 @@ workbook: sample → upload → preview → commit → fix list.
 - The upload routes share the `"import"` rate limit (10/min/user), which runs
   BEFORE authorization — so a loop over many companies tests the limiter, not
   the tenant guard. The tenant suite checks each upload route once.
-- Suites: `cd scripts/onboarding_harness && dotnet run -c Release` (97 checks,
+- Suites: `cd scripts/onboarding_harness && dotnet run -c Release` (99 checks,
   offline — rules, reader, sample and fix-list round trips),
   `python scripts/test_onboarding_import.py` (70 checks, live),
   `node scripts/test_onboarding_import.mjs` (23 checks, the screen's decisions).
@@ -376,7 +376,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Quote discount arithmetic + copying a discounted line (offline) | `node scripts/test_quote_discount.mjs` | `25 passed, 0 failed` |
 | Partial bills: leave challan lines out on create and in Manage challans, merge-back, release paths, billed-challan sync, supplier purchases, FBR lock, tenant | `python scripts/test_partial_billing.py --base <url> --database <local *_Test db>` | `38/38 partial billing checks passed` |
 | PO format from a scanned PDF / photo: OCR fingerprint, save, match on import, company guard | `python scripts/test_po_format_from_scan.py --base <url>` | `10/10 PO format from scan checks passed` |
-| Onboarding import — sample, preview, commit, re-upload adds nothing, fix list, permissions | `python scripts/test_onboarding_import.py`; `cd scripts/onboarding_harness && dotnet run -c Release`; `node scripts/test_onboarding_import.mjs` | `70/70 checks passed`; `97 checks, 0 failed`; `23/23 checks passed` |
+| Onboarding import — sample, preview, commit, re-upload adds nothing, fix list, permissions | `python scripts/test_onboarding_import.py`; `cd scripts/onboarding_harness && dotnet run -c Release`; `node scripts/test_onboarding_import.mjs` | `70/70 checks passed`; `99 checks, 0 failed`; `23/23 checks passed` |
 | Accounting — chart of accounts | `python scripts/test_accounting_chart.py` | `103/103 checks` |
 | Accounting — general ledger core | `python scripts/test_accounting_gl.py` | `93/93 checks` |
 | Accounting — further tax + withholding on documents | `python scripts/test_document_taxes.py` (add `--db "<conn>"` for the credit-note suite) | `67/67 checks` (62 without `--db`) |

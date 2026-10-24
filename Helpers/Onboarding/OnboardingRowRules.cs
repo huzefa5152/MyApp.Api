@@ -90,9 +90,11 @@ namespace MyApp.Api.Helpers.Onboarding
             return DateTime.TryParseExact(s, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d.Date : null;
         }
 
-        public static bool NeedsNtn(string? registrationType) =>
+        /// A customer needs an NTN only when Registered; any other type may
+        /// carry one optionally (it prints on bills). Suppliers also need it for FTN.
+        public static bool NeedsNtn(string? registrationType, bool isCustomer = false) =>
             string.Equals(registrationType, "Registered", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(registrationType, "FTN", StringComparison.OrdinalIgnoreCase);
+            || (!isCustomer && string.Equals(registrationType, "FTN", StringComparison.OrdinalIgnoreCase));
 
         public static List<RowIssue> Check(string sheetKey, ParsedRow row, RuleContext ctx)
         {
@@ -141,7 +143,7 @@ namespace MyApp.Api.Helpers.Onboarding
                 error("ntn", DigitsOnly(ntnRaw).Length == 13
                     ? "13 digits is a CNIC, put it in the CNIC column"
                     : "must be 7 digits, e.g. 1234567");
-            else if (ntnRaw.Length == 0 && NeedsNtn(type))
+            else if (ntnRaw.Length == 0 && NeedsNtn(type, isCustomer))
                 error("ntn", $"required for a {type} {who}");
 
             var cnicRaw = row.Get("cnic");

@@ -94,7 +94,9 @@ namespace MyApp.Api.Helpers.Onboarding
                 "Pick from the list: Registered, Unregistered, FTN or CNIC.",
                 ListSource.RegistrationType, Width: 20),
             new OnboardingColumn("ntn", "NTN", Requirement.Conditional,
-                "7 digits, e.g. 1234567 (1234567-8 is fine). Required when Registration Type is Registered or FTN.",
+                who == "customer"
+                    ? "7 digits, e.g. 1234567 (1234567-8 is fine). Required when Registration Type is Registered; optional otherwise, and printed on documents when given."
+                    : "7 digits, e.g. 1234567 (1234567-8 is fine). Required when Registration Type is Registered or FTN.",
                 Kind: ColumnKind.Identifier, Width: 16),
             new OnboardingColumn("cnic", "CNIC", Requirement.Conditional,
                 "13 digits, dashes optional, e.g. 42101-1234567-1. Required when Registration Type is CNIC.",
