@@ -1,9 +1,8 @@
 # MyApp.Api — Claude Code session standards
 
 You are working on **MyApp.Api**, an FBR Digital Invoicing ERP for Pakistani
-wholesalers. Production live at `hakimitraders.runasp.net` (MonsterASP).
-Two real tenants today (Hakimi Traders, Roshan Traders); the codebase is
-being evolved into a multi-tenant SaaS.
+wholesalers. Three production lines run live on MonsterASP (see
+Environments below); the codebase is being evolved into a multi-tenant SaaS.
 
 **This file is the single source of truth that every Claude session must
 follow.** It is auto-loaded into every conversation — read it once and
@@ -86,25 +85,26 @@ until a test proves it.
 
 ## Environments — READ `docs/ENVIRONMENTS.md` BEFORE TOUCHING ANYTHING
 
-There are **four separate production installations** on MonsterASP, not one
-product with four stages. Each has its own live database, its own deploy
-workflow and its own long-lived branch. A fifth branch carries audit work.
+There are **three live production installations** on MonsterASP, not one
+product with three stages. Each has its own live database, its own deploy
+workflow and its own long-lived branch. `master` was the first installation
+and is **retired**: it gets no work, no ports and no pushes.
 
 | Branch | Role | Local database |
 |---|---|---|
-| `master` | Production #1 (`deploy.yml`) | `MyApp_Master_Local` |
+| `master` | **Retired** — history only; never commit, port to or push it (a push would still fire `deploy.yml`) | `MyApp_Master_Local` |
 | `customize-solution-for-other` | Production #2 (`deploy-other.yml`) | `MyApp_Customize_Local` |
 | `feat/importer-ledger-receipts` | Production #3 (`deploy-importer.yml`) | `MyApp_Importer_Local` |
 | `TraderFbrInvoicingSystem` | Production #4 (`deploy-trader.yml`) | `MyApp_Trader_Local` |
-| `fix/audit-2026-08-02` | Audit / security, ahead of `master` — not an environment | `MyApp_Master_Local` |
 
-**These five are the only valid branches.** A short-lived working branch is
+**These are the only valid branches.** A short-lived working branch is
 fine; delete it when the work lands. Never delete a branch with unique commits.
 
 **Never merge one production line into another.** They have deliberately
 diverged (site shape, dozens of migrations). A change asked for on one branch
 stays there unless the maintainer asks for a port. Security fixes usually
-should reach all four — but each port is a deliberate, reviewed act.
+should reach all three live lines — but each port is a deliberate, reviewed
+act. Nothing is ported to `master`.
 
 **The branch picks the database by itself.** `Helpers/LocalDevDatabase.cs`
 reads `.git/HEAD` at startup and looks the branch up in `local.databases.json`.
@@ -162,7 +162,7 @@ cd myapp-frontend && npm run build
 **Operator rules (do NOT violate without explicit say-so):**
 - Never auto-restart the backend
 - Never auto-commit
-- Never auto-push (master or any branch)
+- Never auto-push (any branch)
 - Frontend rebuild (`npm run build` + copy dist→wwwroot) IS fine to run automatically after frontend source edits
 
 ---
@@ -329,16 +329,20 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 
 > ### 🔴 HARD PRE-PUSH GATE — inventory flow (non-negotiable)
 > **Claude runs every push and deploy for this repo — the operator does not.**
-> So this gate lives here, not in CI. **Before ANY `git push` that reaches
-> `master`** (a direct push, or a merge/PR that lands on it), you MUST:
+> So this gate lives here, not in CI. **Before ANY `git push` that reaches a
+> production branch** — `customize-solution-for-other`, `feat/importer-ledger-receipts` or
+> `TraderFbrInvoicingSystem` (a direct push, or a merge/PR that lands on
+> one) — you MUST:
 > 1. have a backend running against a schema-current DB, and
 > 2. run `python scripts/test_stock_itemtype_reflow.py` and see **`all checks
 >    passed`** (currently **250/250**).
 >
-> If it is **red**, or you **cannot run it**, **DO NOT PUSH.** A broken inventory
-> in/out flow must never reach master — ever. Run it even when the change looks
+> If it is **red**, or you **cannot run it**, **DO NOT PUSH.** Every push to a
+> production branch deploys a live customer's site, so a broken inventory in/out
+> flow must never reach one — ever. Run it even when the change looks
 > unrelated to stock (stock reflow is reachable from invoice, bill, challan, and
 > the FBR dual-book overlay paths). No exceptions, no "it's a tiny change."
+> `master` is retired and is never pushed, so it has no gate.
 
 | Check | Command | Must show |
 |---|---|---|
@@ -498,7 +502,7 @@ original author is honest provenance for a transplanted commit.
 
 ### Everything else
 
-- Branch from `origin/master`: `fix/...` or `feat/...`
+- Branch from the production line you are changing (`origin/<line>`): `fix/...` or `feat/...`
 - Imperative commit subjects ("Fix dashboard duplicates", not "Fixed" / "This fixes")
 - Commit-per-phase for large changes
 - **Never** include `Co-Authored-By: Claude …` or any AI-attribution footer — global rule from user memory
@@ -513,11 +517,11 @@ original author is honest provenance for a transplanted commit.
 
 ## Production deploy notes
 
-- Live host: **MonsterASP** at `hakimitraders.runasp.net`
+- Live hosts: **MonsterASP**, one site per production line (`docs/ENVIRONMENTS.md`)
 - `appsettings.Production.json` provides `Jwt:Key` + `ConnectionStrings` — never committed (gitignored)
 - DataProtection keys persist to `data/keys/` — if MonsterASP wipes that on redeploy, previously-encrypted `Company.FbrToken` values become unreadable (Unprotect returns null → operator re-enters token). Verify persistence after first deploy.
 - `ForwardedHeaders:KnownProxies` should be populated with MonsterASP's proxy IPs once known (audit C-12) so the rate-limit partition key uses the real client IP.
-- Two real tenants currently: **Hakimi Traders** (CompanyId=1) and **Roshan Traders** (CompanyId=2). Do not modify their existing data without explicit say-so.
+- Every line has real tenants. Do not modify any tenant's existing data without explicit say-so.
 
 ---
 
