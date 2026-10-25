@@ -107,7 +107,10 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
 
   // Same registration-type → identity-fields mapping as ClientForm.
   const regType = form.registrationType;
-  const showNtn  = regType === "Registered" || regType === "FTN";
+  // NTN shows for every type and is required only for Registered; an NTN on
+  // any other type is kept and prints through the NTN merge fields.
+  const showNtn  = !!regType;
+  const ntnRequired = regType === "Registered";
   const showStrn = regType === "Registered";
   const showCnic = regType === "Unregistered" || regType === "CNIC";
   const ntnLabel = regType === "FTN" ? "FTN" : "NTN";
@@ -120,7 +123,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
       setForm((f) => ({
         ...f,
         registrationType: value,
-        ntn:  (value === "Registered" || value === "FTN") ? f.ntn  : "",
+        ntn:  value ? f.ntn : "",
         strn: (value === "Registered")                    ? f.strn : "",
         cnic: (value === "Unregistered" || value === "CNIC") ? f.cnic : "",
       }));
@@ -269,8 +272,8 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
     // Type-driven identity validation — same rules as ClientForm so the
     // common edit can't save a half-filled identity that would fail FBR
     // submission later.
-    if (showNtn && !form.ntn?.trim()) {
-      setError(`${ntnLabel} is required for ${regType} entities.`);
+    if (ntnRequired && !form.ntn?.trim()) {
+      setError("NTN is required for Registered entities.");
       return;
     }
     if (showStrn && !form.strn?.trim()) {
@@ -392,7 +395,9 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                   <div className="form-grid-2col">
                     {showNtn && (
                       <div data-admin-field="" style={formStyles.formGroup}>
-                        <label style={formStyles.label}>{ntnLabel} *</label>
+                        <label style={formStyles.label}>
+                          {ntnLabel} {ntnRequired ? "*" : <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional)</span>}
+                        </label>
                         <input
                           name="ntn"
                           value={form.ntn}
@@ -429,7 +434,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                       maxLength={13}
                     />
                     <span style={s.fieldHelp}>
-                      Unregistered buyers don't have NTN/STRN — CNIC is the FBR identity for individuals.
+                      CNIC is the FBR identity for individuals; an NTN above is optional.
                     </span>
                   </div>
                 )}
