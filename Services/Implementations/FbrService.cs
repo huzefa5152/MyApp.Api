@@ -1227,6 +1227,7 @@ namespace MyApp.Api.Services.Implementations
             // generic catch below distinguish "never sent" (safe to retry → Failed)
             // from "sent, outcome unknown" (must not auto-retry → Uncertain).
             bool posted = false;
+            var sw = new System.Diagnostics.Stopwatch();
             try
             {
                 var httpClient = CreateClient(company);
@@ -1276,9 +1277,11 @@ namespace MyApp.Api.Services.Implementations
                     invoice.FbrStatus = FbrSubmissionStatus.Submitting;
                 }
 
+                sw.Start();
                 var response = await httpClient.PostAsync(url, content);
                 posted = true;   // bytes are on the wire; FBR may now hold this invoice
                 var responseBody = await response.Content.ReadAsStringAsync();
+                sw.Stop();
 
                 // ── HTTP-level errors ──
                 if (!response.IsSuccessStatusCode)
@@ -1327,7 +1330,7 @@ namespace MyApp.Api.Services.Implementations
                     {
                         var gwMsg = $"FBR's API gateway could not reach their invoicing service, so nothing was sent " +
                                     $"and nothing was recorded — {gatewayFault} This is on FBR's side; try again shortly.";
-                        await AuditFbr("Error", action, invoice.Id, url, json, responseBody, statusCode, gwMsg);
+                        await AuditFbr("Error", action, invoice.Id, url, json, responseBody, statusCode, gwMsg, durationMs: (int)sw.ElapsedMilliseconds);
                         // Not sent = definitively not committed, so the bill stays
                         // re-submittable rather than being parked for reconciliation.
                         if (isSubmit) await PersistStatus(invoice, FbrSubmissionStatus.Failed, null, gwMsg);
@@ -1352,7 +1355,7 @@ namespace MyApp.Api.Services.Implementations
                         _ => $"FBR API returned HTTP {statusCode}: {responseBody}"
                     };
 
-                    await AuditFbr("Error", action, invoice.Id, url, json, responseBody, statusCode, errorMsg);
+                    await AuditFbr("Error", action, invoice.Id, url, json, responseBody, statusCode, errorMsg, durationMs: (int)sw.ElapsedMilliseconds);
                     if (isSubmit) await PersistStatus(invoice, httpOutcome, null, errorMsg);
                     return Fail(errorMsg);
                 }
@@ -1376,7 +1379,7 @@ namespace MyApp.Api.Services.Implementations
                     // auto-retry that could duplicate; an admin verifies + resets.
                     var pmsg = "FBR returned a 200 response we could not interpret, so this submission's outcome " +
                                "is UNCONFIRMED. Do NOT submit again — an administrator must verify it at FBR and reset it.";
-                    await AuditFbr("Error", action, invoice.Id, url, json, responseBody, 200, pmsg);
+                    await AuditFbr("Error", action, invoice.Id, url, json, responseBody, 200, pmsg, durationMs: (int)sw.ElapsedMilliseconds);
                     if (isSubmit) await PersistStatus(invoice, FbrSubmissionStatus.Uncertain, null, pmsg);
                     return Fail(pmsg);
                 }
@@ -1389,7 +1392,7 @@ namespace MyApp.Api.Services.Implementations
                     // FBR responded OK, outcome unconfirmed → Uncertain, not Failed.
                     var msg = "FBR returned a 200 response with no validation result, so this submission's " +
                               "outcome is UNCONFIRMED. Do NOT submit again — an administrator must verify it at FBR and reset it.";
-                    await AuditFbr("Error", action, invoice.Id, url, json, responseBody, 200, msg);
+                    await AuditFbr("Error", action, invoice.Id, url, json, responseBody, 200, msg, durationMs: (int)sw.ElapsedMilliseconds);
                     if (isSubmit) await PersistStatus(invoice, FbrSubmissionStatus.Uncertain, null, msg);
                     return Fail(msg);
                 }
@@ -1429,7 +1432,7 @@ namespace MyApp.Api.Services.Implementations
                     // text (which stays at the head for support traceability).
                     msg = EnrichFbrErrorHint(validation.ErrorCode, msg, invoice);
 
-                    await AuditFbr("Warning", action, invoice.Id, url, json, responseBody, 200, msg);
+                    await AuditFbr("Warning", action, invoice.Id, url, json, responseBody, 200, msg, durationMs: (int)sw.ElapsedMilliseconds);
                     if (isSubmit) await PersistStatus(invoice, FbrSubmissionStatus.Failed, null, msg);
                     return new FbrSubmissionResult
                     {
@@ -1455,7 +1458,7 @@ namespace MyApp.Api.Services.Implementations
                     var firstCode = errorItems?.FirstOrDefault()?.ErrorCode ?? validation.ErrorCode;
                     msg = EnrichFbrErrorHint(firstCode, msg, invoice);
 
-                    await AuditFbr("Warning", action, invoice.Id, url, json, responseBody, 200, msg);
+                    await AuditFbr("Warning", action, invoice.Id, url, json, responseBody, 200, msg, durationMs: (int)sw.ElapsedMilliseconds);
                     if (isSubmit) await PersistStatus(invoice, FbrSubmissionStatus.Failed, null, msg);
                     return new FbrSubmissionResult
                     {
@@ -1505,7 +1508,7 @@ namespace MyApp.Api.Services.Implementations
                     var successMsg = isSubmit
                         ? $"Invoice {invoice.InvoiceNumber} submitted to FBR successfully. IRN: {irn}"
                         : $"Invoice {invoice.InvoiceNumber} validated by FBR successfully.";
-                    await AuditFbr("Info", action, invoice.Id, url, json, responseBody, 200, successMsg);
+                    await AuditFbr("Info", action, invoice.Id, url, json, responseBody, 200, successMsg, durationMs: (int)sw.ElapsedMilliseconds);
 
                     return new FbrSubmissionResult
                     {
@@ -1521,7 +1524,7 @@ namespace MyApp.Api.Services.Implementations
                 // Uncertain so we never auto-resubmit into a possible duplicate.
                 var unexpectedMsg = $"FBR returned an unrecognised status ({validation.StatusCode} / {validation.Status}); " +
                                     "this submission's outcome is UNCONFIRMED. Do NOT submit again — an administrator must verify it at FBR and reset it.";
-                await AuditFbr("Warning", action, invoice.Id, url, json, responseBody, 200, unexpectedMsg);
+                await AuditFbr("Warning", action, invoice.Id, url, json, responseBody, 200, unexpectedMsg, durationMs: (int)sw.ElapsedMilliseconds);
                 if (isSubmit) await PersistStatus(invoice, FbrSubmissionStatus.Uncertain, null, unexpectedMsg);
                 return Fail(unexpectedMsg);
             }
@@ -1537,7 +1540,7 @@ namespace MyApp.Api.Services.Implementations
                       "is UNCONFIRMED. Do NOT submit again — an administrator must verify it at FBR and reset it."
                     : "Cannot connect to FBR. Check your internet connection and ensure your server IP is " +
                       "whitelisted on the FBR IRIS portal, then try again.";
-                await AuditFbr("Error", action, invoice.Id, url, json, null, 0, msg);
+                await AuditFbr("Error", action, invoice.Id, url, json, null, 0, msg, durationMs: (int)sw.ElapsedMilliseconds);
                 if (isSubmit) await PersistStatus(invoice, posted ? FbrSubmissionStatus.Uncertain : FbrSubmissionStatus.Failed, null, msg);
                 return Fail(msg);
             }
@@ -1554,7 +1557,7 @@ namespace MyApp.Api.Services.Implementations
                       "Do NOT submit again — FBR may already have this invoice. An administrator must verify " +
                       "it at FBR and, only if it is not there, reset it for resubmission."
                     : "Could not reach FBR before the request timed out (nothing was sent). Please try again.";
-                await AuditFbr("Error", action, invoice.Id, url, json, null, 0, msg);
+                await AuditFbr("Error", action, invoice.Id, url, json, null, 0, msg, durationMs: (int)sw.ElapsedMilliseconds);
                 if (isSubmit) await PersistStatus(invoice, uncertain ? FbrSubmissionStatus.Uncertain : FbrSubmissionStatus.Failed, null, msg);
                 return Fail(msg);
             }
@@ -1580,7 +1583,7 @@ namespace MyApp.Api.Services.Implementations
                           "recover. Nothing was sent and nothing was recorded — try again in a moment."
                         : "An unexpected error occurred before the request reached FBR. Nothing was sent. " +
                           "See the FBR monitor for details.";
-                await AuditFbr("Error", action, invoice.Id, url, json, null, 0, msg);
+                await AuditFbr("Error", action, invoice.Id, url, json, null, 0, msg, durationMs: (int)sw.ElapsedMilliseconds);
                 if (isSubmit) await PersistStatus(invoice, posted ? FbrSubmissionStatus.Uncertain : FbrSubmissionStatus.Failed, null, msg);
                 return Fail(msg);
             }

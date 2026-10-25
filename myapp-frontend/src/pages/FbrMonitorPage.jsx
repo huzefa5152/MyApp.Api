@@ -188,7 +188,7 @@ export default function FbrMonitorPage() {
 // ── Layout ─────────────────────────────────────────────────────────
 
 function Shell({ children }) {
-  return <div className="fbr-mon-page" style={{ maxWidth: 1480, margin: "0 auto" }}>{children}</div>;
+  return <div className="fbr-mon-page" style={{ width: "100%", maxWidth: 1480, margin: "0 auto" }}>{children}</div>;
 }
 
 function Header({ company, companies, selectedCompanyId, onCompanyChange, windowHours, onWindowChange, onRefresh }) {
@@ -299,7 +299,7 @@ function RowsList({ rows, loading, onClickRow }) {
   return (
     <section style={S.list}>
       <div className="fbr-mon-list-header" style={S.listHeader}>
-        <span style={{ width: 150 }}>Timestamp</span>
+        <span style={{ width: 180, flexShrink: 0 }}>Timestamp</span>
         <span style={{ width: 110 }}>Status</span>
         <span style={{ width: 90 }}>Action</span>
         <span style={{ width: 90 }}>Bill</span>
@@ -312,7 +312,7 @@ function RowsList({ rows, loading, onClickRow }) {
         const Icon = cfg.icon;
         return (
           <button type="button" key={r.id} onClick={() => onClickRow(r)} className="fbr-mon-row" style={S.row}>
-            <span className="fbr-mon-row__ts" style={{ width: 150, fontSize: "0.78rem", color: "#5f6d7e", fontFamily: "ui-monospace, monospace" }}>{fmtDate(r.timestamp)}</span>
+            <span className="fbr-mon-row__ts" style={{ width: 180, flexShrink: 0, whiteSpace: "nowrap", fontSize: "0.78rem", color: "#5f6d7e", fontFamily: "ui-monospace, monospace" }}>{fmtDate(r.timestamp)}</span>
             <span className="fbr-mon-row__status" style={{ width: 110 }}>
               <span style={{ ...S.pill, color: cfg.color, backgroundColor: cfg.bg, border: `1px solid ${cfg.border}` }}>
                 <Icon size={12} /> {cfg.label}
@@ -368,7 +368,7 @@ function Drawer({ row, onClose }) {
           </div>
           <div style={{ marginTop: "1rem" }}>
             <strong style={{ fontSize: "0.85rem", color: "#1a2332" }}>Response body</strong>
-            <pre className="fbr-mon-pre" style={S.pre}>{row.responseBodyMasked || "(empty)"}</pre>
+            <pre className="fbr-mon-pre" style={S.pre}>{row.responseBodyMasked?.replace(/\r\n?/g, "\n").replace(/\n\s*\n/g, "\n") || "(empty)"}</pre>
           </div>
         </div>
       </div>
