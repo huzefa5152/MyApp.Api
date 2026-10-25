@@ -85,6 +85,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
+          cache-dependency-path: myapp-frontend/package-lock.json
 
       - name: Build React Frontend
         working-directory: myapp-frontend
@@ -108,6 +110,16 @@ jobs:
           echo "{\"version\":\"$GITHUB_SHA\"}" > site-stage/admin/version.json
           rm -rf site-stage/admin/images/products
 
+      # Hashed chunks first, while the old index.html is still live: adding
+      # files never breaks an open page. Assets are synced by name in these
+      # two steps, so the FTP action below leaves the folder alone.
+      - name: Upload new frontend assets
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER_TRADER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME_TRADER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD_TRADER }}
+        run: python3 .github/scripts/ftp_assets.py upload site-stage/admin/assets
+
       - name: Deploy frontend via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
@@ -118,6 +130,18 @@ jobs:
           server-dir: /wwwroot/wwwroot/
           state-name: .frontend-deploy-sync-state.json
           dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            **/admin/assets/**
+
+      - name: Remove superseded frontend assets
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER_TRADER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME_TRADER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD_TRADER }}
+        run: python3 .github/scripts/ftp_assets.py prune site-stage/admin/assets
 
   # Full path: backend changed — build everything, restart app
   # FTP sync only uploads changed files automatically
@@ -137,6 +161,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
+          cache-dependency-path: myapp-frontend/package-lock.json
 
       - name: Build React Frontend
         working-directory: myapp-frontend
@@ -160,6 +186,13 @@ jobs:
           echo "{\"version\":\"$GITHUB_SHA\"}" > wwwroot/admin/version.json
           rm -rf wwwroot/admin/images/products
 
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('MyApp.Api.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
       - name: Publish .NET API
         run: dotnet publish MyApp.Api.csproj -c Release -o ./publish
 
@@ -167,6 +200,16 @@ jobs:
         run: |
           mkdir -p ./publish/wwwroot
           cp -r wwwroot/* ./publish/wwwroot/
+
+      # Hashed chunks go up BEFORE the app is taken offline: adding files
+      # never breaks the running site, and it moves most of the upload out of
+      # the downtime window. The FTP sync below skips the folder.
+      - name: Upload new frontend assets (site still live)
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER_TRADER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME_TRADER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD_TRADER }}
+        run: python3 .github/scripts/ftp_assets.py upload publish/wwwroot/admin/assets
 
       - name: Stop app (upload maintenance file only)
         env:
@@ -215,6 +258,8 @@ jobs:
             # .example templates are dev-side documentation — no business
             # being on the prod server.
             **/appsettings.*.example.json
+            # Synced by name around the offline window (ftp_assets.py).
+            **/wwwroot/admin/assets/**
 
       - name: Start app after successful upload
         env:
@@ -229,3 +274,12 @@ jobs:
               ftp.cwd("/wwwroot")
               ftp.delete("app_offline.htm")
           PY
+
+      # After the new index.html is live. An open page that then misses an
+      # old chunk reloads onto the new release (utils/serviceContinuity.js).
+      - name: Remove superseded frontend assets
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER_TRADER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME_TRADER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD_TRADER }}
+        run: python3 .github/scripts/ftp_assets.py prune publish/wwwroot/admin/assets

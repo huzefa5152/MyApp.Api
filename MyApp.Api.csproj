@@ -7,6 +7,10 @@
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
+    <!-- No .br/.gz copies of wwwroot. Only MapStaticAssets serves them and this
+         app uses UseStaticFiles, so they were never sent to a browser — they
+         just doubled the files every deploy uploaded over FTP. -->
+    <CompressionEnabled>false</CompressionEnabled>
   </PropertyGroup>
 
   <!-- scripts/ and tools/ contain standalone dev tools (PdfDumper, PO-parser
