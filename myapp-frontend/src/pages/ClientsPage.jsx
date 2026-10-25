@@ -1,14 +1,14 @@
 import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useMemo } from "react";
-import { MdPeople, MdAdd, MdSearch, MdBusiness } from "react-icons/md";
+import { MdPeople, MdAdd, MdBusiness, MdSearchOff } from "react-icons/md";
 import ClientList from "../Components/ClientList";
 import ClientForm from "../Components/ClientForm";
-import CommonClientsPanel from "../Components/CommonClientsPanel";
 import CommonClientForm from "../Components/CommonClientForm";
 import CopyToCompaniesDialog from "../Components/CopyToCompaniesDialog";
 import { getClientsByCompany, getCommonClients, copyClientToCompanies } from "../api/clientApi";
 import { notify } from "../utils/notify";
-import { dropdownStyles } from "../theme";
+import PartyToolbar from "../Components/party/PartyToolbar";
+import { matchesSearch, countByType } from "../Components/party/partyUtils";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import ImportFromExcelButton from "../Components/onboarding/ImportFromExcelButton";
@@ -29,6 +29,7 @@ export default function ClientsPage() {
   const [selectedClient, setSelectedClient] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [loadingClients, setLoadingClients] = useState(false);
 
   // Common Client edit state — separate from per-company edit because
@@ -41,27 +42,25 @@ export default function ClientsPage() {
   // Copy-to-companies dialog: holds the source client when open, null when closed.
   const [copyingClient, setCopyingClient] = useState(null);
 
-  // The set of multi-company group IDs visible right now — used to
-  // hide those clients from the per-company list below the dropdown.
-  // Same data the CommonClientsPanel renders (kept in sync via
-  // commonRefreshKey), only the IDs are needed here so it's a thin
-  // shadow query rather than a duplicate fetch.
-  const [commonGroupIds, setCommonGroupIds] = useState(() => new Set());
+  // Common Client groups this company shares with others, by group id.
+  // Every client is listed once in the grid; one whose group is here
+  // carries a "Common" tag and edits through the Common Client form,
+  // which applies the change to every company's copy.
+  const [commonGroups, setCommonGroups] = useState(() => new Map());
 
   useEffect(() => {
     if (!selectedCompany) {
-      setCommonGroupIds(new Set());
+      setCommonGroups(new Map());
       return;
     }
     let cancelled = false;
     (async () => {
       try {
         const { data } = await getCommonClients(selectedCompany.id);
-        if (!cancelled) {
-          setCommonGroupIds(new Set((data || []).map((g) => g.groupId)));
-        }
+        if (!cancelled) setCommonGroups(new Map((data || []).map((g) => [g.groupId, g])));
       } catch {
-        if (!cancelled) setCommonGroupIds(new Set());
+        // Soft-fail: the list still works, just without Common tags.
+        if (!cancelled) setCommonGroups(new Map());
       }
     })();
     return () => { cancelled = true; };
@@ -81,6 +80,7 @@ export default function ClientsPage() {
   };
 
   useEffect(() => {
+    setTypeFilter("all");
     if (selectedCompany) fetchClients(selectedCompany.id);
     else setClients([]);
   }, [selectedCompany]);
@@ -95,19 +95,14 @@ export default function ClientsPage() {
     setShowModal(true);
   };
 
-  // Hide clients that already appear in the Common Clients panel
-  // above — operator wants exactly ONE place to edit each client,
-  // not the same name listed twice on the same page.
-  const uncommonClients = useMemo(() => {
-    if (commonGroupIds.size === 0) return clients;
-    return clients.filter((c) => !c.clientGroupId || !commonGroupIds.has(c.clientGroupId));
-  }, [clients, commonGroupIds]);
+  const isCommon = (c) => c.clientGroupId != null && commonGroups.has(c.clientGroupId);
+  const commonCount = useMemo(() => clients.filter(isCommon).length, [clients, commonGroups]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const filtered = uncommonClients.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    (c.email || "").toLowerCase().includes(search.toLowerCase()) ||
-    (c.phone || "").includes(search)
-  );
+  const searched = clients.filter((c) => matchesSearch(c, search));
+  const counts = { ...countByType(searched), common: searched.filter(isCommon).length };
+  const filtered = typeFilter === "all" ? searched
+    : typeFilter === "common" ? searched.filter(isCommon)
+    : searched.filter((c) => (c.registrationType || "None") === typeFilter);
 
   return (
     <div>
@@ -121,7 +116,8 @@ export default function ClientsPage() {
             <h2 style={styles.pageTitle}>Clients</h2>
             <p style={styles.pageSubtitle}>
               {selectedCompany
-                ? `${uncommonClients.length} company-specific client${uncommonClients.length !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
+                ? `${clients.length} client${clients.length !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}` +
+                  (commonCount > 0 ? ` · ${commonCount} shared with other companies` : "")
                 : "Select a company to view clients"}
             </p>
           </div>
@@ -141,17 +137,6 @@ export default function ClientsPage() {
         </div>
       </div>
 
-      {/* Common Clients panel — shows ONLY when this company shares
-          a client (by NTN, fallback to name) with at least one other
-          company. Empty / single-tenant setups render nothing here. */}
-      {selectedCompany && (
-        <CommonClientsPanel
-          companyId={selectedCompany.id}
-          refreshKey={commonRefreshKey}
-          onEdit={(c) => setEditingGroupId(c.groupId)}
-        />
-      )}
-
       {/* Company Selector */}
       {loadingCompanies ? (
         <div style={styles.loadingContainer}>
@@ -159,58 +144,51 @@ export default function ClientsPage() {
           <span style={{ color: colors.textSecondary, fontSize: "0.9rem" }}>Loading companies...</span>
         </div>
       ) : companies.length > 0 ? (
-        companies.length > 1 && (<div style={{ marginBottom: "1.5rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <MdBusiness size={20} color={colors.blue} />
-          <select
-            style={dropdownStyles.base}
-            value={selectedCompany?.id || ""}
-            onChange={(e) =>
-              setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))
-            }
-          >
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>{c.brandName || c.name}</option>
-            ))}
-          </select>
-        </div>)
+        <PartyToolbar
+          companies={companies}
+          selectedCompany={selectedCompany}
+          onCompanyChange={setSelectedCompany}
+          search={search}
+          onSearch={setSearch}
+          searchPlaceholder="Search name, NTN, CNIC, phone, email, address"
+          typeFilter={typeFilter}
+          onTypeFilter={setTypeFilter}
+          counts={counts}
+        />
       ) : (
-        <div style={styles.emptyState}>
-          <MdBusiness size={40} color={colors.cardBorder} />
-          <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>No companies available. Add a company first.</p>
-        </div>
-      )}
-
-      {/* Search */}
-      {clients.length > 3 && (
-        <div style={styles.searchWrap}>
-          <MdSearch style={styles.searchIcon} />
-          <input
-            type="text"
-            placeholder="Search clients..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={styles.searchInput}
-          />
+        <div className="pd-empty">
+          <span className="pd-empty__icon"><MdBusiness size={30} /></span>
+          <strong>No companies yet</strong>
+          <p>Add a company first, then its clients will appear here.</p>
         </div>
       )}
 
       {/* Client List */}
       <RecordsViewport label="Clients records">{loadingClients ? (
-        <div style={styles.loadingContainer}>
-          <div style={styles.spinner} />
-          <span style={{ color: colors.textSecondary, fontSize: "0.9rem" }}>Loading clients...</span>
+        <div className="pd-grid" aria-busy="true" aria-label="Loading clients">
+          {[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="pd-skeleton" />)}
         </div>
       ) : filtered.length === 0 && selectedCompany ? (
-        <div style={styles.emptyState}>
-          <MdPeople size={40} color={colors.cardBorder} />
-          <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
-            {clients.length === 0 ? "No clients for this company yet." : "No clients match your search."}
+        <div className="pd-empty">
+          <span className="pd-empty__icon">{clients.length === 0 ? <MdPeople size={30} /> : <MdSearchOff size={30} />}</span>
+          <strong>{clients.length === 0 ? "No clients yet" : "No matching clients"}</strong>
+          <p>
+            {clients.length === 0
+              ? "Add your first client, or bring them in from an Excel file."
+              : "Try a different search or registration type."}
           </p>
+          {clients.length === 0 && canCreate && (
+            <button type="button" className="pd-btn pd-btn--primary" style={{ flex: "none" }} onClick={handleAdd}>
+              <MdAdd size={18} /> New Client
+            </button>
+          )}
         </div>
       ) : (
         <ClientList
           clients={filtered}
+          commonGroups={commonGroups}
           onEdit={handleEdit}
+          onEditCommon={(groupId) => setEditingGroupId(groupId)}
           onCopy={(client) => setCopyingClient(client)}
           fetchClients={() => fetchClients(selectedCompany?.id)}
         />
@@ -311,7 +289,8 @@ const styles = {
     width: 48,
     height: 48,
     borderRadius: 14,
-    background: "linear-gradient(135deg, #00695c, #00897b)",
+    background: "linear-gradient(135deg, #0d47a1, #00897b)",
+    boxShadow: "0 10px 22px -10px rgba(13,71,161,0.6)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -343,30 +322,6 @@ const styles = {
     transition: "filter 0.2s, transform 0.2s",
     boxShadow: "0 4px 14px rgba(13,71,161,0.25)",
   },
-  searchWrap: {
-    position: "relative",
-    marginBottom: "1.25rem",
-    maxWidth: 360,
-  },
-  searchIcon: {
-    position: "absolute",
-    left: 12,
-    top: "50%",
-    transform: "translateY(-50%)",
-    color: "#94a3b8",
-    fontSize: "1.1rem",
-  },
-  searchInput: {
-    width: "100%",
-    padding: "0.55rem 0.75rem 0.55rem 2.3rem",
-    border: "1px solid #d0d7e2",
-    borderRadius: 10,
-    fontSize: "0.88rem",
-    backgroundColor: "#f8f9fb",
-    color: "#1a2332",
-    outline: "none",
-    transition: "border-color 0.2s",
-  },
   loadingContainer: {
     display: "flex",
     alignItems: "center",
@@ -381,13 +336,5 @@ const styles = {
     borderTopColor: colors.blue,
     borderRadius: "50%",
     animation: "spin 0.8s linear infinite",
-  },
-  emptyState: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "3rem 1rem",
-    textAlign: "center",
   },
 };

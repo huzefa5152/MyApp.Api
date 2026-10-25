@@ -3,10 +3,12 @@ import { createSupplier, createSupplierBatch, updateSupplier } from "../api/supp
 import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
 import { notify } from "../utils/notify";
 import { formStyles } from "../theme";
+import { MdStorefront, MdVerifiedUser, MdApartment } from "react-icons/md";
+import { PartyFormHeader, FormSection } from "./party/PartyFormKit";
 
 const {
-  backdrop, modal, header, title, closeButton,
-  body, error: errorStyle, formGroup, label, input,
+  backdrop, modal,
+  body, formGroup, label, input,
   footer, button, cancel, submit,
 } = formStyles;
 
@@ -184,26 +186,26 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
 
   return (
     <div data-admin-backdrop="" style={backdrop}>
-      <div data-admin-dialog="" style={modal}>
-        <div data-admin-header="" style={header}>
-          <h5 style={title}>{supplier ? "Edit Supplier" : "New Supplier"}</h5>
-          <button data-admin-close="" style={closeButton} onClick={onClose}>&times;</button>
-        </div>
-        <form onSubmit={handleSubmit} noValidate>
-          <div data-admin-body="" style={body}>
+      <div data-admin-dialog="" style={{ ...modal, maxWidth: 720 }}>
+        <PartyFormHeader
+          title={supplier ? "Edit Supplier" : "New Supplier"}
+          subtitle={supplier ? supplier.name : "Who you buy from: shown on purchase bills"}
+          name={formData.name}
+          onClose={onClose}
+        />
+        <form onSubmit={handleSubmit} noValidate style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+          <div data-admin-body="" className="pf-body" style={{ ...body, background: "#f5f8fc" }}>
             {/* Multi-company picker — CREATE mode + parent supplied
                 companies. Default-checked is the currently-active
                 company so single-company creates stay one click;
                 tapping extra chips spawns a Common Supplier group. */}
             {showCompanyPicker && (
-              <div style={pickerStyles.box}>
-                <div style={pickerStyles.headerRow}>
-                  <span style={pickerStyles.title}>Create under which companies?</span>
-                  <span style={pickerStyles.hint}>
-                    Pick one to add this supplier to a single tenant, or 2+ to share it as a Common Supplier.
-                  </span>
-                </div>
-                <div style={pickerStyles.chips}>
+              <FormSection
+                icon={<MdApartment size={18} />}
+                title="Create under which companies?"
+                hint="Pick one to add this supplier to a single company, or 2+ to share it as a Common Supplier."
+              >
+                <div style={{ ...pickerStyles.chips, marginBottom: "0.8rem" }}>
                   {companies.map((c) => {
                     const id = Number(c.id);
                     const checked = selectedCompanyIds.includes(id);
@@ -225,9 +227,10 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
                   })}
                 </div>
                 {errorMsg("companies")}
-              </div>
+              </FormSection>
             )}
 
+            <FormSection icon={<MdStorefront size={18} />} title="Business details" hint="As it should print on purchase documents">
             <div data-admin-field="" style={formGroup}>
               <label style={label}>Name *</label>
               <input type="text" name="name" value={formData.name} onChange={handleChange} style={{ ...input, ...fieldError("name") }} />
@@ -249,12 +252,12 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
                 <input type="text" name="phone" value={formData.phone} onChange={handleChange} style={input} />
               </div>
             </div>
+            </FormSection>
 
             {/* FBR identity — pick Registration Type first; identity
                 fields render below conditionally. Same model as
                 ClientForm.  */}
-            <div style={{ marginTop: "0.5rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #00695c30", backgroundColor: "#e0f2f1" }}>
-              <p style={{ margin: "0 0 0.5rem", fontWeight: 700, fontSize: "0.85rem", color: "#00695c" }}>FBR Details</p>
+            <FormSection tone="fbr" icon={<MdVerifiedUser size={18} />} title="FBR identity" hint="Used when this supplier's invoices are imported or claimed">
               <div className="form-grid-2col">
                 <div data-admin-field="" style={formGroup}>
                   <label style={label}>Registration Type</label>
@@ -325,7 +328,8 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
                   </span>
                 </div>
               )}
-            </div>
+              {!regType && <div style={{ height: "0.8rem" }} />}
+            </FormSection>
           </div>
 
           <div data-admin-footer="" style={footer}>
@@ -339,28 +343,19 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
 }
 
 const pickerStyles = {
-  box: {
-    background: "#f0f7ff",
-    border: "1px solid #b7d4f0",
-    borderRadius: 10,
-    padding: "0.7rem 0.85rem",
-    marginBottom: "0.9rem",
-  },
-  headerRow: { display: "flex", alignItems: "baseline", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.5rem" },
-  title: { fontWeight: 700, fontSize: "0.88rem", color: "#0d47a1" },
-  hint: { fontSize: "0.74rem", color: "#5f6d7e" },
   chips: { display: "flex", flexWrap: "wrap", gap: "0.4rem" },
   chip: {
     fontFamily: "inherit",
     fontSize: "0.82rem",
     fontWeight: 600,
-    padding: "0.35rem 0.85rem",
+    minHeight: 36,
+    padding: "0 0.9rem",
     borderRadius: 999,
     cursor: "pointer",
     transition: "background 0.15s, color 0.15s, border-color 0.15s",
     boxShadow: "none",
     margin: 0,
   },
-  chipOn: { background: "#0d47a1", color: "#fff", border: "1px solid #0d47a1" },
-  chipOff: { background: "#fff", color: "#0d47a1", border: "1px solid #b7d4f0" },
+  chipOn: { background: "linear-gradient(135deg, #0d47a1, #00897b)", color: "#fff", border: "1px solid transparent" },
+  chipOff: { background: "#f5f8fc", color: "#0d47a1", border: "1px solid #d8e3f1" },
 };

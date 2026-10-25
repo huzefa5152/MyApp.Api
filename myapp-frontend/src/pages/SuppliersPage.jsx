@@ -1,14 +1,14 @@
 import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useMemo } from "react";
-import { MdLocalShipping, MdAdd, MdSearch, MdBusiness } from "react-icons/md";
+import { MdLocalShipping, MdAdd, MdBusiness, MdSearchOff } from "react-icons/md";
 import SupplierList from "../Components/SupplierList";
 import SupplierForm from "../Components/SupplierForm";
-import CommonSuppliersPanel from "../Components/CommonSuppliersPanel";
 import CommonSupplierForm from "../Components/CommonSupplierForm";
 import CopyToCompaniesDialog from "../Components/CopyToCompaniesDialog";
 import { getSuppliersByCompany, getCommonSuppliers, copySupplierToCompanies } from "../api/supplierApi";
 import { notify } from "../utils/notify";
-import { dropdownStyles } from "../theme";
+import PartyToolbar from "../Components/party/PartyToolbar";
+import { matchesSearch, countByType } from "../Components/party/partyUtils";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import ImportFromExcelButton from "../Components/onboarding/ImportFromExcelButton";
@@ -29,6 +29,7 @@ export default function SuppliersPage() {
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [loadingSuppliers, setLoadingSuppliers] = useState(false);
 
   // Common Supplier edit state — separate from per-company edit
@@ -40,25 +41,24 @@ export default function SuppliersPage() {
   // Copy-to-companies dialog source.
   const [copyingSupplier, setCopyingSupplier] = useState(null);
 
-  // Multi-company group ids that show in the Common Suppliers panel —
-  // used to filter them out of the per-company list below the dropdown
-  // (each supplier appears in exactly one place on the page).
-  const [commonGroupIds, setCommonGroupIds] = useState(() => new Set());
+  // Common Supplier groups this company shares with others, by group id.
+  // Every supplier is listed once; one whose group is here carries a
+  // "Common" tag and edits through the Common Supplier form.
+  const [commonGroups, setCommonGroups] = useState(() => new Map());
 
   useEffect(() => {
     if (!selectedCompany) {
-      setCommonGroupIds(new Set());
+      setCommonGroups(new Map());
       return;
     }
     let cancelled = false;
     (async () => {
       try {
         const { data } = await getCommonSuppliers(selectedCompany.id);
-        if (!cancelled) {
-          setCommonGroupIds(new Set((data || []).map((g) => g.groupId)));
-        }
+        if (!cancelled) setCommonGroups(new Map((data || []).map((g) => [g.groupId, g])));
       } catch {
-        if (!cancelled) setCommonGroupIds(new Set());
+        // Soft-fail: the list still works, just without Common tags.
+        if (!cancelled) setCommonGroups(new Map());
       }
     })();
     return () => { cancelled = true; };
@@ -78,6 +78,7 @@ export default function SuppliersPage() {
   };
 
   useEffect(() => {
+    setTypeFilter("all");
     if (selectedCompany) fetchSuppliers(selectedCompany.id);
     else setSuppliers([]);
   }, [selectedCompany]);
@@ -85,19 +86,14 @@ export default function SuppliersPage() {
   const handleEdit = (s) => { setSelectedSupplier(s); setShowModal(true); };
   const handleAdd = () => { setSelectedSupplier(null); setShowModal(true); };
 
-  // Hide suppliers that already appear in the Common Suppliers panel
-  // above — each supplier visible in exactly one place on the page.
-  const uncommonSuppliers = useMemo(() => {
-    if (commonGroupIds.size === 0) return suppliers;
-    return suppliers.filter((s) => !s.supplierGroupId || !commonGroupIds.has(s.supplierGroupId));
-  }, [suppliers, commonGroupIds]);
+  const isCommon = (s) => s.supplierGroupId != null && commonGroups.has(s.supplierGroupId);
+  const commonCount = useMemo(() => suppliers.filter(isCommon).length, [suppliers, commonGroups]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const filtered = uncommonSuppliers.filter((s) =>
-    s.name.toLowerCase().includes(search.toLowerCase()) ||
-    (s.ntn || "").toLowerCase().includes(search.toLowerCase()) ||
-    (s.email || "").toLowerCase().includes(search.toLowerCase()) ||
-    (s.phone || "").includes(search)
-  );
+  const searched = suppliers.filter((s) => matchesSearch(s, search));
+  const counts = { ...countByType(searched), common: searched.filter(isCommon).length };
+  const filtered = typeFilter === "all" ? searched
+    : typeFilter === "common" ? searched.filter(isCommon)
+    : searched.filter((s) => (s.registrationType || "None") === typeFilter);
 
   return (
     <div>
@@ -110,7 +106,8 @@ export default function SuppliersPage() {
             <h2 style={styles.pageTitle}>Suppliers</h2>
             <p style={styles.pageSubtitle}>
               {selectedCompany
-                ? `${uncommonSuppliers.length} company-specific supplier${uncommonSuppliers.length !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
+                ? `${suppliers.length} supplier${suppliers.length !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}` +
+                  (commonCount > 0 ? ` · ${commonCount} shared with other companies` : "")
                 : "Select a company to view suppliers"}
             </p>
           </div>
@@ -130,72 +127,56 @@ export default function SuppliersPage() {
         </div>
       </div>
 
-      {/* Common Suppliers panel — auto-hides for tenants with no
-          multi-company duplicates. Stable across the company dropdown. */}
-      {selectedCompany && (
-        <CommonSuppliersPanel
-          companyId={selectedCompany.id}
-          refreshKey={commonRefreshKey}
-          onEdit={(s) => setEditingGroupId(s.groupId)}
-        />
-      )}
-
       {loadingCompanies ? (
         <div style={styles.loadingContainer}>
           <div style={styles.spinner} />
           <span style={{ color: colors.textSecondary, fontSize: "0.9rem" }}>Loading companies...</span>
         </div>
       ) : companies.length > 0 ? (
-        companies.length > 1 && (<div style={{ marginBottom: "1.5rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <MdBusiness size={20} color={colors.blue} />
-          <select
-            style={dropdownStyles.base}
-            value={selectedCompany?.id || ""}
-            onChange={(e) =>
-              setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))
-            }
-          >
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>{c.brandName || c.name}</option>
-            ))}
-          </select>
-        </div>)
+        <PartyToolbar
+          companies={companies}
+          selectedCompany={selectedCompany}
+          onCompanyChange={setSelectedCompany}
+          search={search}
+          onSearch={setSearch}
+          searchPlaceholder="Search name, NTN, CNIC, phone, email, address"
+          typeFilter={typeFilter}
+          onTypeFilter={setTypeFilter}
+          counts={counts}
+        />
       ) : (
-        <div style={styles.emptyState}>
-          <MdBusiness size={40} color={colors.cardBorder} />
-          <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>No companies available. Add a company first.</p>
-        </div>
-      )}
-
-      {suppliers.length > 3 && (
-        <div style={styles.searchWrap}>
-          <MdSearch style={styles.searchIcon} />
-          <input
-            type="text"
-            placeholder="Search suppliers (name / NTN / email / phone)..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={styles.searchInput}
-          />
+        <div className="pd-empty">
+          <span className="pd-empty__icon"><MdBusiness size={30} /></span>
+          <strong>No companies yet</strong>
+          <p>Add a company first, then its suppliers will appear here.</p>
         </div>
       )}
 
       <RecordsViewport label="Suppliers records">{loadingSuppliers ? (
-        <div style={styles.loadingContainer}>
-          <div style={styles.spinner} />
-          <span style={{ color: colors.textSecondary, fontSize: "0.9rem" }}>Loading suppliers...</span>
+        <div className="pd-grid" aria-busy="true" aria-label="Loading suppliers">
+          {[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="pd-skeleton" />)}
         </div>
       ) : filtered.length === 0 && selectedCompany ? (
-        <div style={styles.emptyState}>
-          <MdLocalShipping size={40} color={colors.cardBorder} />
-          <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
-            {suppliers.length === 0 ? "No suppliers for this company yet." : "No suppliers match your search."}
+        <div className="pd-empty">
+          <span className="pd-empty__icon">{suppliers.length === 0 ? <MdLocalShipping size={30} /> : <MdSearchOff size={30} />}</span>
+          <strong>{suppliers.length === 0 ? "No suppliers yet" : "No matching suppliers"}</strong>
+          <p>
+            {suppliers.length === 0
+              ? "Add your first supplier, or bring them in from an Excel file."
+              : "Try a different search or registration type."}
           </p>
+          {suppliers.length === 0 && canCreate && (
+            <button type="button" className="pd-btn pd-btn--primary" style={{ flex: "none" }} onClick={handleAdd}>
+              <MdAdd size={18} /> New Supplier
+            </button>
+          )}
         </div>
       ) : (
         <SupplierList
           suppliers={filtered}
+          commonGroups={commonGroups}
           onEdit={handleEdit}
+          onEditCommon={(groupId) => setEditingGroupId(groupId)}
           onCopy={(s) => setCopyingSupplier(s)}
           fetchSuppliers={() => fetchSuppliers(selectedCompany?.id)}
         />
@@ -270,14 +251,10 @@ export default function SuppliersPage() {
 
 const styles = {
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem", marginBottom: "1.5rem" },
-  headerIcon: { width: 48, height: 48, borderRadius: 14, background: "linear-gradient(135deg, #00695c, #00897b)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  headerIcon: { width: 48, height: 48, borderRadius: 14, background: "linear-gradient(135deg, #0d47a1, #00897b)", boxShadow: "0 10px 22px -10px rgba(13,71,161,0.6)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
   pageTitle: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
   pageSubtitle: { margin: "0.15rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
   addBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.25rem", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #0d47a1, #00897b)", color: "#fff", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", transition: "filter 0.2s, transform 0.2s", boxShadow: "0 4px 14px rgba(13,71,161,0.25)" },
-  searchWrap: { position: "relative", marginBottom: "1.25rem", maxWidth: 360 },
-  searchIcon: { position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", fontSize: "1.1rem" },
-  searchInput: { width: "100%", padding: "0.55rem 0.75rem 0.55rem 2.3rem", border: "1px solid #d0d7e2", borderRadius: 10, fontSize: "0.88rem", backgroundColor: "#f8f9fb", color: "#1a2332", outline: "none", transition: "border-color 0.2s" },
   loadingContainer: { display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", padding: "3rem 0" },
   spinner: { width: 28, height: 28, border: `3px solid ${colors.cardBorder}`, borderTopColor: colors.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite" },
-  emptyState: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "3rem 1rem", textAlign: "center" },
 };

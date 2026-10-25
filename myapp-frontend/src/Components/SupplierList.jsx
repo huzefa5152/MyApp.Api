@@ -1,12 +1,12 @@
-import { MdEmail, MdPhone, MdLocationOn, MdEdit, MdDelete, MdContentCopy, MdReceiptLong } from "react-icons/md";
+import { MdEdit, MdDelete, MdContentCopy, MdReceiptLong, MdInventory2 } from "react-icons/md";
 import { useNavigate } from "react-router-dom";
 import { deleteSupplier } from "../api/supplierApi";
-import { cardStyles, cardHover } from "../theme";
 import { useConfirm } from "./ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
+import PartyCard from "./party/PartyCard";
 
-export default function SupplierList({ suppliers, onEdit, onCopy, fetchSuppliers }) {
+export default function SupplierList({ suppliers, commonGroups, onEdit, onEditCommon, onCopy, fetchSuppliers }) {
   const confirm = useConfirm();
   const { has } = usePermissions();
   const canUpdate = has("suppliers.manage.update");
@@ -42,106 +42,37 @@ export default function SupplierList({ suppliers, onEdit, onCopy, fetchSuppliers
   };
 
   return (
-    <div className="card-grid">
-      {suppliers.map((supplier) => (
-        <div
+    <div className="pd-grid">
+      {suppliers.map((supplier, i) => {
+        // A supplier shared with other companies edits through the Common
+        // Supplier form, so the change reaches every company's copy.
+        const shared = supplier.supplierGroupId != null ? commonGroups?.get(supplier.supplierGroupId) : null;
+        return (
+        <PartyCard
           key={supplier.id}
-          style={cardStyles.card}
-          onMouseEnter={(e) => Object.assign(e.currentTarget.style, cardHover)}
-          onMouseLeave={(e) =>
-            Object.assign(e.currentTarget.style, {
-              transform: "none",
-              boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
-            })
-          }
-        >
-          <div style={cardStyles.cardContent}>
-            <div>
-              <h5 style={cardStyles.title}>{supplier.name}</h5>
-              {supplier.email && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <MdEmail style={{ color: "#0d47a1", flexShrink: 0 }} /> {supplier.email}
-                </p>
-              )}
-              {supplier.phone && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <MdPhone style={{ color: "#00897b", flexShrink: 0 }} /> {supplier.phone}
-                </p>
-              )}
-              {supplier.address && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <MdLocationOn style={{ color: "#5f6d7e", flexShrink: 0 }} /> {supplier.address}
-                </p>
-              )}
-              {supplier.ntn && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <strong style={{ fontSize: "0.75rem", color: "#5f6d7e" }}>NTN:</strong> {supplier.ntn}
-                </p>
-              )}
-              {supplier.strn && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <strong style={{ fontSize: "0.75rem", color: "#5f6d7e" }}>STRN:</strong> {supplier.strn}
-                </p>
-              )}
-              {supplier.registrationType && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <strong style={{ fontSize: "0.75rem", color: "#5f6d7e" }}>Type:</strong> {supplier.registrationType}
-                </p>
-              )}
-              {supplier.hasPurchaseBills && (
-                <p style={{ ...cardStyles.text, fontSize: "0.74rem", color: "#00695c", marginTop: "0.25rem" }}>
-                  has purchase bills
-                </p>
-              )}
-            </div>
-            {(canUpdate || canDelete || canCopy || canStatement) && (
-              <div style={cardStyles.buttonGroup}>
-                {canUpdate && (
-                  <button
-                    style={{ ...cardStyles.button, ...cardStyles.edit, display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
-                    onClick={() => onEdit(supplier)}
-                  >
-                    <MdEdit /> Edit
-                  </button>
-                )}
-                {canStatement && (
-                  <button
-                    type="button"
-                    style={{ ...cardStyles.button, backgroundColor: "#e0f2f1", color: "#00695c", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
-                    onClick={() => openStatement(supplier)}
-                    title="Open this supplier's statement"
-                  >
-                    <MdReceiptLong /> Statement
-                  </button>
-                )}
-                {canCopy && onCopy && (
-                  <button
-                    style={{ ...cardStyles.button, backgroundColor: "#ede7f6", color: "#4527a0", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
-                    onClick={() => onCopy(supplier)}
-                    title="Copy this supplier into another company"
-                  >
-                    <MdContentCopy /> Copy
-                  </button>
-                )}
-                {canDelete && (
-                  <button
-                    style={{
-                      ...cardStyles.button, ...cardStyles.delete,
-                      display: "inline-flex", alignItems: "center", gap: "0.3rem",
-                      opacity: supplier.hasPurchaseBills ? 0.5 : 1,
-                      cursor: supplier.hasPurchaseBills ? "not-allowed" : "pointer",
-                    }}
-                    title={supplier.hasPurchaseBills ? "Has purchase bills — delete those first" : "Delete supplier"}
-                    onClick={() => handleDelete(supplier)}
-                  >
-                    <MdDelete /> Delete
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      ))}
+          party={supplier}
+          shared={shared}
+          style={{ animationDelay: `${Math.min(i, 12) * 0.03}s` }}
+          footnote={supplier.hasPurchaseBills && (
+            <span className="pd-contact__row" style={{ color: "#00695c", fontSize: "0.76rem", fontWeight: 600 }}>
+              <MdInventory2 style={{ color: "#00897b" }} /><span>Has purchase bills</span>
+            </span>
+          )}
+          actions={[
+            canUpdate && (shared && onEditCommon
+              ? { key: "edit", label: "Edit", icon: <MdEdit size={16} />, variant: "primary", onClick: () => onEditCommon(shared.groupId), title: "Edit for every company that has this supplier" }
+              : { key: "edit", label: "Edit", icon: <MdEdit size={16} />, variant: "primary", onClick: () => onEdit(supplier) }),
+            canStatement && { key: "statement", label: "Statement", icon: <MdReceiptLong size={16} />, onClick: () => openStatement(supplier), title: "Open this supplier's statement" },
+            canCopy && onCopy && { key: "copy", label: "Copy", icon: <MdContentCopy size={16} />, iconOnly: true, onClick: () => onCopy(supplier), title: "Copy this supplier into another company" },
+            canDelete && {
+              key: "delete", label: "Delete", icon: <MdDelete size={17} />, iconOnly: true, variant: "danger",
+              onClick: () => handleDelete(supplier),
+              title: supplier.hasPurchaseBills ? "Has purchase bills — delete those first" : "Delete supplier",
+            },
+          ].filter(Boolean)}
+        />
+        );
+      })}
     </div>
   );
 }

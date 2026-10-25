@@ -1,12 +1,12 @@
-import { MdEmail, MdPhone, MdLocationOn, MdEdit, MdDelete, MdContentCopy, MdReceiptLong } from "react-icons/md";
+import { MdEdit, MdDelete, MdContentCopy, MdReceiptLong } from "react-icons/md";
 import { useNavigate } from "react-router-dom";
 import { deleteClient } from "../api/clientApi";
-import { cardStyles, cardHover } from "../theme";
 import { useConfirm } from "./ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
+import PartyCard from "./party/PartyCard";
 
-export default function ClientList({ clients, onEdit, onCopy, fetchClients }) {
+export default function ClientList({ clients, commonGroups, onEdit, onEditCommon, onCopy, fetchClients }) {
   const confirm = useConfirm();
   const { has } = usePermissions();
   const canUpdate = has("clients.manage.update");
@@ -33,101 +33,28 @@ export default function ClientList({ clients, onEdit, onCopy, fetchClients }) {
   };
 
   return (
-    <div className="card-grid">
-      {clients.map((client) => (
-        <div
+    <div className="pd-grid">
+      {clients.map((client, i) => {
+        // A client shared with other companies edits through the Common
+        // Client form, so the change reaches every company's copy.
+        const shared = client.clientGroupId != null ? commonGroups?.get(client.clientGroupId) : null;
+        return (
+        <PartyCard
           key={client.id}
-          style={cardStyles.card}
-          onMouseEnter={(e) => Object.assign(e.currentTarget.style, cardHover)}
-          onMouseLeave={(e) =>
-            Object.assign(e.currentTarget.style, {
-              transform: "none",
-              boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
-            })
-          }
-        >
-          <div style={cardStyles.cardContent}>
-            <div>
-              <h5 style={cardStyles.title}>{client.name}</h5>
-              {client.email && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <MdEmail style={{ color: "#0d47a1", flexShrink: 0 }} /> {client.email}
-                </p>
-              )}
-              {client.phone && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <MdPhone style={{ color: "#00897b", flexShrink: 0 }} /> {client.phone}
-                </p>
-              )}
-              {client.address && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <MdLocationOn style={{ color: "#5f6d7e", flexShrink: 0 }} /> {client.address}
-                </p>
-              )}
-              {client.ntn && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <strong style={{ fontSize: "0.75rem", color: "#5f6d7e" }}>NTN:</strong> {client.ntn}
-                </p>
-              )}
-              {client.strn && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <strong style={{ fontSize: "0.75rem", color: "#5f6d7e" }}>STRN:</strong> {client.strn}
-                </p>
-              )}
-              {client.site && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <strong style={{ fontSize: "0.75rem", color: "#5f6d7e" }}>Site:</strong> {client.site}
-                </p>
-              )}
-            </div>
-            {(canUpdate || canDelete || canCopy || canStatement) && (
-              <div style={cardStyles.buttonGroup}>
-                {canUpdate && (
-                  <button
-                    style={{ ...cardStyles.button, ...cardStyles.edit, display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
-                    onClick={() => onEdit(client)}
-                    onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.08)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.filter = ""; }}
-                  >
-                    <MdEdit /> Edit
-                  </button>
-                )}
-                {canStatement && (
-                  <button
-                    type="button"
-                    style={{ ...cardStyles.button, backgroundColor: "#e0f2f1", color: "#00695c", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
-                    onClick={() => openStatement(client)}
-                    title="Open this client's statement"
-                  >
-                    <MdReceiptLong /> Statement
-                  </button>
-                )}
-                {canCopy && onCopy && (
-                  <button
-                    style={{ ...cardStyles.button, backgroundColor: "#ede7f6", color: "#4527a0", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
-                    onClick={() => onCopy(client)}
-                    onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(0.97)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.filter = ""; }}
-                    title="Copy this client into another company"
-                  >
-                    <MdContentCopy /> Copy
-                  </button>
-                )}
-                {canDelete && (
-                  <button
-                    style={{ ...cardStyles.button, ...cardStyles.delete, display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
-                    onClick={() => handleDelete(client.id)}
-                    onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(0.95)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.filter = ""; }}
-                  >
-                    <MdDelete /> Delete
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      ))}
+          party={client}
+          shared={shared}
+          style={{ animationDelay: `${Math.min(i, 12) * 0.03}s` }}
+          actions={[
+            canUpdate && (shared && onEditCommon
+              ? { key: "edit", label: "Edit", icon: <MdEdit size={16} />, variant: "primary", onClick: () => onEditCommon(shared.groupId), title: "Edit for every company that has this client" }
+              : { key: "edit", label: "Edit", icon: <MdEdit size={16} />, variant: "primary", onClick: () => onEdit(client) }),
+            canStatement && { key: "statement", label: "Statement", icon: <MdReceiptLong size={16} />, onClick: () => openStatement(client), title: "Open this client's statement" },
+            canCopy && onCopy && { key: "copy", label: "Copy", icon: <MdContentCopy size={16} />, iconOnly: true, onClick: () => onCopy(client), title: "Copy this client into another company" },
+            canDelete && { key: "delete", label: "Delete", icon: <MdDelete size={17} />, iconOnly: true, variant: "danger", onClick: () => handleDelete(client.id), title: "Delete client" },
+          ].filter(Boolean)}
+        />
+        );
+      })}
     </div>
   );
 }

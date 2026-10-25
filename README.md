@@ -306,6 +306,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+- **2026-10-25:** Clients and Suppliers (Configuration) redesigned. One grid lists every party, and a shared one carries a **Common** tag with its companies and edits through the Common form, replacing the separate Common panel. Cards show the registration badge, NTN / STRN / CNIC, contact details and an "FBR details missing" flag. The toolbar searches name, NTN, CNIC, phone, email and address and filters by Common or registration type. The client, supplier and both Common forms share one header and section layout (`Components/party/`); their fields and validation are unchanged. For FTN the client NTN field now reads "NTN / FTN".
+
 - **2026-10-24:** A customer's NTN is required only when its registration type is Registered. For FTN, Unregistered and CNIC the client form (including the inline Add Client on challans, bills, quotes and orders) now shows the NTN field as optional, and Import Data accepts those customers without one. An NTN given there is stored in the existing `NTN` field and prints through the existing `{{clientNTN}}` / `{{buyerNTN}}` merge fields. Suppliers are unchanged. Onboarding harness now 99 checks.
 
 - **2026-10-22:** A company can no longer end up with two customers, or two suppliers, of one name. Simultaneous saves of one name (a double-click) both passed the duplicate check and both inserted; the check and the save now run under a per-company lock (`Helpers/PartyNameLock.cs`), names are stored trimmed, and a name that differs only by case or outer spaces is refused on create, copy to companies and rename. `scripts/test_party_name_guard.py` (8 checks).

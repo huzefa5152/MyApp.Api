@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MdClose, MdInfo, MdBusiness, MdCheckCircle, MdDelete, MdAdd } from "react-icons/md";
+import { MdInfo, MdBusiness, MdCheckCircle, MdDelete, MdAdd, MdStorefront, MdVerifiedUser, MdPlace } from "react-icons/md";
 import { getCommonClientById, updateCommonClient, deleteCommonClient, deleteClient, copyClientToCompanies } from "../api/clientApi";
 import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -9,6 +9,7 @@ import { formStyles, modalSizes } from "../theme";
 import CopyToCompaniesDialog from "./CopyToCompaniesDialog";
 import { notify } from "../utils/notify";
 import useScrollToError from "../hooks/useScrollToError";
+import { PartyFormHeader, FormSection } from "./party/PartyFormKit";
 
 /**
  * Edit form for a "Common Client" (a ClientGroup row + its sibling
@@ -113,7 +114,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
   const ntnRequired = regType === "Registered";
   const showStrn = regType === "Registered";
   const showCnic = regType === "Unregistered" || regType === "CNIC";
-  const ntnLabel = regType === "FTN" ? "FTN" : "NTN";
+  const ntnLabel = regType === "FTN" ? "NTN / FTN" : "NTN";
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -318,21 +319,15 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
         style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div data-admin-header="" style={formStyles.header}>
-          <h5 style={formStyles.title}>Edit Common Client</h5>
-          <button data-admin-close=""
-            type="button"
-            style={formStyles.closeButton}
-            onClick={onClose}
-            aria-label="Close"
-            title="Close"
-          >
-            <MdClose size={20} color="#fff" />
-          </button>
-        </div>
+        <PartyFormHeader
+          title="Edit Common Client"
+          subtitle={detail ? `Shared by ${detail.members?.length || 0} companies · changes apply to every one` : "Loading…"}
+          name={form.name}
+          onClose={onClose}
+        />
 
         <form onSubmit={handleSubmit} style={{ display: "contents" }}>
-          <div data-admin-body="" style={formStyles.body}>
+          <div data-admin-body="" className="pf-body" style={{ ...formStyles.body, background: "#f5f8fc" }}>
             {loading ? (
               <div style={s.notice}>Loading…</div>
             ) : (
@@ -359,6 +354,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                   </div>
                 )}
 
+                <FormSection icon={<MdStorefront size={18} />} title="Business details" hint="As it should print on documents">
                 <div data-admin-field="" style={formStyles.formGroup}>
                   <label style={formStyles.label}>Name *</label>
                   <input
@@ -369,7 +365,23 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                     required
                   />
                 </div>
+                <div className="form-grid-2col">
+                  <div data-admin-field="" style={formStyles.formGroup}>
+                    <label style={formStyles.label}>Phone</label>
+                    <input name="phone" value={form.phone} onChange={handleChange} style={formStyles.input} />
+                  </div>
+                  <div data-admin-field="" style={formStyles.formGroup}>
+                    <label style={formStyles.label}>Email</label>
+                    <input name="email" type="email" value={form.email} onChange={handleChange} style={formStyles.input} />
+                  </div>
+                </div>
+                <div data-admin-field="" style={formStyles.formGroup}>
+                  <label style={formStyles.label}>Address</label>
+                  <input name="address" value={form.address} onChange={handleChange} style={formStyles.input} />
+                </div>
+                </FormSection>
 
+                <FormSection tone="fbr" icon={<MdVerifiedUser size={18} />} title="FBR identity" hint="Checked by FBR on every invoice">
                 {/* Registration type drives the identity fields below.
                     Switching type clears values for hidden fields so a
                     stale NTN doesn't propagate to every member company. */}
@@ -389,6 +401,25 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                       <option value="CNIC">CNIC</option>
                     </select>
                   </div>
+                  <div data-admin-field="" style={formStyles.formGroup}>
+                    <label style={formStyles.label}>Province</label>
+                    <select
+                      name="fbrProvinceCode"
+                      value={form.fbrProvinceCode ?? ""}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          fbrProvinceCode: e.target.value === "" ? null : Number(e.target.value),
+                        }))
+                      }
+                      style={formStyles.input}
+                    >
+                      <option value="">— Select province —</option>
+                      {provinces.map((p) => (
+                        <option key={p.id} value={p.code}>{p.label}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 {(showNtn || showStrn) && (
@@ -403,7 +434,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                           value={form.ntn}
                           onChange={handleChange}
                           style={formStyles.input}
-                          placeholder={regType === "FTN" ? "Federal Tax Number" : "7-digit NTN"}
+                          placeholder={regType === "FTN" ? "7-digit NTN or Federal Tax Number" : "7-digit NTN"}
                         />
                       </div>
                     )}
@@ -438,45 +469,9 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                     </span>
                   </div>
                 )}
+                </FormSection>
 
-                {/* FBR Province + Phone + Email on one row on desktop;
-                    `form-grid-3col` collapses to 1 column on phones via
-                    the responsive utility class in index.css. */}
-                <div className="form-grid-3col">
-                  <div data-admin-field="" style={formStyles.formGroup}>
-                    <label style={formStyles.label}>FBR Province</label>
-                    <select
-                      name="fbrProvinceCode"
-                      value={form.fbrProvinceCode ?? ""}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...f,
-                          fbrProvinceCode: e.target.value === "" ? null : Number(e.target.value),
-                        }))
-                      }
-                      style={formStyles.input}
-                    >
-                      <option value="">— Select province —</option>
-                      {provinces.map((p) => (
-                        <option key={p.id} value={p.code}>{p.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div data-admin-field="" style={formStyles.formGroup}>
-                    <label style={formStyles.label}>Phone</label>
-                    <input name="phone" value={form.phone} onChange={handleChange} style={formStyles.input} />
-                  </div>
-                  <div data-admin-field="" style={formStyles.formGroup}>
-                    <label style={formStyles.label}>Email</label>
-                    <input name="email" type="email" value={form.email} onChange={handleChange} style={formStyles.input} />
-                  </div>
-                </div>
-
-                <div data-admin-field="" style={formStyles.formGroup}>
-                  <label style={formStyles.label}>Address</label>
-                  <input name="address" value={form.address} onChange={handleChange} style={formStyles.input} />
-                </div>
-
+                <FormSection icon={<MdPlace size={18} />} title="Sites" hint="Offered as choices on delivery challans">
                 <div data-admin-field="" style={formStyles.formGroup}>
                   <label style={formStyles.label}>Sites</label>
                   <input
@@ -492,6 +487,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                     tenants, so editing once propagates the same sites everywhere.
                   </span>
                 </div>
+                </FormSection>
 
                 {/* Member breakdown — lists every per-company copy of this
                     client. Each row supports an inline "remove from this
@@ -501,14 +497,11 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                     companies" button at the modal footer handles the
                     "kill the legal entity" case. */}
                 {detail?.members?.length > 0 && (
-                  <div style={s.membersBlock}>
-                    <div style={s.membersHeader}>
-                      <MdBusiness size={16} color="#0d47a1" />
-                      <span style={{ fontWeight: 700 }}>Per-company members</span>
-                      <span style={{ color: "#5f6d7e", fontSize: "0.78rem" }}>
-                        Sites stay per-company — edit each from the per-company form
-                      </span>
-                      {canCopy && (() => {
+                  <FormSection
+                    icon={<MdBusiness size={18} />}
+                    title={`Companies (${detail.members.length})`}
+                    hint="Each company keeps its own copy; remove one without touching the others"
+                    aside={canCopy && (() => {
                         const memberCompanyIds = new Set((detail.members || []).map((m) => m.companyId));
                         const remainingCount = companies.filter((c) => !memberCompanyIds.has(c.id)).length;
                         if (remainingCount === 0) return null;
@@ -525,20 +518,20 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                           </button>
                         );
                       })()}
-                    </div>
-                    <div style={s.membersTable}>
+                  >
+                    <div className="pf-members">
                       {detail.members.map((m) => {
                         const removingThis = deletingMemberId === m.clientId;
                         const otherActionInFlight =
                           (deletingMemberId !== null && !removingThis) ||
                           deleting || saving;
                         return (
-                          <div key={m.clientId} style={s.memberRow}>
-                            <div style={s.memberCompany}>
+                          <div key={m.clientId} className="pf-member">
+                            <div className="pf-member__company">
                               <MdCheckCircle size={14} color="#28a745" /> {m.companyName}
                             </div>
-                            <div style={s.memberSite}>{m.site || <em style={{ color: "#aab3bf" }}>(no sites)</em>}</div>
-                            <div style={s.memberFlag}>
+                            <div className="pf-member__site">{m.site || <em style={{ color: "#aab3bf" }}>(no sites)</em>}</div>
+                            <div className="pf-member__flag">
                               {m.hasInvoices ? "Has bills" : <span style={{ color: "#aab3bf" }}>—</span>}
                             </div>
                             {canDelete ? (
@@ -566,7 +559,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                         );
                       })}
                     </div>
-                  </div>
+                  </FormSection>
                 )}
               </>
             )}
@@ -661,52 +654,13 @@ const s = {
   cascadeBanner: {
     display: "flex",
     gap: "0.6rem",
-    background: "#eef4fb",
-    border: "1px solid #b7d4f0",
-    color: "#0d47a1",
-    padding: "0.7rem 0.9rem",
-    borderRadius: 8,
-    marginBottom: "1rem",
+    background: "linear-gradient(135deg, rgba(13,71,161,0.07), rgba(0,137,123,0.08))",
+    border: "1px solid #cfe0f4",
+    color: "#0a3680",
+    padding: "0.75rem 0.95rem",
+    borderRadius: 14,
+    marginBottom: "0.9rem",
   },
-  membersBlock: {
-    marginTop: "1rem",
-    background: "#f8fafc",
-    border: "1px solid #e8edf3",
-    borderRadius: 10,
-    padding: "0.65rem 0.85rem",
-  },
-  membersHeader: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.4rem",
-    fontSize: "0.85rem",
-    color: "#1a2332",
-    marginBottom: "0.5rem",
-    flexWrap: "wrap",
-  },
-  membersTable: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "0.3rem",
-  },
-  memberRow: {
-    display: "grid",
-    // 4-column layout: company name, site list, has-bills flag,
-    // per-row remove button. The auto-sized last column sits on the
-    // far right; the company column's 1fr keeps name aligned and the
-    // site column's 2fr soaks up the rest.
-    gridTemplateColumns: "1fr 2fr auto auto",
-    gap: "0.5rem",
-    alignItems: "center",
-    fontSize: "0.82rem",
-    padding: "0.4rem 0.5rem",
-    borderRadius: 6,
-    background: "#fff",
-    border: "1px solid #f0f3f7",
-  },
-  memberCompany: { display: "inline-flex", alignItems: "center", gap: "0.25rem", fontWeight: 600, color: "#1a2332", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  memberSite: { color: "#5f6d7e", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 },
-  memberFlag: { color: "#5f6d7e", fontSize: "0.78rem", whiteSpace: "nowrap" },
   memberDeleteBtn: {
     display: "inline-flex",
     alignItems: "center",
@@ -745,14 +699,17 @@ const s = {
     display: "inline-flex",
     alignItems: "center",
     gap: "0.25rem",
-    marginLeft: "auto",
-    padding: "0.3rem 0.65rem",
-    borderRadius: 6,
-    border: "1px solid rgba(13,71,161,0.25)",
-    background: "#e3f2fd",
+    flexShrink: 0,
+    minHeight: 36,
+    padding: "0 0.75rem",
+    margin: 0,
+    borderRadius: 999,
+    border: "1px solid #d8e3f1",
+    background: "#f5f8fc",
     color: "#0d47a1",
     fontSize: "0.76rem",
-    fontWeight: 600,
+    fontWeight: 700,
+    boxShadow: "none",
     cursor: "pointer",
     whiteSpace: "nowrap",
   },
