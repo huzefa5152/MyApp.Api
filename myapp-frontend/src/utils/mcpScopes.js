@@ -14,6 +14,7 @@ export const SCOPE_INFO = {
   "suppliers.write": { label: "Create and update suppliers", help: "Each change is shown to you first and saved only after you approve it." },
   "itemtypes.write": { label: "Create and update items", help: "Catalog items for your selected companies. HS codes are checked with FBR when saved. Each change is shown to you first." },
   "taxfiling.write": { label: "Classify bills for FBR", help: "Saves a bill's FBR filing rows (HS code, sale type, unit). The commercial bill is unchanged and nothing is submitted to FBR. Each change is shown to you first." },
+  "fbrexclusion.write": { label: "Exclude bills from FBR", help: "Keeps chosen bills, or every bill in a date range, out of FBR validation and submission, or includes them again. Like the Bills screen's toggle, it also takes their goods out of stock and re-posts them to the ledger. Bills already submitted are never touched. Each change is shown to you first." },
 };
 
 export const scopeLabel = scope => SCOPE_INFO[scope]?.label || scope;

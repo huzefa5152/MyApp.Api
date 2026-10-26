@@ -139,7 +139,7 @@ namespace MyApp.Api.Helpers
             // All / Submit All. Carved out of bills.manage.update so an
             // operator can be trusted to flip the toggle without being trusted
             // to edit prices, dates, or items on the bill itself.
-            new("invoices.fbr.exclude",    "Invoices", "FBR",    "Exclude/Include", "Mark a bill as excluded from FBR bulk Validate/Submit, or re-include it"),
+            new("invoices.fbr.exclude",    "Invoices", "FBR",    "Exclude/Include", "Keep a bill out of FBR (no validate or submit, single or bulk), or include it again"),
             // Admin recovery for a bill locked after a timed-out / crashed submit
             // ("Uncertain" / "Submitting"). Lets a trusted user clear the FBR state
             // for resubmission, or record an IRN they confirmed at FBR — the ONLY

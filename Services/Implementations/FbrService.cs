@@ -785,6 +785,10 @@ namespace MyApp.Api.Services.Implementations
             if (BillTaxTreatment.IsOutsideFbr(invoice.TaxTreatment))
                 return Fail("This bill is outside FBR and cannot be previewed, validated or submitted to FBR.");
 
+            // Excluded means kept out of FBR on every path, single or bulk, screen or agent.
+            if (invoice.IsFbrExcluded)
+                return Fail("This bill is excluded from FBR. Include it in FBR first, then validate or submit it.");
+
             if (!dryRun && TaxFilingProjection.NeedsInitialAdjustment(invoice))
                 return Fail("Needs adjustment: open Invoices and complete the initial tax filing review before FBR validation or submission.");
             if (TaxFilingProjection.NeedsReReview(invoice))

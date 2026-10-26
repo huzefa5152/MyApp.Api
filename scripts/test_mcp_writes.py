@@ -185,7 +185,7 @@ def make_token(owner_token, name, cids, scopes, days=30):
 # ── scopes are offered only to those entitled to them ────────────────
 print("\n== who may be granted write scopes ==")
 s, st = http("GET", "/api/mcp/me/status", W)
-check("MCP Write + permissions -> implemented write and explicit print-read scopes offered", set(st["scopesAvailable"]) == {"read", "templates.read", "templates.write", "documents.read", "clients.write", "quotes.write", "challans.write", "bills.write", "suppliers.write", "itemtypes.write", "taxfiling.write", "fbr.validate"}, st["scopesAvailable"])
+check("MCP Write + permissions -> implemented write and explicit print-read scopes offered", set(st["scopesAvailable"]) == {"read", "templates.read", "templates.write", "documents.read", "clients.write", "quotes.write", "challans.write", "bills.write", "suppliers.write", "itemtypes.write", "taxfiling.write", "fbrexclusion.write", "fbr.validate"}, st["scopesAvailable"])
 s, st = http("GET", "/api/mcp/me/status", R)
 check("MCP Access without MCP Write -> permitted read scopes, no write scopes", set(st["scopesAvailable"]) == {"read", "templates.read", "documents.read", "fbr.validate"}, st["scopesAvailable"])
 s, st = http("GET", "/api/mcp/me/status", C)

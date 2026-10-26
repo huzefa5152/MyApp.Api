@@ -368,6 +368,7 @@ namespace MyApp.Api.Controllers
                 : kind.StartsWith("supplier.", StringComparison.Ordinal) ? (new[] { "supplier." }, SupplierChangesPerHour, "supplier changes")
                 : kind.StartsWith("itemtype.", StringComparison.Ordinal) ? (new[] { "itemtype." }, ItemTypeChangesPerHour, "item changes")
                 : kind == "taxfiling.save" ? (new[] { "taxfiling." }, TaxFilingsPerHour, "FBR classifications")
+                : kind == "fbrexclusion.set" ? (new[] { "fbrexclusion." }, FbrExclusionsPerHour, "FBR exclusion changes")
                 : (Array.Empty<string>(), int.MaxValue, "");
             if (cap == int.MaxValue) return;
             var since = DateTime.UtcNow.AddHours(-1);
