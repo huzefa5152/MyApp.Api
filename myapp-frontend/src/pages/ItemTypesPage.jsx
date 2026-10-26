@@ -1,5 +1,5 @@
 import RecordsViewport from "../Components/RecordsViewport";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { MdCategory, MdAdd, MdEdit, MdDelete, MdSearch, MdStar, MdStarBorder, MdInfo } from "react-icons/md";
 import { getItemTypes, updateItemType, deleteItemType } from "../api/itemTypeApi";
 import { notify } from "../utils/notify";
@@ -72,16 +72,21 @@ export default function ItemTypesPage() {
   const [editItem, setEditItem] = useState(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [catalogKind, setCatalogKind] = useState("bill");
+  const isFbr = catalogKind === "classification";
 
+  const currentCompany = useRef(selectedCompany?.id);
+  currentCompany.current = selectedCompany?.id;
   const fetchAll = async () => {
+    const companyId = selectedCompany?.id;
     setLoading(true);
     try {
-      const { data } = await getItemTypes(selectedCompany?.id);
-      setItemTypes(data);
+      const { data } = await getItemTypes(companyId);
+      if (currentCompany.current === companyId) setItemTypes(data);
     } catch {
       notify("Failed to load item types.", "error");
     } finally {
-      setLoading(false);
+      if (currentCompany.current === companyId) setLoading(false);
     }
   };
 
@@ -111,7 +116,7 @@ export default function ItemTypesPage() {
 
   const toggleFavorite = async (it) => {
     try {
-      await updateItemType(it.id, { ...it, isFavorite: !it.isFavorite });
+      await updateItemType(it.id, { ...it, isFavorite: !it.isFavorite }, selectedCompany?.id);
       fetchAll();
     } catch {
       notify("Failed to update favorite.", "error");
@@ -136,14 +141,15 @@ export default function ItemTypesPage() {
 
   const filtered = useMemo(() => {
     const term = search.toLowerCase().trim();
-    if (!term) return itemTypes;
-    return itemTypes.filter((it) =>
+    const relevant = itemTypes.filter(it => !!it.hsCode?.trim() === isFbr);
+    if (!term) return relevant;
+    return relevant.filter((it) =>
       it.name.toLowerCase().includes(term) ||
       (it.hsCode || "").toLowerCase().includes(term) ||
       (it.uom || "").toLowerCase().includes(term) ||
       (it.fbrDescription || "").toLowerCase().includes(term)
     );
-  }, [itemTypes, search]);
+  }, [itemTypes, search, isFbr]);
 
   const favoritesCount = itemTypes.filter((it) => it.isFavorite).length;
   const withFbrCount = itemTypes.filter((it) => it.hsCode).length;
@@ -166,7 +172,7 @@ export default function ItemTypesPage() {
           <ImportFromExcelButton sheet="items" />
           {canCreate && (
             <button style={styles.addBtn} onClick={openAdd} disabled={!selectedCompany}>
-              <MdAdd size={18} /> New Item
+              <MdAdd size={18} /> {isFbr ? "Add FBR classification" : "Add bill category"}
             </button>
           )}
         </div>
@@ -181,18 +187,31 @@ export default function ItemTypesPage() {
         </select>
       </label>)}
 
+      <div role="group" aria-label="Catalog purpose" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+        {[{ key: "bill", label: "Bill categories", count: itemTypes.length - withFbrCount },
+          { key: "classification", label: "FBR classifications", count: withFbrCount }].map(tab =>
+          <button key={tab.key} type="button" aria-pressed={catalogKind === tab.key}
+            onClick={() => { setCatalogKind(tab.key); setSearch(""); }}
+            style={{ ...styles.addBtn, background: catalogKind === tab.key ? colors.blue : "#fff",
+              color: catalogKind === tab.key ? "#fff" : colors.blue, border: `1px solid ${colors.inputBorder}` }}>
+            {tab.label} ({tab.count})
+          </button>)}
+      </div>
       <div style={styles.infoBox}>
         <MdInfo size={16} style={{ flexShrink: 0 }} />
         <div>
-          These items belong to <b>{selectedCompany?.name}</b>. Configure their HS Code, UOM, and Sale Type for FBR invoicing.</div>
+          <b>{selectedCompany?.name}</b>{" | "}{isFbr
+            ? "Used when preparing FBR invoices. Save one classification per tax mapping; choose kg, pack or another supported unit on each filing row."
+            : "Used on commercial bills and challans. These categories have no HS code; select FBR classifications separately when preparing invoices."}</div>
       </div>
 
-      {itemTypes.length > 5 && (
+      {itemTypes.length > 0 && (
         <div style={styles.searchWrap}>
           <MdSearch size={18} style={styles.searchIcon} />
           <input
             type="text"
-            placeholder="Search by name, HS code, UOM…"
+            aria-label="Search catalog"
+            placeholder={isFbr ? "Search classification, HS code, unit…" : "Search bill category, unit…"}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={styles.searchInput}
@@ -204,9 +223,7 @@ export default function ItemTypesPage() {
         <p style={{ color: colors.textSecondary, textAlign: "center", padding: "2rem" }}>Loading…</p>
       ) : filtered.length === 0 ? (
         <p style={{ color: colors.textSecondary, textAlign: "center", padding: "2rem" }}>
-          {itemTypes.length === 0
-            ? 'No items yet. Click "New Item" to add one from the FBR catalog.'
-            : "No matching items."}
+          {search ? "No matching entries." : isFbr ? "No FBR classifications yet. Add a classification to prepare invoices." : "No bill categories yet. Add a category for commercial bill entry."}
         </p>
       ) : (
         <>
@@ -219,10 +236,10 @@ export default function ItemTypesPage() {
               <div style={styles.listHeader}>
                 <span style={{ width: 32 }}></span>
                 <span style={{ flex: 2 }}>Name</span>
-                <span style={{ flex: 1.1 }}>HS Code</span>
-                <span style={{ flex: 1.5 }}>UOM</span>
-                <span style={{ flex: 1.6 }}>Sale Type</span>
-                <span style={{ flex: 0.9, textAlign: "right" }}>On hand</span>
+                <span style={{ flex: 1.1 }}>{isFbr ? "HS code" : "Used for"}</span>
+                <span style={{ flex: 1.5 }}>{isFbr ? "Default filing unit" : "Usual unit"}</span>
+                {isFbr && <span style={{ flex: 1.6 }}>Sale Type</span>}
+                {isFbr && <span style={{ flex: 0.9, textAlign: "right" }}>On hand</span>}
                 <span style={{ flex: 0.7, textAlign: "center" }}>Used</span>
                 <span style={{ width: 90, textAlign: "right" }}></span>
               </div>
@@ -239,6 +256,7 @@ export default function ItemTypesPage() {
                   </button>
                   <div style={{ flex: 2, minWidth: 0 }}>
                     <div style={styles.itemName}>{it.name}</div>
+                    {isFbr && <div style={{ fontSize: "0.75rem", color: colors.blue }}>{it.isHsCodePartial ? "Needs complete sales HS code" : "FBR invoice classification"}</div>}
                     {it.fbrDescription && (
                       <div style={styles.itemDesc} title={it.fbrDescription}>
                         {it.fbrDescription}
@@ -246,15 +264,15 @@ export default function ItemTypesPage() {
                     )}
                   </div>
                   <span style={{ flex: 1.1, fontFamily: "monospace", fontSize: "0.82rem", color: it.hsCode ? colors.blue : colors.textSecondary }}>
-                    {it.hsCode || "—"}
+                    {isFbr ? it.hsCode : "Bills / challans"}
                   </span>
                   <span style={{ flex: 1.5, fontSize: "0.82rem", color: colors.textPrimary }}>
                     {it.uom || "—"}
                   </span>
-                  <span style={{ flex: 1.6, fontSize: "0.78rem", color: colors.textSecondary }}>
+                  {isFbr && <span style={{ flex: 1.6, fontSize: "0.78rem", color: colors.textSecondary }}>
                     {it.saleType || "—"}
-                  </span>
-                  <span style={{
+                  </span>}
+                  {isFbr && <span style={{
                     flex: 0.9,
                     textAlign: "right",
                     fontSize: "0.82rem",
@@ -265,7 +283,7 @@ export default function ItemTypesPage() {
                       : it.availableQty > 0 ? colors.teal : colors.danger,
                   }}>
                     {it.availableQty == null ? "—" : formatQty(it.availableQty)}
-                  </span>
+                  </span>}
                   <span style={{ flex: 0.7, textAlign: "center", fontSize: "0.82rem", color: colors.textSecondary }}>
                     {it.usageCount > 0 ? `${it.usageCount}×` : "—"}
                   </span>
@@ -298,6 +316,7 @@ export default function ItemTypesPage() {
                   </button>
                   <div className="it-card__title">
                     <div className="it-card__name">{it.name}</div>
+                    {isFbr && <div style={{ fontSize: "0.75rem", color: colors.blue }}>{it.isHsCodePartial ? "Needs complete sales HS code" : "FBR invoice classification"}</div>}
                     {it.fbrDescription && (
                       <div className="it-card__desc">{it.fbrDescription}</div>
                     )}
@@ -306,23 +325,23 @@ export default function ItemTypesPage() {
 
                 <div className="it-card__grid">
                   <div className="it-card__field">
-                    <span className="it-card__field-label">HS Code</span>
+                    <span className="it-card__field-label">{isFbr ? "HS Code" : "Used for"}</span>
                     <span
                       className="it-card__field-value"
                       style={{ fontFamily: "monospace", color: it.hsCode ? colors.blue : colors.textSecondary }}
                     >
-                      {it.hsCode || "—"}
+                      {isFbr ? it.hsCode : "Bills / challans"}
                     </span>
                   </div>
                   <div className="it-card__field">
-                    <span className="it-card__field-label">UOM</span>
+                    <span className="it-card__field-label">{isFbr ? "Default filing unit" : "Usual unit"}</span>
                     <span className="it-card__field-value">{it.uom || "—"}</span>
                   </div>
-                  <div className="it-card__field it-card__field--full">
+                  {isFbr && <div className="it-card__field it-card__field--full">
                     <span className="it-card__field-label">Sale Type</span>
                     <span className="it-card__field-value">{it.saleType || "—"}</span>
-                  </div>
-                  <div className="it-card__field">
+                  </div>}
+                  {isFbr && <div className="it-card__field">
                     <span className="it-card__field-label">On hand</span>
                     <span
                       className="it-card__field-value"
@@ -336,7 +355,7 @@ export default function ItemTypesPage() {
                     >
                       {it.availableQty == null ? "—" : formatQty(it.availableQty)}
                     </span>
-                  </div>
+                  </div>}
                   <div className="it-card__field">
                     <span className="it-card__field-label">Used</span>
                     <span className="it-card__field-value">
@@ -368,12 +387,10 @@ export default function ItemTypesPage() {
       {showForm && (
         <ItemTypeForm
           editItem={editItem}
+          purpose={editItem ? (editItem.hsCode ? "classification" : "bill") : catalogKind}
           companyId={selectedCompany?.id}
           showFavoriteToggle
           showRichHints
-          existingHsCodes={itemTypes
-            .filter((t) => t.hsCode && t.id !== editItem?.id)
-            .map((t) => t.hsCode)}
           onClose={() => setShowForm(false)}
           onSaved={(saved) => {
             // Edit responses carry the propagation summary so the
@@ -424,8 +441,8 @@ const styles = {
   listHeader: { display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.4rem 0.75rem", fontSize: "0.72rem", fontWeight: 800, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em" },
   item: { display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.6rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#fff" },
   starBtn: { width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "none", cursor: "pointer", borderRadius: 6, padding: 0 },
-  itemName: { fontWeight: 600, fontSize: "0.88rem", color: colors.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  itemDesc: { fontSize: "0.7rem", color: colors.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.3 },
+  itemName: { fontWeight: 600, fontSize: "0.88rem", color: colors.textPrimary, overflowWrap: "anywhere" },
+  itemDesc: { fontSize: "0.7rem", color: colors.textSecondary, overflowWrap: "anywhere", lineHeight: 1.3 },
   editBtn: { display: "flex", alignItems: "center", justifyContent: "center", padding: "0.35rem", borderRadius: 6, border: "none", backgroundColor: "#e3f2fd", color: colors.blue, cursor: "pointer" },
   deleteBtn: { display: "flex", alignItems: "center", justifyContent: "center", padding: "0.35rem", borderRadius: 6, border: "none", backgroundColor: "#ffebee", color: colors.danger, cursor: "pointer" },
   field: { marginBottom: "1rem" },

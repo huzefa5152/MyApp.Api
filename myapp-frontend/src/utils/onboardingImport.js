@@ -23,13 +23,13 @@ export const SHEETS = [
   },
   {
     key: "items",
-    title: "Items",
+    title: "Bill categories & FBR classifications",
     permission: "itemtypes.manage.create",
     viewPermission: "itemtypes.manage.view",
-    blurb: "What you bill: item name, HS code, unit and sale type.",
+    blurb: "Items sheet: blank HS Code creates a bill category; an HS Code creates an FBR classification.",
     required: 1,
     listPath: "/item-types",
-    listLabel: "Item Types",
+    listLabel: "Item Catalog",
   },
   {
     key: "suppliers",

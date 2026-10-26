@@ -117,6 +117,7 @@ namespace MyApp.Api.Helpers.Onboarding
                 cell.Style.Font.Bold = bold;
                 cell.Style.Font.FontSize = size;
                 cell.Style.Alignment.WrapText = true;
+                ws.Row(r).Height = Math.Max(20, Math.Ceiling(text.Length / 100d) * (size + 5));
                 if (colour != null) cell.Style.Font.FontColor = colour;
                 r++;
             }
@@ -143,6 +144,15 @@ namespace MyApp.Api.Helpers.Onboarding
             {
                 var req = s.Columns.Count(c => c.Requirement == Requirement.Required);
                 Line($"{s.Title}: {s.Purpose} ({req} required, {s.Columns.Count - req} other columns)");
+            }
+            if (sheets.Any(s => s.Key == OnboardingSheets.Items))
+            {
+                r++;
+                Line("Items: bill categories and FBR classifications", true, 13);
+                Line("Bill categories: leave HS Code and Sale Type blank. These appear under Bill categories for bills and challans.");
+                Line("FBR classifications: enter an HS Code and the appropriate Sale Type. These appear under FBR classifications when preparing invoices.");
+                Line("Unit is the usual bill unit or the default filing unit. For an HS code supporting kg and pack, import one classification with one default unit; choose the supported unit and enter its quantity on each filing row.");
+                Line("Changing a filing unit does not convert quantity automatically. Available filing units come from FBR for the selected company and HS code.");
             }
             if (sheets.Any(s => s.Key == OnboardingSheets.OpeningStock))
             {
@@ -208,7 +218,7 @@ namespace MyApp.Api.Helpers.Onboarding
                 ws.Column(c).Width = 50;
             }
             ws.Row(OnboardingSchema.HeaderRow).Height = 22;
-            ws.Row(OnboardingSchema.HelpRow).Height = 62;
+            ws.Row(OnboardingSchema.HelpRow).Height = sheet.Key == OnboardingSheets.Items ? 130 : 62;
             ws.SheetView.FreezeRows(OnboardingSchema.HelpRow);
         }
 

@@ -89,9 +89,13 @@ export default function ItemTypeForm({
   showFavoriteToggle = false,
   showRichHints = false,
   existingHsCodes = [],
+  purpose = "item",
   onClose,
   onSaved,
 }) {
+  const isBillCategory = purpose === "bill";
+  const isClassification = purpose === "classification";
+  const entityLabel = isBillCategory ? "bill category" : isClassification ? "FBR classification" : "item type";
   const mode = editItem ? "edit" : "create";
   const lockedSaleType = !!scenarioSaleType;
 
@@ -129,9 +133,12 @@ export default function ItemTypeForm({
   const lookupSeqRef = useRef(0);
   const debounceRef = useRef(null);
   const aliveRef = useRef(true);
-  useEffect(() => () => {
-    aliveRef.current = false;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, []);
 
   // On open in edit mode WITH an existing HS code, fetch hints
@@ -214,9 +221,8 @@ export default function ItemTypeForm({
   // 250 ms after the operator stops typing (or picks from the dropdown,
   // which is also a single onChange call).
   //
-  // When an HS code is set the FBR-recommended UOM **overrides**
-  // whatever the user typed previously. The UOM field then becomes
-  // read-only until the HS code is cleared again.
+  // A new HS code starts with its suggested unit; the operator can choose
+  // another supported unit as this classification's default.
   //
   // Sale type still only pre-fills when blank / seed-default — the
   // operator may legitimately want a non-default sale type even when
@@ -261,18 +267,26 @@ export default function ItemTypeForm({
   const submit = async (e) => {
     e.preventDefault();
     setError("");
+    if (saving || hintLoading || !uom.trim()) {
+      setError(hintLoading ? "Wait for the unit lookup to finish." : "Choose a unit before saving.");
+      return;
+    }
     if (!name.trim()) {
       setError("Name is required.");
+      return;
+    }
+    if (isClassification && !/^\d{4}\.\d{4}(\.\d{2})?$/.test(hsCode.trim())) {
+      setError("Choose a complete HS code for this FBR classification.");
       return;
     }
     setSaving(true);
     try {
       const payload = {
         name: name.trim(),
-        hsCode: hsCode?.trim() || null,
+        hsCode: isBillCategory ? null : hsCode?.trim() || null,
         uom: uom?.trim() || null,
-        fbrUOMId: fbrUOMId || null,
-        saleType: saleType || null,
+        fbrUOMId: isBillCategory ? null : fbrUOMId || null,
+        saleType: isBillCategory ? null : saleType || null,
         fbrDescription: fbrDescription?.trim() || null,
         isFavorite: !!isFavorite,
       };
@@ -293,18 +307,6 @@ export default function ItemTypeForm({
   };
 
   const uomMissing = !uom.trim();
-  // 2026-05-14: once an HS code is picked AND FBR returned a UOM for it,
-  // the recommended UOM is authoritative — lock the input so the operator
-  // can't drift the row away from what FBR will accept.
-  // 2026-05-16: ALSO release the lock when FBR returned no UOMs for the
-  // code (rare but real — some HS codes have no UOM mapping in PRAL's
-  // master). Previously the field stayed locked-empty and the operator
-  // couldn't save the row at all. While the hint fetch is still in
-  // flight the lock stays on so the field doesn't briefly become editable
-  // and then snap shut once the response arrives.
-  const hasFbrUom = !!hsHints?.defaultUom?.description;
-  const fbrHasNoUomForThisCode = !!hsHints && !hasFbrUom;
-  const uomLocked = !!hsCode.trim() && (hintLoading || hasFbrUom);
   const blockReason = hintLoading
     ? "Waiting for FBR's recommended UOM…"
     : uomMissing
@@ -319,7 +321,16 @@ export default function ItemTypeForm({
 
   return (
     <div data-admin-backdrop="" style={{ ...formStyles.backdrop, zIndex: 1100 }}>
-      <div data-admin-dialog=""
+      <div data-admin-dialog="" role="dialog" aria-modal="true" aria-label={`${mode === "edit" ? "Edit" : "New"} ${entityLabel}`}
+        onKeyDown={e => {
+          if (e.target.closest?.("[data-admin-popup]")) return;
+          if (e.key === "Escape") { e.stopPropagation(); if (!saving) onClose(); }
+          if (e.key !== "Tab") return;
+          const nodes = [...e.currentTarget.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]')];
+          const first = nodes[0], last = nodes.at(-1);
+          if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+          else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+        }}
         style={{
           ...formStyles.modal,
           maxWidth: `${showRichHints ? modalSizes.md : modalSizes.sm}px`,
@@ -330,10 +341,10 @@ export default function ItemTypeForm({
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>
             <MdInventory2 style={{ verticalAlign: "-3px", marginRight: 4 }} size={16} />
-            {mode === "edit" ? "Edit Item Type" : "New Item Type"}
+            {mode === "edit" ? `Edit ${entityLabel}` : `New ${entityLabel}`}
             {scenarioCode && <span style={styles.scenarioPill}>{scenarioCode}</span>}
           </h5>
-          <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" type="button" aria-label={`Close ${entityLabel}`} style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
 
         <form onSubmit={submit}>
@@ -341,16 +352,17 @@ export default function ItemTypeForm({
             {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
             <p style={styles.intro}>
-              Adds an entry to your product catalog.{" "}
-              {scenarioCode
+              {isBillCategory ? "Used on bills and challans. Tax classifications are selected separately when preparing an FBR invoice." : "Save a reusable FBR classification and choose its default unit. Filing rows can use any unit FBR supports for this HS code."}{" "}
+              {!isBillCategory && scenarioCode
                 ? `Sale Type is locked to ${scenarioCode}'s rule; UOM auto-fills from FBR's HS-UOM mapping.`
-                : "Pick an HS code to auto-fill UOM, sale type, and rate."}
+                : ""}
             </p>
 
             <div data-admin-field="" style={formStyles.formGroup}>
-              <label style={styles.label}>Name *</label>
+              <label htmlFor="catalog-item-name" style={styles.label}>Name *</label>
               <input
                 style={styles.input}
+                id="catalog-item-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 autoFocus
@@ -358,11 +370,11 @@ export default function ItemTypeForm({
               />
             </div>
 
-            <div data-admin-field="" style={formStyles.formGroup}>
+            {!isBillCategory && <div data-admin-field="" style={formStyles.formGroup}>
               <label style={styles.label}>
                 HS Code{" "}
                 {hintLoading && <span style={styles.lockedTag}>looking up UOM…</span>}
-                {!hintLoading && mode === "create" && <span style={styles.optTag}>Optional</span>}
+                {!hintLoading && mode === "create" && !isClassification && <span style={styles.optTag}>Optional</span>}
               </label>
               <HsCodeAutocomplete
                 companyId={companyId}
@@ -436,68 +448,31 @@ export default function ItemTypeForm({
               {!showRichHints && hsHints?.notes?.length > 0 && (
                 <span style={styles.compactNote}>{hsHints.notes[0]}</span>
               )}
-            </div>
+            </div>}
 
             <div data-admin-form-row="" style={styles.row}>
               <div style={{ flex: 1 }}>
-                <label style={styles.label}>
-                  UOM *
-                  {/* 2026-05-14: badge progression —
-                      ① during FBR lookup AND UOM not yet filled → "looking up UOM…"
-                      ② post-override OR edit mode with saved UOM → "🔒 HS-locked"
-                      ③ HS cleared / no override / no lock → no badge
-                      The lookup badge is suppressed when the field is
-                      already populated (edit-mode re-fetch shouldn't
-                      flicker the label). */}
-                  {/* 2026-05-14: badge state machine
-                       ① `hintLoading` true → "looking up UOM…"
-                         (set only by user-triggered HS changes; edit-
-                          mode mount fetch is silent so this doesn't
-                          flicker on initial open).
-                       ② HS locked AND UOM populated AND no lookup
-                          in flight → "🔒 HS-locked"
-                       ③ otherwise → no badge.
-                       Mutually exclusive — `hintLoading` always wins
-                       so re-picking an HS code flips the badge from
-                       HS-locked → looking up → HS-locked cleanly,
-                       even though the old UOM value is still on
-                       screen mid-fetch. */}
-                  {hintLoading && (
-                    <span style={styles.lockedTag}>looking up UOM…</span>
-                  )}
-                  {!hintLoading && uomLocked && uom.trim() && (
-                    <span style={styles.lockedTag}>
-                      <MdLock size={10} /> HS-locked
-                    </span>
-                  )}
+                <label htmlFor="catalog-default-unit" style={styles.label}>
+                  {isBillCategory ? "Usual unit" : "Default filing unit"} *
                 </label>
-                {/* 2026-05-14: when an HS code is set, render a read-only
-                    input showing the FBR-recommended UOM. The autocomplete
-                    only renders when no HS code is picked, since the HS
-                    code is the source of truth for UOM at submission time
-                    — letting the operator pick a different one would
-                    silently fail FBR validation with [0052]. */}
-                {uomLocked ? (
-                  <input
-                    type="text"
-                    value={uom}
-                    readOnly
-                    style={{ ...styles.input, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
-                    placeholder={hintLoading ? "Looking up UOM…" : "(no UOM mapped — clear HS code to edit)"}
-                    title="UOM is driven by the HS code. Clear the HS code to edit it manually."
-                  />
+                {hsHints?.uoms?.length > 0 ? (
+                  <select id="catalog-default-unit" aria-label="Default filing unit" style={styles.input}
+                    value={fbrUOMId || ""} disabled={hintLoading}
+                    onChange={e => {
+                      const picked = hsHints.uoms.find(u => String(u.uoM_ID) === e.target.value);
+                      setUom(picked?.description || ""); setFbrUOMId(picked?.uoM_ID || null);
+                    }}>
+                    <option value="">Choose a supported unit</option>
+                    {hsHints.uoms.map(u => <option key={u.uoM_ID} value={u.uoM_ID}>{u.description}</option>)}
+                  </select>
                 ) : (
-                  <LookupAutocomplete companyId={companyId}
-                    endpoint="/lookup/units"
-                    label="type to pick from your units"
-                    value={uom}
-                    onChange={(val) => { setUom(val); setFbrUOMId(null); }}
-                    inputClassName=""
-                    inputStyle={styles.input}
-                  />
+                  <LookupAutocomplete companyId={companyId} endpoint="/lookup/units"
+                    label="type to pick from your units" value={uom}
+                    onChange={val => { setUom(val); setFbrUOMId(null); }} inputClassName="" inputStyle={styles.input} />
                 )}
+                {!isBillCategory && <p style={styles.hint}>This is the default, not a restriction to one unit.</p>}
               </div>
-              <div style={{ flex: 1 }}>
+              {!isBillCategory && <div style={{ flex: 1 }}>
                 <label style={styles.label}>
                   Sale Type
                   {lockedSaleType && (
@@ -522,7 +497,7 @@ export default function ItemTypeForm({
                     {SALE_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
                 )}
-              </div>
+              </div>}
             </div>
 
             {saleTypeMismatch && (
@@ -542,7 +517,7 @@ export default function ItemTypeForm({
                     checked={isFavorite}
                     onChange={(e) => setIsFavorite(e.target.checked)}
                   />
-                  Show in challan &amp; bill dropdowns (favorite)
+                  Show near the top of relevant pickers (favorite)
                 </label>
               </div>
             )}

@@ -168,7 +168,7 @@ namespace MyApp.Api.Helpers.Onboarding
         {
             var hs = NormaliseHsCode(row.Get("hsCode"));
             if (hs.Length == 0)
-                warn("hsCode", "empty. This item cannot be filed with FBR until it has an HS code");
+                warn("hsCode", "empty. Imports as a bill category for bills and challans; it cannot be filed with FBR until it has an HS code");
             else if (!HsFormat.IsMatch(hs))
                 error("hsCode", $"\"{row.Get("hsCode")}\" must look like 8481.8090");
 

@@ -133,21 +133,21 @@ namespace MyApp.Api.Helpers.Onboarding
                 }).ToList()),
 
             new(OnboardingSheets.Items, "Items",
-                "The goods or services you bill. FBR needs the HS code, unit and sale type on every line.",
+                "Bill categories and FBR classifications share the Items sheet. Blank HS Code = bill category; supplied HS Code = FBR classification.",
                 "itemtypes.manage.create",
                 new List<OnboardingColumn>
                 {
                     new("name", "Item Name", Requirement.Required,
-                        "As it should print on bills. The same name may repeat only with a different HS code.",
+                        "Name of the bill category or reusable FBR classification. The same name may repeat only with a different HS code.",
                         Width: 34, Aliases: new[] { "name", "item" }, MaxLength: 300),
                     new("hsCode", "HS Code", Requirement.Optional,
-                        "8 digits with a dot, e.g. 8481.8090. Leave empty if unknown; the item cannot be filed with FBR until it has one.",
+                        "Leave blank for a bill category. Enter a complete HS code, e.g. 8481.8090, for an FBR classification used on invoices.",
                         Kind: ColumnKind.Identifier, Width: 16),
                     new("unit", "Unit", Requirement.Optional,
-                        "Unit of measure, e.g. Pcs or KG. Leave empty to take the unit FBR lists for the HS code.",
+                        "Usual bill unit for a category; default filing unit for an FBR classification. Choose another FBR-supported unit on the filing row; do not create a row per unit.",
                         ListSource.Unit, Width: 18),
                     new("saleType", "Sale Type", Requirement.Optional,
-                        "Pick from the list. Leave empty for Goods at standard rate (default).",
+                        "For FBR classifications, pick the tax treatment from the list. Blank uses Goods at standard rate (default). Leave blank for bill categories.",
                         ListSource.SaleType, Width: 30),
                 }),
 
