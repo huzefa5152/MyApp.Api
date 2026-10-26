@@ -13,7 +13,9 @@ import { getItemTypes } from "../api/itemTypeApi";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { saveItemFbrDefaults } from "../api/lookupApi";
 import { formStyles, modalSizes } from "../theme";
-import { lineTotalFrom, unitPriceFrom } from "../utils/lineAmount";
+import { ENTRY_MODE, displayUnitPrice, lineTotalFrom, unitPriceFrom } from "../utils/lineAmount";
+import LineEntryModeSwitch, { CalculatedField } from "./LineEntryModeSwitch";
+import useLineEntryMode from "../hooks/useLineEntryMode";
 import { todayYmd } from "../utils/dateInput";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
@@ -570,6 +572,51 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     const first = ids[0];
     return first && ids.every((x) => x === first) ? String(first) : "";
   }, [allItems, itemTypeIds]);
+
+  // The quantity is fixed by the challan, so the operator either types the
+  // unit price (the line total is worked out) or the line total (the unit
+  // price is worked out); the other is read-only. Remembered for this screen.
+  const [entryMode, setEntryModePref] = useLineEntryMode("bill-challan");
+  const byTotal = entryMode === ENTRY_MODE.total;
+  const typedTotal = (item) => {
+    const price = parseFloat(itemPrices[item.id]) || 0;
+    return itemLineTotals[item.id] ?? (price > 0 ? String(lineTotalFrom(item.quantity, price)) : "");
+  };
+  const shownRate = (item) => {
+    const raw = itemPrices[item.id];
+    if (raw === "" || raw == null) return "";
+    const t = typedTotal(item);
+    return displayUnitPrice(raw, Number(item.quantity), t === "" ? null : Number(t));
+  };
+  const shownTotal = (item) => {
+    const t = typedTotal(item);
+    return t === "" || !Number.isFinite(Number(t))
+      ? "" : Number(t).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+  // Flipping the mode keeps every line's figures: Line total starts from what
+  // each line comes to now; Unit price trims a derived rate to the fewest
+  // decimals that still reproduce that total.
+  const setEntryMode = (next) => {
+    if (next === ENTRY_MODE.total) {
+      const seeded = {};
+      for (const item of allItems) {
+        const t = typedTotal(item);
+        if (t !== "") seeded[item.id] = t;
+      }
+      setItemLineTotals(seeded);
+    } else {
+      setItemPrices((prev) => {
+        const out = { ...prev };
+        for (const item of allItems) {
+          const shown = shownRate(item);
+          if (shown !== "") out[item.id] = String(shown);
+        }
+        return out;
+      });
+      setItemLineTotals({});
+    }
+    setEntryModePref(next);
+  };
 
   const handlePriceChange = (itemId, value) => {
     setItemPrices((prev) => ({ ...prev, [itemId]: value }));
@@ -1137,6 +1184,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             <span style={styles.leaveOutHint}> — untick a line to bill it later; it stays on its challan as pending</span>
                           </label>
                           <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                            <LineEntryModeSwitch mode={entryMode} onChange={setEntryMode} />
                             {/* Bills mode hides all item-type-management
                                 controls — the catalog "+ New Item Type"
                                 button, the FBR-tip pill. Operators classify
@@ -1294,7 +1342,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                     </div>
                                     <div>
                                       <label style={styles.mlabel}>Unit Price *</label>
-                                      <input type="number" min={0} step={0.01} style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right" }} value={itemPrices[item.id] || ""} onChange={(e) => handlePriceChange(item.id, e.target.value)} placeholder="0.00" />
+                                      {byTotal
+                                        ? <CalculatedField label="Unit price" value={shownRate(item)} />
+                                        : <input type="number" min={0} step="any" style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right" }} value={itemPrices[item.id] || ""} onChange={(e) => handlePriceChange(item.id, e.target.value)} placeholder="0.00" />}
                                       {lastRates[item.id]?.lastUnitPrice != null && (
                                         <div style={{
                                           fontSize: "0.68rem", marginTop: 2, lineHeight: 1.2,
@@ -1349,14 +1399,19 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                   )}
                                   <div style={styles.mamt}>
                                     <span style={styles.mlabel}>Line Total</span>
-                                    <input
-                                      type="number" min={0} step={0.01}
-                                      style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right", fontWeight: 700, maxWidth: 150 }}
-                                      value={itemLineTotals[item.id] ?? (price > 0 ? String(lineTotalFrom(item.quantity, price)) : "")}
-                                      onChange={(e) => handleLineTotalChange(item.id, e.target.value, item.quantity)}
-                                      placeholder="0.00"
-                                      title="Type the amount this line must come to — the unit price is derived from it and the challan quantity."
-                                    />
+                                    {byTotal ? (
+                                      <input
+                                        type="number" min={0} step="any"
+                                        aria-label="Line total"
+                                        style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right", fontWeight: 700, maxWidth: 150 }}
+                                        value={typedTotal(item)}
+                                        onChange={(e) => handleLineTotalChange(item.id, e.target.value, item.quantity)}
+                                        placeholder="0.00"
+                                        title="Type the amount this line must come to — the unit price is worked out from it and the challan quantity."
+                                      />
+                                    ) : (
+                                      <CalculatedField label="Line total" value={shownTotal(item)} style={{ maxWidth: 150, fontWeight: 700 }} />
+                                    )}
                                   </div>
                                 </div>
                               );
@@ -1470,15 +1525,19 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                       />
                                     </td>
                                     <td style={styles.unifiedTd}>
-                                      <input
-                                        type="number"
-                                        min={0}
-                                        step={0.01}
-                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
-                                        value={itemPrices[item.id] || ""}
-                                        onChange={(e) => handlePriceChange(item.id, e.target.value)}
-                                        placeholder="0.00"
-                                      />
+                                      {byTotal ? (
+                                        <CalculatedField label="Unit price" value={shownRate(item)} style={{ fontSize: "0.8rem", minHeight: 32, padding: "0.3rem 0.5rem" }} />
+                                      ) : (
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          step="any"
+                                          style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+                                          value={itemPrices[item.id] || ""}
+                                          onChange={(e) => handlePriceChange(item.id, e.target.value)}
+                                          placeholder="0.00"
+                                        />
+                                      )}
                                       {lastRates[item.id]?.lastUnitPrice != null && (
                                         <div style={{
                                           fontSize: "0.68rem", marginTop: 2, lineHeight: 1.2,
@@ -1502,14 +1561,19 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                       )}
                                     </td>
                                     <td style={{ ...styles.unifiedTd, textAlign: "right", fontWeight: 600, fontSize: "0.82rem" }}>
-                                      <input
-                                        type="number" min={0} step={0.01}
-                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", textAlign: "right", fontWeight: 600 }}
-                                        value={itemLineTotals[item.id] ?? (price > 0 ? String(lineTotalFrom(item.quantity, price)) : "")}
-                                        onChange={(e) => handleLineTotalChange(item.id, e.target.value, item.quantity)}
-                                        placeholder="0.00"
-                                        title="Type the amount this line must come to — the unit price is derived from it and the challan quantity."
-                                      />
+                                      {byTotal ? (
+                                        <input
+                                          type="number" min={0} step="any"
+                                          aria-label="Line total"
+                                          style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", textAlign: "right", fontWeight: 600 }}
+                                          value={typedTotal(item)}
+                                          onChange={(e) => handleLineTotalChange(item.id, e.target.value, item.quantity)}
+                                          placeholder="0.00"
+                                          title="Type the amount this line must come to — the unit price is worked out from it and the challan quantity."
+                                        />
+                                      ) : (
+                                        <CalculatedField label="Line total" value={shownTotal(item)} style={{ fontSize: "0.8rem", minHeight: 32, padding: "0.3rem 0.5rem", fontWeight: 600 }} />
+                                      )}
                                     </td>
                                     {!billsMode && (
                                       <td

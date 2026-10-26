@@ -238,6 +238,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
             </div></section>
 
             <LineItemsEditor companyId={companyId}
+              entryModeKey="quote"
               showImage
               onUploadImage={async file => (await uploadQuoteLineImage(companyId, file)).data.url}
               onImageBusyChange={delta => setImageUploads(count => Math.max(0, count + delta))}

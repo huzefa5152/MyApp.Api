@@ -7,6 +7,9 @@ import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import QuantityInput from "./QuantityInput";
 import LineItemImageCell from "./LineItemImageCell";
 import CopyLineButton from "./CopyLineButton";
+import LineEntryModeSwitch, { CalculatedField } from "./LineEntryModeSwitch";
+import useLineEntryMode from "../hooks/useLineEntryMode";
+import { ENTRY_MODE, applyLineEntry, displayUnitPrice, lineForMode, unitPriceFrom } from "../utils/lineAmount";
 
 /**
  * Shared line-item entry for the sales module (Quote / Order / Challan).
@@ -37,6 +40,13 @@ import CopyLineButton from "./CopyLineButton";
  *   - getRate                   → last-billed-rate auto-fill on the price (Quote/Bill)
  *   - showDiscount              → a per-line discount (10% or a rupee amount) +
  *                                 reason, opened from the row's tag button (Quote)
+ *   - entryModeKey              → the "I'll enter Unit price / Line total" switch,
+ *                                 remembered per screen. In Line total mode the
+ *                                 typed figure lives on the row as `_lineTotal`
+ *                                 (the amount BEFORE any line discount) and the
+ *                                 unit price is derived at 12 decimals; the
+ *                                 parent's save maps fields explicitly, so the
+ *                                 helper field never reaches the server.
  */
 export default function LineItemsEditor({
   companyId,
@@ -70,8 +80,12 @@ export default function LineItemsEditor({
   enablePaste = true,
   enableRepeatLast = true,
   narrowBreakpoint = 760,
+  entryModeKey,
 }) {
   const showBulk = (bulkApply ?? showItemType) && showItemType;
+  const [entryMode, setEntryModePref] = useLineEntryMode(entryModeKey || "_unused");
+  const showEntrySwitch = showUnitPrice && !!entryModeKey;
+  const byTotal = showEntrySwitch && entryMode === ENTRY_MODE.total;
   const [isNarrow, setIsNarrow] = useState(
     () => typeof window !== "undefined" && window.innerWidth < narrowBreakpoint
   );
@@ -116,7 +130,7 @@ export default function LineItemsEditor({
   // the browser would crush qty / unit / price until their values are cut, so
   // the table keeps this minimum and overflows instead, which flips to cards.
   const tableMin = 28 + (showImage ? 64 : 0) + (showItemType ? (showDiscount ? 170 : 180) : 0) + 220 + 92 + 120
-    + (showUnitPrice ? 230 : 0) + (showDiscount && showUnitPrice ? 112 : 76) - 40;
+    + (showUnitPrice ? 250 : 0) + (showDiscount && showUnitPrice ? 112 : 76) - 40;
   const narrow = isNarrow || (panelWidth != null && tableNeeds > 0 && panelWidth < tableNeeds);
 
   // After a row is added/inserted we stash the index to focus; this runs post-
@@ -158,6 +172,42 @@ export default function LineItemsEditor({
 
   // Net of the line's discount when it has one (Quote); plain qty x price otherwise.
   const lineTotal = (it) => lineAmounts(it).net;
+
+  // Line total mode: what the operator typed for the line (before discount),
+  // else what qty x price comes to now — so a saved line opens on its figure.
+  const typedTotal = (it) => {
+    if (it._lineTotal != null) return String(it._lineTotal);
+    const g = lineAmounts(it).gross;
+    return it.unitPrice === "" || it.unitPrice == null ? "" : String(g);
+  };
+  const shownRate = (it) => {
+    if (it.unitPrice === "" || it.unitPrice == null) return "";
+    const t = typedTotal(it);
+    return displayUnitPrice(it.unitPrice, Number(it.quantity), t === "" ? null : Number(t));
+  };
+  // A keystroke in Line total mode: the quantity or the total moves, and the
+  // rate is re-divided so qty x rate lands back on the typed total.
+  const setByTotal = (idx, field, value) => {
+    const it = items[idx];
+    const r = applyLineEntry(
+      { quantity: String(it.quantity ?? ""), unitPrice: String(it.unitPrice ?? ""), lineTotal: typedTotal(it) },
+      field, String(value ?? ""), ENTRY_MODE.total,
+    );
+    setItem(idx, { quantity: field === "quantity" ? value : it.quantity, unitPrice: r.unitPrice, _lineTotal: r.lineTotal });
+  };
+  const setQuantity = (idx, v) => (byTotal ? setByTotal(idx, "quantity", v) : setItem(idx, { quantity: v }));
+  // Flipping the mode keeps every line's figures: Line total starts from what
+  // the line comes to now; Unit price trims the derived rate to the fewest
+  // decimals that still reproduce the total.
+  const setEntryMode = (next) => {
+    onItemsChange(items.map((it) => {
+      const cur = { quantity: String(it.quantity ?? ""), unitPrice: String(it.unitPrice ?? ""), lineTotal: typedTotal(it) };
+      if (next === ENTRY_MODE.total) return { ...it, _lineTotal: lineForMode(cur, next).lineTotal };
+      const { _lineTotal, ...rest } = it;
+      return it.unitPrice === "" || it.unitPrice == null ? rest : { ...rest, unitPrice: lineForMode(cur, next).unitPrice };
+    }));
+    setEntryModePref(next);
+  };
   const fmtMoney = (n) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
   const discountOpen = (it) => showDiscount && showUnitPrice && (it._discountOpen || !!String(it.discountText || "").trim());
   const openDiscount = (idx) => setItem(idx, { _discountOpen: true });
@@ -202,13 +252,6 @@ export default function LineItemsEditor({
     );
   };
 
-  const amountCell = (item) => {
-    const { gross, discount } = lineAmounts(item);
-    return discount > 0
-      ? <><div>{fmtMoney(gross - discount)}</div><div style={s.grossStruck}>{fmtMoney(gross)}</div></>
-      : fmtMoney(gross);
-  };
-
   // Auto-fill price from the item's last billed rate. Only fills when the
   // row's price is still 0 so it never clobbers a typed price; always sets the
   // hint. No-op unless the parent supplied `getRate`.
@@ -220,9 +263,9 @@ export default function LineItemsEditor({
         onItemsChange(
           itemsRef.current.map((it, i) => {
             if (i !== idx) return it;
-            return !it.unitPrice || Number(it.unitPrice) === 0
-              ? { ...it, unitPrice: res.lastUnitPrice, rateHint: res.hint || "" }
-              : { ...it, rateHint: res.hint || "" };
+            if (it.unitPrice && Number(it.unitPrice) !== 0) return { ...it, rateHint: res.hint || "" };
+            const filled = { ...it, unitPrice: res.lastUnitPrice, rateHint: res.hint || "" };
+            return byTotal && !it._lineTotal ? { ...filled, _lineTotal: String(lineAmounts(filled).gross) } : filled;
           })
         );
       }
@@ -290,6 +333,7 @@ export default function LineItemsEditor({
       unit: last.unit || "",
     };
     if (showUnitPrice) seed.unitPrice = last.unitPrice || 0;
+    if (byTotal) seed._lineTotal = typedTotal(last);
     if (showImage) seed.imagePath = last.imagePath || null;
     if (last.rateHint) seed.rateHint = last.rateHint;
     addItem(seed);
@@ -335,7 +379,13 @@ export default function LineItemsEditor({
         row.description = parts.slice(0, tail.keep).join(" ").trim() || line;
         if (tail.qty != null) row.quantity = tail.qty;
         if (tail.unit) row.unit = tail.unit;
-        if (showUnitPrice && tail.price != null) row.unitPrice = tail.price;
+        if (showUnitPrice && tail.price != null) {
+          if (byTotal) {
+            row._lineTotal = String(tail.price);
+            const rate = unitPriceFrom(tail.price, tail.qty ?? row.quantity);
+            row.unitPrice = rate == null ? "" : rate;
+          } else row.unitPrice = tail.price;
+        }
       } else {
         row.description = parts.join(" ").trim() || line;
       }
@@ -351,6 +401,44 @@ export default function LineItemsEditor({
 
   const nonHsPlaceholderAll = bulkApplyMode === "all" ? "— pick to apply to all —" : "— pick to fill empty rows —";
   const rowLocked = (it) => (isRowLocked ? isRowLocked(it) : false);
+
+  const totalInput = (item, idx) => (
+    <input
+      type="number"
+      inputMode="decimal"
+      min="0"
+      step="any"
+      aria-label={`Line total for line ${idx + 1}`}
+      style={{ ...s.cellInput, textAlign: "right" }}
+      value={typedTotal(item)}
+      onChange={(e) => setByTotal(idx, "lineTotal", e.target.value)}
+      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitAndAdvance(idx); } }}
+    />
+  );
+  const priceCell = (item, idx) => (byTotal
+    ? <CalculatedField label="Unit price" value={shownRate(item)} />
+    : priceInput(item, idx));
+  // Price mode: the line comes to qty x price (less its discount), worked out.
+  // Total mode: the typed total, with what it comes to after discount beneath.
+  const amountField = (item, idx) => {
+    const { gross, discount } = lineAmounts(item);
+    if (byTotal) {
+      return (
+        <>
+          {totalInput(item, idx)}
+          {discount > 0 && <div style={s.afterDisc}>After discount {fmtMoney(gross - discount)}</div>}
+        </>
+      );
+    }
+    return (
+      <CalculatedField
+        label="Line total"
+        value={discount > 0
+          ? <><span>{fmtMoney(gross - discount)}</span> <span style={s.grossStruck}>{fmtMoney(gross)}</span></>
+          : fmtMoney(gross)}
+      />
+    );
+  };
 
   const priceInput = (item, idx, styleExtra) => (
     <input
@@ -372,7 +460,14 @@ export default function LineItemsEditor({
           {itemsLabel}
           {itemsHint && <span style={s.hintText}> — {itemsHint}</span>}
         </label>
-        <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "center" }}>
+          {showEntrySwitch && (
+            <LineEntryModeSwitch
+              mode={entryMode}
+              onChange={setEntryMode}
+              totalLabel={showDiscount ? "Line total (before discount)" : "Line total"}
+            />
+          )}
           {enableRepeatLast && (
             <button type="button" style={{ ...s.toolBtn, opacity: canRepeat ? 1 : 0.5, cursor: canRepeat ? "pointer" : "not-allowed" }} onClick={repeatLast} disabled={!canRepeat} title={canRepeat ? "Duplicate the last line (item type, description, qty, unit, price)" : "Fill the current line's description first"}>
               <MdRepeat size={14} /> Repeat last
@@ -395,14 +490,14 @@ export default function LineItemsEditor({
         <div style={s.pastePanel}>
           <div style={s.pasteHintRow}>
             Paste one item per line, columns in order —{" "}
-            {showUnitPrice ? "description, qty, unit, unit price" : "description, qty, unit"} (tab or comma
+            {showUnitPrice ? `description, qty, unit, ${byTotal ? "line total" : "unit price"}` : "description, qty, unit"} (tab or comma
             separated; trailing columns optional).
           </div>
           <textarea
             style={s.pasteArea}
             value={pasteText}
             onChange={(e) => setPasteText(e.target.value)}
-            placeholder={showUnitPrice ? "Steel rod 12mm, 10, Pcs, 850\nCement bag, 5, Bag" : "Steel rod 12mm, 10, Pcs\nCement bag, 5, Bag"}
+            placeholder={showUnitPrice ? (byTotal ? "Steel rod 12mm, 10, Pcs, 8500\nSugar, 0.5, Kg, 450" : "Steel rod 12mm, 10, Pcs, 850\nCement bag, 5, Bag") : "Steel rod 12mm, 10, Pcs\nCement bag, 5, Bag"}
             rows={4}
             autoFocus
           />
@@ -472,7 +567,7 @@ export default function LineItemsEditor({
                 <div style={showUnitPrice ? s.m3col : s.m2col}>
                   <div>
                     <label style={s.mlabel}>Qty</label>
-                    <QuantityInput value={item.quantity} onChange={(v) => setItem(idx, { quantity: v })} unit={item.unit} units={units} min={getRowMin ? getRowMin(item) : undefined} style={{ ...s.cellInput, textAlign: "right" }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitAndAdvance(idx); } }} />
+                    <QuantityInput value={item.quantity} onChange={(v) => setQuantity(idx, v)} unit={item.unit} units={units} min={getRowMin ? getRowMin(item) : undefined} style={{ ...s.cellInput, textAlign: "right" }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitAndAdvance(idx); } }} />
                   </div>
                   <div>
                     <label style={s.mlabel}>Unit</label>
@@ -481,11 +576,17 @@ export default function LineItemsEditor({
                   {showUnitPrice && (
                     <div>
                       <label style={s.mlabel}>Unit Price</label>
-                      {priceInput(item, idx)}
+                      {priceCell(item, idx)}
                     </div>
                   )}
                 </div>
-                {showUnitPrice && (
+                {showUnitPrice && byTotal && (
+                  <div style={{ ...s.mamt, alignItems: "flex-start" }}>
+                    <span style={{ paddingTop: "0.55rem" }}>{showDiscount ? "Line total (before discount)" : "Line total"}</span>
+                    <span style={{ flex: "0 1 55%", minWidth: 0 }}>{amountField(item, idx)}</span>
+                  </div>
+                )}
+                {showUnitPrice && !byTotal && (
                   <div style={s.mamt}>
                     <span>Amount</span>
                     <span style={{ textAlign: "right" }}>
@@ -513,7 +614,7 @@ export default function LineItemsEditor({
                 <th style={{ ...s.th, width: 92, textAlign: "right" }}>Qty</th>
                 <th style={{ ...s.th, width: 120 }}>Unit</th>
                 {showUnitPrice && <th style={{ ...s.th, width: 120, textAlign: "right" }}>Unit Price</th>}
-                {showUnitPrice && <th style={{ ...s.th, width: 110, textAlign: "right" }}>Amount</th>}
+                {showUnitPrice && <th style={{ ...s.th, width: 130, textAlign: "right" }}>{byTotal ? "Line total" : "Amount"}</th>}
                 <th style={{ ...s.th, width: showDiscount && showUnitPrice ? 112 : 76 }}><span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>Actions</span></th>
               </tr>
             </thead>
@@ -547,14 +648,14 @@ export default function LineItemsEditor({
                       {hint && <div style={s.lockHint}>{hint}</div>}
                     </td>
                     <td style={s.td}>
-                      <QuantityInput value={item.quantity} onChange={(v) => setItem(idx, { quantity: v })} unit={item.unit} units={units} min={getRowMin ? getRowMin(item) : undefined} style={{ ...s.cellInput, textAlign: "right" }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitAndAdvance(idx); } }} />
+                      <QuantityInput value={item.quantity} onChange={(v) => setQuantity(idx, v)} unit={item.unit} units={units} min={getRowMin ? getRowMin(item) : undefined} style={{ ...s.cellInput, textAlign: "right" }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitAndAdvance(idx); } }} />
                     </td>
                     <td style={s.td}>
                       <LookupAutocomplete companyId={companyId} label="Unit" endpoint="/lookup/units" value={item.unit} onChange={(v) => setItem(idx, { unit: v })} inputStyle={s.cellInput} onEnterKey={() => commitAndAdvance(idx)} />
                     </td>
-                    {showUnitPrice && <td style={s.td}>{priceInput(item, idx)}</td>}
+                    {showUnitPrice && <td style={s.td}>{priceCell(item, idx)}</td>}
                     {showUnitPrice && (
-                      <td style={{ ...s.td, textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>{amountCell(item)}</td>
+                      <td style={{ ...s.td, textAlign: "right", fontWeight: 700 }}>{amountField(item, idx)}</td>
                     )}
                     <td style={{ ...s.td, textAlign: "center" }}>
                       <div style={s.rowActions}>
@@ -636,6 +737,7 @@ const s = {
   discToggle: { display: "grid", placeItems: "center", padding: 0, boxShadow: "none", width: 32, height: 32, borderRadius: 8, border: `1px solid ${colors.teal}40`, background: "#fff", color: colors.teal, cursor: "pointer" },
   discToggleOn: { background: colors.teal, color: "#fff", borderColor: colors.teal },
   discAddBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.35rem", marginTop: "0.5rem", padding: "0.4rem 0.8rem", borderRadius: 8, border: `1px dashed ${colors.teal}80`, background: "#fff", color: colors.teal, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" },
+  afterDisc: { fontSize: "0.7rem", fontWeight: 600, color: colors.teal, marginTop: 3, textAlign: "right" },
   grossStruck: { fontSize: "0.72rem", fontWeight: 500, color: colors.textSecondary, textDecoration: "line-through" },
   inputError: { borderColor: colors.danger, background: colors.dangerLight },
   kbd: { fontFamily: "monospace", fontSize: "0.7rem", padding: "0.05rem 0.35rem", borderRadius: 4, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: "#1a2332" },

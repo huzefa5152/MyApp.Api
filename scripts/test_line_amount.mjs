@@ -10,6 +10,7 @@
 
 import {
   roundTo, lineTotalFrom, unitPriceFrom, roundTripsTo, recalcLine, displayUnitPrice,
+  ENTRY_MODE, applyLineEntry, lineForMode,
 } from "../myapp-frontend/src/utils/lineAmount.js";
 
 let passed = 0, failed = 0;
@@ -86,6 +87,38 @@ check("a clean rate shows short", displayUnitPrice(25, 10, 250) === "25", displa
 check("an awkward rate keeps enough decimals to still reproduce the total",
   roundTripsTo(196, Number(displayUnitPrice(rate, 196, 220000)), 220000),
   displayUnitPrice(rate, 196, 220000));
+
+console.log("\n=== I'll enter: unit price (line total is worked out) ===");
+let e = applyLineEntry({ quantity: "0.5", unitPrice: "", lineTotal: "" }, "unitPrice", "900", ENTRY_MODE.price);
+check("0.5 kg at 900 comes to 450", e.lineTotal === "450", e.lineTotal);
+e = applyLineEntry(e, "lineTotal", "999", ENTRY_MODE.price);
+check("the calculated total cannot be typed over", e.lineTotal === "450", e.lineTotal);
+e = applyLineEntry(e, "quantity", "2", ENTRY_MODE.price);
+check("a quantity change re-works the total, rate kept", e.unitPrice === "900" && e.lineTotal === "1800", JSON.stringify(e));
+e = applyLineEntry(e, "quantity", "", ENTRY_MODE.price);
+check("no quantity, no total", e.lineTotal === "", e.lineTotal);
+
+console.log("\n=== I'll enter: line total (unit price is worked out) ===");
+e = applyLineEntry({ quantity: "0.5", unitPrice: "", lineTotal: "" }, "lineTotal", "450", ENTRY_MODE.total);
+check("450 for 0.5 kg is 900 a kg", Number(e.unitPrice) === 900, e.unitPrice);
+e = applyLineEntry(e, "unitPrice", "1", ENTRY_MODE.total);
+check("the calculated rate cannot be typed over", Number(e.unitPrice) === 900, e.unitPrice);
+e = applyLineEntry({ quantity: "3", unitPrice: "", lineTotal: "" }, "lineTotal", "1000", ENTRY_MODE.total);
+check("1000 over 3 round-trips to 1000", roundTripsTo(3, Number(e.unitPrice), 1000), e.unitPrice);
+e = applyLineEntry(e, "quantity", "4", ENTRY_MODE.total);
+check("a quantity change keeps the typed total, re-works the rate",
+  e.lineTotal === "1000" && Number(e.unitPrice) === 250, JSON.stringify(e));
+e = applyLineEntry(e, "lineTotal", "", ENTRY_MODE.total);
+check("clearing the total clears the rate", e.unitPrice === "", e.unitPrice);
+
+console.log("\n=== switching modes keeps the line's figures ===");
+let m = lineForMode({ quantity: "3", unitPrice: "12.5", lineTotal: "" }, ENTRY_MODE.total);
+check("to line total seeds the total from qty x rate", m.lineTotal === "37.5", m.lineTotal);
+m = lineForMode({ quantity: "3", unitPrice: String(unitPriceFrom(1000, 3)), lineTotal: "1000" }, ENTRY_MODE.price);
+check("to unit price trims the rate yet still reproduces the total",
+  m.unitPrice.length < 16 && roundTripsTo(3, Number(m.unitPrice), 1000), m.unitPrice);
+m = lineForMode({ quantity: "", unitPrice: "", lineTotal: "" }, ENTRY_MODE.total);
+check("an empty line stays empty", m.unitPrice === "" && m.lineTotal === "", JSON.stringify(m));
 
 console.log("\n" + "=".repeat(60));
 console.log(`  ${passed} passed, ${failed} failed`);

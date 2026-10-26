@@ -258,6 +258,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
             </div></section>
 
             <LineItemsEditor companyId={companyId}
+              entryModeKey="sales-order"
               items={items}
               onItemsChange={setItems}
               makeBlankItem={blankItem}

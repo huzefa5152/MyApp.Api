@@ -4949,8 +4949,8 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal?>("UnitPrice")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(28, 12)
+                        .HasColumnType("decimal(28,12)");
 
                     b.HasKey("Id");
 
@@ -5109,8 +5109,8 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal>("UnitPrice")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(28, 12)
+                        .HasColumnType("decimal(28,12)");
 
                     b.HasKey("Id");
 

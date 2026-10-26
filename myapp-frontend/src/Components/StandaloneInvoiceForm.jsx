@@ -15,7 +15,9 @@ import { getClientsByCompany } from "../api/clientApi";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { formStyles, modalSizes } from "../theme";
-import { recalcLine, lineTotalFrom } from "../utils/lineAmount";
+import { ENTRY_MODE, applyLineEntry, displayUnitPrice, lineForMode, lineTotalFrom } from "../utils/lineAmount";
+import LineEntryModeSwitch, { CalculatedField } from "./LineEntryModeSwitch";
+import useLineEntryMode from "../hooks/useLineEntryMode";
 import { todayYmd } from "../utils/dateInput";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
@@ -375,20 +377,35 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const updateRow = (localId, patch) =>
     setRows((prev) => prev.map((r) => (r.localId === localId ? { ...r, ...patch } : r)));
 
-  // Quantity / unit price / line total move together, and the box just typed
-  // is never rewritten under the operator — see utils/lineAmount. Typing a
-  // line total derives the rate at the 12 decimals UnitPrice stores, so the
-  // server's own `LineTotal = Quantity x UnitPrice` lands back on the figure
-  // that was typed instead of a few paisa away from it.
+  // The operator chooses what they type on each line — the unit price or the
+  // line total — and the other is worked out and shown read-only (see
+  // utils/lineAmount). A typed line total derives the rate at the 12 decimals
+  // UnitPrice stores, so the server's own `LineTotal = Quantity x UnitPrice`
+  // lands back on the figure that was typed instead of a few paisa away.
+  const [entryMode, setEntryModePref] = useLineEntryMode("bill");
+  const byTotal = entryMode === ENTRY_MODE.total;
   const setRowAmount = (localId, field, value) =>
     setRows((prev) => prev.map((r) => {
       if (r.localId !== localId) return r;
-      const next = recalcLine(
-        { quantity: r.quantity, unitPrice: r.unitPrice, lineTotal: r.lineTotal, [field]: value },
-        field,
+      const next = applyLineEntry(
+        { quantity: r.quantity, unitPrice: r.unitPrice, lineTotal: r.lineTotal }, field, value, entryMode,
       );
       return { ...r, ...next };
     }));
+  // Flipping the mode keeps every line's figures as they stand.
+  const setEntryMode = (next) => {
+    setRows((prev) => prev.map((r) => ({
+      ...r,
+      ...lineForMode({ quantity: r.quantity, unitPrice: r.unitPrice, lineTotal: r.lineTotal }, next),
+    })));
+    setEntryModePref(next);
+  };
+  const shownRate = (r) => (r.unitPrice === "" || r.unitPrice == null
+    ? ""
+    : displayUnitPrice(r.unitPrice, parseFloat(r.quantity), r.lineTotal === "" ? null : Number(r.lineTotal)));
+  const shownTotal = (r) => (r.lineTotal === "" || r.lineTotal == null || !Number.isFinite(Number(r.lineTotal))
+    ? ""
+    : Number(r.lineTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
   const addRow = () => setRows((prev) => [...prev, blankRow()]);
   const removeRow = (localId) =>
     setRows((prev) => (prev.length === 1 ? prev : prev.filter((r) => r.localId !== localId)));
@@ -994,6 +1011,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       <div style={styles.itemsHeaderBar}>
                         <label style={{ ...styles.label, margin: 0 }}>Items ({rows.length})</label>
                         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                          <LineEntryModeSwitch mode={entryMode} onChange={setEntryMode} />
                           {/* 2026-05-13: previously hidden when billsMode
                               was true. Operators asked for the New Item
                               Type shortcut on every bill-creation flow
@@ -1124,7 +1142,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                   </div>
                                   <div>
                                     <label style={styles.mlabel}>Unit Price *</label>
-                                    <input type="number" min={0} step={0.01} style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right" }} value={r.unitPrice} onChange={(e) => setRowAmount(r.localId, "unitPrice", e.target.value)} placeholder="0.00" />
+                                    {byTotal
+                                      ? <CalculatedField label="Unit price" value={shownRate(r)} />
+                                      : <input type="number" min={0} step="any" style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right" }} value={r.unitPrice} onChange={(e) => setRowAmount(r.localId, "unitPrice", e.target.value)} placeholder="0.00" />}
                                   </div>
                                 </div>
                                 {!billsMode && (
@@ -1159,14 +1179,19 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                 )}
                                 <div style={styles.mamt}>
                                   <span style={styles.mlabel}>Line Total</span>
-                                  <input
-                                    type="number" min={0} step={0.01}
-                                    style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right", fontWeight: 700, maxWidth: 150 }}
-                                    value={r.lineTotal}
-                                    onChange={(e) => setRowAmount(r.localId, "lineTotal", e.target.value)}
-                                    placeholder={(q * p) > 0 ? lineTotalFrom(q, p).toFixed(2) : "0.00"}
-                                    title="Type the amount this line must come to — the unit price is derived from it and the quantity."
-                                  />
+                                  {byTotal ? (
+                                    <input
+                                      type="number" min={0} step="any"
+                                      aria-label="Line total"
+                                      style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right", fontWeight: 700, maxWidth: 150 }}
+                                      value={r.lineTotal}
+                                      onChange={(e) => setRowAmount(r.localId, "lineTotal", e.target.value)}
+                                      placeholder="0.00"
+                                      title="Type the amount this line must come to — the unit price is worked out from it and the quantity."
+                                    />
+                                  ) : (
+                                    <CalculatedField label="Line total" value={shownTotal(r)} style={{ maxWidth: 150, fontWeight: 700 }} />
+                                  )}
                                 </div>
                               </div>
                             );
@@ -1277,24 +1302,33 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                     )}
                                   </td>
                                   <td style={styles.unifiedTd}>
-                                    <input
-                                      type="number" min={0} step={0.01}
-                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
-                                      value={r.unitPrice}
-                                      onChange={(e) => setRowAmount(r.localId, "unitPrice", e.target.value)}
-                                      placeholder="0.00"
-                                      title="Type this and the line total follows; type the line total and this is derived."
-                                    />
+                                    {byTotal ? (
+                                      <CalculatedField label="Unit price" value={shownRate(r)} style={{ fontSize: "0.8rem", minHeight: 32, padding: "0.3rem 0.5rem" }} />
+                                    ) : (
+                                      <input
+                                        type="number" min={0} step="any"
+                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+                                        value={r.unitPrice}
+                                        onChange={(e) => setRowAmount(r.localId, "unitPrice", e.target.value)}
+                                        placeholder="0.00"
+                                        title="Type the unit price; the line total is worked out."
+                                      />
+                                    )}
                                   </td>
                                   <td style={styles.unifiedTd}>
-                                    <input
-                                      type="number" min={0} step={0.01}
-                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", textAlign: "right", fontWeight: 600 }}
-                                      value={r.lineTotal}
-                                      onChange={(e) => setRowAmount(r.localId, "lineTotal", e.target.value)}
-                                      placeholder={(q * p) > 0 ? lineTotalFrom(q, p).toFixed(2) : "0.00"}
-                                      title="Type the amount this line must come to — the unit price is derived from it and the quantity."
-                                    />
+                                    {byTotal ? (
+                                      <input
+                                        type="number" min={0} step="any"
+                                        aria-label="Line total"
+                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", textAlign: "right", fontWeight: 600 }}
+                                        value={r.lineTotal}
+                                        onChange={(e) => setRowAmount(r.localId, "lineTotal", e.target.value)}
+                                        placeholder="0.00"
+                                        title="Type the amount this line must come to — the unit price is worked out from it and the quantity."
+                                      />
+                                    ) : (
+                                      <CalculatedField label="Line total" value={shownTotal(r)} style={{ fontSize: "0.8rem", minHeight: 32, padding: "0.3rem 0.5rem", fontWeight: 600 }} />
+                                    )}
                                   </td>
                                   {!billsMode && (
                                     <td

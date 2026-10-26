@@ -351,7 +351,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
-| Line arithmetic — qty / unit price / line total derive each other (offline) | `node scripts/test_line_amount.mjs` | `23 passed, 0 failed` |
+| Line arithmetic — qty / unit price / line total derive each other (offline) | `node scripts/test_line_amount.mjs` | `35 passed, 0 failed` |
 | Grouped quantity spread — no bill line left at zero, fractions only where the unit allows (offline) | `node scripts/test_group_quantity_split.mjs` | `27 passed, 0 failed` |
 | Invoice exact line total — the consultant's adjustment re-sums to the bill | `python scripts/test_invoice_exact_line_total.py` | `73/73 checks` |
 | Every screen is behind a permission (offline) | `node scripts/test_route_permissions.mjs` | `147 passed, 0 failed` |
