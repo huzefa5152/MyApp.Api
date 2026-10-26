@@ -24,10 +24,12 @@ public static class McpScopes
     public const string TaxFiling = "taxfiling.write";
     /// <summary>Not a write of business data, but it calls PRAL with the company's token, so it is granted explicitly.</summary>
     public const string FbrValidate = "fbr.validate";
+    /// <summary>Keeps bills out of FBR (or brings them back); it also moves their stock and re-posts them.</summary>
+    public const string FbrExclusion = "fbrexclusion.write";
 
     /// <summary>Write scopes that have tools behind them today. Others are refused, not pre-granted.</summary>
-    public static readonly string[] Write = { Clients, Quotes, Challans, Bills, Email, TemplatesWrite, Suppliers, ItemTypes, TaxFiling };
-    public static readonly string[] Implemented = { Read, TemplatesRead, DocumentsRead, FbrValidate, Clients, Quotes, Challans, Bills, Email, TemplatesWrite, Suppliers, ItemTypes, TaxFiling };
+    public static readonly string[] Write = { Clients, Quotes, Challans, Bills, Email, TemplatesWrite, Suppliers, ItemTypes, TaxFiling, FbrExclusion };
+    public static readonly string[] Implemented = { Read, TemplatesRead, DocumentsRead, FbrValidate, Clients, Quotes, Challans, Bills, Email, TemplatesWrite, Suppliers, ItemTypes, TaxFiling, FbrExclusion };
 
     // Permissions the owner must hold: ALL of "All", and at least one of "Any" (when listed).
     private static readonly Dictionary<string, (string[] All, string[] Any)> Needs = new()
@@ -43,6 +45,8 @@ public static class McpScopes
         [ItemTypes] = (new[] { "itemtypes.manage.view" }, new[] { "itemtypes.manage.create", "itemtypes.manage.update" }),
         // The consultant's classification; the quantity variant is the wider of the two rights.
         [TaxFiling] = (new[] { "invoices.list.view" }, new[] { "invoices.manage.update.itemtype", "invoices.manage.update.itemtype.qty" }),
+        // The Bills screen's own toggle key, plus a list right to see which bills it covers.
+        [FbrExclusion] = (new[] { "invoices.fbr.exclude" }, new[] { "bills.list.view", "invoices.list.view" }),
     };
 
     /// <summary>

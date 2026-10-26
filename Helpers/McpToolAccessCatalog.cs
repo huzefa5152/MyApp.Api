@@ -34,6 +34,7 @@ public static class McpToolAccessCatalog
         new("prepare_bill", "Sales", "Prepare a bill", new[] { "bills.manage.create", "bills.manage.create.standalone" }, McpScopes.Bills, Write: true),
         new("get_bill_tax_filing", "FBR filing", "Read a bill's FBR filing rows", new[] { "invoices.list.view" }),
         new("prepare_bill_tax_filing", "FBR filing", "Prepare a bill's FBR classification", new[] { "invoices.manage.update.itemtype", "invoices.manage.update.itemtype.qty" }, McpScopes.TaxFiling, Write: true),
+        new("prepare_fbr_exclusion", "FBR filing", "Prepare excluding bills from FBR, or including them again", new[] { "invoices.fbr.exclude" }, McpScopes.FbrExclusion, Write: true),
         new("validate_bill_fbr", "FBR filing", "Validate a bill with FBR (never submits)", new[] { "invoices.fbr.validate" }, McpScopes.FbrValidate),
 
         new("search_challans", "Deliveries", "Find delivery challans", new[] { "challans.list.view" }),

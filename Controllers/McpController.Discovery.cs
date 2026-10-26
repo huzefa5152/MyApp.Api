@@ -37,6 +37,7 @@ public partial class McpController
         AddEmailTools(tools);
         AddMasterTools(tools);
         AddTaxFilingTools(tools);
+        AddFbrExclusionTools(tools);
         return tools.ToArray();
     }
 
@@ -107,6 +108,7 @@ public partial class McpController
             "get_onboarding_schema" or "get_company_onboarding_status" => await CallOnboardingToolAsync(name, args),
             "prepare_supplier" or "prepare_item_type" => await CallMasterToolAsync(name, args),
             "get_bill_tax_filing" or "prepare_bill_tax_filing" or "validate_bill_fbr" => await CallTaxFilingToolAsync(name, args),
+            "prepare_fbr_exclusion" => await PrepareFbrExclusionAsync(args),
             _ => await CallOperationsToolAsync(name, args)
         };
     }

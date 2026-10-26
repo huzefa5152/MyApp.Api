@@ -426,7 +426,7 @@ namespace MyApp.Api.Controllers
             withholdingTaxRate = r.WithholdingTaxRate, withholdingTaxAmount = r.WithholdingTaxAmount, collectible = r.Collectible,
             amountPaid = payment ? r.AmountPaid : null, balanceDue = payment ? r.BalanceDue : null,
             paymentStatus = payment ? r.PaymentStatus : null,
-            fbrStatus = r.FbrStatus, fbrInvoiceNumber = r.FbrInvoiceNumber, isCancelled = r.IsCancelled,
+            fbrStatus = r.FbrStatus, fbrInvoiceNumber = r.FbrInvoiceNumber, isCancelled = r.IsCancelled, isFbrExcluded = r.IsFbrExcluded,
         };
 
         // GET /api/invoices/company/{id}/paged — bills.list.view OR invoices.list.view.

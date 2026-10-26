@@ -43,7 +43,7 @@ function fbrStatusBadge(inv, isBillsMode) {
     return <StatusBadge tone="danger" title={inv.fbrErrorMessage || "FBR rejected this submission"}>FBR Failed</StatusBadge>;
   }
   if (inv.isFbrExcluded) {
-    return <StatusBadge tone="excluded" title="Excluded from FBR bulk actions">Excluded</StatusBadge>;
+    return <StatusBadge tone="excluded" title="Excluded from FBR: not validated or submitted, alone or in bulk">Excluded</StatusBadge>;
   }
   if (!inv.fbrReady) {
     const missing = inv.fbrMissing?.length ? `Missing:\n• ${inv.fbrMissing.join("\n• ")}` : "";
@@ -371,7 +371,7 @@ export default function InvoiceTable({
             <MdRestore size={14} />
           </button>
         )}
-        {!isBillsMode && perms.canFbrAny && selectedCompanyHasFbrToken && (inv.taxTreatment == null || inv.taxTreatment === "FBR") && inv.fbrReady && !isSubmitted && !isFbrPending && !inv.isCancelled && (
+        {!isBillsMode && perms.canFbrAny && selectedCompanyHasFbrToken && (inv.taxTreatment == null || inv.taxTreatment === "FBR") && inv.fbrReady && !isSubmitted && !isFbrPending && !inv.isCancelled && !inv.isFbrExcluded && (
           <>
             {perms.canFbrValidate && (
               <button data-label="Validate with FBR" data-primary
@@ -433,8 +433,8 @@ export default function InvoiceTable({
             }}
             onClick={() => onToggleFbrExcluded?.(inv)}
             title={inv.isFbrExcluded
-              ? "Re-enable for Validate All / Submit All bulk actions."
-              : "Exclude from Validate All / Submit All. Per-bill actions still work."}
+              ? "Include in FBR again, so it can be validated and submitted."
+              : "Keep out of FBR: not validated or submitted, alone or in bulk."}
           >
             {inv.isFbrExcluded ? <MdRestore size={14} /> : <MdBlock size={14} />}
           </button>

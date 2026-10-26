@@ -26,7 +26,7 @@ namespace MyApp.Api.Controllers
         // activity row is filed under that company like every companyId call.
         private int? _activityCompanyId;
 
-        private static readonly string[] WriteToolNameList = { "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "prepare_email_decision", "prepare_email_quotation", "prepare_print_template_update", "prepare_supplier", "prepare_item_type", "prepare_bill_tax_filing", "commit_action", "cancel_action" };
+        private static readonly string[] WriteToolNameList = { "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "prepare_email_decision", "prepare_email_quotation", "prepare_print_template_update", "prepare_supplier", "prepare_item_type", "prepare_bill_tax_filing", "prepare_fbr_exclusion", "commit_action", "cancel_action" };
         private static bool IsWriteTool(string name) => WriteToolNameList.Contains(name, StringComparer.Ordinal);
 
         private static string PrepareToolFor(string kind) => kind switch
@@ -41,6 +41,7 @@ namespace MyApp.Api.Controllers
             "supplier.create" or "supplier.update" => "prepare_supplier",
             "itemtype.create" or "itemtype.update" => "prepare_item_type",
             "taxfiling.save" => "prepare_bill_tax_filing",
+            "fbrexclusion.set" => "prepare_fbr_exclusion",
             _ => throw new ToolError("Unknown action kind.")
         };
 
@@ -210,6 +211,8 @@ namespace MyApp.Api.Controllers
             await RequireWriterAsync(ScopeFor(prior.Kind));
             await Need(PermissionFor(prior.Kind));
             if (prior.Kind == "template.update") await Need("printtemplates.manage.view");
+            // The plan lists bills, which either list right may read.
+            if (prior.Kind == "fbrexclusion.set") await Need("bills.list.view", "invoices.list.view");
             // An update plan echoes the record's stored details, so the read right its prepare
             // required is needed again before the plan is shown back.
             if (ReadPermissionFor(prior.Kind) is { } read) await Need(read);
@@ -387,6 +390,7 @@ namespace MyApp.Api.Controllers
             "supplier.create" or "supplier.update" => McpScopes.Suppliers,
             "itemtype.create" or "itemtype.update" => McpScopes.ItemTypes,
             "taxfiling.save" => McpScopes.TaxFiling,
+            "fbrexclusion.set" => McpScopes.FbrExclusion,
             _ => throw new ToolError("Unknown plan type.")
         };
 
@@ -417,6 +421,7 @@ namespace MyApp.Api.Controllers
             "itemtype.create" => new[] { "itemtypes.manage.create" },
             "itemtype.update" => new[] { "itemtypes.manage.update" },
             "taxfiling.save" => new[] { "invoices.manage.update.itemtype", "invoices.manage.update.itemtype.qty" },
+            "fbrexclusion.set" => new[] { "invoices.fbr.exclude" },
             _ => throw new ToolError("Unknown plan type.")
         };
 
@@ -552,6 +557,11 @@ namespace MyApp.Api.Controllers
                     case "taxfiling.save":
                     {
                         (resultRef, resultSummary) = await CommitTaxFilingAsync(plan.CompanyId, p);
+                        break;
+                    }
+                    case "fbrexclusion.set":
+                    {
+                        (resultRef, resultSummary) = await CommitFbrExclusionAsync(plan.CompanyId, p);
                         break;
                     }
                     default: throw new ToolError("Unknown plan type.");

@@ -36,6 +36,7 @@ names and `get_action_status` after an uncertain action result.
 | `suppliers.write` | `prepare_supplier` (create or update) | `suppliers.manage.create` and `.update` |
 | `itemtypes.write` | `prepare_item_type` (create or update a catalog item) | `itemtypes.manage.view`, and `.create` and/or `.update` |
 | `taxfiling.write` | `prepare_bill_tax_filing` (a bill's FBR filing rows) | `invoices.list.view`, and `invoices.manage.update.itemtype` and/or `.itemtype.qty` |
+| `fbrexclusion.write` | `prepare_fbr_exclusion` (keep bills out of FBR, or include them again; by ids or a date range) | `invoices.fbr.exclude`, and `bills.list.view` or `invoices.list.view` |
 
 `fbr.validate` is a separate, non-write scope for `validate_bill_fbr` (needs
 `invoices.fbr.validate`). It asks PRAL to validate a bill with the company's own FBR token,

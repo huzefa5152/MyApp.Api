@@ -79,7 +79,7 @@ function renderFbrPill(inv, isBillsMode) {
   if (inv.fbrStatus === "Failed") return statusPill("red", MdError, "Failed", inv.fbrErrorMessage || "FBR rejected this submission. Open View FBR for details.");
   if (inv.fbrAdjustmentStale) return statusPill("amber", MdError, "Re-adjust", `Bill changed after FBR adjust — Bill Rs. ${Number(inv.subtotal).toLocaleString()} vs FBR Rs. ${Number(inv.fbrAdjustedSubtotal ?? inv.subtotal).toLocaleString()}. Reopen, re-adjust qty/price, then save.`);
   if (!inv.fbrReady) return statusPill("amber", MdError, inv.fbrMissing?.length ? `Setup · ${inv.fbrMissing.length}` : "Setup", inv.fbrMissing?.length ? `FBR setup incomplete — missing:\n• ${inv.fbrMissing.join("\n• ")}` : "FBR setup incomplete");
-  if (inv.isFbrExcluded) return statusPill("gray", MdBlock, "Excluded", "Excluded from Validate All / Submit All bulk actions. Per-bill actions still work.");
+  if (inv.isFbrExcluded) return statusPill("gray", MdBlock, "Excluded", "Excluded from FBR: it cannot be validated or submitted, alone or in bulk. Include it in FBR to file it.");
   return statusPill("blue", MdCheckCircle, "Ready", "All FBR fields set — Validate to dry-run, or Submit to issue the IRN.");
 }
 function renderNotePill(inv) {
@@ -659,8 +659,8 @@ export default function InvoicePage({ mode = "invoices" }) {
   // set across all pages, so users with 30 bills on page 1 of 4 can click once
   // and have all 120 (or whatever the filter returns) processed in a single go.
   // Bills the operator has flagged as "FBR-excluded" are deliberately skipped
-  // by Validate All / Submit All (bulk actions) but the per-bill buttons still
-  // work. So we exclude them from these counts too — the badges are about what
+  // by Validate All / Submit All, and the server refuses them on every path.
+  // So we exclude them from these counts too — the badges are about what
   // the bulk buttons will process.
   const unsubmittedInvoices = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && (inv.taxTreatment == null || inv.taxTreatment === "FBR") && inv.fbrReady && !inv.isFbrExcluded && (!inv.taxTreatment || inv.taxTreatment === "FBR"));
   const incompleteCount = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && !(inv.taxTreatment == null || inv.taxTreatment === "FBR") && inv.fbrReady && !inv.isFbrExcluded).length;
@@ -674,11 +674,11 @@ export default function InvoicePage({ mode = "invoices" }) {
     const nextExcluded = !inv.isFbrExcluded;
     const ok = await confirm({
       title: nextExcluded
-        ? `Exclude Bill #${inv.invoiceNumber} from FBR bulk actions?`
-        : `Include Bill #${inv.invoiceNumber} back in FBR bulk actions?`,
+        ? `Exclude Bill #${inv.invoiceNumber} from FBR?`
+        : `Include Bill #${inv.invoiceNumber} in FBR again?`,
       message: nextExcluded
-        ? "Validate All / Submit All will skip this bill. Per-bill Validate / Submit still work."
-        : "This bill will be picked up by Validate All / Submit All again.",
+        ? "This bill cannot be validated or submitted to FBR, alone or in bulk, until it is included again. Its goods also leave stock."
+        : "This bill can be validated and submitted to FBR again, and its goods are taken out of stock again.",
       variant: nextExcluded ? "warning" : "info",
       confirmText: nextExcluded ? "Exclude" : "Include",
     });
@@ -687,8 +687,8 @@ export default function InvoicePage({ mode = "invoices" }) {
       await setInvoiceFbrExcluded(inv.id, nextExcluded);
       notify(
         nextExcluded
-          ? `Bill #${inv.invoiceNumber} excluded from FBR bulk actions.`
-          : `Bill #${inv.invoiceNumber} re-enabled for FBR bulk actions.`,
+          ? `Bill #${inv.invoiceNumber} excluded from FBR.`
+          : `Bill #${inv.invoiceNumber} included in FBR again.`,
         "success"
       );
       fetchInvoices(selectedCompany.id, page);
@@ -1386,7 +1386,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdRestore size={14} /> Reset FBR
                       </button>
                     )}
-                    {!isBillsMode && canFbrAny && selectedCompany?.hasFbrToken && (inv.taxTreatment == null || inv.taxTreatment === "FBR") && inv.fbrReady && inv.fbrStatus !== "Submitted" && inv.fbrStatus !== "Submitting" && inv.fbrStatus !== "Uncertain" && !inv.isCancelled && (
+                    {!isBillsMode && canFbrAny && selectedCompany?.hasFbrToken && (inv.taxTreatment == null || inv.taxTreatment === "FBR") && inv.fbrReady && inv.fbrStatus !== "Submitted" && inv.fbrStatus !== "Submitting" && inv.fbrStatus !== "Uncertain" && !inv.isCancelled && !inv.isFbrExcluded && (
                       <>
                         {canFbrValidate && (
                           <button data-primary
@@ -1476,8 +1476,8 @@ export default function InvoicePage({ mode = "invoices" }) {
                         onClick={() => handleToggleFbrExcluded(inv)}
                         title={
                           inv.isFbrExcluded
-                            ? "Re-enable this bill for Validate All / Submit All bulk actions."
-                            : "Exclude this bill from Validate All / Submit All. Per-bill Validate / Submit still work."
+                            ? "Include this bill in FBR again, so it can be validated and submitted."
+                            : "Keep this bill out of FBR: it cannot be validated or submitted, alone or in bulk."
                         }
                       >
                         {inv.isFbrExcluded ? <MdRestore size={14} /> : <MdBlock size={14} />}
