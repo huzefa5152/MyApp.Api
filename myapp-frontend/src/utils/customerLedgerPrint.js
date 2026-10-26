@@ -1,4 +1,4 @@
-import { selectReportInvoiceTemplate } from "./invoiceReportBranding";
+import { logoDataUrl, selectReportInvoiceTemplate } from "./invoiceReportBranding";
 import { mergeTemplate } from "./templateEngine";
 import { defaultBillTemplate } from "./defaultTemplates";
 
@@ -32,7 +32,7 @@ export async function invoiceBranding(template, company) {
   const html = mergeTemplate(source.documentElement.outerHTML, {
     companyBrandName: company.brandName || company.name,
     companyName: company.name,
-    companyLogoPath: company.logoPath || "",
+    companyLogoPath: await logoDataUrl(company.logoPath),
     companyAddress: company.fullAddress || "",
     companyPhone: company.phone || "",
     companyEmail: company.email || "",

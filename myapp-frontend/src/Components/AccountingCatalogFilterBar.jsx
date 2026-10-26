@@ -507,12 +507,11 @@ const st = {
   wrap: {
     background: colors.cardBg,
     border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 14,
-    boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
-    padding: "0.9rem clamp(0.75rem, 1.6vw, 1.1rem)",
-    marginBottom: "1rem",
+    borderRadius: 12,
+    padding: "8px 12px",
+    marginBottom: 10,
   },
-  topRow: { display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "0.75rem" },
+  topRow: { display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "8px 10px" },
 
   // auto-fit so the panel goes 4-up → 2-up → 1-up with no media queries
   grid: {
@@ -520,19 +519,19 @@ const st = {
     gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))",
     gap: "0.75rem 1rem",
   },
-  panel: { marginTop: "0.9rem", paddingTop: "0.9rem", borderTop: `1px solid ${colors.cardBorder}` },
+  panel: { marginTop: 8, paddingTop: 8, borderTop: `1px solid ${colors.cardBorder}` },
   panelFooter: {
     display: "flex", justifyContent: "flex-end", gap: "0.6rem",
-    marginTop: "0.9rem", flexWrap: "wrap",
+    marginTop: 8, flexWrap: "wrap",
   },
 
-  field: { display: "flex", flexDirection: "column", gap: 4, flex: "1 1 170px", minWidth: 0 },
+  field: { display: "flex", flexDirection: "column", gap: 3, flex: "1 1 170px", minWidth: 0 },
   label: {
-    fontSize: "0.66rem", fontWeight: 700, textTransform: "uppercase",
+    fontSize: "0.64rem", fontWeight: 700, textTransform: "uppercase",
     letterSpacing: "0.05em", color: colors.textSecondary,
   },
-  // 44px min tap target on every control (mobile-first standard).
-  control: { minHeight: 44, width: "100%", minWidth: 0, fontSize: "0.88rem" },
+  // 38px on a desktop; ReportWorkspace.css lifts every control to 44px on a phone.
+  control: { minHeight: 38, width: "100%", minWidth: 0, fontSize: "0.86rem" },
 
   searchWrap: { position: "relative", display: "flex", alignItems: "center" },
   searchIcon: { position: "absolute", left: 10, pointerEvents: "none" },
@@ -547,7 +546,7 @@ const st = {
   },
   ghostBtn: {
     display: "inline-flex", alignItems: "center", gap: 6,
-    minHeight: 44, padding: "0 0.95rem", borderRadius: 10,
+    minHeight: 38, padding: "0 0.85rem", borderRadius: 9,
     border: `1px solid ${colors.inputBorder}`, background: colors.inputBg,
     color: colors.textSecondary, fontWeight: 700, fontSize: "0.85rem", cursor: "pointer",
   },
@@ -559,10 +558,10 @@ const st = {
     color: colors.textSecondary, fontWeight: 600, fontSize: "0.85rem", cursor: "pointer",
   },
 
-  chipRow: { display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.8rem" },
+  chipRow: { display: "flex", flexWrap: "wrap", gap: "0.35rem", marginTop: 8 },
   chip: {
     display: "inline-flex", alignItems: "center", gap: 6,
-    padding: "0.3rem 0.6rem", borderRadius: 20,
+    padding: "0.2rem 0.6rem", borderRadius: 20,
     background: "#eef4fd", border: `1px solid #d6e4f7`,
     color: colors.blue, fontSize: "0.76rem", fontWeight: 600,
     cursor: "pointer", maxWidth: "100%",

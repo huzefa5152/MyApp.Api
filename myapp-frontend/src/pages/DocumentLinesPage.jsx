@@ -7,14 +7,18 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { challanPrivateColumns, defaultColumnsForType, lineColumns, lineSources, linesToTsv, saveLinesExcel } from "../utils/documentLines";
 import { loadDocumentLines } from "../api/documentLinesApi";
 import SearchableSelect from "../Components/SearchableSelect";
-import { MdTableRows } from "react-icons/md";
+import { MdContentCopy, MdDownload, MdTableRows } from "react-icons/md";
+import ColumnPicker from "../Components/reports/ColumnPicker";
+import { Dot, PrintPdfButtons, ReportBar } from "../Components/reports/ReportChrome";
+import { fileSlug, pdfReport, printReport } from "../utils/reportPrintKit";
+import { excelBrandParams } from "../utils/reportExcelBrand";
 import "./DocumentLinesPage.css";
+import useIsNarrow from "../hooks/useIsNarrow";
 
 const ymd = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const today = new Date();
 const startOfWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() - ((today.getDay() + 6) % 7));
 const input = { minHeight: 40, width: "100%", boxSizing: "border-box", padding: "7px 9px", fontSize: 13, border: "1px solid #d0d7e2", borderRadius: 7, background: "#fff", color: "#1a2332" };
-const action = { minHeight: 44, padding: "8px 12px", border: "1px solid #d0d7e2", borderRadius: 8, background: "#fff", color: "#0d47a1", fontSize: 13, fontWeight: 600, cursor: "pointer" };
 
 export default function DocumentLinesPage() {
   const { companies, selectedCompany, setSelectedCompany } = useCompany();
@@ -45,6 +49,8 @@ export default function DocumentLinesPage() {
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [printing, setPrinting] = useState("");
+  const narrow = useIsNarrow(760);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -88,18 +94,66 @@ export default function DocumentLinesPage() {
   };
   const download = async () => {
     setExporting(true); setError("");
-    try { await saveLinesExcel(shown, columns, `${lineSources[type].label}-${period === "document" ? documentId : `${range.from}-to-${range.to}`}`); }
+    try { await saveLinesExcel(shown, columns, `${lineSources[type].label}-${period === "document" ? documentId : `${range.from}-to-${range.to}`}`, await excelBrandParams(selectedCompany)); }
     catch { setError("Could not create the Excel file."); }
     finally { setExporting(false); }
   };
 
   if (!allowed.length) return <p>You do not have access to document lines.</p>;
-  return <div className="document-lines-page">
-    <header className="document-lines-heading">
-      <span className="document-lines-icon"><MdTableRows size={22} /></span>
-      <div><h2>Document Lines</h2><p>Filter line items, then copy or export to Excel.</p></div>
-    </header>
-    <ListFilters><div className="document-lines-filters">
+
+  const hiddenSet = new Set(availableColumns.map(([key]) => key).filter((key) => !columns.includes(key)));
+  const typeLabel = lineSources[type]?.label || "Document lines";
+  const rangeLabel = period === "document" ? "This document" : `${range.from} to ${range.to}`;
+  // Print / PDF: every matching line (not only the first 200 on screen), in the
+  // chosen columns, on the company letterhead.
+  const envelope = () => ({
+    title: `Document Lines — ${typeLabel}`,
+    companyName: selectedCompany?.brandName || selectedCompany?.name,
+    periodLabel: rangeLabel,
+    generatedAt: new Date().toISOString(),
+    filtersApplied: [search && `Search: "${search}"`, status && `Status: ${status}`, itemSearch && `Item: "${itemSearch}"`].filter(Boolean),
+    sourceLabel: `${shown.length} line${shown.length === 1 ? "" : "s"}`,
+    columns: visibleColumns.map(([key, label]) => ({ key, label, format: "text" })),
+    rows: shown,
+  });
+  const print = async () => {
+    setPrinting("print"); setError("");
+    try { await printReport(envelope(), selectedCompany); }
+    catch { setError("Could not prepare the print. Allow print pop-ups and try again."); }
+    finally { setPrinting(""); }
+  };
+  const pdf = async () => {
+    setPrinting("pdf"); setError("");
+    try { await pdfReport(envelope(), selectedCompany, fileSlug(`${typeLabel}-${rangeLabel}`)); }
+    catch { setError("Could not create the PDF."); }
+    finally { setPrinting(""); }
+  };
+
+  return <div className="document-lines-page rw">
+    <ReportBar
+      icon={<MdTableRows size={20} />}
+      crumb="Reports"
+      title="Document Lines"
+      meta={<>
+        {selectedCompany && <strong>{selectedCompany.brandName || selectedCompany.name}</strong>}
+        <Dot>{typeLabel}</Dot>
+        <Dot>{rangeLabel}</Dot>
+        <Dot>Filter line items, then copy, print or export</Dot>
+      </>}
+      actions={<>
+        <ColumnPicker
+          columns={availableColumns.map(([key, label]) => ({ key, label }))}
+          hidden={hiddenSet}
+          onChange={(nextHidden) => setColumns(lineColumns.map(([id]) => id).filter((id) => availableColumns.some(([key]) => key === id) && !nextHidden.has(id)))}
+          onReset={() => setColumns(defaultColumnsForType(type))}
+          note="Copy, Excel, Print and PDF use the columns ticked here."
+        />
+        <button type="button" className="rw-btn" disabled={!shown.length || busy || exporting} onClick={copy}><MdContentCopy size={16} /><span>Copy for Excel</span></button>
+        <button type="button" className="rw-btn" disabled={!shown.length || busy || exporting} onClick={download}><MdDownload size={17} /><span>{exporting ? "Exporting…" : "Excel"}</span></button>
+        <PrintPdfButtons onPrint={print} onPdf={pdf} busy={printing} disabled={!shown.length || busy} />
+      </>}
+    />
+    <ListFilters><div className="document-lines-filters rw-filters">
       <div className="document-lines-company"><span className="document-lines-label">Company</span><SearchableSelect items={companies} value={selectedCompany?.id || ""} onChange={(id) => setSelectedCompany(companies.find((c) => c.id === Number(id)))} allowClear={false} style={input} /></div>
       <label>Document type<br /><select aria-label="Document type" style={input} value={type} onChange={(e) => { setStatus(""); setParams({ type: e.target.value }); }}>
         {allowed.map(([key, source]) => <option key={key} value={key}>{source.label}</option>)}
@@ -115,34 +169,32 @@ export default function DocumentLinesPage() {
         <option value="">All statuses</option>{["Pending", "Imported", "Invoiced", "No PO", "Cancelled"].map((x) => <option key={x} value={x}>{x}</option>)}
       </select></label>}
     </div></ListFilters>
-    <details className="document-lines-columns"><summary>Columns <span>{visibleColumns.length} selected</span></summary>
-      <div className="document-lines-column-grid">
-        {availableColumns.map(([key, label]) => <label key={key}>
-          <input type="checkbox" checked={columns.includes(key)} onChange={() => setColumns((current) => current.includes(key) ? current.length > 1 ? current.filter((x) => x !== key) : current : lineColumns.map(([id]) => id).filter((id) => current.includes(id) || id === key))} />{label}
-        </label>)}
-      </div>
-      <button type="button" style={action} onClick={() => setColumns(defaultColumnsForType(type))}>Reset columns</button>
-    </details>
-    {error && <p role="alert" style={{ color: "#b91c1c" }}>{error}</p>}
-    {message && <p role="status" style={{ color: "#00695c" }}>{message}</p>}
-    <section className="document-lines-results" aria-busy={busy}>
-      <div className="document-lines-toolbar">
-        <strong role="status">{busy ? "Loading lines…" : loaded ? `${shown.length} line${shown.length === 1 ? "" : "s"}` : "Line items"}</strong>
-        <input aria-label="Find an item" style={{ ...input, width: "min(100%, 240px)" }} value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="Find description or item type…" disabled={!loaded} />
-        <button type="button" style={action} disabled={!shown.length || busy || exporting} onClick={copy}>Copy for Excel</button>
-        <button type="button" style={action} disabled={!shown.length || busy || exporting} onClick={download}>{exporting ? "Exporting…" : "Download Excel"}</button>
-      </div>
-    <RecordsViewport label="Document line records">{!loaded ? <div className="document-lines-empty">{busy ? "Loading matching line items…" : error ? "Update the filters to try again." : "Select a company to view its lines."}</div> : !shown.length ? <div className="document-lines-empty">No lines match these filters. Try another period or search.</div> : <>
-      <div data-admin-table-region="" className="document-lines-table">
-        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 650 }}>
-          <thead><tr>{visibleColumns.map(([key, label]) => <th key={key} style={{ textAlign: "left", padding: 10, background: "#e0f2f1", borderBottom: "1px solid #cbd5e1" }}>{label}</th>)}</tr></thead>
+    {error && <div className="rw-notice rw-notice--warn" role="alert">{error}</div>}
+    {message && <div className="rw-notice" role="status">{message}</div>}
+    <div className="rw-section-head" aria-busy={busy}>
+      <strong role="status" style={{ color: "#1a2332" }}>{busy ? "Loading lines…" : loaded ? `${shown.length} line${shown.length === 1 ? "" : "s"}` : "Line items"}</strong>
+      <input aria-label="Find an item" style={{ ...input, width: "min(100%, 260px)", minHeight: 36 }} value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="Find description or item type…" disabled={!loaded} />
+    </div>
+    <RecordsViewport label="Document line records" enabled={!narrow}>{!loaded ? <div className="rw-state">{busy ? "Loading matching line items…" : error ? "Update the filters to try again." : "Select a company to view its lines."}</div> : !shown.length ? <div className="rw-state">No lines match these filters. Try another period or search.</div> : <>
+      {narrow ? <div className="rw-cards">
+        {shown.slice(0, 200).map((row, index) => {
+          const [lead, ...rest] = visibleColumns;
+          return <div key={`${row.documentId}-${row.line}-${index}`} className="rw-card">
+            <div className="rw-card__lead">{row[lead[0]] || "—"}</div>
+            <div className="rw-card__meta" style={{ marginTop: 6 }}>
+              {rest.filter(([key]) => row[key] !== "" && row[key] != null).map(([key, label]) => <div key={key} style={{ minWidth: 0 }}><span>{label}</span><b>{row[key]}</b></div>)}
+            </div>
+          </div>;
+        })}
+      </div> : <div data-admin-table-region="" className="rw-table-wrap">
+        <table className="rw-table" style={{ minWidth: 650 }}>
+          <thead><tr>{visibleColumns.map(([key, label]) => <th key={key}>{label}</th>)}</tr></thead>
           <tbody>{shown.slice(0, 200).map((row, index) => <tr key={`${row.documentId}-${row.line}-${index}`}>
-            {visibleColumns.map(([key]) => <td key={key} style={{ padding: "7px 10px", borderBottom: "1px solid #e8edf3" }}>{row[key]}</td>)}
+            {visibleColumns.map(([key]) => <td key={key} className={/date/i.test(key) ? "rw-nowrap" : undefined} style={/date/i.test(key) ? undefined : { maxWidth: 300, overflowWrap: "anywhere" }}>{row[key]}</td>)}
           </tr>)}</tbody>
         </table>
-      </div>
-      {shown.length > 200 && <p>Showing the first 200 lines here. Copy and Excel include all {shown.length} matching lines.</p>}
+      </div>}
+      {shown.length > 200 && <p className="rw-section-head" style={{ marginTop: 8 }}>Showing the first 200 lines here. Copy, Excel, Print and PDF include all {shown.length} matching lines.</p>}
     </>}</RecordsViewport>
-    </section>
   </div>;
 }

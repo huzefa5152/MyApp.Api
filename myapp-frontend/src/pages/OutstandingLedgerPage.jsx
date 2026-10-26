@@ -1,7 +1,7 @@
 import ListFilters from "../Components/ListFilters";
 import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback } from "react";
-import { MdAccountBalanceWallet, MdBusiness, MdRefresh, MdDownload, MdPictureAsPdf, MdPerson } from "react-icons/md";
+import { MdAccountBalanceWallet, MdBusiness, MdRefresh, MdDownload, MdPerson } from "react-icons/md";
 import { getOutstandingLedger, getOutstandingLedgerExcel } from "../api/reportApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { dropdownStyles } from "../theme";
@@ -9,8 +9,11 @@ import SearchableClientSelect from "../Components/SearchableClientSelect";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
-import { exportToPdf } from "../utils/exportUtils";
+import { excelBrandParams } from "../utils/reportExcelBrand";
 import useIsNarrow from "../hooks/useIsNarrow";
+import ColumnPicker, { useHiddenColumns } from "../Components/reports/ColumnPicker";
+import { CompanyPicker, Dot, PrintPdfButtons, ReportBar, ReportKpis } from "../Components/reports/ReportChrome";
+import { pdfReport, printReport } from "../utils/reportPrintKit";
 
 const colors = {
   blue: "#0d47a1",
@@ -22,6 +25,21 @@ const colors = {
   rowAlt: "#fafbfd",
   totalBg: "#eef4ff",
 };
+
+// Columns of the on-screen ledger. `total` marks a column with a grand total.
+const OL_COLS = [
+  { key: "serialNo", label: "S.No" },
+  { key: "poNumber", label: "P.O #" },
+  { key: "deliveryDate", label: "Delivery" },
+  { key: "invoiceDate", label: "Invoice Date" },
+  { key: "dcNumbers", label: "D.C #" },
+  { key: "billNumber", label: "Bill #" },
+  { key: "amount", label: "Amount", format: "money", total: true },
+  { key: "paid", label: "Paid", format: "money", total: true },
+  { key: "balance", label: "Balance", format: "money", total: true },
+  { key: "status", label: "Status" },
+  { key: "paymentSummary", label: "Payment Details" },
+];
 
 const STATUSES = [
   { value: "unpaid", label: "Unpaid" },
@@ -57,6 +75,7 @@ export default function OutstandingLedgerPage() {
   const canView = has("reports.outstanding.view");
   const canExport = has("reports.outstanding.export");
   const isNarrow = useIsNarrow();
+  const [hiddenCols, setHiddenCols] = useHiddenColumns("outstanding-ledger");
 
   const [clients, setClients] = useState([]);
   const [clientId, setClientId] = useState("");
@@ -115,7 +134,8 @@ export default function OutstandingLedgerPage() {
     if (!selectedCompany || rangeInvalid) return;
     setExporting("excel");
     try {
-      const { data } = await getOutstandingLedgerExcel(selectedCompany.id, buildParams());
+      // The workbook carries the company's letterhead and template colours.
+      const { data } = await getOutstandingLedgerExcel(selectedCompany.id, { ...buildParams(), ...(await excelBrandParams(selectedCompany)) });
       const url = URL.createObjectURL(new Blob([data], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       }));
@@ -132,11 +152,37 @@ export default function OutstandingLedgerPage() {
     }
   };
 
+  // Print and PDF carry the company's letterhead and the columns on screen.
+  const envelope = () => {
+    const shown = OL_COLS.filter((c) => !hiddenCols.has(c.key));
+    return {
+      title: "Outstanding Ledger",
+      companyName: report.companyName,
+      periodLabel: report.periodLabel,
+      generatedAt: new Date().toISOString(),
+      filtersApplied: [report.clientName || clientName || "All clients", STATUSES.find((s) => s.value === status)?.label],
+      sourceLabel: `${report.invoiceCount} invoice(s) · amount, paid and balance per bill`,
+      columns: (shown.length ? shown : OL_COLS).map((c) => ({ key: c.key, label: c.label, format: c.format || "text", totalled: !!c.total })),
+      rows: report.rows.map((r) => ({
+        ...r, deliveryDate: fmtDate(r.deliveryDate), invoiceDate: fmtDate(r.invoiceDate),
+        poNumber: r.poNumber || "", dcNumbers: r.dcNumbers || "", status: statusText(r.status), paymentSummary: r.paymentSummary || "",
+      })),
+      totals: { amount: report.grandAmount, paid: report.grandPaid, balance: report.grandBalance },
+    };
+  };
+  const doPrint = async () => {
+    if (!report || !report.rows?.length) return;
+    setExporting("print");
+    try { await printReport(envelope(), selectedCompany); }
+    catch { notify("Could not prepare the report. Allow print pop-ups and try again.", "error"); }
+    finally { setExporting(""); }
+  };
+
   const exportPdf = async () => {
     if (!report || !report.rows?.length) return;
     setExporting("pdf");
     try {
-      await exportToPdf(buildLedgerHtml(report), `Outstanding-Ledger-${clientName || "All-Clients"}-${status}`);
+      await pdfReport(envelope(), selectedCompany, `Outstanding-Ledger-${clientName || "All-Clients"}-${status}`);
       notify("PDF generated.", "success");
     } catch {
       notify("Failed to generate the PDF.", "error");
@@ -149,31 +195,71 @@ export default function OutstandingLedgerPage() {
     return <div style={{ padding: 24, color: colors.textSecondary }}>You don't have permission to view reports.</div>;
   }
 
+  const visibleCols = OL_COLS.filter((c) => !hiddenCols.has(c.key));
+  const cols = visibleCols.length ? visibleCols : OL_COLS;
+  const statusLabel = STATUSES.find((s) => s.value === status)?.label;
+
+  const cell = (row, key) => {
+    const ss = STATUS_STYLE[row.status] || STATUS_STYLE.Unpaid;
+    switch (key) {
+      case "serialNo": return <td key={key} className="rw-muted">{row.serialNo}</td>;
+      case "poNumber": return <td key={key} className="rw-text"><span className="rw-clamp">{row.poNumber || "—"}</span></td>;
+      case "deliveryDate": return <td key={key} className="rw-nowrap">{fmtDate(row.deliveryDate)}</td>;
+      case "invoiceDate": return <td key={key} className="rw-nowrap">{fmtDate(row.invoiceDate)}</td>;
+      case "dcNumbers": return <td key={key} className="rw-code" style={{ whiteSpace: "normal", maxWidth: 140 }}>{row.dcNumbers || "—"}</td>;
+      case "billNumber": return <td key={key} className="rw-nowrap" style={{ fontWeight: 700, color: colors.blue }}>{row.billNumber}</td>;
+      case "amount": return <td key={key} className="rw-num">{money(row.amount)}</td>;
+      case "paid": return <td key={key} className="rw-num">{money(row.paid)}</td>;
+      case "balance": return <td key={key} className="rw-num rw-strong" style={{ color: row.balance > 0 ? "#b71c1c" : colors.teal }}>{money(row.balance)}</td>;
+      case "status": return (
+        <td key={key} style={{ textAlign: "center" }}>
+          <span style={{ background: ss.bg, color: ss.fg, padding: "2px 8px", borderRadius: 999, fontSize: "0.72rem", fontWeight: 700, whiteSpace: "nowrap" }}>{statusText(row.status)}</span>
+        </td>
+      );
+      case "paymentSummary": return <td key={key} style={{ maxWidth: 320, minWidth: 160, fontSize: "0.78rem", color: colors.textSecondary }}>{row.paymentSummary || "—"}</td>;
+      default: return <td key={key} />;
+    }
+  };
+  const totalCell = (key, idx) => {
+    const v = { amount: report.grandAmount, paid: report.grandPaid, balance: report.grandBalance }[key];
+    if (v !== undefined) return <td key={key} className="rw-num">{money(v)}</td>;
+    return <td key={key}>{idx === 0 ? `Total (${report.invoiceCount})` : ""}</td>;
+  };
+
   return (
-    <div>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-        <MdAccountBalanceWallet size={26} color={colors.blue} />
-        <h1 style={{ margin: 0, fontSize: "clamp(1.2rem, 3vw, 1.6rem)", color: colors.textPrimary }}>Outstanding Ledger</h1>
-      </div>
-      <p style={{ margin: "0 0 16px", color: colors.textSecondary, fontSize: "0.9rem" }}>
-        Per-client receivables — each bill's amount, what's paid, the balance, its payment status and the receipts that settled it.
-      </p>
+    <div className="rw">
+      <ReportBar
+        icon={<MdAccountBalanceWallet size={20} />}
+        crumb="Reports"
+        title="Outstanding Ledger"
+        meta={<>
+          {report?.companyName && <strong>{report.companyName}</strong>}
+          {report?.periodLabel && <Dot>{report.periodLabel}</Dot>}
+          <Dot>{report?.clientName || clientName || "All clients"}</Dot>
+          <Dot>{statusLabel}</Dot>
+        </>}
+        actions={<>
+          <CompanyPicker icon={<MdBusiness size={18} />} companies={companies} selectedCompany={selectedCompany} onChange={setSelectedCompany} />
+          <button type="button" className="rw-btn" onClick={fetchReport} disabled={loading || rangeInvalid}>
+            <MdRefresh size={17} /><span>{loading ? "Loading…" : "Refresh"}</span>
+          </button>
+          {report && <ColumnPicker columns={OL_COLS} hidden={hiddenCols} onChange={setHiddenCols} />}
+          {canExport && (
+            <>
+              <button type="button" className="rw-btn" onClick={exportExcel} disabled={!report?.rows?.length || !!exporting}>
+                <MdDownload size={17} /><span>{exporting === "excel" ? "Exporting…" : "Excel"}</span>
+              </button>
+              <PrintPdfButtons onPrint={doPrint} onPdf={exportPdf} busy={exporting} disabled={!report?.rows?.length} />
+            </>
+          )}
+        </>}
+      />
 
       {/* Controls */}
-      <ListFilters><div style={{
-        display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end",
-        background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: 14, marginBottom: 16,
+      <ListFilters><div className="rw-filters" style={{
+        display: "flex", flexWrap: "wrap", gap: "8px 10px", alignItems: "flex-end",
+        background: "#fff", border: `1px solid ${colors.cardBorder}`,
       }}>
-        {companies.length > 1 && (<Field label="Company" icon={<MdBusiness size={15} />}>
-          <select
-            style={{ ...dropdownStyles.base, minWidth: "min(200px, 100%)" }}
-            value={selectedCompany?.id || ""}
-            onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))}
-          >
-            {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
-          </select>
-        </Field>)}
         <Field label="Client" icon={<MdPerson size={15} />}>
           <div style={{ minWidth: "min(280px, 100%)" }}>
             <SearchableClientSelect
@@ -229,170 +315,74 @@ export default function OutstandingLedgerPage() {
             ))}
           </div>
         </Field>
-        <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
-          <button onClick={fetchReport} disabled={loading || rangeInvalid} style={btn(colors.blue)}>
-            <MdRefresh size={16} /> {loading ? "Loading…" : "Refresh"}
-          </button>
-          {canExport && (
-            <>
-              <button onClick={exportExcel} disabled={!report?.rows?.length || !!exporting} style={btn(colors.teal)}>
-                <MdDownload size={16} /> {exporting === "excel" ? "Exporting…" : "Excel"}
-              </button>
-              <button onClick={exportPdf} disabled={!report?.rows?.length || !!exporting} style={btn("#b71c1c")}>
-                <MdPictureAsPdf size={16} /> {exporting === "pdf" ? "Generating…" : "PDF"}
-              </button>
-            </>
-          )}
-        </div>
       </div></ListFilters>
 
-      {error && (
-        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", padding: 12, borderRadius: 8, marginBottom: 16 }}>
-          {error}
-        </div>
+      {error && <div className="rw-notice rw-notice--warn" role="alert">{error}</div>}
+
+      {report && !loading && (
+        <ReportKpis items={[
+          { label: "Invoices", value: report.invoiceCount },
+          { label: "Billed", value: money(report.grandAmount) },
+          { label: "Received", value: money(report.grandPaid), tone: "good" },
+          { label: "Balance", value: money(report.grandBalance), tone: "lead" },
+        ]} />
       )}
 
-      <RecordsViewport label="Outstanding Ledger records">{loading ? (
-        <div style={{ padding: 32, textAlign: "center", color: colors.textSecondary }}>Loading…</div>
+      <RecordsViewport label="Outstanding Ledger records" enabled={!isNarrow}>{loading ? (
+        <div className="rw-state" role="status">Loading…</div>
       ) : report && (
-        <div style={{ background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, overflow: "hidden" }}>
-          <div style={{ padding: "12px 16px", borderBottom: `1px solid ${colors.cardBorder}` }}>
-            <div style={{ fontWeight: 700, color: colors.textPrimary }}>{report.companyName}</div>
-            <div style={{ color: colors.textSecondary, fontSize: "0.85rem" }}>
-              {report.periodLabel} · {report.clientName || clientName || "All clients"} · {STATUSES.find((s) => s.value === status)?.label} · {report.invoiceCount} invoice(s)
-            </div>
+        report.rows.length === 0 ? (
+          <div className="rw-state">
+            No {status === "paid" ? "paid" : status === "all" ? "" : "outstanding"} invoices for {report.periodLabel}.
           </div>
-
-          {report.rows.length === 0 ? (
-            <div style={{ padding: 32, textAlign: "center", color: colors.textSecondary }}>
-              No {status === "paid" ? "paid" : status === "all" ? "" : "outstanding"} invoices for {report.periodLabel}.
-            </div>
-          ) : isNarrow ? (
-            /* ── Mobile: stacked cards ── */
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "10px 8px" }}>
-              {report.rows.map((row) => {
-                const ss = STATUS_STYLE[row.status] || STATUS_STYLE.Unpaid;
-                return (
-                  <div key={row.invoiceId} style={card.box}>
-                    <div style={card.top}>
-                      <span style={{ fontWeight: 700, color: colors.blue }}>Bill #{row.billNumber}</span>
-                      <span style={{ background: ss.bg, color: ss.fg, padding: "2px 8px", borderRadius: 6, fontSize: "0.72rem", fontWeight: 700 }}>{statusText(row.status)}</span>
-                    </div>
-                    {row.poNumber && <div style={{ fontSize: "0.8rem", color: colors.textSecondary }}>PO: {row.poNumber}</div>}
-                    <div style={card.meta}>
-                      <div><span style={card.lbl}>Delivery</span><span style={card.val}>{fmtDate(row.deliveryDate)}</span></div>
-                      <div><span style={card.lbl}>Invoice Date</span><span style={card.val}>{fmtDate(row.invoiceDate)}</span></div>
-                      <div><span style={card.lbl}>D.C #</span><span style={card.val}>{row.dcNumbers || "—"}</span></div>
-                      <div><span style={card.lbl}>Amount</span><span style={card.val}>{money(row.amount)}</span></div>
-                      <div><span style={card.lbl}>Paid</span><span style={card.val}>{money(row.paid)}</span></div>
-                      <div><span style={card.lbl}>Balance</span><span style={{ ...card.val, fontWeight: 800, color: row.balance > 0 ? "#b71c1c" : colors.teal }}>{money(row.balance)}</span></div>
-                    </div>
-                    {row.paymentSummary && (
-                      <div style={{ marginTop: 6, paddingTop: 6, borderTop: `1px dashed ${colors.cardBorder}`, fontSize: "0.78rem", color: colors.textSecondary }}>
-                        <span style={card.lbl}>Payments</span>{row.paymentSummary}
-                      </div>
-                    )}
+        ) : isNarrow ? (
+          /* ── Mobile: stacked cards ── */
+          <div className="rw-cards">
+            {report.rows.map((row) => {
+              const ss = STATUS_STYLE[row.status] || STATUS_STYLE.Unpaid;
+              return (
+                <div key={row.invoiceId} className="rw-card" style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  <div style={card.top}>
+                    <span style={{ fontWeight: 700, color: colors.blue }}>Bill #{row.billNumber}</span>
+                    <span style={{ background: ss.bg, color: ss.fg, padding: "2px 8px", borderRadius: 6, fontSize: "0.72rem", fontWeight: 700 }}>{statusText(row.status)}</span>
                   </div>
-                );
-              })}
-              <div style={{ ...card.box, background: colors.totalBg, borderColor: colors.blue }}>
-                <div style={{ fontWeight: 800, color: colors.blue, marginBottom: 4 }}>TOTAL ({report.invoiceCount})</div>
-                <div style={card.meta}>
-                  <div><span style={card.lbl}>Amount</span><span style={{ ...card.val, fontWeight: 800 }}>{money(report.grandAmount)}</span></div>
-                  <div><span style={card.lbl}>Paid</span><span style={{ ...card.val, fontWeight: 800 }}>{money(report.grandPaid)}</span></div>
-                  <div><span style={card.lbl}>Balance</span><span style={{ ...card.val, fontWeight: 800, color: colors.blue }}>{money(report.grandBalance)}</span></div>
+                  {row.poNumber && <div style={{ fontSize: "0.8rem", color: colors.textSecondary }}>PO: {row.poNumber}</div>}
+                  <div style={card.meta}>
+                    <div><span style={card.lbl}>Delivery</span><span style={card.val}>{fmtDate(row.deliveryDate)}</span></div>
+                    <div><span style={card.lbl}>Invoice Date</span><span style={card.val}>{fmtDate(row.invoiceDate)}</span></div>
+                    <div><span style={card.lbl}>D.C #</span><span style={card.val}>{row.dcNumbers || "—"}</span></div>
+                    <div><span style={card.lbl}>Amount</span><span style={card.val}>{money(row.amount)}</span></div>
+                    <div><span style={card.lbl}>Paid</span><span style={card.val}>{money(row.paid)}</span></div>
+                    <div><span style={card.lbl}>Balance</span><span style={{ ...card.val, fontWeight: 800, color: row.balance > 0 ? "#b71c1c" : colors.teal }}>{money(row.balance)}</span></div>
+                  </div>
+                  {row.paymentSummary && (
+                    <div style={{ marginTop: 6, paddingTop: 6, borderTop: `1px dashed ${colors.cardBorder}`, fontSize: "0.78rem", color: colors.textSecondary }}>
+                      <span style={card.lbl}>Payments</span>{row.paymentSummary}
+                    </div>
+                  )}
                 </div>
-              </div>
-            </div>
-          ) : (
-            /* ── Desktop/tablet: table (scrolls inside its own box) ── */
-            <div data-admin-table-region="" style={{ overflowX: "auto" }}>
-              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 900, fontSize: "0.82rem" }}>
-                <thead>
-                  <tr style={{ background: colors.rowAlt }}>
-                    {["S.No", "P.O #", "Delivery", "Invoice Date", "D.C #", "Bill #", "Amount", "Paid", "Balance", "Status", "Payment Details"].map((h, i) => (
-                      <th key={i} style={{ ...th, textAlign: i >= 6 && i <= 8 ? "right" : "left" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.rows.map((row) => {
-                    const ss = STATUS_STYLE[row.status] || STATUS_STYLE.Unpaid;
-                    return (
-                      <tr key={row.invoiceId} style={{ borderTop: `1px solid ${colors.cardBorder}` }}>
-                        <td style={td}>{row.serialNo}</td>
-                        <td style={td}>{row.poNumber || "—"}</td>
-                        <td style={td}>{fmtDate(row.deliveryDate)}</td>
-                        <td style={td}>{fmtDate(row.invoiceDate)}</td>
-                        <td style={{ ...td, fontFamily: "monospace", fontSize: "0.75rem" }}>{row.dcNumbers || "—"}</td>
-                        <td style={{ ...td, fontWeight: 600, color: colors.blue }}>{row.billNumber}</td>
-                        <td style={tdR}>{money(row.amount)}</td>
-                        <td style={tdR}>{money(row.paid)}</td>
-                        <td style={{ ...tdR, fontWeight: 700, color: row.balance > 0 ? "#b71c1c" : colors.teal }}>{money(row.balance)}</td>
-                        <td style={{ ...td, textAlign: "center" }}>
-                          <span style={{ background: ss.bg, color: ss.fg, padding: "2px 8px", borderRadius: 6, fontSize: "0.72rem", fontWeight: 700, whiteSpace: "nowrap" }}>{statusText(row.status)}</span>
-                        </td>
-                        <td style={{ ...td, maxWidth: 320, fontSize: "0.76rem", color: colors.textSecondary }}>{row.paymentSummary || "—"}</td>
-                      </tr>
-                    );
-                  })}
-                  <tr style={{ background: colors.totalBg, borderTop: `2px solid ${colors.blue}` }}>
-                    <td style={{ ...td, fontWeight: 800, color: colors.blue }} colSpan={6}>TOTAL</td>
-                    <td style={{ ...tdR, fontWeight: 800 }}>{money(report.grandAmount)}</td>
-                    <td style={{ ...tdR, fontWeight: 800 }}>{money(report.grandPaid)}</td>
-                    <td style={{ ...tdR, fontWeight: 800, color: colors.blue }}>{money(report.grandBalance)}</td>
-                    <td style={td} colSpan={2}></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* ── Desktop/tablet: table ── */
+          <div data-admin-table-region="" className="rw-table-wrap">
+            <table className="rw-table" style={{ minWidth: 640 }}>
+              <thead>
+                <tr>{cols.map((c) => <th key={c.key} className={c.total ? "rw-num" : undefined} style={c.key === "status" ? { textAlign: "center" } : undefined}>{c.label}</th>)}</tr>
+              </thead>
+              <tbody>
+                {report.rows.map((row) => <tr key={row.invoiceId}>{cols.map((c) => cell(row, c.key))}</tr>)}
+              </tbody>
+              <tfoot>
+                <tr>{cols.map((c, i) => totalCell(c.key, i))}</tr>
+              </tfoot>
+            </table>
+          </div>
+        )
       )}</RecordsViewport>
     </div>
   );
-}
-
-// Build a styled, printable HTML doc for the PDF export (parsed by exportToPdf).
-function buildLedgerHtml(report) {
-  const money2 = (n) => (Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const d = (s) => (s ? new Date(s).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "");
-  const esc = (v) => String(v ?? "").replace(/[&<>]/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[m]));
-  const statusLabel = report.statusFilter === "paid" ? "Paid" : report.statusFilter === "all" ? "All invoices" : "Outstanding (Unpaid)";
-  const rows = report.rows.map((r) => `
-    <tr>
-      <td class="c">${r.serialNo}</td><td>${esc(r.poNumber)}</td><td class="c">${d(r.deliveryDate)}</td>
-      <td class="c">${d(r.invoiceDate)}</td><td class="c">${esc(r.dcNumbers)}</td><td class="c">${esc(r.billNumber)}</td>
-      <td class="r">${money2(r.amount)}</td><td class="r">${money2(r.paid)}</td><td class="r b">${money2(r.balance)}</td>
-      <td class="c">${esc(r.status === "PartiallyPaid" ? "Partial" : r.status)}</td><td class="pd">${esc(r.paymentSummary)}</td>
-    </tr>`).join("");
-  return `<!DOCTYPE html><html><head><style>
-    body { font-family: Arial, sans-serif; color: #1a2332; }
-    .title { text-align:center; font-size:22px; font-weight:800; background:#ebebeb; padding:10px; }
-    .sub { text-align:center; font-size:14px; font-weight:700; background:#ebebeb; padding:4px; }
-    .meta { text-align:center; font-size:11px; color:#5f6d7e; font-style:italic; margin-bottom:8px; }
-    table { border-collapse:collapse; width:100%; font-size:10px; }
-    th, td { border:1px solid #d0d7e2; padding:4px 5px; vertical-align:top; }
-    th { background:#ebebeb; font-weight:700; text-align:center; }
-    td.c { text-align:center; } td.r { text-align:right; white-space:nowrap; } td.b { font-weight:700; }
-    td.pd { font-size:8.5px; color:#5f6d7e; }
-    tr.total td { background:#eef4ff; font-weight:800; border-top:2px solid #0d47a1; }
-  </style></head><body>
-    <div class="title">${esc(report.companyName)}</div>
-    <div class="sub">Outstanding Ledger — ${esc(report.clientName || "Client")}</div>
-    <div class="meta">${statusLabel} &middot; ${report.invoiceCount} invoice(s)</div>
-    <table>
-      <thead><tr>
-        <th>S.No</th><th>P.O #</th><th>Delivery</th><th>Invoice Date</th><th>D.C #</th><th>Bill #</th>
-        <th>Amount</th><th>Paid</th><th>Balance</th><th>Status</th><th>Payment Details</th>
-      </tr></thead>
-      <tbody>${rows}
-        <tr class="total"><td colspan="6" style="text-align:right">TOTAL</td>
-          <td class="r">${money2(report.grandAmount)}</td><td class="r">${money2(report.grandPaid)}</td>
-          <td class="r">${money2(report.grandBalance)}</td><td colspan="2"></td></tr>
-      </tbody>
-    </table>
-  </body></html>`;
 }
 
 function Field({ label, icon, children }) {
@@ -406,15 +396,6 @@ function Field({ label, icon, children }) {
   );
 }
 
-const th = { padding: "7px 10px", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.02em", color: colors.textSecondary, whiteSpace: "nowrap" };
-const td = { padding: "6px 10px", color: colors.textPrimary, verticalAlign: "top" };
-const tdR = { ...td, textAlign: "right", whiteSpace: "nowrap" };
-
-const btn = (bg) => ({
-  display: "inline-flex", alignItems: "center", gap: 6, background: bg, color: "#fff",
-  border: "none", borderRadius: 8, padding: "9px 14px", fontSize: "0.85rem", fontWeight: 600,
-  cursor: "pointer", minHeight: 40,
-});
 
 const seg = {
   group: { display: "inline-flex", border: `1px solid ${colors.inputBorder}`, borderRadius: 8, overflow: "hidden", background: "#fff" },
@@ -424,7 +405,6 @@ const seg = {
 };
 
 const card = {
-  box: { border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "0.7rem 0.8rem", background: "#fff", display: "flex", flexDirection: "column", gap: 3 },
   top: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 },
   meta: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(90px, 100%), 1fr))", gap: "0.35rem 0.7rem", marginTop: 4 },
   lbl: { display: "block", fontSize: "0.6rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary },

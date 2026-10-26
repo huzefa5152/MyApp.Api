@@ -8,7 +8,7 @@ export async function brandAccountingReport(html, company, template) {
     header.className = "report-letterhead no-break";
     if (brand.branding) {
       header.innerHTML = brand.branding;
-      if (!header.textContent.includes(company.name || "")) {
+      if (!header.textContent.toLowerCase().includes((company.name || "").toLowerCase())) {
         const identity = doc.createElement("div");
         identity.textContent = company.name;
         header.appendChild(identity);
@@ -31,7 +31,9 @@ export async function brandAccountingReport(html, company, template) {
     .accounting-print { font-family:${brand.font}; color:${brand.color}; margin:0; }
     .accounting-print * { box-sizing:border-box; print-color-adjust:exact; -webkit-print-color-adjust:exact; }
     .accounting-print .report-letterhead { margin-bottom:16px; }
-    .accounting-print .ttl,.accounting-print h3,.accounting-print tr.g td { color:${brand.headerColor}; }
+    .accounting-print .ttl,.accounting-print tr.g td { color:${brand.headerColor}; }
+    .accounting-print h3 { color:${brand.color}; border-bottom:2px solid ${brand.headerBackground}; padding-bottom:3px; }
+    .accounting-print .kpi { border-top:3px solid ${brand.headerBackground}; }
     .accounting-print .ttl,.accounting-print tr.g td { background:${brand.headerBackground}; padding:6px; }
     .accounting-print th { background:${brand.headerBackground}; color:${brand.headerColor}; }
     .accounting-print table { font-family:inherit; font-size:11px; }

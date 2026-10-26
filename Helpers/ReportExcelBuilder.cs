@@ -40,9 +40,18 @@ namespace MyApp.Api.Helpers
         /// sheet rather than build a workbook that never opens.</summary>
         public const int MaxRows = 50_000;
 
-        public static byte[] Build(ReportResultDto report)
+        /// <param name="letterhead">The company's own letterhead and colours; null keeps the plain banner.</param>
+        /// <param name="columnKeys">The columns the user chose to see, in report order. Null or
+        /// no match exports every column. Only narrows what is shown, never a figure.</param>
+        public static byte[] Build(ReportResultDto report, ReportExcelLetterhead? letterhead = null,
+            IReadOnlyCollection<string>? columnKeys = null)
         {
             var columns = report.Columns.Count > 0 ? report.Columns : InferColumns(report);
+            if (columnKeys is { Count: > 0 })
+            {
+                var chosen = columns.Where(c => columnKeys.Contains(c.Key, StringComparer.OrdinalIgnoreCase)).ToList();
+                if (chosen.Count > 0) columns = chosen;
+            }
             var colCount = Math.Max(columns.Count, 1);
 
             using var wb = new XLWorkbook();
@@ -51,9 +60,13 @@ namespace MyApp.Api.Helpers
             SetColumnWidths(ws, columns);
 
             var r = 1;
-            r = WriteBanner(ws, report, colCount, r);
+            r = letterhead == null
+                ? WriteBanner(ws, report, colCount, r)
+                : WriteBrandedBanner(ws, report, colCount, r, letterhead);
             var headerRow = r;
             WriteHeader(ws, columns, r);
+            if (letterhead != null)
+                for (var c = 1; c <= columns.Count; c++) letterhead.StyleHeaderCell(ws.Cell(r, c));
             r++;
 
             r = WriteRows(ws, report, columns, r, out var written);
@@ -115,6 +128,34 @@ namespace MyApp.Api.Helpers
             meta.Style.Alignment.WrapText = true;
             r += 2; // blank spacer
             return r;
+        }
+
+        private static int WriteBrandedBanner(IXLWorksheet ws, ReportResultDto report, int colCount, int r,
+            ReportExcelLetterhead letterhead)
+        {
+            r = letterhead.Write(ws, colCount, r);
+
+            ws.Cell(r, 1).Value = Safe(report.Title);
+            var title = ws.Range(r, 1, r, colCount).Merge();
+            title.Style.Font.FontSize = 14;
+            title.Style.Font.Bold = true;
+            title.Style.Fill.BackgroundColor = letterhead.HeaderFill;
+            title.Style.Font.FontColor = letterhead.HeaderText;
+            title.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            ws.Row(r).Height = 22;
+            r++;
+
+            var parts = new List<string> { report.PeriodLabel };
+            parts.AddRange(report.FiltersApplied);
+            parts.Add(report.LedgerSourced ? "Source: general ledger" : "Source: payment subledger (GL posting off)");
+            parts.Add($"Generated {report.GeneratedAt:dd-MM-yyyy HH:mm}");
+            ws.Cell(r, 1).Value = Safe(string.Join("  ·  ", parts));
+            var meta = ws.Range(r, 1, r, colCount).Merge();
+            meta.Style.Font.Italic = true;
+            meta.Style.Font.FontColor = Muted;
+            meta.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            meta.Style.Alignment.WrapText = true;
+            return r + 2;
         }
 
         private static void WriteHeader(IXLWorksheet ws, List<ReportColumnDto> columns, int r)

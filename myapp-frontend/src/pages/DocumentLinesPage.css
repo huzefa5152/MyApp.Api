@@ -3,7 +3,7 @@
 .document-lines-heading h2 { margin: 0; font-size: 22px; font-weight: 700; }
 .document-lines-heading p { margin: 3px 0 0; color: #64748b; font-size: 13px; }
 .document-lines-icon { display: grid; place-items: center; width: 42px; height: 42px; flex-shrink: 0; border-radius: 12px; color: white; background: linear-gradient(135deg, #0d47a1, #00897b); }
-.document-lines-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; padding: 14px; border: 1px solid #e8edf3; border-radius: 12px; background: #fff; }
+.document-lines-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 10px; border: 1px solid #e8edf3; background: #fff; }
 .document-lines-filters > label { flex: 1 1 145px; font-size: 12px; font-weight: 600; color: #526174; line-height: 1.8; }
 .document-lines-company { flex: 1.5 1 220px; min-width: 0; }
 .document-lines-label { display: block; font-size: 12px; font-weight: 600; color: #526174; line-height: 1.8; }
