@@ -1,3 +1,4 @@
+import RecordsViewport from "./RecordsViewport";
 import { useMemo, useState } from "react";
 import {
   MdArrowBack, MdCheckCircle, MdChevronRight, MdInfoOutline, MdOpenInNew,
@@ -17,6 +18,9 @@ import { getCustomerLedgerInvoiceLayout } from "../api/printTemplateApi";
 import { buildCustomerLedgerHtml, selectLedgerInvoiceTemplate } from "../utils/customerLedgerPrint";
 import { brandAccountingReport } from "../utils/accountingReportPrint";
 import "./ReportShell.css";
+import "./reports/ReportWorkspace.css";
+import ColumnPicker, { useHiddenColumns } from "./reports/ColumnPicker";
+import { excelBrandParams } from "../utils/reportExcelBrand";
 
 /**
  * The one renderer every accounting report uses.
@@ -52,6 +56,8 @@ export default function ReportShell({
   printDivisionId,
   printCompanyId,
   loadPrintReport,
+  headerExtra,      // e.g. the company picker, rendered beside the actions
+  toolbar,          // the filter bar, rendered under the identity bar
 }) {
   const { selectedCompany } = useCompany();
   const narrow = useIsNarrow(820);
@@ -66,11 +72,19 @@ export default function ReportShell({
       getCustomerLedgerInvoiceLayout(company.id, printDivisionId), loadPrintReport ? loadPrintReport() : report,
     ]);
     const template = selectLedgerInvoiceTemplate(invoiceLayout ? [invoiceLayout] : [], company.id, printDivisionId);
-    return customerLedger ? buildCustomerLedgerHtml(ledger, company, template)
-      : brandAccountingReport(buildReportHtml(ledger), company, template);
+    // Print and PDF carry the same columns the screen shows.
+    const shaped = ledger?.statement ? ledger : { ...ledger, columns };
+    return customerLedger ? buildCustomerLedgerHtml(shaped, company, template)
+      : brandAccountingReport(buildReportHtml(shaped), company, template);
   };
 
-  const columns = report?.columns || [];
+  const allColumns = report?.columns || [];
+  // The user's own column choice, per report. Statements keep their fixed shape.
+  const [hiddenCols, setHiddenCols] = useHiddenColumns(printReportId || report?.title || "report");
+  const columns = useMemo(() => {
+    const shown = allColumns.filter((c) => !hiddenCols.has(String(c.key)));
+    return shown.length ? shown : allColumns;
+  }, [allColumns, hiddenCols]);
   const rows = report?.rows || [];
   const totals = report?.totals || {};
   const totalLabels = report?.totalLabels || {};
@@ -87,6 +101,12 @@ export default function ReportShell({
       || [...columns].reverse().find((c) => c.totalled) || null,
     [columns, customerLedger]
   );
+
+  // A report whose rows each stand for something with its own ledger (a
+  // customer) names the filter; a row carrying a drillKey then opens it.
+  const drillRow = report?.rowDrillFilter && typeof onDrill === "function"
+    ? (row) => onDrill(report.rowDrillFilter, row.drillKey)
+    : null;
 
   const totalPages = report?.pageSize
     ? Math.max(1, Math.ceil((report.totalCount || 0) / report.pageSize))
@@ -117,62 +137,74 @@ export default function ReportShell({
     } finally { setBusy(null); }
   };
 
+  const hasTotals = Object.keys(totals).length > 0;
+  // The headline figure: a "total…" if the report has one, else its first amount.
+  const totalKeys = Object.keys(totals).filter((k) => !isCount(k) && !isPercentKey(k));
+  const leadTotal = totalKeys.find((k) => /^total|total$/i.test(k)) || totalKeys[0];
+  const showBook = !customerLedger && report?.openingBalance !== undefined
+    && (report?.accountName !== undefined || report?.partyType);
+
   return (
-    <div className={`report-shell${customerLedger ? " customer-ledger" : ""}`} aria-busy={loading}>
-      {/* ── 1. Identity + actions ─────────────────────────────────────────── */}
-      <div className="report-heading" style={st.header}>
-        <div style={st.headerBar} />
-        <div className="report-heading-inner" style={st.headerInner}>
-          <div style={{ minWidth: 0, flex: "1 1 260px" }}>
-            {onBack && (
-              <button type="button" style={st.backBtn} onClick={onBack}>
-                <MdArrowBack size={16} />
-                <span>All reports</span>
-              </button>
-            )}
-            {categoryTitle && (
-              <div style={st.crumb}>
-                <span>{categoryTitle}</span>
-                <MdChevronRight size={14} />
-              </div>
-            )}
-            <h2 style={st.title}>{report?.title || "Report"}</h2>
-            <div style={st.metaLine}>
-              {report?.companyName && <strong style={st.company}>{report.companyName}</strong>}
+    <div className={`rw report-shell${customerLedger ? " customer-ledger" : ""}`} aria-busy={loading}>
+      {/* ── 1. Identity + actions, one compact bar ─────────────────────────── */}
+      <header className="rw-head report-heading">
+        <div className="rw-head__id">
+          {onBack && (
+            <button type="button" className="rw-back" onClick={onBack} title="All reports" aria-label="All reports">
+              <MdArrowBack size={18} />
+            </button>
+          )}
+          <div className="rw-head__text">
+            {categoryTitle && <span className="rw-crumb">{categoryTitle}</span>}
+            <h2 className="rw-title">{report?.title || "Report"}</h2>
+            <div className="rw-meta">
+              {report?.companyName && <strong>{report.companyName}</strong>}
               {report?.periodLabel && <Dot>{report.periodLabel}</Dot>}
               {report?.generatedAt && <Dot>Generated {fmtDateTime(report.generatedAt)}</Dot>}
+              {(report?.filtersApplied || []).length > 0 && (
+                <Dot><span className="rw-meta__filters">{report.filtersApplied.join("  ·  ")}</span></Dot>
+              )}
             </div>
-            {(report?.filtersApplied || []).length > 0 && (
-              <div style={st.provenance}>
-                {report.filtersApplied.join("  ·  ")}
-              </div>
-            )}
-          </div>
-
-          <div style={st.actionRow}>
-            {canExport && (
-              <button
-                type="button"
-                style={st.actionBtn}
-                onClick={async () => { setBusy("excel"); try { await onExportExcel?.(); } finally { setBusy(null); } }}
-                disabled={!!busy || !printable}
-                title="Download as Excel"
-              >
-                <MdTableChart size={17} />
-                <span>{busy === "excel" ? "Preparing…" : "Excel"}</span>
-              </button>
-            )}
-            <button type="button" style={st.actionBtn} onClick={doPrint} disabled={!!busy || !printable} title="Print this report">
-              <MdPrint size={17} />
-              <span>Print</span>
-            </button>
-            <button type="button" style={st.actionBtn} onClick={doPdf} disabled={!!busy || !printable} title="Save as PDF">
-              <MdPictureAsPdf size={17} />
-              <span>{busy === "pdf" ? "Building…" : "PDF"}</span>
-            </button>
           </div>
         </div>
-      </div>
+
+        <div className="rw-head__actions">
+          {headerExtra}
+          {report && !report.statement && (
+            <ColumnPicker columns={allColumns} hidden={hiddenCols} onChange={setHiddenCols} />
+          )}
+          {canExport && (
+            <button
+              type="button"
+              className="rw-btn"
+              onClick={async () => {
+                setBusy("excel");
+                try {
+                  // The workbook carries the company's letterhead and the columns on screen.
+                  const brand = await excelBrandParams({ ...selectedCompany }, printDivisionId);
+                  const chosen = columns.length < allColumns.length ? { columns: columns.map((c) => c.key).join(",") } : {};
+                  await onExportExcel?.({ ...brand, ...chosen });
+                } finally { setBusy(null); }
+              }}
+              disabled={!!busy || !printable}
+              title="Download as Excel"
+            >
+              <MdTableChart size={17} />
+              <span>{busy === "excel" ? "Preparing…" : "Excel"}</span>
+            </button>
+          )}
+          <button type="button" className="rw-btn" onClick={doPrint} disabled={!!busy || !printable} title="Print this report">
+            <MdPrint size={17} />
+            <span>Print</span>
+          </button>
+          <button type="button" className="rw-btn rw-btn--primary" onClick={doPdf} disabled={!!busy || !printable} title="Save as PDF">
+            <MdPictureAsPdf size={17} />
+            <span>{busy === "pdf" ? "Building…" : "PDF"}</span>
+          </button>
+        </div>
+      </header>
+
+      {toolbar}
 
       {printError && <Notice tone="warn">{printError}</Notice>}
 
@@ -196,147 +228,164 @@ export default function ReportShell({
       {/* A balance sheet that does not balance has to say so where it cannot be
           missed, and one that does should reassure at a glance. */}
       {report?.statement === "BalanceSheet" && report.difference !== undefined && (
-        <div style={report.isBalanced ? st.balancedChip : st.imbalanceChip}>
+        <div className={report.isBalanced ? "rw-chip-ok" : "rw-chip-bad"}>
           {report.isBalanced
-            ? <><MdCheckCircle size={17} /> Assets = Liabilities + Equity</>
-            : <><MdWarning size={17} /> Out of balance by {fmtMoney(report.difference)}</>}
+            ? <><MdCheckCircle size={16} /> Assets = Liabilities + Equity</>
+            : <><MdWarning size={16} /> Out of balance by {fmtMoney(report.difference)}</>}
         </div>
       )}
 
-      {/* ── 2. The answer ─────────────────────────────────────────────────── */}
+      {/* ── 2. The answer: every figure in one band, above the detail ──────── */}
       {report && customerLedger && (
-        <div className="ledger-overview">
+        <div className="rw-kpis ledger-overview">
           {[["Opening balance", report.openingBalance], ["Invoiced / debits", report.totalDebit],
             ["Received / credits", report.totalCredit], ["Closing balance", report.closingBalance]].map(([label, value], i) => (
-            <div key={label} className={`ledger-metric${i === 3 ? " ledger-metric-closing" : ""}`}>
-              <span>{label}</span><strong>{fmtMoney(value)}</strong>
+            <div key={label} className={`rw-kpi${i === 3 ? " rw-kpi--lead" : ""}`}>
+              <span className="rw-kpi__label">{label}</span>
+              <span className="rw-kpi__value">{fmtMoney(value)}</span>
             </div>
           ))}
         </div>
       )}
-      {report && !customerLedger && Object.keys(totals).length > 0 && (
-        <div style={st.totalsStrip}>
-          {Object.entries(totals).map(([key, value]) => (
-            <div key={key} style={st.totalTile}>
-              <span style={st.totalLabel}>{totalLabels[key] || humanise(key)}</span>
-              <span style={{ ...st.totalValue, ...(isCount(key) ? st.totalValueCount : {}) }}>
-                {isCount(key) ? fmtInt(value) : fmtMoney(value)}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* A statement is a document you send, so it leads with the letterhead,
-          the addressee and the amount due rather than a row of tiles. */}
-      {report?.party && !customerLedger && <StatementHead report={report} />}
-
-      {/* Books and party ledgers both state opening → closing, which a column
-          total cannot express. */}
-      {!customerLedger && report?.openingBalance !== undefined
-        && (report?.accountName !== undefined || report?.partyType) && (
-        <div style={st.bookStrip}>
-          <BookFigure label="Opening balance" value={report.openingBalance} />
-          <BookFigure label="Closing balance" value={report.closingBalance} strong />
-          {report.accountName && <BookFigure label="Account" text={report.accountName} />}
-          {!report.accountName && report.partyName && (
-            <BookFigure
-              label={report.partyType === "Supplier" ? "Supplier" : "Customer"}
-              text={report.partyName}
-            />
+      {report && !customerLedger && (hasTotals || showBook) && (
+        <div className="rw-kpis">
+          {/* Books and party ledgers both state opening → closing, which a column
+              total cannot express. */}
+          {showBook && <Kpi label="Opening balance" value={fmtMoney(report.openingBalance)} />}
+          {showBook && <Kpi label="Closing balance" value={fmtMoney(report.closingBalance)} lead />}
+          {showBook && report.accountName && <Kpi label="Account" value={report.accountName} />}
+          {/* A statement names its party in the letterhead below; a ledger has no
+              letterhead, so the band says whose it is. */}
+          {showBook && !report.accountName && report.partyName && !report.party && (
+            <Kpi label={report.partyType === "Supplier" ? "Supplier" : "Customer"} value={report.partyName} />
           )}
-        </div>
-      )}
-
-      {/* ── 3. The rows ───────────────────────────────────────────────────── */}
-      {customerLedger && report && (
-        <div className="ledger-transactions-heading">
-          <div><h3>Transactions</h3><span>{report.partyName || "All customers"}</span></div>
-          <span>{fmtInt(report.totalCount)} transaction{report.totalCount === 1 ? "" : "s"}</span>
-        </div>
-      )}
-      {loading ? (
-        <div style={st.stateBox}>Loading report…</div>
-      ) : error ? (
-        <div style={{ ...st.stateBox, color: colors.danger }}>{error}</div>
-      ) : rows.length === 0 ? (
-        <div style={st.stateBox}>
-          Nothing to show for this period and filter combination.
-        </div>
-      ) : report?.statement ? (
-        // A statement is a hierarchy, not a grid: indented groups, subtotals at
-        // every level, and one figure per line. It reads the same on a phone as on
-        // a desktop, so there is no separate narrow layout.
-        <StatementTable report={report} rows={rows} onDrill={onOpenAccount} />
-      ) : narrow ? (
-        <div style={st.cardList}>
-          {rows.map((row, i) => (
-            <RowCard
-              key={i}
-              row={row}
-              columns={columns}
-              leadCol={leadCol}
-              amountCol={amountCol}
-              onOpenRow={onOpenRow}
+          {Object.entries(totals).map(([key, value]) => (
+            <Kpi
+              key={key}
+              label={totalLabels[key] || humanise(key)}
+              value={fmtTotal(key, value)}
+              lead={!showBook && key === leadTotal}
             />
           ))}
         </div>
-      ) : (
-        <div data-admin-table-region="" className="report-table-wrap" style={st.tableWrap}>
-          <table style={st.table}>
-            <thead>
-              <tr>
-                {columns.map((c) => (
-                  <th key={c.key} style={isNumeric(c.format) ? st.thNum : st.th}>{c.label}</th>
-                ))}
-                {onOpenRow && <th style={st.thNum} aria-label="Open" />}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, i) => (
-                <tr key={i} style={st.tr}>
-                  {columns.map((c) => (
-                    <td key={c.key} style={cellStyle(c, row)}>
-                      {c.format === "text"
-                        ? <span style={st.clamp2}>{renderCell(row, c)}</span>
-                        : renderCell(row, c)}
-                    </td>
-                  ))}
-                  {onOpenRow && (
-                    <td style={st.tdAction}>
-                      {canOpen(row) && (
-                        <button
-                          type="button"
-                          style={st.openBtn}
-                          onClick={() => onOpenRow(row)}
-                          title="Open the source document"
-                          aria-label="Open the source document"
-                        >
-                          <MdOpenInNew size={16} />
-                        </button>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-            {Object.keys(totals).length > 0 && columns.some((c) => c.totalled) && (
-              <tfoot>
-                <tr style={st.totalsRow}>
-                  {columns.map((c, idx) => (
-                    <td key={c.key} style={isNumeric(c.format) ? st.tdNum : st.td}>
-                      {c.totalled && totals[c.key] !== undefined
-                        ? fmtMoney(totals[c.key])
-                        : idx === 0 ? "Total" : ""}
-                    </td>
-                  ))}
-                  {onOpenRow && <td style={st.tdAction} />}
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
       )}
+
+      {/* ── 3. The rows: they fill the window and scroll on their own ─────── */}
+      <RecordsViewport label="Accounting ledger records" enabled={!narrow}>
+        {/* A statement is a document you send, so it leads with the letterhead,
+            the addressee and the amount due. */}
+        {report?.party && !customerLedger && <StatementHead report={report} />}
+
+        {customerLedger && report && (
+          <div className="rw-section-head ledger-transactions-heading">
+            <h3>Transactions <span style={{ fontWeight: 600, color: colors.textSecondary }}>· {report.partyName || "All customers"}</span></h3>
+            <span>{fmtInt(report.totalCount)} transaction{report.totalCount === 1 ? "" : "s"}</span>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="rw-state" role="status">Loading report…</div>
+        ) : error ? (
+          <div className="rw-state rw-state--error">{error}</div>
+        ) : rows.length === 0 ? (
+          <div className="rw-state">Nothing to show for this period and filter combination.</div>
+        ) : report?.statement ? (
+          // A statement is a hierarchy, not a grid: indented groups, subtotals at
+          // every level, and one figure per line. It reads the same on a phone as on
+          // a desktop, so there is no separate narrow layout.
+          <StatementTable report={report} rows={rows} onDrill={onOpenAccount} />
+        ) : narrow ? (
+          <div className="rw-cards">
+            {rows.map((row, i) => (
+              <RowCard
+                key={i}
+                row={row}
+                columns={columns}
+                leadCol={leadCol}
+                amountCol={amountCol}
+                onOpenRow={onOpenRow}
+                onDrillRow={drillRow}
+              />
+            ))}
+          </div>
+        ) : (
+          <div data-admin-table-region="" className="rw-table-wrap report-table-wrap">
+            <table className="rw-table">
+              <thead>
+                <tr>
+                  {columns.map((c) => (
+                    <th key={c.key} className={isNumeric(c.format) ? "rw-num" : undefined}>{c.label}</th>
+                  ))}
+                  {(onOpenRow || drillRow) && <th className="rw-num" aria-label="Open" />}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, i) => (
+                  <tr key={i}>
+                    {columns.map((c) => (
+                      <td key={c.key} className={cellClass(c, row)}>
+                        {c.format === "text"
+                          ? <span className="rw-clamp">{renderCell(row, c)}</span>
+                          : renderCell(row, c)}
+                      </td>
+                    ))}
+                    {(onOpenRow || drillRow) && (
+                      <td className="rw-act">
+                        {drillRow && row?.drillKey && (
+                          <button
+                            type="button"
+                            className="rw-open"
+                            onClick={() => drillRow(row)}
+                            title={`Open the ledger behind ${rowLabel(row, leadCol)}`}
+                            aria-label={`Open the ledger behind ${rowLabel(row, leadCol)}`}
+                          >
+                            <MdChevronRight size={18} />
+                          </button>
+                        )}
+                        {onOpenRow && canOpen(row) && (
+                          <button
+                            type="button"
+                            className="rw-open"
+                            onClick={() => onOpenRow(row)}
+                            title="Open the source document"
+                            aria-label="Open the source document"
+                          >
+                            <MdOpenInNew size={15} />
+                          </button>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+              {hasTotals && columns.some((c) => c.totalled) && (
+                <tfoot>
+                  <tr>
+                    {columns.map((c, idx) => (
+                      <td key={c.key} className={isNumeric(c.format) ? "rw-num" : undefined}>
+                        {c.totalled && totals[c.key] !== undefined
+                          ? fmtMoney(totals[c.key])
+                          : idx === 0 ? "Total" : ""}
+                      </td>
+                    ))}
+                    {(onOpenRow || drillRow) && <td className="rw-act" />}
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        )}
+
+        {/* How old the debt is — the part of a statement that prompts payment. */}
+        {report?.aging && Number(report.aging.total || 0) !== 0 && (
+          <AgingFooter aging={report.aging} owed={report.closingBalance} />
+        )}
+
+        {/* ── 4. The breakdown ──────────────────────────────────────────────── */}
+        {(report?.groupSummaries || []).map((group) => (
+          <GroupSummary key={group.title} group={group} onDrill={onDrill} />
+        ))}
+      </RecordsViewport>
 
       {report && report.totalCount > 0 && (
         <Pagination
@@ -349,16 +398,6 @@ export default function ReportShell({
           unit="rows"
         />
       )}
-
-      {/* How old the debt is — the part of a statement that prompts payment. */}
-      {report?.aging && Number(report.aging.total || 0) !== 0 && (
-        <AgingFooter aging={report.aging} owed={report.closingBalance} />
-      )}
-
-      {/* ── 4. The breakdown ──────────────────────────────────────────────── */}
-      {(report?.groupSummaries || []).map((group) => (
-        <GroupSummary key={group.title} group={group} onDrill={onDrill} />
-      ))}
     </div>
   );
 }
@@ -368,24 +407,25 @@ export default function ReportShell({
 function Dot({ children }) {
   return (
     <>
-      <span style={st.dot} aria-hidden="true">·</span>
+      <span className="rw-meta__dot" aria-hidden="true">·</span>
       <span>{children}</span>
     </>
   );
 }
 
-function Notice({ tone, children }) {
-  const palette = tone === "warn"
-    ? { bg: "#fff8e1", border: "#ffe0a3", fg: "#8a5a00" }
-    : { bg: "#eef4fd", border: "#d6e4f7", fg: colors.blue };
+function Kpi({ label, value, lead }) {
   return (
-    <div style={{
-      display: "flex", gap: 8, alignItems: "flex-start",
-      background: palette.bg, border: `1px solid ${palette.border}`,
-      color: palette.fg, borderRadius: 12, padding: "0.7rem 0.9rem",
-      fontSize: "0.84rem", lineHeight: 1.45, marginBottom: "1rem",
-    }}>
-      <MdInfoOutline size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+    <div className={`rw-kpi${lead ? " rw-kpi--lead" : ""}`}>
+      <span className="rw-kpi__label">{label}</span>
+      <span className="rw-kpi__value">{value}</span>
+    </div>
+  );
+}
+
+function Notice({ tone, children }) {
+  return (
+    <div className={`rw-notice${tone === "warn" ? " rw-notice--warn" : ""}`}>
+      <MdInfoOutline size={17} />
       <span>{children}</span>
     </div>
   );
@@ -405,27 +445,25 @@ function StatementHead({ report }) {
   const isSupplier = report.partyType === "Supplier";
 
   return (
-    <div style={st.statement}>
-      <div style={st.statementGrid}>
-        <div style={{ minWidth: 0 }}>
-          <span style={st.statementLabel}>From</span>
-          <div style={st.statementName}>{from.name || report.companyName}</div>
-          <ContactLines c={from} />
-        </div>
-        <div style={{ minWidth: 0 }}>
-          <span style={st.statementLabel}>
-            {isSupplier ? "Statement of account with" : "Statement for"}
-          </span>
-          <div style={st.statementName}>{to.name || report.partyName}</div>
-          <ContactLines c={to} />
-        </div>
-        <div style={st.dueBox}>
-          <span style={st.statementLabel}>
-            {isSupplier ? "Balance we owe" : "Amount due"}
-          </span>
-          <span style={st.dueAmount}>Rs {fmtMoney(owed)}</span>
-          <span style={st.duePeriod}>{report.periodLabel}</span>
-        </div>
+    <div className="rw-statement">
+      <div style={{ minWidth: 0 }}>
+        <span className="rw-statement__label">From</span>
+        <div className="rw-statement__name">{from.name || report.companyName}</div>
+        <ContactLines c={from} />
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <span className="rw-statement__label">
+          {isSupplier ? "Statement of account with" : "Statement for"}
+        </span>
+        <div className="rw-statement__name">{to.name || report.partyName}</div>
+        <ContactLines c={to} />
+      </div>
+      <div className="rw-statement__due">
+        <span className="rw-statement__label">
+          {isSupplier ? "Balance we owe" : "Amount due"}
+        </span>
+        <span className="rw-statement__amount">Rs {fmtMoney(owed)}</span>
+        <span className="rw-statement__period">{report.periodLabel}</span>
       </div>
     </div>
   );
@@ -435,9 +473,9 @@ function ContactLines({ c }) {
   const lines = [c.address, c.phone, c.email].filter(Boolean);
   const tax = [c.ntn && `NTN ${c.ntn}`, c.strn && `STRN ${c.strn}`].filter(Boolean).join("  ·  ");
   return (
-    <div style={st.contactLines}>
+    <div className="rw-statement__lines">
       {lines.map((l, i) => <div key={i}>{l}</div>)}
-      {tax && <div style={{ marginTop: 2 }}>{tax}</div>}
+      {tax && <div>{tax}</div>}
     </div>
   );
 }
@@ -457,23 +495,21 @@ function AgingFooter({ aging, owed }) {
   const total = Math.abs(Number(aging.total || 0)) || 1;
 
   return (
-    <div style={st.agingCard}>
-      <div style={st.groupHead}>
-        <h3 style={st.groupTitle}>How old is this balance</h3>
-        <span style={st.groupTotal}>Rs {fmtMoney(owed)}</span>
+    <div className="rw-panel">
+      <div className="rw-panel__head">
+        <h3>How old is this balance</h3>
+        <strong>Rs {fmtMoney(owed)}</strong>
       </div>
-      <div style={st.agingGrid}>
+      <div className="rw-panel__grid">
         {buckets.map((b) => {
           const amount = Number(aging[b.key] || 0);
           const pct = Math.max(0, Math.min(100, (Math.abs(amount) / total) * 100));
           const tone = amount === 0 ? "zero" : b.tone;
           return (
-            <div key={b.key} style={st.agingCell}>
-              <span style={st.totalLabel}>{b.label}</span>
-              <span style={{ ...st.agingAmount, ...AGING_TONE[tone] }}>{fmtMoney(amount)}</span>
-              <div style={st.barTrack}>
-                <div style={{ ...st.barFill, width: `${pct}%`, ...AGING_BAR[tone] }} />
-              </div>
+            <div key={b.key} className="rw-bucket">
+              <span className="rw-kpi__label">{b.label}</span>
+              <strong style={AGING_TONE[tone]}>{fmtMoney(amount)}</strong>
+              <div className="rw-bar"><i style={{ width: `${pct}%`, ...AGING_BAR[tone] }} /></div>
             </div>
           );
         })}
@@ -490,37 +526,36 @@ const AGING_TONE = {
 };
 const AGING_BAR = {
   zero: { background: "#e3e8ef" },
-  ok: { background: `linear-gradient(90deg, ${colors.blue}, ${colors.teal})` },
+  ok: {},
   warn: { background: "#f0a000" },
   bad: { background: colors.danger },
 };
-
-function BookFigure({ label, value, text, strong }) {
-  return (
-    <div style={st.bookFigure}>
-      <span style={st.totalLabel}>{label}</span>
-      <span style={{ ...st.bookValue, ...(strong ? { color: colors.blue, fontWeight: 800 } : {}) }}>
-        {text !== undefined ? text : fmtMoney(value)}
-      </span>
-    </div>
-  );
-}
 
 /**
  * Phone layout. A 10-column table cannot be read on a 375px screen, so each row
  * becomes a card: who/what on top, the figure in its own band, the rest as a
  * label/value grid that reflows to one column.
  */
-function RowCard({ row, columns, leadCol, amountCol, onOpenRow }) {
+function RowCard({ row, columns, leadCol, amountCol, onOpenRow, onDrillRow }) {
   const meta = columns.filter((c) => c !== leadCol && c !== amountCol);
   return (
-    <div className="report-row-card" style={st.card}>
-      <div className="report-row-card-top" style={st.cardTop}>
-        <span style={st.cardLead}>{renderCell(row, leadCol) || "—"}</span>
+    <div className="rw-card report-row-card">
+      <div className="rw-card__top">
+        <span className="rw-card__lead">{renderCell(row, leadCol) || "—"}</span>
+        {onDrillRow && row?.drillKey && (
+          <button
+            type="button"
+            className="rw-open"
+            onClick={() => onDrillRow(row)}
+            aria-label={`Open the ledger behind ${rowLabel(row, leadCol)}`}
+          >
+            <MdChevronRight size={20} />
+          </button>
+        )}
         {onOpenRow && canOpen(row) && (
           <button
             type="button"
-            style={st.openBtnMobile}
+            className="rw-open"
             onClick={() => onOpenRow(row)}
             aria-label="Open source document"
           >
@@ -530,20 +565,20 @@ function RowCard({ row, columns, leadCol, amountCol, onOpenRow }) {
       </div>
 
       {amountCol && (
-        <div className="report-row-card-amount" style={st.cardAmountBox}>
-          <span style={st.totalLabel}>{amountCol.label}</span>
-          <span style={st.cardAmount}>{renderCell(row, amountCol)}</span>
+        <div className="rw-card__amount">
+          <span className="rw-kpi__label">{amountCol.label}</span>
+          <strong>{renderCell(row, amountCol)}</strong>
         </div>
       )}
 
-      <div className="report-row-card-meta" style={st.cardMetaGrid}>
+      <div className="rw-card__meta">
         {meta.map((c) => {
           const v = renderCell(row, c);
           if (v === "" || v === null || v === undefined) return null;
           return (
             <div key={c.key} style={{ minWidth: 0 }}>
-              <span style={st.metaLabel}>{c.label}</span>
-              <span style={st.metaValue}>{v}</span>
+              <span>{c.label}</span>
+              <b>{v}</b>
             </div>
           );
         })}
@@ -565,52 +600,49 @@ function StatementTable({ report, rows, onDrill }) {
   const hasComparative = (report.columns || []).some((c) => c.key === "comparative");
 
   return (
-    <div data-admin-table-region="" style={st.tableWrap}>
-      <table style={{ ...st.table, minWidth: hasComparative ? 620 : 380 }}>
+    <div data-admin-table-region="" className="rw-table-wrap">
+      <table className="rw-table rw-stmt" style={{ minWidth: hasComparative ? 620 : 0 }}>
         <thead>
           <tr>
-            <th style={st.th} />
-            <th style={st.thNum}>{report.periodLabel}</th>
-            {hasComparative && <th style={st.thNum}>{report.comparativeLabel}</th>}
-            {hasComparative && <th style={st.thNum}>Change</th>}
+            <th />
+            <th className="rw-num">{report.periodLabel}</th>
+            {hasComparative && <th className="rw-num">{report.comparativeLabel}</th>}
+            {hasComparative && <th className="rw-num">Change</th>}
           </tr>
         </thead>
         <tbody>
           {rows.map((line, i) => {
             if (line.kind === "spacer") {
-              return <tr key={i}><td colSpan={hasComparative ? 4 : 2} style={st.stmtSpacer} /></tr>;
+              return <tr key={i}><td colSpan={hasComparative ? 4 : 2} style={{ height: 8, padding: 0, border: 0 }} /></tr>;
             }
-            const tone = STMT_TONE[line.kind] || {};
             const clickable = line.kind === "account" && line.accountId && onDrill;
             return (
               <tr
                 key={i}
-                style={{ ...st.stmtRow, ...(clickable ? { cursor: "pointer" } : {}) }}
+                className={`rw-stmt--${line.kind}${clickable ? " rw-stmt--click" : ""}`}
                 onClick={clickable ? () => onDrill(line.accountId) : undefined}
                 title={clickable ? `Open the ledger for ${line.label}` : undefined}
               >
-                <td style={{
-                  ...st.stmtLabel,
-                  paddingLeft: `calc(0.8rem + ${line.level * 1.1}rem)`,
-                  ...tone.label,
-                }}>
-                  {line.label}
-                  {line.code && <span style={st.stmtCode}>{line.code}</span>}
+                <td style={{ paddingLeft: `calc(10px + ${line.level * 1.1}rem)` }}>
+                  <span className="rw-stmt-label">
+                    {line.label}
+                    {line.code && <span className="rw-stmt-code">{line.code}</span>}
+                  </span>
                 </td>
-                <td style={{ ...st.stmtNum, ...tone.amount }}>{fmtMoney(line.amount)}</td>
+                <td className="rw-num">{fmtLine(line, line.amount)}</td>
                 {hasComparative && (
-                  <td style={{ ...st.stmtNum, ...tone.amount, color: colors.textSecondary }}>
+                  <td className="rw-num" style={{ color: colors.textSecondary }}>
                     {line.comparative === null || line.comparative === undefined
-                      ? "" : fmtMoney(line.comparative)}
+                      ? "" : fmtLine(line, line.comparative)}
                   </td>
                 )}
                 {hasComparative && (
-                  <td style={{ ...st.stmtNum, ...changeTone(line.change) }}>
+                  <td className="rw-num" style={changeTone(line.change)}>
                     {line.change === null || line.change === undefined ? "" : (
                       <>
-                        {fmtMoney(line.change)}
+                        {line.kind === "ratio" ? fmtPoints(line.change) : fmtMoney(line.change)}
                         {line.changePercent !== null && line.changePercent !== undefined && (
-                          <span style={st.stmtPct}>
+                          <span className="rw-stmt-pct">
                             {line.changePercent > 0 ? "+" : ""}{line.changePercent}%
                           </span>
                         )}
@@ -626,23 +658,6 @@ function StatementTable({ report, rows, onDrill }) {
     </div>
   );
 }
-
-const STMT_TONE = {
-  group: {
-    label: { fontWeight: 800, color: colors.blue, textTransform: "uppercase",
-             fontSize: "0.72rem", letterSpacing: "0.05em", paddingTop: "0.9rem" },
-    amount: { paddingTop: "0.9rem" },
-  },
-  account: { label: { color: colors.textPrimary }, amount: {} },
-  subtotal: {
-    label: { fontWeight: 700, color: colors.textPrimary },
-    amount: { fontWeight: 700, borderTop: `1px solid ${colors.cardBorder}` },
-  },
-  total: {
-    label: { fontWeight: 800, color: colors.textPrimary, fontSize: "0.92rem" },
-    amount: { fontWeight: 800, fontSize: "0.92rem", borderTop: `2px solid ${colors.blue}` },
-  },
-};
 
 /** A negative change is not automatically bad — it depends on the line — so the
  *  tint is deliberately neutral-leaning: red only for a real decline. */
@@ -660,10 +675,10 @@ function GroupSummary({ group, onDrill }) {
   const clickable = !!group.drillFilter && typeof onDrill === "function";
 
   return (
-    <div style={st.groupCard}>
-      <div style={st.groupHead}>
-        <h3 style={st.groupTitle}>{group.title}</h3>
-        <span style={st.groupTotal}>Rs {fmtMoney(group.total)}</span>
+    <div className="rw-panel">
+      <div className="rw-panel__head">
+        <h3>{group.title}</h3>
+        <strong>Rs {fmtMoney(group.total)}</strong>
       </div>
       <div>
         {rows.map((r, i) => {
@@ -672,24 +687,22 @@ function GroupSummary({ group, onDrill }) {
           return (
             <div
               key={`${r.label}-${i}`}
-              style={{ ...st.groupRow, ...(canClick ? st.groupRowClickable : {}) }}
+              className={`rw-group-row${canClick ? " rw-group-row--click" : ""}`}
               onClick={canClick ? () => onDrill(group.drillFilter, r.drillKey) : undefined}
               role={canClick ? "button" : undefined}
               tabIndex={canClick ? 0 : undefined}
               onKeyDown={canClick ? (e) => (e.key === "Enter" || e.key === " ") && onDrill(group.drillFilter, r.drillKey) : undefined}
               title={canClick ? `Show the transactions behind ${r.label}` : undefined}
             >
-              <div style={st.groupRowTop}>
-                <span style={st.groupLabel}>{r.label}</span>
-                <span style={st.groupAmount}>{fmtMoney(r.amount)}</span>
+              <div className="rw-group-row__top">
+                <span className="rw-group-row__label">{r.label}</span>
+                <span className="rw-group-row__amount">{fmtMoney(r.amount)}</span>
               </div>
-              <div style={st.barTrack}>
-                <div style={{ ...st.barFill, width: `${pct}%` }} />
-              </div>
-              <div style={st.groupSub}>
+              <div className="rw-bar"><i style={{ width: `${pct}%` }} /></div>
+              <div className="rw-group-row__sub">
                 {r.count ? `${fmtInt(r.count)} transaction${r.count === 1 ? "" : "s"}` : ""}
                 {Number(r.tax) ? `  ·  tax ${fmtMoney(r.tax)}` : ""}
-                {canClick && <span style={st.groupDrillHint}>View detail →</span>}
+                {canClick && <em>View detail →</em>}
               </div>
             </div>
           );
@@ -701,8 +714,35 @@ function GroupSummary({ group, onDrill }) {
 
 // ── Formatting ──────────────────────────────────────────────────────────────
 
-const isNumeric = (format) => format === "money" || format === "int";
-const isCount = (key) => /count$/i.test(key);
+const isNumeric = (format) => format === "money" || format === "int" || format === "percent" || format === "number";
+
+/** A quantity: whole numbers plain, fractions to 4 places. */
+const fmtNumber = (v) => Number(v || 0).toLocaleString("en-PK", { maximumFractionDigits: 4 });
+// "invoiceCount", but also plain tallies such as "postings" — never money.
+const isCount = (key) => /(count|postings|entries|transactions)$/i.test(key);
+// Totals keyed "...Percent" (gross margin) are a percentage, not money.
+const isPercentKey = (key) => /percent$/i.test(key);
+
+/** 23.5 -> "23.5%". The server sends the percentage itself, never a fraction. */
+export function fmtPercent(v) {
+  if (v === null || v === undefined || v === "") return "";
+  const n = Number(v);
+  return `${n.toLocaleString("en-PK", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+}
+
+/** A change in a percentage, in percentage points. */
+const fmtPoints = (v) => {
+  const n = Number(v || 0);
+  return `${n > 0 ? "+" : ""}${n.toLocaleString("en-PK", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} pts`;
+};
+
+const fmtTotal = (key, value) =>
+  isCount(key) ? fmtInt(value) : isPercentKey(key) ? fmtPercent(value) : fmtMoney(value);
+
+/** A statement line's figure — a ratio line carries a percentage. */
+const fmtLine = (line, v) => (line.kind === "ratio" ? fmtPercent(v) : fmtMoney(v));
+
+const rowLabel = (row, col) => String((col && row?.[col.key]) || "this row");
 
 /** Negatives in parentheses — accounting convention, not a minus sign. */
 export function fmtMoney(v) {
@@ -727,7 +767,9 @@ function renderCell(row, col) {
   if (v === null || v === undefined) return "";
   switch (col.format) {
     case "money": return fmtMoney(v);
+    case "number": return fmtNumber(v);
     case "int": return fmtInt(v);
+    case "percent": return fmtPercent(v);
     case "date": return fmtDate(v);
     case "status": return <StatusChip value={String(v)} />;
     default: return String(v);
@@ -737,37 +779,35 @@ function renderCell(row, col) {
 function StatusChip({ value }) {
   const v = value.toLowerCase();
   const tone =
-    v.includes("cancel") || v.includes("bounce") ? { bg: colors.dangerLight, fg: colors.danger, bd: "#f5c6cb" }
-    : v.includes("pending") || v.includes("deposit") ? { bg: "#fff8e1", fg: "#8a5a00", bd: "#ffe0a3" }
-    : v.includes("clear") || v.includes("reconcil") ? { bg: "#e8f5e9", fg: colors.success, bd: "#c8e6c9" }
-    : { bg: colors.inputBg, fg: colors.textSecondary, bd: colors.inputBorder };
-  return (
-    <span style={{
-      display: "inline-block", padding: "0.15rem 0.5rem", borderRadius: 20,
-      background: tone.bg, color: tone.fg, border: `1px solid ${tone.bd}`,
-      fontSize: "0.72rem", fontWeight: 700, whiteSpace: "nowrap",
-    }}>{value}</span>
-  );
+    v.includes("cancel") || v.includes("bounce") ? " rw-status--bad"
+    : v.includes("pending") || v.includes("deposit") ? " rw-status--warn"
+    : v.includes("clear") || v.includes("reconcil") ? " rw-status--ok"
+    : "";
+  return <span className={`rw-status${tone}`}>{value}</span>;
 }
 
-function cellStyle(col, row) {
+function cellClass(col, row) {
   if (isNumeric(col.format)) {
     const n = Number(row?.[col.key] || 0);
-    return { ...st.tdNum, ...(n < 0 ? { color: colors.danger } : {}) };
+    return n < 0 ? "rw-num rw-neg" : "rw-num";
   }
   // A date is short and atomic: wrapping it to "19 / Oct / 2024" over three
   // lines triples the row height and reads as broken.
-  if (col.format === "date") return st.tdDate;
-  if (col.format === "status") return st.tdStatus;
-  return st.td;
+  if (col.format === "date" || col.format === "status") return "rw-nowrap";
+  return "rw-text";
 }
 
 /** A row is openable when it carries a source document id. */
 const canOpen = (row) =>
   !!(row?.sourceId || row?.paymentId || row?.journalEntryId);
 
-const humanise = (key) =>
-  key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()).trim();
+const humanise = (key) => {
+  const aged = /^days(\d+)To(\d+)$/i.exec(key);
+  if (aged) return `${aged[1]}–${aged[2]} days`;
+  if (/^over(\d+)$/i.test(key)) return `Over ${key.replace(/\D/g, "")} days`;
+  return key.replace(/([A-Z])/g, " $1").replace(/([a-z])(\d)/gi, "$1 $2")
+    .replace(/^./, (c) => c.toUpperCase()).trim();
+};
 
 const slug = (s) => (s || "report").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
 
@@ -797,9 +837,9 @@ export function buildReportHtml(report) {
       const indent = 2 + (l.level || 0) * 10;
       return `<tr class="${cls}">`
         + `<td style="padding-left:${indent}px">${esc(l.label)}</td>`
-        + `<td class="num">${esc(fmtMoney(l.amount))}</td>`
-        + (hasComp ? `<td class="num">${l.comparative == null ? "" : esc(fmtMoney(l.comparative))}</td>` : "")
-        + (hasComp ? `<td class="num">${l.change == null ? "" : esc(fmtMoney(l.change))}</td>` : "")
+        + `<td class="num">${esc(fmtLine(l, l.amount))}</td>`
+        + (hasComp ? `<td class="num">${l.comparative == null ? "" : esc(fmtLine(l, l.comparative))}</td>` : "")
+        + (hasComp ? `<td class="num">${l.change == null ? "" : esc(l.kind === "ratio" ? fmtPoints(l.change) : fmtMoney(l.change))}</td>` : "")
         + `</tr>`;
     }).join("");
 
@@ -843,7 +883,9 @@ export function buildReportHtml(report) {
     const tds = cols.map((c) => {
       const raw = row?.[c.key];
       const text = c.format === "money" ? fmtMoney(raw)
+        : c.format === "number" ? fmtNumber(raw)
         : c.format === "int" ? fmtInt(raw)
+        : c.format === "percent" ? fmtPercent(raw)
         : c.format === "date" ? fmtDate(raw)
         : raw ?? "";
       return `<td class="${isNumeric(c.format) ? "num" : ""}">${esc(text)}</td>`;
@@ -854,13 +896,14 @@ export function buildReportHtml(report) {
   const foot = cols.some((c) => c.totalled)
     ? `<tfoot><tr>${cols.map((c, i) =>
         `<td class="${isNumeric(c.format) ? "num" : ""}">${
-          c.totalled && report.totals?.[c.key] !== undefined ? esc(fmtMoney(report.totals[c.key]))
+          c.totalled && report.totals?.[c.key] !== undefined
+            ? esc(c.format === "number" ? fmtNumber(report.totals[c.key]) : c.format === "int" ? fmtInt(report.totals[c.key]) : fmtMoney(report.totals[c.key]))
           : i === 0 ? "Total" : ""}</td>`).join("")}</tr></tfoot>`
     : "";
 
   const totals = Object.entries(report.totals || {}).map(([k, v]) =>
     `<div class="kpi"><span>${esc(report.totalLabels?.[k] || humanise(k))}</span>`
-    + `<strong>${esc(isCount(k) ? fmtInt(v) : fmtMoney(v))}</strong></div>`).join("");
+    + `<strong>${esc(fmtTotal(k, v))}</strong></div>`).join("");
 
   const groups = (report.groupSummaries || []).map((g) => `
     <h3>${esc(g.title)}</h3>
@@ -894,21 +937,21 @@ export function buildReportHtml(report) {
       </td>
     </tr></table>` : "";
 
+  // Opening → closing reads as two figures beside the totals, not a table.
   const openClose = (report.openingBalance !== undefined && (report.partyType || report.accountName))
-    ? `<table class="grp"><tbody>
-         <tr><td>Opening balance</td><td class="num">${esc(fmtMoney(report.openingBalance))}</td></tr>
-         <tr class="grp-total"><td>Closing balance</td><td class="num">${esc(fmtMoney(report.closingBalance))}</td></tr>
-       </tbody></table>` : "";
+    ? `<div class="kpi"><span>Opening balance</span><strong>${esc(fmtMoney(report.openingBalance))}</strong></div>`
+      + `<div class="kpi"><span>Closing balance</span><strong>${esc(fmtMoney(report.closingBalance))}</strong></div>`
+    : "";
 
+  const agingBuckets = [["Current", "current"], ["1–30 days", "days1To30"], ["31–60 days", "days31To60"],
+    ["61–90 days", "days61To90"], ["Over 90 days", "over90"]];
   const aging = report.aging && Number(report.aging.total || 0) !== 0 ? `
+    <div class="no-break">
     <h3>How old is this balance</h3>
-    <table class="grp"><tbody>
-      ${[["Current", "current"], ["1–30 days", "days1To30"], ["31–60 days", "days31To60"],
-         ["61–90 days", "days61To90"], ["Over 90 days", "over90"]]
-        .map(([label, key]) =>
-          `<tr><td>${esc(label)}</td><td class="num">${esc(fmtMoney(report.aging[key]))}</td></tr>`)
-        .join("")}
-    </tbody></table>` : "";
+    <table class="age"><thead><tr>${agingBuckets.map(([label]) => `<th class="num">${esc(label)}</th>`).join("")}<th class="num">Total</th></tr></thead>
+      <tbody><tr>${agingBuckets.map(([, key]) => `<td class="num">${esc(fmtMoney(report.aging[key]))}</td>`).join("")}
+        <td class="num"><b>${esc(fmtMoney(report.closingBalance))}</b></td></tr></tbody>
+    </table></div>` : "";
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(report.title)}</title>
 <style>
@@ -939,268 +982,24 @@ export function buildReportHtml(report) {
   .stmt .sm { font-size: 9px; color: #5f6d7e; line-height: 1.45; }
   .stmt .due { text-align: right; }
   .stmt .dueamt { font-size: 20px; font-weight: 800; color: #0d47a1; }
+  tbody tr:nth-child(even) td { background: #fafbfd; }
+  .age { width: 100%; margin-top: 2px; }
+  .age td { font-size: 12px; }
+  .grp { margin-top: 2px; }
+  .foot { margin-top: 18px; padding-top: 6px; border-top: 1px solid #e8edf3; font-size: 9px; color: #5f6d7e; text-align: center; }
 </style></head><body>
   <div class="co">${esc(report.companyName)}</div>
   <div class="ttl">${esc(report.title)}</div>
   <div class="meta">${esc(report.periodLabel)}${
     (report.filtersApplied || []).length ? "  ·  " + esc(report.filtersApplied.join("  ·  ")) : ""
-  }<br/>${esc(report.ledgerSourced ? "Source: general ledger" : "Source: payment records (GL posting off)")}
+  }<br/>${esc(report.sourceLabel || (report.ledgerSourced ? "Source: general ledger" : "Source: payment records (GL posting off)"))}
    ·  Generated ${esc(fmtDateTime(report.generatedAt))}</div>
   <div class="rule"></div>
   ${statement}
-  ${totals ? `<div class="kpis">${totals}</div>` : ""}
+  ${totals || openClose ? `<div class="kpis">${openClose}${totals}</div>` : ""}
   <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody>${foot}</table>
-  ${openClose}
   ${aging}
   ${groups}
+  <div class="foot">${esc(report.companyName)} · ${esc(report.title)} · ${esc(report.periodLabel)} · Printed ${esc(fmtDateTime(new Date()))}</div>
 </body></html>`;
 }
-
-// ── Styles ──────────────────────────────────────────────────────────────────
-const st = {
-  // Header: a thin gradient band echoing the app's blue→teal identity, then
-  // white content. Reads as part of the product, not a bolted-on report tool.
-  header: {
-    background: colors.cardBg, border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 14, overflow: "hidden", marginBottom: "1rem",
-    boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
-  },
-  headerBar: { height: 4, background: `linear-gradient(90deg, ${colors.blue}, ${colors.teal})` },
-  headerInner: {
-    display: "flex", flexWrap: "wrap", gap: "1rem", alignItems: "flex-start",
-    padding: "1rem clamp(0.85rem, 1.8vw, 1.3rem)",
-  },
-  backBtn: {
-    display: "inline-flex", alignItems: "center", gap: 5,
-    // 44px minimum tap target, and padding on the right so the hit area extends
-    // past the short label on a phone.
-    minHeight: 44, padding: "0 0.75rem 0 0", marginBottom: 2,
-    border: "none", background: "none", boxShadow: "none",
-    color: colors.textSecondary, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer",
-  },
-  crumb: {
-    display: "inline-flex", alignItems: "center", gap: 2,
-    fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase",
-    letterSpacing: "0.06em", color: colors.teal, marginBottom: 2,
-  },
-  title: { margin: "0 0 0.35rem", fontSize: "clamp(1.15rem, 2.4vw, 1.5rem)", fontWeight: 800, color: colors.textPrimary, lineHeight: 1.2 },
-  metaLine: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 5, fontSize: "0.84rem", color: colors.textSecondary },
-  company: { color: colors.textPrimary, fontWeight: 700 },
-  dot: { opacity: 0.5 },
-  provenance: { marginTop: 5, fontSize: "0.78rem", color: colors.teal, fontWeight: 600, lineHeight: 1.4 },
-
-  actionRow: { display: "flex", flexWrap: "wrap", gap: "0.45rem", marginLeft: "auto" },
-  actionBtn: {
-    display: "inline-flex", alignItems: "center", gap: 6, minHeight: 44,
-    padding: "0 0.9rem", borderRadius: 10, border: `1px solid ${colors.inputBorder}`,
-    background: colors.inputBg, color: colors.textPrimary,
-    fontWeight: 600, fontSize: "0.84rem", cursor: "pointer", whiteSpace: "nowrap",
-  },
-
-  // The answer first: a responsive strip of figures above the detail.
-  totalsStrip: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(170px, 100%), 1fr))",
-    gap: "0.75rem", marginBottom: "1rem",
-  },
-  totalTile: {
-    display: "flex", flexDirection: "column", gap: 3,
-    padding: "0.8rem 0.95rem", borderRadius: 12,
-    background: "linear-gradient(135deg, rgba(13,71,161,0.06), rgba(0,137,123,0.07))",
-    border: `1px solid ${colors.cardBorder}`,
-  },
-  totalLabel: {
-    fontSize: "0.66rem", fontWeight: 700, textTransform: "uppercase",
-    letterSpacing: "0.05em", color: colors.textSecondary,
-  },
-  totalValue: { fontSize: "1.35rem", fontWeight: 800, color: colors.blue, letterSpacing: "-0.015em", fontVariantNumeric: "tabular-nums" },
-  totalValueCount: { color: colors.textPrimary, fontSize: "1.2rem" },
-
-  // Statement lines: indentation carries the hierarchy, weight carries the level.
-  stmtRow: { borderBottom: `1px solid ${colors.cardBorder}22` },
-  stmtLabel: {
-    padding: "0.4rem 0.8rem", color: colors.textPrimary, fontSize: "0.85rem",
-    display: "flex", alignItems: "baseline", gap: 8, minWidth: 200,
-  },
-  stmtCode: { fontFamily: "monospace", fontSize: "0.7rem", color: colors.textSecondary },
-  stmtNum: {
-    padding: "0.4rem 0.8rem", textAlign: "right", whiteSpace: "nowrap",
-    fontVariantNumeric: "tabular-nums", fontSize: "0.85rem", color: colors.textPrimary,
-  },
-  stmtPct: { marginLeft: 6, fontSize: "0.72rem", opacity: 0.85 },
-  stmtSpacer: { height: 10 },
-
-  balancedChip: {
-    display: "inline-flex", alignItems: "center", gap: 6, marginBottom: "1rem",
-    padding: "0.45rem 0.85rem", borderRadius: 22, background: "#e8f5e9",
-    color: colors.success, border: "1px solid #c8e6c9", fontSize: "0.84rem", fontWeight: 700,
-  },
-  imbalanceChip: {
-    display: "inline-flex", alignItems: "center", gap: 6, marginBottom: "1rem",
-    padding: "0.45rem 0.85rem", borderRadius: 22, background: colors.dangerLight,
-    color: colors.danger, border: "1px solid #f5c6cb", fontSize: "0.84rem", fontWeight: 700,
-  },
-
-  // Statement letterhead: three columns that collapse to one on a phone.
-  statement: {
-    background: colors.cardBg, border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 14, padding: "1rem clamp(0.85rem, 1.8vw, 1.25rem)",
-    marginBottom: "1rem", boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
-  },
-  statementGrid: {
-    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(210px, 100%), 1fr))",
-    gap: "1rem",
-  },
-  statementLabel: {
-    display: "block", fontSize: "0.64rem", fontWeight: 700, textTransform: "uppercase",
-    letterSpacing: "0.06em", color: colors.textSecondary, marginBottom: 3,
-  },
-  statementName: { fontSize: "1rem", fontWeight: 800, color: colors.textPrimary, lineHeight: 1.3 },
-  contactLines: { fontSize: "0.78rem", color: colors.textSecondary, lineHeight: 1.5, marginTop: 3 },
-  dueBox: {
-    display: "flex", flexDirection: "column", gap: 2, justifyContent: "flex-start",
-    padding: "0.75rem 0.9rem", borderRadius: 12,
-    background: "linear-gradient(135deg, rgba(13,71,161,0.07), rgba(0,137,123,0.08))",
-    border: `1px solid ${colors.cardBorder}`,
-  },
-  dueAmount: {
-    fontSize: "1.5rem", fontWeight: 800, color: colors.blue,
-    letterSpacing: "-0.015em", fontVariantNumeric: "tabular-nums",
-  },
-  duePeriod: { fontSize: "0.74rem", color: colors.textSecondary },
-
-  agingCard: {
-    marginTop: "1.25rem", background: colors.cardBg,
-    border: `1px solid ${colors.cardBorder}`, borderRadius: 14,
-    boxShadow: "0 2px 12px rgba(0,0,0,0.05)", overflow: "hidden",
-  },
-  agingGrid: {
-    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(140px, 100%), 1fr))",
-    gap: "0.9rem", padding: "0.9rem 1rem",
-  },
-  agingCell: { display: "flex", flexDirection: "column", gap: 3, minWidth: 0 },
-  agingAmount: { fontSize: "1.02rem", fontWeight: 700, fontVariantNumeric: "tabular-nums" },
-
-  bookStrip: {
-    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(170px, 100%), 1fr))",
-    gap: "0.75rem", marginBottom: "1rem",
-    background: colors.cardBg, border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 12, padding: "0.85rem 1rem",
-  },
-  bookFigure: { display: "flex", flexDirection: "column", gap: 2, minWidth: 0 },
-  bookValue: { fontSize: "1.05rem", fontWeight: 700, color: colors.textPrimary, fontVariantNumeric: "tabular-nums", wordBreak: "break-word" },
-
-  stateBox: {
-    padding: "2.5rem 1rem", textAlign: "center", color: colors.textSecondary,
-    background: colors.cardBg, border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 14, fontSize: "0.9rem",
-  },
-
-  // Wide tables scroll inside their own box — the page never scrolls sideways.
-  tableWrap: {
-    overflowX: "auto", background: colors.cardBg,
-    border: `1px solid ${colors.cardBorder}`, borderRadius: 14,
-    boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
-  },
-  table: { width: "100%", borderCollapse: "collapse", fontSize: "0.84rem" },
-  th: {
-    position: "sticky", top: 0, zIndex: 1,
-    textAlign: "left", padding: "0.7rem 0.8rem", background: "#f7f9fc",
-    fontSize: "0.68rem", fontWeight: 800, textTransform: "uppercase",
-    letterSpacing: "0.05em", color: colors.blue,
-    borderBottom: `2px solid ${colors.cardBorder}`, whiteSpace: "nowrap",
-  },
-  get thNum() { return { ...this.th, textAlign: "right" }; },
-  tr: { borderBottom: `1px solid ${colors.cardBorder}` },
-  td: {
-    padding: "0.55rem 0.8rem", color: colors.textPrimary, verticalAlign: "top",
-    // Never nowrap+ellipsis user-supplied names: similar-prefix names would
-    // render identically. Two lines, then clip.
-    maxWidth: 260,
-    display: "table-cell",
-  },
-  tdDate: {
-    padding: "0.55rem 0.8rem", color: colors.textPrimary,
-    whiteSpace: "nowrap", verticalAlign: "top",
-  },
-  tdStatus: { padding: "0.55rem 0.8rem", verticalAlign: "top", whiteSpace: "nowrap" },
-  tdNum: {
-    padding: "0.55rem 0.8rem", textAlign: "right", whiteSpace: "nowrap",
-    color: colors.textPrimary, fontVariantNumeric: "tabular-nums", verticalAlign: "top",
-  },
-  // Two lines then clip — never nowrap+ellipsis on user-supplied names, which
-  // would render "MEKO FABRICS" and "MEKO DENIM" identically.
-  clamp2: {
-    display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
-    overflow: "hidden", lineHeight: 1.35,
-  },
-  tdAction: { padding: "0.4rem 0.6rem", textAlign: "right", width: 44 },
-  totalsRow: { fontWeight: 800, background: colors.inputBg, borderTop: `2px solid ${colors.blue}` },
-  openBtn: {
-    display: "grid", placeItems: "center", width: 30, height: 30,
-    padding: 0, borderRadius: 8, border: `1px solid ${colors.inputBorder}`,
-    background: colors.inputBg, color: colors.blue, cursor: "pointer", boxShadow: "none",
-  },
-  // Mobile card: a full 44px thumb target, per the mobile-first standard.
-  openBtnMobile: {
-    display: "grid", placeItems: "center", width: 44, height: 44,
-    padding: 0, borderRadius: 10, border: `1px solid ${colors.inputBorder}`,
-    background: colors.inputBg, color: colors.blue, cursor: "pointer",
-    boxShadow: "none", flexShrink: 0,
-  },
-
-  // Phone cards
-  cardList: { display: "flex", flexDirection: "column", gap: "0.7rem" },
-  card: {
-    background: colors.cardBg, border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 12, padding: "0.85rem 0.95rem",
-    boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
-  },
-  cardTop: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: "0.6rem" },
-  cardLead: {
-    fontSize: "0.95rem", fontWeight: 700, color: colors.textPrimary, lineHeight: 1.3,
-    display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
-  },
-  cardAmountBox: {
-    display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8,
-    padding: "0.5rem 0.7rem", borderRadius: 10, marginBottom: "0.6rem",
-    background: "linear-gradient(135deg, rgba(13,71,161,0.06), rgba(0,137,123,0.07))",
-  },
-  cardAmount: { fontSize: "1.15rem", fontWeight: 800, color: colors.blue, fontVariantNumeric: "tabular-nums" },
-  cardMetaGrid: {
-    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(130px, 100%), 1fr))",
-    gap: "0.5rem 0.9rem",
-  },
-  metaLabel: {
-    display: "block", fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase",
-    letterSpacing: "0.05em", color: colors.textSecondary, marginBottom: 1,
-  },
-  metaValue: { fontSize: "0.83rem", fontWeight: 600, color: colors.textPrimary, lineHeight: 1.3, wordBreak: "break-word" },
-
-  // Grouped breakdowns
-  groupCard: {
-    marginTop: "1.25rem", background: colors.cardBg,
-    border: `1px solid ${colors.cardBorder}`, borderRadius: 14,
-    boxShadow: "0 2px 12px rgba(0,0,0,0.05)", overflow: "hidden",
-  },
-  groupHead: {
-    display: "flex", flexWrap: "wrap", alignItems: "baseline", justifyContent: "space-between",
-    gap: 8, padding: "0.85rem 1rem", borderBottom: `1px solid ${colors.cardBorder}`,
-    background: "#f7f9fc",
-  },
-  groupTitle: { margin: 0, fontSize: "0.98rem", fontWeight: 800, color: colors.textPrimary },
-  groupTotal: { fontSize: "1rem", fontWeight: 800, color: colors.blue, fontVariantNumeric: "tabular-nums" },
-  groupRow: { padding: "0.7rem 1rem", borderBottom: `1px solid ${colors.cardBorder}` },
-  groupRowClickable: { cursor: "pointer" },
-  groupRowTop: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 },
-  groupLabel: {
-    fontSize: "0.88rem", fontWeight: 600, color: colors.textPrimary, minWidth: 0,
-    display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
-  },
-  groupAmount: { fontSize: "0.9rem", fontWeight: 700, color: colors.textPrimary, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" },
-  // A proportion bar turns a column of numbers into a shape you can scan.
-  barTrack: { height: 5, borderRadius: 3, background: "#eef1f6", margin: "0.4rem 0 0.3rem", overflow: "hidden" },
-  barFill: { height: "100%", borderRadius: 3, background: `linear-gradient(90deg, ${colors.blue}, ${colors.teal})` },
-  groupSub: { display: "flex", flexWrap: "wrap", gap: 8, fontSize: "0.74rem", color: colors.textSecondary },
-  groupDrillHint: { marginLeft: "auto", color: colors.blue, fontWeight: 700 },
-};

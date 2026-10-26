@@ -104,13 +104,15 @@ export function linesToTsv(rows, columns) {
   return [headings.join("\t"), ...rows.map((row) => columns.map((key) => safeCell(row[key])).join("\t"))].join("\r\n");
 }
 
-export async function saveLinesExcel(rows, columns, filename) {
+/** brand: optional { brandFill, brandText } (#rrggbb) from the company's Bill template. */
+export async function saveLinesExcel(rows, columns, filename, brand = {}) {
   const [{ default: ExcelJS }, { saveAs }] = await Promise.all([import("exceljs"), import("file-saver")]);
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Document lines", { views: [{ state: "frozen", ySplit: 1 }] });
   sheet.columns = columns.map((key) => ({ header: lineColumns.find(([id]) => id === key)?.[1] || key, key, width: key === "description" ? 48 : 20 }));
-  sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
-  sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF00695C" } };
+  const argb = (hex, fallback) => (/^#[0-9a-f]{6}$/i.test(hex || "") ? `FF${hex.slice(1).toUpperCase()}` : fallback);
+  sheet.getRow(1).font = { bold: true, color: { argb: argb(brand.brandText, "FFFFFFFF") } };
+  sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: argb(brand.brandFill, "FF00695C") } };
   sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: columns.length } };
   for (const row of rows) sheet.addRow(Object.fromEntries(columns.map((key) => [key, safeCell(row[key])])));
   const bytes = await workbook.xlsx.writeBuffer();

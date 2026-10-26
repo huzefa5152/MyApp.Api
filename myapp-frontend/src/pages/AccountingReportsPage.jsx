@@ -1,7 +1,9 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
-  MdAccountBalance, MdAccountBalanceWallet, MdAssessment, MdBusiness,
+  MdAccountBalance, MdAccountBalanceWallet, MdArrowBack, MdAssessment, MdBusiness,
   MdCheckCircle, MdChevronRight, MdInsights, MdLocalShipping, MdPeople,
   MdPointOfSale, MdReceiptLong, MdRuleFolder, MdShoppingCart, MdWarning,
 } from "react-icons/md";
@@ -12,6 +14,7 @@ import useIsNarrow from "../hooks/useIsNarrow";
 import usePageSize from "../hooks/usePageSize";
 import ReportFilterBar from "../Components/ReportFilterBar";
 import ReportShell from "../Components/ReportShell";
+import "../Components/reports/ReportWorkspace.css";
 import { getReport, downloadReportExcel, saveBlob } from "../api/accountingReportApi";
 import { getTrialBalance, getAgedReceivables, getAgedPayables } from "../api/accountingApi";
 import {
@@ -52,32 +55,40 @@ export default function AccountingReportsPage() {
 
   const report = reportId ? REPORTS_BY_ID[reportId] : null;
 
+  // One picker, two homes: beside the page title on the index, inside the
+  // report's own bar once a report is open (so the rows get the height).
+  const companyPicker = companies.length > 1 ? (
+    <label className="rw-company">
+      <MdBusiness size={18} />
+      <select
+        value={selectedCompany?.id || ""}
+        onChange={(e) =>
+          setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))
+        }
+        aria-label="Company"
+      >
+        {companies.map((c) => (
+          <option key={c.id} value={c.id}>{c.brandName || c.name}</option>
+        ))}
+      </select>
+    </label>
+  ) : null;
+
   return (
     <div className="accounting-reports-page" style={st.page}>
-      <div style={st.pageHead}>
-        <div style={st.pageTitleRow}>
-          <MdAssessment size={26} color={colors.blue} />
-          <h2 style={st.h2}>Accounting Reports</h2>
+      {(!reportId || !companyId) && (
+        <div className="rw-head" style={{ marginBottom: 12 }}>
+          <div className="rw-head__id">
+            <span className="rw-icon"><MdAssessment size={20} /></span>
+            <div className="rw-head__text">
+              <span className="rw-crumb">Accounting</span>
+              <h2 className="rw-title">Accounting Reports</h2>
+              <div className="rw-meta">Every report the books can answer, grouped by the question it answers.</div>
+            </div>
+          </div>
+          <div className="rw-head__actions">{companyPicker}</div>
         </div>
-
-        {companies.length > 1 && (
-          companies.length > 1 && (<label style={st.companyPicker}>
-            <MdBusiness size={20} color={colors.blue} />
-            <select
-              style={{ ...dropdownStyles.base, minHeight: 44, flex: 1, minWidth: 0 }}
-              value={selectedCompany?.id || ""}
-              onChange={(e) =>
-                setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))
-              }
-              aria-label="Company"
-            >
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>{c.brandName || c.name}</option>
-              ))}
-            </select>
-          </label>)
-        )}
-      </div>
+      )}
 
       {!companyId ? (
         <div style={st.state}>Select a company to view reports.</div>
@@ -97,9 +108,25 @@ export default function AccountingReportsPage() {
           title={report.title}
           categoryTitle={report.categoryTitle}
           onBack={() => navigate("/accounting/reports")}
+          companyName={selectedCompany?.brandName || selectedCompany?.name}
+          headerExtra={companyPicker}
         />
       ) : !isAvailable(report) ? (
-        <NotBuiltYet report={report} onBack={() => navigate("/accounting/reports")} />
+        <div className="rw">
+          <div className="rw-head">
+            <div className="rw-head__id">
+              <button type="button" className="rw-back" onClick={() => navigate("/accounting/reports")} aria-label="All reports" title="All reports">
+                <MdArrowBack size={18} />
+              </button>
+              <div className="rw-head__text">
+                <span className="rw-crumb">{report.categoryTitle}</span>
+                <h2 className="rw-title">{report.title}</h2>
+              </div>
+            </div>
+            <div className="rw-head__actions">{companyPicker}</div>
+          </div>
+          <NotBuiltYet report={report} onBack={() => navigate("/accounting/reports")} />
+        </div>
       ) : (
         <GenericReport
           key={`${reportId}:${companyId}`}
@@ -108,6 +135,7 @@ export default function AccountingReportsPage() {
           canExport={canExport}
           onBack={() => navigate("/accounting/reports")}
           onNavigate={navigate}
+          headerExtra={companyPicker}
         />
       )}
     </div>
@@ -137,7 +165,7 @@ function ReportIndex({ onOpen }) {
   );
 
   return (
-    <div>
+    <RecordsViewport label="Available accounting reports"><div>
       {featured.length > 0 && (
         <>
           <SectionLabel>Start here</SectionLabel>
@@ -203,7 +231,7 @@ function ReportIndex({ onOpen }) {
           );
         })}
       </div>
-    </div>
+    </div></RecordsViewport>
   );
 }
 
@@ -231,7 +259,7 @@ function NotBuiltYet({ report, onBack }) {
 
 // ── A registry-driven report ────────────────────────────────────────────────
 
-function GenericReport({ companyId, report, canExport, onBack, onNavigate }) {
+function GenericReport({ companyId, report, canExport, onBack, onNavigate, headerExtra }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [pageSize, setPageSize] = usePageSize(`acctReport:${report.id}`);
 
@@ -244,10 +272,10 @@ function GenericReport({ companyId, report, canExport, onBack, onNavigate }) {
   const filters = useMemo(() => {
     const f = {};
     searchParams.forEach((v, k) => { f[k] = NUMERIC_KEYS.has(k) ? parseInt(v, 10) : v; });
-    if (!f.period) f.period = report.id.startsWith("expenses") ? "thisMonth" : "thisMonth";
+    if (!f.period) f.period = report.defaultPeriod || "thisMonth";
     if (!f.page) f.page = 1;
     return f;
-  }, [searchParams, report.id]);
+  }, [searchParams, report.defaultPeriod]);
 
   const applyFilters = useCallback((next) => {
     const params = {};
@@ -286,9 +314,9 @@ function GenericReport({ companyId, report, canExport, onBack, onNavigate }) {
     return () => { alive = false; };
   }, [companyId, report.path, requestParams]);
 
-  const exportExcel = async () => {
+  const exportExcel = async (presentation = {}) => {
     try {
-      const res = await downloadReportExcel(companyId, report.exportId || report.id, requestParams);
+      const res = await downloadReportExcel(companyId, report.exportId || report.id, { ...requestParams, ...presentation });
       saveBlob(res, `${report.title}.xlsx`);
     } catch {
       setError("Could not build the Excel file.");
@@ -332,16 +360,17 @@ function GenericReport({ companyId, report, canExport, onBack, onNavigate }) {
   };
 
   return (
-    <div>
-      <ReportFilterBar
-        companyId={companyId}
-        filters={report.filters || []}
-        value={filters}
-        onApply={applyFilters}
-        loading={loading}
-        accountKind={report.accountKind}
-      />
+    <div className="rw">
       <ReportShell
+        headerExtra={headerExtra}
+        toolbar={<ListFilters><ReportFilterBar
+          companyId={companyId}
+          filters={report.filters || []}
+          value={filters}
+          onApply={applyFilters}
+          loading={loading}
+          accountKind={report.accountKind}
+        /></ListFilters>}
         report={data}
         loading={loading}
         error={error}
@@ -356,8 +385,8 @@ function GenericReport({ companyId, report, canExport, onBack, onNavigate }) {
         onOpenRow={openRow}
         onOpenAccount={(accountId) => drill("accountId", accountId)}
         printReportId={report.id}
-        printCompanyId={companyId}
         printDivisionId={filters.divisionId}
+        printCompanyId={companyId}
         loadPrintReport={loadPrintReport}
       />
     </div>
@@ -395,17 +424,22 @@ function documentRoute(row) {
 // they keep their own rendering rather than being force-fitted into the generic
 // envelope. Re-homing them here means the index covers everything.
 
-function LegacyReport({ companyId, kind, title, categoryTitle, onBack }) {
+function LegacyReport({ companyId, kind, title, categoryTitle, onBack, companyName, headerExtra }) {
   return (
-    <div>
-      <div style={st.legacyHead}>
-        <div style={st.headerBar} />
-        <div style={st.legacyHeadInner}>
-          <button type="button" style={st.backBtn} onClick={onBack}>← All reports</button>
-          <div style={st.crumb}>{categoryTitle}</div>
-          <h2 style={st.legacyTitle}>{title}</h2>
+    <div className="rw">
+      <header className="rw-head">
+        <div className="rw-head__id">
+          <button type="button" className="rw-back" onClick={onBack} aria-label="All reports" title="All reports">
+            <MdArrowBack size={18} />
+          </button>
+          <div className="rw-head__text">
+            <span className="rw-crumb">{categoryTitle}</span>
+            <h2 className="rw-title">{title}</h2>
+            {companyName && <div className="rw-meta"><strong>{companyName}</strong></div>}
+          </div>
         </div>
-      </div>
+        <div className="rw-head__actions">{headerExtra}</div>
+      </header>
       {kind === "trial-balance"
         ? <TrialBalanceReport companyId={companyId} />
         : <AgingReport companyId={companyId} kind={kind} />}
@@ -443,7 +477,7 @@ function TrialBalanceReport({ companyId }) {
 
   return (
     <div>
-      <div style={st.simpleFilterBar}>
+      <div className="rw-filters" style={st.simpleFilterBar}>
         <label style={st.field}>
           <span style={st.fieldLabel}>From</span>
           <input type="date" style={st.dateInput} value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -460,19 +494,27 @@ function TrialBalanceReport({ companyId }) {
         ))}
       </div>
 
-      {loading ? <div style={st.state}>Loading…</div>
-        : error ? <div style={{ ...st.state, color: colors.danger }}>{error}</div>
+      {data && (
+        <div className="rw-kpis">
+          <div className="rw-kpi"><span className="rw-kpi__label">Opening</span><span className="rw-kpi__value">{money(data.totalOpening)}</span></div>
+          <div className="rw-kpi"><span className="rw-kpi__label">Debits</span><span className="rw-kpi__value">{money(data.totalDebit)}</span></div>
+          <div className="rw-kpi"><span className="rw-kpi__label">Credits</span><span className="rw-kpi__value">{money(data.totalCredit)}</span></div>
+          <div className="rw-kpi rw-kpi--lead"><span className="rw-kpi__label">Closing</span><span className="rw-kpi__value">{money(data.totalClosing)}</span></div>
+        </div>
+      )}
+      <RecordsViewport label="Financial summary records" enabled={!narrow}>{loading ? <div className="rw-state" role="status">Loading…</div>
+        : error ? <div className="rw-state rw-state--error">{error}</div>
         : !data || (data.rows || []).length === 0
-          ? <div style={st.state}>No account activity {applied.from || applied.to ? "in this period" : "yet"}.</div>
+          ? <div className="rw-state">No account activity {applied.from || applied.to ? "in this period" : "yet"}.</div>
           : narrow ? (
-            <div style={st.cardList}>
+            <div className="rw-cards">
               {data.rows.map((r) => (
-                <div key={r.accountId} style={st.miniCard}>
-                  <div style={st.miniCardTop}>
-                    <span style={st.miniLead}>{r.name}</span>
+                <div key={r.accountId} className="rw-card">
+                  <div className="rw-card__top">
+                    <span className="rw-card__lead">{r.name}</span>
                     <span style={st.miniAmount}>{money(r.closing)}</span>
                   </div>
-                  <div style={st.miniMeta}>
+                  <div className="rw-card__meta" style={{ marginTop: 6 }}>
                     <Meta label="Code" value={r.code || "—"} />
                     <Meta label="Type" value={r.accountType} />
                     <Meta label="Opening" value={money(r.opening)} />
@@ -483,46 +525,46 @@ function TrialBalanceReport({ companyId }) {
               ))}
             </div>
           ) : (
-            <div data-admin-table-region="" style={st.tableWrap}>
-              <table style={st.table}>
+            <div data-admin-table-region="" className="rw-table-wrap">
+              <table className="rw-table">
                 <thead>
                   <tr>
-                    <th style={st.th}>Code</th>
-                    <th style={st.th}>Account</th>
-                    <th style={st.th}>Type</th>
-                    <th style={st.thNum}>Opening</th>
-                    <th style={st.thNum}>Debit</th>
-                    <th style={st.thNum}>Credit</th>
-                    <th style={st.thNum}>Closing</th>
+                    <th>Code</th>
+                    <th>Account</th>
+                    <th>Type</th>
+                    <th className="rw-num">Opening</th>
+                    <th className="rw-num">Debit</th>
+                    <th className="rw-num">Credit</th>
+                    <th className="rw-num">Closing</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.rows.map((r) => (
-                    <tr key={r.accountId} style={st.tr}>
-                      <td style={st.tdCode}>{r.code || ""}</td>
-                      <td style={st.tdName}><span style={st.clamp2}>{r.name}</span></td>
-                      <td style={st.tdMuted}>{r.accountType}</td>
-                      <td style={st.tdNum}>{money(r.opening)}</td>
-                      <td style={st.tdNum}>{money(r.debit)}</td>
-                      <td style={st.tdNum}>{money(r.credit)}</td>
-                      <td style={{ ...st.tdNum, fontWeight: 700 }}>{money(r.closing)}</td>
+                    <tr key={r.accountId}>
+                      <td className="rw-code">{r.code || ""}</td>
+                      <td className="rw-text rw-strong"><span className="rw-clamp">{r.name}</span></td>
+                      <td className="rw-muted rw-nowrap">{r.accountType}</td>
+                      <td className="rw-num">{money(r.opening)}</td>
+                      <td className="rw-num">{money(r.debit)}</td>
+                      <td className="rw-num">{money(r.credit)}</td>
+                      <td className="rw-num rw-strong">{money(r.closing)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr style={st.totalsRow}>
-                    <td style={st.tdCode} />
-                    <td style={st.tdName}>Total</td>
-                    <td style={st.tdMuted} />
-                    <td style={st.tdNum}>{money(data.totalOpening)}</td>
-                    <td style={st.tdNum}>{money(data.totalDebit)}</td>
-                    <td style={st.tdNum}>{money(data.totalCredit)}</td>
-                    <td style={st.tdNum}>{money(data.totalClosing)}</td>
+                  <tr>
+                    <td />
+                    <td>Total</td>
+                    <td />
+                    <td className="rw-num">{money(data.totalOpening)}</td>
+                    <td className="rw-num">{money(data.totalDebit)}</td>
+                    <td className="rw-num">{money(data.totalCredit)}</td>
+                    <td className="rw-num">{money(data.totalClosing)}</td>
                   </tr>
                 </tfoot>
               </table>
             </div>
-          )}
+          )}</RecordsViewport>
     </div>
   );
 }
@@ -549,20 +591,20 @@ function AgingReport({ companyId, kind }) {
     return () => { alive = false; };
   }, [companyId, kind, isReceivables]);
 
-  if (loading) return <div style={st.state}>Loading…</div>;
-  if (error) return <div style={{ ...st.state, color: colors.danger }}>{error}</div>;
+  if (loading) return <div className="rw-state" role="status">Loading…</div>;
+  if (error) return <div className="rw-state rw-state--error">{error}</div>;
   if (!data) return null;
 
   const rows = data.rows || [];
   const bucket = (v, tone) => {
     const has = Number(v || 0) > 0;
     const tint = !has ? {} : tone === "amber" ? st.cellAmber : st.cellRed;
-    return <td style={{ ...st.tdNum, ...tint }}>{money(v)}</td>;
+    return <td className="rw-num" style={tint}>{money(v)}</td>;
   };
 
   return (
-    <div>
-      <div style={st.totalsStrip}>
+    <>
+      <div className="rw-kpis">
         <Tile label="Total outstanding" value={data.total} strong />
         <Tile label="Current" value={data.current} />
         <Tile label="1–30 days" value={data.days1To30} />
@@ -570,19 +612,19 @@ function AgingReport({ companyId, kind }) {
         <Tile label="61–90 days" value={data.days61To90} />
         <Tile label="Over 90 days" value={data.over90} danger />
       </div>
-      <div style={st.asOf}>As of {new Date(data.asOf).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</div>
+      <div className="rw-section-head"><span>As of {new Date(data.asOf).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span><span>{rows.length} {isReceivables ? "customer" : "supplier"}{rows.length === 1 ? "" : "s"}</span></div>
 
-      {rows.length === 0 ? (
-        <div style={st.state}>No outstanding {isReceivables ? "invoices" : "bills"}. All settled.</div>
+      <RecordsViewport label="Party outstanding records" enabled={!narrow}>{rows.length === 0 ? (
+        <div className="rw-state">No outstanding {isReceivables ? "invoices" : "bills"}. All settled.</div>
       ) : narrow ? (
-        <div style={st.cardList}>
+        <div className="rw-cards">
           {rows.map((r) => (
-            <div key={r.partyId} style={st.miniCard}>
-              <div style={st.miniCardTop}>
-                <span style={st.miniLead}>{r.name}</span>
+            <div key={r.partyId} className="rw-card">
+              <div className="rw-card__top">
+                <span className="rw-card__lead">{r.name}</span>
                 <span style={st.miniAmount}>{money(r.total)}</span>
               </div>
-              <div style={st.miniMeta}>
+              <div className="rw-card__meta" style={{ marginTop: 6 }}>
                 <Meta label="Open docs" value={r.openDocuments} />
                 <Meta label="Current" value={money(r.current)} />
                 <Meta label="1–30" value={money(r.days1To30)} />
@@ -594,62 +636,58 @@ function AgingReport({ companyId, kind }) {
           ))}
         </div>
       ) : (
-        <div data-admin-table-region="" style={st.tableWrap}>
-          <table style={st.table}>
+        <div data-admin-table-region="" className="rw-table-wrap">
+          <table className="rw-table">
             <thead>
               <tr>
-                <th style={st.th}>{isReceivables ? "Customer" : "Supplier"}</th>
-                <th style={st.thNum}>Open docs</th>
-                <th style={st.thNum}>Current</th>
-                <th style={st.thNum}>1–30</th>
-                <th style={st.thNum}>31–60</th>
-                <th style={st.thNum}>61–90</th>
-                <th style={st.thNum}>90+</th>
-                <th style={st.thNum}>Total</th>
+                <th>{isReceivables ? "Customer" : "Supplier"}</th>
+                <th className="rw-num">Open docs</th>
+                <th className="rw-num">Current</th>
+                <th className="rw-num">1–30</th>
+                <th className="rw-num">31–60</th>
+                <th className="rw-num">61–90</th>
+                <th className="rw-num">90+</th>
+                <th className="rw-num">Total</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.partyId} style={st.tr}>
-                  <td style={st.tdName}><span style={st.clamp2}>{r.name}</span></td>
-                  <td style={st.tdNum}>{r.openDocuments}</td>
-                  <td style={st.tdNum}>{money(r.current)}</td>
-                  <td style={st.tdNum}>{money(r.days1To30)}</td>
-                  <td style={st.tdNum}>{money(r.days31To60)}</td>
+                <tr key={r.partyId}>
+                  <td className="rw-text rw-strong"><span className="rw-clamp">{r.name}</span></td>
+                  <td className="rw-num">{r.openDocuments}</td>
+                  <td className="rw-num">{money(r.current)}</td>
+                  <td className="rw-num">{money(r.days1To30)}</td>
+                  <td className="rw-num">{money(r.days31To60)}</td>
                   {bucket(r.days61To90, "amber")}
                   {bucket(r.over90, "red")}
-                  <td style={{ ...st.tdNum, fontWeight: 700 }}>{money(r.total)}</td>
+                  <td className="rw-num rw-strong">{money(r.total)}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
-              <tr style={st.totalsRow}>
-                <td style={st.tdName}>Total</td>
-                <td style={st.tdNum}>{rows.reduce((s, r) => s + Number(r.openDocuments || 0), 0)}</td>
-                <td style={st.tdNum}>{money(data.current)}</td>
-                <td style={st.tdNum}>{money(data.days1To30)}</td>
-                <td style={st.tdNum}>{money(data.days31To60)}</td>
+              <tr>
+                <td>Total</td>
+                <td className="rw-num">{rows.reduce((s, r) => s + Number(r.openDocuments || 0), 0)}</td>
+                <td className="rw-num">{money(data.current)}</td>
+                <td className="rw-num">{money(data.days1To30)}</td>
+                <td className="rw-num">{money(data.days31To60)}</td>
                 {bucket(data.days61To90, "amber")}
                 {bucket(data.over90, "red")}
-                <td style={st.tdNum}>{money(data.total)}</td>
+                <td className="rw-num">{money(data.total)}</td>
               </tr>
             </tfoot>
           </table>
         </div>
-      )}
-    </div>
+      )}</RecordsViewport>
+    </>
   );
 }
 
 function Tile({ label, value, strong, danger }) {
   return (
-    <div style={st.totalTile}>
-      <span style={st.fieldLabel}>{label}</span>
-      <span style={{
-        ...st.totalValue,
-        ...(strong ? { fontSize: "1.45rem" } : {}),
-        ...(danger && Number(value) > 0 ? { color: colors.danger } : {}),
-      }}>{money(value)}</span>
+    <div className={`rw-kpi${strong ? " rw-kpi--lead" : ""}${danger && Number(value) > 0 ? " rw-kpi--bad" : ""}`}>
+      <span className="rw-kpi__label">{label}</span>
+      <span className="rw-kpi__value">{money(value)}</span>
     </div>
   );
 }
@@ -657,8 +695,8 @@ function Tile({ label, value, strong, danger }) {
 function Meta({ label, value }) {
   return (
     <div style={{ minWidth: 0 }}>
-      <span style={st.metaLabel}>{label}</span>
-      <span style={st.metaValue}>{value}</span>
+      <span>{label}</span>
+      <b>{value}</b>
     </div>
   );
 }
@@ -793,31 +831,28 @@ const st = {
   },
 
   simpleFilterBar: {
-    display: "flex", alignItems: "flex-end", gap: "0.75rem", flexWrap: "wrap",
-    marginBottom: "1rem", background: colors.cardBg,
-    border: `1px solid ${colors.cardBorder}`, borderRadius: 14,
-    padding: "0.9rem clamp(0.75rem, 1.6vw, 1.1rem)",
-    boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
+    display: "flex", alignItems: "flex-end", gap: "8px 10px", flexWrap: "wrap",
+    background: colors.cardBg, border: `1px solid ${colors.cardBorder}`,
   },
   field: { display: "flex", flexDirection: "column", gap: 4, flex: "1 1 150px", maxWidth: 220, minWidth: 0 },
   fieldLabel: {
     fontSize: "0.66rem", fontWeight: 700, textTransform: "uppercase",
     letterSpacing: "0.05em", color: colors.textSecondary,
   },
-  dateInput: { ...dropdownStyles.base, minHeight: 44, width: "100%", minWidth: 0, cursor: "auto" },
+  dateInput: { ...dropdownStyles.base, minHeight: 38, width: "100%", minWidth: 0, cursor: "auto" },
   applyBtn: {
-    minHeight: 44, padding: "0 1.3rem", borderRadius: 10, border: "none",
+    minHeight: 38, padding: "0 1.3rem", borderRadius: 9, border: "none",
     background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
     color: "#fff", fontWeight: 700, fontSize: "0.88rem", cursor: "pointer",
     boxShadow: "0 2px 8px rgba(13,71,161,0.22)",
   },
   okChip: {
-    display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44,
+    display: "inline-flex", alignItems: "center", gap: 5, minHeight: 34,
     padding: "0 0.8rem", borderRadius: 22, background: "#e8f5e9",
     color: colors.success, border: "1px solid #c8e6c9", fontSize: "0.82rem", fontWeight: 700,
   },
   badChip: {
-    display: "inline-flex", alignItems: "center", gap: 5, minHeight: 44,
+    display: "inline-flex", alignItems: "center", gap: 5, minHeight: 34,
     padding: "0 0.8rem", borderRadius: 22, background: colors.dangerLight,
     color: colors.danger, border: "1px solid #f5c6cb", fontSize: "0.82rem", fontWeight: 700,
   },

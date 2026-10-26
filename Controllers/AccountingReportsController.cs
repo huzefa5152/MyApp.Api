@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
 using MyApp.Api.Middleware;
@@ -35,12 +36,17 @@ namespace MyApp.Api.Controllers
     {
         private readonly IAccountingReportService _reports;
         private readonly IDivisionAccessGuard _divisionAccess;
+        private readonly AppDbContext _db;
+        private readonly IWebHostEnvironment _env;
 
         public AccountingReportsController(IAccountingReportService reports,
-            IDivisionAccessGuard divisionAccess, ILogger<AccountingReportsController> logger)
+            IDivisionAccessGuard divisionAccess, ILogger<AccountingReportsController> logger,
+            AppDbContext db, IWebHostEnvironment env)
             : base(logger)
         {
             _reports = reports;
+            _db = db;
+            _env = env;
             _divisionAccess = divisionAccess;
         }
 
@@ -594,7 +600,12 @@ namespace MyApp.Api.Controllers
         [AuthorizeCompany]
         public async Task<IActionResult> Export(
             int companyId, string reportId, [FromQuery] ReportFilterDto filter,
-            [FromQuery] string groupBy = "account")
+            [FromQuery] string groupBy = "account",
+            // Presentation only: the company template's header colours (#rrggbb),
+            // the columns the user chose to see, and whether to use the company
+            // letterhead at all. None of them changes a figure.
+            [FromQuery] string? brandFill = null, [FromQuery] string? brandText = null,
+            [FromQuery] string? columns = null, [FromQuery] bool letterhead = false)
         {
             if (await PrepareAsync(companyId, filter) is { } bad) return bad;
 
@@ -705,7 +716,14 @@ namespace MyApp.Api.Controllers
             byte[] bytes;
             try
             {
-                bytes = ReportExcelBuilder.Build(report);
+                // [AuthorizeCompany] has already asserted access to companyId. The
+                // letterhead only when the screen asks for it; other callers keep the plain banner.
+                var brand = letterhead
+                    ? await ReportExcelLetterhead.LoadAsync(_db, _env.ContentRootPath, companyId, brandFill, brandText)
+                    : null;
+                var chosen = string.IsNullOrWhiteSpace(columns) ? null
+                    : columns.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Take(60).ToList();
+                bytes = ReportExcelBuilder.Build(report, brand, chosen);
             }
             catch (Exception ex)
             {

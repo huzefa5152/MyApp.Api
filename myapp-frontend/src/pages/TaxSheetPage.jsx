@@ -6,6 +6,12 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import useIsNarrow from "../hooks/useIsNarrow";
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
+import ColumnPicker, { useHiddenColumns } from "../Components/reports/ColumnPicker";
+import { CompanyPicker, Dot, PrintPdfButtons, ReportBar, ReportKpis } from "../Components/reports/ReportChrome";
+import { fileSlug, pdfReport, printReport } from "../utils/reportPrintKit";
+import { excelBrandParams } from "../utils/reportExcelBrand";
 
 const colors = {
   blue: "#0d47a1",
@@ -19,6 +25,20 @@ const colors = {
   pill: "#fff4e5",
   pillText: "#a15c00",
 };
+
+// Columns of the on-screen sheet, in the consultant's order. `total` marks a
+// column with a grand total; the user can hide any of them.
+const TS_COLS = [
+  { key: "ntn", label: "NTN Number" },
+  { key: "party", label: "Party Name" },
+  { key: "doc", label: "Inv Number" },
+  { key: "date", label: "Inv Date" },
+  { key: "qty", label: "Item Total QTY" },
+  { key: "hs", label: "HS Code" },
+  { key: "excl", label: "Excluding Amount", format: "money", total: true },
+  { key: "tax", label: "Sales Tax", format: "money", total: true },
+  { key: "total", label: "Total", format: "money", total: true },
+];
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -43,6 +63,8 @@ export default function TaxSheetPage() {
   const canView = has("reports.taxsheet.view");
   const canExport = has("reports.taxsheet.export");
   const isNarrow = useIsNarrow();
+  const [hiddenCols, setHiddenCols] = useHiddenColumns("tax-sheet");
+  const [printBusy, setPrintBusy] = useState(null);
 
   const [mode, setMode] = useState("period"); // "period" | "custom"
   const [year, setYear] = useState(NOW.getFullYear());
@@ -96,7 +118,8 @@ export default function TaxSheetPage() {
     if (!selectedCompany || rangeInvalid) return;
     setExporting(true);
     try {
-      const { data } = await getTaxSheetExcel(selectedCompany.id, buildParams());
+      // The workbook carries the company's letterhead and template colours.
+      const { data } = await getTaxSheetExcel(selectedCompany.id, { ...buildParams(), ...(await excelBrandParams(selectedCompany)) });
       const url = URL.createObjectURL(new Blob([data], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       }));
@@ -117,33 +140,97 @@ export default function TaxSheetPage() {
     return <div style={{ padding: 24, color: colors.textSecondary }}>You don't have permission to view reports.</div>;
   }
 
+  const visibleCols = TS_COLS.filter((c) => !hiddenCols.has(c.key));
+  const cols = visibleCols.length ? visibleCols : TS_COLS;
+
+  // The tax sheet as printed: the rows on screen, in the chosen columns, on
+  // the company's own letterhead.
+  const envelope = () => ({
+    title: "Tax Sheet",
+    companyName: report.companyName,
+    periodLabel,
+    generatedAt: new Date().toISOString(),
+    filtersApplied: [],
+    sourceLabel: "Invoice lines whose item type still has no HS code",
+    columns: cols.map((c) => ({ key: c.key, label: c.label, format: c.format || "text", totalled: !!c.total })),
+    rows: report.rows.map((row) => ({
+      ntn: row.ntn, party: row.partyName, doc: row.documentNumber,
+      date: new Date(row.documentDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
+      qty: row.quantityLabel, hs: row.itemTypeName,
+      excl: row.excludingAmount, tax: row.salesTax, total: row.total,
+    })),
+    totals: { excl: report.grandExcluding, tax: report.grandTax, total: report.grandTotal },
+  });
+  const doPrint = async () => {
+    setPrintBusy("print");
+    try { await printReport(envelope(), selectedCompany); }
+    catch { notify.error("Could not prepare the report. Allow print pop-ups and try again."); }
+    finally { setPrintBusy(null); }
+  };
+  const doPdf = async () => {
+    setPrintBusy("pdf");
+    try { await pdfReport(envelope(), selectedCompany, fileSlug(`Tax-Sheet-${periodLabel}`)); }
+    catch { notify.error("Could not build the PDF."); }
+    finally { setPrintBusy(null); }
+  };
+
+  const cell = (row, key) => {
+    switch (key) {
+      case "ntn": return <td key={key} className="rw-code">{row.ntn}</td>;
+      case "party": return <td key={key} className="rw-text"><span className="rw-clamp">{row.partyName}</span></td>;
+      case "doc": return <td key={key} className="rw-nowrap" style={{ fontWeight: 700, color: colors.blue }}>{row.documentNumber}</td>;
+      case "date": return <td key={key} className="rw-nowrap">{new Date(row.documentDate).toLocaleDateString()}</td>;
+      case "qty": return <td key={key} className="rw-nowrap">{row.quantityLabel}</td>;
+      case "hs": return (
+        <td key={key}>
+          <span style={{ background: colors.pill, color: colors.pillText, padding: "2px 8px", borderRadius: 6, fontSize: "0.78rem", fontWeight: 600, display: "inline-block", lineHeight: 1.3 }}>
+            {row.itemTypeName}
+          </span>
+        </td>
+      );
+      case "excl": return <td key={key} className="rw-num">{money(row.excludingAmount)}</td>;
+      case "tax": return <td key={key} className="rw-num">{money(row.salesTax)}</td>;
+      case "total": return <td key={key} className="rw-num rw-strong">{money(row.total)}</td>;
+      default: return <td key={key} />;
+    }
+  };
+  const totalCell = (key, idx) => {
+    const v = { excl: report.grandExcluding, tax: report.grandTax, total: report.grandTotal }[key];
+    if (v !== undefined) return <td key={key} className="rw-num">{money(v)}</td>;
+    return <td key={key}>{idx === 0 ? "Total" : ""}</td>;
+  };
+
   return (
-    <div>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-        <MdFactCheck size={26} color={colors.blue} />
-        <h1 style={{ margin: 0, fontSize: "clamp(1.2rem, 3vw, 1.6rem)", color: colors.textPrimary }}>Tax Sheet</h1>
-      </div>
-      <p style={{ margin: "0 0 16px", color: colors.textSecondary, fontSize: "0.9rem" }}>
-        Invoice lines whose item type still has <strong>no HS code</strong> — send to the tax consultant to classify.
-        The <strong>HS Code</strong> column shows the item-type name that needs a real HS code.
-      </p>
+    <div className="rw">
+      <ReportBar
+        icon={<MdFactCheck size={20} />}
+        crumb="Reports"
+        title="Tax Sheet"
+        meta={<>
+          {report?.companyName && <strong>{report.companyName}</strong>}
+          <Dot>{periodLabel}</Dot>
+          <Dot>Lines whose item type still has no HS code — for the tax consultant to classify</Dot>
+        </>}
+        actions={<>
+          <CompanyPicker icon={<MdBusiness size={18} />} companies={companies} selectedCompany={selectedCompany} onChange={setSelectedCompany} />
+          <button type="button" className="rw-btn" onClick={fetchReport} disabled={loading || rangeInvalid}>
+            <MdRefresh size={17} /><span>{loading ? "Loading…" : "Refresh"}</span>
+          </button>
+          {report && <ColumnPicker columns={TS_COLS} hidden={hiddenCols} onChange={setHiddenCols} />}
+          {canExport && (
+            <button type="button" className="rw-btn" onClick={exportExcel} disabled={!report || loading || exporting || rangeInvalid}>
+              <MdDownload size={17} /><span>{exporting ? "Exporting…" : "Excel"}</span>
+            </button>
+          )}
+          <PrintPdfButtons onPrint={doPrint} onPdf={doPdf} busy={printBusy} disabled={!report || loading || !report.rows.length} />
+        </>}
+      />
 
       {/* Controls */}
-      <div style={{
-        display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end",
-        background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: 14, marginBottom: 16,
+      <ListFilters><div className="rw-filters" style={{
+        display: "flex", flexWrap: "wrap", gap: "8px 10px", alignItems: "flex-end",
+        background: "#fff", border: `1px solid ${colors.cardBorder}`,
       }}>
-        {companies.length > 1 && (<Field label="Company" icon={<MdBusiness size={15} />}>
-          <select
-            style={{ ...dropdownStyles.base, minWidth: 180 }}
-            value={selectedCompany?.id || ""}
-            onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))}
-          >
-            {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
-          </select>
-        </Field>)}
-
         <Field label="Period">
           <div style={{ display: "inline-flex", border: `1px solid ${colors.inputBorder}`, borderRadius: 8, overflow: "hidden", background: "#fff" }}>
             <button type="button" onClick={() => setMode("period")} style={segBtn(mode === "period")}>Month / Year</button>
@@ -186,109 +273,64 @@ export default function TaxSheetPage() {
           </>
         )}
 
-        <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
-          <button onClick={fetchReport} disabled={loading || rangeInvalid} style={btn(colors.blue)}>
-            <MdRefresh size={16} /> {loading ? "Loading…" : "Refresh"}
-          </button>
-          {canExport && (
-            <button onClick={exportExcel} disabled={!report || loading || exporting || rangeInvalid} style={btn(colors.teal)}>
-              <MdDownload size={16} /> {exporting ? "Exporting…" : "Export Excel"}
-            </button>
-          )}
-        </div>
-      </div>
+      </div></ListFilters>
 
-      {error && (
-        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", padding: 12, borderRadius: 8, marginBottom: 16 }}>
-          {error}
-        </div>
-      )}
+      {error && <div className="rw-notice rw-notice--warn" role="alert">{error}</div>}
 
       {report && !loading && (
-        <div style={{ background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, overflow: "hidden" }}>
-          <div style={{ padding: "12px 16px", borderBottom: `1px solid ${colors.cardBorder}` }}>
-            <div style={{ fontWeight: 700, color: colors.textPrimary }}>{report.companyName}</div>
-            <div style={{ color: colors.textSecondary, fontSize: "0.85rem" }}>
-              Tax Sheet · {periodLabel} · {report.invoiceCount} invoice(s), {report.rowCount} line(s) pending HS code
-            </div>
-          </div>
-
-          {report.rows.length === 0 ? (
-            <div style={{ padding: 32, textAlign: "center", color: colors.textSecondary }}>
-              No invoices pending HS classification for {periodLabel}. 🎉
-            </div>
-          ) : isNarrow ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "4px 2px" }}>
-              {report.rows.map((row, idx) => (
-                <div key={idx} style={tsCard}>
-                  <div style={tsCardTop}>
-                    <span style={{ fontWeight: 700, color: colors.blue }}>{row.documentNumber}</span>
-                    <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>{new Date(row.documentDate).toLocaleDateString()}</span>
-                  </div>
-                  <div style={{ fontSize: "0.88rem", fontWeight: 600, color: colors.textPrimary, ...clamp2 }}>{row.partyName}</div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", margin: "2px 0 2px" }}>
-                    <span style={{ fontFamily: "monospace", fontSize: "0.74rem", color: colors.textSecondary }}>{row.ntn}</span>
-                    <span style={{ background: colors.pill, color: colors.pillText, padding: "2px 8px", borderRadius: 6, fontSize: "0.74rem", fontWeight: 600 }}>{row.itemTypeName}</span>
-                  </div>
-                  <div style={tsCardMeta}>
-                    <div><span style={tsLbl}>Qty</span><span style={tsVal}>{row.quantityLabel}</span></div>
-                    <div><span style={tsLbl}>Excl. Amount</span><span style={tsVal}>{money(row.excludingAmount)}</span></div>
-                    <div><span style={tsLbl}>Sales Tax</span><span style={tsVal}>{money(row.salesTax)}</span></div>
-                    <div><span style={tsLbl}>Total</span><span style={{ ...tsVal, fontWeight: 700, color: colors.blue }}>{money(row.total)}</span></div>
-                  </div>
-                </div>
-              ))}
-              <div style={{ ...tsCard, background: colors.totalBg, borderColor: colors.blue }}>
-                <div style={{ fontWeight: 800, color: colors.blue, marginBottom: 4 }}>TOTAL</div>
-                <div style={tsCardMeta}>
-                  <div><span style={tsLbl}>Excl. Amount</span><span style={{ ...tsVal, fontWeight: 800 }}>{money(report.grandExcluding)}</span></div>
-                  <div><span style={tsLbl}>Sales Tax</span><span style={{ ...tsVal, fontWeight: 800 }}>{money(report.grandTax)}</span></div>
-                  <div><span style={tsLbl}>Total</span><span style={{ ...tsVal, fontWeight: 800, color: colors.blue }}>{money(report.grandTotal)}</span></div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div data-admin-table-region="" style={{ overflowX: "auto" }}>
-              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 860, fontSize: "0.82rem" }}>
-                <thead>
-                  <tr style={{ background: colors.rowAlt }}>
-                    {["NTN Number", "Party Name", "Inv Number", "Inv Date", "Item Total QTY", "HS Code", "Excluding Amount", "Sales Tax", "Total"].map((h, i) => (
-                      <th key={i} style={{ ...th, textAlign: i >= 6 ? "right" : "left" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.rows.map((row, idx) => (
-                    <tr key={idx} style={{ borderTop: `1px solid ${colors.cardBorder}` }}>
-                      <td style={{ ...td, fontFamily: "monospace", fontSize: "0.75rem" }}>{row.ntn}</td>
-                      <td style={{ ...td, maxWidth: 220 }}><div style={clamp2}>{row.partyName}</div></td>
-                      <td style={{ ...td, fontWeight: 600, color: colors.blue }}>{row.documentNumber}</td>
-                      <td style={td}>{new Date(row.documentDate).toLocaleDateString()}</td>
-                      <td style={td}>{row.quantityLabel}</td>
-                      <td style={td}>
-                        <span style={{ background: colors.pill, color: colors.pillText, padding: "2px 8px", borderRadius: 6, fontSize: "0.78rem", fontWeight: 600 }}>
-                          {row.itemTypeName}
-                        </span>
-                      </td>
-                      <td style={tdR}>{money(row.excludingAmount)}</td>
-                      <td style={tdR}>{money(row.salesTax)}</td>
-                      <td style={{ ...tdR, fontWeight: 600 }}>{money(row.total)}</td>
-                    </tr>
-                  ))}
-                  <tr style={{ background: colors.totalBg, borderTop: `2px solid ${colors.blue}` }}>
-                    <td style={{ ...td, fontWeight: 800, color: colors.blue }} colSpan={6}>TOTAL</td>
-                    <td style={{ ...tdR, fontWeight: 800 }}>{money(report.grandExcluding)}</td>
-                    <td style={{ ...tdR, fontWeight: 800 }}>{money(report.grandTax)}</td>
-                    <td style={{ ...tdR, fontWeight: 800, color: colors.blue }}>{money(report.grandTotal)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        <ReportKpis items={[
+          { label: "Invoices", value: report.invoiceCount },
+          { label: "Lines pending HS code", value: report.rowCount },
+          { label: "Excluding amount", value: money(report.grandExcluding) },
+          { label: "Sales tax", value: money(report.grandTax) },
+          { label: "Total", value: money(report.grandTotal), tone: "lead" },
+        ]} />
       )}
 
-      {loading && <div style={{ padding: 32, textAlign: "center", color: colors.textSecondary }}>Loading tax sheet…</div>}
+      <RecordsViewport label="Tax Sheet records" enabled={!isNarrow}>{loading ? (
+        <div className="rw-state" role="status">Loading tax sheet…</div>
+      ) : report && (
+        report.rows.length === 0 ? (
+          <div className="rw-state">No invoices pending HS classification for {periodLabel}.</div>
+        ) : isNarrow ? (
+          <div className="rw-cards">
+            {report.rows.map((row, idx) => (
+              <div key={idx} className="rw-card" style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <div style={tsCardTop}>
+                  <span style={{ fontWeight: 700, color: colors.blue }}>{row.documentNumber}</span>
+                  <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>{new Date(row.documentDate).toLocaleDateString()}</span>
+                </div>
+                <div style={{ fontSize: "0.88rem", fontWeight: 600, color: colors.textPrimary, ...clamp2 }}>{row.partyName}</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", margin: "2px 0 2px" }}>
+                  <span style={{ fontFamily: "monospace", fontSize: "0.74rem", color: colors.textSecondary }}>{row.ntn}</span>
+                  <span style={{ background: colors.pill, color: colors.pillText, padding: "2px 8px", borderRadius: 6, fontSize: "0.74rem", fontWeight: 600 }}>{row.itemTypeName}</span>
+                </div>
+                <div style={tsCardMeta}>
+                  <div><span style={tsLbl}>Qty</span><span style={tsVal}>{row.quantityLabel}</span></div>
+                  <div><span style={tsLbl}>Excl. Amount</span><span style={tsVal}>{money(row.excludingAmount)}</span></div>
+                  <div><span style={tsLbl}>Sales Tax</span><span style={tsVal}>{money(row.salesTax)}</span></div>
+                  <div><span style={tsLbl}>Total</span><span style={{ ...tsVal, fontWeight: 700, color: colors.blue }}>{money(row.total)}</span></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div data-admin-table-region="" className="rw-table-wrap">
+            <table className="rw-table" style={{ minWidth: 640 }}>
+              <thead>
+                <tr>{cols.map((c) => <th key={c.key} className={c.total ? "rw-num" : undefined}>{c.label}</th>)}</tr>
+              </thead>
+              <tbody>
+                {report.rows.map((row, idx) => <tr key={idx}>{cols.map((c) => cell(row, c.key))}</tr>)}
+              </tbody>
+              <tfoot>
+                <tr>{cols.map((c, i) => totalCell(c.key, i))}</tr>
+              </tfoot>
+            </table>
+          </div>
+        )
+      )}</RecordsViewport>
+
     </div>
   );
 }
@@ -304,23 +346,13 @@ function Field({ label, icon, children }) {
   );
 }
 
-const th = { padding: "6px 10px", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.02em", color: colors.textSecondary, whiteSpace: "nowrap" };
-const td = { padding: "6px 10px", color: colors.textPrimary, verticalAlign: "top" };
-const tdR = { ...td, textAlign: "right", whiteSpace: "nowrap" };
 const clamp2 = { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" };
 
 // Mobile card styles (phones get stacked cards instead of the wide table).
-const tsCard = { border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "0.7rem 0.8rem", background: "#fff", display: "flex", flexDirection: "column", gap: 3 };
 const tsCardTop = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 };
 const tsCardMeta = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(120px, 100%), 1fr))", gap: "0.35rem 0.8rem", marginTop: 4 };
 const tsLbl = { display: "block", fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary };
 const tsVal = { display: "block", fontSize: "0.85rem", fontWeight: 600, color: colors.textPrimary };
-
-const btn = (bg) => ({
-  display: "inline-flex", alignItems: "center", gap: 6, background: bg, color: "#fff",
-  border: "none", borderRadius: 8, padding: "9px 14px", fontSize: "0.85rem", fontWeight: 600,
-  cursor: "pointer", minHeight: 40,
-});
 
 const segBtn = (active) => ({
   border: "none",

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
 using MyApp.Api.Middleware;
@@ -18,11 +19,24 @@ namespace MyApp.Api.Controllers
     public class ReportsController : ControllerBase
     {
         private readonly IReportService _reports;
+        private readonly AppDbContext _db;
+        private readonly IWebHostEnvironment _env;
 
-        public ReportsController(IReportService reports)
+        public ReportsController(IReportService reports, AppDbContext db, IWebHostEnvironment env)
         {
             _reports = reports;
+            _db = db;
+            _env = env;
         }
+
+        // The company's letterhead and its Bill template's header colours for an
+        // Excel export, when the screen asks for it (letterhead=true). Any other
+        // caller keeps the workbook layout it always had. Presentation only;
+        // [AuthorizeCompany] has already asserted access to companyId.
+        private Task<ReportExcelLetterhead?> LetterheadAsync(bool wanted, int companyId, string? brandFill, string? brandText) =>
+            wanted
+                ? ReportExcelLetterhead.LoadAsync(_db, _env.ContentRootPath, companyId, brandFill, brandText)
+                : Task.FromResult<ReportExcelLetterhead?>(null);
 
         /// <summary>
         /// Sales report for a company: FBR-submitted sale invoices grouped by
@@ -84,12 +98,16 @@ namespace MyApp.Api.Controllers
             [FromQuery] int? month = null,
             [FromQuery] string buyerType = "all",
             [FromQuery] DateTime? dateFrom = null,
-            [FromQuery] DateTime? dateTo = null)
+            [FromQuery] DateTime? dateTo = null,
+            [FromQuery] string? brandFill = null,
+            [FromQuery] string? brandText = null,
+            [FromQuery] bool letterhead = false)
         {
             if (ValidatePeriod(year, month, dateFrom, dateTo) is { } err)
                 return BadRequest(new { message = err });
 
-            var bytes = await _reports.GetSalesReportExcelAsync(companyId, year, month, buyerType, dateFrom, dateTo);
+            var bytes = await _reports.GetSalesReportExcelAsync(companyId, year, month, buyerType, dateFrom, dateTo,
+                await LetterheadAsync(letterhead, companyId, brandFill, brandText));
             var period = (dateFrom.HasValue && dateTo.HasValue)
                 ? $"{dateFrom.Value:yyyy-MM-dd}_to_{dateTo.Value:yyyy-MM-dd}"
                 : month.HasValue ? $"{year}-{month.Value:00}" : $"{year}";
@@ -129,12 +147,16 @@ namespace MyApp.Api.Controllers
             [FromQuery] int? year = null,
             [FromQuery] int? month = null,
             [FromQuery] DateTime? dateFrom = null,
-            [FromQuery] DateTime? dateTo = null)
+            [FromQuery] DateTime? dateTo = null,
+            [FromQuery] string? brandFill = null,
+            [FromQuery] string? brandText = null,
+            [FromQuery] bool letterhead = false)
         {
             if (ValidatePeriod(year, month, dateFrom, dateTo) is { } err)
                 return BadRequest(new { message = err });
 
-            var bytes = await _reports.GetTaxSheetExcelAsync(companyId, year, month, dateFrom, dateTo);
+            var bytes = await _reports.GetTaxSheetExcelAsync(companyId, year, month, dateFrom, dateTo,
+                await LetterheadAsync(letterhead, companyId, brandFill, brandText));
             var period = (dateFrom.HasValue && dateTo.HasValue)
                 ? $"{dateFrom.Value:yyyy-MM-dd}_to_{dateTo.Value:yyyy-MM-dd}"
                 : month.HasValue ? $"{year}-{month.Value:00}" : $"{year}";

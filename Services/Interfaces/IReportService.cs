@@ -1,4 +1,5 @@
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 
 namespace MyApp.Api.Services.Interfaces
 {
@@ -24,7 +25,7 @@ namespace MyApp.Api.Services.Interfaces
         /// raw file bytes for the controller to stream back.
         /// </summary>
         Task<byte[]> GetSalesReportExcelAsync(int companyId, int? year, int? month, string buyerType,
-            DateTime? dateFrom = null, DateTime? dateTo = null);
+            DateTime? dateFrom = null, DateTime? dateTo = null, ReportExcelLetterhead? letterhead = null);
 
         /// <summary>
         /// Tax Sheet: every invoice line whose item type still has no valid HS
@@ -36,6 +37,6 @@ namespace MyApp.Api.Services.Interfaces
 
         /// <summary>Styled .xlsx of <see cref="GetTaxSheetAsync"/>.</summary>
         Task<byte[]> GetTaxSheetExcelAsync(int companyId, int? year, int? month,
-            DateTime? dateFrom = null, DateTime? dateTo = null);
+            DateTime? dateFrom = null, DateTime? dateTo = null, ReportExcelLetterhead? letterhead = null);
     }
 }

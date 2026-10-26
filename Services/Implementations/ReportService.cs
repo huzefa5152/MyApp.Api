@@ -2,6 +2,7 @@ using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 using MyApp.Api.Models;
 using MyApp.Api.Services.Interfaces;
 
@@ -171,7 +172,7 @@ namespace MyApp.Api.Services.Implementations
         // line items grouped beneath as a collapsible outline (+/-), and a
         // merged grand-total row across all invoices. #,##0.00 money columns.
         public async Task<byte[]> GetSalesReportExcelAsync(int companyId, int? year, int? month, string buyerType,
-            DateTime? dateFrom = null, DateTime? dateTo = null)
+            DateTime? dateFrom = null, DateTime? dateTo = null, ReportExcelLetterhead? letterhead = null)
         {
             var report = await GetSalesReportAsync(companyId, year, month, buyerType, dateFrom, dateTo);
 
@@ -213,19 +214,25 @@ namespace MyApp.Api.Services.Implementations
 
             int r = 1;
 
-            // Title banner (merged across all columns, grey fill).
-            ws.Cell(r, 1).Value = report.CompanyName;
-            var titleRange = ws.Range(r, 1, r, COLS).Merge();
-            titleRange.Style.Font.FontSize = 22;
-            titleRange.Style.Fill.BackgroundColor = grey;
-            titleRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            ws.Row(r).Height = 32;
-            r++;
+            // Title banner: the company's own letterhead when the caller asked for
+            // it, otherwise the grey merged banner (merged across all columns).
+            if (letterhead != null) r = letterhead.Write(ws, COLS, r) - 1;
+            else
+            {
+                ws.Cell(r, 1).Value = report.CompanyName;
+                var titleRange = ws.Range(r, 1, r, COLS).Merge();
+                titleRange.Style.Font.FontSize = 22;
+                titleRange.Style.Fill.BackgroundColor = grey;
+                titleRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                ws.Row(r).Height = 32;
+                r++;
+            }
 
             ws.Cell(r, 1).Value = "Sale Report";
             var subTitle = ws.Range(r, 1, r, COLS).Merge();
             subTitle.Style.Font.FontSize = 16;
-            subTitle.Style.Fill.BackgroundColor = grey;
+            subTitle.Style.Fill.BackgroundColor = letterhead?.HeaderFill ?? grey;
+            if (letterhead != null) subTitle.Style.Font.FontColor = letterhead.HeaderText;
             subTitle.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
             ws.Row(r).Height = 24;
             r++;
@@ -246,6 +253,7 @@ namespace MyApp.Api.Services.Implementations
                 hc.Style.Fill.BackgroundColor = grey;
                 hc.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
                 if (moneyCols.Contains(c)) hc.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                letterhead?.StyleHeaderCell(hc);
             }
             var headerRow = r;
             r++;
@@ -433,7 +441,7 @@ namespace MyApp.Api.Services.Implementations
         }
 
         public async Task<byte[]> GetTaxSheetExcelAsync(int companyId, int? year, int? month,
-            DateTime? dateFrom = null, DateTime? dateTo = null)
+            DateTime? dateFrom = null, DateTime? dateTo = null, ReportExcelLetterhead? letterhead = null)
         {
             var report = await GetTaxSheetAsync(companyId, year, month, dateFrom, dateTo);
 
@@ -451,15 +459,20 @@ namespace MyApp.Api.Services.Implementations
             ws.Column(7).Width = 16; ws.Column(8).Width = 13; ws.Column(9).Width = 15;
 
             int r = 1;
-            ws.Cell(r, 1).Value = report.CompanyName;
-            var title = ws.Range(r, 1, r, COLS).Merge();
-            title.Style.Font.FontSize = 20; title.Style.Fill.BackgroundColor = grey;
-            title.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            ws.Row(r).Height = 28; r++;
+            if (letterhead != null) r = letterhead.Write(ws, COLS, r) - 1;
+            else
+            {
+                ws.Cell(r, 1).Value = report.CompanyName;
+                var title = ws.Range(r, 1, r, COLS).Merge();
+                title.Style.Font.FontSize = 20; title.Style.Fill.BackgroundColor = grey;
+                title.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                ws.Row(r).Height = 28; r++;
+            }
 
             ws.Cell(r, 1).Value = "Tax Sheet — items pending HS code";
             var sub = ws.Range(r, 1, r, COLS).Merge();
-            sub.Style.Font.FontSize = 14; sub.Style.Fill.BackgroundColor = grey;
+            sub.Style.Font.FontSize = 14; sub.Style.Fill.BackgroundColor = letterhead?.HeaderFill ?? grey;
+            if (letterhead != null) sub.Style.Font.FontColor = letterhead.HeaderText;
             sub.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center; r++;
 
             ws.Cell(r, 1).Value = $"{report.PeriodLabel}  ·  {report.InvoiceCount} invoice(s), {report.RowCount} line(s)";
@@ -475,6 +488,7 @@ namespace MyApp.Api.Services.Implementations
                 hc.Style.Fill.BackgroundColor = grey;
                 hc.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
                 if (moneyCols.Contains(c)) hc.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                letterhead?.StyleHeaderCell(hc);
             }
             var headerRow = r; r++;
 

@@ -12,6 +12,31 @@ const date = (value) => value ? new Date(value).toLocaleDateString("en-GB", {
   day: "2-digit", month: "short", year: "numeric",
 }) : "";
 
+// A printed or PDF document (an about:blank window, a canvas) cannot load the
+// company logo by its site-relative path. Read it
+// once with the signed-in session and embed it; a logo that cannot be read is
+// left out rather than drawn as a broken image.
+export async function logoDataUrl(path) {
+  if (!path) return "";
+  if (path.startsWith("data:")) return path;
+  try {
+    let token = "";
+    try { token = localStorage.getItem("token") || ""; } catch { /* storage unavailable */ }
+    const res = await fetch(path, { credentials: "include", headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) return "";
+    const blob = await res.blob();
+    if (!blob.type.startsWith("image/")) return "";
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => resolve("");
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return "";
+  }
+}
+
 export function selectLedgerInvoiceTemplate(templates, companyId, divisionId) {
   const owned = templates.filter((t) => Number(t.companyId) === Number(companyId));
   const scopes = divisionId ? [Number(divisionId), null] : [null];
@@ -34,6 +59,8 @@ export async function invoiceBranding(template, company) {
   const companyField = /\{\{\{?\s*(?:nl2br\s+)?company(?:BrandName|Name|LogoPath|Address|Phone|Email|NTN|STRN)\b/;
   for (const el of source.body.querySelectorAll("*")) {
     const direct = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join("");
+    // "FOR {{companyName}}" is the template's signature line, not its letterhead.
+    if (/^\s*for\s/i.test(direct)) continue;
     if (companyField.test(direct) || [...el.attributes].some((a) => companyField.test(a.value))) {
       el.setAttribute("data-ledger-brand", "");
     }
@@ -41,7 +68,7 @@ export async function invoiceBranding(template, company) {
   const html = mergeTemplate(source.documentElement.outerHTML, {
     companyBrandName: company.brandName || company.name,
     companyName: company.name,
-    companyLogoPath: company.logoPath || "",
+    companyLogoPath: await logoDataUrl(company.logoPath),
     companyAddress: company.fullAddress || "",
     companyPhone: company.phone || "",
     companyEmail: company.email || "",
