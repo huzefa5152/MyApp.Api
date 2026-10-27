@@ -2814,8 +2814,8 @@ namespace MyApp.Api.Migrations
 
                     b.Property<string>("Scopes")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("nvarchar(max)");
@@ -2909,8 +2909,8 @@ namespace MyApp.Api.Migrations
 
                     b.Property<string>("Scopes")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<DateTime?>("UsedAt")
                         .HasColumnType("datetime2");

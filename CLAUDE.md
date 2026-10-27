@@ -359,7 +359,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Hosted MCP (`POST /mcp`) company / tenant / permission isolation, MCP Access opt-in | `python scripts/test_mcp_isolation.py --base <url>` | `90/90 checks passed` (needs 3 companies with invoices locally; see `docs/MCP_AGENT_ACCESS.md`) |
 | MCP agent tokens + the append-only activity log (needs `sqlcmd` for expiry) | `python scripts/test_mcp_agent_tokens.py --base <url>` | `56/56 checks passed` |
 | MCP self-service tab (a user manages only their own tokens and activity) | `python scripts/test_mcp_self_service.py --base <url>` | `33/33 checks passed` |
-| MCP sign-in connect: OAuth + PKCE + client registration, refresh rotation, replay (needs `sqlcmd`) | `python scripts/test_mcp_oauth.py --base <url>` | `67/67 checks passed` |
+| MCP sign-in connect: OAuth + PKCE + client registration, refresh rotation, replay (needs `sqlcmd`) | `python scripts/test_mcp_oauth.py --base <url>` | `71/71 checks passed` |
 | MCP write tools: prepare / approve / commit for clients and quotations, gates re-checked at commit, idempotency (needs `sqlcmd`) | `python scripts/test_mcp_writes.py --base <url>` | `91/91 checks passed` |
 | MCP primary admin across all tenants, with tenant users still confined (needs `sqlcmd`-free; creates one throwaway company) | `python scripts/test_mcp_seed_admin.py --base <url>` | `52/52 checks passed` |
 | MCP report tools: figures equal the screens' own reports, bounded output, per-tool permission, no payment details | `python scripts/test_mcp_reports.py --base <url>` | `79/79 checks passed` |

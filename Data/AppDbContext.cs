@@ -217,7 +217,7 @@ namespace MyApp.Api.Data
                 e.Property(t => t.TokenHash).HasMaxLength(64);
                 e.Property(t => t.Hint).HasMaxLength(16);
                 e.Property(t => t.CompanyIds).HasMaxLength(400);
-                e.Property(t => t.Scopes).HasMaxLength(200);
+                e.Property(t => t.Scopes).HasMaxLength(500);
                 e.Property(t => t.OAuthClientId).HasMaxLength(64);
                 e.Property(t => t.RefreshHash).HasMaxLength(64);
                 e.HasIndex(t => t.RefreshHash);
@@ -252,7 +252,7 @@ namespace MyApp.Api.Data
                 e.Property(c => c.RedirectUri).HasMaxLength(500);
                 e.Property(c => c.CodeChallenge).HasMaxLength(128);
                 e.Property(c => c.CompanyIds).HasMaxLength(400);
-                e.Property(c => c.Scopes).HasMaxLength(200);
+                e.Property(c => c.Scopes).HasMaxLength(500);
                 e.HasIndex(c => c.CodeHash).IsUnique();
                 e.HasIndex(c => c.ExpiresAt);
             });
