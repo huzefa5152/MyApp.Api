@@ -48,6 +48,13 @@ export default function BillChallansEditor({ invoice, onClose, onSaved, canAttac
     }
   }
   useEffect(() => { load("", true); return () => { request.current += 1; }; }, [invoice.id]);
+  // Search as the user types: challan number, PO or item, matched server-side.
+  const typed = useRef(false);
+  useEffect(() => {
+    if (!typed.current) return;
+    const t = setTimeout(() => load(search.trim()), 350);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const bill = snapshot?.bill || invoice;
   const linked = new Set(snapshot?.linked.map(c => c.id) || []);
@@ -116,11 +123,11 @@ export default function BillChallansEditor({ invoice, onClose, onSaved, canAttac
         <p>Choose challans for <strong>{bill.clientName}</strong>. Retained items keep their rates and adjustments. Removed challans become available for billing again. Untick a single line to bill it later: it goes back to its challan as pending.</p>
         <p role="note"><strong>Next step after saving:</strong> consultant review is required, even when totals still match. The consultant checks the changed bill in Invoices and completes review before FBR validation or submission.</p>
         {error && <div role="alert" style={{ color: "#a21525", background: "#fff0f1", padding: 12, marginBottom: 12 }}>{error}</div>}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-          <input aria-label="Search challans" placeholder="Challan number, PO or item" value={search} disabled={saving} onChange={e => setSearch(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); load(search); } }}
-            style={{ flex: "1 1 180px", minWidth: 0, minHeight: 44, padding: 8 }} />
-          <button type="button" style={button} disabled={loading || saving} onClick={() => load(search)}>Search</button>
+        <div style={{ marginBottom: 12 }}>
+          <input type="search" aria-label="Search challans" placeholder="Search by challan number, PO or item" value={search} disabled={saving}
+            onChange={e => { typed.current = true; setSearch(e.target.value); }}
+            onKeyDown={e => { if (e.key === "Enter") e.preventDefault(); }}
+            style={{ boxSizing: "border-box", width: "100%", minHeight: 44, padding: 8 }} />
         </div>
         {hasMore && <p>Showing 100 available challans. Search by number or PO to find more.</p>}
         {loading && <p role="status">Loading challans…</p>}
