@@ -306,6 +306,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+- **2026-10-27:** An invoice excluded from FBR now reads that way. Its status says **Excluded from FBR** ahead of every pre-filing step (it used to show "Needs adjustment" when it had never been classified), the card carries a short note, and on the Invoices tab the only action left in view is **Include in FBR**: Adjust invoice and View FBR are hidden until it is included again. View and print stay in the ⋯ menu. Same in the table view.
+
 - **2026-10-27:** Connecting an AI agent with every permission ticked no longer fails with "An unexpected error occurred". Fourteen scopes join to 206 characters, past the 200-character `Scopes` column on MCP tokens and sign-in codes, so the save was refused once `fbrexclusion.write` was added. Both columns are now 500 (`20261027101725_WidenMcpScopes`). `scripts/test_mcp_oauth.py` approves with every offered scope and checks the token carries them all.
 
 - **2026-10-27:** Quote, Sales Order, Bill (No Challan) and Bill from challans gain an **I'll enter [Unit price] [Line total]** switch above the lines. The figure the operator types is an input and the other is worked out and shown read-only (grey, calculator mark, skipped by Tab), so 500 grams sold for 450 is typed as 0.5 and 450. The choice is remembered per screen. On a quote "Line total" means the amount before discount; the discounted figure shows under it. Flipping the switch keeps every line's figures. Quote and order unit prices are widened to 12 decimals, as bill prices already were, so a rate worked out from a typed total (1000 over 3) saves back to that total instead of 999.99 (`20261026194822_WidenQuoteOrderUnitPriceTo12Decimals`). `scripts/test_line_amount.mjs` now 35 checks.

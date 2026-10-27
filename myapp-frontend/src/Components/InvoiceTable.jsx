@@ -34,6 +34,9 @@ function fbrStatusBadge(inv, isBillsMode) {
     return <StatusBadge tone="warning" title="A previous submission timed out — its FBR outcome is unconfirmed. An administrator must verify it at FBR and reset it.">Uncertain</StatusBadge>;
   }
   if (inv.taxTreatment && inv.taxTreatment !== "FBR") return <StatusBadge tone="info">{inv.taxTreatment === "NoTax" ? "No tax" : "SRB"} · Outside FBR</StatusBadge>;
+  if (inv.isFbrExcluded) {
+    return <StatusBadge tone="excluded" title="Kept out of FBR: not adjusted, validated or submitted, alone or in bulk">Excluded from FBR</StatusBadge>;
+  }
   if (inv.fbrAdjustmentRequired) return <StatusBadge tone="warning" title="Complete initial HS classification and filing review before FBR validation or submission.">Needs adjustment</StatusBadge>;
   if (inv.fbrReviewRequired) return <StatusBadge tone="warning" title="Next: consultant opens Invoices, reviews every current item and completes review. FBR validation and submission are blocked.">Needs consultant re-review</StatusBadge>;
   if (isBillsMode) {
@@ -41,9 +44,6 @@ function fbrStatusBadge(inv, isBillsMode) {
   }
   if (inv.fbrStatus === "Failed") {
     return <StatusBadge tone="danger" title={inv.fbrErrorMessage || "FBR rejected this submission"}>FBR Failed</StatusBadge>;
-  }
-  if (inv.isFbrExcluded) {
-    return <StatusBadge tone="excluded" title="Excluded from FBR: not validated or submitted, alone or in bulk">Excluded</StatusBadge>;
   }
   if (!inv.fbrReady) {
     const missing = inv.fbrMissing?.length ? `Missing:\n• ${inv.fbrMissing.join("\n• ")}` : "";
@@ -357,7 +357,7 @@ export default function InvoiceTable({
             {exportingId === inv.id + "-tax-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />}
           </button>
         )}
-        {!isBillsMode && perms.canFbrPreview && (!inv.taxTreatment || inv.taxTreatment === "FBR") && (
+        {!isBillsMode && perms.canFbrPreview && (!inv.taxTreatment || inv.taxTreatment === "FBR") && !inv.isFbrExcluded && (
           <button data-label="View FBR payload" data-primary={(isSubmitted) || undefined} style={btn.view} onClick={() => onFbrPreview?.(inv)} title="Preview FBR payload">
             <MdVisibility size={14} />
           </button>
@@ -414,7 +414,7 @@ export default function InvoiceTable({
         )}
         {isBillsMode && perms.canCreateOrderFromBill && inv.canCreateSalesOrder && <button style={btn.edit} disabled={!!creatingOrderFor} onClick={() => onCreateOrderFromBill?.(inv)}>Create sales order</button>}
         {isBillsMode && perms.canViewOrders && inv.salesOrders?.map(o => <button key={o.id} style={btn.edit} onClick={() => navigate(`/sales-orders?viewOrder=${o.id}`)}>Order #{o.number || o.id}</button>)}
-        {perms.canOpenEdit && inv.isEditable && (isBillsMode || !inv.taxTreatment || inv.taxTreatment === "FBR") && (
+        {perms.canOpenEdit && inv.isEditable && (isBillsMode || ((!inv.taxTreatment || inv.taxTreatment === "FBR") && !inv.isFbrExcluded)) && (
           <button data-label="Edit" data-primary
             style={btn.edit}
             onClick={() => onEdit?.(inv)}
@@ -424,7 +424,7 @@ export default function InvoiceTable({
           </button>
         )}
         {!isBillsMode && (!inv.taxTreatment || inv.taxTreatment === "FBR") && perms.canFbrExclude && !isSubmitted && !inv.isCancelled && (
-          <button data-label="Exclude / include in FBR bulk"
+          <button data-label={inv.isFbrExcluded ? "Include in FBR" : "Exclude from FBR"} data-primary={inv.isFbrExcluded || undefined}
             style={{
               ...btn.neutral,
               backgroundColor: inv.isFbrExcluded ? "#e8f5e9" : "#eceff1",

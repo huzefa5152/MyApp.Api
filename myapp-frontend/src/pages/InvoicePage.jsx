@@ -73,13 +73,14 @@ function renderFbrPill(inv, isBillsMode) {
   if (inv.fbrStatus === "Submitted") return statusPill("green", MdCheckCircle, "Submitted", inv.fbrIRN ? `Submitted to FBR — IRN ${inv.fbrIRN} (locked from edits)` : "Submitted to FBR (locked from edits)");
   if (inv.fbrStatus === "Submitting") return statusPill("blue", MdHourglassEmpty, "Submitting…", "A submission is in progress. Please wait and refresh — do not submit again.");
   if (inv.fbrStatus === "Uncertain") return statusPill("amber", MdError, "Uncertain", "A previous submission timed out and its FBR outcome is unconfirmed. An administrator must verify it at FBR and reset it before it can be submitted again.");
+  // Excluded wins over every pre-filing step: nothing is owed to FBR on it.
+  if (inv.isFbrExcluded) return statusPill("gray", MdBlock, "Excluded from FBR", "Kept out of FBR: it is not adjusted, validated or submitted, alone or in bulk. Include it in FBR to file it.");
   if (inv.fbrAdjustmentRequired) return statusPill("amber", MdEdit, "Needs adjustment", "Complete the initial HS classification and filing review before validating or submitting to FBR");
   if (inv.fbrReviewRequired) return statusPill("amber", MdError, "Needs consultant re-review", "Filing details changed. Next: a tax consultant opens Invoices, checks all current items and chooses Complete review. FBR submission is blocked.");
   if (isBillsMode) return statusPill("amber", MdHourglassEmpty, "Pending", "Pending FBR submission — open the Invoices tab to validate & submit.");
   if (inv.fbrStatus === "Failed") return statusPill("red", MdError, "Failed", inv.fbrErrorMessage || "FBR rejected this submission. Open View FBR for details.");
   if (inv.fbrAdjustmentStale) return statusPill("amber", MdError, "Re-adjust", `Bill changed after FBR adjust — Bill Rs. ${Number(inv.subtotal).toLocaleString()} vs FBR Rs. ${Number(inv.fbrAdjustedSubtotal ?? inv.subtotal).toLocaleString()}. Reopen, re-adjust qty/price, then save.`);
   if (!inv.fbrReady) return statusPill("amber", MdError, inv.fbrMissing?.length ? `Setup · ${inv.fbrMissing.length}` : "Setup", inv.fbrMissing?.length ? `FBR setup incomplete — missing:\n• ${inv.fbrMissing.join("\n• ")}` : "FBR setup incomplete");
-  if (inv.isFbrExcluded) return statusPill("gray", MdBlock, "Excluded", "Excluded from FBR: it cannot be validated or submitted, alone or in bulk. Include it in FBR to file it.");
   return statusPill("blue", MdCheckCircle, "Ready", "All FBR fields set — Validate to dry-run, or Submit to issue the IRN.");
 }
 function renderNotePill(inv) {
@@ -1286,6 +1287,12 @@ export default function InvoicePage({ mode = "invoices" }) {
                         />
                       )}
                     </div>
+                    {!isBillsMode && inv.isFbrExcluded && !inv.isCancelled && (
+                      <p style={{ margin: "10px 0 0", padding: "8px 10px", borderRadius: 8, background: "#f5f7f9", border: "1px dashed #b0bec5", color: "#546e7a", fontSize: "0.82rem", display: "flex", gap: 6, alignItems: "flex-start" }}>
+                        <MdBlock size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+                        <span>Not filed with FBR. Include it to adjust, validate and submit.</span>
+                      </p>
+                    )}
                   </div>
                   <CardActions className="invoice-card-actions" style={cardStyles.buttonGroup}>
                     {isBillsMode && has("bills.costs.view") && <button style={{ ...cardStyles.button, minHeight: 44 }} onClick={() => setCostTarget(inv)}>Costs & suppliers</button>}
@@ -1368,7 +1375,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         exclude — those live on the Invoices tab. The FBR
                         status badge above the buttons still shows in both
                         modes so the operator can see locked rows. */}
-                    {!isBillsMode && canFbrPreview && (!inv.taxTreatment || inv.taxTreatment === "FBR") && (
+                    {!isBillsMode && canFbrPreview && (!inv.taxTreatment || inv.taxTreatment === "FBR") && !inv.isFbrExcluded && (
                       <button data-primary={(inv.fbrStatus === "Submitted") || undefined}
                         style={{ ...styles.printBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" }}
                         onClick={() => setFbrPreviewId(inv.id)}
@@ -1456,7 +1463,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         Type for each line. Everything else (items, prices,
                         qty, dates) is read-only and reflects whatever was
                         last saved on the Bills tab. Hidden once submitted. */}
-                    {!isBillsMode && canEditInThisMode && inv.isEditable && (!inv.taxTreatment || inv.taxTreatment === "FBR") && (
+                    {!isBillsMode && canEditInThisMode && inv.isEditable && (!inv.taxTreatment || inv.taxTreatment === "FBR") && !inv.isFbrExcluded && (
                       <button data-primary
                         style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
                         onClick={() => setEditingId(inv.id)}
@@ -1466,9 +1473,10 @@ export default function InvoicePage({ mode = "invoices" }) {
                       </button>
                     )}
                     {!isBillsMode && (!inv.taxTreatment || inv.taxTreatment === "FBR") && canFbrExclude && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
-                      <button
+                      <button data-primary={inv.isFbrExcluded || undefined}
                         style={{
                           ...styles.printBtn,
+                          ...(inv.isFbrExcluded ? { flex: 1, justifyContent: "center", fontWeight: 600 } : {}),
                           backgroundColor: inv.isFbrExcluded ? "#e8f5e9" : "#eceff1",
                           color: inv.isFbrExcluded ? "#2e7d32" : "#546e7a",
                           border: `1px solid ${inv.isFbrExcluded ? "#a5d6a7" : "#b0bec5"}`,
