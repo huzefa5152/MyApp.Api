@@ -49,5 +49,7 @@ namespace MyApp.Api.Services.Interfaces
         /// the order doesn't exist.
         /// </summary>
         Task<SalesOrderDto?> AttachChallanAsync(int orderId, AttachChallanRequestDto dto);
+        Task<List<AttachableOrderDto>> GetAttachableOrdersAsync(int challanId);
+        Task<int?> GetChallanCompanyIdAsync(int challanId);
     }
 }

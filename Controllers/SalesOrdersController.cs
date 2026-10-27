@@ -247,6 +247,21 @@ namespace MyApp.Api.Controllers
         }
 
         /// <summary>
+        /// Open orders a challan can be linked to (its company and customer),
+        /// likeliest first. The challan is loaded and its STORED company
+        /// asserted; a challan id is a request, not proof of access.
+        /// </summary>
+        [HttpGet("attachable-for-challan/{challanId}")]
+        [HasPermission("salesorders.list.view")]
+        public async Task<ActionResult<List<AttachableOrderDto>>> GetAttachableOrders(int challanId)
+        {
+            var companyId = await _service.GetChallanCompanyIdAsync(challanId);
+            if (companyId == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
+            return Ok(await _service.GetAttachableOrdersAsync(challanId));
+        }
+
+        /// <summary>
         /// Attach an existing challan to this order (map its lines onto the
         /// ordered lines, adopt the order's PO). Gated by the challan-update
         /// permission since it mutates the challan's linkage / PO / status.

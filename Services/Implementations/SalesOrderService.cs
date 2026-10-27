@@ -858,6 +858,59 @@ namespace MyApp.Api.Services.Implementations
             }).ToList();
         }
 
+        public Task<int?> GetChallanCompanyIdAsync(int challanId) =>
+            _context.DeliveryChallans.AsNoTracking()
+                .Where(dc => dc.Id == challanId).Select(dc => (int?)dc.CompanyId).FirstOrDefaultAsync();
+
+        public async Task<List<AttachableOrderDto>> GetAttachableOrdersAsync(int challanId)
+        {
+            var challan = await _context.DeliveryChallans.AsNoTracking()
+                .Include(dc => dc.Items)
+                .FirstOrDefaultAsync(dc => dc.Id == challanId);
+            // An ineligible challan has no orders to offer: the button that opens
+            // this list is hidden for it, and attach would refuse it anyway.
+            if (challan == null || challan.SalesOrderId != null || challan.InvoiceId != null
+                || challan.Status == "Cancelled" || challan.IsDemo || !string.IsNullOrWhiteSpace(challan.PoNumber))
+                return new();
+
+            // Open orders only: a closed order can still take a challan from the
+            // order's own screen, but it is not a likely home for a new delivery.
+            var orders = await _context.SalesOrders.AsNoTracking()
+                .Include(o => o.Items)
+                .Where(o => o.CompanyId == challan.CompanyId && o.ClientId == challan.ClientId && o.Status == "Open")
+                .ToListAsync();
+            if (orders.Count == 0) return new();
+
+            var itemIds = orders.SelectMany(o => o.Items).Select(i => i.Id).ToList();
+            var delivered = await _context.DeliveryItems.AsNoTracking()
+                .Where(di => di.SalesOrderItemId != null && itemIds.Contains(di.SalesOrderItemId.Value)
+                          && di.DeliveryChallan.Status != "Cancelled")
+                .GroupBy(di => di.SalesOrderItemId!.Value)
+                .Select(g => new { g.Key, Qty = g.Sum(x => x.Quantity) })
+                .ToDictionaryAsync(x => x.Key, x => x.Qty);
+
+            // The same correspondence attach uses for unmapped lines: item type,
+            // else exact description.
+            static bool Matches(SalesOrderItem i, DeliveryItem dl) =>
+                dl.ItemTypeId.HasValue && i.ItemTypeId == dl.ItemTypeId
+                || string.Equals((i.Description ?? "").Trim(), (dl.Description ?? "").Trim(), StringComparison.OrdinalIgnoreCase);
+
+            return orders.Select(o => new AttachableOrderDto
+            {
+                Id = o.Id,
+                SalesOrderNumber = o.SalesOrderNumber,
+                OrderDate = o.OrderDate,
+                CustomerPoNumber = o.CustomerPoNumber,
+                ChallanLines = challan.Items.Count,
+                MatchingLines = challan.Items.Count(dl => o.Items.Any(i => Matches(i, dl))),
+                RemainingQuantity = o.Items.Sum(i => Math.Max(0m, i.Quantity - delivered.GetValueOrDefault(i.Id, 0m))),
+            })
+            .OrderByDescending(o => o.MatchingLines)
+            .ThenByDescending(o => o.OrderDate)
+            .ThenByDescending(o => o.SalesOrderNumber)
+            .ToList();
+        }
+
         public async Task<SalesOrderDto?> AttachChallanAsync(int orderId, AttachChallanRequestDto dto)
         {
             var order = await _repository.GetByIdAsync(orderId);
@@ -882,6 +935,12 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException("That challan has already been billed and can't be re-linked.");
             if (challan.Status == "Cancelled")
                 throw new InvalidOperationException("A cancelled challan can't be attached.");
+            // Same eligibility the pickers show: a demo delivery is not a real
+            // one, and a challan with its own PO already belongs to that PO.
+            if (challan.IsDemo)
+                throw new InvalidOperationException("A demo challan can't be attached to a sales order.");
+            if (!string.IsNullOrWhiteSpace(challan.PoNumber))
+                throw new InvalidOperationException("That challan already carries its own PO, so it can't be attached to another order.");
 
             // Validate the line mapping: every mapped delivery item must be on
             // this challan, and every target ordered line must be on this order.
