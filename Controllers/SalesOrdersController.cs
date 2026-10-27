@@ -263,6 +263,21 @@ namespace MyApp.Api.Controllers
         }
 
         /// <summary>
+        /// Open orders a challan can be linked to (its company, customer and
+        /// division), likeliest first. The challan is loaded and its STORED
+        /// company and division asserted; a challan id is a request, not proof of access.
+        /// </summary>
+        [HttpGet("attachable-for-challan/{challanId}")]
+        [HasPermission("salesorders.list.view")]
+        public async Task<ActionResult<List<AttachableOrderDto>>> GetAttachableOrders(int challanId)
+        {
+            if (await _service.GetChallanScopeAsync(challanId) is not { } scope) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, scope.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, scope.CompanyId, scope.DivisionId);
+            return Ok(await _service.GetAttachableOrdersAsync(challanId));
+        }
+
+        /// <summary>
         /// Attach an existing challan to this order (map its lines onto the
         /// ordered lines, adopt the order's PO). Reuses challans.manage.create —
         /// the same gate as raising a challan from an order — since it links a

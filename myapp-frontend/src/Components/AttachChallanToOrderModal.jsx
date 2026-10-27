@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { MdLink, MdWarningAmber } from "react-icons/md";
 import {
   getAttachableChallans, attachChallanToOrder,
-  getSalesOrdersForPicker, getSalesOrderById,
+  getAttachableOrders, getSalesOrderById,
 } from "../api/salesOrderApi";
 import SearchableSelect from "./SearchableSelect";
 import { formStyles, modalSizes } from "../theme";
@@ -89,11 +89,10 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
           const { data } = await getAttachableChallans(order.id);
           if (!cancelled) setAttachable(data || []);
         } else {
-          const list = await getSalesOrdersForPicker(companyId);
-          const forClient = (list || []).filter(
-            (o) => String(o.clientId) === String(challan.clientId) && o.status !== "Cancelled"
-          );
-          if (!cancelled) setOrders(forClient);
+          // Only open orders of this challan's customer and division, the
+          // likeliest (most matching lines) first. The server decides.
+          const { data } = await getAttachableOrders(challan.id);
+          if (!cancelled) setOrders(data || []);
         }
       } catch {
         if (!cancelled) setError("Failed to load options.");
@@ -103,7 +102,7 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
     };
     run();
     return () => { cancelled = true; };
-  }, [fromOrder, companyId, order?.id, challan?.clientId]);
+  }, [fromOrder, companyId, order?.id, challan?.id]);
 
   // Mode A: picking a challan resolves its lines; SO items are fixed.
   const onPickChallan = (id) => {
@@ -183,7 +182,7 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
 
   const orderOptions = useMemo(() => orders.map((o) => ({
     id: o.id,
-    label: `SO #${o.salesOrderNumber} · ${fmtDate(o.orderDate)}${o.customerPoNumber ? ` · PO ${o.customerPoNumber}` : ""} · ${o.fulfillmentStatus}`,
+    label: `SO #${o.salesOrderNumber} · ${fmtDate(o.orderDate)}${o.customerPoNumber ? ` · PO ${o.customerPoNumber}` : ""} · ${o.matchingLines}/${o.challanLines} line${o.challanLines !== 1 ? "s" : ""} match · ${fmtQty(o.remainingQuantity)} still to deliver`,
   })), [orders]);
 
   const soLineLabel = (s) => `${richTextToPlain(s.description || "")}${s.unit ? ` (${s.unit})` : ""} — ${fmtQty(s.deliveredQuantity || 0)}/${fmtQty(s.quantity)} delivered`;
@@ -226,7 +225,7 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
                 items={orderOptions} value={pickedOrderId}
                 onChange={(id) => onPickOrder(id)}
                 labelKey="label" searchKeys={["label"]}
-                placeholder={loading ? "Loading…" : (orderOptions.length ? "Pick an order…" : "No open orders for this customer")}
+                placeholder={loading ? "Loading…" : (orderOptions.length ? "Pick an order…" : "No open orders for this customer and division")}
                 loading={loading}
               />
             )}

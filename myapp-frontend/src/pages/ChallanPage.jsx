@@ -15,6 +15,7 @@ import InvoiceForm from "../Components/InvoiceForm";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
 import AttachmentQuickModal from "../Components/AttachmentQuickModal";
+import AttachChallanToOrderModal from "../Components/AttachChallanToOrderModal";
 import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import {
   getPagedChallansByCompany,
@@ -63,6 +64,9 @@ export default function ChallanPage() {
   const { has } = usePermissions();
   const canCreate = has("challans.manage.create");
   const canUpdate = has("challans.manage.update");
+  // "Link to Sales Order": attach a challan delivered before its order existed.
+  const [linkChallan, setLinkChallan] = useState(null);
+  const canLinkOrder = canUpdate && has("salesorders.list.view");
   const canDelete = has("challans.manage.delete");
   const canImportPo = canCreate && has("poformats.import.create");
   const canPrint = has("challans.print.view");
@@ -550,6 +554,7 @@ export default function ChallanPage() {
             <ChallanTable
               challans={challans}
               onCopy={(c) => copy.openCopy(c.id, `Delivery Challan #${c.challanNumber}`)}
+              onLinkOrder={canLinkOrder ? (c) => setLinkChallan(c) : null}
               onCancel={handleCancel}
               onDelete={handleDelete}
               onPrint={handlePrint}
@@ -570,6 +575,7 @@ export default function ChallanPage() {
             <ChallanList
               challans={challans}
               onCopy={(c) => copy.openCopy(c.id, `Delivery Challan #${c.challanNumber}`)}
+              onLinkOrder={canLinkOrder ? (c) => setLinkChallan(c) : null}
               onCancel={handleCancel}
               onDelete={handleDelete}
               onPrint={handlePrint}
@@ -597,6 +603,19 @@ export default function ChallanPage() {
             onPageSize={(n) => { setSize(n); setPage(1); }}
           />
         </>
+      )}
+
+      {linkChallan && selectedCompany && (
+        <AttachChallanToOrderModal
+          companyId={selectedCompany.id}
+          challan={linkChallan}
+          onClose={() => setLinkChallan(null)}
+          onAttached={(order) => {
+            setLinkChallan(null);
+            notify(`Challan linked to SO #${order?.salesOrderNumber ?? ""}.`, "success");
+            fetchChallans(selectedCompany.id, page);
+          }}
+        />
       )}
 
       {attachTarget && selectedCompany?.id && (

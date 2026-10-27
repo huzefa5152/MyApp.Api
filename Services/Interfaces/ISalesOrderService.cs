@@ -55,5 +55,7 @@ namespace MyApp.Api.Services.Interfaces
         /// when the order doesn't exist.
         /// </summary>
         Task<SalesOrderDto?> AttachChallanAsync(int orderId, AttachChallanRequestDto dto);
+        Task<List<AttachableOrderDto>> GetAttachableOrdersAsync(int challanId);
+        Task<(int CompanyId, int? DivisionId)?> GetChallanScopeAsync(int challanId);
     }
 }

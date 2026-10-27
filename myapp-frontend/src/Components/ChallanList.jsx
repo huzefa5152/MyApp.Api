@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import CardActions from "./CardActions";
 import { createPortal } from "react-dom";
-import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning, MdRequestQuote, MdLocationOn, MdContentCopy, MdCopyAll } from "react-icons/md";
+import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning, MdRequestQuote, MdLocationOn, MdContentCopy, MdCopyAll, MdLink } from "react-icons/md";
 import ChallanModal from "./ChallanModal";
 import AttachmentBadge from "./AttachmentBadge";
 import { cardStyles, cardHover } from "../theme";
@@ -61,7 +61,7 @@ function WarningTooltip({ warnings }) {
 
 const partialColors = { bg: "#fff8e1", color: "#b26a00", border: "#b26a0030" };
 
-export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, onCopy, exportingId, duplicatingId, printDisabled = false, printDisabledReason = "", companyFbrOff = false, attachCounts = {}, onAttach }) {
+export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, onCopy, onLinkOrder, exportingId, duplicatingId, printDisabled = false, printDisabledReason = "", companyFbrOff = false, attachCounts = {}, onAttach }) {
   const { has } = usePermissions();
   const permUpdate = has("challans.manage.update");
   const permDelete = has("challans.manage.delete");
@@ -107,6 +107,8 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
           // Generate Bill shortcut — Pending / Imported always; "No PO" too when
           // the company has FBR integration OFF (a PO isn't needed to bill, and the
           // backend already accepts it). FBR-on companies still need a PO first.
+          // Delivered before the order existed: link it once the SO arrives.
+          const canLink = onLinkOrder && c.status === "No PO" && !c.salesOrderId && !c.invoiceId;
           const canGenerateBill = permCreateBill && (c.status === "Pending" || c.status === "Imported" || (c.status === "No PO" && companyFbrOff));
           // Duplicate is available on the same statuses as Generate Bill,
           // EXCEPT duplicating-a-duplicate is not allowed (2026-05-08): the
@@ -299,6 +301,15 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       <MdRequestQuote size={14} /> Generate Bill
                     </button>
                   )}
+                  {canLink && (
+                    <button
+                      style={{ ...styles.actionBtn, ...styles.linkBtn }}
+                      onClick={() => onLinkOrder(c)}
+                      title="Link this challan to a Sales Order"
+                    >
+                      <MdLink size={14} /> Link to Order
+                    </button>
+                  )}
                   {permUpdate && canCancel && (
                     <button data-admin-close=""
                       style={{ ...styles.actionBtn, ...styles.cancelBtn }}
@@ -390,6 +401,7 @@ const styles = {
   pdfBtn: { backgroundColor: "#ffebee", color: "#c62828" },
   excelBtn: { backgroundColor: "#e8f5e9", color: "#2e7d32" },
   editBtn: { backgroundColor: "#fff3e0", color: "#e65100" },
+  linkBtn: { backgroundColor: "#e3f2fd", color: "#0d47a1" },
   cancelBtn: { backgroundColor: "#fce4ec", color: "#c62828" },
   deleteBtn: { backgroundColor: "#ffebee", color: "#b71c1c" },
   generateBillBtn: { backgroundColor: "#e0f2f1", color: "#00695c" },

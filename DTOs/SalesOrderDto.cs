@@ -145,6 +145,22 @@ namespace MyApp.Api.DTOs
         public List<AttachableChallanLineDto> Lines { get; set; } = new();
     }
 
+    /// <summary>
+    /// An open Sales Order a given challan can be linked to: same company,
+    /// customer and division. MatchingLines counts the challan's lines that
+    /// already correspond to an ordered line, so the likeliest order is first.
+    /// </summary>
+    public class AttachableOrderDto
+    {
+        public int Id { get; set; }
+        public int SalesOrderNumber { get; set; }
+        public DateTime OrderDate { get; set; }
+        public string? CustomerPoNumber { get; set; }
+        public int MatchingLines { get; set; }
+        public int ChallanLines { get; set; }
+        public decimal RemainingQuantity { get; set; }
+    }
+
     public class AttachableChallanLineDto
     {
         public int DeliveryItemId { get; set; }

@@ -57,6 +57,8 @@ export default function SalesOrderPage() {
   const canDelete = has("salesorders.manage.delete");
   const canPrint = has("salesorders.print.view");
   const canMakeChallan = has("challans.manage.create");
+  // Attaching edits the challan (its order link, PO and status), as the server checks.
+  const canAttachChallan = has("challans.manage.update");
   const canBill = has("bills.manage.create");
   const canViewClients = has("clients.manage.view");
   const canImportPo = canCreate && has("poformats.import.create");
@@ -337,7 +339,7 @@ export default function SalesOrderPage() {
                   <div style={st.actions}>
                     {canView && <button style={st.actBtn} onClick={() => setViewOrder(o)} title="View details"><MdVisibility size={16} /></button>}
                     {canDeliver && <button style={st.deliverBtn} onClick={() => setDeliverOrder(o)} title="Create a delivery challan for this order"><MdLocalShipping size={15} /> Create Challan</button>}
-                    {canDeliver && <button style={st.attachBtn} onClick={() => setAttachOrder(o)} title="Attach an existing delivery challan to this order"><MdLink size={15} /> Attach Challan</button>}
+                    {canDeliver && canAttachChallan && <button style={st.attachBtn} onClick={() => setAttachOrder(o)} title="Attach an existing delivery challan to this order"><MdLink size={15} /> Attach Challan</button>}
                     {canUpdate && (o.isEditable
                       ? <button style={st.actBtn} onClick={() => { setEditOrder(o); setShowForm(true); }} title="Edit"><MdEdit size={16} /></button>
                       : <button style={{ ...st.actBtn, opacity: 0.4, cursor: "not-allowed" }} disabled title="Locked — a challan from this order has been billed, so its lines are fixed. Edit items on the challan/bill instead."><MdEdit size={16} /></button>
@@ -386,7 +388,7 @@ export default function SalesOrderPage() {
           onPrint={canPrint ? handlePrint : undefined}
           onEdit={canUpdate ? (o) => { setEditOrder(o); setShowForm(true); } : undefined}
           onDeliver={canMakeChallan ? (o) => setDeliverOrder(o) : undefined}
-          onAttach={canMakeChallan ? (o) => setAttachOrder(o) : undefined}
+          onAttach={canAttachChallan ? (o) => setAttachOrder(o) : undefined}
           onGenerateBill={canBill ? (o) => handleGenerateBill(o) : undefined}
         />
       )}

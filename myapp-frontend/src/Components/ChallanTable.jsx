@@ -1,6 +1,6 @@
 import { useState } from "react";
 import CardActions from "./CardActions";
-import { MdVisibility, MdEdit, MdPrint, MdPictureAsPdf, MdGridOn, MdRequestQuote, MdContentCopy, MdCopyAll, MdCancel, MdDelete, MdWarning } from "react-icons/md";
+import { MdVisibility, MdEdit, MdPrint, MdPictureAsPdf, MdGridOn, MdRequestQuote, MdContentCopy, MdCopyAll, MdCancel, MdDelete, MdWarning, MdLink } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
 import DataTable from "./DataTable";
 import StatusBadge, { toneForStatus } from "./StatusBadge";
@@ -35,6 +35,7 @@ export default function ChallanTable({
   onGenerateBill,
   onDuplicate,
   onCopy,
+  onLinkOrder,
   exportingId,
   duplicatingId,
   printDisabled = false,
@@ -148,6 +149,8 @@ export default function ChallanTable({
   const renderActions = (c) => {
     const flags = evalRowFlags(c, perms);
     const isDuplicating = duplicatingId === c.id;
+    // Delivered before the order existed: link it once the SO arrives.
+    const canLink = onLinkOrder && c.status === "No PO" && !c.salesOrderId && !c.invoiceId;
     return (
       <CardActions nowrap label={`More actions for challan ${c.challanNumber}`}>
         <button data-label="View" data-primary style={btnStyles.view} onClick={() => setSelectedChallan(c)} title="View challan">
@@ -205,6 +208,11 @@ export default function ChallanTable({
         {flags.canGenerateBill && (
           <button data-label="Generate bill" data-primary style={btnStyles.generateBill} onClick={() => onGenerateBill?.(c)} title="Generate Bill from this challan">
             <MdRequestQuote size={14} />
+          </button>
+        )}
+        {canLink && (
+          <button data-label="Link to sales order" style={btnStyles.link} onClick={() => onLinkOrder(c)} title="Link this challan to a Sales Order">
+            <MdLink size={14} />
           </button>
         )}
         {perms.permUpdate && flags.canCancel && (
@@ -270,6 +278,7 @@ const btnStyles = {
   duplicate:    { ...baseBtn, backgroundColor: "#ede7f6", color: "#4527a0" },
   copy:         { ...baseBtn, backgroundColor: "#e8eaf6", color: "#283593" },
   generateBill: { ...baseBtn, backgroundColor: "#e0f2f1", color: "#00695c" },
+  link:         { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1" },
   cancel:       { ...baseBtn, backgroundColor: "#fce4ec", color: "#c62828" },
   delete:       { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },
 };
