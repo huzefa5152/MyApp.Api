@@ -713,8 +713,9 @@ confused with it.
 
 ### 5b-7. Editing a bill, and what each tab may change (2026-09-03)
 
-`EditBillForm.jsx` serves BOTH tabs and the read-only view. Four rules it must
-keep:
+`EditBillForm.jsx` serves the Invoices screen's edit and the read-only view
+(one screen since 2026-10-28, §5b-22: it always runs in bill mode, and the FBR
+adjustment overlay is never written from the importer). Rules it must keep:
 
 - **A bill list is ordered by when the row was WRITTEN**
   (`CreatedAt desc, Id desc` in `InvoiceRepository`), not by invoice number.
@@ -736,7 +737,7 @@ keep:
   `challanNumbers` alone locked a plain standalone bill's buyer and its
   add/remove-items the moment a delivery was recorded, and told the operator to
   go and edit the challan instead.
-- **The Invoices tab is not read-only when FBR is off.** It used to shadow
+- *(Historical, before the one-screen merge.)* **The Invoices tab was not read-only when FBR was off.** It used to shadow
   `readOnly` (`groupingOnly`), which left a "View Bill" screen with no Save at
   all — a misclassified line could only be fixed from the Bills tab. It now
   behaves as it does with FBR on: item type, quantity, unit price and the line
@@ -753,8 +754,10 @@ keep:
   (`QuantityInput`), which is where that rule belongs. The server always
   recomputes `LineTotal = Quantity x UnitPrice`, so the 12-decimal rate is what
   makes the round trip exact.
-- **Picking an item type seeds the description ONLY when the line has none**, in
-  both modes. The create form's save used to ship `itemTypeName || description`
+- **Picking an item type fills the description by `utils/lineDescription.js`**
+  (2026-10-28): when the line has none, OR it still reads exactly the previous
+  pick's own text (catalog text, not the operator's); typed text is never
+  replaced; clearing the item keeps the words. All three invoice forms use it. The create form's save used to ship `itemTypeName || description`
   for the Invoices tab, which replaced a typed description — or one prefilled
   from a sales order — with the catalog name on the way to the server.
 - **The line AMOUNT is an input on both tabs, and means different things:**
@@ -823,8 +826,7 @@ Do not reintroduce a "fully paid" test in either.
 **The Correct BUTTON is stricter than the server (2026-09-09).** A correction is
 a FILING correction — it exists to bill quantity under-reported on a document
 FBR already holds — so the button renders only when the company has FBR on AND
-that document is `Submitted`, on the Bills tab and the Invoices tab, card and
-table alike (one gate each in `InvoicePage.jsx` and `InvoiceTable.jsx`). It used
+that document is `Submitted`, on the Invoices screen, card and table alike (one gate, `utils/invoiceActions.js`). It used
 to read `fbrEnabled ? isSubmitted : true`, which offered it on every bill of
 every FBR-off company, where there is no filing to correct and an ordinary edit
 is the right tool. `CreateSupplementAsync` still accepts the FBR-off case on
@@ -1181,14 +1183,16 @@ what refuses.
 
 ### 5b-14. Every bill screen is built from the same steps (2026-09-24)
 
-New Bill, New Bill (No Challan), Edit Bill and View Bill (both tabs) share one
+New invoice (from a challan / without challan), Edit and View share one
 layout, so an operator who has learnt one has learnt them all:
 
 - **`Components/bill/`** holds the pieces -- `BillStep` (the numbered card:
   status `done` / `todo` / `warn` / `optional` / `view`, a one-line `help`, a
   `notice` that shows even when folded, an anchor `id`), `BillChecklist` (the
   footer's clickable "what's left before you can save"), `BillTotals` (totals
-  with a note on every row) and `billTheme.js`.
+  with a note on every row). Colours and the step tones come from `theme.js`
+  (`colors`, `stepTone`, `formShell` / `formBodyFill`); `billTheme.js` was
+  retired on 2026-10-28 -- add a colour to `theme.colors`, never a hex literal.
 - **`utils/billEntry.js` decides, the components only draw.** It is pure and
   dependency-free: the anchors, the checklist items, the rate-block wording
   and the create screens' totals rows. `node scripts/test_bill_entry.mjs` pins
@@ -1200,8 +1204,8 @@ layout, so an operator who has learnt one has learnt them all:
   taxes & total, attachments. Steps that wait for the buyer still show, folded,
   so the numbering never jumps. Edit keeps its tax inputs in Buyer & Bill
   Details and its own balance due (grand total - withholding + advance tax).
-- **The form must join the modal's flex column** (`billFormShell` /
-  `billFormBody`). A `<form>` is not a flex container, so the body used to be
+- **The form must join the modal's flex column** (`formShell` /
+  `formBodyFill` in `theme.js`). A `<form>` is not a flex container, so the body used to be
   capped at a guessed 70-75vh and a footer that wrapped on a phone pushed the
   save button out of the modal.
 - **Scroll the modal body directly** (`jumpToAnchor`). A smooth
@@ -1719,6 +1723,49 @@ Overview (`pages/DashboardPage.jsx`) and Accounting (`pages/AccountingDashboardP
     Suite: `test_customer_ledger.py` suite 10.
 - Suites: `scripts/test_customer_ledger.py` suite 9, tenant suite 14.
 
+### 5b-22. One Invoices screen (2026-10-28)
+
+The importer's Bills and Invoices tabs are ONE screen, `/invoices`
+(`InvoicePage` mode `invoices`); `/bills` redirects there with its query
+string. Importers never adjust quantity or item type for FBR, so:
+
+- **Edit is the full edit** (`bills.manage.update`, PUT). The narrow
+  `invoices.manage.update.itemtype[.qty]` keys stay in the catalog (shared with
+  the other lines) and open nothing here; nothing on the importer writes
+  `InvoiceItemAdjustment` (`writeMode` is always `"bill"`).
+- **Permissions are unchanged, only regrouped**: either list key opens the
+  screen; `bills.*` reads "Invoices > Making invoices" in the role editor;
+  either print key prints. The server is still the authority on every action.
+- **One printed document, the Invoice** = the `TaxInvoice` template (what every
+  live customer's layout uses). The `Bill` type is HIDDEN, not deleted
+  (`PrintTemplateTypes.Retired`, `templateSampleData.isOfferedTemplateType`):
+  not in the template list, editor, starter gallery, portal choice or MCP print
+  tools; existing Bill rows and a portal already set to Bill keep working.
+- **Card and table offer the same actions**: `utils/invoiceActions.js`
+  (`buildInvoiceActions`, `fbrChip`, `statusReason`) decides, and
+  `Components/InvoiceActionBar.jsx` draws both. Icon + label + tooltip on every
+  action, danger last, state decides what shows and `statusReason` says why
+  (e.g. no Edit on a filed invoice). No payment chip -- §5b-8 still holds.
+- **A line never saves a blank description**: `AppDbContext.FillBlankLineDescriptions`
+  fills it on SaveChanges (company DisplayName, else the line's item name,
+  else the catalog name; non-inventory: its default text). FBR still gets "".
+- **FBR HS codes on the line, item made on save**: with `itemtypes.manage.create`
+  the picker (`offerFbrCodes`) lists tariff codes the company has no item for.
+  The line carries a pending `newItemType`; the controller (and MCP
+  `prepare_bill`) re-checks the right, opens ONE transaction, and
+  `Helpers/NewItemTypes` makes the item through `ItemTypeService.CreateAsync`
+  (or registers the shared placeholder when its name is unchanged -- never
+  touching its global `IsFavorite`, or reuses a visible match); the invoice
+  service joins it (`BeginOrJoinTransactionAsync`). A failed invoice leaves no
+  item. The company is always the asserted one, never the body's.
+- **The stock guard is never loosened**: `utils/lineStock.js` shows "No stock"
+  before save; on a hard-block company Save stays disabled (the importer's
+  guard does not honour `stock.overcommit.allow` on invoices), and "Add item
+  and record stock" opens the item form prefilled -- an opening quantity there
+  must carry a value, or the sale would carry no cost.
+- Suites: `python scripts/test_importer_invoice_screen.py --base <url>` (44),
+  `node scripts/test_invoice_screen.mjs` (42).
+
 ### 5c. Customer Portal — the only anonymous surface
 
 `Controllers/PublicCustomerPortalController.cs` is one of just two
@@ -1743,7 +1790,9 @@ Rules that must not be relaxed:
   of Serilog by `Helpers/PortalTokenLogMasker`, and masked in audit rows. Never
   log it, and never echo the management list response into a log.
 - The portal serves ONE document type, stored on the row (`CustomerPortal.DocumentType`:
-  `Bill` | `TaxInvoice` | NULL = auto, legacy rows only). Bill and Tax Invoice are
+  `Bill` | `TaxInvoice` | NULL = auto, legacy rows only). Since 2026-10-28 the
+  screen offers only `TaxInvoice` (labelled "Invoice"); a row already on `Bill`
+  is shown read-only and keeps printing (§5b-22). Bill and Tax Invoice are
   different templates fed by different print DTOs, so template and data are chosen
   together in `ResolveDocumentAsync` — never swap one for the other. An explicit
   choice is absolute: if that template is missing, printing is OFF.
@@ -2229,7 +2278,9 @@ them can be resolved from FBR.
 | FBR sandbox E2E (Importer + Exporter, scenario matrix) | `python scripts/test_fbr_sandbox_e2e.py --fbr-token <sandbox>` | see the suite banner; skips every live suite without a token |
 | FBR permissions (validate / submit / reset are separate) | `python scripts/test_fbr_rbac.py --fbr-token <sandbox>` | `18/18 checks passed` |
 | Billing at the rate the goods came in at (evidence, refuse vs advise, override, picker, isolation) | `python scripts/test_imported_tax_rate.py` (add `--db "<conn>"` for the GD-line cases) | `56/56 checks passed` (with `--db`) |
-| Bill screens' shared checklist + totals rows (offline) | `node scripts/test_bill_entry.mjs` | `17/17 checks passed` |
+| Bill screens' shared checklist + totals rows (offline) | `node scripts/test_bill_entry.mjs` | `24/24 checks passed` |
+| One Invoices screen: descriptions, new items on save, stock guard, MCP prepare_bill, retired Bill print type | `python scripts/test_importer_invoice_screen.py --base <url>` | `44/44 importer invoice screen checks passed` |
+| Invoice screen decisions (offline): description fill, stock before save, card/table actions, FBR chip | `node scripts/test_invoice_screen.mjs` | `42/42 checks passed` |
 | GD costing import: line rules on both paths, leave-out, choose item, file identity | `python scripts/test_gd_import_costing.py`; `node scripts/test_gd_costing_entry.mjs`; `cd scripts/gd_costing_harness && dotnet run -c Release` | `476 passed, 0 failed`; `54/54 checks passed`; `145 checks, 0 failed` |
 | Invoice Sales Detail: periods, filters, Excel = screen, Excel format pinned, access | `python scripts/test_invoice_sales_detail.py` (add `--db "<conn>"` for the FBR-submitted cases); `node scripts/test_invoice_sales_detail.mjs` | `64/64 checks passed` (with `--db`; 61 + 3 skipped without); `45/45 checks passed` |
 | FIFO by GD (claimed first, never blocks, WA unchanged) | `cd scripts/stock_fifo_harness && dotnet run -c Release`; `python scripts/test_stock_fifo.py`; `node scripts/test_fifo_pricing.mjs` | `159 checks, 0 failed`; `61/61 checks passed`; `11/11 checks passed` |
