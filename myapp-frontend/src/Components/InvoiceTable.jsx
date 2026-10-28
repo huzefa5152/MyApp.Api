@@ -313,26 +313,26 @@ export default function InvoiceTable({
           </button>
         )}
         {perms.canPrint && (
-          <button data-label="Print tax invoice" data-primary={(isSubmitted || inv.isCancelled || isReturnsMode) || undefined} style={{ ...btn.tax, ...(perms.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={perms.noTemplate} onClick={() => onPrintTax?.(inv)} title={perms.noTemplate ? perms.noTemplateReason : "Print tax invoice"}>
+          <button data-label="Print" data-primary={(isSubmitted || inv.isCancelled || isReturnsMode) || undefined} style={{ ...btn.tax, ...(perms.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={perms.noTemplate} onClick={() => onPrintTax?.(inv)} title={perms.noTemplate ? perms.noTemplateReason : "Print this invoice"}>
             <MdDescription size={14} />
           </button>
         )}
         {perms.canPrint && (
-          <button data-label="Tax invoice PDF"
+          <button data-label="PDF"
             style={{ ...btn.pdf, opacity: (exportingId || perms.noTemplate) ? 0.55 : 1, ...(perms.noTemplate ? { cursor: "not-allowed" } : {}) }}
             disabled={!!exportingId || perms.noTemplate}
             onClick={() => onExportTaxPdf?.(inv)}
-            title={perms.noTemplate ? perms.noTemplateReason : "Export Tax Invoice PDF"}
+            title={perms.noTemplate ? perms.noTemplateReason : "Download as PDF"}
           >
             {exportingId === inv.id + "-tax-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />}
           </button>
         )}
         {perms.canPrint && hasExcelTax && (
-          <button data-label="Tax invoice XLS"
+          <button data-label="Excel"
             style={{ ...btn.excel, opacity: exportingId ? 0.55 : 1 }}
             disabled={!!exportingId}
             onClick={() => onExportTaxExcel?.(inv)}
-            title="Export Tax Invoice XLS"
+            title="Download as Excel"
           >
             {exportingId === inv.id + "-tax-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />}
           </button>

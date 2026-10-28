@@ -303,15 +303,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
         setClientId(data.clientId ? String(data.clientId) : "");
         setDivisionId(data.divisionId ? String(data.divisionId) : "");
         setGstRate(data.gstRate ?? 18);
-        // Print grouping (2026-08-11): initialise the toggle from the saved
-        // per-document flag — Invoice mode ↔ Tax Invoice flag, Bill mode ↔ Bill
-        // flag. null → that document's legacy default (Tax Invoice grouped,
-        // Bill individual).
-        setGroupedView(
-          billsMode
-            ? (data.printGroupBillByItemType ?? false)
-            : (data.printGroupTaxInvoiceByItemType ?? false)
-        );
+        // Print grouping: the importer prints one document, the Invoice
+        // (TaxInvoice template), so the toggle reads and writes its flag.
+        // null → individual lines.
+        setGroupedView(data.printGroupTaxInvoiceByItemType ?? false);
         // Withholding tax — prefill from the loaded bill: a stored rate → rate
         // mode; else a non-zero stored amount → fixed-amount mode; else off.
         if (data.withholdingTaxRate != null) {
@@ -1404,16 +1399,13 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   const removeRow = (index) => setItems((prev) => prev.filter((_, i) => i !== index));
 
   // Persist the print-grouping choice immediately (independent of the item/qty
-  // Save, and the ONLY editable action in FBR-off grouping-only mode). Invoice
-  // mode ↔ Tax Invoice flag, Bill mode ↔ Bill flag — the two stay independent.
-  // No-op for a not-yet-created bill (the create form carries the flag instead).
+  // Save). Sets the Invoice print's flag; the retired Bill print's flag is left
+  // as it was. No-op for a not-yet-created bill.
   const persistGrouping = async (grouped) => {
     setGroupedView(grouped);
     if (!invoiceId) return;
     try {
-      await setPrintGrouping(invoiceId, billsMode
-        ? { printGroupBillByItemType: grouped }
-        : { printGroupTaxInvoiceByItemType: grouped });
+      await setPrintGrouping(invoiceId, { printGroupTaxInvoiceByItemType: grouped });
     } catch { /* non-fatal — the print reflects whatever was last saved */ }
   };
 
@@ -2215,7 +2207,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                         onClick={() => persistGrouping(false)}
                         style={{ ...styles.viewToggleBtn, ...(!groupedView ? styles.viewToggleBtnActive : {}) }}
                         aria-pressed={!groupedView}
-                        title="Show every bill line individually"
+                        title="Print every line with its own description"
                       >
                         Individual lines
                       </button>
@@ -2233,9 +2225,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                 )}
                 {showGroupToggle && billsMode && (
                   <p style={styles.gridHint}>
-                    Sets how the printed <b>Bill</b> lays out lines that share an Item Type — <b>Grouped</b> merges
-                    them into one row (summed qty + value, weighted-average price); <b>Individual lines</b> prints
-                    every line. Saved on this bill; affects the printout only (the lines below stay individual for editing).
+                    Sets how the printed <b>Invoice</b> lays out lines that share an Item Type — <b>Grouped</b> merges
+                    them into one row (summed qty + value, weighted-average price) and <b>grouped rows print the item
+                    type name</b>, not the line descriptions; <b>Individual lines</b> prints every line with its own
+                    description. Saved on this invoice; affects the printout only (the lines below stay individual for editing).
                   </p>
                 )}
 

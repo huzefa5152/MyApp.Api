@@ -1280,18 +1280,18 @@ export default function InvoicePage({ mode = "invoices" }) {
                       </button>
                     )}
                     {canPrint && (
-                      <button data-primary={isNotesMode || inv.fbrStatus === "Submitted" || inv.isCancelled || undefined} style={{ ...styles.taxBtn, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print tax invoice"} onClick={() => handlePrintTax(inv)}>
-                        <MdDescription size={14} /> Tax Invoice
+                      <button data-primary={isNotesMode || inv.fbrStatus === "Submitted" || inv.isCancelled || undefined} style={{ ...styles.taxBtn, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : (isNotesMode ? "Print this note" : "Print this invoice")} onClick={() => handlePrintTax(inv)}>
+                        <MdPrint size={14} /> Print
                       </button>
                     )}
                     {canPrint && (
-                      <button style={{ ...styles.pdfBtn, opacity: (tplPicker.noTemplate || exportingId) ? 0.5 : 1, ...(tplPicker.noTemplate ? { cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download Tax PDF"} onClick={() => handleExportTaxPdf(inv)}>
-                        {exportingId === inv.id + "-tax-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} Tax PDF
+                      <button style={{ ...styles.pdfBtn, opacity: (tplPicker.noTemplate || exportingId) ? 0.5 : 1, ...(tplPicker.noTemplate ? { cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download as PDF"} onClick={() => handleExportTaxPdf(inv)}>
+                        {exportingId === inv.id + "-tax-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} PDF
                       </button>
                     )}
                     {canPrint && hasExcelTax && (
                       <button style={{ ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportTaxExcel(inv)}>
-                        {exportingId === inv.id + "-tax-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Tax XLS
+                        {exportingId === inv.id + "-tax-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Excel
                       </button>
                     )}
                     {/* View what FBR will see — grouped items, totals, raw
@@ -1567,7 +1567,7 @@ export default function InvoicePage({ mode = "invoices" }) {
         <BulkInvoiceDialog
           open={bulkPrintOpen}
           onClose={() => setBulkPrintOpen(false)}
-          title={printTemplateType === "TaxInvoice" ? "Download Sales Tax Invoices" : "Download Bills"}
+          title={isNotesMode ? `Download ${noteLabel}s` : "Download invoices"}
           documentType={printTemplateType}
           templates={tplPicker.templates}
           initialFrom={dateFrom}

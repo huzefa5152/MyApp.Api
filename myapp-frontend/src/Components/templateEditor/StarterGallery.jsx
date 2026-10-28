@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { MdSearch, MdClose, MdVisibility, MdCheckCircle } from "react-icons/md";
 import { STARTER_TEMPLATES } from "../../utils/starterTemplates";
-import { TEMPLATE_TYPES, TEMPLATE_TYPE_LABEL, buildTemplatePreviewHtml } from "../../utils/templateSampleData";
+import { TEMPLATE_TYPES, TEMPLATE_TYPE_LABEL, buildTemplatePreviewHtml, isOfferedTemplateType } from "../../utils/templateSampleData";
 import { useCompany } from "../../contexts/CompanyContext";
 import A4PreviewFrame from "./A4PreviewFrame";
 
@@ -80,6 +80,7 @@ export default function StarterGallery({
 
   const list = useMemo(() => {
     let items = STARTER_TEMPLATES.filter((t) => {
+      if (!isOfferedTemplateType(t.type)) return false;
       if (lockType && t.type !== lockType) return false;
       if (typeFilter && t.type !== typeFilter) return false;
       if (search) {

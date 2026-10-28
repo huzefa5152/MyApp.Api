@@ -194,7 +194,7 @@ export default function CustomerPortalsPage() {
     if ((portal.documentType || "") === type) return;
     try {
       await setCustomerPortalDocumentType(portal.id, type || null);
-      notify(`Portal now uses the ${type === "TaxInvoice" ? "Tax Invoice" : "Bill"}.`, "success");
+      notify(`Portal now uses the ${type === "TaxInvoice" ? "Invoice" : "Bill"}.`, "success");
       reload();
     } catch (err) {
       notify(err.response?.data?.error || "Could not change the document.", "error");
@@ -420,6 +420,17 @@ export default function CustomerPortalsPage() {
 function DocumentPicker({ portal, disabled, onChange }) {
   const available = portal.availableDocumentTypes || [];
   const isAuto = !portal.documentType;
+  // A portal set to the retired Bill document keeps printing it. It is shown,
+  // not rewritten: changing what a customer receives is the operator's call.
+  if (portal.documentType === "Bill") {
+    return (
+      <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}
+            title="This portal still prints the Bill template. New portals use the Invoice.">
+        <strong style={{ fontSize: "0.8rem" }}>Bill</strong>
+        <span style={st.subHint}>Still prints. New portals use the Invoice.</span>
+      </span>
+    );
+  }
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
       <select
@@ -433,11 +444,8 @@ function DocumentPicker({ portal, disabled, onChange }) {
       >
         {/* Only while it's still automatic — a one-way exit from the legacy default. */}
         {isAuto && <option value="">Automatic</option>}
-        <option value="Bill" disabled={!available.includes("Bill")}>
-          Bill{available.includes("Bill") ? "" : " (no template)"}
-        </option>
         <option value="TaxInvoice" disabled={!available.includes("TaxInvoice")}>
-          Tax Invoice{available.includes("TaxInvoice") ? "" : " (no template)"}
+          Invoice{available.includes("TaxInvoice") ? "" : " (no template)"}
         </option>
       </select>
       {!portal.templateAvailable && <span style={st.noTemplate}>no template</span>}
@@ -474,7 +482,8 @@ function CreatePortalModal({ companies, defaultCompanyId, loadingCompanies, onCl
     getPortalDocumentOptions(companyId)
       .then(({ data }) => {
         if (cancelled) return;
-        const opts = data || [];
+        // One sales document on the importer: the Invoice (TaxInvoice).
+        const opts = (data || []).filter((o) => o.type === "TaxInvoice");
         setDocOptions(opts);
         const firstReady = opts.find((o) => o.available);
         setDocumentType(firstReady ? firstReady.type : "");
@@ -570,7 +579,7 @@ function CreatePortalModal({ companies, defaultCompanyId, loadingCompanies, onCl
             </div>
             {noTemplates && (
               <p style={st.warnHint}>
-                This company has no Bill or Tax Invoice print template yet. The portal
+                This company has no Invoice print template yet. The portal
                 will still list invoices, but customers won't see Print or Download
                 until you add one.
               </p>

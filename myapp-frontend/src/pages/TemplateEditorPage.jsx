@@ -15,7 +15,7 @@ import { getDivisionsByCompany } from "../api/divisionApi";
 import { invalidatePrintTemplateCache } from "../hooks/usePrintTemplates";
 import { useCompany } from "../contexts/CompanyContext";
 import {
-  TEMPLATE_TYPES, DEFAULT_TEMPLATES, buildTemplatePreviewHtml,
+  TEMPLATE_TYPES, DEFAULT_TEMPLATES, buildTemplatePreviewHtml, isOfferedTemplateType,
 } from "../utils/templateSampleData";
 import { dropdownStyles } from "../theme";
 import CodeEditor from "../Components/templateEditor/CodeEditor";
@@ -56,7 +56,11 @@ export default function TemplateEditorPage() {
   const canApplyStarter = has("printtemplates.starter.apply");
   const [showApplyStarter, setShowApplyStarter] = useState(false);
   const { companies, selectedCompany, setSelectedCompany, loading, companyStamps } = useCompany();
-  const [templateType, setTemplateType] = useState(() => localStorage.getItem("te.type") || "Challan");
+  // A remembered type this line no longer offers (Bill) falls back to Challan.
+  const [templateType, setTemplateType] = useState(() => {
+    const t = localStorage.getItem("te.type");
+    return t && isOfferedTemplateType(t) ? t : "Challan";
+  });
   const [htmlContent, setHtmlContent] = useState("");
   const [originalContent, setOriginalContent] = useState("");
   const [templateJson, setTemplateJson] = useState(null);

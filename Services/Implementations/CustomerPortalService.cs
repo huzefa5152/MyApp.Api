@@ -58,7 +58,10 @@ namespace MyApp.Api.Services.Implementations
         private static readonly Dictionary<string, string> DocumentTypes = new(StringComparer.Ordinal)
         {
             ["Bill"] = "Bill",
-            ["TaxInvoice"] = "Tax Invoice",
+            // The importer prints one sales document, the Invoice (TaxInvoice
+            // template). "Bill" stays valid so a portal already set to it keeps
+            // printing; the screen no longer offers it.
+            ["TaxInvoice"] = "Invoice",
         };
 
         /// <summary>

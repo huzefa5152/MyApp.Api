@@ -28,10 +28,13 @@ import {
 const SAMPLE_LINE_PHOTO = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMjAiIGhlaWdodD0iMjQwIiB2aWV3Qm94PSIwIDAgMzIwIDI0MCI+PHJlY3Qgd2lkdGg9IjMyMCIgaGVpZ2h0PSIyNDAiIHJ4PSI2IiBmaWxsPSJyZ2IoMzgsODYsMTQ1KSIvPjxjaXJjbGUgY3g9IjEwMiIgY3k9Ijg2IiByPSIyNiIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwuNzUpIi8+PHBhdGggZD0iTTM4IDE5NiBMMTM0IDExMCBMMTk4IDE2MyBMMjQzIDEzMiBMMjg4IDE5NiBaIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LC44NSkiLz48dGV4dCB4PSI1MCUiIHk9IjIyOCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjMxIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LC45NSkiPlNBTVBMRSBQSE9UTzwvdGV4dD48L3N2Zz4=";
 const SAMPLE_LINE_PHOTO_TALL = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgMjAwIDMwMCI+PHJlY3Qgd2lkdGg9IjIwMCIgaGVpZ2h0PSIzMDAiIHJ4PSI2IiBmaWxsPSJyZ2IoMTUwLDcyLDQyKSIvPjxjaXJjbGUgY3g9IjY0IiBjeT0iMTA4IiByPSIyMiIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwuNzUpIi8+PHBhdGggZD0iTTI0IDI0NSBMODQgMTM4IEwxMjQgMjA0IEwxNTIgMTY1IEwxODAgMjQ1IFoiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsLjg1KSIvPjx0ZXh0IHg9IjUwJSIgeT0iMjg1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMjYiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsLjk1KSI+VEFMTCBQSE9UTzwvdGV4dD48L3N2Zz4=";
 
+// The importer prints one sales document, the Invoice (TemplateType
+// "TaxInvoice"). "Bill" is hidden from every list, editor and gallery — hidden,
+// not deleted: existing Bill rows stay in the database and a portal set to one
+// keeps printing it.
 export const TEMPLATE_TYPES = [
   { value: "Challan", label: "Delivery Challan" },
-  { value: "Bill", label: "Bill / Invoice" },
-  { value: "TaxInvoice", label: "Sales Tax Invoice" },
+  { value: "TaxInvoice", label: "Invoice" },
   { value: "SalesQuote", label: "Sales Quote" },
   { value: "SalesOrder", label: "Sales Order" },
   { value: "CreditNote", label: "Credit Note" },
@@ -45,9 +48,13 @@ export const TEMPLATE_TYPES = [
   { value: "WithholdingTaxReceipt", label: "Withholding Tax Receipt" },
 ];
 
-export const TEMPLATE_TYPE_LABEL = Object.fromEntries(
-  TEMPLATE_TYPES.map((t) => [t.value, t.label])
-);
+// Whether a template type is offered on this line (Bill is not).
+export const isOfferedTemplateType = (type) => TEMPLATE_TYPES.some((t) => t.value === type);
+
+export const TEMPLATE_TYPE_LABEL = {
+  ...Object.fromEntries(TEMPLATE_TYPES.map((t) => [t.value, t.label])),
+  Bill: "Bill (retired)",
+};
 
 const SAMPLE_BRANDING = {
   companyBrandName: "SAMPLE COMPANY",

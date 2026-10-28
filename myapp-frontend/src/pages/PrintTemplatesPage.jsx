@@ -22,7 +22,7 @@ import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
 import { dropdownStyles } from "../theme";
 import {
-  TEMPLATE_TYPES, TEMPLATE_TYPE_LABEL, buildTemplatePreviewHtml,
+  TEMPLATE_TYPES, TEMPLATE_TYPE_LABEL, buildTemplatePreviewHtml, isOfferedTemplateType,
 } from "../utils/templateSampleData";
 import StarterGallery from "../Components/templateEditor/StarterGallery";
 import ApplyStarterModal from "../Components/templateEditor/ApplyStarterModal";
@@ -140,7 +140,7 @@ export default function PrintTemplatesPage() {
     return () => clearTimeout(t);
   }, [recentId, loading]);
 
-  // Per-type counts for the type filter, so "Bill / Invoice (3)" says at a
+  // Per-type counts for the type filter, so "Invoice (3)" says at a
   // glance what the company has before the operator narrows to it.
   const countsByType = useMemo(() => {
     const m = {};
@@ -242,6 +242,8 @@ export default function PrintTemplatesPage() {
   const divisionById = useMemo(() => Object.fromEntries(divisions.map((d) => [d.id, d])), [divisions]);
 
   const applyFilters = (rows) => rows.filter((t) => {
+    // Retired types (Bill) stay in the database but are not listed.
+    if (!isOfferedTemplateType(t.templateType)) return false;
     if (typeFilter && t.templateType !== typeFilter) return false;
     if (divFilter === "company" && t.divisionId != null) return false;
     if (divFilter && divFilter !== "company" && String(t.divisionId) !== divFilter) return false;
