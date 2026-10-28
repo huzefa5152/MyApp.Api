@@ -1,3 +1,24 @@
+// Templates that don't define their own @page get a sane print default: a
+// top+bottom page margin (so a multi-page doc doesn't butt page-to-page —
+// page 1 ends with a bottom margin, page 2 starts with a top margin), rows
+// that won't split across a break, and a repeating table header. Skip this
+// when the template already sets @page so we never fight its own layout.
+// Break-avoidance is injected unconditionally — a template defining its own
+// @page used to suppress it entirely, which is how the FBR box ended up
+// split across pages. The @page default is still skipped when the template
+// sets one, so we never fight its own page geometry.
+export function withPrintCss(html) {
+  const pageCss = /@page/i.test(html)
+    ? ""
+    : "@page{size:A4;margin:12mm;}thead{display:table-header-group;}";
+  const printCss =
+    "<style>@media print{" + pageCss
+    + "tr,img,.no-break{page-break-inside:avoid;break-inside:avoid;}}</style>";
+  return /<\/head>/i.test(html)
+    ? html.replace(/<\/head>/i, printCss + "</head>")
+    : printCss + html;
+}
+
 /**
  * Write merged print HTML into an already-open popup window and trigger the
  * browser print dialog only AFTER every image (logo) has finished loading.
@@ -24,24 +45,7 @@ export function writeAndPrint(w, html, { timeoutMs = 5000 } = {}) {
       .catch(() => { if (!w.closed) w.document.body.textContent = "This document could not fit the letterhead area. Adjust the template or shorten an oversized row and retry."; });
     return;
   }
-  // Templates that don't define their own @page get a sane print default: a
-  // top+bottom page margin (so a multi-page doc doesn't butt page-to-page —
-  // page 1 ends with a bottom margin, page 2 starts with a top margin), rows
-  // that won't split across a break, and a repeating table header. Skip this
-  // when the template already sets @page so we never fight its own layout.
-  // Break-avoidance is injected unconditionally — a template defining its own
-  // @page used to suppress it entirely, which is how the FBR box ended up
-  // split across pages. The @page default is still skipped when the template
-  // sets one, so we never fight its own page geometry.
-  const pageCss = /@page/i.test(html)
-    ? ""
-    : "@page{size:A4;margin:12mm;}thead{display:table-header-group;}";
-  const printCss =
-    "<style>@media print{" + pageCss
-    + "tr,img,.no-break{page-break-inside:avoid;break-inside:avoid;}}</style>";
-  html = /<\/head>/i.test(html)
-    ? html.replace(/<\/head>/i, printCss + "</head>")
-    : printCss + html;
+  html = withPrintCss(html);
   w.document.open();
   w.document.write(html);
   w.document.close();

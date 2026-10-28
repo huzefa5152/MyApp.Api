@@ -93,10 +93,11 @@ namespace MyApp.Api.Services.Implementations
                 }
                 if (!eligible) return false;
             }
-            if (!tool.Configurable) return true;
+            if (!tool.Configurable && tool.GrantedWith == null) return true;
+            var policyName = tool.GrantedWith ?? toolName;
             var policy = await McpPolicyAsync(userId);
-            return policy == null || (McpUserAccessService.Names(policy.GrantedTools).Contains(toolName)
-                && (policy.SelectedTools == null || McpUserAccessService.Names(policy.SelectedTools).Contains(toolName)));
+            return policy == null || (McpUserAccessService.Names(policy.GrantedTools).Contains(policyName)
+                && (policy.SelectedTools == null || McpUserAccessService.Names(policy.SelectedTools).Contains(policyName)));
         }
 
         public void InvalidateAll()

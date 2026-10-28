@@ -104,7 +104,7 @@ public partial class McpController
             "get_action_status" => await GetActionStatusAsync(args),
             "search_email_enquiries" or "get_email_enquiry" or "prepare_email_decision" or "prepare_email_quotation" => await CallEmailToolAsync(name, args),
             "list_print_templates" or "get_print_template" or "get_print_contract" or "prepare_print_template_update" => await CallPrintToolAsync(name, args),
-            "get_document_print_data" => await CallDocumentPrintToolAsync(name, args),
+            "get_document_print_data" or "get_document_render_bundle" => await CallDocumentPrintToolAsync(name, args),
             "get_onboarding_schema" or "get_company_onboarding_status" => await CallOnboardingToolAsync(name, args),
             "prepare_supplier" or "prepare_item_type" => await CallMasterToolAsync(name, args),
             "get_bill_tax_filing" or "prepare_bill_tax_filing" or "validate_bill_fbr" => await CallTaxFilingToolAsync(name, args),

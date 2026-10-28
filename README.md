@@ -306,6 +306,7 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+- **2026-10-29:** MCP can print documents. The new `get_document_render_bundle` tool returns a document with its company's own template, print data and images, signed or unsigned, and `myapp-frontend/scripts/print-document.mjs` turns it into a PDF and prints N copies. It is on for everyone who already has MCP print data and goes away when that is removed. The print suite's permission fixture was also brought in line with the rule that only the primary admin may put MCP keys into a role.
 - **2026-10-27:** An invoice excluded from FBR now reads that way. Its status says **Excluded from FBR** ahead of every pre-filing step (it used to show "Needs adjustment" when it had never been classified), the card carries a short note, and on the Invoices tab the only action left in view is **Include in FBR**: Adjust invoice and View FBR are hidden until it is included again. View and print stay in the ⋯ menu. Same in the table view.
 
 - **2026-10-27:** Connecting an AI agent with every permission ticked no longer fails with "An unexpected error occurred". Fourteen scopes join to 206 characters, past the 200-character `Scopes` column on MCP tokens and sign-in codes, so the save was refused once `fbrexclusion.write` was added. Both columns are now 500 (`20261027101725_WidenMcpScopes`). `scripts/test_mcp_oauth.py` approves with every offered scope and checks the token carries them all.

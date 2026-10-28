@@ -22,6 +22,15 @@ print data requires `documents.read` plus that document's print permission. Exis
 do not acquire those scopes automatically. Use `get_mcp_capabilities` for the effective tool
 names and `get_action_status` after an uncertain action result.
 
+`get_document_render_bundle` returns everything needed to print one document as its Print
+button does: the company's template (`templateId`, else the default, else the oldest), the
+print data and the company's own logo, stamps and quote images inlined. `signed` true needs
+a template with a signature, false prints without one. It is read in chunks (`offset`,
+`length`, `sha256`). It rides on the `get_document_print_data` grant: on wherever that is,
+off when it is removed. `myapp-frontend/scripts/print-document.mjs` uses it to print N
+copies (PDF via Edge, printed by SumatraPDF); its token lives in the gitignored
+`scripts/.print-sites.local.json` or `MYAPP_MCP_TOKEN_<SITE>`.
+
 **Create records (opt-in, per token):**
 
 | Scope | Tools | Needs |

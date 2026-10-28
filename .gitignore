@@ -457,3 +457,6 @@ wwwroot/
 # PO-parser production read-only check output: downloaded customer PO PDFs +
 # per-item dumps. Real client-confidential documents — never commit.
 scripts/_prod_dump_out/
+
+# Local MCP print tokens (scripts/print-document.mjs)
+myapp-frontend/scripts/.print-sites.local.json
