@@ -461,6 +461,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | One customer / supplier per name per company: simultaneous saves, case and outer spaces, rename | `python scripts/test_party_name_guard.py --base <url>` | `8/8 party name guard checks passed` |
 | FBR purchase import creates one supplier per seller, even with many invoices from a new seller in one file | `python scripts/test_fbr_import_supplier_reuse.py --base <url>` | `10/10 FBR import supplier reuse checks passed` |
 | Stock item-type reflow (V1) **(hard pre-push gate — see box above)** | `python scripts/test_stock_itemtype_reflow.py` | `76/76 checks passed` |
+| MCP render bundle (`get_document_render_bundle`): chunks + sha256, data equals the screen, template choice, signed / unsigned, own stamp inlined, cross-company refused, rides on the print-data grant | `python scripts/test_mcp_render_bundle.py --base <url>` | `16/16 render bundle checks passed` |
 | Unreadable FBR token survives Company saves | `python scripts/test_fbr_token_unreadable_survives_save.py --db "<conn>"` | `22/22 checks passed` |
 | Inventory V2 lifecycle | `python scripts/test_stock_v2_lifecycle.py` | `29/29 checks passed` |
 | Division isolation | `python scripts/test_division_isolation.py` | `all checks passed` |

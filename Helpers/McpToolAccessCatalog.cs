@@ -2,11 +2,19 @@ namespace MyApp.Api.Helpers;
 
 public sealed record McpToolAccessDefinition(
     string Name, string Group, string Label, string[] Permissions,
-    string Scope = "read", bool Write = false, bool SeedOnly = false, bool Configurable = true);
+    string Scope = "read", bool Write = false, bool SeedOnly = false, bool Configurable = true,
+    string? GrantedWith = null);
 
 /// <summary>Named MCP grants supplement, never replace, business permissions and token limits.</summary>
 public static class McpToolAccessCatalog
 {
+    private static readonly string[] DocumentPrintKeys =
+    {
+        "challans.print.view", "bills.print.view", "invoices.print.view", "salesquotes.print.view",
+        "salesorders.print.view", "purchasebills.print.view", "goodsreceipts.print.view",
+        "accounting.receipts.print", "accounting.payments.print", "withholdingtax.print.view"
+    };
+
     public static IReadOnlyList<McpToolAccessDefinition> All { get; } = Array.AsReadOnly(new McpToolAccessDefinition[]
     {
         new("list_companies", "Connection", "List accessible companies", Array.Empty<string>(), Configurable: false),
@@ -59,12 +67,10 @@ public static class McpToolAccessCatalog
         new("list_print_templates", "Print templates", "List print designs", new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead),
         new("get_print_template", "Print templates", "Read print design content", new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead),
         new("get_print_contract", "Print templates", "Read supported print fields", new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead),
-        new("get_document_print_data", "Print templates", "Read actual document print data", new[]
-        {
-            "challans.print.view", "bills.print.view", "invoices.print.view", "salesquotes.print.view",
-            "salesorders.print.view", "purchasebills.print.view", "goodsreceipts.print.view",
-            "accounting.receipts.print", "accounting.payments.print", "withholdingtax.print.view"
-        }, McpScopes.DocumentsRead),
+        new("get_document_print_data", "Print templates", "Read and print documents", DocumentPrintKeys, McpScopes.DocumentsRead),
+        // Rides on the print-data grant: the same documents, rendered with the company's own template.
+        new("get_document_render_bundle", "Print templates", "Render documents for printing", DocumentPrintKeys, McpScopes.DocumentsRead,
+            Configurable: false, GrantedWith: "get_document_print_data"),
 
     });
 

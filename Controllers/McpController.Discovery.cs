@@ -95,7 +95,7 @@ public partial class McpController
             "get_mcp_capabilities" => await GetCapabilitiesAsync(),
             "get_action_status" => await GetActionStatusAsync(args),
             "list_print_templates" or "get_print_template" or "get_print_contract" => await CallPrintToolAsync(name, args),
-            "get_document_print_data" => await CallDocumentPrintToolAsync(name, args),
+            "get_document_print_data" or "get_document_render_bundle" => await CallDocumentPrintToolAsync(name, args),
             "get_onboarding_schema" or "get_company_onboarding_status" => await CallOnboardingToolAsync(name, args),
             _ => await CallOperationsToolAsync(name, args)
         };
