@@ -1,4 +1,4 @@
-import { billColors } from "./billTheme";
+import { colors } from "../../theme";
 
 const money = (n) => `Rs. ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -14,7 +14,7 @@ export default function BillTotals({ rows = [] }) {
     <div
       style={{
         marginLeft: "auto", width: "100%", maxWidth: 480, padding: "0.75rem 0.9rem",
-        border: `1px solid ${billColors.cardBorder}`, borderRadius: 10, backgroundColor: billColors.inputBg,
+        border: `1px solid ${colors.cardBorder}`, borderRadius: 10, backgroundColor: colors.inputBg,
       }}
     >
       {rows.map((r) => (
@@ -23,7 +23,7 @@ export default function BillTotals({ rows = [] }) {
           style={{
             display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "1rem",
             padding: r.strong ? "0.5rem 0 0.35rem" : "0.3rem 0",
-            borderTop: r.strong ? `2px solid ${billColors.textPrimary}` : "none",
+            borderTop: r.strong ? `2px solid ${colors.textPrimary}` : "none",
             marginTop: r.strong ? "0.25rem" : 0,
           }}
         >
@@ -31,13 +31,13 @@ export default function BillTotals({ rows = [] }) {
             <span
               style={{
                 display: "block", fontSize: r.strong ? "0.98rem" : "0.88rem",
-                fontWeight: r.strong ? 800 : 600, color: billColors.textPrimary,
+                fontWeight: r.strong ? 800 : 600, color: colors.textPrimary,
               }}
             >
               {r.label}
             </span>
             {r.note && (
-              <span style={{ display: "block", fontSize: "0.72rem", color: billColors.textSecondary, lineHeight: 1.35 }}>
+              <span style={{ display: "block", fontSize: "0.72rem", color: colors.textSecondary, lineHeight: 1.35 }}>
                 {r.note}
               </span>
             )}
@@ -46,7 +46,7 @@ export default function BillTotals({ rows = [] }) {
             style={{
               flexShrink: 0, fontVariantNumeric: "tabular-nums",
               fontSize: r.strong ? "1.02rem" : "0.9rem", fontWeight: r.strong ? 800 : 600,
-              color: billColors.textPrimary,
+              color: colors.textPrimary,
             }}
           >
             {r.sign ? `${r.sign} ` : ""}{money(r.amount)}

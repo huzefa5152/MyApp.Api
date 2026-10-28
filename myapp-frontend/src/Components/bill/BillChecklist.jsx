@@ -1,5 +1,5 @@
+import { colors } from "../../theme";
 import { MdCheckCircle } from "react-icons/md";
-import { billColors } from "./billTheme";
 
 // The box that scrolls this element vertically -- the modal body, on a bill.
 function scrollerOf(el) {
@@ -25,7 +25,7 @@ export function jumpToAnchor(target) {
     el.scrollIntoView({ block: "center" });
   }
   const prev = el.style.boxShadow;
-  el.style.boxShadow = `0 0 0 3px ${billColors.warn}66`;
+  el.style.boxShadow = `0 0 0 3px ${colors.warn}66`;
   setTimeout(() => { el.style.boxShadow = prev; }, 1400);
 }
 
@@ -44,7 +44,7 @@ export default function BillChecklist({ items = [], readyText = "Ready to save",
         role="status"
         style={{
           display: "inline-flex", alignItems: "center", gap: "0.35rem", marginRight: "auto",
-          fontSize: "0.85rem", fontWeight: 600, color: billColors.success,
+          fontSize: "0.85rem", fontWeight: 600, color: colors.successDark,
         }}
       >
         <MdCheckCircle size={18} /> {readyText}
@@ -61,7 +61,7 @@ export default function BillChecklist({ items = [], readyText = "Ready to save",
         marginRight: "auto", minWidth: 0, flex: "1 1 320px",
       }}
     >
-      <span style={{ fontSize: "0.8rem", fontWeight: 700, color: billColors.danger }}>
+      <span style={{ fontSize: "0.8rem", fontWeight: 700, color: colors.danger }}>
         {items.length === 1 ? "1 thing to finish:" : `${items.length} things to finish:`}
       </span>
       {shown.map((it) => (
@@ -72,8 +72,8 @@ export default function BillChecklist({ items = [], readyText = "Ready to save",
           title="Show me"
           style={{
             minHeight: 36, padding: "0.3rem 0.65rem", borderRadius: 999,
-            border: `1px solid ${billColors.danger}40`, backgroundColor: billColors.dangerLight,
-            color: billColors.danger, fontSize: "0.78rem", fontWeight: 600, lineHeight: 1.3,
+            border: `1px solid ${colors.danger}40`, backgroundColor: colors.dangerLight,
+            color: colors.danger, fontSize: "0.78rem", fontWeight: 600, lineHeight: 1.3,
             textAlign: "left", cursor: "pointer", boxShadow: "none",
           }}
         >
@@ -81,7 +81,7 @@ export default function BillChecklist({ items = [], readyText = "Ready to save",
         </button>
       ))}
       {more > 0 && (
-        <span style={{ fontSize: "0.78rem", color: billColors.textSecondary }}>+{more} more</span>
+        <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>+{more} more</span>
       )}
     </div>
   );

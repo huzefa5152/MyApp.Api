@@ -1,6 +1,6 @@
+import { colors } from "../../theme";
 import { useMemo, useState } from "react";
 import { MdAddCircleOutline, MdBuild, MdErrorOutline, MdRemoveCircleOutline, MdWarningAmber } from "react-icons/md";
-import { billColors } from "../bill/billTheme";
 import { MODE_NEW_ARRIVALS, lineAnchor, lineOutcome, moneyText, qtyText } from "../../utils/gdCostingEntry";
 
 /**
@@ -14,12 +14,12 @@ import { MODE_NEW_ARRIVALS, lineAnchor, lineOutcome, moneyText, qtyText } from "
  */
 
 const tone = {
-  adds: { accent: billColors.success, tint: billColors.successLight, label: billColors.success },
-  new: { accent: billColors.teal, tint: "#effaf8", label: billColors.teal },
-  cost: { accent: billColors.blue, tint: billColors.blueSoft, label: billColors.blue },
-  choose: { accent: billColors.warn, tint: billColors.warnLight, label: billColors.warn },
-  "left-out": { accent: billColors.muted, tint: billColors.mutedLight, label: billColors.textSecondary },
-  fix: { accent: billColors.danger, tint: billColors.dangerLight, label: billColors.danger },
+  adds: { accent: colors.successDark, tint: colors.successTint, label: colors.successDark },
+  new: { accent: colors.teal, tint: "#effaf8", label: colors.teal },
+  cost: { accent: colors.blue, tint: colors.infoTint, label: colors.blue },
+  choose: { accent: colors.warn, tint: colors.cautionSoft, label: colors.warn },
+  "left-out": { accent: colors.muted, tint: colors.mutedLight, label: colors.textSecondary },
+  fix: { accent: colors.danger, tint: colors.dangerLight, label: colors.danger },
 };
 
 const wrap2 = { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" };
@@ -33,7 +33,7 @@ const actionBtn = (color, filled = false) => ({
 function Figure({ label, value }) {
   return (
     <div style={{ textAlign: "right" }}>
-      <div style={{ fontSize: 11, color: billColors.textSecondary }}>{label}</div>
+      <div style={{ fontSize: 11, color: colors.textSecondary }}>{label}</div>
       <div style={{ fontSize: 13.5, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{value}</div>
     </div>
   );
@@ -65,14 +65,14 @@ function UnitConversion({ line, busy, onSetCustomsUnit }) {
       <span style={{ fontWeight: 700 }}>1 {line.unit} =</span>
       <input type="number" min="0" step="any" value={factor} onChange={(e) => setFactor(e.target.value)} disabled={busy}
         aria-label={`${line.matchedItemUnit} in one ${line.unit}`}
-        style={{ width: 110, minHeight: 44, padding: "0.3rem 0.5rem", border: `1px solid ${billColors.inputBorder}`, borderRadius: 8, boxSizing: "border-box" }} />
+        style={{ width: 110, minHeight: 44, padding: "0.3rem 0.5rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 8, boxSizing: "border-box" }} />
       <span style={{ fontWeight: 700 }}>{line.matchedItemUnit}</span>
       <button type="button" disabled={busy || !ok} onClick={() => onSetCustomsUnit(line, Number(factor))}
         style={{ minHeight: 44, padding: "0.35rem 0.9rem", borderRadius: 8, border: "none", fontWeight: 700,
-          background: ok ? billColors.blue : "#c5ccd6", color: "#fff", cursor: ok ? "pointer" : "default" }}>
+          background: ok ? colors.blue : "#c5ccd6", color: "#fff", cursor: ok ? "pointer" : "default" }}>
         Save and convert
       </button>
-      <span style={{ fontSize: 11.5, color: billColors.textSecondary, flexBasis: "100%" }}>
+      <span style={{ fontSize: 11.5, color: colors.textSecondary, flexBasis: "100%" }}>
         Saved for {line.itemTypeName || "this item"}; later GDs in {line.unit} convert by themselves.
       </span>
     </div>
@@ -95,8 +95,8 @@ function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose, onConfi
 
   return (
     <div id={lineAnchor(line.sourceRow)} style={{
-      border: `1px solid ${billColors.cardBorder}`, borderLeft: `4px solid ${t.accent}`, borderRadius: 10,
-      background: line.leaveOut ? billColors.mutedLight : "#fff", padding: "0.7rem 0.8rem",
+      border: `1px solid ${colors.cardBorder}`, borderLeft: `4px solid ${t.accent}`, borderRadius: 10,
+      background: line.leaveOut ? colors.mutedLight : "#fff", padding: "0.7rem 0.8rem",
       marginBottom: "0.6rem", scrollMarginTop: 12, opacity: line.leaveOut ? 0.85 : 1,
     }}>
       <div style={{
@@ -104,14 +104,14 @@ function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose, onConfi
         gridTemplateColumns: "repeat(auto-fit, minmax(min(240px, 100%), 1fr))",
       }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 11.5, color: billColors.textSecondary, fontWeight: 700 }}>Row {line.sourceRow}</div>
+          <div style={{ fontSize: 11.5, color: colors.textSecondary, fontWeight: 700 }}>Row {line.sourceRow}</div>
           <div style={{ ...wrap2, fontWeight: 700, fontSize: 14 }}>{line.description || "(no item name)"}</div>
-          <div style={{ fontSize: 12.5, color: billColors.textSecondary, marginTop: 2 }}>
+          <div style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 2 }}>
             HS {line.hsCode || "—"} · {qtyText(line.quantity)}{line.unit ? ` ${line.unit}` : " (no unit)"}
             {line.matchedItemUnit && line.unit && line.matchedItemUnit !== line.unit
               ? ` · item kept in ${line.matchedItemUnit}` : ""}
           </div>
-          <div style={{ fontSize: 12, color: line.claimMonth ? billColors.textSecondary : billColors.warn, marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: line.claimMonth ? colors.textSecondary : colors.warn, marginTop: 2 }}>
             {line.claimMonth
               ? `Claim month ${new Date(line.claimMonth).toLocaleDateString(undefined, { month: "short", year: "numeric" })}`
                 + (line.claimMonthDefaulted ? " (from the GD date — Edit if it was claimed later)" : "")
@@ -123,9 +123,9 @@ function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose, onConfi
           <div style={{ fontWeight: 800, fontSize: 13.5, color: t.label }}>
             {o.blocking ? `Needs fixing · ${o.title}` : o.title}
           </div>
-          <div style={{ fontSize: 12.5, color: billColors.textPrimary, marginTop: 2 }}>{o.detail}</div>
+          <div style={{ fontSize: 12.5, color: colors.textPrimary, marginTop: 2 }}>{o.detail}</div>
           {note && (
-            <div style={{ ...wrap2, fontSize: 11.5, color: billColors.textSecondary, marginTop: 3 }}>{note}</div>
+            <div style={{ ...wrap2, fontSize: 11.5, color: colors.textSecondary, marginTop: 3 }}>{note}</div>
           )}
         </div>
 
@@ -140,7 +140,7 @@ function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose, onConfi
           {problems.map((p, i) => (
             <li key={i} style={{
               display: "flex", gap: 5, alignItems: "flex-start", fontSize: 12.5, fontWeight: 600,
-              color: line.leaveOut ? billColors.textSecondary : billColors.danger, marginTop: 2,
+              color: line.leaveOut ? colors.textSecondary : colors.danger, marginTop: 2,
             }}>
               <MdErrorOutline size={15} style={{ flexShrink: 0, marginTop: 1 }} /> {p.message}
             </li>
@@ -165,7 +165,7 @@ function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose, onConfi
         <div style={{ marginTop: "0.6rem" }}>
           <label htmlFor={`choose-${line.sourceRow}`} style={{
             display: "block", fontSize: 12.5, fontWeight: 700, marginBottom: 4,
-            color: line.disposition === "ambiguous" ? billColors.warn : billColors.textSecondary,
+            color: line.disposition === "ambiguous" ? colors.warn : colors.textSecondary,
           }}>
             {line.disposition === "ambiguous" ? "Which item are these goods?" : "Item (change it if these are different goods)"}
           </label>
@@ -174,7 +174,7 @@ function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose, onConfi
             onChange={(e) => onChoose(line, e.target.value === "new" ? "new" : e.target.value ? Number(e.target.value) : null)}
             style={{
               width: "100%", maxWidth: 420, minHeight: 44, padding: "0.45rem 0.6rem", borderRadius: 8,
-              border: `1px solid ${billColors.inputBorder}`, background: billColors.inputBg, fontSize: 13.5,
+              border: `1px solid ${colors.inputBorder}`, background: colors.inputBg, fontSize: 13.5,
             }}>
             <option value="">Choose the item…</option>
             {line.candidates.map((c) => (
@@ -192,9 +192,9 @@ function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose, onConfi
       {line.disposition === "stock-posted" && !line.leaveOut && (
         <label style={{
           display: "flex", alignItems: "flex-start", gap: 8, marginTop: "0.6rem", padding: "0.55rem 0.65rem",
-          border: `1px solid ${line.confirmNewStock ? billColors.success : billColors.warn}`, borderRadius: 8,
+          border: `1px solid ${line.confirmNewStock ? colors.successDark : colors.warn}`, borderRadius: 8,
           background: line.confirmNewStock ? "#f1f8f1" : "#fff8e6", cursor: busy ? "default" : "pointer",
-          fontSize: 13, color: billColors.textPrimary, minHeight: 44,
+          fontSize: 13, color: colors.textPrimary, minHeight: 44,
         }}>
           <input type="checkbox" checked={!!line.confirmNewStock} disabled={busy}
             onChange={(e) => onConfirmNew(line, e.target.checked)}
@@ -211,15 +211,15 @@ function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose, onConfi
       )}
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: "0.6rem" }}>
-        <button type="button" onClick={() => onFix(line)} disabled={busy} style={actionBtn(billColors.blue, o.blocking)}>
+        <button type="button" onClick={() => onFix(line)} disabled={busy} style={actionBtn(colors.blue, o.blocking)}>
           <MdBuild size={16} /> {o.blocking ? "Fix this line" : "Edit"}
         </button>
         {line.leaveOut ? (
-          <button type="button" onClick={() => onToggleLeaveOut(line, false)} disabled={busy} style={actionBtn(billColors.success)}>
+          <button type="button" onClick={() => onToggleLeaveOut(line, false)} disabled={busy} style={actionBtn(colors.successDark)}>
             <MdAddCircleOutline size={17} /> Bring it in
           </button>
         ) : (
-          <button type="button" onClick={() => onToggleLeaveOut(line, true)} disabled={busy} style={actionBtn(billColors.textSecondary)}>
+          <button type="button" onClick={() => onToggleLeaveOut(line, true)} disabled={busy} style={actionBtn(colors.textSecondary)}>
             <MdRemoveCircleOutline size={17} /> Leave out
           </button>
         )}
@@ -242,12 +242,12 @@ export default function GdReviewLines({ preview, mode, busy, onFix, onToggleLeav
 
   return groups.map((g) => (
     <section key={g.key || "no-gd"} style={{
-      border: `1px solid ${billColors.cardBorder}`, borderRadius: 12, padding: "0.8rem 0.85rem",
+      border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.8rem 0.85rem",
       marginBottom: "0.9rem", background: "#fcfdff",
     }}>
       <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: "0.6rem" }}>
         <h3 style={{ margin: 0, fontSize: 15 }}>GD {g.lines[0]?.gdNumber || "(no number)"}</h3>
-        <span style={{ fontSize: 12.5, color: billColors.textSecondary }}>
+        <span style={{ fontSize: 12.5, color: colors.textSecondary }}>
           {g.totals?.gdDate ? new Date(g.totals.gdDate).toLocaleDateString() : "no GD date"}
           {" · "}{g.lines.length} line{g.lines.length === 1 ? "" : "s"}
           {g.totals ? ` · landed cost ${moneyText(g.totals.totalCostExcludingTax)} · input tax ${moneyText(g.totals.totalInputTax)}` : ""}

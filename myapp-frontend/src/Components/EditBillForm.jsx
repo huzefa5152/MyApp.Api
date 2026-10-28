@@ -11,7 +11,7 @@ import { getClaimSummary } from "../api/taxClaimApi";
 import QuantityInput from "./QuantityInput";
 import { isDecimalUnit } from "../utils/formatQuantity";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
-import { formStyles, modalSizes } from "../theme";
+import { formStyles, modalSizes, formShell, formBodyFill, colors } from "../theme";
 import { ADVANCE_TAX_OPTIONS, advanceTaxLabel, findAdvanceTax, advanceTaxAmount, advanceTaxKeyOf } from "../config/advanceTax";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -22,7 +22,6 @@ import { descriptionAfterPick } from "../utils/lineDescription";
 import { itemTypesForBook, BOOK_BILL, BOOK_INVOICE } from "../utils/itemTypeBooks";
 import { matchesScenarioSaleType, DEFAULT_SALE_TYPE } from "../utils/saleType";
 import TaxRateNotice from "./TaxRateNotice";
-import { billFormShell, billFormBody } from "./bill/billTheme";
 import BillStep from "./bill/BillStep";
 import BillChecklist from "./bill/BillChecklist";
 import BillTotals from "./bill/BillTotals";
@@ -43,22 +42,6 @@ import { fifoQuantityForAmount, fifoTierText } from "../utils/fifoPricing";
 const PORTAL_RENUMBER_CAUTION =
   "A portal link already shared for this bill points at its old number and will stop working.";
 
-const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
-  danger: "#dc3545",
-  dangerLight: "#fff0f1",
-  warn: "#f57c00",
-  warnBg: "#fff8e1",
-  warnBorder: "#ffcc80",
-  infoBg: "#e3f2fd",
-  infoBorder: "#90caf9",
-};
 
 /**
  * Edit an existing bill.
@@ -1684,8 +1667,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
           </div>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
-        <form onSubmit={handleSave} style={billFormShell}>
-          <div style={{ ...formStyles.body, ...billFormBody }}>
+        <form onSubmit={handleSave} style={formShell}>
+          <div style={{ ...formStyles.body, ...formBodyFill }}>
             {loading ? (
               <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>Loading...</div>
             ) : !invoice ? (
@@ -2553,9 +2536,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                 {showTotalsGuard && (
                   <div style={{
                     ...styles.totalsBox,
-                    background: totalsMatch ? "#e8f5e9" : "#fff4e0",
-                    borderColor: totalsMatch ? "#a5d6a7" : "#ffcc80",
-                    borderLeft: `4px solid ${totalsMatch ? "#2e7d32" : "#e65100"}`,
+                    background: totalsMatch ? colors.successSoft : colors.warnSoft,
+                    borderColor: totalsMatch ? colors.successLine : colors.warnLine,
+                    borderLeft: `4px solid ${totalsMatch ? "${colors.successDark}" : "${colors.warn}"}`,
                     marginTop: "0.6rem",
                   }}>
                     <div style={{ fontSize: "0.78rem", color: colors.textSecondary, marginBottom: "0.4rem", fontWeight: 600 }}>
@@ -2576,7 +2559,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                       <span style={{ fontWeight: 700 }}>Difference:</span>
                       <strong style={{
                         fontSize: "1rem",
-                        color: totalsMatch ? "#2e7d32" : "#c62828",
+                        color: totalsMatch ? colors.successDark : colors.error,
                       }}>
                         {totalsMatch ? "✓ " : "✗ "}
                         Rs. {subtotalDiff.toLocaleString("en-PK", { maximumFractionDigits: 2 })}
@@ -2993,7 +2976,7 @@ function TaxClaimPanel({ summary, loading, period, onPeriodChange, onRefresh, op
                 <span style={{
                   display: "inline-flex", alignItems: "center", gap: "0.25rem",
                   fontSize: "0.74rem", fontWeight: 700,
-                  color: sc.kind === "good" ? "#2e7d32" : sc.kind === "warn" ? "#8a4b00" : "#b71c1c",
+                  color: sc.kind === "good" ? colors.successDark : sc.kind === "warn" ? colors.warnInk : colors.errorInk,
                   flexShrink: 0,
                 }}>
                   <StatusIcon size={14} />
@@ -3056,7 +3039,7 @@ function TaxClaimPanel({ summary, loading, period, onPeriodChange, onRefresh, op
               )}
 
               <div style={styles.taxRowHint}>
-                <MdLightbulb size={13} color="#5f6d7e" style={{ flexShrink: 0, marginTop: 1 }} />
+                <MdLightbulb size={13} color={colors.textSecondary} style={{ flexShrink: 0, marginTop: 1 }} />
                 <span>{hint}</span>
               </div>
 
@@ -3110,7 +3093,7 @@ function TaxClaimPanel({ summary, loading, period, onPeriodChange, onRefresh, op
                 return (
                 <div style={styles.taxRowOptimization}>
                   <div style={styles.taxRowOptimizationHeader}>
-                    <MdAutoAwesome size={14} color="#0d47a1" />
+                    <MdAutoAwesome size={14} color={colors.blue} />
                     <span style={styles.taxRowOptimizationTitle}>
                       Maximum-claim suggestion for this HS
                     </span>
@@ -3339,7 +3322,7 @@ function TaxClaimPanel({ summary, loading, period, onPeriodChange, onRefresh, op
         <div style={styles.taxWarnings}>
           {warnings.map((w, i) => (
             <div key={i} style={styles.taxWarningRow}>
-              <MdInfo size={13} color="#8a4b00" style={{ flexShrink: 0, marginTop: 2 }} />
+              <MdInfo size={13} color={colors.warnInk} style={{ flexShrink: 0, marginTop: 2 }} />
               <span>{w}</span>
             </div>
           ))}
@@ -3359,10 +3342,10 @@ function TaxClaimPanel({ summary, loading, period, onPeriodChange, onRefresh, op
 }
 
 function HeadlineCell({ label, value, flag, tone }) {
-  let valueColor = "#1a2332";
-  if (tone === "good") valueColor = "#2e7d32";
-  else if (tone === "muted") valueColor = "#5f6d7e";
-  else if (tone === "strong") valueColor = "#0d47a1";
+  let valueColor = colors.textPrimary;
+  if (tone === "good") valueColor = colors.successDark;
+  else if (tone === "muted") valueColor = colors.textSecondary;
+  else if (tone === "strong") valueColor = colors.blue;
   return (
     <div>
       <div style={styles.taxPanelHeadlineLabel}>
@@ -3391,12 +3374,12 @@ const styles = {
   headerSub: { marginTop: 2, fontSize: "0.78rem", lineHeight: 1.35, color: "rgba(255,255,255,0.88)" },
   itemsCount: { fontSize: "0.8rem", fontWeight: 600, color: colors.textSecondary },
   errorAlert: { padding: "0.7rem 1rem", backgroundColor: colors.dangerLight, color: colors.danger, borderRadius: 6, marginBottom: "1rem", fontSize: "0.85rem" },
-  warnNote: { padding: "0.7rem 1rem", backgroundColor: colors.warnBg, color: colors.warn, borderRadius: 6, marginTop: "1rem", fontSize: "0.82rem", border: `1px solid ${colors.warnBorder}` },
+  warnNote: { padding: "0.7rem 1rem", backgroundColor: colors.cautionSoft, color: colors.warn, borderRadius: 6, marginTop: "1rem", fontSize: "0.82rem", border: `1px solid ${colors.warnLine}` },
   infoBox: {
     display: "flex", alignItems: "flex-start", gap: "0.5rem",
-    padding: "0.65rem 0.85rem", backgroundColor: colors.infoBg,
+    padding: "0.65rem 0.85rem", backgroundColor: colors.infoSoft,
     color: colors.textPrimary, borderRadius: 6, marginBottom: "1rem",
-    fontSize: "0.82rem", border: `1px solid ${colors.infoBorder}`,
+    fontSize: "0.82rem", border: `1px solid ${colors.infoLine}`,
   },
   row: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.85rem 1rem", marginBottom: "1rem", alignItems: "end" },
   // Even, responsive field grid for the bill-header fields — equal columns
@@ -3423,7 +3406,7 @@ const styles = {
     padding: "0.35rem 0.7rem",
     border: `1px solid ${colors.blue}`,
     borderRadius: 8,
-    backgroundColor: "#fff",
+    backgroundColor: colors.white,
     color: colors.blue,
     fontSize: "0.78rem",
     fontWeight: 600,
@@ -3435,20 +3418,20 @@ const styles = {
     display: "inline-flex", alignItems: "center", justifyContent: "center",
     width: 30, height: 30, padding: 0,
     border: `1px solid ${colors.inputBorder}`, borderRadius: 7,
-    backgroundColor: "#fff", color: colors.danger, cursor: "pointer",
+    backgroundColor: colors.white, color: colors.danger, cursor: "pointer",
   },
   addRowBtn: {
     display: "inline-flex", alignItems: "center", gap: "0.35rem",
     marginTop: "0.6rem", padding: "0.45rem 0.9rem",
     border: `1px dashed ${colors.blue}`, borderRadius: 8,
-    backgroundColor: "#f4f8ff", color: colors.blue,
+    backgroundColor: colors.infoTint, color: colors.blue,
     fontSize: "0.85rem", fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
   },
   // ── Tax Claim Panel styles ────────────────────────────────────────
   taxPanelCard: {
     border: `1px solid ${colors.cardBorder}`,
     borderRadius: 12,
-    background: "#fbfdff",
+    background: colors.infoTint,
     padding: "0.85rem 1rem",
     margin: "0.5rem 0 1rem",
     boxShadow: "0 1px 2px rgba(13,71,161,0.04)",
@@ -3466,7 +3449,7 @@ const styles = {
     gridTemplateColumns: "repeat(auto-fit, minmax(min(150px, 100%), 1fr))",
     gap: "0.7rem",
     padding: "0.5rem 0.75rem",
-    background: "#fff",
+    background: colors.white,
     border: `1px solid ${colors.cardBorder}`,
     borderRadius: 10,
     marginBottom: "0.85rem",
@@ -3495,15 +3478,15 @@ const styles = {
     borderLeftWidth: 3,
     borderRadius: 10,
     padding: "0.6rem 0.75rem",
-    background: "#fff",
+    background: colors.white,
     display: "flex",
     flexDirection: "column",
     gap: "0.5rem",
     minWidth: 0,
   },
-  taxRowGood:    { borderColor: "#a5d6a7", borderLeftColor: "#2e7d32" },
-  taxRowWarn:    { borderColor: "#ffcc80", borderLeftColor: "#e65100" },
-  taxRowDanger:  { borderColor: "#ef9a9a", borderLeftColor: "#b71c1c" },
+  taxRowGood:    { borderColor: colors.successLine, borderLeftColor: colors.successDark },
+  taxRowWarn:    { borderColor: colors.warnLine, borderLeftColor: colors.warn },
+  taxRowDanger:  { borderColor: colors.errorLine, borderLeftColor: colors.errorInk },
   taxRowHeader: {
     display: "flex",
     alignItems: "center",
@@ -3561,7 +3544,7 @@ const styles = {
   },
   taxStatExtra: {
     fontSize: "0.7rem",
-    color: "#2e7d32",
+    color: colors.successDark,
     fontWeight: 600,
     marginTop: 1,
   },
@@ -3569,7 +3552,7 @@ const styles = {
     display: "flex",
     gap: "0.4rem",
     padding: "0.4rem 0.55rem",
-    background: "#f7f9fc",
+    background: colors.surface,
     borderRadius: 6,
     fontSize: "0.74rem",
     color: colors.textPrimary,
@@ -3582,9 +3565,9 @@ const styles = {
   taxRowOptimization: {
     marginTop: "0.5rem",
     padding: "0.6rem 0.7rem",
-    background: "linear-gradient(135deg, #e3f2fd 0%, #f0f7ff 70%, #fbfdff 100%)",
-    border: "1px solid #90caf9",
-    borderLeft: "3px solid #0d47a1",
+    background: `linear-gradient(135deg, ${colors.infoSoft} 0%, ${colors.infoTint} 70%, ${colors.infoTint} 100%)`,
+    border: `1px solid ${colors.infoLine}`,
+    borderLeft: `3px solid ${colors.blue}`,
     borderRadius: 8,
     display: "flex",
     flexDirection: "column",
@@ -3599,16 +3582,16 @@ const styles = {
   taxRowOptimizationTitle: {
     fontSize: "0.78rem",
     fontWeight: 700,
-    color: "#0d47a1",
+    color: colors.blue,
     flex: 1,
     minWidth: 0,
   },
   taxRowOptimizationDelta: {
     fontSize: "0.74rem",
     fontWeight: 700,
-    color: "#1b5e20",
-    background: "#e8f5e9",
-    border: "1px solid #a5d6a7",
+    color: colors.successInk,
+    background: colors.successSoft,
+    border: `1px solid ${colors.successLine}`,
     padding: "0.15rem 0.45rem",
     borderRadius: 999,
   },
@@ -3628,7 +3611,7 @@ const styles = {
   taxRowOptimizationValue: {
     fontSize: "0.95rem",
     fontWeight: 800,
-    color: "#0d47a1",
+    color: colors.blue,
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
   },
   taxRowOptimizationValueMuted: {
@@ -3641,7 +3624,7 @@ const styles = {
   taxRowOptimizationValueHighlight: {
     fontSize: "0.95rem",
     fontWeight: 800,
-    color: "#1b5e20",
+    color: colors.successInk,
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
   },
   // Subtotal-preservation receipt — proves qty × unit_price recomposes
@@ -3651,8 +3634,8 @@ const styles = {
     fontSize: "0.74rem",
     color: colors.textPrimary,
     lineHeight: 1.55,
-    background: "#fff",
-    border: "1px solid #cfe3f6",
+    background: colors.white,
+    border: `1px solid ${colors.infoLine}`,
     borderRadius: 6,
     padding: "0.4rem 0.55rem",
     display: "flex",
@@ -3666,9 +3649,9 @@ const styles = {
     gap: "0.25rem",
     fontSize: "0.68rem",
     fontWeight: 700,
-    color: "#1b5e20",
-    background: "#e8f5e9",
-    border: "1px solid #a5d6a7",
+    color: colors.successInk,
+    background: colors.successSoft,
+    border: `1px solid ${colors.successLine}`,
     padding: "0.15rem 0.45rem",
     borderRadius: 999,
     whiteSpace: "nowrap",
@@ -3679,9 +3662,9 @@ const styles = {
     gap: "0.25rem",
     fontSize: "0.68rem",
     fontWeight: 700,
-    color: "#8a4b00",
-    background: "#fff4e0",
-    border: "1px solid #ffcc80",
+    color: colors.warnInk,
+    background: colors.warnSoft,
+    border: `1px solid ${colors.warnLine}`,
     padding: "0.15rem 0.45rem",
     borderRadius: 999,
     whiteSpace: "nowrap",
@@ -3690,8 +3673,8 @@ const styles = {
     fontSize: "0.74rem",
     color: colors.textPrimary,
     lineHeight: 1.45,
-    background: "#fff",
-    border: "1px dashed #b3d4f0",
+    background: colors.white,
+    border: `1px dashed ${colors.infoLine}`,
     borderRadius: 6,
     padding: "0.4rem 0.55rem",
   },
@@ -3699,11 +3682,11 @@ const styles = {
     display: "flex",
     gap: "0.4rem",
     padding: "0.4rem 0.55rem",
-    background: "#fff4e0",
-    border: "1px solid #ffcc80",
+    background: colors.warnSoft,
+    border: `1px solid ${colors.warnLine}`,
     borderRadius: 6,
     fontSize: "0.72rem",
-    color: "#8a4b00",
+    color: colors.warnInk,
     lineHeight: 1.45,
   },
   // ── Audit-risk pill (2026-05-11) ─────────────────────────────────
@@ -3720,19 +3703,19 @@ const styles = {
     lineHeight: 1.45,
   },
   taxRowOptimizationRiskLow: {
-    background: "#e8f5e9",
-    border: "1px solid #a5d6a7",
-    color: "#1b5e20",
+    background: colors.successSoft,
+    border: `1px solid ${colors.successLine}`,
+    color: colors.successInk,
   },
   taxRowOptimizationRiskModerate: {
-    background: "#fff4e0",
-    border: "1px solid #ffcc80",
-    color: "#8a4b00",
+    background: colors.warnSoft,
+    border: `1px solid ${colors.warnLine}`,
+    color: colors.warnInk,
   },
   taxRowOptimizationRiskHigh: {
-    background: "#ffebee",
-    border: "1px solid #ef9a9a",
-    color: "#b71c1c",
+    background: colors.errorSoft,
+    border: `1px solid ${colors.errorLine}`,
+    color: colors.errorInk,
   },
   // ── Action row (Apply / Recalculate / Why) ────────────────────────
   taxRowOptimizationActions: {
@@ -3746,9 +3729,9 @@ const styles = {
     alignItems: "center",
     gap: "0.3rem",
     padding: "0.35rem 0.7rem",
-    background: "#1b5e20",
-    color: "#fff",
-    border: "1px solid #1b5e20",
+    background: colors.successInk,
+    color: colors.white,
+    border: `1px solid ${colors.successInk}`,
     borderRadius: 6,
     fontSize: "0.74rem",
     fontWeight: 700,
@@ -3759,9 +3742,9 @@ const styles = {
     alignItems: "center",
     gap: "0.3rem",
     padding: "0.35rem 0.65rem",
-    background: "#fff",
-    color: "#0d47a1",
-    border: "1px solid #90caf9",
+    background: colors.white,
+    color: colors.blue,
+    border: `1px solid ${colors.infoLine}`,
     borderRadius: 6,
     fontSize: "0.72rem",
     fontWeight: 600,
@@ -3773,8 +3756,8 @@ const styles = {
     gap: "0.25rem",
     padding: "0.35rem 0.55rem",
     background: "transparent",
-    color: "#0d47a1",
-    border: "1px dashed #90caf9",
+    color: colors.blue,
+    border: `1px dashed ${colors.infoLine}`,
     borderRadius: 6,
     fontSize: "0.72rem",
     fontWeight: 600,
@@ -3782,7 +3765,7 @@ const styles = {
   },
   taxRowOptimizationStaleHint: {
     fontSize: "0.7rem",
-    color: "#8a4b00",
+    color: colors.warnInk,
     fontStyle: "italic",
   },
   taxRowOptimizationApplyOk: {
@@ -3790,9 +3773,9 @@ const styles = {
     alignItems: "center",
     gap: "0.35rem",
     fontSize: "0.72rem",
-    color: "#1b5e20",
-    background: "#e8f5e9",
-    border: "1px solid #a5d6a7",
+    color: colors.successInk,
+    background: colors.successSoft,
+    border: `1px solid ${colors.successLine}`,
     borderRadius: 6,
     padding: "0.35rem 0.55rem",
   },
@@ -3801,9 +3784,9 @@ const styles = {
     alignItems: "flex-start",
     gap: "0.4rem",
     fontSize: "0.72rem",
-    color: "#8a4b00",
-    background: "#fff4e0",
-    border: "1px solid #ffcc80",
+    color: colors.warnInk,
+    background: colors.warnSoft,
+    border: `1px solid ${colors.warnLine}`,
     borderRadius: 6,
     padding: "0.4rem 0.55rem",
     lineHeight: 1.45,
@@ -3824,14 +3807,14 @@ const styles = {
     gap: "0.45rem",
     alignItems: "center",
     padding: "0.3rem 0.45rem",
-    background: "#fff",
-    border: "1px solid #e0eef8",
+    background: colors.white,
+    border: `1px solid ${colors.infoSoft}`,
     borderRadius: 5,
     fontSize: "0.72rem",
   },
   taxRowOptimizationDistLabel: {
     fontWeight: 700,
-    color: "#0d47a1",
+    color: colors.blue,
   },
   taxRowOptimizationDistQty: {
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
@@ -3845,9 +3828,9 @@ const styles = {
   taxRowOptimizationDistBadgeOk: {
     fontSize: "0.66rem",
     fontWeight: 700,
-    color: "#1b5e20",
-    background: "#e8f5e9",
-    border: "1px solid #a5d6a7",
+    color: colors.successInk,
+    background: colors.successSoft,
+    border: `1px solid ${colors.successLine}`,
     padding: "0.1rem 0.4rem",
     borderRadius: 999,
     whiteSpace: "nowrap",
@@ -3855,9 +3838,9 @@ const styles = {
   taxRowOptimizationDistBadgeWarn: {
     fontSize: "0.66rem",
     fontWeight: 700,
-    color: "#8a4b00",
-    background: "#fff4e0",
-    border: "1px solid #ffcc80",
+    color: colors.warnInk,
+    background: colors.warnSoft,
+    border: `1px solid ${colors.warnLine}`,
     padding: "0.1rem 0.4rem",
     borderRadius: 999,
     whiteSpace: "nowrap",
@@ -3867,8 +3850,8 @@ const styles = {
   // realistic band, weighted-avg cost, and the top reference purchase
   // bills the suggestion was anchored against.
   taxRowOptimizationWhy: {
-    background: "#fff",
-    border: "1px solid #cfe3f6",
+    background: colors.white,
+    border: `1px solid ${colors.infoLine}`,
     borderRadius: 6,
     padding: "0.55rem 0.7rem",
     display: "flex",
@@ -3878,7 +3861,7 @@ const styles = {
   taxRowOptimizationWhyHeader: {
     fontSize: "0.74rem",
     fontWeight: 700,
-    color: "#0d47a1",
+    color: colors.blue,
     textTransform: "uppercase",
     letterSpacing: "0.03em",
   },
@@ -3890,7 +3873,7 @@ const styles = {
   taxRowOptimizationWhyValue: {
     fontSize: "0.86rem",
     fontWeight: 700,
-    color: "#0d47a1",
+    color: colors.blue,
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
   },
   taxRowOptimizationWhyValueMuted: {
@@ -3922,14 +3905,14 @@ const styles = {
     gap: "0.5rem",
     alignItems: "center",
     padding: "0.35rem 0.5rem",
-    background: "#f5fbff",
-    border: "1px solid #e0eef8",
+    background: colors.infoTint,
+    border: `1px solid ${colors.infoSoft}`,
     borderRadius: 5,
     fontSize: "0.72rem",
   },
   taxRowOptimizationRefBillNum: {
     fontWeight: 700,
-    color: "#0d47a1",
+    color: colors.blue,
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
   },
   taxRowOptimizationRefBillMeta: {
@@ -3942,7 +3925,7 @@ const styles = {
   },
   // Phase B additions ───────────────────────────────────────────────
   periodSelect: {
-    background: "#fff",
+    background: colors.white,
     color: colors.textPrimary,
     border: `1px solid ${colors.inputBorder}`,
     borderRadius: 8,
@@ -3960,17 +3943,17 @@ const styles = {
     borderRadius: 99,
     fontSize: "0.62rem",
     fontWeight: 700,
-    color: "#8a4b00",
-    backgroundColor: "#fff4e0",
-    border: "1px solid #ffcc80",
+    color: colors.warnInk,
+    backgroundColor: colors.warnSoft,
+    border: `1px solid ${colors.warnLine}`,
     textTransform: "uppercase",
     letterSpacing: "0.04em",
     verticalAlign: "middle",
   },
   taxStatHighlight: {
     padding: "0.3rem 0.4rem",
-    background: "#e8f5e9",
-    border: "1px solid #a5d6a7",
+    background: colors.successSoft,
+    border: `1px solid ${colors.successLine}`,
     borderRadius: 6,
   },
   taxRowSubMeta: {
@@ -3981,19 +3964,19 @@ const styles = {
     color: colors.textSecondary,
   },
   taxRowAging: {
-    color: "#8a4b00",
+    color: colors.warnInk,
     fontWeight: 600,
   },
   taxRowPending: {
-    color: "#0277bd",
+    color: colors.blueLight,
     fontWeight: 600,
   },
   taxRowManualOnly: {
-    color: "#8a4b00",
+    color: colors.warnInk,
     fontWeight: 600,
   },
   taxRowDisputed: {
-    color: "#b71c1c",
+    color: colors.errorInk,
     fontWeight: 600,
   },
   refreshBtn: {
@@ -4001,7 +3984,7 @@ const styles = {
     alignItems: "center",
     gap: "0.25rem",
     padding: "0.3rem 0.6rem",
-    background: "#fff",
+    background: colors.white,
     color: colors.blue,
     border: `1px solid ${colors.blue}`,
     borderRadius: 8,
@@ -4017,9 +4000,9 @@ const styles = {
     alignItems: "center",
     gap: "0.25rem",
     padding: "0.3rem 0.6rem",
-    background: "#fff4e0",
-    color: "#8a4b00",
-    border: "1px solid #ffcc80",
+    background: colors.warnSoft,
+    color: colors.warnInk,
+    border: `1px solid ${colors.warnLine}`,
     borderRadius: 8,
     fontSize: "0.74rem",
     fontWeight: 600,
@@ -4060,15 +4043,15 @@ const styles = {
     borderRadius: 99,
     fontSize: "0.7rem",
     fontWeight: 700,
-    color: "#8a4b00",
-    backgroundColor: "#fff4e0",
-    border: "1px solid #ffcc80",
+    color: colors.warnInk,
+    backgroundColor: colors.warnSoft,
+    border: `1px solid ${colors.warnLine}`,
   },
   taxWarnings: {
     marginTop: "0.85rem",
     padding: "0.6rem 0.75rem",
-    background: "#fff8e1",
-    border: "1px solid #ffe082",
+    background: colors.cautionSoft,
+    border: `1px solid ${colors.cautionLine}`,
     borderRadius: 8,
     display: "flex",
     flexDirection: "column",
@@ -4078,7 +4061,7 @@ const styles = {
     display: "flex",
     gap: "0.35rem",
     fontSize: "0.75rem",
-    color: "#5d4037",
+    color: colors.neutralInk,
     lineHeight: 1.4,
   },
   taxComplianceFooter: {
@@ -4092,44 +4075,44 @@ const styles = {
   },
   tableWrap: { width: "100%", overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 8 },
   table: { width: "100%", borderCollapse: "collapse", minWidth: 1100, tableLayout: "fixed" },
-  thead: { backgroundColor: "#f5f7fa" },
+  thead: { backgroundColor: colors.surface },
   th: { padding: "0.6rem 0.5rem", textAlign: "left", fontSize: "0.75rem", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: `1px solid ${colors.cardBorder}` },
   td: { padding: "0.4rem 0.5rem", fontSize: "0.82rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "middle" },
   rateChipBad: { marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: colors.danger, fontWeight: 600 },
-  rateChipCheck: { marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: "#b26a00", fontWeight: 600 },
-  tableInput: { width: "100%", padding: "0.35rem 0.5rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 4, fontSize: "0.8rem", backgroundColor: "#fff" },
+  rateChipCheck: { marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: colors.caution, fontWeight: 600 },
+  tableInput: { width: "100%", padding: "0.35rem 0.5rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 4, fontSize: "0.8rem", backgroundColor: colors.white },
   stockOverSoft: {
-    marginTop: 3, fontSize: "0.66rem", lineHeight: 1.35, color: "#8d6e00",
+    marginTop: 3, fontSize: "0.66rem", lineHeight: 1.35, color: colors.cautionInk,
     fontWeight: 700, fontVariantNumeric: "tabular-nums", textAlign: "left",
   },
   stockOverWarn: {
-    marginTop: 3, fontSize: "0.66rem", lineHeight: 1.35, color: "#b3261e",
+    marginTop: 3, fontSize: "0.66rem", lineHeight: 1.35, color: colors.error,
     fontWeight: 700, fontVariantNumeric: "tabular-nums", textAlign: "left",
   },
   narrowPermissionBanner: {
     display: "flex", alignItems: "flex-start", gap: "0.5rem",
-    padding: "0.65rem 0.85rem", backgroundColor: colors.warnBg,
+    padding: "0.65rem 0.85rem", backgroundColor: colors.cautionSoft,
     color: colors.textPrimary, borderRadius: 6, marginBottom: "1rem",
-    fontSize: "0.82rem", border: `1px solid ${colors.warnBorder}`, lineHeight: 1.4,
+    fontSize: "0.82rem", border: `1px solid ${colors.warnLine}`, lineHeight: 1.4,
   },
-  readOnlyCell: { backgroundColor: "#f5f7fa", color: colors.textPrimary, fontSize: "0.78rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  readOnlyInput: { backgroundColor: "#f5f7fa", cursor: "not-allowed", pointerEvents: "none" },
+  readOnlyCell: { backgroundColor: colors.surface, color: colors.textPrimary, fontSize: "0.78rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  readOnlyInput: { backgroundColor: colors.surface, cursor: "not-allowed", pointerEvents: "none" },
   readOnlyText: { padding: "0.35rem 0.5rem", fontSize: "0.8rem", color: colors.textPrimary, fontWeight: 600 },
-  muted: { color: "#9ca3af", fontStyle: "italic" },
+  muted: { color: colors.muted, fontStyle: "italic" },
   gridHint: { margin: "0.5rem 0 0.6rem", fontSize: "0.75rem", color: colors.textSecondary, lineHeight: 1.4 },
   // Grouped ⇄ Individual lines segmented toggle + grouped-table affordances.
-  viewToggle: { display: "inline-flex", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, overflow: "hidden", backgroundColor: "#fff" },
-  viewToggleBtn: { padding: "0.35rem 0.7rem", fontSize: "0.76rem", fontWeight: 600, color: colors.textSecondary, backgroundColor: "#fff", border: "none", cursor: "pointer", whiteSpace: "nowrap" },
-  viewToggleBtnActive: { backgroundColor: colors.blue, color: "#fff" },
-  groupedRow: { backgroundColor: "#fbfcfe" },
+  viewToggle: { display: "inline-flex", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, overflow: "hidden", backgroundColor: colors.white },
+  viewToggleBtn: { padding: "0.35rem 0.7rem", fontSize: "0.76rem", fontWeight: 600, color: colors.textSecondary, backgroundColor: colors.white, border: "none", cursor: "pointer", whiteSpace: "nowrap" },
+  viewToggleBtnActive: { backgroundColor: colors.blue, color: colors.white },
+  groupedRow: { backgroundColor: colors.surface },
   groupMeta: { marginTop: 2, fontSize: "0.68rem", color: colors.textSecondary, fontStyle: "italic" },
   bulkApplyBar: {
     display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap",
     padding: "0.55rem 0.85rem", marginBottom: "0.65rem",
     borderRadius: 8, border: `1px solid ${colors.cardBorder}`,
-    backgroundColor: "#f8faff",
+    backgroundColor: colors.infoTint,
   },
   bulkApplyLabel: { fontSize: "0.82rem", color: colors.textPrimary, fontWeight: 500 },
-  totalsBox: { marginTop: "1rem", padding: "0.75rem 1rem", backgroundColor: "#f5f7fa", borderRadius: 8, maxWidth: 360, marginLeft: "auto" },
+  totalsBox: { marginTop: "1rem", padding: "0.75rem 1rem", backgroundColor: colors.surface, borderRadius: 8, maxWidth: 360, marginLeft: "auto" },
   totalsRow: { display: "flex", justifyContent: "space-between", fontSize: "0.88rem", color: colors.textPrimary, padding: "0.2rem 0" },
 };

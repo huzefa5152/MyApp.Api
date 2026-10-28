@@ -17,6 +17,38 @@ export const colors = {
   danger: "#dc3545",
   dangerLight: "#fff0f1",
   success: "#28a745",
+  white: "#ffffff",
+  muted: "#8a97a8",
+  mutedLight: "#fafbfc",
+  surface: "#f5f7fa",
+  // Status tones (2026-10-28), one family per meaning: Ink = text on the soft
+  // background, the plain name = icon / strong text, Line = border, Soft =
+  // background, Tint = the faintest wash. The invoice screens and forms take
+  // every colour from here, so a status reads the same wherever it shows.
+  infoInk: "#0c447c", infoLine: "#90caf9", infoSoft: "#e3f2fd", infoTint: "#f8faff",
+  tealSoft: "#e0f2f1", tealLine: "#80cbc4",
+  successInk: "#1b5e20", successDark: "#2e7d32", successLine: "#a5d6a7", successSoft: "#e8f5e9", successTint: "#f1f8f2",
+  warnInk: "#8a4b00", warn: "#e65100", warnLine: "#ffcc80", warnSoft: "#fff3e0",
+  cautionInk: "#8a6d00", caution: "#b26a00", cautionLine: "#ffe082", cautionSoft: "#fff8e1", cautionTint: "#fffdf5",
+  errorInk: "#b71c1c", error: "#c62828", errorLine: "#ef9a9a", errorSoft: "#ffebee",
+  violetInk: "#4527a0", violet: "#5e35b1", violetLine: "#b39ddb", violetSoft: "#ede7f6",
+  neutralInk: "#37474f", neutral: "#546e7a", neutralLine: "#b0bec5", neutralSoft: "#eceff1",
+};
+
+// A form inside a modal joins the modal's flex column (a <form> is not a flex
+// container), so the body takes what is left and scrolls and the footer with
+// Save always shows -- a footer that wrapped to two rows on a phone used to be
+// pushed out of the modal. Every invoice form uses these.
+export const formShell = { display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0 };
+export const formBodyFill = { maxHeight: "none" };
+
+// Accent, header tint and badge colour per invoice-form step status.
+export const stepTone = {
+  done:     { accent: colors.successDark, tint: colors.successTint, badge: colors.successDark, pill: "Done" },
+  todo:     { accent: colors.blue,        tint: colors.infoTint,    badge: colors.blue,        pill: null },
+  warn:     { accent: colors.warn,        tint: colors.cautionSoft, badge: colors.warn,        pill: "Needs attention" },
+  optional: { accent: colors.muted,       tint: colors.mutedLight,  badge: colors.muted,       pill: "Optional" },
+  view:     { accent: colors.blue,        tint: colors.infoTint,    badge: colors.blue,        pill: null },
 };
 
 export const cardHover = {

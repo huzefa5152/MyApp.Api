@@ -8,13 +8,12 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { useCompany } from "../contexts/CompanyContext";
 import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
-import { formStyles, modalSizes } from "../theme";
+import { formStyles, modalSizes, colors } from "../theme";
 import {
   previewGdCosting, previewGdCostingManual, commitGdCosting, getImportProfiles, setGdCustomsUnit,
 } from "../api/spreadsheetImportApi";
 import BillStep from "../Components/bill/BillStep";
 import BillChecklist from "../Components/bill/BillChecklist";
-import { billColors } from "../Components/bill/billTheme";
 import GdLineEditor from "../Components/costing/GdLineEditor";
 import LateGdMatchPanel from "../Components/stock/LateGdMatchPanel";
 import GdReviewLines from "../Components/costing/GdReviewLines";
@@ -46,7 +45,7 @@ import {
  */
 
 const card = {
-  background: "#fff", border: `1px solid ${billColors.cardBorder}`, borderRadius: 12,
+  background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 12,
   padding: "0.9rem 1rem", marginBottom: "0.85rem",
 };
 
@@ -64,14 +63,14 @@ const ghostBtn = (color) => ({
 
 const segBtn = (active) => ({
   display: "inline-flex", alignItems: "center", gap: 6, minHeight: 44, padding: "0.55rem 0.95rem",
-  borderRadius: 9, border: `1px solid ${active ? billColors.blue : billColors.cardBorder}`,
-  background: active ? billColors.blue : "#fff", color: active ? "#fff" : billColors.textPrimary,
+  borderRadius: 9, border: `1px solid ${active ? colors.blue : colors.cardBorder}`,
+  background: active ? colors.blue : "#fff", color: active ? "#fff" : colors.textPrimary,
   fontWeight: 700, fontSize: 13.5, cursor: "pointer", boxShadow: "none",
 });
 
 const selectStyle = {
   width: "100%", maxWidth: 420, minHeight: 44, padding: "0.5rem 0.65rem", borderRadius: 8,
-  border: `1px solid ${billColors.inputBorder}`, background: billColors.inputBg, fontSize: 14,
+  border: `1px solid ${colors.inputBorder}`, background: colors.inputBg, fontSize: 14,
 };
 
 const bulkBtn = (color) => ({
@@ -82,10 +81,10 @@ const bulkBtn = (color) => ({
 
 function Banner({ tone = "warn", children }) {
   const c = {
-    error: [billColors.danger, billColors.dangerLight, MdError],
-    warn: [billColors.warn, billColors.warnLight, MdWarning],
-    info: [billColors.blue, billColors.blueSoft, MdInfoOutline],
-    ok: [billColors.success, billColors.successLight, MdCheckCircle],
+    error: [colors.danger, colors.dangerLight, MdError],
+    warn: [colors.warn, colors.cautionSoft, MdWarning],
+    info: [colors.blue, colors.infoTint, MdInfoOutline],
+    ok: [colors.successDark, colors.successTint, MdCheckCircle],
   }[tone];
   const Icon = c[2];
   return (
@@ -101,18 +100,18 @@ function Banner({ tone = "warn", children }) {
 
 // The two import modes, said in full: which act is being performed is the most
 // consequential choice on the screen (GD_IMPORT_COSTING_GUIDE.md §3).
-function ModeCard({ active, title, body, onPick, disabled, tone = billColors.blue }) {
+function ModeCard({ active, title, body, onPick, disabled, tone = colors.blue }) {
   return (
     <label style={{
       display: "flex", gap: 10, alignItems: "flex-start", padding: "0.7rem 0.8rem", borderRadius: 10,
-      border: `1px solid ${active ? tone : billColors.cardBorder}`, background: active ? `${tone}0f` : "#fff",
+      border: `1px solid ${active ? tone : colors.cardBorder}`, background: active ? `${tone}0f` : "#fff",
       cursor: disabled ? "not-allowed" : "pointer", minHeight: 44, boxSizing: "border-box",
     }}>
       <input type="radio" name="gdCostingMode" checked={active} disabled={disabled} onChange={onPick}
         aria-label={title} style={{ width: 18, height: 18, marginTop: 2, flexShrink: 0 }} />
       <span>
         <span style={{ display: "block", fontWeight: 800, fontSize: 14 }}>{title}</span>
-        <span style={{ display: "block", fontSize: 12.5, color: billColors.textSecondary, marginTop: 2 }}>{body}</span>
+        <span style={{ display: "block", fontSize: 12.5, color: colors.textSecondary, marginTop: 2 }}>{body}</span>
       </span>
     </label>
   );
@@ -467,14 +466,14 @@ export default function GdCostingImportPage() {
 
   return (
     <div ref={pageRef} style={{ padding: "0 0 7.5rem", maxWidth: 1100, margin: "0 auto" }}>
-      <h1 style={{ fontSize: 22, margin: "0 0 0.25rem", color: billColors.textPrimary }}>Import Costing</h1>
-      <p style={{ margin: "0 0 0.35rem", color: billColors.textSecondary, fontSize: 14, maxWidth: "68ch" }}>
+      <h1 style={{ fontSize: 22, margin: "0 0 0.25rem", color: colors.textPrimary }}>Import Costing</h1>
+      <p style={{ margin: "0 0 0.35rem", color: colors.textSecondary, fontSize: 14, maxWidth: "68ch" }}>
         Bring a customs GD's goods and their landed cost onto the books. Every line is checked first,
         and nothing is saved until you press the button at the bottom.
       </p>
       <Link to="/guides/import" style={{
         display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700,
-        color: billColors.blue, textDecoration: "none", marginBottom: "0.8rem", minHeight: 44,
+        color: colors.blue, textDecoration: "none", marginBottom: "0.8rem", minHeight: 44,
       }}>
         <MdMenuBook size={16} aria-hidden="true" /> How to use this
       </Link>
@@ -492,7 +491,7 @@ export default function GdCostingImportPage() {
               ["Landed cost", moneyText(result.totalCostExcludingTax)],
             ].map(([k, v]) => (
               <div key={k}>
-                <div style={{ fontSize: 12, color: billColors.textSecondary }}>{k}</div>
+                <div style={{ fontSize: 12, color: colors.textSecondary }}>{k}</div>
                 <div style={{ fontSize: 17, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{v}</div>
               </div>
             ))}
@@ -517,11 +516,11 @@ export default function GdCostingImportPage() {
             </div>
           )}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: "0.7rem" }}>
-            <button type="button" onClick={resetAll} style={btn(billColors.teal, false)}>
+            <button type="button" onClick={resetAll} style={btn(colors.teal, false)}>
               <MdRestartAlt size={18} /> Import another GD
             </button>
-            {canSeeConsignments && <Link to="/imports/consignments" style={{ ...ghostBtn(billColors.blue), textDecoration: "none" }}>Open Consignments</Link>}
-            {canSeeStock && <Link to="/stock" style={{ ...ghostBtn(billColors.blue), textDecoration: "none" }}>See stock on hand</Link>}
+            {canSeeConsignments && <Link to="/imports/consignments" style={{ ...ghostBtn(colors.blue), textDecoration: "none" }}>Open Consignments</Link>}
+            {canSeeStock && <Link to="/stock" style={{ ...ghostBtn(colors.blue), textDecoration: "none" }}>See stock on hand</Link>}
           </div>
         </div>
       )}
@@ -532,8 +531,8 @@ export default function GdCostingImportPage() {
         help="Choose whose books this GD goes on, and say what the GD is. Almost every GD is new goods arriving.">
         <div style={{ display: "grid", gap: "0.8rem" }}>
           <div>
-            <label htmlFor="costing-company" style={{ display: "block", fontSize: 13, color: billColors.textSecondary, marginBottom: 4 }}>
-              Company<span aria-hidden="true" style={{ color: billColors.danger, marginLeft: 3 }}>*</span>
+            <label htmlFor="costing-company" style={{ display: "block", fontSize: 13, color: colors.textSecondary, marginBottom: 4 }}>
+              Company<span aria-hidden="true" style={{ color: colors.danger, marginLeft: 3 }}>*</span>
             </label>
             <select id="costing-company" value={companyId} onChange={(e) => setCompanyId(e.target.value)}
               disabled={!!busy} style={selectStyle}>
@@ -543,7 +542,7 @@ export default function GdCostingImportPage() {
           </div>
 
           <ModeCard active={mode === MODE_NEW_ARRIVALS} disabled={!!busy} onPick={() => onMode(MODE_NEW_ARRIVALS)}
-            tone={billColors.success}
+            tone={colors.successDark}
             title="New goods arrived on this GD"
             body="The monthly case. Each line adds its quantity, landed cost and selling value to the item it matches; a line that matches nothing becomes a new item." />
 
@@ -577,33 +576,33 @@ export default function GdCostingImportPage() {
 
             {entry === "file" ? (
               <div>
-                <label htmlFor="costing-file" style={{ display: "block", fontSize: 13, color: billColors.textSecondary, marginBottom: 4 }}>
+                <label htmlFor="costing-file" style={{ display: "block", fontSize: 13, color: colors.textSecondary, marginBottom: 4 }}>
                   GD costing workbook (.xls, .xlsx, .xlsm)
                 </label>
                 <input id="costing-file" key={fileKey} type="file" accept=".xls,.xlsx,.xlsm" disabled={!!busy}
                   onChange={(e) => { setFile(e.target.files?.[0] || null); clearReview(); }}
                   style={{ ...selectStyle, padding: "0.5rem", maxWidth: 520 }} />
-                <p style={{ margin: "0.45rem 0 0", fontSize: 12.5, color: billColors.textSecondary }}>
+                <p style={{ margin: "0.45rem 0 0", fontSize: 12.5, color: colors.textSecondary }}>
                   Close the file in Excel first. Every line needs its GD number and date, item name, HS code,
                   quantity, unit and assessed value.{" "}
                   <a href={`${import.meta.env.BASE_URL || "/"}templates/gd-costing-template.xlsx`} download
-                    style={{ color: billColors.blue, fontWeight: 700 }}>
+                    style={{ color: colors.blue, fontWeight: 700 }}>
                     Download the sample sheet
                   </a>{" "}(filled-in rows and a sheet explaining every column).
                 </p>
                 {profileError && <div style={{ marginTop: "0.5rem" }}><Banner tone="error">{profileError}</Banner></div>}
                 {profile && (
-                  <p style={{ margin: "0.35rem 0 0", fontSize: 12, color: billColors.textSecondary }}>
+                  <p style={{ margin: "0.35rem 0 0", fontSize: 12, color: colors.textSecondary }}>
                     Layout: {profile.name} (v{profile.currentVersion})
                   </p>
                 )}
                 <div style={{ marginTop: "0.8rem" }}>
                   <button type="button" onClick={onCheckFile}
                     disabled={!file || !profile || !!busy}
-                    style={btn(billColors.blue, !file || !profile || !!busy)}>
+                    style={btn(colors.blue, !file || !profile || !!busy)}>
                     <MdCloudUpload size={18} /> {busy === "preview" ? "Checking…" : "Check the sheet"}
                   </button>
-                  {!file && <span style={{ marginLeft: 10, fontSize: 12.5, color: billColors.textSecondary }}>Choose the workbook first.</span>}
+                  {!file && <span style={{ marginLeft: 10, fontSize: 12.5, color: colors.textSecondary }}>Choose the workbook first.</span>}
                 </div>
               </div>
             ) : (
@@ -612,38 +611,38 @@ export default function GdCostingImportPage() {
                   onChange={(patch) => { setTyped((m) => ({ ...m, ...patch })); if (preview) setStale(true); }}
                   idPrefix="typed" />
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: "0.8rem" }}>
-                  <button type="button" onClick={onAddLine} disabled={!!busy} style={ghostBtn(billColors.blue)}>
+                  <button type="button" onClick={onAddLine} disabled={!!busy} style={ghostBtn(colors.blue)}>
                     <MdAdd size={18} /> Add line and type the next
                   </button>
                   <button type="button" onClick={onCheckTyped} disabled={!!busy || typedCount === 0}
-                    style={btn(billColors.blue, !!busy || typedCount === 0)}>
+                    style={btn(colors.blue, !!busy || typedCount === 0)}>
                     <MdCloudUpload size={18} />
                     {busy === "preview" ? "Checking…" : typedCount > 0 ? `Check ${typedCount} line${typedCount === 1 ? "" : "s"}` : "Check"}
                   </button>
                 </div>
                 {staged.length > 0 && (
                   <div style={{ marginTop: "0.9rem" }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: billColors.textSecondary, marginBottom: 6 }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary, marginBottom: 6 }}>
                       Lines added ({staged.length})
                     </div>
                     {staged.map((m, i) => (
                       <div key={i} style={{
                         display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.4rem 0.8rem",
-                        padding: "0.45rem 0.6rem", border: `1px solid ${billColors.cardBorder}`, borderRadius: 9, marginBottom: 6,
+                        padding: "0.45rem 0.6rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 9, marginBottom: 6,
                       }}>
-                        <span style={{ fontWeight: 800, color: billColors.textSecondary, minWidth: 28 }}>{i + 1}</span>
+                        <span style={{ fontWeight: 800, color: colors.textSecondary, minWidth: 28 }}>{i + 1}</span>
                         <span style={{ flex: "1 1 200px", minWidth: 0, fontWeight: 600, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                           {m.description || "(no item name)"}
                         </span>
-                        <span style={{ fontSize: 12.5, color: billColors.textSecondary }}>
+                        <span style={{ fontSize: 12.5, color: colors.textSecondary }}>
                           {m.gdNumber || "no GD"} · HS {m.hsCode || "—"} · {qtyText(m.quantity)} {m.unit}
                         </span>
                         <span style={{ fontSize: 12.5, fontVariantNumeric: "tabular-nums" }}>{moneyText(computeCosting(m).cost)}</span>
                         <span style={{ display: "flex", gap: 6 }}>
-                          <button type="button" onClick={() => onEditStaged(i)} disabled={!!busy} style={ghostBtn(billColors.blue)}>
+                          <button type="button" onClick={() => onEditStaged(i)} disabled={!!busy} style={ghostBtn(colors.blue)}>
                             <MdEdit size={16} /> Edit
                           </button>
-                          <button type="button" onClick={() => onRemoveStaged(i)} disabled={!!busy} style={ghostBtn(billColors.danger)}
+                          <button type="button" onClick={() => onRemoveStaged(i)} disabled={!!busy} style={ghostBtn(colors.danger)}
                             aria-label={`Remove line ${i + 1}`}>
                             <MdDelete size={16} />
                           </button>
@@ -663,10 +662,10 @@ export default function GdCostingImportPage() {
         summary={preview ? (
           <span>
             {lines.length} line{lines.length === 1 ? "" : "s"}
-            {fixCount > 0 && <strong style={{ color: billColors.danger }}> · {fixCount} to fix</strong>}
+            {fixCount > 0 && <strong style={{ color: colors.danger }}> · {fixCount} to fix</strong>}
             {leftCount > 0 && <span> · {leftCount} left out</span>}
           </span>
-        ) : <span style={{ color: billColors.textSecondary }}>Opens when the GD is checked</span>}
+        ) : <span style={{ color: colors.textSecondary }}>Opens when the GD is checked</span>}
         help={preview
           ? "Each line says what will happen to your stock. Fix anything in red, choose the item where several share a code, or leave a line out: its goods then will not come in."
           : null}>
@@ -690,10 +689,10 @@ export default function GdCostingImportPage() {
             )}
             {notes.length > 0 && (
               <details style={{ marginBottom: "0.7rem" }}>
-                <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 700, color: billColors.textSecondary, minHeight: 32 }}>
+                <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 700, color: colors.textSecondary, minHeight: 32 }}>
                   Notes from reading the sheet ({notes.length})
                 </summary>
-                <ul style={{ margin: "0.4rem 0 0", paddingLeft: "1.2rem", fontSize: 12.5, color: billColors.textSecondary }}>
+                <ul style={{ margin: "0.4rem 0 0", paddingLeft: "1.2rem", fontSize: 12.5, color: colors.textSecondary }}>
                   {notes.map((w, i) => <li key={i}>{w}</li>)}
                 </ul>
               </details>
@@ -705,19 +704,19 @@ export default function GdCostingImportPage() {
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "0 0 0.8rem" }}>
                 {bulk.unconfirmed.length > 0 && (
                   <button type="button" disabled={!!busy || stale} onClick={() => onBulkConfirm(bulk.unconfirmed)}
-                    style={bulkBtn(billColors.success)}>
+                    style={bulkBtn(colors.successDark)}>
                     <MdCheckCircle size={17} style={{ flexShrink: 0 }} /> Bring in all {bulk.unconfirmed.length} new item{bulk.unconfirmed.length === 1 ? "" : "s"}
                   </button>
                 )}
                 {bulk.problems.length > 0 && (
                   <button type="button" disabled={!!busy || stale} onClick={() => onBulkLeaveOut(bulk.problems)}
-                    style={bulkBtn(billColors.textSecondary)}>
+                    style={bulkBtn(colors.textSecondary)}>
                     <MdClose size={17} style={{ flexShrink: 0 }} /> Leave out {bulk.problems.length} line{bulk.problems.length === 1 ? "" : "s"} that need fixing
                   </button>
                 )}
                 {bulk.undecided.length > 0 && (
                   <button type="button" disabled={!!busy || stale} onClick={() => onBulkLeaveOut(bulk.undecided)}
-                    style={bulkBtn(billColors.textSecondary)}>
+                    style={bulkBtn(colors.textSecondary)}>
                     <MdClose size={17} style={{ flexShrink: 0 }} /> Leave out {bulk.undecided.length} undecided line{bulk.undecided.length === 1 ? "" : "s"}
                   </button>
                 )}
@@ -732,7 +731,7 @@ export default function GdCostingImportPage() {
 
       {/* 4 ── Bring it in ──────────────────────────────────────────────── */}
       <BillStep id={COSTING_ANCHORS.commit} n={4} title="Bring it in" status={ready ? "done" : "todo"}
-        summary={summary ? <span>{moneyText(summary.totalCost)} landed cost</span> : <span style={{ color: billColors.textSecondary }}>After the check</span>}>
+        summary={summary ? <span>{moneyText(summary.totalCost)} landed cost</span> : <span style={{ color: colors.textSecondary }}>After the check</span>}>
         {summary ? (
           <div>
             <ul style={{ margin: "0 0 0.6rem", paddingLeft: "1.2rem", fontSize: 14, lineHeight: 1.6 }}>
@@ -743,13 +742,13 @@ export default function GdCostingImportPage() {
               <span>Selling value <strong style={{ fontVariantNumeric: "tabular-nums" }}>{moneyText(summary.totalSelling)}</strong></span>
             </div>
             {mode === MODE_NEW_ARRIVALS && (
-              <p style={{ margin: "0.5rem 0 0", fontSize: 12.5, color: billColors.textSecondary }}>
+              <p style={{ margin: "0.5rem 0 0", fontSize: 12.5, color: colors.textSecondary }}>
                 When the company keeps its ledger here, each GD also posts one journal entry, dated the GD's own date.
               </p>
             )}
           </div>
         ) : (
-          <p style={{ margin: 0, fontSize: 13, color: billColors.textSecondary }}>Check the GD first: this step then says exactly what will be saved.</p>
+          <p style={{ margin: 0, fontSize: 13, color: colors.textSecondary }}>Check the GD first: this step then says exactly what will be saved.</p>
         )}
       </BillStep>
 
@@ -758,7 +757,7 @@ export default function GdCostingImportPage() {
         position: "fixed", bottom: 0, zIndex: 30,
         left: barBox ? barBox.left : 0, width: barBox ? barBox.width : "100%", boxSizing: "border-box",
         padding: "0.6rem clamp(0.75rem, 2vw, 1.25rem) 0.7rem", background: "#fff",
-        borderTop: `1px solid ${billColors.cardBorder}`, boxShadow: "0 -6px 18px rgba(13,71,161,0.08)",
+        borderTop: `1px solid ${colors.cardBorder}`, boxShadow: "0 -6px 18px rgba(13,71,161,0.08)",
       }}>
         <div style={{
           maxWidth: 1100, margin: "0 auto", display: "flex", flexWrap: "wrap", alignItems: "center",
@@ -766,7 +765,7 @@ export default function GdCostingImportPage() {
         }}>
           <BillChecklist items={checklist} readyText="Ready to bring in" />
           <button type="button" onClick={onCommit} disabled={!ready}
-            style={{ ...btn(billColors.success, !ready), marginLeft: "auto" }}>
+            style={{ ...btn(colors.successDark, !ready), marginLeft: "auto" }}>
             <MdCheckCircle size={18} />
             {busy === "commit" ? "Saving…" : summary ? commitLabel(summary) : "Bring into stock"}
           </button>
@@ -788,7 +787,7 @@ export default function GdCostingImportPage() {
                 onChange={(patch) => setFixing((f) => ({ ...f, draft: { ...f.draft, ...patch }, problems: [] }))} />
             </div>
             <div style={formStyles.footer}>
-              <span style={{ marginRight: "auto", fontSize: 12.5, color: billColors.textSecondary }}>
+              <span style={{ marginRight: "auto", fontSize: 12.5, color: colors.textSecondary }}>
                 {lineProblems(fixing.draft).length > 0
                   ? `Still needed: ${lineProblems(fixing.draft).map((p) => p.message.replace(/\.$/, "")).join("; ")}.`
                   : "The line is complete. Saving checks it on the server again."}

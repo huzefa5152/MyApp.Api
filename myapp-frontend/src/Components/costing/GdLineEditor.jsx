@@ -1,8 +1,8 @@
+import { colors } from "../../theme";
 import { useEffect, useMemo, useState } from "react";
 import { MdErrorOutline } from "react-icons/md";
 import HsCodeAutocomplete from "../HsCodeAutocomplete";
 import { getItemTypesPaged } from "../../api/itemTypeApi";
-import { billColors } from "../bill/billTheme";
 import { FIELDS, lineProblems, messagesFor, computeCosting, moneyText, cleanHsCode } from "../../utils/gdCostingEntry";
 
 /**
@@ -26,9 +26,9 @@ const grid = {
 
 const inputStyle = (bad) => ({
   width: "100%", padding: "0.55rem 0.65rem", borderRadius: 8, boxSizing: "border-box",
-  border: `1px solid ${bad ? billColors.danger : billColors.inputBorder}`,
-  background: bad ? billColors.dangerLight : billColors.inputBg,
-  color: billColors.textPrimary, fontSize: 14, minHeight: 44,
+  border: `1px solid ${bad ? colors.danger : colors.inputBorder}`,
+  background: bad ? colors.dangerLight : colors.inputBg,
+  color: colors.textPrimary, fontSize: 14, minHeight: 44,
 });
 
 function Section({ title, children, note }) {
@@ -36,7 +36,7 @@ function Section({ title, children, note }) {
     <fieldset style={{ border: "none", margin: "0 0 0.9rem", padding: 0, minWidth: 0 }}>
       <legend style={{
         padding: 0, marginBottom: "0.45rem", fontSize: 11.5, fontWeight: 800,
-        textTransform: "uppercase", letterSpacing: "0.06em", color: billColors.textSecondary,
+        textTransform: "uppercase", letterSpacing: "0.06em", color: colors.textSecondary,
       }}>{title}</legend>
       {children}
       {note}
@@ -49,7 +49,7 @@ function ErrorText({ messages }) {
   return messages.map((m, i) => (
     <div key={i} role="alert" style={{
       display: "flex", gap: 4, alignItems: "flex-start", marginTop: 4,
-      fontSize: 12, lineHeight: 1.4, color: billColors.danger, fontWeight: 600,
+      fontSize: 12, lineHeight: 1.4, color: colors.danger, fontWeight: 600,
     }}>
       <MdErrorOutline size={14} style={{ flexShrink: 0, marginTop: 1 }} /> <span>{m}</span>
     </div>
@@ -59,15 +59,15 @@ function ErrorText({ messages }) {
 function Field({ id, label, required, hint, hintTone, errors, children }) {
   return (
     <div style={{ minWidth: 0 }}>
-      <label htmlFor={id} style={{ display: "block", fontSize: 13, color: billColors.textSecondary, marginBottom: 4 }}>
+      <label htmlFor={id} style={{ display: "block", fontSize: 13, color: colors.textSecondary, marginBottom: 4 }}>
         {label}
-        {required && <span aria-hidden="true" style={{ color: billColors.danger, marginLeft: 3 }}>*</span>}
+        {required && <span aria-hidden="true" style={{ color: colors.danger, marginLeft: 3 }}>*</span>}
         {required && <span style={srOnly}> (required)</span>}
       </label>
       {children}
       <ErrorText messages={errors} />
       {hint && !errors?.length && (
-        <div style={{ marginTop: 3, fontSize: 11.5, lineHeight: 1.45, color: hintTone || billColors.textSecondary }}>{hint}</div>
+        <div style={{ marginTop: 3, fontSize: 11.5, lineHeight: 1.45, color: hintTone || colors.textSecondary }}>{hint}</div>
       )}
     </div>
   );
@@ -81,7 +81,7 @@ const srOnly = {
 function Stat({ label, value, strong }) {
   return (
     <div>
-      <div style={{ fontSize: 11.5, color: billColors.textSecondary }}>{label}</div>
+      <div style={{ fontSize: 11.5, color: colors.textSecondary }}>{label}</div>
       <div style={{ fontSize: strong ? 16 : 14.5, fontWeight: strong ? 800 : 600, fontVariantNumeric: "tabular-nums" }}>{value}</div>
     </div>
   );
@@ -131,11 +131,11 @@ export default function GdLineEditor({
     if (hsMatches.length === 1)
       return {
         text: `Adds to ${hsMatches[0].name}${hsMatches[0].uom ? ` (kept in ${hsMatches[0].uom})` : ""}.`,
-        tone: billColors.success,
+        tone: colors.successDark,
       };
     return {
       text: `${hsMatches.length} items share this code. The one named like this line is used; otherwise you choose in the review.`,
-      tone: billColors.warn,
+      tone: colors.warn,
     };
   })();
   const itemUnit = hsMatches?.length === 1 ? hsMatches[0].uom : null;
@@ -194,7 +194,7 @@ export default function GdLineEditor({
           </Field>
           <Field id={id("unit")} label="Unit" required errors={errorsFor(FIELDS.unit)}
             hint={itemUnit ? `That item is kept in ${itemUnit}: use the same unit.` : "Pcs, Kg, Mtr… Carries over to the next line."}
-            hintTone={itemUnit ? billColors.blue : undefined}>
+            hintTone={itemUnit ? colors.blue : undefined}>
             <input id={id("unit")} type="text" list={id("units")} style={inputStyle(errorsFor(FIELDS.unit).length)}
               placeholder="e.g. Pcs" value={line.unit} onChange={set("unit")} onBlur={touch("unit")}
               disabled={disabled} autoComplete="off" />
@@ -256,7 +256,7 @@ export default function GdLineEditor({
       <div style={{
         ...grid, gridTemplateColumns: "repeat(auto-fit, minmax(min(130px, 100%), 1fr))",
         padding: "0.65rem 0.8rem", borderRadius: 9,
-        background: billColors.blueSoft, border: `1px solid ${billColors.cardBorder}`,
+        background: colors.infoTint, border: `1px solid ${colors.cardBorder}`,
       }}>
         <Stat label="Landed cost" value={moneyText(computed.cost)} strong />
         <Stat label="Sales tax" value={moneyText(computed.salesTax)} />
@@ -264,7 +264,7 @@ export default function GdLineEditor({
         <Stat label="Income tax" value={moneyText(computed.incomeTax)} />
         <Stat label="Selling value" value={moneyText(line.sellingValue !== "" && line.sellingValue != null ? Number(line.sellingValue) : computed.sellingValue)} strong />
       </div>
-      <p style={{ margin: "0.35rem 0 0", fontSize: 11.5, color: billColors.textSecondary }}>
+      <p style={{ margin: "0.35rem 0 0", fontSize: 11.5, color: colors.textSecondary }}>
         Worked out as you type. Check re-does it on the server before anything is saved.
       </p>
     </div>

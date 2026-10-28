@@ -9,7 +9,7 @@ import { getAccountsFlat } from "../api/accountApi";
 import { getAllUnits } from "../api/unitsApi";
 import { isDecimalUnit } from "../utils/formatQuantity";
 import { getSalesOrdersForPicker, getSalesOrderInvoicePrefill } from "../api/salesOrderApi";
-import { formStyles, modalSizes } from "../theme";
+import { formStyles, modalSizes, formShell, formBodyFill, colors } from "../theme";
 import { todayYmd } from "../utils/dateInput";
 import { ADVANCE_TAX_OPTIONS, advanceTaxLabel, findAdvanceTax, advanceTaxAmount } from "../config/advanceTax";
 import { defaultAccountPlaceholder } from "../utils/accountDisplay";
@@ -17,7 +17,6 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import { descriptionAfterPick } from "../utils/lineDescription";
 import TaxRateNotice from "./TaxRateNotice";
-import { billFormShell, billFormBody } from "./bill/billTheme";
 import BillStep from "./bill/BillStep";
 import BillChecklist from "./bill/BillChecklist";
 import BillTotals from "./bill/BillTotals";
@@ -50,19 +49,6 @@ import { fifoQuantityForAmount, fifoTierText } from "../utils/fifoPricing";
 // the picked Item Type. Operator can ALSO inline-create a Buyer or an
 // Item Type from this same form when permitted.
 
-const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
-  danger: "#dc3545",
-  dangerLight: "#fff0f1",
-  warn: "#e65100",
-  warnLight: "#fff8e1",
-};
 
 // Per §9 + §10. Each entry annotates the backend's Scenario record so
 // the form's conditional rendering doesn't have to read SN codes.
@@ -1311,8 +1297,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
           </div>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
-        <form onSubmit={handleSubmit} style={billFormShell}>
-          <div style={{ ...formStyles.body, ...billFormBody }}>
+        <form onSubmit={handleSubmit} style={formShell}>
+          <div style={{ ...formStyles.body, ...formBodyFill }}>
             {error && <div ref={errorRef} style={styles.errorAlert}>{error}</div>}
 
             {loading ? (
@@ -1416,7 +1402,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                 style={{
                                   ...styles.scenarioCard,
                                   borderColor: active ? colors.blue : colors.cardBorder,
-                                  backgroundColor: active ? "#e3f2fd" : "#fff",
+                                  backgroundColor: active ? colors.infoSoft : colors.white,
                                 }}
                               >
                                 <div style={styles.scenarioCardHeader}>
@@ -1618,7 +1604,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               <label style={styles.label}>Document Type <span style={styles.optionalTag}>FBR</span></label>
                               <input
                                 type="text"
-                                style={{ ...styles.input, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
+                                style={{ ...styles.input, backgroundColor: colors.infoTint, cursor: "not-allowed" }}
                                 value="Sale Invoice"
                                 readOnly
                                 title="This screen creates Sale Invoices only. Credit / Debit Notes will get their own dedicated screens."
@@ -1736,10 +1722,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               {!billsMode && (
                                 <th style={{ ...styles.unifiedTh, width: "10%" }}>HS Code</th>
                               )}
-                              {showMRP && <th style={{ ...styles.unifiedTh, width: "9%", backgroundColor: "#fff8e1" }}>MRP / unit *</th>}
-                              {showMRP && <th style={{ ...styles.unifiedTh, width: "9%", backgroundColor: "#fff8e1" }}>MRP × Qty</th>}
-                              {showSRO && <th style={{ ...styles.unifiedTh, width: "10%", backgroundColor: "#fce4ec" }}>SRO Schedule *</th>}
-                              {showSRO && <th style={{ ...styles.unifiedTh, width: "8%", backgroundColor: "#fce4ec" }}>SRO Item No *</th>}
+                              {showMRP && <th style={{ ...styles.unifiedTh, width: "9%", backgroundColor: colors.cautionSoft }}>MRP / unit *</th>}
+                              {showMRP && <th style={{ ...styles.unifiedTh, width: "9%", backgroundColor: colors.cautionSoft }}>MRP × Qty</th>}
+                              {showSRO && <th style={{ ...styles.unifiedTh, width: "10%", backgroundColor: colors.violetSoft }}>SRO Schedule *</th>}
+                              {showSRO && <th style={{ ...styles.unifiedTh, width: "8%", backgroundColor: colors.violetSoft }}>SRO Item No *</th>}
                               <th style={{ ...styles.unifiedTh, width: "4%" }}></th>
                             </tr>
                           </thead>
@@ -1928,7 +1914,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                         readOnly={!!r.itemTypeId}
                                         style={{
                                           ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem",
-                                          backgroundColor: r.itemTypeId ? "#eef5ff" : colors.inputBg,
+                                          backgroundColor: r.itemTypeId ? colors.infoTint : colors.inputBg,
                                           cursor: r.itemTypeId ? "not-allowed" : "text",
                                         }}
                                         value={r.uom}
@@ -2000,9 +1986,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                             textAlign: "right",
                                             minWidth: 108,
                                             fontVariantNumeric: "tabular-nums",
-                                            backgroundColor: (!r.itemTypeId || noStock) ? "#f1f3f6" : colors.inputBg,
+                                            backgroundColor: (!r.itemTypeId || noStock) ? colors.surface : colors.inputBg,
                                             cursor: (!r.itemTypeId || noStock) ? "not-allowed" : "text",
-                                            borderColor: overStock ? "#e65100" : undefined,
+                                            borderColor: overStock ? colors.warn : undefined,
                                           }}
                                           value={shown}
                                           // Digits and a single decimal point only, so a
@@ -2032,7 +2018,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                           </div>
                                         )}
                                         {ready && (
-                                          <div style={{ fontSize: "0.7rem", color: overStock ? "#e65100" : colors.textSecondary, marginTop: 3, lineHeight: 1.3 }}>
+                                          <div style={{ fontSize: "0.7rem", color: overStock ? colors.warn : colors.textSecondary, marginTop: 3, lineHeight: 1.3 }}>
                                             {overStock
                                               ? `only ${Number(price.availableValueExcludingTax).toLocaleString(undefined, { maximumFractionDigits: 0 })} in stock`
                                               : rateMoved
@@ -2060,7 +2046,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                     <td
                                       style={{
                                         ...styles.unifiedTd,
-                                        backgroundColor: "#f4f6fa",
+                                        backgroundColor: colors.surface,
                                         fontFamily: "monospace",
                                         fontSize: "0.78rem",
                                         color: r.hsCode ? colors.textPrimary : colors.textSecondary,
@@ -2072,7 +2058,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                     </td>
                                   )}
                                   {showMRP && (
-                                    <td style={{ ...styles.unifiedTd, backgroundColor: "#fffdf5" }}>
+                                    <td style={{ ...styles.unifiedTd, backgroundColor: colors.cautionTint }}>
                                       <input
                                         type="number" min={0} step="any"
                                         style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
@@ -2084,7 +2070,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                     </td>
                                   )}
                                   {showMRP && (
-                                    <td style={{ ...styles.unifiedTd, backgroundColor: "#fffdf5", textAlign: "right", fontWeight: 600, fontSize: "0.82rem" }}>
+                                    <td style={{ ...styles.unifiedTd, backgroundColor: colors.cautionTint, textAlign: "right", fontWeight: 600, fontSize: "0.82rem" }}>
                                       {(() => {
                                         const m = parseFloat(r.mrp) || 0;
                                         const total = m * q;
@@ -2095,7 +2081,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                     </td>
                                   )}
                                   {showSRO && (
-                                    <td style={{ ...styles.unifiedTd, backgroundColor: "#fff7fa" }}>
+                                    <td style={{ ...styles.unifiedTd, backgroundColor: colors.surface }}>
                                       <input
                                         type="text"
                                         style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
@@ -2110,7 +2096,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                     </td>
                                   )}
                                   {showSRO && (
-                                    <td style={{ ...styles.unifiedTd, backgroundColor: "#fff7fa" }}>
+                                    <td style={{ ...styles.unifiedTd, backgroundColor: colors.surface }}>
                                       <input
                                         type="text"
                                         style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
@@ -2179,7 +2165,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               </label>
                               <input
                                 type="number"
-                                style={{ ...styles.input, backgroundColor: chosenScenario ? "#eef5ff" : undefined, cursor: chosenScenario ? "not-allowed" : "text" }}
+                                style={{ ...styles.input, backgroundColor: chosenScenario ? colors.infoTint : undefined, cursor: chosenScenario ? "not-allowed" : "text" }}
                                 value={gstRate}
                                 onChange={(e) => setGstRate(e.target.value)}
                                 readOnly={!!chosenScenario}
@@ -2336,11 +2322,11 @@ const styles = {
   // Stock at a glance under the item picker: what is on hand and what it is
   // worth per unit, or that there is none.
   stockChipOk: {
-    marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: "#00695c",
+    marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: colors.tealDark,
     fontVariantNumeric: "tabular-nums",
   },
   stockChipNone: {
-    marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: "#8d6e00",
+    marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: colors.cautionInk,
     fontWeight: 600,
   },
   rateChipBad: {
@@ -2348,32 +2334,32 @@ const styles = {
     fontWeight: 600,
   },
   rateChipCheck: {
-    marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: "#b26a00",
+    marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: colors.caution,
     fontWeight: 600,
   },
   // The scenario was set from the goods' own records, not by the operator.
   scenarioAutoNote: {
     display: "flex", gap: "0.45rem", alignItems: "flex-start",
     margin: "0.45rem 0 0", padding: "0.5rem 0.75rem",
-    border: `1px solid ${colors.blue}33`, background: "#e3f2fd", borderRadius: 8,
+    border: `1px solid ${colors.blue}33`, background: colors.infoSoft, borderRadius: 8,
     fontSize: "0.8rem", lineHeight: 1.4, color: colors.textPrimary,
   },
   // Qty / Unit Price worked out from the amount: visibly not a box to type in.
   derivedInput: {
-    backgroundColor: "#f1f3f6", color: colors.textSecondary, cursor: "not-allowed",
+    backgroundColor: colors.surface, color: colors.textSecondary, cursor: "not-allowed",
     fontVariantNumeric: "tabular-nums",
   },
   stockChipWarn: {
-    marginTop: 3, fontSize: "0.68rem", lineHeight: 1.35, color: "#8d6e00",
+    marginTop: 3, fontSize: "0.68rem", lineHeight: 1.35, color: colors.cautionInk,
     fontWeight: 600, fontVariantNumeric: "tabular-nums",
   },
   stockChipOver: {
-    marginTop: 3, fontSize: "0.68rem", lineHeight: 1.35, color: "#b3261e",
+    marginTop: 3, fontSize: "0.68rem", lineHeight: 1.35, color: colors.error,
     fontWeight: 600, fontVariantNumeric: "tabular-nums",
   },
   stockChipBtn: {
     background: "none", border: "none", padding: 0, margin: 0, font: "inherit", fontWeight: 700,
-    color: "#0d47a1", textDecoration: "underline", cursor: "pointer", minHeight: 24,
+    color: colors.blue, textDecoration: "underline", cursor: "pointer", minHeight: 24,
   },
 
   row: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.85rem 1rem", marginBottom: "1rem", alignItems: "end" },
@@ -2382,26 +2368,26 @@ const styles = {
   input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", boxSizing: "border-box" },
   select: { width: "100%", padding: "0.6rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", cursor: "pointer" },
   errorAlert: { backgroundColor: colors.dangerLight, color: colors.danger, padding: "0.65rem 1rem", borderRadius: 8, marginBottom: "1rem", fontWeight: 500, border: `1px solid ${colors.danger}30`, fontSize: "0.85rem" },
-  warnAlert: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.65rem 0.85rem", borderRadius: 8, backgroundColor: colors.warnLight, border: `1px solid ${colors.warn}30`, color: colors.warn, fontSize: "0.85rem" },
-  totalsBox: { display: "flex", flexDirection: "column", gap: "0.35rem", alignItems: "flex-end", padding: "1rem", backgroundColor: "#f8f9fb", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, marginTop: "0.5rem" },
+  warnAlert: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.65rem 0.85rem", borderRadius: 8, backgroundColor: colors.cautionSoft, border: `1px solid ${colors.warn}30`, color: colors.warn, fontSize: "0.85rem" },
+  totalsBox: { display: "flex", flexDirection: "column", gap: "0.35rem", alignItems: "flex-end", padding: "1rem", backgroundColor: colors.inputBg, borderRadius: 8, border: `1px solid ${colors.cardBorder}`, marginTop: "0.5rem" },
   totalRow: { display: "flex", gap: "2rem", justifyContent: "flex-end", fontSize: "0.9rem", minWidth: 280 },
   fbrToggleHint: { margin: "0.3rem 0 0", fontSize: "0.75rem", color: colors.textSecondary },
-  optionalTag: { marginLeft: "0.3rem", padding: "0.05rem 0.35rem", borderRadius: 4, backgroundColor: "#fff3e0", color: "#e65100", fontSize: "0.62rem", fontWeight: 800, letterSpacing: "0.03em", textTransform: "uppercase" },
-  lockedTag: { marginLeft: "0.3rem", padding: "0.05rem 0.35rem", borderRadius: 4, backgroundColor: "#e0f2f1", color: "#00695c", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", display: "inline-flex", alignItems: "center", gap: 2 },
+  optionalTag: { marginLeft: "0.3rem", padding: "0.05rem 0.35rem", borderRadius: 4, backgroundColor: colors.warnSoft, color: colors.warn, fontSize: "0.62rem", fontWeight: 800, letterSpacing: "0.03em", textTransform: "uppercase" },
+  lockedTag: { marginLeft: "0.3rem", padding: "0.05rem 0.35rem", borderRadius: 4, backgroundColor: colors.tealSoft, color: colors.tealDark, fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", display: "inline-flex", alignItems: "center", gap: 2 },
   itemsHeaderBar: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.5rem" },
-  addRowBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.35rem 0.75rem", borderRadius: 6, border: "none", backgroundColor: colors.blue, color: "#fff", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
-  inlineAddBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.45rem 0.75rem", borderRadius: 6, border: `1px solid ${colors.blue}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
-  tinyAddBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0.25rem", borderRadius: 6, border: `1px solid ${colors.blue}`, backgroundColor: "#fff", color: colors.blue, cursor: "pointer", flexShrink: 0 },
-  removeRowBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0.3rem", borderRadius: 6, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#fff", color: colors.danger, cursor: "pointer" },
+  addRowBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.35rem 0.75rem", borderRadius: 6, border: "none", backgroundColor: colors.blue, color: colors.white, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
+  inlineAddBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.45rem 0.75rem", borderRadius: 6, border: `1px solid ${colors.blue}`, backgroundColor: colors.white, color: colors.blue, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
+  tinyAddBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0.25rem", borderRadius: 6, border: `1px solid ${colors.blue}`, backgroundColor: colors.white, color: colors.blue, cursor: "pointer", flexShrink: 0 },
+  removeRowBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0.3rem", borderRadius: 6, border: `1px solid ${colors.cardBorder}`, backgroundColor: colors.white, color: colors.danger, cursor: "pointer" },
   unifiedTableWrap: { width: "100%", overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 8 },
   unifiedTable: { width: "100%", borderCollapse: "collapse" },   // minWidth is computed at the call site
-  unifiedThead: { backgroundColor: "#eff3f8" },
+  unifiedThead: { backgroundColor: colors.surface },
   unifiedTh: { padding: "0.5rem 0.45rem", textAlign: "left", fontSize: "0.7rem", fontWeight: 800, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: `1px solid ${colors.cardBorder}` },
-  unifiedRow: { backgroundColor: "#fff" },
+  unifiedRow: { backgroundColor: colors.white },
   unifiedTd: { padding: "0.3rem 0.4rem", fontSize: "0.8rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "middle" },
 
   stepLabel: { display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.95rem", fontWeight: 700, color: colors.textPrimary, marginBottom: "0.4rem" },
-  stepNum: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", backgroundColor: colors.blue, color: "#fff", fontSize: "0.78rem", fontWeight: 800, flexShrink: 0 },
+  stepNum: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", backgroundColor: colors.blue, color: colors.white, fontSize: "0.78rem", fontWeight: 800, flexShrink: 0 },
   stepHint: { margin: "0 0 0.6rem 30px", fontSize: "0.78rem", color: colors.textSecondary, lineHeight: 1.4 },
   // Collapsible Step 1 (FBR Scenario picker) — clickable header bar that
   // shows the auto-defaulted scenario summary and toggles the card grid.
@@ -2415,7 +2401,7 @@ const styles = {
     padding: "0.6rem 0.85rem",
     borderRadius: 10,
     border: `1px solid ${colors.cardBorder}`,
-    backgroundColor: "#f8faff",
+    backgroundColor: colors.infoTint,
     cursor: "pointer",
     fontFamily: "inherit",
     textAlign: "left",
@@ -2471,40 +2457,40 @@ const styles = {
     padding: "0.65rem 0.85rem",
     borderRadius: 10,
     border: `1px solid ${colors.cardBorder}`,
-    backgroundColor: "#fff",
+    backgroundColor: colors.white,
   },
 
   scenarioGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "0.6rem", marginTop: "0.25rem" },
-  scenarioCard: { textAlign: "left", padding: "0.7rem 0.85rem", borderRadius: 10, border: "2px solid", cursor: "pointer", display: "flex", flexDirection: "column", gap: "0.3rem", transition: "all 0.15s", backgroundColor: "#fff", fontFamily: "inherit" },
+  scenarioCard: { textAlign: "left", padding: "0.7rem 0.85rem", borderRadius: 10, border: "2px solid", cursor: "pointer", display: "flex", flexDirection: "column", gap: "0.3rem", transition: "all 0.15s", backgroundColor: colors.white, fontFamily: "inherit" },
   scenarioCardHeader: { display: "flex", justifyContent: "space-between", alignItems: "center" },
   scenarioCode: { fontWeight: 800, fontSize: "0.95rem", color: colors.blue, fontFamily: "monospace" },
   scenarioSaleType: { fontSize: "0.82rem", color: colors.textPrimary, fontWeight: 600, lineHeight: 1.25 },
   scenarioRate: { fontSize: "0.74rem", color: colors.textSecondary },
   scenarioBadges: { display: "flex", flexWrap: "wrap", gap: "0.25rem", marginTop: "0.15rem" },
   scenarioBadge: { fontSize: "0.65rem", padding: "0.1rem 0.4rem", borderRadius: 4, fontWeight: 700, letterSpacing: "0.02em" },
-  badgeBlue:   { backgroundColor: "#e3f2fd", color: "#0d47a1" },
-  badgeOrange: { backgroundColor: "#fff3e0", color: "#e65100" },
-  badgePurple: { backgroundColor: "#f3e5f5", color: "#6a1b9a" },
-  badgeYellow: { backgroundColor: "#fff8e1", color: "#a16e00" },
-  badgePink:   { backgroundColor: "#fce4ec", color: "#ad1457" },
-  scenarioHint: { display: "flex", alignItems: "flex-start", gap: "0.4rem", marginTop: "0.6rem", padding: "0.5rem 0.75rem", borderRadius: 8, backgroundColor: "#e3f2fd", border: "1px solid #90caf9", color: "#0d47a1", fontSize: "0.82rem", lineHeight: 1.4 },
+  badgeBlue:   { backgroundColor: colors.infoSoft, color: colors.blue },
+  badgeOrange: { backgroundColor: colors.warnSoft, color: colors.warn },
+  badgePurple: { backgroundColor: colors.violetSoft, color: colors.violetInk },
+  badgeYellow: { backgroundColor: colors.cautionSoft, color: colors.cautionInk },
+  badgePink:   { backgroundColor: colors.violetSoft, color: colors.violetInk },
+  scenarioHint: { display: "flex", alignItems: "flex-start", gap: "0.4rem", marginTop: "0.6rem", padding: "0.5rem 0.75rem", borderRadius: 8, backgroundColor: colors.infoSoft, border: `1px solid ${colors.infoLine}`, color: colors.blue, fontSize: "0.82rem", lineHeight: 1.4 },
 
-  lockedSaleType: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0.85rem", marginBottom: "0.6rem", borderRadius: 8, backgroundColor: "#e0f2f1", border: "1px solid #80cbc4", color: "#00695c", fontSize: "0.82rem" },
-  lockedSaleTypeHint: { color: "#00695c", opacity: 0.8, fontSize: "0.75rem" },
+  lockedSaleType: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0.85rem", marginBottom: "0.6rem", borderRadius: 8, backgroundColor: colors.tealSoft, border: `1px solid ${colors.tealLine}`, color: colors.tealDark, fontSize: "0.82rem" },
+  lockedSaleTypeHint: { color: colors.tealDark, opacity: 0.8, fontSize: "0.75rem" },
 
-  permHintBlock: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.75rem", borderRadius: 6, backgroundColor: "#fff8e1", border: `1px solid ${colors.warn}30`, color: colors.warn, fontSize: "0.78rem", lineHeight: 1.35, flexWrap: "wrap" },
+  permHintBlock: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.75rem", borderRadius: 6, backgroundColor: colors.cautionSoft, border: `1px solid ${colors.warn}30`, color: colors.warn, fontSize: "0.78rem", lineHeight: 1.35, flexWrap: "wrap" },
   permHintInline: { display: "inline-flex", alignItems: "center", gap: "0.25rem", color: colors.warn, fontSize: "0.72rem", flexWrap: "wrap" },
-  permCode: { fontFamily: "monospace", padding: "0 0.25rem", borderRadius: 3, backgroundColor: "#f5f5f5", fontWeight: 700, fontSize: "0.74rem" },
+  permCode: { fontFamily: "monospace", padding: "0 0.25rem", borderRadius: 3, backgroundColor: colors.surface, fontWeight: 700, fontSize: "0.74rem" },
 
   // ── HS code typeahead inside ItemTypeForm ─────────────────────────
-  scenarioPillSmall: { marginLeft: "0.5rem", padding: "0.1rem 0.4rem", borderRadius: 4, backgroundColor: "#e3f2fd", color: "#0d47a1", fontSize: "0.7rem", fontWeight: 800, fontFamily: "monospace" },
-  hsDropdown: { position: "absolute", top: "100%", left: 0, right: 0, marginTop: "0.2rem", maxHeight: 260, overflowY: "auto", backgroundColor: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.08)", zIndex: 1200 },
+  scenarioPillSmall: { marginLeft: "0.5rem", padding: "0.1rem 0.4rem", borderRadius: 4, backgroundColor: colors.infoSoft, color: colors.blue, fontSize: "0.7rem", fontWeight: 800, fontFamily: "monospace" },
+  hsDropdown: { position: "absolute", top: "100%", left: 0, right: 0, marginTop: "0.2rem", maxHeight: 260, overflowY: "auto", backgroundColor: colors.white, border: `1px solid ${colors.cardBorder}`, borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.08)", zIndex: 1200 },
   hsLoading: { padding: "0.6rem 0.85rem", fontSize: "0.82rem", color: colors.textSecondary },
-  hsOption: { display: "flex", flexDirection: "column", alignItems: "flex-start", width: "100%", padding: "0.5rem 0.75rem", border: "none", borderBottom: `1px solid ${colors.cardBorder}`, backgroundColor: "#fff", textAlign: "left", cursor: "pointer", fontFamily: "inherit" },
+  hsOption: { display: "flex", flexDirection: "column", alignItems: "flex-start", width: "100%", padding: "0.5rem 0.75rem", border: "none", borderBottom: `1px solid ${colors.cardBorder}`, backgroundColor: colors.white, textAlign: "left", cursor: "pointer", fontFamily: "inherit" },
   hsOptionCode: { fontWeight: 700, color: colors.blue, fontFamily: "monospace", fontSize: "0.85rem" },
   hsOptionDesc: { fontSize: "0.74rem", color: colors.textSecondary, marginTop: 2, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" },
 
   // Bulk-apply Item Type toolbar — surfaces above the items table when 2+ rows exist
-  bulkApplyBar: { display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap", padding: "0.55rem 0.85rem", marginBottom: "0.5rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#f8faff" },
-  bulkClearBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.35rem 0.7rem", borderRadius: 6, border: `1px solid ${colors.danger}`, backgroundColor: "#fff", color: colors.danger, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 },
+  bulkApplyBar: { display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap", padding: "0.55rem 0.85rem", marginBottom: "0.5rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, backgroundColor: colors.infoTint },
+  bulkClearBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.35rem 0.7rem", borderRadius: 6, border: `1px solid ${colors.danger}`, backgroundColor: colors.white, color: colors.danger, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 },
 };

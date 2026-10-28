@@ -24,7 +24,7 @@ import { useListViewMode } from "../hooks/useListViewMode";
 import { getPagedInvoicesByCompany, getInvoicePrintTaxInvoice, deleteInvoice, cancelInvoice, setInvoiceFbrExcluded } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { submitInvoiceToFbr, validateInvoiceWithFbr } from "../api/fbrApi";
-import { dropdownStyles, cardStyles, cardHover } from "../theme";
+import { dropdownStyles, cardStyles, cardHover, colors } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { getTemplate, hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
@@ -49,15 +49,6 @@ import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
 import usePersistentFilter from "../hooks/usePersistentFilter";
 
-const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
-};
 
 // Payment-status pill (mirrors InvoiceTable's) for the card view.
 // Per-document payment status is NOT shown (2026-09-03). Receipts in these
@@ -744,7 +735,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     <div>
       <div style={styles.pageHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={styles.headerIcon}>{isNotesMode ? <MdUndo size={28} color="#fff" /> : <MdReceipt size={28} color="#fff" />}</div>
+          <div style={styles.headerIcon}>{isNotesMode ? <MdUndo size={28} color={colors.white} /> : <MdReceipt size={28} color={colors.white} />}</div>
           <div>
             <h2 style={styles.pageTitle}>{isNotesMode ? `${noteLabel}s` : "Invoices"}</h2>
             <p style={styles.pageSubtitle}>
@@ -782,12 +773,12 @@ export default function InvoicePage({ mode = "invoices" }) {
                 without the permission there is nothing to explain. */}
             {canCreateStandalone && requireSO && (
               <div style={styles.soOnlyNote}>
-                <MdInfoOutline size={18} style={{ color: "#0d47a1", flexShrink: 0, marginTop: 1 }} />
+                <MdInfoOutline size={18} style={{ color: colors.blue, flexShrink: 0, marginTop: 1 }} />
                 <div style={{ minWidth: 0 }}>
-                  <strong style={{ display: "block", color: "#1a2332" }}>
+                  <strong style={{ display: "block", color: colors.textPrimary }}>
                     Bills without a challan are turned off for {selectedCompany?.brandName || selectedCompany?.name || "this company"}.
                   </strong>
-                  <span style={{ color: "#5f6d7e" }}>
+                  <span style={{ color: colors.textSecondary }}>
                     This company requires every bill to come from a Sales Order, so
                     use <strong>New Bill</strong> and pick one of that order's delivery challans.
                     {canManageCompany && " To bill without a challan, turn off “Require a Sales Order for billing” in Settings → Companies → Document Numbers."}
@@ -845,13 +836,13 @@ export default function InvoicePage({ mode = "invoices" }) {
           {canFbrAny && selectedCompany?.hasFbrToken && (unsubmittedInvoices.length > 0 || incompleteCount > 0) && (
             <div style={styles.fbrBulkBar}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                <MdCloudUpload size={18} color="#0d47a1" />
+                <MdCloudUpload size={18} color={colors.blue} />
                 <span style={{ fontSize: "0.85rem", fontWeight: 600, color: colors.textPrimary }}>
                   FBR: {unsubmittedInvoices.length} ready to submit
                   {validatedCount > 0 ? `, ${validatedCount} validated` : ""}
                 </span>
                 {incompleteCount > 0 && (
-                  <span style={{ fontSize: "0.78rem", padding: "0.15rem 0.5rem", borderRadius: 12, backgroundColor: "#fff8e1", color: "#e65100", border: "1px solid #ffcc80", fontWeight: 700 }}>
+                  <span style={{ fontSize: "0.78rem", padding: "0.15rem 0.5rem", borderRadius: 12, backgroundColor: colors.cautionSoft, color: colors.warn, border: `1px solid ${colors.warnLine}`, fontWeight: 700 }}>
                     {incompleteCount} setup incomplete
                   </span>
                 )}
@@ -1048,7 +1039,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                     {inv.divisionName && (
                       <p style={cardStyles.text}>
                         <strong>Division:</strong>{" "}
-                        <span style={{ display: "inline-block", fontSize: "0.72rem", fontWeight: 700, color: "#4527a0", background: "#ede7f6", padding: "0.1rem 0.45rem", borderRadius: 8, verticalAlign: "middle" }}>{inv.divisionName}</span>
+                        <span style={{ display: "inline-block", fontSize: "0.72rem", fontWeight: 700, color: colors.violetInk, background: colors.violetSoft, padding: "0.1rem 0.45rem", borderRadius: 8, verticalAlign: "middle" }}>{inv.divisionName}</span>
                       </p>
                     )}
                     {/* PO Number / Indent No / Site come from the linked
@@ -1077,7 +1068,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                             title={`Brought in by a ledger import${inv.migratedReference ? ` — reference ${inv.migratedReference}` : ""}. Carries a total, not line items.`}
                             style={{
                               fontSize: "0.68rem", fontWeight: 700, padding: "1px 6px",
-                              borderRadius: 999, backgroundColor: "#ede7f6", color: "#4527a0",
+                              borderRadius: 999, backgroundColor: colors.violetSoft, color: colors.violetInk,
                               letterSpacing: "0.02em",
                             }}
                           >
@@ -1121,45 +1112,45 @@ export default function InvoicePage({ mode = "invoices" }) {
                     <TaxRateBadge inv={inv} />
                     {inv.isCancelled && (
                       <div
-                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.7rem", borderRadius: 8, background: "#ffebee", color: "#b71c1c", fontSize: "0.78rem", fontWeight: 700, border: "1px solid #ef9a9a" }}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.7rem", borderRadius: 8, background: colors.errorSoft, color: colors.errorInk, fontSize: "0.78rem", fontWeight: 700, border: `1px solid ${colors.errorLine}` }}
                         title={inv.cancelReason ? `Cancelled — ${inv.cancelReason}` : "This bill has been cancelled (voided). Its delivery challan(s) were reverted to Pending so they can be re-billed."}
                       >
-                        <MdCancel size={14} color="#b71c1c" />
+                        <MdCancel size={14} color={colors.errorInk} />
                         <span>Cancelled{inv.cancelReason ? ` — ${inv.cancelReason}` : ""}</span>
                       </div>
                     )}
                     {/* This document IS a credit/debit note — show what it adjusts. */}
                     {(inv.documentType === 9 || inv.documentType === 10) && (
                       <div
-                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.7rem", borderRadius: 8, background: "#ede7f6", color: "#5e35b1", fontSize: "0.78rem", fontWeight: 700, border: "1px solid #b39ddb" }}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.7rem", borderRadius: 8, background: colors.violetSoft, color: colors.violet, fontSize: "0.78rem", fontWeight: 700, border: `1px solid ${colors.violetLine}` }}
                         title={inv.originalInvoiceNumber ? `${inv.documentType === 10 ? "Credit" : "Debit"} Note against Bill #${inv.originalInvoiceNumber}${inv.originalInvoiceRefIRN ? ` (IRN ${inv.originalInvoiceRefIRN})` : ""}` : undefined}
                       >
-                        <MdUndo size={14} color="#5e35b1" />
+                        <MdUndo size={14} color={colors.violet} />
                         <span>{inv.documentType === 10 ? "Credit Note" : "Debit Note"}{inv.originalInvoiceNumber ? ` ↩ against Bill #${inv.originalInvoiceNumber}` : ""}</span>
                       </div>
                     )}
                     {/* This invoice HAS notes against it — clear indicators. */}
                     {inv.documentType !== 9 && inv.documentType !== 10 && inv.reversedByCreditNoteNumber && (
                       <div
-                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.7rem", borderRadius: 8, background: "#ede7f6", color: "#5e35b1", fontSize: "0.78rem", fontWeight: 700, border: "1px solid #b39ddb" }}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.7rem", borderRadius: 8, background: colors.violetSoft, color: colors.violet, fontSize: "0.78rem", fontWeight: 700, border: `1px solid ${colors.violetLine}` }}
                         title={`A Credit Note (#${inv.reversedByCreditNoteNumber}) has been created against this invoice. It reverses this sale.`}
                       >
-                        <MdUndo size={14} color="#5e35b1" />
+                        <MdUndo size={14} color={colors.violet} />
                         <span>Reversed — Credit Note #{inv.reversedByCreditNoteNumber} created</span>
                       </div>
                     )}
                     {inv.documentType !== 9 && inv.documentType !== 10 && inv.adjustedByDebitNoteNumber && (
                       <div
-                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.7rem", borderRadius: 8, background: "#e0f2f1", color: "#00695c", fontSize: "0.78rem", fontWeight: 700, border: "1px solid #80cbc4" }}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.7rem", borderRadius: 8, background: colors.tealSoft, color: colors.tealDark, fontSize: "0.78rem", fontWeight: 700, border: `1px solid ${colors.tealLine}` }}
                         title={`A Debit Note (#${inv.adjustedByDebitNoteNumber}) adjusts this invoice upward.`}
                       >
-                        <MdUndo size={14} color="#00695c" />
+                        <MdUndo size={14} color={colors.tealDark} />
                         <span>Adjusted — Debit Note #{inv.adjustedByDebitNoteNumber}</span>
                       </div>
                     )}
                     {!inv.isCancelled && inv.fbrStatus === "Submitted" && (
                       <div style={styles.fbrPillSubmitted} title={inv.fbrIRN ? `IRN: ${inv.fbrIRN}` : "This bill has been submitted to FBR and is locked from edits."}>
-                        <MdCheckCircle size={14} color="#1b5e20" />
+                        <MdCheckCircle size={14} color={colors.successInk} />
                         <span>Filed with FBR</span>
                         {inv.fbrIRN && <span style={styles.fbrPillIrn}>IRN {inv.fbrIRN}</span>}
                       </div>
@@ -1167,7 +1158,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                     {!inv.isCancelled && inv.fbrAdjustmentStale && (
                       <div style={styles.fbrPillReadjust}
                            title={`The bill was changed after it was adjusted for FBR. Bill Rs. ${Number(inv.subtotal || 0).toLocaleString()} vs FBR Rs. ${Number(inv.fbrAdjustedSubtotal ?? inv.subtotal ?? 0).toLocaleString()}. This invoice carries an old FBR adjustment that no longer matches its total; edit and save the invoice, then validate again.`}>
-                        <MdError size={14} color="#8a4b00" />
+                        <MdError size={14} color={colors.warnInk} />
                         <span>Re-adjust for FBR</span>
                       </div>
                     )}
@@ -1176,30 +1167,30 @@ export default function InvoicePage({ mode = "invoices" }) {
                            title={`Cancelled on the FBR portal on ${new Date(inv.fbrCancelledAt).toLocaleDateString()}`
                                   + (inv.fbrCancelledReason ? ` — ${inv.fbrCancelledReason}` : "")
                                   + ". The bill keeps its number and IRN but no longer counts as a sale."}>
-                        <MdBlock size={14} color="#791f1f" />
+                        <MdBlock size={14} color={colors.errorInk} />
                         <span>Cancelled at FBR</span>
                       </div>
                     )}
                     {!inv.isCancelled && inv.fbrStatus === "Submitting" && (
                       <div style={styles.fbrPillSubmitting} title="A submission to FBR is in progress. Wait and refresh — do not submit again.">
-                        <MdHourglassEmpty size={14} color="#0c447c" />
+                        <MdHourglassEmpty size={14} color={colors.infoInk} />
                         <span>Submitting to FBR…</span>
                       </div>
                     )}
                     {!inv.isCancelled && inv.fbrStatus === "Uncertain" && (
                       <div style={styles.fbrPillUncertain} title="A previous submission timed out, so its FBR outcome is unconfirmed. Do NOT submit again — an administrator must check FBR and reset this bill.">
-                        <MdError size={14} color="#8a6d00" />
+                        <MdError size={14} color={colors.cautionInk} />
                         <span>FBR outcome unconfirmed</span>
                       </div>
                     )}
                     {!inv.isCancelled && inv.fbrStatus === "Failed" && (
                       <div style={styles.fbrPillFailed} title={inv.fbrErrorMessage || "FBR rejected this submission. Open View FBR for details."}>
-                        <MdError size={14} color="#b71c1c" />
+                        <MdError size={14} color={colors.errorInk} />
                         <span>FBR Failed</span>
                       </div>
                     )}
                     {!inv.isCancelled && inv.fbrStatus === "Failed" && inv.fbrErrorMessage && (
-                      <p style={{ fontSize: "0.72rem", color: "#c62828", marginTop: "0.35rem", wordBreak: "break-word", lineHeight: 1.35 }}>
+                      <p style={{ fontSize: "0.72rem", color: colors.error, marginTop: "0.35rem", wordBreak: "break-word", lineHeight: 1.35 }}>
                         {inv.fbrErrorMessage}
                       </p>
                     )}
@@ -1208,7 +1199,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         style={styles.fbrPillIncomplete}
                         title={inv.fbrMissing?.length ? `Missing:\n• ${inv.fbrMissing.join("\n• ")}` : ""}
                       >
-                        <MdError size={14} color="#b26a00" style={{ flexShrink: 0 }} />
+                        <MdError size={14} color={colors.caution} style={{ flexShrink: 0 }} />
                         <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.3 }}>
                           <span>FBR Setup Incomplete</span>
                           {inv.fbrMissing?.length > 0 && (
@@ -1222,7 +1213,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                     )}
                     {fbrEnabled && !inv.isCancelled && inv.fbrStatus !== "Submitted" && inv.fbrReady && !inv.isFbrExcluded && !isFutureDocDate(inv.date) && (
                       <div style={styles.fbrPillReady} title="All FBR fields are set. Click Validate to dry-run, or Submit to issue the IRN.">
-                        <MdCheckCircle size={14} color="#0d47a1" />
+                        <MdCheckCircle size={14} color={colors.blue} />
                         <span>Ready to Validate</span>
                       </div>
                     )}
@@ -1236,7 +1227,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         style={styles.fbrPillIncomplete}
                         title="FBR rejects a future-dated invoice [0043]. Validate and Submit unlock on this bill's own date."
                       >
-                        <MdHourglassEmpty size={14} color="#b26a00" style={{ flexShrink: 0 }} />
+                        <MdHourglassEmpty size={14} color={colors.caution} style={{ flexShrink: 0 }} />
                         <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.3 }}>
                           <span>Future-dated</span>
                           <span style={styles.fbrPillIncompleteHint}>
@@ -1250,7 +1241,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         style={styles.fbrPillExcluded}
                         title="This bill is excluded from Validate All / Submit All bulk actions. Per-bill Validate / Submit still work."
                       >
-                        <MdBlock size={14} color="#455a64" />
+                        <MdBlock size={14} color={colors.neutral} />
                         <span>Excluded from FBR bulk</span>
                       </div>
                     )}
@@ -1260,7 +1251,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         pre-filling the client + this document in the form. */}
                     {canRecordReceipt && !inv.isCancelled && (
                       <button
-                        style={{ ...styles.printBtn, backgroundColor: "#e8f5e9", color: "#1b5e20", border: "1px solid #a5d6a7" }}
+                        style={{ ...styles.printBtn, backgroundColor: colors.successSoft, color: colors.successInk, border: `1px solid ${colors.successLine}` }}
                         onClick={() => setReceiptPreset({ contactId: inv.clientId, documentId: inv.id, divisionId: inv.divisionId })}
                         title="Record a receipt (payment received) against this invoice"
                       >
@@ -1272,7 +1263,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                     {!isNotesMode && (
                       <button
                         data-primary
-                        style={{ ...styles.printBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" }}
+                        style={{ ...styles.printBtn, backgroundColor: colors.infoSoft, color: colors.blue, border: `1px solid ${colors.infoLine}` }}
                         onClick={() => setViewingId(inv.id)}
                         title="View invoice details (read-only)"
                       >
@@ -1302,7 +1293,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                     {canFbrPreview && (
                       <button
                         data-primary={inv.fbrStatus === "Submitted" || undefined}
-                        style={{ ...styles.printBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" }}
+                        style={{ ...styles.printBtn, backgroundColor: colors.infoSoft, color: colors.blue, border: `1px solid ${colors.infoLine}` }}
                         onClick={() => setFbrPreviewId(inv.id)}
                         title="Preview the FBR payload — grouped items, total qty, total value, total tax. Read-only, doesn't send anything."
                       >
@@ -1311,7 +1302,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                     )}
                     {canFbrReset && (inv.fbrStatus === "Submitting" || inv.fbrStatus === "Uncertain") && (
                       <button
-                        style={{ ...styles.printBtn, backgroundColor: "#fff8e1", color: "#8a6d00", border: "1px solid #ffe082" }}
+                        style={{ ...styles.printBtn, backgroundColor: colors.cautionSoft, color: colors.cautionInk, border: `1px solid ${colors.cautionLine}` }}
                         onClick={() => handleFbrReset(inv)}
                         title="Reset this bill's FBR state (stuck after a timed-out/uncertain submit). Verify at FBR first."
                       >
@@ -1327,7 +1318,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                               ...styles.fbrValidateBtn,
                               opacity: fbrLoading || !inv.fbrReady ? 0.4 : 1,
                               cursor: !inv.fbrReady ? "not-allowed" : "pointer",
-                              ...(fbrValidated.has(inv.id) ? { backgroundColor: "#e8f5e9", color: "#2e7d32" } : {}),
+                              ...(fbrValidated.has(inv.id) ? { backgroundColor: colors.successSoft, color: colors.successDark } : {}),
                             }}
                             disabled={!!fbrLoading || !inv.fbrReady}
                             onClick={() => handleFbrValidate(inv)}
@@ -1370,7 +1361,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                     {canEditInThisMode && inv.fbrStatus !== "Submitted" && !inv.isCancelled && !inv.isMigrated && (
                       <button
                         data-primary
-                        style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
+                        style={{ ...styles.printBtn, backgroundColor: colors.warnSoft, color: colors.warn, border: `1px solid ${colors.warnLine}` }}
                         onClick={() => setEditingId(inv.id)}
                         title={canUpdate
                           ? "Edit items and prices on this bill"
@@ -1384,7 +1375,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         the server. Offering either was a button that 400s. */}
                     {canCopyBill && !inv.isCancelled && !inv.isMigrated && (
                       <button
-                        style={{ ...styles.printBtn, backgroundColor: "#e8eaf6", color: "#283593", border: "1px solid #9fa8da" }}
+                        style={{ ...styles.printBtn, backgroundColor: colors.infoSoft, color: colors.infoInk, border: `1px solid ${colors.infoLine}` }}
                         onClick={() => copy.openCopy(inv.id, `Bill #${inv.invoiceNumber}`)}
                         title="Copy this bill into a new one"
                       >
@@ -1397,7 +1388,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                     {canCreateChallan && !inv.isCancelled
                       && Number(inv.challanRemainingQuantity || 0) > 0 && (
                       <button
-                        style={{ ...styles.printBtn, backgroundColor: "#e0f2f1", color: "#00695c", border: "1px solid #80cbc4" }}
+                        style={{ ...styles.printBtn, backgroundColor: colors.tealSoft, color: colors.tealDark, border: `1px solid ${colors.tealLine}` }}
                         onClick={() => setChallanFor(inv)}
                         title={`Create a delivery challan — ${Number(inv.challanRemainingQuantity).toLocaleString()} still to deliver`}
                       >
@@ -1408,9 +1399,9 @@ export default function InvoicePage({ mode = "invoices" }) {
                       <button
                         style={{
                           ...styles.printBtn,
-                          backgroundColor: inv.isFbrExcluded ? "#e8f5e9" : "#eceff1",
-                          color: inv.isFbrExcluded ? "#2e7d32" : "#546e7a",
-                          border: `1px solid ${inv.isFbrExcluded ? "#a5d6a7" : "#b0bec5"}`,
+                          backgroundColor: inv.isFbrExcluded ? colors.successSoft : colors.neutralSoft,
+                          color: inv.isFbrExcluded ? colors.successDark : colors.neutral,
+                          border: `1px solid ${inv.isFbrExcluded ? "${colors.successLine}" : "${colors.neutralLine}"}`,
                         }}
                         onClick={() => handleToggleFbrExcluded(inv)}
                         title={
@@ -1429,7 +1420,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         is left in the numbering. Use Void instead to keep the number. */}
                     {canDelete && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
                       <button
-                        style={{ ...styles.printBtn, backgroundColor: "#ffebee", color: "#c62828", border: "1px solid #ef9a9a" }}
+                        style={{ ...styles.printBtn, backgroundColor: colors.errorSoft, color: colors.error, border: `1px solid ${colors.errorLine}` }}
                         onClick={() => handleDeleteInvoice(inv)}
                         title="Delete this document entirely — reverts its GL + inventory impact and frees its challans (leaves a gap in the numbering). Use Void to keep the number."
                       >
@@ -1442,7 +1433,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         reverts its delivery challan(s) to Pending for re-billing. */}
                     {canVoid && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
                       <button
-                        style={{ ...styles.printBtn, backgroundColor: "#fff8e1", color: "#b26a00", border: "1px solid #ffe082" }}
+                        style={{ ...styles.printBtn, backgroundColor: colors.cautionSoft, color: colors.caution, border: `1px solid ${colors.cautionLine}` }}
                         onClick={() => handleVoidInvoice(inv)}
                         title={isNotesMode
                           ? "Void this note — keeps its number (no gap), frees the original invoice so it can be reversed again."
@@ -1458,7 +1449,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                     {canReverse && inv.fbrStatus === "Submitted" && !inv.isCancelled && !inv.fbrCancelledAt &&
                      inv.documentType !== 9 && inv.documentType !== 10 && (
                       <button
-                        style={{ ...styles.printBtn, backgroundColor: "#ede7f6", color: "#5e35b1", border: "1px solid #b39ddb" }}
+                        style={{ ...styles.printBtn, backgroundColor: colors.violetSoft, color: colors.violet, border: `1px solid ${colors.violetLine}` }}
                         onClick={() => handleReverseInvoice(inv)}
                         title="Reverse this FBR-submitted bill — generates a Credit Note (new unsubmitted bill) that you then Validate and Submit to FBR."
                       >
@@ -1477,7 +1468,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                      inv.documentType !== 9 && inv.documentType !== 10 &&
                      fbrEnabled && inv.fbrStatus === "Submitted" && (
                       <button
-                        style={{ ...styles.printBtn, backgroundColor: "#d6eee8", color: "#0a5d50", border: "1px solid #b6ddd3" }}
+                        style={{ ...styles.printBtn, backgroundColor: colors.tealSoft, color: colors.tealDark, border: `1px solid ${colors.tealLine}` }}
                         onClick={() => setCorrectTarget(inv)}
                         title="Bill the balance quantity under-reported on this bill — creates a new unclassified bill (+ same challan/PO) to classify and, when FBR is on, submit to FBR."
                       >
@@ -1707,34 +1698,34 @@ const styles = {
   headerIcon: { width: 48, height: 48, borderRadius: 14, background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, display: "flex", alignItems: "center", justifyContent: "center" },
   pageTitle: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
   pageSubtitle: { margin: "0.15rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
-  addBtn: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.25rem", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, color: "#fff", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 14px rgba(13,71,161,0.25)" },
+  addBtn: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.25rem", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, color: colors.white, fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 14px rgba(13,71,161,0.25)" },
   // Visually distinct from the primary "New Bill" — outlined treatment
   // makes the standalone path the secondary action without losing
   // discoverability for roles that also have the primary permission.
-  addBtnSecondary: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.25rem", borderRadius: 10, border: `1px solid ${colors.blue}`, background: "#fff", color: colors.blue, fontSize: "0.9rem", fontWeight: 600, cursor: "pointer" },
+  addBtnSecondary: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.25rem", borderRadius: 10, border: `1px solid ${colors.blue}`, background: colors.white, color: colors.blue, fontSize: "0.9rem", fontWeight: 600, cursor: "pointer" },
   soOnlyNote: {
     display: "flex", alignItems: "flex-start", gap: 10,
     flex: "1 1 320px", minWidth: 0, maxWidth: 620,
     padding: "0.55rem 0.75rem", borderRadius: 10,
-    background: "#eef4ff", border: "1px solid #cddcf7", borderLeft: "3px solid #0d47a1",
+    background: colors.infoTint, border: `1px solid ${colors.infoLine}`, borderLeft: `3px solid ${colors.blue}`,
     fontSize: "0.8rem", lineHeight: 1.45,
   },
   loadingContainer: { display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", padding: "3rem 0" },
   spinner: { width: 28, height: 28, border: `3px solid ${colors.cardBorder}`, borderTopColor: colors.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite" },
   emptyState: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "3rem 1rem", textAlign: "center" },
-  printBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#f3e5f5", color: "#7b1fa2" },
-  taxBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#e8f5e9", color: "#2e7d32" },
-  pdfBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#ffebee", color: "#c62828" },
-  excelBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#e8f5e9", color: "#1b5e20" },
+  printBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: colors.violetSoft, color: colors.violet },
+  taxBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: colors.successSoft, color: colors.successDark },
+  pdfBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: colors.errorSoft, color: colors.error },
+  excelBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: colors.successSoft, color: colors.successInk },
   pagination: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", padding: "1rem 0", marginTop: "0.5rem" },
   pageBtn: {
     display: "inline-flex", alignItems: "center", gap: "0.2rem", padding: "0.4rem 0.8rem", borderRadius: 8,
-    border: `1px solid ${colors.inputBorder}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer",
+    border: `1px solid ${colors.inputBorder}`, backgroundColor: colors.white, color: colors.blue, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer",
   },
   pageInfo: { fontSize: "0.82rem", color: colors.textSecondary, fontWeight: 500 },
-  fbrValidateBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#fff3e0", color: "#e65100" },
-  fbrSubmitBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#e3f2fd", color: "#0d47a1" },
-  fbrBulkBar: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem", marginBottom: "1rem", padding: "0.65rem 1rem", borderRadius: 10, border: "1px solid #e3f2fd", backgroundColor: "#f8faff" },
+  fbrValidateBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: colors.warnSoft, color: colors.warn },
+  fbrSubmitBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: colors.infoSoft, color: colors.blue },
+  fbrBulkBar: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem", marginBottom: "1rem", padding: "0.65rem 1rem", borderRadius: 10, border: `1px solid ${colors.infoSoft}`, backgroundColor: colors.infoTint },
   // FBR-status pills used in Bills mode. Soft-tinted background with a
   // matching border + an icon and label, sitting under the bill metadata
   // row so the operator gets a clear at-a-glance "locked / not yet" cue.
@@ -1747,9 +1738,9 @@ const styles = {
     borderRadius: 999,
     fontSize: "0.75rem",
     fontWeight: 600,
-    color: "#8a4b00",
-    backgroundColor: "#fff4e0",
-    border: "1px solid #ffcc80",
+    color: colors.warnInk,
+    backgroundColor: colors.warnSoft,
+    border: `1px solid ${colors.warnLine}`,
     letterSpacing: "0.01em",
   },
   fbrPillReadjust: {
@@ -1761,9 +1752,9 @@ const styles = {
     borderRadius: 999,
     fontSize: "0.75rem",
     fontWeight: 600,
-    color: "#8a4b00",
-    backgroundColor: "#fff4e0",
-    border: "1px solid #ffcc80",
+    color: colors.warnInk,
+    backgroundColor: colors.warnSoft,
+    border: `1px solid ${colors.warnLine}`,
     letterSpacing: "0.01em",
   },
   fbrPillCancelledAtFbr: {
@@ -1775,9 +1766,9 @@ const styles = {
     borderRadius: 999,
     fontSize: "0.75rem",
     fontWeight: 600,
-    color: "#791f1f",
-    backgroundColor: "#fcebeb",
-    border: "1px solid #ef9a9a",
+    color: colors.errorInk,
+    backgroundColor: colors.errorSoft,
+    border: `1px solid ${colors.errorLine}`,
     letterSpacing: "0.01em",
   },
   fbrPillSubmitting: {
@@ -1789,9 +1780,9 @@ const styles = {
     borderRadius: 999,
     fontSize: "0.75rem",
     fontWeight: 600,
-    color: "#0c447c",
-    backgroundColor: "#e6f1fb",
-    border: "1px solid #90caf9",
+    color: colors.infoInk,
+    backgroundColor: colors.infoSoft,
+    border: `1px solid ${colors.infoLine}`,
     letterSpacing: "0.01em",
   },
   fbrPillUncertain: {
@@ -1803,9 +1794,9 @@ const styles = {
     borderRadius: 999,
     fontSize: "0.75rem",
     fontWeight: 600,
-    color: "#8a6d00",
-    backgroundColor: "#fff8e1",
-    border: "1px solid #ffe082",
+    color: colors.cautionInk,
+    backgroundColor: colors.cautionSoft,
+    border: `1px solid ${colors.cautionLine}`,
     letterSpacing: "0.01em",
   },
   fbrPillSubmitted: {
@@ -1817,20 +1808,20 @@ const styles = {
     borderRadius: 999,
     fontSize: "0.75rem",
     fontWeight: 600,
-    color: "#1b5e20",
-    backgroundColor: "#eafbef",
-    border: "1px solid #a5d6a7",
+    color: colors.successInk,
+    backgroundColor: colors.successSoft,
+    border: `1px solid ${colors.successLine}`,
     letterSpacing: "0.01em",
   },
   fbrPillIrn: {
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
     fontSize: "0.7rem",
     fontWeight: 600,
-    color: "#2e7d32",
-    backgroundColor: "#fff",
+    color: colors.successDark,
+    backgroundColor: colors.white,
     padding: "0.05rem 0.4rem",
     borderRadius: 50,
-    border: "1px solid #c8e6c9",
+    border: `1px solid ${colors.successLine}`,
   },
   // Invoices-mode FBR status pills — same shape as the Bills-mode ones
   // (Pending / Submitted) but tinted for the workflow states the FBR
@@ -1844,9 +1835,9 @@ const styles = {
     borderRadius: 999,
     fontSize: "0.75rem",
     fontWeight: 600,
-    color: "#0d47a1",
-    backgroundColor: "#e3f2fd",
-    border: "1px solid #90caf9",
+    color: colors.blue,
+    backgroundColor: colors.infoSoft,
+    border: `1px solid ${colors.infoLine}`,
     letterSpacing: "0.01em",
   },
   fbrPillIncomplete: {
@@ -1858,9 +1849,9 @@ const styles = {
     borderRadius: 12,
     fontSize: "0.75rem",
     fontWeight: 600,
-    color: "#8a4b00",
-    backgroundColor: "#fff4e0",
-    border: "1px solid #ffcc80",
+    color: colors.warnInk,
+    backgroundColor: colors.warnSoft,
+    border: `1px solid ${colors.warnLine}`,
     letterSpacing: "0.01em",
     maxWidth: "100%",
   },
@@ -1868,7 +1859,7 @@ const styles = {
     display: "block",
     fontSize: "0.7rem",
     fontWeight: 500,
-    color: "#a35400",
+    color: colors.warnInk,
     marginTop: "0.15rem",
     wordBreak: "break-word",
   },
@@ -1881,9 +1872,9 @@ const styles = {
     borderRadius: 999,
     fontSize: "0.75rem",
     fontWeight: 600,
-    color: "#b71c1c",
-    backgroundColor: "#ffebee",
-    border: "1px solid #ef9a9a",
+    color: colors.errorInk,
+    backgroundColor: colors.errorSoft,
+    border: `1px solid ${colors.errorLine}`,
     letterSpacing: "0.01em",
   },
   fbrPillExcluded: {
@@ -1895,16 +1886,16 @@ const styles = {
     borderRadius: 999,
     fontSize: "0.75rem",
     fontWeight: 600,
-    color: "#37474f",
-    backgroundColor: "#eceff1",
-    border: "1px solid #b0bec5",
+    color: colors.neutralInk,
+    backgroundColor: colors.neutralSoft,
+    border: `1px solid ${colors.neutralLine}`,
     letterSpacing: "0.01em",
   },
   fbrBulkBtn: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 1rem", borderRadius: 8, border: "none", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", transition: "filter 0.2s" },
   // 2026-05-13: neutral-blue outline for "Preview All" — distinct from
   // the amber Validate All (action) and solid-blue Submit All (terminal
   // action). Reads as an inspector button, not a workflow trigger.
-  fbrBulkPreviewBtn: { backgroundColor: "#fff", color: "#0d47a1", border: "1px solid #b7d4f0" },
-  fbrBulkValidateBtn: { backgroundColor: "#fff3e0", color: "#e65100" },
-  fbrBulkSubmitBtn: { backgroundColor: "#0d47a1", color: "#fff", boxShadow: "0 2px 8px rgba(13,71,161,0.2)" },
+  fbrBulkPreviewBtn: { backgroundColor: colors.white, color: colors.blue, border: `1px solid ${colors.infoLine}` },
+  fbrBulkValidateBtn: { backgroundColor: colors.warnSoft, color: colors.warn },
+  fbrBulkSubmitBtn: { backgroundColor: colors.blue, color: colors.white, boxShadow: "0 2px 8px rgba(13,71,161,0.2)" },
 };

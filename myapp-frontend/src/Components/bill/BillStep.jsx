@@ -1,5 +1,5 @@
+import { colors, stepTone } from "../../theme";
 import { MdCheck, MdExpandLess, MdExpandMore, MdInfoOutline } from "react-icons/md";
-import { billColors, stepTone } from "./billTheme";
 
 /**
  * One numbered step of a bill screen, the same card on New Bill, New Bill (No
@@ -33,7 +33,7 @@ export default function BillStep({
       id={id}
       style={{
         marginBottom: "0.85rem",
-        border: `1px solid ${billColors.cardBorder}`,
+        border: `1px solid ${colors.cardBorder}`,
         borderLeft: `4px solid ${tone.accent}`,
         borderRadius: 12,
         backgroundColor: "#fff",
@@ -60,14 +60,14 @@ export default function BillStep({
         >
           {status === "done" ? <MdCheck size={16} /> : status === "warn" ? "!" : n}
         </span>
-        <span style={{ fontSize: "0.95rem", fontWeight: 700, color: billColors.textPrimary, flexShrink: 0 }}>
+        <span style={{ fontSize: "0.95rem", fontWeight: 700, color: colors.textPrimary, flexShrink: 0 }}>
           {title}
         </span>
         {summary != null && (
           <span
             style={{
               display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.35rem",
-              flex: "1 1 220px", minWidth: 0, fontSize: "0.82rem", color: billColors.textPrimary,
+              flex: "1 1 220px", minWidth: 0, fontSize: "0.82rem", color: colors.textPrimary,
             }}
           >
             {summary}
@@ -88,7 +88,7 @@ export default function BillStep({
           <span
             style={{
               display: "inline-flex", alignItems: "center", gap: "0.2rem", flexShrink: 0,
-              color: billColors.blue, fontWeight: 600, fontSize: "0.78rem",
+              color: colors.blue, fontWeight: 600, fontSize: "0.78rem",
             }}
           >
             {open ? <MdExpandLess size={20} /> : <MdExpandMore size={20} />}
@@ -96,14 +96,14 @@ export default function BillStep({
           </span>
         )}
       </Header>
-      {notice && <div style={{ padding: "0.55rem 0.9rem 0.6rem", borderTop: `1px solid ${billColors.cardBorder}` }}>{notice}</div>}
+      {notice && <div style={{ padding: "0.55rem 0.9rem 0.6rem", borderTop: `1px solid ${colors.cardBorder}` }}>{notice}</div>}
       {open && children && (
-        <div style={{ padding: "0.8rem 0.9rem 0.9rem", borderTop: `1px solid ${billColors.cardBorder}` }}>
+        <div style={{ padding: "0.8rem 0.9rem 0.9rem", borderTop: `1px solid ${colors.cardBorder}` }}>
           {help && (
             <p
               style={{
                 display: "flex", gap: "0.4rem", alignItems: "flex-start", margin: "0 0 0.7rem",
-                fontSize: "0.8rem", lineHeight: 1.45, color: billColors.textSecondary,
+                fontSize: "0.8rem", lineHeight: 1.45, color: colors.textSecondary,
               }}
             >
               <MdInfoOutline size={16} style={{ flexShrink: 0, marginTop: 1 }} />
