@@ -23,12 +23,17 @@ namespace MyApp.Api.Controllers
         // bill form, the dashboard and an adjustment share one valuation.
         private readonly IStockService _stock;
         private readonly AppDbContext _context;
+        private readonly IItemTypeService _itemTypes;
+        private readonly IPermissionService _permissions;
         private readonly int _defaultPageSize;
 
         public InvoicesController(IInvoiceService service, ICompanyAccessGuard access,
             IDivisionAccessGuard divisionAccess, IStockService stock,
-            AppDbContext context, IConfiguration configuration)
+            AppDbContext context, IConfiguration configuration,
+            IItemTypeService itemTypes, IPermissionService permissions)
         {
+            _itemTypes = itemTypes;
+            _permissions = permissions;
             _service = service;
             _access = access;
             _divisionAccess = divisionAccess;
@@ -41,6 +46,18 @@ namespace MyApp.Api.Controllers
             int.TryParse(
                 User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
                 out var id) ? id : 0;
+
+        /// <summary>
+        /// A line that asks for a new catalog item (NewItemType) needs the
+        /// catalog's own create right on top of the invoice right: making an
+        /// item is a catalog write. Re-checked here because the form hiding
+        /// the "add as new item" group is not the control.
+        /// </summary>
+        private async Task<bool> MayMakeItemsAsync(IEnumerable<INewItemTypeLine>? lines)
+            => !NewItemTypes.Any(lines) || await _permissions.HasPermissionAsync(CurrentUserId, "itemtypes.manage.create");
+
+        private ObjectResult NoItemCreateRight() =>
+            StatusCode(403, new { error = "Making a new item needs the Item Catalog \"Add\" permission. Pick an item from your catalog instead." });
 
         [HttpGet("count")]
         [HasAnyPermission("bills.list.view", "invoices.list.view")]
@@ -502,8 +519,14 @@ namespace MyApp.Api.Controllers
                     return BadRequest(new { error = "All items must have a positive unit price." });
                 if (dto.GSTRate < 0 || dto.GSTRate > 100)
                     return BadRequest(new { error = "GST rate must be between 0 and 100." });
+                if (!await MayMakeItemsAsync(dto.Items)) return NoItemCreateRight();
 
+                // New catalog items and the invoice land together or not at all:
+                // the service joins this transaction (BeginOrJoinTransactionAsync).
+                await using var tx = NewItemTypes.Any(dto.Items) ? await _context.Database.BeginTransactionAsync() : null;
+                if (tx != null) await NewItemTypes.ResolveAsync(_context, _itemTypes, dto.CompanyId, dto.Items);
                 var created = await _service.CreateAsync(dto);
+                if (tx != null) await tx.CommitAsync();
                 return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
             }
             catch (KeyNotFoundException ex)
@@ -546,8 +569,12 @@ namespace MyApp.Api.Controllers
                     return BadRequest(new { error = "Quantity must be greater than zero." });
                 if (dto.GSTRate < 0 || dto.GSTRate > 100)
                     return BadRequest(new { error = "GST rate must be between 0 and 100." });
+                if (!await MayMakeItemsAsync(dto.Items)) return NoItemCreateRight();
 
+                await using var tx = NewItemTypes.Any(dto.Items) ? await _context.Database.BeginTransactionAsync() : null;
+                if (tx != null) await NewItemTypes.ResolveAsync(_context, _itemTypes, dto.CompanyId, dto.Items);
                 var created = await _service.CreateStandaloneAsync(dto);
+                if (tx != null) await tx.CommitAsync();
                 return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
             }
             catch (KeyNotFoundException ex)
@@ -578,9 +605,14 @@ namespace MyApp.Api.Controllers
                     return BadRequest(new { error = "Quantity must be greater than zero." });
                 if (dto.GSTRate < 0 || dto.GSTRate > 100)
                     return BadRequest(new { error = "GST rate must be between 0 and 100." });
+                if (!await MayMakeItemsAsync(dto.Items)) return NoItemCreateRight();
 
+                // The company is the STORED one asserted above, never the body's.
+                await using var tx = NewItemTypes.Any(dto.Items) ? await _context.Database.BeginTransactionAsync() : null;
+                if (tx != null) await NewItemTypes.ResolveAsync(_context, _itemTypes, existing.CompanyId, dto.Items);
                 var updated = await _service.UpdateAsync(id, dto);
                 if (updated == null) return NotFound(new { error = "Bill not found." });
+                if (tx != null) await tx.CommitAsync();
                 return Ok(updated);
             }
             catch (InvalidOperationException ex)

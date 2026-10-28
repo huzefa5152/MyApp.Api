@@ -16,6 +16,8 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import { descriptionAfterPick, autoDescription } from "../utils/lineDescription";
+import { lineStock } from "../utils/lineStock";
+import NewItemChip from "./NewItemChip";
 import { itemTypesForBook, BOOK_BILL } from "../utils/itemTypeBooks";
 import { matchesScenarioSaleType, DEFAULT_SALE_TYPE } from "../utils/saleType";
 import TaxRateNotice from "./TaxRateNotice";
@@ -182,6 +184,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // Per-item Non-Inventory Item id (GL-account shortcut line: Freight / Discount / …),
   // keyed by delivery item id. Mutually exclusive with itemTypeIds[id].
   const [itemNonInvIds, setItemNonInvIds] = useState({});
+  // Pending NEW items picked from the FBR HS codes, per challan line
+  // ({ placeholderId, name, hsCode, uom, ... }). Sent as newItemType; the
+  // server makes the item in the invoice's own transaction.
+  const [itemNewTypes, setItemNewTypes] = useState({});
   const [nonInvItems, setNonInvItems] = useState([]);
   // ── Per-line GL account (design §4) ──
   // Which income account each line posts to, keyed by delivery item id.
@@ -256,6 +262,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         if (Object.keys(newUom).length) setItemUoms(p => ({ ...p, ...newUom }));
         if (Object.keys(newFbrUom).length) setItemFbrUomIds(p => ({ ...p, ...newFbrUom }));
         if (Object.keys(clearNi).length) setItemNonInvIds(p => ({ ...p, ...clearNi }));
+        if (Object.keys(clearNi).length) setItemNewTypes(p => ({ ...p, ...clearNi }));
         if (Object.keys(newAcct).length) setItemAccountIds(p => ({ ...p, ...newAcct }));
         if (Object.keys(newDesc).length) setItemDescriptions(p => {
           const out = { ...p };
@@ -847,8 +854,35 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // Every line must be complete before the bill can be created: a classification
   // (Item Type OR Non-Inventory item), a non-empty description, qty > 0, and
   // unit price > 0. Gates the Create Bill button (disabled until all pass).
+  // A brand-new item has nothing on hand; a hard-block company refuses that
+  // sale on the server (never loosened), so the line says so before save.
+  const newItemStock = (i) => itemNewTypes[i.id]
+    ? lineStock({ pending: itemNewTypes[i.id], quantity: i.quantity, company }) : null;
+  const newItemBlocks = (i) => !!newItemStock(i)?.blocksSave;
+  const handleNewItemPick = (item, pending) => {
+    const id = item.id;
+    const prevAuto = itemNewTypes[id]?.name || autoDescription(itemTypes.find((t) => t.id === itemTypeIds[id]));
+    setItemNewTypes((p) => ({ ...p, [id]: pending }));
+    setItemTypeIds((p) => ({ ...p, [id]: null }));
+    setItemNonInvIds((p) => ({ ...p, [id]: null }));
+    setItemAccountIds((p) => ({ ...p, [id]: null }));
+    setItemHsCodes((p) => ({ ...p, [id]: pending.hsCode || "" }));
+    setItemSaleTypes((p) => ({ ...p, [id]: pending.saleType || "" }));
+    setItemFbrUomIds((p) => ({ ...p, [id]: pending.fbrUOMId || null }));
+    if (pending.uom) setItemUoms((p) => ({ ...p, [id]: p[id] || pending.uom }));
+    setItemDescriptions((p) => ({ ...p, [id]: descriptionAfterPick(p[id] ?? item.description, prevAuto, pending) }));
+  };
+  const renameNewItem = (item, name) => {
+    const id = item.id;
+    const prev = itemNewTypes[id]?.name || "";
+    setItemNewTypes((p) => ({ ...p, [id]: { ...p[id], name } }));
+    setItemDescriptions((p) => ({ ...p, [id]: descriptionAfterPick(p[id] ?? item.description, prev, { name }) }));
+  };
+  const clearNewItem = (id) => setItemNewTypes((p) => (p[id] ? { ...p, [id]: null } : p));
+
   const allLinesComplete = allItems.length > 0 && allItems.every((i) => {
-    const hasPick = !!(itemTypeIds[i.id] || itemNonInvIds[i.id]);
+    const hasPick = !!(itemTypeIds[i.id] || itemNonInvIds[i.id] || itemNewTypes[i.id]?.name?.trim());
+    if (newItemBlocks(i)) return false;
     const desc = ((itemDescriptions[i.id] ?? i.description) || "").trim();
     const qty = Number(i.quantity) || 0;
     const price = parseFloat(itemPrices[i.id]) || 0;
@@ -859,7 +893,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // allLinesComplete above, spelt out for the footer checklist.
   const lineProblem = (i) => {
     const parts = [];
-    if (!(itemTypeIds[i.id] || itemNonInvIds[i.id])) parts.push("pick an item type");
+    if (!(itemTypeIds[i.id] || itemNonInvIds[i.id] || itemNewTypes[i.id])) parts.push("pick an item type");
+    if (itemNewTypes[i.id] && !itemNewTypes[i.id].name?.trim()) parts.push("name the new item");
+    if (newItemBlocks(i)) parts.push("the new item has no stock — record its stock first");
     if (!(((itemDescriptions[i.id] ?? i.description) || "").trim())) parts.push("type a description");
     if (!((Number(i.quantity) || 0) > 0)) parts.push("the challan quantity is zero");
     if (!((parseFloat(itemPrices[i.id]) || 0) > 0)) parts.push("enter the Unit Price");
@@ -895,6 +931,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     if (!n) { setItemNonInvIds((p) => ({ ...p, [id]: null })); return; }
     setItemNonInvIds((p) => ({ ...p, [id]: n.id }));
     setItemTypeIds((p) => ({ ...p, [id]: null }));
+    clearNewItem(id);
     // A non-inventory item posts to its own mapped account — clear any per-line
     // override so that mapping governs.
     setItemAccountIds((p) => ({ ...p, [id]: null }));
@@ -926,8 +963,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     if (missingPrices.length > 0) return setError("Enter unit price for all items.");
 
     // Every line on a bill must be classified — an Item Type OR a Non-Inventory item.
-    const missingPick = allItems.filter((i) => !itemTypeIds[i.id] && !itemNonInvIds[i.id]);
+    const missingPick = allItems.filter((i) => !itemTypeIds[i.id] && !itemNonInvIds[i.id] && !itemNewTypes[i.id]);
     if (missingPick.length > 0) return setError("Every line must have an Item Type or Non-Inventory item selected.");
+    if (allItems.some((i) => itemNewTypes[i.id] && !itemNewTypes[i.id].name?.trim()))
+      return setError("Name every new item before saving.");
+    if (allItems.some(newItemBlocks))
+      return setError("A new item has no stock and this company does not sell below zero. Record its stock first.");
     if (rateCheck.enforced.length > 0 && !rateReason.trim())
       return setError(
         `Some goods came in at a different sales tax rate than the ${gstRate}% this bill charges. ` +
@@ -980,7 +1021,16 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           unitPrice: parseFloat(itemPrices[item.id]),
           description: itemDescriptions[item.id] || item.description,
           // ItemType link (new) — when set, backend re-derives HS/UOM/SaleType from catalog
-          itemTypeId: itemTypeIds[item.id] || null,
+          itemTypeId: itemNewTypes[item.id] ? null : (itemTypeIds[item.id] || null),
+          // A pending new item: made by the server in the invoice's transaction.
+          newItemType: itemNewTypes[item.id] ? {
+            placeholderId: itemNewTypes[item.id].placeholderId || null,
+            name: itemNewTypes[item.id].name.trim(),
+            hsCode: itemNewTypes[item.id].hsCode,
+            uom: itemUoms[item.id]?.trim() || item.unit || itemNewTypes[item.id].uom || null,
+            fbrUOMId: itemFbrUomIds[item.id] || itemNewTypes[item.id].fbrUOMId || null,
+            saleType: (chosenScenario ? chosenScenario.saleType : itemSaleTypes[item.id]?.trim()) || itemNewTypes[item.id].saleType || null,
+          } : null,
           // Non-Inventory line (Freight / Discount / …) — mutually exclusive with itemTypeId.
           nonInventoryItemId: itemNonInvIds[item.id] || null,
           // Per-line GL income account (auto-filled from the item type's overlay,
@@ -1710,8 +1760,13 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                         nonInventoryItems={nonInvItems}
                                         nonInventoryValue={itemNonInvIds[item.id] || ""}
                                         onPickNonInventory={(n) => handleNonInvPick(item, n)}
+                                        companyId={companyId}
+                                        offerFbrCodes
+                                        pendingNew={itemNewTypes[item.id] || null}
+                                        onPickNewItem={(n) => handleNewItemPick(item, n)}
                                         onChange={(newId, picked) => {
                                           const prevType = itemTypes.find((t) => t.id === itemTypeIds[item.id]);
+                                          clearNewItem(item.id);
                                           setItemTypeIds((p) => ({ ...p, [item.id]: newId ? parseInt(newId) : null }));
                                           if (picked) {
                                             // utils/lineDescription.js: fill when empty or still the
@@ -1743,6 +1798,19 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                         }}
                                         placeholder="— required —"
                                         style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                                      />
+                                      <NewItemChip
+                                        pending={itemNewTypes[item.id] || null}
+                                        onRename={(name) => renameNewItem(item, name)}
+                                        stock={newItemStock(item)}
+                                        quantity={item.quantity}
+                                        companyId={companyId}
+                                        fbrOn={company?.fbrEnabled !== false}
+                                        onStocked={(saved) => {
+                                          setItemTypes((p) => [saved, ...p.filter((t) => t.id !== saved.id)]);
+                                          clearNewItem(item.id);
+                                          setItemTypeIds((p) => ({ ...p, [item.id]: saved.id }));
+                                        }}
                                       />
                                       {(() => {
                                         const rc = itemTypeIds[item.id] ? rateCheck.checks[itemTypeIds[item.id]] : null;

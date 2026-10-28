@@ -16,6 +16,9 @@ import { defaultAccountPlaceholder } from "../utils/accountDisplay";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import { descriptionAfterPick } from "../utils/lineDescription";
+import { lineStock } from "../utils/lineStock";
+import NewItemChip from "./NewItemChip";
+import { notify } from "../utils/notify";
 import TaxRateNotice from "./TaxRateNotice";
 import BillStep from "./bill/BillStep";
 import BillChecklist from "./bill/BillChecklist";
@@ -94,6 +97,9 @@ const blankRow = () => ({
   localId: Math.random().toString(36).slice(2, 10),
   itemTypeId: "",
   itemTypeName: "",       // mirrored from the picked ItemType for the read-only Description column
+  // A pending NEW item picked from the FBR HS codes ({ placeholderId, name,
+  // hsCode, uom, ... }): sent as newItemType and made by the server on save.
+  newItemType: null,
   // Non-Inventory Item id (GL-account shortcut line: Freight / Discount / …).
   // Mutually exclusive with itemTypeId — a line carries at most one.
   nonInventoryItemId: "",
@@ -568,6 +574,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       // and the auto-filled GL account.
       updateRow(localId, {
         itemTypeId: "", itemTypeName: "", hsCode: "", uom: "", fbrUOMId: null, saleType: "", nonInventoryItemId: "", accountId: null,
+        newItemType: null,
       });
       return;
     }
@@ -577,6 +584,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         ...r,
         itemTypeId: picked.id,
         itemTypeName: picked.name || "",
+        newItemType: null,
         hsCode: picked.hsCode || "",
         uom: picked.uom || "",
         fbrUOMId: picked.fbrUOMId || null,
@@ -603,6 +611,38 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     setFocusRow({ localId, itemTypeId: picked.id });
   };
 
+  // An FBR HS code the company has no item for: the line carries a PENDING new
+  // item and nothing is written until the invoice is saved (the server makes
+  // it in the invoice's transaction). Same description rule as any pick.
+  const handleNewItemPick = (localId, pending) => {
+    setRows((prev) => prev.map((r) => r.localId !== localId ? r : {
+      ...r,
+      itemTypeId: "", nonInventoryItemId: "", accountId: null,
+      newItemType: pending,
+      itemTypeName: pending.name,
+      hsCode: pending.hsCode || "",
+      uom: r.uom || pending.uom || "",
+      fbrUOMId: pending.fbrUOMId || null,
+      saleType: pending.saleType || "",
+      description: descriptionAfterPick(r.description, r.itemTypeName, pending),
+    }));
+  };
+  const renameNewItem = (localId, name) => {
+    setRows((prev) => prev.map((r) => r.localId !== localId || !r.newItemType ? r : {
+      ...r,
+      newItemType: { ...r.newItemType, name },
+      itemTypeName: name,
+      // A description still reading the old name follows the rename.
+      description: descriptionAfterPick(r.description, r.itemTypeName, { name }),
+    }));
+  };
+  // "Add item and record stock" made the item now: the line becomes that
+  // catalog item, with the on-hand just recorded.
+  const handleNewItemStocked = (localId, item) => {
+    setItemTypes((prev) => [item, ...prev.filter((t) => t.id !== item.id)]);
+    handleItemTypePick(localId, item);
+  };
+
   // Non-Inventory pick — mutually exclusive with an item type. Clears the
   // item-type binding + its FBR fields, records the non-inv id, and prefills
   // description / UOM / sale price only when those fields are still empty.
@@ -613,7 +653,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       const next = {
         ...r,
         nonInventoryItemId: n.id,
-        itemTypeId: "", itemTypeName: "", hsCode: "", fbrUOMId: null, saleType: "",
+        itemTypeId: "", itemTypeName: "", hsCode: "", fbrUOMId: null, saleType: "", newItemType: null,
         // Non-inventory posts to its own mapped account — clear any per-line override.
         accountId: null,
       };
@@ -643,6 +683,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         accountId: picked.saleAccountId ?? null,
         // Stamping an item type clears any non-inventory binding.
         nonInventoryItemId: "",
+        newItemType: null,
         // Same Bills-mode seeding rule as the per-row pick.
         // Seed the description from the item type ONLY when the operator has not
         // written one -- in either mode. Picking (or re-picking) an item type
@@ -667,7 +708,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       const next = {
         ...r,
         nonInventoryItemId: n.id,
-        itemTypeId: "", itemTypeName: "", hsCode: "", fbrUOMId: null, saleType: "",
+        itemTypeId: "", itemTypeName: "", hsCode: "", fbrUOMId: null, saleType: "", newItemType: null,
         accountId: null,
       };
       next.description = descriptionAfterPick(r.description, r.itemTypeName, n);
@@ -694,6 +735,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       fbrUOMId: null,
       saleType: "",
       accountId: null,
+      newItemType: null,
     })));
   };
 
@@ -1074,7 +1116,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     // Every bill line must be classified — an Item Type OR a Non-Inventory
     // item (Freight / Discount / … which legitimately has no item type/HS).
     // Required in BOTH Bills and Invoices modes.
-    if (!r.itemTypeId && !r.nonInventoryItemId) errs.push("itemType");
+    if (!r.itemTypeId && !r.nonInventoryItemId && !r.newItemType) errs.push("itemType");
+    // A brand-new item has nothing on hand; a hard-block company refuses the
+    // sale (server guard, never loosened), so the form says so first.
+    if (r.newItemType && lineStock({ pending: r.newItemType, quantity: r.quantity, company }).blocksSave)
+      errs.push("new item has no stock");
+    if (r.newItemType && !r.newItemType.name?.trim()) errs.push("new item name");
     // Bills mode: the operator types the description directly; in Invoices
     // mode it derives from the picked item type.
     if (billsMode && !r.description?.trim()) errs.push("description");
@@ -1115,6 +1162,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       else parts.push(noQty ? "enter Qty" : "enter Unit Price");
     }
     if (errs.includes("qty exceeds stock on hand")) parts.push("it asks for more than is on hand");
+    if (errs.includes("new item has no stock")) parts.push("the new item has no stock — record its stock first");
+    if (errs.includes("new item name")) parts.push("name the new item");
     if (errs.includes("MRP>0")) parts.push("enter the MRP");
     if (errs.includes("sroSchedule")) parts.push("enter the SRO Schedule");
     if (errs.includes("sroItemNo")) parts.push("enter the SRO Item No");
@@ -1136,7 +1185,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     if (billNumberMode === "custom" && !billNumberOk)
       return setError("Enter a bill number that isn't already in use, or switch back to Auto.");
     // Every line on a bill must be classified — an Item Type OR a Non-Inventory item.
-    if (rows.some((r) => !r.itemTypeId && !r.nonInventoryItemId)) {
+    if (rows.some((r) => !r.itemTypeId && !r.nonInventoryItemId && !r.newItemType)) {
       return setError("Every line must have an Item Type or Non-Inventory item selected.");
     }
     // A line asking for more than is on hand is not a missing field, so it gets
@@ -1187,7 +1236,17 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         items: rows.map((r) => ({
           // Optional in Bills mode — when set, the backend re-derives
           // HS / UOM / Sale Type from the catalog for this line.
-          itemTypeId: r.itemTypeId ? parseInt(r.itemTypeId) : null,
+          itemTypeId: !r.newItemType && r.itemTypeId ? parseInt(r.itemTypeId) : null,
+          // A pending new item: the server makes it (or reuses a match) in
+          // the invoice's own transaction and fills itemTypeId.
+          newItemType: r.newItemType ? {
+            placeholderId: r.newItemType.placeholderId || null,
+            name: r.newItemType.name.trim(),
+            hsCode: r.newItemType.hsCode,
+            uom: r.uom?.trim() || r.newItemType.uom || null,
+            fbrUOMId: r.fbrUOMId || r.newItemType.fbrUOMId || null,
+            saleType: effectiveSaleType(r) || r.newItemType.saleType || null,
+          } : null,
           // Non-Inventory line (Freight / Discount / …) — mutually exclusive
           // with itemTypeId; the backend sources GL accounts from it.
           nonInventoryItemId: r.nonInventoryItemId ? parseInt(r.nonInventoryItemId) : null,
@@ -1225,7 +1284,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       try {
         if (created?.id) await attachmentRef.current?.flush(created.id);
       } catch { /* attachments are best-effort */ }
-      onSaved();
+      // A soft company saved a new item with nothing on hand: say where its
+      // on-hand stands now (a hard-block company never reaches this point).
+      const madeNew = rows.filter((r) => r.newItemType && lineStock({ pending: r.newItemType, quantity: r.quantity, company }).noStock);
+      if (madeNew.length > 0)
+        notify(madeNew.map((r) => `"${r.newItemType.name}" added to your catalog — on hand is now -${Number(r.quantity).toLocaleString("en-PK")}`).join("; "), "warning");
+      onSaved(created);
     } catch (err) {
       setError(err.response?.data?.message || err.response?.data?.error || "Failed to create bill.");
     } finally {
@@ -1756,8 +1820,21 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       nonInventoryItems={nonInvItems}
                                       nonInventoryValue={r.nonInventoryItemId || ""}
                                       onPickNonInventory={(n) => handleNonInventoryPick(r.localId, n)}
+                                      companyId={companyId}
+                                      offerFbrCodes
+                                      pendingNew={r.newItemType}
+                                      onPickNewItem={(n) => handleNewItemPick(r.localId, n)}
                                       placeholder="Required — pick item or non-inventory…"
                                       style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+                                    />
+                                    <NewItemChip
+                                      pending={r.newItemType}
+                                      onRename={(name) => renameNewItem(r.localId, name)}
+                                      stock={r.newItemType ? lineStock({ pending: r.newItemType, quantity: r.quantity, company }) : null}
+                                      quantity={r.quantity}
+                                      companyId={companyId}
+                                      fbrOn={fbrEnabled}
+                                      onStocked={(item) => handleNewItemStocked(r.localId, item)}
                                     />
                                     {/* What this item is worth, right where it
                                         was picked. Without it the operator only

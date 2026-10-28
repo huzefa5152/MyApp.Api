@@ -47,5 +47,41 @@ check("an item with no text leaves the description alone", () =>
 check("26: a challan line's own text is kept when an item is picked", () =>
   assert.strictEqual(descriptionAfterPick("As per challan 41, 12 cartons", "", valve), "As per challan 41, 12 cartons"));
 
+const { lineStock, isHardBlock, pendingFromFbrCode } = await import(src("utils/lineStock.js"));
+const hard = { inventoryTrackingEnabled: true, stockGuardHardBlock: true, inventoryFlowVersion: 1 };
+const soft = { inventoryTrackingEnabled: true, stockGuardHardBlock: false, inventoryFlowVersion: 1 };
+const off = { inventoryTrackingEnabled: false, stockGuardHardBlock: true };
+const pending = { name: "Check valve", hsCode: "8481.3000" };
+
+console.log("\n=== stock before save (D8) ===");
+check("41: a pending new item on a hard-block company: No stock, Save blocked", () =>
+  assert.deepStrictEqual(lineStock({ pending, quantity: 1, company: hard }), { noStock: true, blocksSave: true, onHand: 0 }));
+check("41d: the same on a soft company: No stock, Save allowed", () => {
+  const r = lineStock({ pending, quantity: 1, company: soft });
+  assert.ok(r.noStock && !r.blocksSave);
+});
+check("41c: a catalog item with less on hand than the line: blocked when hard", () =>
+  assert.ok(lineStock({ item: { hsCode: "8481.3000", availableQty: 2 }, quantity: 5, company: hard }).blocksSave));
+check("a catalog item with enough stock is fine", () =>
+  assert.ok(!lineStock({ item: { hsCode: "8481.3000", availableQty: 5 }, quantity: 5, company: hard }).noStock));
+check("v1 tracking ignores an item with no HS code", () =>
+  assert.ok(!lineStock({ item: { hsCode: "", availableQty: 0 }, quantity: 5, company: hard }).noStock));
+check("v2 tracking counts an item with no HS code", () =>
+  assert.ok(lineStock({ item: { hsCode: "", availableQty: 0 }, quantity: 5, company: { ...hard, inventoryFlowVersion: 2 } }).blocksSave));
+check("tracking off: never a stock message", () =>
+  assert.ok(!lineStock({ pending, quantity: 1, company: off }).noStock && !isHardBlock(off)));
+check("an item with no on-hand figure is left to the server", () =>
+  assert.ok(!lineStock({ item: { hsCode: "8481.3000" }, quantity: 5, company: hard }).noStock));
+
+console.log("\n=== FBR code -> pending new item (D7) ===");
+check("32: name is the FBR description, trimmed to 100 characters", () => {
+  const p = pendingFromFbrCode({ id: 7, hsCode: "8481.3000", fbrDescription: "x".repeat(150), uom: "" });
+  assert.strictEqual(p.name.length, 100);
+  assert.strictEqual(p.placeholderId, 7);
+  assert.strictEqual(p.hsCode, "8481.3000");
+});
+check("32: no FBR description falls back to the row name", () =>
+  assert.strictEqual(pendingFromFbrCode({ id: null, hsCode: "1", name: "HS Code 1" }).name, "HS Code 1"));
+
 console.log(`\n${pass}/${pass + failures.length} checks passed`);
 if (failures.length) process.exit(1);

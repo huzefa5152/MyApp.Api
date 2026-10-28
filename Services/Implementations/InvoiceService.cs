@@ -1171,7 +1171,7 @@ namespace MyApp.Api.Services.Implementations
                 var rateOverrides = await GuardImportedTaxRatesAsync(invoice, dto.TaxRateOverrideReason);
 
                 // Wrap invoice creation + challan transitions + company update in a single transaction
-                await using var transaction = await _context.Database.BeginTransactionAsync();
+                await using var transaction = await _context.Database.BeginOrJoinTransactionAsync();
                 try
                 {
                     // Oversell guard under the per-company stock lock (inside tx,
@@ -1541,7 +1541,7 @@ namespace MyApp.Api.Services.Implementations
                 // Same guard as the challan path, before anything is written.
                 var rateOverrides = await GuardImportedTaxRatesAsync(invoice, dto.TaxRateOverrideReason);
 
-                await using var transaction = await _context.Database.BeginTransactionAsync();
+                await using var transaction = await _context.Database.BeginOrJoinTransactionAsync();
                 try
                 {
                     // A line that bills the whole of a fractional bin rounds the
@@ -1780,7 +1780,7 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException(
                     $"Bill item id(s) [{string.Join(", ", extrasInPayload)}] do not belong to this bill.");
 
-            await using var transaction = await _context.Database.BeginTransactionAsync();
+            await using var transaction = await _context.Database.BeginOrJoinTransactionAsync();
             try
             {
                 // Update invoice-level fields

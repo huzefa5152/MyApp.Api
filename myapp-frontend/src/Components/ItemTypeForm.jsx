@@ -102,6 +102,10 @@ export default function ItemTypeForm({
   // (Sale Type, rate hints) — NOT the HS Code field, which every company needs
   // to classify its catalog and which reads the local HS master.
   fbrOn = true,
+  // Create-mode starting values (name, hsCode, uom, fbrUOMId, saleType,
+  // fbrDescription, openingQuantity): the invoice screen's "Add item and
+  // record stock" opens this form with the line's pending new item.
+  prefill = null,
   onClose,
   onSaved,
 }) {
@@ -110,23 +114,23 @@ export default function ItemTypeForm({
 
   // The shared catalog name. In a company's context the list hands back that
   // company's own name in `name` and the catalog one in `catalogName`.
-  const [name, setName] = useState(editItem?.catalogName || editItem?.name || "");
+  const [name, setName] = useState(editItem?.catalogName || editItem?.name || prefill?.name || "");
   // This company's own name for the item (CompanyItemTypeSetting.DisplayName):
   // shown instead of the catalog name for this company only. Blank = none.
   const [companyName, setCompanyName] = useState(editItem?.companyDisplayName || "");
-  const [hsCode, setHsCode] = useState(editItem?.hsCode || "");
-  const [uom, setUom] = useState(editItem?.uom || "");
+  const [hsCode, setHsCode] = useState(editItem?.hsCode || prefill?.hsCode || "");
+  const [uom, setUom] = useState(editItem?.uom || prefill?.uom || "");
   // Who last filled the UOM: "auto" = an HS-code lookup put it there, "manual"
   // = the operator chose it (or it is a saved value being edited). A suggested
   // unit may replace an auto-filled one -- otherwise changing the HS code
   // leaves the PREVIOUS code's unit sitting in the field while the panel
   // advertises a different suggestion -- but must never overwrite a choice.
-  const uomSourceRef = useRef(editItem?.uom ? "manual" : "auto");
-  const [fbrUOMId, setFbrUOMId] = useState(editItem?.fbrUOMId || null);
+  const uomSourceRef = useRef((editItem?.uom || prefill?.uom) ? "manual" : "auto");
+  const [fbrUOMId, setFbrUOMId] = useState(editItem?.fbrUOMId || prefill?.fbrUOMId || null);
   const [saleType, setSaleType] = useState(
-    scenarioSaleType || editItem?.saleType || "Goods at standard rate (default)"
+    scenarioSaleType || editItem?.saleType || prefill?.saleType || "Goods at standard rate (default)"
   );
-  const [fbrDescription, setFbrDescription] = useState(editItem?.fbrDescription || "");
+  const [fbrDescription, setFbrDescription] = useState(editItem?.fbrDescription || prefill?.fbrDescription || "");
   const [isFavorite, setIsFavorite] = useState(editItem?.isFavorite ?? true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -136,7 +140,7 @@ export default function ItemTypeForm({
   // currently in context. Only shown to operators who can manage opening stock.
   const { has } = usePermissions();
   const canManageOpening = has("stock.opening.manage");
-  const [openingBalance, setOpeningBalance] = useState("");
+  const [openingBalance, setOpeningBalance] = useState(prefill?.openingQuantity != null ? String(prefill.openingQuantity) : "");
   const [openingInitial, setOpeningInitial] = useState("");
   // What that opening quantity is WORTH, and at which sales-tax rate. Stock
   // carries a value as well as a count (see Helpers/StockValuation.cs), so an
@@ -440,6 +444,7 @@ export default function ItemTypeForm({
       const openingChanged = openingBalance.trim() !== openingInitial.trim()
         || openingValue.trim() !== openingValueInitial.trim()
         || openingRate.trim() !== openingRateInitial.trim();
+      let openingSaved = null;
       if (canManageOpening && companyId && saved?.id && openingChanged) {
         try {
           await upsertOpeningBalance({
@@ -451,10 +456,13 @@ export default function ItemTypeForm({
             asOfDate: new Date().toISOString().slice(0, 10),
             notes: "Set from item type form",
           });
+          openingSaved = parseFloat(openingBalance) || 0;
         } catch { /* opening balance is best-effort; the item type is saved */ }
       }
 
-      onSaved?.(saved);
+      // Second argument: the opening quantity actually recorded (null if none),
+      // so a caller can show the new on-hand without refetching.
+      onSaved?.(saved, { openingQuantity: openingSaved });
     } catch (err) {
       setError(err.response?.data?.message || "Failed to save.");
     } finally {

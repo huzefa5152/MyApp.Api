@@ -19,6 +19,8 @@ import LookupAutocomplete from "./LookupAutocomplete";
 import RichText from "./RichText";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import { descriptionAfterPick } from "../utils/lineDescription";
+import { lineStock } from "../utils/lineStock";
+import NewItemChip from "./NewItemChip";
 import { itemTypesForBook, BOOK_BILL, BOOK_INVOICE } from "../utils/itemTypeBooks";
 import { matchesScenarioSaleType, DEFAULT_SALE_TYPE } from "../utils/saleType";
 import TaxRateNotice from "./TaxRateNotice";
@@ -913,6 +915,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   const _applyItemTypeToRow = (current, newId, pickedType) => {
     const next = { ...current };
     next.itemTypeId = newId || null;
+    // Any catalog pick (or clear) replaces a pending new item.
+    next.newItemType = null;
     // An item type and a non-inventory item are mutually exclusive on a line.
     if (newId) next.nonInventoryItemId = null;
     if (pickedType) {
@@ -945,7 +949,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
       const next = {
         ...row,
         nonInventoryItemId: n.id,
-        itemTypeId: null, itemTypeName: "", uom: row.uom, hsCode: "", saleType: "", fbrUOMId: null,
+        itemTypeId: null, itemTypeName: "", uom: row.uom, hsCode: "", saleType: "", fbrUOMId: null, newItemType: null,
       };
       next.description = descriptionAfterPick(row.description, row.itemTypeName, n);
       if (!row.uom?.trim()) next.uom = n.unitName || "";
@@ -954,6 +958,33 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
         next.lineTotal = Math.round((parseFloat(row.quantity) || 0) * n.defaultSalePrice * 100) / 100;
       }
       return next;
+    }));
+  };
+
+  // The stock guard as this form knows it (the page passes the company's hard
+  // block). Only used for a pending NEW item, which has nothing on hand.
+  const stockCompany = { inventoryTrackingEnabled: true, stockGuardHardBlock: stockHardBlock };
+  // An FBR HS code the company has no item for: the line carries a PENDING
+  // new item, made by the server inside the save's transaction.
+  const pickNewItem = (index, pending) => {
+    setItems((prev) => prev.map((row, i) => i !== index ? row : {
+      ...row,
+      itemTypeId: null, nonInventoryItemId: null,
+      newItemType: pending,
+      itemTypeName: pending.name,
+      hsCode: pending.hsCode || "",
+      uom: row.uom || pending.uom || "",
+      fbrUOMId: pending.fbrUOMId || null,
+      saleType: pending.saleType || "",
+      description: descriptionAfterPick(row.description, row.itemTypeName, pending),
+    }));
+  };
+  const renameNewItem = (index, name) => {
+    setItems((prev) => prev.map((row, i) => i !== index || !row.newItemType ? row : {
+      ...row,
+      newItemType: { ...row.newItemType, name },
+      itemTypeName: name,
+      description: descriptionAfterPick(row.description, row.itemTypeName, { name }),
     }));
   };
 
@@ -1436,6 +1467,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
     // carries the warning; the save is the operator's call, which is what the
     // server does too, so the form and the server agree either way.
     // Checked before the per-tab validation, because it applies to every path.
+    if (items.some((it) => it.newItemType && !it.newItemType.name?.trim()))
+      return setError("Name every new item before saving.");
+    if (items.some((it) => it.newItemType && lineStock({ pending: it.newItemType, quantity: it.quantity, company: stockCompany }).blocksSave))
+      return setError("A new item has no stock and this company does not sell below zero. Record its stock first.");
     const over = items.map((it, i) => shortfallFor(it, i)).filter(Boolean);
     if (stockHardBlock && over.length > 0) {
       return setError(
@@ -1482,7 +1517,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
         // Total-preservation guard: new Σ(qty × unitPrice) must equal
         // the original Subtotal within ±2 PKR (server-side enforced).
         // Every line must be classified — an Item Type OR a Non-Inventory item.
-        if (items.some((i) => !i.itemTypeId && !i.nonInventoryItemId)) {
+        if (items.some((i) => !i.itemTypeId && !i.nonInventoryItemId && !i.newItemType)) {
           return setError("Every line must have an Item Type or Non-Inventory item selected.");
         }
         if (items.some((i) => (parseFloat(i.quantity) || 0) <= 0)) {
@@ -1530,7 +1565,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
         // Every line must be classified — an Item Type OR a Non-Inventory item.
         // Only enforced when the Item Type column is available (Invoices-side
         // full edit); Bills-mode hides the column and defers classification.
-        if (!billsMode && items.some((i) => !i.itemTypeId && !i.nonInventoryItemId))
+        if (!billsMode && items.some((i) => !i.itemTypeId && !i.nonInventoryItemId && !i.newItemType))
           return setError("Every line must have an Item Type or Non-Inventory item selected.");
 
         // Re-write paymentTerms to keep the [SNxxx] tag in sync with the
@@ -1577,7 +1612,16 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
             id: i.id || 0,
             deliveryItemId: i.deliveryItemId || null,
             // When ItemTypeId is set, backend re-derives HS/UOM/Sale Type from it.
-            itemTypeId: i.itemTypeId || null,
+            itemTypeId: i.newItemType ? null : (i.itemTypeId || null),
+            // A pending new item: the server makes it in this save's transaction.
+            newItemType: i.newItemType ? {
+              placeholderId: i.newItemType.placeholderId || null,
+              name: i.newItemType.name.trim(),
+              hsCode: i.newItemType.hsCode,
+              uom: i.uom || i.newItemType.uom || null,
+              fbrUOMId: i.fbrUOMId || i.newItemType.fbrUOMId || null,
+              saleType: i.saleType || i.newItemType.saleType || null,
+            } : null,
             // Non-Inventory line (Freight / Discount / …) — mutually exclusive
             // with itemTypeId. Round-trips so existing bindings aren't wiped.
             nonInventoryItemId: i.nonInventoryItemId || null,
@@ -2365,8 +2409,26 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                                   nonInventoryItems={nonInvItems}
                                   nonInventoryValue={item.nonInventoryItemId || ""}
                                   onPickNonInventory={(n) => updateNonInventory(idx, n)}
+                                  companyId={invoice?.companyId}
+                                  offerFbrCodes
+                                  pendingNew={item.newItemType || null}
+                                  onPickNewItem={(n) => pickNewItem(idx, n)}
                                   placeholder="Pick item…"
                                   style={styles.tableInput}
+                                />
+                              )}
+                              {!readOnly && (
+                                <NewItemChip
+                                  pending={item.newItemType || null}
+                                  onRename={(name) => renameNewItem(idx, name)}
+                                  stock={item.newItemType ? lineStock({ pending: item.newItemType, quantity: item.quantity, company: stockCompany }) : null}
+                                  quantity={item.quantity}
+                                  companyId={invoice?.companyId}
+                                  fbrOn={fbrEnabled}
+                                  onStocked={(saved) => {
+                                    setItemTypes((prev) => [saved, ...prev.filter((t) => t.id !== saved.id)]);
+                                    updateItemType(idx, saved.id, saved);
+                                  }}
                                 />
                               )}
                               {(() => {

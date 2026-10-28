@@ -419,7 +419,7 @@
         public int? InvoiceNumber { get; set; }
     }
 
-    public class CreateInvoiceItemDto
+    public class CreateInvoiceItemDto : INewItemTypeLine
     {
         public int DeliveryItemId { get; set; }
         public decimal UnitPrice { get; set; }
@@ -431,6 +431,14 @@
         /// line (visible on the Invoices tab afterwards).
         /// </summary>
         public int? ItemTypeId { get; set; }
+        /// <summary>
+        /// A catalog item to make for this line when the invoice is saved
+        /// (importer, 2026-10-28). Sent instead of <see cref="ItemTypeId"/>
+        /// for an FBR HS code the company has no item for; the controller
+        /// creates or adopts it inside the invoice's own transaction and
+        /// fills ItemTypeId. Needs itemtypes.manage.create.
+        /// </summary>
+        public NewItemTypeDto? NewItemType { get; set; }
         /// <summary>Optional NonInventoryItem link (GL-account shortcut line). Mutually exclusive with ItemTypeId.</summary>
         public int? NonInventoryItemId { get; set; }
         /// <summary>Optional per-line GL income account override (design §4 step 1).
@@ -522,7 +530,7 @@
         public List<CreateStandaloneInvoiceItemDto> Items { get; set; } = new();
     }
 
-    public class CreateStandaloneInvoiceItemDto
+    public class CreateStandaloneInvoiceItemDto : INewItemTypeLine
     {
         /// <summary>Free-text item description (typed by operator or picked from autocomplete).</summary>
         public string Description { get; set; } = "";
@@ -533,6 +541,14 @@
         public decimal UnitPrice { get; set; }
         /// <summary>Optional ItemType (FBR catalog) link — when set, server re-derives HS / UOM / SaleType / FbrUOMId from the catalog.</summary>
         public int? ItemTypeId { get; set; }
+        /// <summary>
+        /// A catalog item to make for this line when the invoice is saved
+        /// (importer, 2026-10-28). Sent instead of <see cref="ItemTypeId"/>
+        /// for an FBR HS code the company has no item for; the controller
+        /// creates or adopts it inside the invoice's own transaction and
+        /// fills ItemTypeId. Needs itemtypes.manage.create.
+        /// </summary>
+        public NewItemTypeDto? NewItemType { get; set; }
         /// <summary>Optional NonInventoryItem link (GL-account shortcut line, no stock/FBR). Mutually exclusive with ItemTypeId.</summary>
         public int? NonInventoryItemId { get; set; }
         /// <summary>Optional per-line GL income account override (design §4 step 1).</summary>
@@ -789,7 +805,7 @@
         public List<UpdateInvoiceItemDto> Items { get; set; } = new();
     }
 
-    public class UpdateInvoiceItemDto
+    public class UpdateInvoiceItemDto : INewItemTypeLine
     {
         public int Id { get; set; }  // 0 for new items, >0 for existing
         public int? DeliveryItemId { get; set; }
@@ -799,6 +815,14 @@
         /// The UOM/HSCode/SaleType fields in this DTO are ignored when ItemTypeId is set.
         /// </summary>
         public int? ItemTypeId { get; set; }
+        /// <summary>
+        /// A catalog item to make for this line when the invoice is saved
+        /// (importer, 2026-10-28). Sent instead of <see cref="ItemTypeId"/>
+        /// for an FBR HS code the company has no item for; the controller
+        /// creates or adopts it inside the invoice's own transaction and
+        /// fills ItemTypeId. Needs itemtypes.manage.create.
+        /// </summary>
+        public NewItemTypeDto? NewItemType { get; set; }
         /// <summary>Optional NonInventoryItem link (GL-account shortcut line). Mutually exclusive with ItemTypeId.</summary>
         public int? NonInventoryItemId { get; set; }
         /// <summary>Optional per-line GL income account override (design §4 step 1).</summary>
@@ -1016,5 +1040,27 @@
         public string? HsConflict { get; set; }
         /// <summary>The finding for the bill rate asked about; null when the rates agree.</summary>
         public TaxRateWarningDto? Warning { get; set; }
+    }
+
+    /// <summary>A line that may ask for a catalog item to be made on save.</summary>
+    public interface INewItemTypeLine
+    {
+        int? ItemTypeId { get; set; }
+        NewItemTypeDto? NewItemType { get; set; }
+    }
+
+    /// <summary>
+    /// An item picked from the FBR HS codes, made when the invoice is saved.
+    /// PlaceholderId is the tariff row the picker offered; Name unchanged from
+    /// it means "use that row", an edited Name means "make my own item".
+    /// </summary>
+    public class NewItemTypeDto
+    {
+        public int? PlaceholderId { get; set; }
+        public string Name { get; set; } = "";
+        public string HsCode { get; set; } = "";
+        public string? Uom { get; set; }
+        public int? FbrUOMId { get; set; }
+        public string? SaleType { get; set; }
     }
 }
