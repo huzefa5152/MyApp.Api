@@ -23,7 +23,8 @@ import { purchaseBillStarters } from "./starters/purchaseBill";
 import { goodsReceiptStarters } from "./starters/goodsReceipt";
 import { receiptStarters } from "./starters/receipt";
 import { paymentStarters } from "./starters/payment";
-
+import { transferStarters } from "./starters/transfer";
+import { journalEntryStarters } from "./starters/journalEntry";
 import { withholdingTaxStarters } from "./starters/withholdingTax";
 
 export const STARTER_TEMPLATES = [
@@ -38,5 +39,7 @@ export const STARTER_TEMPLATES = [
   ...goodsReceiptStarters,
   ...receiptStarters,
   ...paymentStarters,
+  ...transferStarters,
+  ...journalEntryStarters,
   ...withholdingTaxStarters,
 ];

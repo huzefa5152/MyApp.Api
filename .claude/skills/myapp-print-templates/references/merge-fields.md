@@ -146,6 +146,53 @@ Expressions below come from this branch's `MERGE_FIELDS`. Fields beginning with 
 | `{{fmtDate this.date}}` | Document Date (in loop) |
 | `{{fmt this.amount}}` | Settled Amount (in loop) |
 
+### Transfer
+
+Added 2026-10-29 (`PrintTransferDto`, `AccountTransfersController` GET `{id}/print`).
+
+| Expression | Catalog description |
+| --- | --- |
+| `{{companyBrandName}}` | Company Brand Name |
+| `{{companyLogoPath}}` | Company Logo URL |
+| `{{{nl2br companyAddress}}}` | Company Address (with line breaks) |
+| `{{{nl2br companyPhone}}}` | Company Phone (with line breaks) |
+| `{{companyNTN}}` | Company NTN |
+| `{{companySTRN}}` | Company STRN |
+| `{{reference}}` | Voucher Reference (TRF-#) |
+| `{{fmtDate date}}` | Transfer Date |
+| `{{fromAccountName}}` | From Account |
+| `{{toAccountName}}` | To Account |
+| `{{{richText description}}}` | Description / Remarks (formatted) |
+| `{{fmt amount}}` | Amount |
+| `{{amountInWords}}` | Amount In Words |
+
+### JournalEntry
+
+Added 2026-10-29 (`PrintJournalEntryDto`, `PrintJournalLineDto`).
+
+| Expression | Catalog description |
+| --- | --- |
+| `{{companyBrandName}}` | Company Brand Name |
+| `{{companyLogoPath}}` | Company Logo URL |
+| `{{{nl2br companyAddress}}}` | Company Address (with line breaks) |
+| `{{{nl2br companyPhone}}}` | Company Phone (with line breaks) |
+| `{{companyNTN}}` | Company NTN |
+| `{{companySTRN}}` | Company STRN |
+| `{{reference}}` | Voucher Reference (JE-#) |
+| `{{entryNo}}` | Entry Number |
+| `{{fmtDate date}}` | Entry Date |
+| `{{{richText narration}}}` | Narration (formatted) |
+| `{{fmt totalDebit}}` | Total Debit |
+| `{{fmt totalCredit}}` | Total Credit |
+| `{{#each lines}}` | Loop: Lines Start |
+| `{{/each}}` | Loop: End |
+| `{{inc @index}}` | Line Serial No. (in loop) |
+| `{{this.accountCode}}` | Account Code (in loop) |
+| `{{this.accountName}}` | Account Name (in loop) |
+| `{{{richText this.description}}}` | Line Description (in loop) |
+| `{{fmt this.debit}}` | Line Debit (in loop) |
+| `{{fmt this.credit}}` | Line Credit (in loop) |
+
 ## DTO property inventory
 
 These are C# property names from `DTOs/PrintDtos.cs`, retained exactly to avoid guessing serializer casing. Use the catalog/actual JSON for merge-token spelling. Collection item DTOs define row fields; nullable properties can be blank. Other document DTOs may live in separate files.

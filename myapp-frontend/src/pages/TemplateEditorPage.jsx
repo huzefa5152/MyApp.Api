@@ -137,12 +137,13 @@ export default function TemplateEditorPage() {
           label: f.label,
           category: f.category,
         }));
-        // These additive print fields ship with the print DTO; expose them even
-        // when the production merge-field catalog predates this release.
-        if (templateType === "Bill" || templateType === "TaxInvoice") {
-          for (const field of MERGE_FIELDS[templateType]) {
-            if (!catalog.some(f => f.field === field.field)) catalog.push({ ...field, category: /fbr/i.test(field.field) ? "FBR" : templateType });
-          }
+        // The code catalog fills whatever the database lacks, for every type:
+        // fields that ship with the print DTO appear even when the seeded
+        // catalog predates them, and a type with no seeded fields at all
+        // (Transfer, JournalEntry, the vouchers) still gets a full sidebar.
+        const known = new Set(catalog.map(f => f.field));
+        for (const field of MERGE_FIELDS[templateType] || []) {
+          if (!known.has(field.field)) catalog.push({ ...field, category: /fbr/i.test(field.field) ? "FBR" : templateType });
         }
         setFields(catalog);
       } catch {

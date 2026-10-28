@@ -23,6 +23,7 @@ import { purchaseBillStarters } from "./starters/purchaseBill";
 import { goodsReceiptStarters } from "./starters/goodsReceipt";
 import { receiptStarters } from "./starters/receipt";
 import { paymentStarters } from "./starters/payment";
+import { defaultTransferTemplate, defaultJournalEntryTemplate } from "./accountingDocTemplates";
 
 // Placeholder line photos for the Sales Quote preview — inline SVG data URIs
 // so the starter gallery / editor preview shows the Image column without
@@ -43,6 +44,8 @@ export const TEMPLATE_TYPES = [
   { value: "GoodsReceipt", label: "Goods Receipt" },
   { value: "Receipt", label: "Receipt Voucher" },
   { value: "Payment", label: "Payment Voucher" },
+  { value: "Transfer", label: "Fund Transfer" },
+  { value: "JournalEntry", label: "Journal Voucher" },
   { value: "WithholdingTaxReceipt", label: "Withholding Tax Receipt" },
 ];
 
@@ -105,6 +108,29 @@ export const SAMPLE_DATA = {
     allocations: [
       { sNo: 1, documentLabel: "Bill #312", date: new Date().toISOString(), amount: 150000 },
       { sNo: 2, documentLabel: "Bill #305", date: new Date().toISOString(), amount: 85000 },
+    ],
+  },
+  Transfer: {
+    ...SAMPLE_BRANDING,
+    reference: "TRF-7",
+    date: new Date().toISOString(),
+    fromAccountName: "Cash in hand",
+    toAccountName: "Bank current account",
+    description: "Cash deposited to bank",
+    amount: 500000,
+    amountInWords: "Five Hundred Thousand Rupees Only",
+  },
+  JournalEntry: {
+    ...SAMPLE_BRANDING,
+    reference: "JE-14",
+    entryNo: 14,
+    date: new Date().toISOString(),
+    narration: "Depreciation charged for the month",
+    totalDebit: 45000,
+    totalCredit: 45000,
+    lines: [
+      { sNo: 1, accountCode: "5200", accountName: "Depreciation expense", description: "Monthly depreciation", debit: 45000, credit: 0 },
+      { sNo: 2, accountCode: "1500", accountName: "Accumulated depreciation", description: "", debit: 0, credit: 45000 },
     ],
   },
   Challan: {
@@ -413,6 +439,10 @@ export const DEFAULT_TEMPLATES = {
   GoodsReceipt: goodsReceiptStarters[0]?.html || "",
   Receipt: receiptStarters[0]?.html || "",
   Payment: paymentStarters[0]?.html || "",
+  // The same built-in layouts the Transfers / Journal Entries screens print
+  // with when the company has no saved template.
+  Transfer: defaultTransferTemplate,
+  JournalEntry: defaultJournalEntryTemplate,
   WithholdingTaxReceipt: withholdingTaxStarters[0]?.html || "",
 };
 
