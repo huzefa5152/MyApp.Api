@@ -25,13 +25,15 @@ namespace MyApp.Api.Controllers
         private readonly AppDbContext _context;
         private readonly IItemTypeService _itemTypes;
         private readonly IPermissionService _permissions;
+        private readonly IFbrService _fbr;
         private readonly int _defaultPageSize;
 
         public InvoicesController(IInvoiceService service, ICompanyAccessGuard access,
             IDivisionAccessGuard divisionAccess, IStockService stock,
             AppDbContext context, IConfiguration configuration,
-            IItemTypeService itemTypes, IPermissionService permissions)
+            IItemTypeService itemTypes, IPermissionService permissions, IFbrService fbr)
         {
+            _fbr = fbr;
             _itemTypes = itemTypes;
             _permissions = permissions;
             _service = service;
@@ -55,6 +57,26 @@ namespace MyApp.Api.Controllers
         /// </summary>
         private async Task<bool> MayMakeItemsAsync(IEnumerable<INewItemTypeLine>? lines)
             => !NewItemTypes.Any(lines) || await _permissions.HasPermissionAsync(CurrentUserId, "itemtypes.manage.create");
+
+        /// <summary>
+        /// "Already filed by hand on FBR's portal" chosen on the create form: the
+        /// same right as the reset valve that records it, and a portal number.
+        /// </summary>
+        private async Task<ObjectResult?> RefuseManualFilingAsync(ManualFbrFilingDto? filing)
+        {
+            if (filing == null) return null;
+            if (!await _permissions.HasPermissionAsync(CurrentUserId, "invoices.fbr.reset"))
+                return StatusCode(403, new { error = "Recording an invoice as filed on FBR's portal needs the FBR reset permission." });
+            if (string.IsNullOrWhiteSpace(filing.PortalInvoiceNumber))
+                return BadRequest(new { error = "Enter the invoice number used on FBR's portal." });
+            return null;
+        }
+
+        /// <summary>Records the new invoice as filed by hand, inside the create transaction.</summary>
+        private Task<FbrResetResult> RecordManualFilingAsync(int invoiceId, ManualFbrFilingDto filing) =>
+            _fbr.ResetSubmissionAsync(invoiceId, "recordManual", null,
+                string.IsNullOrWhiteSpace(filing.Reason) ? "Filed by hand on FBR's portal; recorded when the invoice was created." : filing.Reason.Trim(),
+                User.Identity?.Name, filing.PortalInvoiceNumber, filing.KeepInStockHsCodes);
 
         private ObjectResult NoItemCreateRight() =>
             StatusCode(403, new { error = "Making a new item needs the Item Catalog \"Add\" permission. Pick an item from your catalog instead." });
@@ -520,12 +542,20 @@ namespace MyApp.Api.Controllers
                 if (dto.GSTRate < 0 || dto.GSTRate > 100)
                     return BadRequest(new { error = "GST rate must be between 0 and 100." });
                 if (!await MayMakeItemsAsync(dto.Items)) return NoItemCreateRight();
+                if (await RefuseManualFilingAsync(dto.ManualFbrFiling) is { } refused) return refused;
 
-                // New catalog items and the invoice land together or not at all:
-                // the service joins this transaction (BeginOrJoinTransactionAsync).
-                await using var tx = NewItemTypes.Any(dto.Items) ? await _context.Database.BeginTransactionAsync() : null;
-                if (tx != null) await NewItemTypes.ResolveAsync(_context, _itemTypes, dto.CompanyId, dto.Items);
+                // New catalog items, the invoice and a hand filing land together
+                // or not at all: the service joins this transaction.
+                await using var tx = NewItemTypes.Any(dto.Items) || dto.ManualFbrFiling != null
+                    ? await _context.Database.BeginTransactionAsync() : null;
+                if (NewItemTypes.Any(dto.Items)) await NewItemTypes.ResolveAsync(_context, _itemTypes, dto.CompanyId, dto.Items);
                 var created = await _service.CreateAsync(dto);
+                if (dto.ManualFbrFiling != null)
+                {
+                    var filed = await RecordManualFilingAsync(created.Id, dto.ManualFbrFiling);
+                    if (!filed.Success) return BadRequest(new { error = filed.Message });   // tx rolls back
+                    created = await _service.GetByIdAsync(created.Id) ?? created;
+                }
                 if (tx != null) await tx.CommitAsync();
                 return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
             }
@@ -570,10 +600,18 @@ namespace MyApp.Api.Controllers
                 if (dto.GSTRate < 0 || dto.GSTRate > 100)
                     return BadRequest(new { error = "GST rate must be between 0 and 100." });
                 if (!await MayMakeItemsAsync(dto.Items)) return NoItemCreateRight();
+                if (await RefuseManualFilingAsync(dto.ManualFbrFiling) is { } refused) return refused;
 
-                await using var tx = NewItemTypes.Any(dto.Items) ? await _context.Database.BeginTransactionAsync() : null;
-                if (tx != null) await NewItemTypes.ResolveAsync(_context, _itemTypes, dto.CompanyId, dto.Items);
+                await using var tx = NewItemTypes.Any(dto.Items) || dto.ManualFbrFiling != null
+                    ? await _context.Database.BeginTransactionAsync() : null;
+                if (NewItemTypes.Any(dto.Items)) await NewItemTypes.ResolveAsync(_context, _itemTypes, dto.CompanyId, dto.Items);
                 var created = await _service.CreateStandaloneAsync(dto);
+                if (dto.ManualFbrFiling != null)
+                {
+                    var filed = await RecordManualFilingAsync(created.Id, dto.ManualFbrFiling);
+                    if (!filed.Success) return BadRequest(new { error = filed.Message });   // tx rolls back
+                    created = await _service.GetByIdAsync(created.Id) ?? created;
+                }
                 if (tx != null) await tx.CommitAsync();
                 return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
             }

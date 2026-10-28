@@ -41,6 +41,7 @@ import BillNumberField, { billNumberPayload } from "./BillNumberField";
 // to retype "Pcs" / "KG" / etc. each line.
 import LookupAutocomplete from "./LookupAutocomplete";
 import AttachmentManager from "./AttachmentManager";
+import ManualFilingStep, { emptyManualFiling, keptCodes, manualFilingPayload } from "./ManualFilingStep";
 import { defaultAccountPlaceholder } from "../utils/accountDisplay";
 
 
@@ -82,7 +83,7 @@ const SCENARIO_META = {
   SN028: { buyerKind: "walk-in" },
 };
 
-export default function InvoiceForm({ companyId, company, onClose, onSaved, prefillChallanId, prefillChallanIds, billsMode = false, defaultDivisionId }) {
+export default function InvoiceForm({ companyId, company, onClose, onSaved, prefillChallanId, prefillChallanIds, billsMode = false, defaultDivisionId, canRecordManual = false }) {
   // billsMode: true when this form is mounted from the Bills tab. Hides
   // the HS Code and Sale Type columns — those stay Invoice-tab concerns.
   // Item Type affordances (per-row picker, bulk-apply toolbar, "+ New
@@ -99,6 +100,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // FBR integration toggle (company-level). When off, the bill is a plain
   // non-FBR bill: no scenario step, editable GST, no scenario saved.
   const fbrEnabled = company?.fbrEnabled !== false;
+  // "Already filed by hand on FBR's portal?" -- saved and recorded in one request.
+  const showFiling = canRecordManual && fbrEnabled;
+  const [manualFiling, setManualFiling] = useState(emptyManualFiling);
 
   const [clients, setClients] = useState([]);
   // Inline create modals — same affordances StandaloneInvoiceForm has
@@ -680,6 +684,13 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const allItems = selectedChallans.flatMap((c) =>
     c.items.map((item) => ({ ...item, challanNumber: c.challanNumber }))
   );
+  // The lines as the "Already filed" step groups them by HS code.
+  const filingLines = allItems.map((i) => ({
+    itemTypeId: itemNewTypes[i.id] ? "new" : itemTypeIds[i.id] || null,
+    itemTypeName: itemNewTypes[i.id]?.name || itemTypes.find((t) => t.id === itemTypeIds[i.id])?.name,
+    description: itemDescriptions[i.id] || i.description,
+    hsCode: itemHsCodes[i.id], quantity: i.quantity, uom: itemUoms[i.id] || i.unit,
+  }));
 
   // ── The rate the goods came in at ─────────────────────────────────────────
   // Same check the standalone form makes (Helpers/ImportedTaxRate on the
@@ -858,7 +869,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // sale on the server (never loosened), so the line says so before save.
   const newItemStock = (i) => itemNewTypes[i.id]
     ? lineStock({ pending: itemNewTypes[i.id], quantity: i.quantity, company }) : null;
-  const newItemBlocks = (i) => !!newItemStock(i)?.blocksSave;
+  // Goods kept in stock by a hand filing never leave it, so they cannot run short.
+  const newItemBlocks = (i) => !!newItemStock(i)?.blocksSave && !keptCodes(manualFiling).has((itemHsCodes[i.id] || "").trim());
   const handleNewItemPick = (item, pending) => {
     const id = item.id;
     const prevAuto = itemNewTypes[id]?.name || autoDescription(itemTypes.find((t) => t.id === itemTypeIds[id]));
@@ -958,6 +970,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
 
     if (billNumberMode === "custom" && !billNumberOk)
       return setError("Enter a bill number that isn't already in use, or switch back to Auto.");
+    if (manualFiling.on && !manualFiling.portalNumber.trim())
+      return setError("Enter the invoice number used on FBR's portal, or untick \"Already filed\".");
 
     const missingPrices = allItems.filter((i) => !itemPrices[i.id] || parseFloat(itemPrices[i.id]) <= 0);
     if (missingPrices.length > 0) return setError("Enter unit price for all items.");
@@ -1051,6 +1065,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           fixedNotifiedValueOrRetailPrice: needsRetail ? (retailOf(item) || null) : null,
         })),
         poDateUpdates,
+        manualFbrFiling: showFiling ? manualFilingPayload(manualFiling, filingLines) : null,
         poNumber: billPoNumber.trim() || null,
         poDate: billPoDate ? new Date(billPoDate).toISOString() : null,
       });
@@ -2120,9 +2135,19 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                 {/* Attachments — staged client-side until the bill is created,
                     then flushed against the new id (see handleSubmit). Never
                     folded away: a staged file must still be mounted to upload. */}
+                {showFiling && (
+                  <ManualFilingStep
+                    n={stepNo(7)}
+                    value={manualFiling}
+                    onChange={setManualFiling}
+                    lines={filingLines}
+                    trackStock={!!company?.inventoryTrackingEnabled}
+                    disabled={saving}
+                  />
+                )}
                 <BillStep
                   id={BILL_ANCHORS.attachments}
-                  n={stepNo(7)}
+                  n={stepNo(showFiling ? 8 : 7)}
                   title="Attachments"
                   status="optional"
                   help="Optional: the customer's PO, the signed challan, anything to keep with this bill."

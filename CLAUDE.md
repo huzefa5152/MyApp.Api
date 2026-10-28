@@ -1774,7 +1774,15 @@ string. Importers never adjust quantity or item type for FBR, so:
   goods out again; codes not on the invoice are refused). Such a bill stays
   editable (`IsInvoiceEditable`), so the screen shows Edit; it gets no credit
   note or correction, because a note is filed against an IRN it does not have.
-- Suites: `python scripts/test_importer_invoice_screen.py --base <url>` (67),
+- **Filed by hand, chosen on the New invoice forms** (2026-10-29): both create
+  forms (from challans, without) show "Already filed on FBR's portal?" to
+  holders of `invoices.fbr.reset` when FBR is on. `manualFbrFiling` on the create
+  DTO makes the controller check that key (403 otherwise) and run the same reset
+  valve INSIDE the create transaction, so a refused filing rolls the invoice
+  back rather than leaving it unfiled. Kept HS codes are flagged before the hard
+  stock block (`MarkKeptInStock`), because goods that never leave stock cannot
+  run short; a code not on the invoice is refused.
+- Suites: `python scripts/test_importer_invoice_screen.py --base <url>` (87),
   `node scripts/test_invoice_screen.mjs` (53); the reflow gate's suite 8 pins
   the kept-in-stock choice.
 

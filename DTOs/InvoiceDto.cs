@@ -366,6 +366,12 @@
     public class CreateInvoiceDto
     {
         /// <summary>
+        /// Set when the invoice was already filed by hand on FBR's portal: it is
+        /// recorded as filed in the same save (needs invoices.fbr.reset).
+        /// </summary>
+        public ManualFbrFilingDto? ManualFbrFiling { get; set; }
+
+        /// <summary>
         /// Why this bill charges a rate the company's own GD / opening stock
         /// records disagree with. Required to save such a bill; ignored when the
         /// rates agree. See Helpers/ImportedTaxRate.
@@ -467,8 +473,27 @@
     /// flows through the same Bills page, FBR Validate / Submit, and
     /// Item Rate History as challan-linked bills.
     /// </summary>
+    /// <summary>
+    /// "Already filed by hand on FBR's portal", chosen while creating an invoice
+    /// (2026-10-29). Same effect as the reset valve's mode recordManual.
+    /// </summary>
+    public class ManualFbrFilingDto
+    {
+        /// <summary>The invoice number used on FBR's portal.</summary>
+        public string PortalInvoiceNumber { get; set; } = "";
+        /// <summary>HS codes on the invoice whose goods stay in stock.</summary>
+        public List<string>? KeepInStockHsCodes { get; set; }
+        public string? Reason { get; set; }
+    }
+
     public class CreateStandaloneInvoiceDto
     {
+        /// <summary>
+        /// Set when the invoice was already filed by hand on FBR's portal: it is
+        /// recorded as filed in the same save (needs invoices.fbr.reset).
+        /// </summary>
+        public ManualFbrFilingDto? ManualFbrFiling { get; set; }
+
         /// <summary>
         /// Why this bill charges a rate the company's own GD / opening stock
         /// records disagree with. Required to save such a bill; ignored when the

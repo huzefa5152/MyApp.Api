@@ -38,6 +38,7 @@ import ItemTypeForm from "./ItemTypeForm";
 import PermissionLackedHint from "./PermissionLackedHint";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import AttachmentManager from "./AttachmentManager";
+import ManualFilingStep, { emptyManualFiling, keptCodes, manualFilingPayload } from "./ManualFilingStep";
 import { fifoQuantityForAmount, fifoTierText } from "../utils/fifoPricing";
 
 // Bill-without-challan flow ("Standalone Bill"). Per FBR DI-API V1.12:
@@ -126,7 +127,7 @@ const blankRow = () => ({
   sroItemSerialNo: "",
 });
 
-export default function StandaloneInvoiceForm({ companyId, company, onClose, onSaved, billsMode = false, defaultDivisionId }) {
+export default function StandaloneInvoiceForm({ companyId, company, onClose, onSaved, billsMode = false, defaultDivisionId, canRecordManual = false }) {
   // billsMode: true when this form is mounted from the Bills tab. Hides
   // the FBR-only display columns (HS Code); the scenario UI stays
   // fbrEnabled-gated as usual. Item Type affordances — per-row picker,
@@ -143,6 +144,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // FBR integration toggle (company-level). When off, this is a plain
   // non-FBR bill: no scenario step, editable GST, no scenario saved.
   const fbrEnabled = company?.fbrEnabled !== false;
+  // "Already filed by hand on FBR's portal?" -- saved and recorded in one request.
+  const showFiling = canRecordManual && fbrEnabled;
+  const [manualFiling, setManualFiling] = useState(emptyManualFiling);
+  const keptByFiling = (r) => keptCodes(manualFiling).has(((r.newItemType?.hsCode || r.hsCode) || "").trim());
 
   const [clients, setClients] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
@@ -1138,7 +1143,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     if (!r.itemTypeId && !r.nonInventoryItemId && !r.newItemType) errs.push("itemType");
     // A brand-new item has nothing on hand; a hard-block company refuses the
     // sale (server guard, never loosened), so the form says so first.
-    if (r.newItemType && lineStock({ pending: r.newItemType, quantity: r.quantity, company }).blocksSave)
+    if (r.newItemType && !keptByFiling(r) && lineStock({ pending: r.newItemType, quantity: r.quantity, company }).blocksSave)
       errs.push("new item has no stock");
     if (r.newItemType && !r.newItemType.name?.trim()) errs.push("new item name");
     // Bills mode: the operator types the description directly; in Invoices
@@ -1162,6 +1167,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     return errs;
   };
   const allRowsValid = rows.length > 0 && rows.every((r) => rowErrors(r).length === 0);
+  // The lines as the "Already filed" step groups them by HS code.
+  const filingLines = rows.map((r) => ({
+    itemTypeId: r.newItemType ? "new" : r.itemTypeId, itemTypeName: r.newItemType?.name || r.itemTypeName,
+    description: r.description, hsCode: r.newItemType?.hsCode || r.hsCode, quantity: r.quantity, uom: r.uom,
+  }));
 
   // What a line still needs, in the words on screen. "Some required fields are
   // missing" alone sent an operator hunting: the tax-rate reason they had just
@@ -1209,7 +1219,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     }
     // A line asking for more than is on hand is not a missing field, so it gets
     // its own message with the figures rather than being listed as "missing".
-    const over = rows.map((r) => stockShortfall(r)).filter(Boolean);
+    // Goods a hand filing keeps in stock never leave it, so they cannot run short.
+    const over = rows.filter((r) => !keptByFiling(r)).map((r) => stockShortfall(r)).filter(Boolean);
     if (stockHardBlock && over.length > 0) {
       return setError(
         "Not enough stock: " +
@@ -1219,6 +1230,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         ).join("; ") + ". Lower the amount or the quantity."
       );
     }
+    if (manualFiling.on && !manualFiling.portalNumber.trim())
+      return setError("Enter the invoice number used on FBR's portal, or untick \"Already filed\".");
     if (!allRowsValid) {
       const missing = rows.flatMap(rowErrors);
       return setError(`Fill all required fields. Missing: ${[...new Set(missing)].join(", ")}.`);
@@ -1252,6 +1265,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         salesOrderId: salesOrderId ? parseInt(salesOrderId) : null,
         poNumber: poNumber.trim() || null,
         poDate: poDate ? new Date(poDate).toISOString() : null,
+        manualFbrFiling: showFiling ? manualFilingPayload(manualFiling, filingLines) : null,
         items: rows.map((r) => ({
           // Optional in Bills mode — when set, the backend re-derives
           // HS / UOM / Sale Type from the catalog for this line.
@@ -2339,9 +2353,19 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                 {/* Attachments — staged client-side until the bill is created,
                     then flushed against the new id (see handleSubmit). Never
                     folded away: a staged file must still be mounted to upload. */}
+                {showFiling && (
+                  <ManualFilingStep
+                    n={stepNo(6)}
+                    value={manualFiling}
+                    onChange={setManualFiling}
+                    lines={filingLines}
+                    trackStock={!!company?.inventoryTrackingEnabled}
+                    disabled={saving}
+                  />
+                )}
                 <BillStep
                   id={BILL_ANCHORS.attachments}
-                  n={stepNo(6)}
+                  n={stepNo(showFiling ? 7 : 6)}
                   title="Attachments"
                   status="optional"
                   help="Optional: the customer's PO, a delivery note, anything to keep with this bill."

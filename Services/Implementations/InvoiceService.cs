@@ -602,6 +602,25 @@ namespace MyApp.Api.Services.Implementations
         }
 
         /// <summary>
+        /// An invoice created as already filed by hand on FBR's portal may keep
+        /// some HS codes in stock. Flag those lines before the stock guard, so
+        /// goods that never leave stock are not demanded from it; the reset
+        /// valve, run by the controller in the same transaction, re-applies the
+        /// same choice and records the filing.
+        /// </summary>
+        private static void MarkKeptInStock(IEnumerable<InvoiceItem> items, ManualFbrFilingDto? filing)
+        {
+            var keep = new HashSet<string>(
+                (filing?.KeepInStockHsCodes ?? new List<string>()).Select(c => (c ?? "").Trim()).Where(c => c.Length > 0),
+                StringComparer.OrdinalIgnoreCase);
+            var unknown = keep.Where(c => !items.Any(i => string.Equals((i.HSCode ?? "").Trim(), c, StringComparison.OrdinalIgnoreCase))).ToList();
+            if (unknown.Count > 0)
+                throw new InvalidOperationException($"HS code {string.Join(", ", unknown)} is not on this invoice.");
+            foreach (var i in items)
+                i.KeepInStock = keep.Count > 0 && keep.Contains((i.HSCode ?? "").Trim());
+        }
+
+        /// <summary>
         /// Hard-block oversell guard for bill creation. MUST be called inside
         /// the create transaction: it takes a per-company app lock so concurrent
         /// bills consuming the last units serialise, then re-checks physical
@@ -615,7 +634,7 @@ namespace MyApp.Api.Services.Implementations
             await MyApp.Api.Helpers.StockLock.AcquireCompanyAsync(_context, companyId);
 
             var requirements = items
-                .Where(i => i.ItemTypeId.HasValue)
+                .Where(i => i.ItemTypeId.HasValue && !i.KeepInStock)
                 .Select(i => new StockRequirement(i.ItemTypeId!.Value, i.ItemTypeName ?? "", i.Quantity))
                 .ToList();
             if (requirements.Count == 0) return;
@@ -1177,6 +1196,7 @@ namespace MyApp.Api.Services.Implementations
                 {
                     // Oversell guard under the per-company stock lock (inside tx,
                     // so it serialises concurrent bills — closes the TOCTOU race).
+                    MarkKeptInStock(invoiceItems, dto.ManualFbrFiling);
                     await AssertBillStockAvailabilityAsync(company, dto.CompanyId, invoiceItems);
 
                     var created = await _invoiceRepo.CreateAsync(invoice);
@@ -1550,6 +1570,7 @@ namespace MyApp.Api.Services.Implementations
                     // a whole quantity it can honour.
                     await RoundUpCloseOutBinsAsync(company, dto.CompanyId, invoiceItems, invoice.Date);
                     // Oversell guard under the per-company stock lock (inside tx).
+                    MarkKeptInStock(invoiceItems, dto.ManualFbrFiling);
                     await AssertBillStockAvailabilityAsync(company, dto.CompanyId, invoiceItems);
 
                     var created = await _invoiceRepo.CreateAsync(invoice);

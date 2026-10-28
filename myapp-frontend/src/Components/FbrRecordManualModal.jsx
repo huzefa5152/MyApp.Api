@@ -3,6 +3,7 @@ import { MdClose, MdInfoOutline } from "react-icons/md";
 import { formStyles, modalSizes, colors } from "../theme";
 import { resetFbrSubmission } from "../api/fbrApi";
 import { stockGroups } from "../utils/invoiceActions";
+import { StockChoiceList } from "./ManualFilingStep";
 
 /**
  * Record that an invoice was filed BY HAND on FBR's portal (importer,
@@ -79,32 +80,12 @@ export default function FbrRecordManualModal({ invoice, trackStock = true, onClo
               <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colors.textSecondary }}>
                 These goods left stock when the invoice was saved. Untick an HS code to put its goods back in stock.
               </p>
-              {groups.map((g) => {
-                const on = !!deduct[g.code];
-                return (
-                  <label key={g.code} style={{
-                    display: "flex", gap: 10, alignItems: "flex-start", padding: "0.55rem 0.2rem", minHeight: 44,
-                    borderTop: `1px solid ${colors.cardBorder}`, cursor: busy ? "default" : "pointer",
-                  }}>
-                    <input type="checkbox" checked={on} disabled={busy}
-                      onChange={(e) => setDeduct((d) => ({ ...d, [g.code]: e.target.checked }))}
-                      style={{ width: 20, height: 20, marginTop: 2, flexShrink: 0, accentColor: colors.blue }} />
-                    <span style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ display: "flex", flexWrap: "wrap", gap: "0.2rem 0.6rem", alignItems: "baseline" }}>
-                        <b style={{ fontSize: "0.86rem", fontVariantNumeric: "tabular-nums" }}>HS {g.code}</b>
-                        <span style={{ fontSize: "0.8rem", color: colors.textSecondary }}>{g.qtyLabel}</span>
-                        <span style={{ marginLeft: "auto", fontSize: "0.75rem", fontWeight: 600, color: on ? colors.successInk : colors.warnInk }}>
-                          {on ? "Take out of stock" : "Keep in stock"}
-                        </span>
-                      </span>
-                      <span style={{
-                        display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
-                        fontSize: "0.78rem", color: colors.textSecondary, overflowWrap: "anywhere",
-                      }}>{g.names.join(", ")}</span>
-                    </span>
-                  </label>
-                );
-              })}
+              <StockChoiceList
+                groups={groups}
+                isDeducted={(code) => !!deduct[code]}
+                onToggle={(code, on) => setDeduct((d) => ({ ...d, [code]: on }))}
+                disabled={busy}
+              />
             </fieldset>
           )}
 

@@ -1028,7 +1028,9 @@ export default function InvoicePage({ mode = "invoices" }) {
         <div style={styles.savedBanner} role="status">
           <MdCheckCircle size={20} color={colors.successDark} style={{ flexShrink: 0 }} />
           <span style={{ flex: "1 1 200px", minWidth: 0 }}>
-            <strong>Invoice #{justSaved.invoiceNumber} saved.</strong> Next: print it{canFbrValidate && selectedCompany?.hasFbrToken ? ", or check it with FBR" : ""}.
+            {justSaved.fbrFiledManually
+              ? <><strong>Invoice #{justSaved.invoiceNumber} saved</strong> and recorded as filed on FBR's portal{justSaved.fbrInvoiceNumber ? ` as ${justSaved.fbrInvoiceNumber}` : ""}. Next: print it.</>
+              : <><strong>Invoice #{justSaved.invoiceNumber} saved.</strong> Next: print it{canFbrValidate && selectedCompany?.hasFbrToken ? ", or check it with FBR" : ""}.</>}
           </span>
           <InvoiceActionBar
             inv={justSaved}
@@ -1255,6 +1257,7 @@ export default function InvoicePage({ mode = "invoices" }) {
           billsMode
           defaultDivisionId={divisionFilter}
           onClose={() => setShowForm(false)}
+          canRecordManual={canFbrReset}
           onSaved={(created) => handleCreated(created)}
         />
       )}
@@ -1266,6 +1269,7 @@ export default function InvoicePage({ mode = "invoices" }) {
           billsMode
           defaultDivisionId={divisionFilter}
           onClose={() => setShowStandaloneForm(false)}
+          canRecordManual={canFbrReset}
           onSaved={(created) => handleCreated(created)}
         />
       )}

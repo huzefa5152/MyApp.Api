@@ -482,6 +482,97 @@ def suite_filed_manually(base, token):
         check("MCP commit keeps the chosen HS code in stock", all(i.get("keepInStock") for i in f2.get("items", [])), f2.get("items"))
 
 
+def suite_filed_at_create(base, token):
+    """'Already filed on FBR's portal' chosen on the New invoice forms (2026-10-29): the invoice is
+    saved and recorded as filed in one request, on both create paths, with a per-HS stock choice."""
+    print("\n=== Filed on FBR's portal, chosen while creating ===")
+    hard = make_company(base, token, f"_test_fileatcreate_hard {SUFFIX}", hard_block=True)
+    soft = make_company(base, token, f"_test_fileatcreate_soft {SUFFIX}")
+    items = {}
+    for co in (hard, soft):
+        for key, hs in (("valve", "8481.8090"), ("elbow", "7307.1190")):
+            st, it = http("POST", f"/api/itemtypes?companyId={co['id']}", base, token=token, body={
+                "name": f"FC {key} {co['id']} {SUFFIX}", "hsCode": hs, "uom": UNIT, "isFavorite": True})
+            if not check(f"item {key} in company {co['id']}", st in (200, 201), f"{st} {it}"):
+                return
+            items[(co["id"], key)] = it
+    hard_cl, soft_cl = make_client(base, token, hard["id"]), make_client(base, token, soft["id"])
+
+    def lines(co, qv, qe):
+        return [{"itemTypeId": items[(co["id"], "valve")]["id"], "description": "Valve", "quantity": qv, "uom": UNIT, "unitPrice": 100},
+                {"itemTypeId": items[(co["id"], "elbow")]["id"], "description": "Elbow", "quantity": qe, "uom": UNIT, "unitPrice": 50}]
+
+    def count(co):
+        st, rows = http("GET", f"/api/invoices/company/{co['id']}", base, token=token)
+        return len(rows) if isinstance(rows, list) else -1
+
+    def qty(co, key):
+        it = items[(co["id"], key)]
+        st, rows = http("GET", f"/api/itemtypes?companyId={co['id']}&search={urllib.parse.quote(it['name'])}", base, token=token)
+        row = next((r for r in (rows or []) if r.get("id") == it["id"]), {}) if isinstance(rows, list) else {}
+        return row.get("availableQty")
+
+    def create(co, cl, ls, filing, tok=token):
+        return http("POST", "/api/invoices/standalone", base, token=tok, body={
+            "date": TODAY, "companyId": co["id"], "clientId": cl["id"], "gstRate": 18, "items": ls,
+            "manualFbrFiling": filing})
+
+    n0 = count(hard)
+    st, body = create(hard, hard_cl, lines(hard, 2, 3), {"portalInvoiceNumber": " ", "keepInStockHsCodes": []})
+    check("a portal number is required", st == 400, f"{st} {body}")
+    st, body = create(hard, hard_cl, lines(hard, 2, 3), {"portalInvoiceNumber": "FC-1", "keepInStockHsCodes": ["0101.0000"]})
+    check("an HS code not on the invoice is refused", st == 400 and "not on this invoice" in str(body), f"{st} {body}")
+    check("...and the invoice was rolled back, not left unfiled", count(hard) == n0, (n0, count(hard)))
+    st, body = create(hard, hard_cl, lines(hard, 2, 3), {"portalInvoiceNumber": "FC-1", "keepInStockHsCodes": ["7307.1190"]})
+    check("hard block: a deducted code with no stock is still refused (409)", st == 409, f"{st} {body}")
+    st, inv = create(hard, hard_cl, lines(hard, 2, 3), {"portalInvoiceNumber": "FC-1", "keepInStockHsCodes": ["8481.8090", "7307.1190"]})
+    check("hard block: kept goods need no stock, so it saves", st in (200, 201), f"{st} {str(inv)[:300]}")
+    if st in (200, 201):
+        check("saved already filed, with the portal number and no IRN",
+              inv.get("fbrStatus") == "Submitted" and inv.get("fbrFiledManually") and inv.get("fbrInvoiceNumber") == "FC-1" and not inv.get("fbrIRN"),
+              {k: inv.get(k) for k in ("fbrStatus", "fbrFiledManually", "fbrInvoiceNumber", "fbrIRN")})
+        check("every line kept in stock", all(i.get("keepInStock") for i in inv.get("items", [])), inv.get("items"))
+        check("no stock moved", qty(hard, "valve") == 0 and qty(hard, "elbow") == 0, (qty(hard, "valve"), qty(hard, "elbow")))
+
+    # From a challan, on a company that sells below zero: keep the elbows only.
+    challan_items = [{"description": "Valve", "quantity": 4, "unit": UNIT, "itemTypeId": items[(soft["id"], "valve")]["id"]},
+                     {"description": "Elbow", "quantity": 6, "unit": UNIT, "itemTypeId": items[(soft["id"], "elbow")]["id"]}]
+    st, dc = http("POST", f"/api/deliverychallans/company/{soft['id']}", base, token=token, body={
+        "companyId": soft["id"], "clientId": soft_cl["id"], "poNumber": f"PO-FC-{SUFFIX}", "poDate": TODAY,
+        "deliveryDate": TODAY, "items": challan_items})
+    if check("a billable challan", st in (200, 201), f"{st} {dc}"):
+        v0, e0 = qty(soft, "valve"), qty(soft, "elbow")
+        st, inv2 = http("POST", "/api/invoices", base, token=token, body={
+            "date": TODAY, "companyId": soft["id"], "clientId": soft_cl["id"], "gstRate": 18, "challanIds": [dc["id"]],
+            "items": [{"deliveryItemId": d["id"], "unitPrice": 100, "description": d["description"]} for d in dc["items"]],
+            "manualFbrFiling": {"portalInvoiceNumber": "FC-2", "keepInStockHsCodes": ["7307.1190"]}})
+        check("from a challan: saved already filed", st in (200, 201) and inv2.get("fbrFiledManually") and inv2.get("fbrInvoiceNumber") == "FC-2",
+              f"{st} {str(inv2)[:300]}")
+        check("from a challan: valves left stock, elbows stayed", qty(soft, "valve") == v0 - 4 and qty(soft, "elbow") == e0,
+              (v0, qty(soft, "valve"), e0, qty(soft, "elbow")))
+
+    # Without invoices.fbr.reset the choice is refused and nothing is saved.
+    role_name = f"FileAtCreate NoReset {SUFFIX}"
+    st, role = http("POST", "/api/roles", base, token=token, body={
+        "name": role_name, "description": "file at create test",
+        "permissionKeys": ["bills.list.view", "bills.manage.create.standalone"]})
+    if not check("role without the FBR reset right", st in (200, 201), f"{st} {role}"):
+        return
+    uname = f"fileatcreate_{SUFFIX}"
+    st, user = http("POST", "/api/users", base, token=token, body={
+        "username": uname, "password": "test1234", "fullName": "File At Create Test",
+        "role": role_name, "roleIds": [role["id"]], "companyIds": [soft["id"]]})
+    if not check("user created", st in (200, 201), f"{st} {user}"):
+        return
+    ut = login(base, uname, "test1234")
+    n1 = count(soft)
+    st, body = create(soft, soft_cl, lines(soft, 1, 1), {"portalInvoiceNumber": "FC-3", "keepInStockHsCodes": []}, tok=ut)
+    check("without invoices.fbr.reset -> 403", st == 403, f"{st} {body}")
+    check("...and no invoice was saved", count(soft) == n1, (n1, count(soft)))
+    st, body = create(soft, soft_cl, lines(soft, 1, 1), None, tok=ut)
+    check("the same user still saves an ordinary invoice", st in (200, 201), f"{st} {str(body)[:200]}")
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--base", default="http://localhost:5195")
@@ -493,6 +584,7 @@ def main():
     suite_d7_d8(a.base, token)
     suite_mcp(a.base, token)
     suite_filed_manually(a.base, token)
+    suite_filed_at_create(a.base, token)
     print(f"\n{PASSED}/{PASSED + FAILED} importer invoice screen checks passed")
     sys.exit(1 if FAILED else 0)
 
