@@ -113,7 +113,10 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
   // one member company files with FBR -- a common client kept purely for
   // non-FBR companies must stay saveable without them.
   const regType = form.registrationType;
-  const showNtn  = regType === "Registered" || regType === "FTN";
+  // NTN shows for every type and is required only for Registered; an NTN on
+  // any other type is kept and prints through the NTN merge fields.
+  const showNtn  = !!regType;
+  const ntnRequired = regType === "Registered";
   const showStrn = regType === "Registered";
   // CNIC for every type (see ClientForm); optional throughout.
   const showCnic = !!regType;
@@ -162,7 +165,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
       setForm((f) => ({
         ...f,
         registrationType: value,
-        ntn:  (value === "Registered" || value === "FTN") ? f.ntn  : "",
+        ntn:  value ? f.ntn : "",
         strn: (value === "Registered")                    ? f.strn : "",
         cnic: f.cnic,
       }));
@@ -319,8 +322,8 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
       setError("Province is required — one of this client's companies files with FBR.");
       return;
     }
-    if (showNtn && !form.ntn?.trim()) {
-      setError(`${ntnLabel} is required for ${regType} entities.`);
+    if (ntnRequired && !form.ntn?.trim()) {
+      setError("NTN is required for Registered entities.");
       return;
     }
     // STRN is optional (2026-09-10): FBR's buyer block does not carry it.
@@ -455,7 +458,9 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                   <div className="form-grid-2col">
                     {showNtn && (
                       <div style={formStyles.formGroup}>
-                        <label style={formStyles.label}>{ntnLabel} *</label>
+                        <label style={formStyles.label}>
+                          {ntnLabel} {ntnRequired ? "*" : <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional)</span>}
+                        </label>
                         <input
                           name="ntn"
                           value={form.ntn}
