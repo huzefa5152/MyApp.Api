@@ -90,7 +90,7 @@ export default function ClientList({ clients, summaryById = {}, onEdit, onCopy, 
     if (impact && impact.fbrSubmittedInvoices > 0) {
       await confirm({
         title: "Can't delete this client",
-        message: `"${client.name}" has ${impact.fbrSubmittedInvoices} FBR-submitted bill${impact.fbrSubmittedInvoices !== 1 ? "s" : ""}, which can't be deleted for compliance. Handle those in the Invoices tab first.`,
+        message: `"${client.name}" has ${impact.fbrSubmittedInvoices} FBR-submitted bill${impact.fbrSubmittedInvoices !== 1 ? "s" : ""}, which can't be deleted for compliance. Handle those on the Invoices screen first.`,
         variant: "warning", confirmText: "OK", cancelText: "Close",
       });
       return;

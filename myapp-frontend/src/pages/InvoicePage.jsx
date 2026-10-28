@@ -1603,7 +1603,7 @@ export default function InvoicePage({ mode = "invoices" }) {
             setCorrectTarget(null);
             if (selectedCompany) fetchInvoices(selectedCompany.id, page);
             if (correctionMode === "supp") {
-              notify(`Bill #${doc.invoiceNumber} created for the balance quantity — classify it for FBR in Invoice mode.`, "success");
+              notify(`Invoice #${doc.invoiceNumber} created for the balance quantity — check its lines, then validate and submit it to FBR.`, "success");
               navigate(`/invoices?search=${doc.invoiceNumber}`);
             } else {
               const kind = correctionMode === "credit" ? "Credit" : "Debit";

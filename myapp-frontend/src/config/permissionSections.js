@@ -32,7 +32,6 @@ export const PERMISSION_SECTIONS = [
       { key: "Sales Quotes" },
       { key: "Sales Orders" },
       { key: "Delivery Challans" },
-      { key: "Bills" },
       { key: "Invoices" },
       { key: "Withholding Tax" },
       { key: "Item Rate History" },

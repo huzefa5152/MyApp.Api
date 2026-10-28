@@ -658,7 +658,7 @@ export default function PurchaseBillsPage() {
                 <div style={{ padding: "3rem 0", textAlign: "center", color: colors.textSecondary }}>Loading...</div>
               ) : awaitingBills.length === 0 ? (
                 <div style={{ padding: "3rem 1rem", textAlign: "center", color: colors.textSecondary, fontSize: "0.9rem" }}>
-                  No sale bills awaiting procurement. Either every bill is FBR-ready, or some lines are missing Item Type — fix those on the Bills page first.
+                  No sale bills awaiting procurement. Either every bill is FBR-ready, or some lines are missing Item Type — fix those on the Invoices screen first.
                 </div>
               ) : (() => {
                 const filtered = awaitingBills.filter(b => {

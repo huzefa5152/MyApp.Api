@@ -2141,7 +2141,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       <p style={styles.fbrToggleHint}>
                         <b>*</b> required ·
                         {billsMode ? (
-                          <> every line needs an <b>item type</b> or a <b>non-inventory item</b> — an item type also classifies the line (HS Code / UOM / Sale Type ride along) and shows it on the Invoices tab</>
+                          <> every line needs an <b>item type</b> or a <b>non-inventory item</b> — an item type also classifies the line (HS Code / UOM / Sale Type ride along)</>
                         ) : (
                           <> <b>Description, UOM, HS Code, Sale Type</b> all auto-fill from the picked Item Type</>
                         )}

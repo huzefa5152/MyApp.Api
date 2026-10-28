@@ -214,45 +214,39 @@ namespace MyApp.Api.Helpers
             new("attachments.manage.upload",  "Folders & Attachments", "Attachments", "Upload", "Upload an attachment"),
             new("attachments.manage.delete",  "Folders & Attachments", "Attachments", "Delete", "Delete an attachment"),
 
-            // ── Bills (data entry — no FBR concerns) ────────────────────────
-            // Sales is split across two screens that view the same underlying
-            // bill data:
-            //   • Bills tab — operational billing (create / edit / delete /
-            //     print). Item Type is the only FBR-classification field
-            //     exposed here; HS Code / Sale Type / scenario picker are
-            //     hidden.
-            //   • Invoices tab — FBR classification & submission (Tax Invoice
-            //     print / Validate / Submit / FBR preview / Exclude).
-            // Each side has its own permissions so a bookkeeper role can hold
-            // bills.* without invoices.fbr.*, and an FBR officer role can hold
-            // invoices.fbr.* without bills.manage.*.
-            new("bills.list.view",          "Bills", "Bills",   "See list",   "View the bills list (powers both Bills and Invoices tabs)"),
-            new("bills.manage.create",      "Bills", "Bills", "Add from challan", "Create a new bill (challan-linked)"),
+            // ── Invoices (one screen, 2026-10-28) ───────────────────────────
+            // The importer's Bills and Invoices tabs are one Invoices screen.
+            // The keys are unchanged (roles hold grants by key): bills.* is
+            // the "Making invoices" part (create / edit / void / delete /
+            // print), invoices.* the filing part. A bookkeeper role can still
+            // hold bills.* without invoices.fbr.*, and an FBR officer role
+            // invoices.fbr.* without bills.manage.*. Either list key opens the
+            // screen; either print key prints the one Invoice document.
+            new("bills.list.view",          "Invoices", "Making invoices", "See list", "Open the Invoices screen to make and edit invoices"),
+            new("bills.manage.create",      "Invoices", "Making invoices", "Add from challan", "Make a new invoice from delivery challans"),
             // Standalone create — operator can issue a bill WITHOUT a linked
             // delivery challan. Carved out as a separate permission so a role
             // can be granted ONLY this without also gaining the regular
             // create-from-challan flow, or vice-versa.
-            new("bills.manage.create.standalone", "Bills", "Bills", "Add without challan", "Create a bill directly without linking a delivery challan"),
-            new("bills.manage.update",      "Bills", "Bills", "Edit", "Edit a bill (all fields)"),
-            new("bills.manage.delete",      "Bills", "Bills", "Delete", "Delete a bill"),
+            new("bills.manage.create.standalone", "Invoices", "Making invoices", "Add without challan", "Make an invoice directly, without a delivery challan"),
+            new("bills.manage.update",      "Invoices", "Making invoices", "Edit", "Edit an invoice that is not yet filed with FBR (all fields)"),
+            new("bills.manage.delete",      "Invoices", "Making invoices", "Delete", "Delete an invoice that is not yet filed with FBR"),
             // Void is a distinct, less-destructive sibling of Delete: it keeps
             // the bill (and its number, so the sequence stays gap-free) but
             // marks it Cancelled and frees its challan(s) for re-billing.
             // Separate key so a role can be allowed to void without also being
             // trusted to hard-delete the trailing bill.
-            new("bills.manage.void",        "Bills", "Bills", "Void",   "Void (cancel) a non-submitted bill — keeps the number gap-free and reverts its delivery challan(s) to Pending"),
-            new("bills.print.view",         "Bills", "Bills",  "Print / PDF",   "Print or download a Bill (Bill print, Bill PDF, Bill XLS)"),
+            new("bills.manage.void",        "Invoices", "Making invoices", "Void", "Void (cancel) an invoice not yet filed with FBR — keeps the number gap-free and reverts its delivery challan(s) to Pending"),
+            new("bills.print.view",         "Invoices", "Making invoices", "Print / PDF", "Print or download an invoice (print, PDF, Excel)"),
 
-            // ── Invoices (FBR classification + submission) ──────────────────
-            new("invoices.list.view",      "Invoices", "Invoices",   "See list",   "View the Invoices tab (FBR submission view of bills)"),
-            // Narrow edit permissions live under Invoices because item-type
-            // classification is the Invoices tab's responsibility — a Bills-
-            // only user (bookkeeper) doesn't need to set ItemType. The
-            // bookkeeping fields (price, dates, descriptions) stay locked
-            // when these are the user's only update perm; only Item Type
-            // (and optionally Qty) become editable.
-            new("invoices.manage.update.itemtype",     "Invoices", "Invoices", "Change item type",       "Edit ONLY the Item Type column on a bill from the Invoices tab"),
-            new("invoices.manage.update.itemtype.qty", "Invoices", "Invoices", "Change item type and quantity", "Edit Item Type and Quantity columns on a bill from the Invoices tab"),
+            // ── Invoices: filing with FBR ──────────────────────────────────
+            new("invoices.list.view",      "Invoices", "Invoices",   "See list",   "Open the Invoices screen to see invoices and their FBR status"),
+            // Narrow item-type / quantity edits for the FBR adjustment overlay.
+            // The importer has no FBR adjustment (one Invoices screen, full
+            // edit only), so these open nothing here; kept so the key set
+            // matches the other lines and no grant is lost.
+            new("invoices.manage.update.itemtype",     "Invoices", "Invoices", "Change item type",       "Not used on this installation: invoices are corrected with the full edit (Edit)"),
+            new("invoices.manage.update.itemtype.qty", "Invoices", "Invoices", "Change item type and quantity", "Not used on this installation: invoices are corrected with the full edit (Edit)"),
             // Reverse an FBR-submitted invoice → auto-generate a Credit Note
             // (return/reversal) or Debit Note (upward correction). The note is
             // created unsubmitted so it can be validated then submitted like an
@@ -283,7 +277,7 @@ namespace MyApp.Api.Helpers
             // sanctioned way to unlock the double-submit guard. High-trust: it can
             // clear a real IRN, so keep it to admins / senior FBR officers.
             new("invoices.fbr.reset",      "Invoices", "FBR filing",    "Reset a stuck submission", "Reset a bill's FBR submission state (clear for resubmit, or record a confirmed IRN) after a timed-out/uncertain submit"),
-            new("invoices.print.view",     "Invoices", "Invoices",  "Print / PDF",   "Print or download a Tax Invoice (Tax Invoice print, Tax PDF, Tax XLS)"),
+            new("invoices.print.view",     "Invoices", "Invoices",  "Print / PDF",   "Print or download an invoice (print, PDF, Excel)"),
 
             // ── PO Formats (Purchase-Order parser registry) ─────────────────
             new("poformats.manage.view",   "PO Formats", "PO Formats", "See list",   "View registered PO formats"),
