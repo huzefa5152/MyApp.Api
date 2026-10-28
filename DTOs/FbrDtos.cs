@@ -237,6 +237,12 @@ namespace MyApp.Api.DTOs
         /// <summary>The invoice number used on the FBR portal. Required for mode "recordManual".</summary>
         public string? ManualFbrInvoiceNumber { get; set; }
 
+        /// <summary>
+        /// Mode "recordManual" only: HS codes on the invoice whose goods stay in
+        /// stock. Empty = every line leaves stock, as it did when saved.
+        /// </summary>
+        public List<string>? KeepInStockHsCodes { get; set; }
+
         /// <summary>Why the reset is being done — required, written to the audit log.</summary>
         public string Reason { get; set; } = "";
     }

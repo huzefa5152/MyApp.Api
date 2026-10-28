@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { MdClose, MdInfoOutline } from "react-icons/md";
 import { formStyles, modalSizes, colors } from "../theme";
 import { resetFbrSubmission } from "../api/fbrApi";
+import { stockGroups } from "../utils/invoiceActions";
 
 /**
  * Record that an invoice was filed BY HAND on FBR's portal (importer,
@@ -13,8 +14,16 @@ import { resetFbrSubmission } from "../api/fbrApi";
  * The server is the authority: invoices.fbr.reset, the invoice's company, and
  * only an invoice that has not been sent to FBR (the caller renders this for
  * holders of the key, on such invoices only).
+ *
+ * Stock: the goods left stock when the invoice was saved. A filing made by
+ * hand may cover goods the operator does not want deducted, so each HS code
+ * on the invoice gets a "take out of stock" choice (default: yes). The ones
+ * left unticked go to the server as keepInStockHsCodes.
  */
-export default function FbrRecordManualModal({ invoice, onClose, onDone }) {
+
+export default function FbrRecordManualModal({ invoice, trackStock = true, onClose, onDone }) {
+  const groups = useMemo(() => (trackStock ? stockGroups(invoice.items) : []), [invoice, trackStock]);
+  const [deduct, setDeduct] = useState(() => Object.fromEntries(groups.map((g) => [g.code, !g.keep])));
   const [portalNumber, setPortalNumber] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -29,6 +38,7 @@ export default function FbrRecordManualModal({ invoice, onClose, onDone }) {
       await resetFbrSubmission(invoice.id, {
         mode: "recordManual",
         manualFbrInvoiceNumber: portalNumber.trim(),
+        keepInStockHsCodes: groups.filter((g) => !deduct[g.code]).map((g) => g.code),
         reason: reason.trim(),
       });
       onDone?.();
@@ -63,13 +73,40 @@ export default function FbrRecordManualModal({ invoice, onClose, onDone }) {
             </span>
           </div>
 
-          {/* Stock is not this dialog's business: an invoice takes its goods out
-              of stock when it is SAVED, whatever its FBR state. Say so, so
-              nobody records the filing expecting it to move stock. */}
-          <p style={{ margin: "0 0 1rem", fontSize: "0.8rem", color: colors.textSecondary }}>
-            <b>Stock:</b> the goods on this invoice already left stock when it was saved. Recording the
-            filing does not change stock.
-          </p>
+          {groups.length > 0 && (
+            <fieldset style={{ border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "0.65rem 0.85rem 0.4rem", margin: "0 0 1rem", minWidth: 0 }}>
+              <legend style={{ ...formStyles.label, padding: "0 0.3rem", margin: 0 }}>Stock</legend>
+              <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: colors.textSecondary }}>
+                These goods left stock when the invoice was saved. Untick an HS code to put its goods back in stock.
+              </p>
+              {groups.map((g) => {
+                const on = !!deduct[g.code];
+                return (
+                  <label key={g.code} style={{
+                    display: "flex", gap: 10, alignItems: "flex-start", padding: "0.55rem 0.2rem", minHeight: 44,
+                    borderTop: `1px solid ${colors.cardBorder}`, cursor: busy ? "default" : "pointer",
+                  }}>
+                    <input type="checkbox" checked={on} disabled={busy}
+                      onChange={(e) => setDeduct((d) => ({ ...d, [g.code]: e.target.checked }))}
+                      style={{ width: 20, height: 20, marginTop: 2, flexShrink: 0, accentColor: colors.blue }} />
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ display: "flex", flexWrap: "wrap", gap: "0.2rem 0.6rem", alignItems: "baseline" }}>
+                        <b style={{ fontSize: "0.86rem", fontVariantNumeric: "tabular-nums" }}>HS {g.code}</b>
+                        <span style={{ fontSize: "0.8rem", color: colors.textSecondary }}>{g.qtyLabel}</span>
+                        <span style={{ marginLeft: "auto", fontSize: "0.75rem", fontWeight: 600, color: on ? colors.successInk : colors.warnInk }}>
+                          {on ? "Take out of stock" : "Keep in stock"}
+                        </span>
+                      </span>
+                      <span style={{
+                        display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+                        fontSize: "0.78rem", color: colors.textSecondary, overflowWrap: "anywhere",
+                      }}>{g.names.join(", ")}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </fieldset>
+          )}
 
           <div style={formStyles.formGroup}>
             <label style={formStyles.label}>Invoice number used on FBR's portal *</label>

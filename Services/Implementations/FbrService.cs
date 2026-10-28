@@ -1725,11 +1725,27 @@ namespace MyApp.Api.Services.Implementations
         /// </summary>
         public async Task<FbrResetResult> ResetSubmissionAsync(
             int invoiceId, string mode, string? irn, string reason, string? actorUserName,
-            string? manualFbrInvoiceNumber = null)
+            string? manualFbrInvoiceNumber = null, IReadOnlyCollection<string>? keepInStockHsCodes = null)
         {
             var invoice = await _invoiceRepo.GetByIdAsync(invoiceId);
             if (invoice == null)
                 return new FbrResetResult { Success = false, Message = "Invoice not found." };
+
+            // HS codes whose goods stay in stock — only meaningful when recording
+            // a filing made by hand. Every other mode puts the invoice back on
+            // the normal footing, where every classified line leaves stock.
+            var keepCodes = new HashSet<string>(
+                (keepInStockHsCodes ?? Array.Empty<string>()).Select(c => (c ?? "").Trim()).Where(c => c.Length > 0),
+                StringComparer.OrdinalIgnoreCase);
+            if (keepCodes.Count > 0 && !string.Equals((mode ?? "").Trim(), "recordManual", StringComparison.OrdinalIgnoreCase))
+                return new FbrResetResult { Success = false, Message = "Only a filing recorded as made by hand can keep goods in stock." };
+            var lineCodes = invoice.Items
+                .Select(ii => (ii.HSCode ?? ii.ItemType?.HSCode ?? "").Trim())
+                .Where(c => c.Length > 0)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var unknown = keepCodes.Where(c => !lineCodes.Contains(c)).ToList();
+            if (unknown.Count > 0)
+                return new FbrResetResult { Success = false, Message = $"HS code {string.Join(", ", unknown)} is not on this invoice." };
 
             mode = (mode ?? "").Trim();
             var before = $"status={invoice.FbrStatus ?? "(none)"}, irn={invoice.FbrIRN ?? "(none)"}";
@@ -1789,7 +1805,23 @@ namespace MyApp.Api.Services.Implementations
                 return new FbrResetResult { Success = false, Message = "Unknown reset mode. Use 'retry', 'recordExisting' or 'recordManual'." };
             }
 
-            await _invoiceRepo.UpdateAsync(invoice);
+            // Which lines keep their goods. Changing it moves stock, so the FBR
+            // state, the flags and the stock movements commit together.
+            var stockChanged = false;
+            foreach (var ii in invoice.Items)
+            {
+                var keep = keepCodes.Contains((ii.HSCode ?? ii.ItemType?.HSCode ?? "").Trim());
+                if (ii.KeepInStock != keep) { ii.KeepInStock = keep; stockChanged = true; }
+            }
+            var kept = invoice.Items.Where(ii => ii.KeepInStock)
+                .Select(ii => (ii.HSCode ?? ii.ItemType?.HSCode ?? "").Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+            await using (var tx = await _db.Database.BeginOrJoinTransactionAsync())
+            {
+                await _invoiceRepo.UpdateAsync(invoice);
+                if (stockChanged) await _stock.SyncInvoiceStockMovementsAsync(invoice);
+                await tx.CommitAsync();
+            }
 
             try
             {
@@ -1804,6 +1836,8 @@ namespace MyApp.Api.Services.Implementations
                     ExceptionType = "Fbr.ResetSubmission",
                     Message = $"Bill #{invoice.InvoiceNumber}: FBR state reset (mode={mode}). "
                             + $"Before: {before}. After: status={invoice.FbrStatus ?? "(none)"}, irn={invoice.FbrIRN ?? "(none)"}. "
+                            + (kept.Count > 0 ? $"Kept in stock: HS {string.Join(", ", kept)}. " : "")
+                            + (stockChanged ? "Stock re-synced. " : "")
                             + $"Reason: {trimmedReason}",
                 });
             }
@@ -1822,6 +1856,7 @@ namespace MyApp.Api.Services.Implementations
                     ? "FBR state cleared. The bill can be submitted again."
                     : invoice.FbrFiledManually
                         ? "Recorded as filed manually at FBR. The bill will not be sent again."
+                          + (kept.Count > 0 ? $" HS {string.Join(", ", kept)} stays in stock." : "")
                         : "IRN recorded. The bill is now marked Submitted.",
             };
         }

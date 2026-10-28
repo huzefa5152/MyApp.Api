@@ -21,7 +21,7 @@ namespace MyApp.Api.Services.Interfaces
         /// </summary>
         Task<FbrResetResult> ResetSubmissionAsync(
             int invoiceId, string mode, string? irn, string reason, string? actorUserName,
-            string? manualFbrInvoiceNumber = null);
+            string? manualFbrInvoiceNumber = null, IReadOnlyCollection<string>? keepInStockHsCodes = null);
 
         // Reference APIs v1 (V1.12 §5.1–§5.6)
         Task<List<FbrProvinceDto>> GetProvincesAsync(int companyId);

@@ -1766,13 +1766,17 @@ string. Importers never adjust quantity or item type for FBR, so:
 - **Filed by hand on FBR's portal** (2026-10-28): the card's "Filed on FBR portal"
   action (`invoices.fbr.reset`, unsent invoices, FBR on) and MCP
   `prepare_fbr_reset` mode `recordManual` both call the reset valve, which marks
-  the bill filed with no IRN and the portal's number. It never moves stock: an
-  invoice takes its goods out when it is SAVED, whatever its FBR state (all
-  manual filings on production carry their stock-out). Such a bill stays
+  the bill filed with no IRN and the portal's number. An invoice takes its goods
+  out when it is SAVED, so by default recording changes no stock; the dialog
+  lists each HS code on the invoice and the operator may untick one to keep its
+  goods in stock (`keepInStockHsCodes` → `InvoiceItem.KeepInStock`, which
+  `StockService` skips; edits keep it, mode `retry` clears it and takes the
+  goods out again; codes not on the invoice are refused). Such a bill stays
   editable (`IsInvoiceEditable`), so the screen shows Edit; it gets no credit
   note or correction, because a note is filed against an IRN it does not have.
-- Suites: `python scripts/test_importer_invoice_screen.py --base <url>` (56),
-  `node scripts/test_invoice_screen.mjs` (51).
+- Suites: `python scripts/test_importer_invoice_screen.py --base <url>` (67),
+  `node scripts/test_invoice_screen.mjs` (53); the reflow gate's suite 8 pins
+  the kept-in-stock choice.
 
 ### 5c. Customer Portal — the only anonymous surface
 

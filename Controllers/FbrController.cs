@@ -176,7 +176,7 @@ namespace MyApp.Api.Controllers
 
             var actor = User.Identity?.Name;
             var result = await _fbrService.ResetSubmissionAsync(
-                invoiceId, request.Mode, request.Irn, request.Reason, actor, request.ManualFbrInvoiceNumber);
+                invoiceId, request.Mode, request.Irn, request.Reason, actor, request.ManualFbrInvoiceNumber, request.KeepInStockHsCodes);
 
             return result.Success ? Ok(result) : BadRequest(result);
         }

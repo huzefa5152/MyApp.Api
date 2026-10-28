@@ -645,6 +645,7 @@ namespace MyApp.Api.Services.Implementations
             {
                 if (!item.ItemTypeId.HasValue) continue;
                 if (!trackedItemTypeIds.Contains(item.ItemTypeId.Value)) continue;
+                if (item.KeepInStock) continue;   // filed by hand, operator kept it in stock
                 var q = overlayQtyByItemId.TryGetValue(item.Id, out var adjQty) ? adjQty : item.Quantity;
                 if (q <= 0m) continue;
                 desired.TryGetValue(item.ItemTypeId.Value, out var cur);
@@ -698,6 +699,7 @@ namespace MyApp.Api.Services.Implementations
             {
                 if (!item.ItemTypeId.HasValue) continue;
                 if (!trackedItemTypeIds.Contains(item.ItemTypeId.Value)) continue;
+                if (item.KeepInStock) continue;   // filed by hand, operator kept it in stock
                 var effectiveQty = overlayQtyByItemId.TryGetValue(item.Id, out var adjQty)
                     ? adjQty
                     : item.Quantity;

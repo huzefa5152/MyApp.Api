@@ -86,6 +86,14 @@ namespace MyApp.Api.Models
         public decimal? FixedNotifiedValueOrRetailPrice { get; set; }
 
         /// <summary>
+        /// The goods on this line stay in stock (2026-10-28). Set only when an
+        /// invoice filed by hand on FBR's portal is recorded and the operator
+        /// chose not to take that HS code out of stock; cleared when the filing
+        /// is undone. StockService skips the line, so it moves no stock.
+        /// </summary>
+        public bool KeepInStock { get; set; }
+
+        /// <summary>
         /// FBR SRO / Schedule reference for reduced-rate or exempt items. FBR
         /// rejects non-18% submissions with [0077] unless this is populated.
         /// Common values: "EIGHTH SCHEDULE Table 1", "SRO 297(I)/2023".

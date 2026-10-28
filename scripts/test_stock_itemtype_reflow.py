@@ -790,6 +790,49 @@ def suite_deleted_item_hidden(base, token, cid, supplier, suffix):
           not in_grid(base, token, cid, eid), "still showing on grid")
 
 
+# ── Suite 8 — Filed by hand on FBR's portal: keep chosen HS codes in stock ──
+# 2026-10-28: recording a hand filing may keep some HS codes' goods in stock
+# (InvoiceItem.KeepInStock). The sync skips those lines; edits keep the
+# choice; undoing the filing ("retry") takes the goods out again.
+def suite_manual_filing_keep(base, token, cid, client, supplier, suffix):
+    s = "8. Manual filing keeps chosen HS codes"
+    print(f"\n=== {s} ===")
+    A = make_item_type(base, token, f"MF_A_{suffix}", hs=next_hs())
+    B = make_item_type(base, token, f"MF_B_{suffix}", hs=next_hs())
+    if not (A and B):
+        check(s, "item types created", False, "creation failed"); return
+    st, _ = prestock(base, token, cid, supplier["id"], [(A, 100), (B, 100)])
+    check(s, "8.0 pre-stock A,B +100 ok", st in (200, 201), f"{st}")
+    st, inv = create_standalone(base, token, cid, client["id"], [
+        {"itemTypeId": A["id"], "description": "a", "quantity": 10, "uom": "Pcs", "unitPrice": 5},
+        {"itemTypeId": B["id"], "description": "b", "quantity": 20, "uom": "Pcs", "unitPrice": 5}])
+    check(s, "8.1 sell A×10, B×20 ok", st in (200, 201), f"{st} {inv}")
+    if st not in (200, 201):
+        return
+    iid = inv["id"]
+    oa, ob = (lambda: onhand(base, token, cid, A["id"])), (lambda: onhand(base, token, cid, B["id"]))
+    check(s, "8.1 A=90, B=80", approx(oa(), 90) and approx(ob(), 80), f"A={oa()} B={ob()}")
+    st, body = http("POST", f"/api/fbr/{iid}/reset-submission", base, token=token, body={
+        "mode": "recordManual", "manualFbrInvoiceNumber": f"P-{suffix}",
+        "keepInStockHsCodes": [B["hsCode"]], "reason": "reflow suite"})
+    check(s, "8.2 record as filed by hand, keeping B's HS code", st == 200, f"{st} {body}")
+    check(s, "8.2 B back to 100, A stays 90", approx(oa(), 90) and approx(ob(), 100), f"A={oa()} B={ob()}")
+    st, full = http("GET", f"/api/invoices/{iid}", base, token=token)
+    items = [{"id": i["id"], "itemTypeId": i["itemTypeId"], "description": i["description"],
+              "quantity": float(i["quantity"]) + 1, "uom": i.get("uom") or "Pcs", "unitPrice": float(i["unitPrice"])}
+             for i in (full or {}).get("items", [])]
+    st, upd = http("PUT", f"/api/invoices/{iid}", base, token=token, body={"gstRate": 18, "items": items})
+    check(s, "8.3 edit qty +1 on both lines ok", st == 200, f"{st} {str(upd)[:200]}")
+    check(s, "8.3 A=89 (reflowed), B still 100 (kept)", approx(oa(), 89) and approx(ob(), 100), f"A={oa()} B={ob()}")
+    st, body = http("POST", f"/api/fbr/{iid}/reset-submission", base, token=token,
+                    body={"mode": "retry", "reason": "reflow suite undo"})
+    check(s, "8.4 undo the filing ok", st == 200, f"{st} {body}")
+    check(s, "8.4 B out again = 79, A = 89", approx(oa(), 89) and approx(ob(), 79), f"A={oa()} B={ob()}")
+    st, _ = http("DELETE", f"/api/invoices/{iid}", base, token=token)
+    check(s, "8.5 delete restores A,B to 100", st in (200, 204) and approx(oa(), 100) and approx(ob(), 100),
+          f"{st} A={oa()} B={ob()}")
+
+
 # ── Reporter ───────────────────────────────────────────────────────
 def print_report() -> int:
     by_suite: dict[str, list[tuple[str, str]]] = {}
@@ -834,6 +877,7 @@ def main() -> int:
         suite_challan_reflow(args.base, token, cid, client, supplier, suffix)
         suite_noop_delta(args.base, token, cid, client, supplier, suffix)
         suite_deleted_item_hidden(args.base, token, cid, supplier, suffix)
+        suite_manual_filing_keep(args.base, token, cid, client, supplier, suffix)
     finally:
         teardown(args.base, token, company, args.keep)
 

@@ -375,6 +375,7 @@ namespace MyApp.Api.Services.Implementations
                 UnitPrice = ii.UnitPrice,
                 LineTotal = ii.LineTotal,
                 HSCode = ii.HSCode,
+                KeepInStock = ii.KeepInStock,
                 FbrUOMId = ii.FbrUOMId,
                 SaleType = ii.SaleType,
                 RateId = ii.RateId,

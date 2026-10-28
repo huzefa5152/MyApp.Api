@@ -292,4 +292,6 @@ working; their descriptions say invoice.
 
 `prepare_fbr_reset` also takes mode `recordManual` (with `manualFbrInvoiceNumber`)
 for a bill filed by hand on FBR's portal: marked filed with no IRN, never sent,
-still editable. It does not move stock -- the invoice took its stock when saved.
+still editable. The invoice took its stock when saved; `keepInStockHsCodes`
+lists HS codes on it whose goods go back to stock instead (omit it to keep the
+deduction). A code not on the invoice is refused at commit.

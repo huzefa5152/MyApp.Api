@@ -111,8 +111,11 @@ export function buildInvoiceActions(inv, ctx) {
 export function statusReason(inv) {
   if (inv.isCancelled) return `Voided${inv.cancelReason ? ` — ${inv.cancelReason}` : ""}. Kept for its number.`;
   if (inv.fbrCancelledAt) return "Withdrawn on FBR's portal — no longer counts as a sale.";
-  if (isFiled(inv) && inv.fbrFiledManually)
-    return `Filed by hand on FBR's portal${inv.fbrInvoiceNumber ? ` as ${inv.fbrInvoiceNumber}` : ""} — edits here are not sent to FBR.`;
+  if (isFiled(inv) && inv.fbrFiledManually) {
+    const kept = [...new Set((inv.items || []).filter((i) => i.keepInStock && i.hsCode).map((i) => i.hsCode))];
+    return `Filed by hand on FBR's portal${inv.fbrInvoiceNumber ? ` as ${inv.fbrInvoiceNumber}` : ""} — edits here are not sent to FBR.`
+      + (kept.length ? ` HS ${kept.join(", ")} kept in stock.` : "");
+  }
   if (isFiled(inv)) return "Filed with FBR — correct it with a credit or debit note.";
   if (inv.fbrStatus === "Submitting") return "Being sent to FBR — wait and refresh; do not submit again.";
   if (inv.fbrStatus === "Uncertain") return "FBR's answer was lost — check FBR's portal before anything else.";
@@ -142,4 +145,23 @@ export function fbrChip(inv, { fbrEnabled = true, validated = false, futureDated
     title: (inv.fbrMissing || []).length ? `Missing: ${inv.fbrMissing.join(", ")}` : "Some FBR details are missing." };
   if (validated) return { label: "Checked", tone: "info", title: "Passed FBR validation. Ready to submit." };
   return { label: "Not filed", tone: "warn", title: "Not sent to FBR yet." };
+}
+
+/** One row per HS code on the invoice's item lines, with what it covers. */
+export function stockGroups(items = []) {
+  const byCode = new Map();
+  for (const it of items) {
+    const code = (it.hsCode || "").trim();
+    if (!it.itemTypeId || !code) continue;
+    const g = byCode.get(code) || { code, names: new Set(), qty: 0, uoms: new Set(), keep: false };
+    g.names.add(it.itemTypeName || it.description || "Item");
+    g.qty += Number(it.quantity) || 0;
+    if (it.uom) g.uoms.add(it.uom);
+    g.keep = g.keep || !!it.keepInStock;
+    byCode.set(code, g);
+  }
+  return [...byCode.values()].map((g) => ({
+    code: g.code, names: [...g.names], keep: g.keep,
+    qtyLabel: `${+g.qty.toFixed(4)}${g.uoms.size === 1 ? ` ${[...g.uoms][0]}` : ""}`,
+  }));
 }

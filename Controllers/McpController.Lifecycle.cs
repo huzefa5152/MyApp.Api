@@ -98,8 +98,8 @@ namespace MyApp.Api.Controllers
                 new("prepare_fbr_submit", "Prepare SUBMITTING a bill to FBR. On commit FBR issues a legal invoice number (IRN) that cannot be undone; run validate_bill_fbr first. The ERP refuses a bill already filed or in flight.",
                     Obj(new { companyId = CompanyProp, invoiceId = Int(), scenarioId = Str(10), idempotencyKey = IdemProp }, "companyId", "invoiceId"),
                     Build: BuildFbrSubmitAsync, PerHour: 20, Noun: "FBR submissions"),
-                new("prepare_fbr_reset", "Prepare the recovery for a bill's FBR state: for a bill stuck in an uncertain state, mode 'retry' clears it so it can be submitted again (only once FBR confirms no invoice exists) and 'recordExisting' records the IRN FBR shows; for a bill never sent from here, 'recordManual' records that it was filed by hand on FBR's portal (give manualFbrInvoiceNumber, the number used there; it is then never sent and stays editable). Never contacts FBR. A reason is required.",
-                    Obj(new { companyId = CompanyProp, invoiceId = Int(), mode = new { type = "string", @enum = new[] { "retry", "recordExisting", "recordManual" } }, irn = Str(100), manualFbrInvoiceNumber = Str(100), reason = Str(500), idempotencyKey = IdemProp }, "companyId", "invoiceId", "mode", "reason"),
+                new("prepare_fbr_reset", "Prepare the recovery for a bill's FBR state: for a bill stuck in an uncertain state, mode 'retry' clears it so it can be submitted again (only once FBR confirms no invoice exists) and 'recordExisting' records the IRN FBR shows; for a bill never sent from here, 'recordManual' records that it was filed by hand on FBR's portal (give manualFbrInvoiceNumber, the number used there; it is then never sent and stays editable). Its goods left stock when it was saved; list in keepInStockHsCodes any HS codes on it whose goods should stay in stock instead (omit to keep the deduction). Never contacts FBR. A reason is required.",
+                    Obj(new { companyId = CompanyProp, invoiceId = Int(), mode = new { type = "string", @enum = new[] { "retry", "recordExisting", "recordManual" } }, irn = Str(100), manualFbrInvoiceNumber = Str(100), keepInStockHsCodes = new { type = "array", maxItems = 200, items = Str(20) }, reason = Str(500), idempotencyKey = IdemProp }, "companyId", "invoiceId", "mode", "reason"),
                     Build: BuildFbrResetAsync, PerHour: 10, Noun: "FBR resets"),
                 new("prepare_fbr_exclusion", "Prepare marking a bill as not to be filed with FBR (excluded = true), or filable again (false).",
                     Obj(new { companyId = CompanyProp, invoiceId = Int(), excluded = new { type = "boolean" }, idempotencyKey = IdemProp }, "companyId", "invoiceId", "excluded"),
@@ -299,11 +299,14 @@ namespace MyApp.Api.Controllers
             {
                 Mode = OptText(args, "mode", 20) ?? "", Irn = OptText(args, "irn", 100), Reason = OptText(args, "reason", 500) ?? "",
                 ManualFbrInvoiceNumber = OptText(args, "manualFbrInvoiceNumber", 100),
+                KeepInStockHsCodes = args.TryGetProperty("keepInStockHsCodes", out var keep) && keep.ValueKind == JsonValueKind.Array
+                    ? keep.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.String).Select(e => e.GetString()!.Trim()).Where(c => c.Length > 0).Distinct().ToList()
+                    : null,
             };
             if (string.IsNullOrWhiteSpace(req.Reason)) throw new ToolError("A reason is required.");
             if (string.Equals(req.Mode, "recordManual", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(req.ManualFbrInvoiceNumber))
                 throw new ToolError("recordManual needs manualFbrInvoiceNumber: the invoice number used on FBR's portal.");
-            return new Built(new { invoiceId = bill.Id, bill.InvoiceNumber, bill.FbrStatus, req.Mode, req.Irn, req.ManualFbrInvoiceNumber, req.Reason }, $"Reset the FBR state of bill #{bill.InvoiceNumber} ({req.Mode}) in company {companyId}",
+            return new Built(new { invoiceId = bill.Id, bill.InvoiceNumber, bill.FbrStatus, req.Mode, req.Irn, req.ManualFbrInvoiceNumber, keepInStockHsCodes = req.KeepInStockHsCodes ?? new List<string>(), req.Reason }, $"Reset the FBR state of bill #{bill.InvoiceNumber} ({req.Mode}) in company {companyId}",
                 async () =>
                 {
                     await ScreenAsync(() => Screen<FbrController>().ResetSubmission(bill.Id, req));

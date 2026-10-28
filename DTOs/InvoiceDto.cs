@@ -319,6 +319,7 @@
         public decimal UnitPrice { get; set; }
         public decimal LineTotal { get; set; }
         public string? HSCode { get; set; }
+        public bool KeepInStock { get; set; }
         public int? FbrUOMId { get; set; }
         public string? SaleType { get; set; }
         public int? RateId { get; set; }

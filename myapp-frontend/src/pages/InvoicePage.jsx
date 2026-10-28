@@ -1359,6 +1359,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       {manualTarget && (
         <FbrRecordManualModal
           invoice={manualTarget}
+          trackStock={!!selectedCompany?.inventoryTrackingEnabled}
           onClose={() => setManualTarget(null)}
           onDone={() => {
             const done = manualTarget;

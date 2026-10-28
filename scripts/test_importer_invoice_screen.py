@@ -412,6 +412,46 @@ def suite_filed_manually(base, token):
                     body={"mode": "recordManual", "manualFbrInvoiceNumber": "PORTAL-8", "reason": "again"})
     check("it cannot be recorded twice", st == 400, f"{st} {body}")
 
+    # The operator chooses, per HS code, whether a hand-filed invoice's goods leave stock.
+    st, it2 = http("POST", f"/api/itemtypes?companyId={co['id']}", base, token=token, body={
+        "name": f"Manual Elbow {SUFFIX}", "hsCode": "7307.1190", "uom": UNIT, "isFavorite": True})
+    if not check("a second HS item", st in (200, 201), f"{st} {it2}"):
+        return
+
+    def qty(item):
+        s, rows = http("GET", f"/api/itemtypes?companyId={co['id']}&search={urllib.parse.quote(item['name'])}", base, token=token)
+        row = next((r for r in (rows or []) if r.get("id") == item["id"]), {}) if isinstance(rows, list) else {}
+        return row.get("availableQty")
+
+    v0, e0 = qty(it), qty(it2)
+    st, inv3 = standalone(base, token, co, cl, [
+        {"itemTypeId": it["id"], "description": "Valve", "quantity": 3, "uom": UNIT, "unitPrice": 100},
+        {"itemTypeId": it2["id"], "description": "Elbow", "quantity": 5, "uom": UNIT, "unitPrice": 50}])
+    if not check("an unfiled invoice with two HS codes", st in (200, 201), f"{st} {inv3}"):
+        return
+    v1, e1 = qty(it), qty(it2)
+    check("saving it took both HS codes out of stock", v1 == v0 - 3 and e1 == e0 - 5, (v0, v1, e0, e1))
+    st, body = http("POST", f"/api/fbr/{inv3['id']}/reset-submission", base, token=token, body={
+        "mode": "recordManual", "manualFbrInvoiceNumber": "PORTAL-10", "keepInStockHsCodes": ["0101.0000"], "reason": "t"})
+    check("an HS code not on the invoice is refused", st == 400 and "not on this invoice" in str(body), f"{st} {body}")
+    st, body = http("POST", f"/api/fbr/{inv3['id']}/reset-submission", base, token=token, body={
+        "mode": "retry", "keepInStockHsCodes": ["7307.1190"], "reason": "t"})
+    check("only a hand-filed recording can keep goods in stock", st == 400, f"{st} {body}")
+    st, body = http("POST", f"/api/fbr/{inv3['id']}/reset-submission", base, token=token, body={
+        "mode": "recordManual", "manualFbrInvoiceNumber": "PORTAL-10", "keepInStockHsCodes": ["7307.1190"], "reason": "elbows were samples"})
+    check("recorded as filed, keeping HS 7307.1190 in stock", st == 200 and "7307.1190" in str(body), f"{st} {body}")
+    check("the kept HS code's goods are back in stock, the other's stay out",
+          qty(it) == v1 and qty(it2) == e0, (qty(it), v1, qty(it2), e0))
+    st, full3 = http("GET", f"/api/invoices/{inv3['id']}", base, token=token)
+    kept = {i.get("hsCode"): i.get("keepInStock") for i in full3.get("items", [])}
+    check("the lines say which HS code was kept", kept == {"8481.8090": False, "7307.1190": True}, kept)
+    items3 = [{"id": i["id"], "itemTypeId": i.get("itemTypeId"), "description": i["description"] + " (edited)",
+               "quantity": float(i["quantity"]), "uom": i.get("uom"), "unitPrice": float(i["unitPrice"])} for i in full3["items"]]
+    st, upd = http("PUT", f"/api/invoices/{inv3['id']}", base, token=token, body={"gstRate": 18, "items": items3})
+    check("an edit keeps the choice: kept goods stay in stock", st == 200 and qty(it2) == e0 and qty(it) == v1, (st, qty(it2), e0))
+    st, body = http("POST", f"/api/fbr/{inv3['id']}/reset-submission", base, token=token, body={"mode": "retry", "reason": "undo the record"})
+    check("undoing the filing takes the kept goods out again", st == 200 and qty(it2) == e1 and qty(it) == v1, (st, qty(it2), e1))
+
     # MCP: prepare_fbr_reset takes recordManual
     sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent))
     import mcp_importer_fixture as fx
@@ -432,12 +472,14 @@ def suite_filed_manually(base, token):
     refused, text = fx.call(T, "prepare_fbr_reset", {"companyId": A, "invoiceId": inv2["id"], "mode": "recordManual", "reason": "t"})
     check("MCP recordManual without the portal number is refused", refused and "manualFbrInvoiceNumber" in text, text[:200])
     refused, text = fx.call(T, "prepare_fbr_reset", {"companyId": A, "invoiceId": inv2["id"], "mode": "recordManual",
-                                                     "manualFbrInvoiceNumber": "PORTAL-9", "reason": "filed by hand"})
+                                                     "manualFbrInvoiceNumber": "PORTAL-9", "keepInStockHsCodes": ["8481.8090"], "reason": "filed by hand"})
     plan = None if refused else json.loads(text)
-    if check("MCP prepare_fbr_reset accepts recordManual", plan is not None, text[:200]):
+    if check("MCP prepare_fbr_reset accepts recordManual and shows the kept HS codes",
+             plan is not None and "8481.8090" in text, text[:300]):
         refused, text = fx.call(T, "commit_action", {"planId": plan["planId"]})
         st, f2 = http("GET", f"/api/invoices/{inv2['id']}", base, token=token)
         check("MCP commit records it as filed manually", not refused and f2.get("fbrFiledManually") and f2.get("fbrInvoiceNumber") == "PORTAL-9", text[:200])
+        check("MCP commit keeps the chosen HS code in stock", all(i.get("keepInStock") for i in f2.get("items", [])), f2.get("items"))
 
 
 def main():

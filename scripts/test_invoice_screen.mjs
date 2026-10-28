@@ -83,7 +83,7 @@ check("32: name is the FBR description, trimmed to 100 characters", () => {
 check("32: no FBR description falls back to the row name", () =>
   assert.strictEqual(pendingFromFbrCode({ id: null, hsCode: "1", name: "HS Code 1" }).name, "HS Code 1"));
 
-const { buildInvoiceActions, statusReason, fbrChip } = await import(src("utils/invoiceActions.js"));
+const { buildInvoiceActions, statusReason, fbrChip, stockGroups } = await import(src("utils/invoiceActions.js"));
 const all = { canEdit: true, canPrint: true, canVoid: true, canDelete: true, canCopy: true, canCreateChallan: true,
   canRecordReceipt: true, canReverse: true, canFbrPreview: true, canFbrValidate: true, canFbrSubmit: true,
   canFbrExclude: true, canFbrReset: true };
@@ -167,6 +167,17 @@ check("a manually filed invoice keeps Edit, offers no credit note or correction"
 check("a manually filed invoice says where it was filed", () =>
   assert.match(statusReason(manual), /by hand on FBR's portal as ABC-1/));
 check("67: its chip reads Filed manually", () => assert.strictEqual(fbrChip(manual).label, "Filed manually"));
+check("a manually filed invoice names the HS codes it kept in stock", () =>
+  assert.match(statusReason({ ...manual, items: [{ hsCode: "7307.1190", keepInStock: true }, { hsCode: "8481.8090" }] }), /HS 7307\.1190 kept in stock\.$/));
+check("the stock choice lists one row per HS code on item lines, summing quantity", () => {
+  const g = stockGroups([
+    { itemTypeId: 1, itemTypeName: "Valve", hsCode: "8481.8090", quantity: 2, uom: "Pcs" },
+    { itemTypeId: 1, itemTypeName: "Valve", hsCode: "8481.8090", quantity: 3, uom: "Pcs" },
+    { itemTypeId: 2, itemTypeName: "Elbow", hsCode: "7307.1190", quantity: 1.5, uom: "KG", keepInStock: true },
+    { itemTypeId: null, hsCode: "9999.0000", quantity: 9 }, { itemTypeId: 3, hsCode: "", quantity: 9 }]);
+  assert.deepStrictEqual(g.map((r) => [r.code, r.qtyLabel, r.names.join(), r.keep]),
+    [["8481.8090", "5 Pcs", "Valve", false], ["7307.1190", "1.5 KG", "Elbow", true]]);
+});
 
 console.log("\n=== FBR chip (67) ===");
 const chip = (inv, o) => fbrChip(inv, o)?.label ?? null;
