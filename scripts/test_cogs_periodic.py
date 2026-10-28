@@ -91,6 +91,22 @@ def inventory_account_balance(base, token, cid) -> float:
     return opening if inv.get("openingBalanceIsDebit", True) else -opening
 
 
+def account_balance_by_name(base, token, cid, name) -> float | None:
+    """Trial-balance closing (debit positive) of the account with this name,
+    or None when the company has no such account."""
+    st, rows = http("GET", f"/api/accounts/company/{cid}/flat", base, token=token)
+    acct = next((a for a in (rows if isinstance(rows, list) else [])
+                 if (a.get("name") or "").lower() == name.lower()), None)
+    if not acct:
+        return None
+    st, tb = http("GET", f"/api/accounting/reports/company/{cid}/trial-balance",
+                  base, token=token)
+    for r in ((tb.get("rows") if isinstance(tb, dict) else tb) or []) if st == 200 else []:
+        if r.get("accountId") == acct["id"]:
+            return float(r.get("closing") or 0)
+    return 0.0
+
+
 def stock_walk_value(base, token, cid) -> float:
     """What the stock dashboard says the goods are worth."""
     st, rows = http("GET", f"/api/stock/company/{cid}/onhand", base, token=token)
@@ -172,7 +188,8 @@ def main() -> int:
         if not check("setup: client created", st in (200, 201), f"{st} {client}"):
             return report()
 
-        st, item = http("POST", "/api/itemtypes", base, token=token, body={
+        # Catalogs are company-private: the company goes on the query string.
+        st, item = http("POST", f"/api/itemtypes?companyId={cid}", base, token=token, body={
             "name": f"COGS Item {tag}", "hsCode": "8481.1000", "uom": "Pcs",
             "companyId": cid,
         })
@@ -186,7 +203,7 @@ def main() -> int:
             "valueExcludingTax": 100000, "salesTaxRate": 18,
             "asOfDate": (date.today().replace(day=1) - timedelta(days=40)).isoformat(),
         })
-        if not check("setup: opening stock 100 @ 100,000", st in (200, 201, 204), f"{st}"):
+        if not check("setup: opening stock 100 @ 100,000", st in (200, 201, 204), f"{st} {_}"):
             return report()
 
         assert_invariant(base, token, cid, "1: opening only")
@@ -267,6 +284,56 @@ def main() -> int:
         check("6: a no-op repost changes nothing", approx(before, after),
               f"before={before:,.2f} after={after:,.2f}")
         assert_invariant(base, token, cid, "6: after a repost")
+
+        # ── 7: a correction to an earlier figure posts to EQUITY ──────────
+        # 2026-10-28: onboarding restatements had swung profit by hundreds of
+        # thousands through the Inventory adjustments expense. A movement
+        # flagged isValuationCorrection must leave that expense alone.
+        adj_before = account_balance_by_name(base, token, cid, "Inventory adjustments") or 0.0
+        st, r7 = http("POST", "/api/stock/adjust", base, token=token, body={
+            "companyId": cid, "itemTypeId": item_id,
+            "mode": "delta", "delta": 0, "valueDelta": -10000,
+            "movementDate": today, "notes": "opening value was typed wrong",
+            "isValuationCorrection": True,
+        })
+        check("7: correction recorded", st in (200, 201), f"{st} {r7}")
+        assert_invariant(base, token, cid, "7: after a correction")
+        corr = account_balance_by_name(base, token, cid, "Stock value corrections")
+        check("7: Stock value corrections (equity) carries the 10,000",
+              corr is not None and approx(corr, 10000),
+              f"balance={corr}")
+        adj_after = account_balance_by_name(base, token, cid, "Inventory adjustments") or 0.0
+        check("7: Inventory adjustments expense unchanged by a correction",
+              approx(adj_before, adj_after), f"before={adj_before:,.2f} after={adj_after:,.2f}")
+        st, flat = http("GET", f"/api/accounts/company/{cid}/flat", base, token=token)
+        acct = next((a for a in (flat or []) if a.get("name") == "Stock value corrections"), {})
+        check("7: the corrections account is equity, not P&L",
+              str(acct.get("accountType")) in ("Equity", "2"), f"type={acct.get('accountType')}")
+
+        # ── 8: a loss still posts to the expense ──────────────────────────
+        st, _ = http("POST", "/api/stock/adjust", base, token=token, body={
+            "companyId": cid, "itemTypeId": item_id,
+            "mode": "delta", "delta": -1,
+            "movementDate": today, "notes": "breakage",
+        })
+        check("8: loss recorded", st in (200, 201), f"{st}")
+        assert_invariant(base, token, cid, "8: after a loss")
+        loss_after = account_balance_by_name(base, token, cid, "Inventory adjustments") or 0.0
+        corr_after = account_balance_by_name(base, token, cid, "Stock value corrections") or 0.0
+        check("8: the loss lands in Inventory adjustments", loss_after > adj_after + 1,
+              f"before={adj_after:,.2f} after={loss_after:,.2f}")
+        check("8: the loss leaves Stock value corrections alone", approx(corr_after, 10000),
+              f"balance={corr_after:,.2f}")
+
+        # ── 9: the flag does not open another company ─────────────────────
+        # A seed admin reaches every company, so the refusal is proved with a
+        # company id that does not exist rather than one it was never given.
+        st, _ = http("POST", "/api/stock/adjust", base, token=token, body={
+            "companyId": 999999999, "itemTypeId": item_id,
+            "mode": "delta", "delta": 0, "valueDelta": -1,
+            "movementDate": today, "isValuationCorrection": True,
+        })
+        check("9: a correction for an unknown company is refused", st in (400, 403, 404), f"{st}")
 
     finally:
         if cid and not args.keep:

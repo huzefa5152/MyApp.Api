@@ -26,6 +26,10 @@ namespace MyApp.Api.Helpers
     ///     adjustments. Breakage and revaluation are not cost of goods SOLD,
     ///     and keeping them apart is what stops a future write-off landing
     ///     silently in gross margin.
+    ///   • The same two source types flagged
+    ///     <see cref="StockMovement.IsValuationCorrection"/> → corrections. A
+    ///     fix to an earlier figure is not a loss of this period, so it posts
+    ///     to equity rather than to either expense.
     ///   • Purchases, goods receipts and supplier debit notes are SKIPPED —
     ///     they already debit or credit Inventory through their own postings.
     ///     Including them would double-count. (Verified on this line: movement
@@ -56,10 +60,10 @@ namespace MyApp.Api.Helpers
         /// and the caller flips the entry rather than clamping, because a
         /// clamped month would silently stop reconciling to the stock walk.
         /// </summary>
-        public readonly record struct Totals(decimal CostOfGoodsSold, decimal Adjustments)
+        public readonly record struct Totals(decimal CostOfGoodsSold, decimal Adjustments, decimal Corrections = 0m)
         {
-            public decimal Total => CostOfGoodsSold + Adjustments;
-            public bool IsEmpty => CostOfGoodsSold == 0m && Adjustments == 0m;
+            public decimal Total => CostOfGoodsSold + Adjustments + Corrections;
+            public bool IsEmpty => CostOfGoodsSold == 0m && Adjustments == 0m && Corrections == 0m;
         }
 
         /// <summary>An item's starting position, as the opening balance records it.</summary>
@@ -90,6 +94,7 @@ namespace MyApp.Api.Helpers
             costing ??= StockCosting.None;
             var cogs = new Dictionary<Period, decimal>();
             var adjustments = new Dictionary<Period, decimal>();
+            var corrections = new Dictionary<Period, decimal>();
 
             foreach (var (itemTypeId, movements) in movementsByItem)
             {
@@ -131,7 +136,7 @@ namespace MyApp.Api.Helpers
                     previous = step.RunningValue;
 
                     if (!byId.TryGetValue(step.MovementId, out var m)) continue;
-                    var bucket = Classify(m.SourceType);
+                    var bucket = Classify(m);
                     var period = new Period(m.MovementDate.Year, m.MovementDate.Month);
 
                     // FIFO: a skipped movement (a purchase) that settled an
@@ -147,7 +152,12 @@ namespace MyApp.Api.Helpers
                     }
                     if (contribution == 0m) continue;
 
-                    var target = bucket == Bucket.Cogs ? cogs : adjustments;
+                    var target = bucket switch
+                    {
+                        Bucket.Cogs => cogs,
+                        Bucket.Correction => corrections,
+                        _ => adjustments,
+                    };
                     target[period] = target.TryGetValue(period, out var running)
                         ? running + contribution
                         : contribution;
@@ -155,11 +165,12 @@ namespace MyApp.Api.Helpers
             }
 
             var result = new SortedDictionary<Period, Totals>(PeriodOrder.Instance);
-            foreach (var period in cogs.Keys.Union(adjustments.Keys))
+            foreach (var period in cogs.Keys.Union(adjustments.Keys).Union(corrections.Keys))
             {
                 cogs.TryGetValue(period, out var c);
                 adjustments.TryGetValue(period, out var a);
-                var totals = new Totals(Round(c), Round(a));
+                corrections.TryGetValue(period, out var x);
+                var totals = new Totals(Round(c), Round(a), Round(x));
                 if (!totals.IsEmpty) result[period] = totals;
             }
             return result;
@@ -189,6 +200,7 @@ namespace MyApp.Api.Helpers
             costing ??= StockCosting.None;
             var cogs = 0m;
             var adjustments = 0m;
+            var corrections = 0m;
 
             foreach (var (itemTypeId, movements) in movementsByItem)
             {
@@ -216,26 +228,27 @@ namespace MyApp.Api.Helpers
                     if (from.HasValue && m.MovementDate < from.Value) continue;
                     if (to.HasValue && m.MovementDate >= to.Value) continue;
 
-                    switch (Classify(m.SourceType))
+                    switch (Classify(m))
                     {
                         case Bucket.Cogs: cogs += contribution; break;
                         case Bucket.Adjustment: adjustments += contribution; break;
+                        case Bucket.Correction: corrections += contribution; break;
                         // FIFO settlement on a skipped movement: see Compute.
                         case Bucket.Skip: cogs += step.SettledValue; break;
                     }
                 }
             }
 
-            return new Totals(Round(cogs), Round(adjustments));
+            return new Totals(Round(cogs), Round(adjustments), Round(corrections));
         }
 
-        private enum Bucket { Skip, Cogs, Adjustment }
+        private enum Bucket { Skip, Cogs, Adjustment, Correction }
 
-        private static Bucket Classify(StockMovementSourceType source) => source switch
+        private static Bucket Classify(StockMovement m) => m.SourceType switch
         {
             StockMovementSourceType.Invoice => Bucket.Cogs,
-            StockMovementSourceType.Adjustment => Bucket.Adjustment,
-            StockMovementSourceType.Revaluation => Bucket.Adjustment,
+            StockMovementSourceType.Adjustment or StockMovementSourceType.Revaluation =>
+                m.IsValuationCorrection ? Bucket.Correction : Bucket.Adjustment,
             // Already in the ledger through their own postings, or not a value
             // change at all. Listed rather than defaulted so a NEW source type
             // has to be classified deliberately instead of silently vanishing

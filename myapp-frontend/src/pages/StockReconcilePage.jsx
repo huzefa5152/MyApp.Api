@@ -41,6 +41,9 @@ export default function StockReconcilePage() {
   const [choices, setChoices] = useState({});       // sourceRow -> itemTypeId | -1
   const [useSheet, setUseSheet] = useState(null);    // Set of itemTypeIds, null = proposals
   const [busy, setBusy] = useState(false);
+  // Quantity corrections: a loss of the period (expense) unless the operator
+  // says the sheet fixes an earlier wrong count (equity).
+  const [qtyAreCorrections, setQtyAreCorrections] = useState(false);
   const [open, setOpen] = useState({});
   const [guideOpen, setGuideOpen] = useState(null);   // null = open until a file is chosen
 
@@ -134,7 +137,7 @@ export default function StockReconcilePage() {
     if (!ok) return;
     setBusy(true);
     try {
-      const { data } = await applyStockReconcile(companyId, request({ useSheetQuantityItemTypeIds: [...(useSheet || [])] }));
+      const { data } = await applyStockReconcile(companyId, request({ useSheetQuantityItemTypeIds: [...(useSheet || [])], quantityDifferencesAreCorrections: qtyAreCorrections }));
       notify((data.messages || []).join(" ") || "Reconciled.", "success");
       setUseSheet(new Set());
       await replan(choices, new Set());
@@ -269,6 +272,15 @@ export default function StockReconcilePage() {
               {plan.canApply ? `${corrections.length} quantity correction(s) · ${plan.items.filter((i) => !i.error).length} item(s) restated`
                 : "Decide every highlighted row and item to continue."}
             </span>
+            {corrections.length > 0 && (
+              <select value={qtyAreCorrections ? "correction" : "loss"} disabled={busy}
+                      onChange={(e) => setQtyAreCorrections(e.target.value === "correction")}
+                      aria-label="What the quantity corrections are"
+                      style={{ flex: 1, minWidth: 0, maxWidth: 360, minHeight: 44 }}>
+                <option value="loss">Quantity differences are losses (expense)</option>
+                <option value="correction">Quantity differences correct earlier counts (equity)</option>
+              </select>
+            )}
             <button type="button" onClick={apply} disabled={busy || !plan.canApply || changed.length === 0} style={st.primary}>
               <MdDoneAll style={{ flexShrink: 0 }} size={18} /> Reconcile
             </button>

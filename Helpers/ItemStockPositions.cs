@@ -33,12 +33,17 @@ namespace MyApp.Api.Helpers
             decimal ConsumedDeclared,
             /// <summary>The same goods at actual landed cost.</summary>
             decimal ConsumedLanded,
-            /// <summary>Breakage, count corrections and revaluations.</summary>
+            /// <summary>Breakage, count differences and write-downs: losses of
+            /// the period. Excludes corrections to an earlier figure.</summary>
             decimal AdjustmentsDeclared,
             decimal ClosingQuantity,
             decimal ClosingDeclared,
             decimal ClosingLanded,
-            DateTime? LastMovement)
+            DateTime? LastMovement,
+            /// <summary>Adjustments and revaluations flagged
+            /// <see cref="StockMovement.IsValuationCorrection"/>: fixes to an
+            /// earlier figure, which post to equity rather than expense.</summary>
+            decimal CorrectionsDeclared = 0m)
         {
             /// <summary>Never sold a single unit. Dead stock, if it opened with
             /// value.</summary>
@@ -105,7 +110,7 @@ namespace MyApp.Api.Helpers
                     open.Quantity, open.Declared, open.Landed, open.SalesTaxRate,
                     movements, trace);
 
-                decimal soldQty = 0m, consumedDeclared = 0m, consumedLanded = 0m, adjustments = 0m;
+                decimal soldQty = 0m, consumedDeclared = 0m, consumedLanded = 0m, adjustments = 0m, corrections = 0m;
                 var byId = movements.ToDictionary(x => x.Id);
                 var prevDeclared = Round(open.Declared);
                 var prevLanded = Round(open.Landed);
@@ -150,7 +155,8 @@ namespace MyApp.Api.Helpers
                             break;
                         case StockMovementSourceType.Adjustment:
                         case StockMovementSourceType.Revaluation:
-                            adjustments += declaredOut;
+                            if (m.IsValuationCorrection) corrections += declaredOut;
+                            else adjustments += declaredOut;
                             break;
                         default:
                             // FIFO: a purchase that settled an earlier oversale
@@ -171,7 +177,7 @@ namespace MyApp.Api.Helpers
                     soldQty,
                     Round(consumedDeclared), Round(consumedLanded), Round(adjustments),
                     final.Quantity, Round(final.ValueExcludingTax), Round(final.ActualValueExcludingTax),
-                    last));
+                    last, Round(corrections)));
             }
 
             return result;

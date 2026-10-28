@@ -848,6 +848,7 @@ namespace MyApp.Api.Services.Implementations
             var inventory = await ResolveAsync(companyId, accounts, ControlType.Inventory, "inventory");
             Account? cogs = null;
             Account? adjustments = null;
+            Account? corrections = null;
 
             foreach (var (period, totals) in periods)
             {
@@ -876,6 +877,8 @@ namespace MyApp.Api.Services.Implementations
                 cogs ??= await ResolveCostOfGoodsSoldAsync(companyId, accounts);
                 if (totals.Adjustments != 0m)
                     adjustments ??= await ResolveInventoryAdjustmentsAsync(companyId, accounts);
+                if (totals.Corrections != 0m)
+                    corrections ??= await ResolveStockValueCorrectionsAsync(companyId, accounts);
 
                 var lines = new List<JournalLine>();
 
@@ -894,6 +897,13 @@ namespace MyApp.Api.Services.Implementations
                         totals.Adjustments > 0m ? totals.Adjustments : 0m,
                         totals.Adjustments < 0m ? -totals.Adjustments : 0m,
                         null, $"Inventory adjustments — {period}");
+
+                // Equity, not expense: see StockMovement.IsValuationCorrection.
+                if (totals.Corrections != 0m && corrections != null)
+                    AddLine(lines, corrections.Id,
+                        totals.Corrections > 0m ? totals.Corrections : 0m,
+                        totals.Corrections < 0m ? -totals.Corrections : 0m,
+                        null, $"Stock value corrections — {period}");
 
                 AddLine(lines, inventory.Id,
                     totals.Total < 0m ? -totals.Total : 0m,
@@ -1036,6 +1046,34 @@ namespace MyApp.Api.Services.Implementations
                 AccountType = AccountType.Expense,
                 IsActive = true,
                 ExternalRef = "seed:inventory-adjustments",
+            };
+            _context.Accounts.Add(created);
+            await _context.SaveChangesAsync();
+            accounts.Add(created);
+            return created;
+        }
+
+        /// <summary>
+        /// Where corrections to an earlier stock figure land: an equity account,
+        /// because fixing a wrong opening or imported value is not the period's
+        /// trading result. Kept apart from Retained earnings and from the
+        /// Inventory valuation reserve (which holds only the declared-minus-
+        /// landed gap per GD) so each still reconciles to its own source.
+        /// </summary>
+        private async Task<Account> ResolveStockValueCorrectionsAsync(int companyId, List<Account> accounts)
+        {
+            var hit = accounts.FirstOrDefault(a => a.ExternalRef == "seed:stock-value-corrections");
+            if (hit != null) return hit;
+
+            var group = await EnsureEquityGroupAsync(companyId, accounts);
+            var created = new Account
+            {
+                CompanyId = companyId,
+                Name = "Stock value corrections",
+                AccountGroupId = group.Id,
+                AccountType = AccountType.Equity,
+                IsActive = true,
+                ExternalRef = "seed:stock-value-corrections",
             };
             _context.Accounts.Add(created);
             await _context.SaveChangesAsync();
@@ -1377,6 +1415,35 @@ namespace MyApp.Api.Services.Implementations
 
             await _context.SaveChangesAsync();
             _flags.Remove(companyId); // drop cached defaults so this request re-reads them
+        }
+
+        /// <summary>The equity group an operator would look in: the owner's
+        /// capital account's own group, else the preset's "Equity" group, else a
+        /// new one on the Balance Sheet.</summary>
+        private async Task<AccountGroup> EnsureEquityGroupAsync(int companyId, List<Account> accounts)
+        {
+            var siblingGroupId = accounts
+                .Where(a => a.ControlType == ControlType.Capital)
+                .Select(a => (int?)a.AccountGroupId)
+                .FirstOrDefault();
+            var group = siblingGroupId is int gid
+                ? await _context.AccountGroups.FirstOrDefaultAsync(g => g.Id == gid && g.CompanyId == companyId)
+                : null;
+            group ??= await _context.AccountGroups
+                .FirstOrDefaultAsync(g => g.CompanyId == companyId && g.ExternalRef == "seed:equity");
+            if (group != null) return group;
+
+            group = new AccountGroup
+            {
+                CompanyId = companyId,
+                Name = "Equity",
+                Statement = FinancialStatement.BalanceSheet,
+                IsSystem = true,
+                ExternalRef = "seed:equity",
+            };
+            _context.AccountGroups.Add(group);
+            await _context.SaveChangesAsync();
+            return group;
         }
 
         /// <summary>Find — or create — the P&amp;L income / expense statement group

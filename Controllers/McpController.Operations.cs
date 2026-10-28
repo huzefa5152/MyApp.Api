@@ -81,12 +81,12 @@ namespace MyApp.Api.Controllers
                     Obj(new { companyId = CompanyProp, itemTypeId = Int() }, "companyId", "itemTypeId"), Read: GetStockGdDetailsAsync),
                 new("get_stock_tie_out", "Month-end tie-out: stock screen vs the Inventory account vs Annex-H1, and GD balances vs Import Clearing, with the reasons for any difference.",
                     Obj(new { companyId = CompanyProp, month = Str(7, "yyyy-MM; default the current month.") }, "companyId"), Read: GetStockTieOutAsync),
-                new("prepare_stock_adjustment", "Prepare a stock correction for damaged, lost or miscounted goods: mode 'set' gives the figures it should be (quantity and/or value), 'delta' gives the change. A SOLD item needs its sale bill, not an adjustment. Nothing is saved until commit_action.",
+                new("prepare_stock_adjustment", "Prepare a stock correction for damaged, lost or miscounted goods: mode 'set' gives the figures it should be (quantity and/or value), 'delta' gives the change. isValuationCorrection=true when this fixes an earlier wrong figure (opening or imported value, onboarding count) — posted to equity; false (default) for a loss of the period — posted to the Inventory adjustments expense. A SOLD item needs its sale bill, not an adjustment. Nothing is saved until commit_action.",
                     Obj(new
                     {
                         companyId = CompanyProp, itemTypeId = Int(), mode = new { type = "string", @enum = new[] { "set", "delta" } },
                         targetQuantity = new { type = "string" }, targetValueExcludingTax = MoneyProp, delta = new { type = "string" }, valueDelta = MoneyProp,
-                        unitCostExcludingTax = MoneyProp, salesTaxRate = new { type = "string" }, movementDate = DateProp, notes = Str(500), idempotencyKey = IdemProp,
+                        unitCostExcludingTax = MoneyProp, salesTaxRate = new { type = "string" }, movementDate = DateProp, notes = Str(500), isValuationCorrection = new { type = "boolean" }, idempotencyKey = IdemProp,
                     }, "companyId", "itemTypeId", "mode"),
                     Build: BuildStockAdjustmentAsync, PerHour: 30, Noun: "stock adjustments"),
 
@@ -176,11 +176,13 @@ namespace MyApp.Api.Controllers
                 UnitCostExcludingTax = mode == "delta" ? OptDec(args, "unitCostExcludingTax", 0m, 99_999_999m, 4) : null,
                 SalesTaxRate = OptDec(args, "salesTaxRate", 0m, 100m, 2),
                 MovementDate = DateArg(args, "movementDate") ?? PakistanClock.Today, Notes = OptText(args, "notes", 500),
+                IsValuationCorrection = OptBool(args, "isValuationCorrection") ?? false,
             };
             if (mode == "set" && dto.TargetQuantity == null && dto.TargetValueExcludingTax == null) throw new ToolError("Give targetQuantity and/or targetValueExcludingTax.");
             if (mode == "delta" && dto.Delta == 0m && dto.ValueDelta is null or 0m) throw new ToolError("Give a quantity change (delta) and/or a value change (valueDelta).");
             var name = await _context.ItemTypes.AsNoTracking().Where(i => i.Id == item).Select(i => i.Name).FirstAsync();
             var preview = new { itemTypeId = item, itemName = name, mode, dto.TargetQuantity, dto.TargetValueExcludingTax, dto.Delta, dto.ValueDelta, movementDate = Ymd(dto.MovementDate), dto.Notes,
+                postsTo = dto.IsValuationCorrection ? "Stock value corrections (equity)" : "Inventory adjustments (expense)",
                 reminder = "Goods that were SOLD need their sale bill instead: an adjustment is not undone when the bill is entered later." };
             return new Built(preview, $"Adjust stock of \"{name}\" in company {companyId} ({mode})",
                 async () =>

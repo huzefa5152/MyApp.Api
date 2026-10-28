@@ -154,6 +154,9 @@ namespace MyApp.Api.Services.Implementations
                         SourceType = StockMovementSourceType.Revaluation, MovementDate = restateOn,
                         ValueAdjustmentExcludingTax = Money(item.SheetValue - waValue) is var d && d != 0m ? d : null,
                         Notes = $"FIFO restatement to stock sheet{(file != null ? $" {file}" : "")}: {lines.Count} GD lines",
+                        // Restating to the sheet's GD lines fixes the value the
+                        // books carried; it records no loss.
+                        IsValuationCorrection = true,
                     };
                     context.StockMovements.Add(movement);
                     await context.SaveChangesAsync();

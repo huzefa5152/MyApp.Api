@@ -5716,6 +5716,9 @@ namespace MyApp.Api.Migrations
                     b.Property<int?>("DivisionId")
                         .HasColumnType("int");
 
+                    b.Property<bool>("IsValuationCorrection")
+                        .HasColumnType("bit");
+
                     b.Property<int>("ItemTypeId")
                         .HasColumnType("int");
 

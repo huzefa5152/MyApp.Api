@@ -1620,6 +1620,7 @@ namespace MyApp.Api.Controllers
                     SourceId = null,
                     MovementDate = dto.MovementDate.Date,
                     Notes = dto.Notes,
+                    IsValuationCorrection = dto.IsValuationCorrection,
                     // Only an increase can state a cost. Stock leaving is always
                     // costed at the running average — see StockValuation.
                     UnitCostExcludingTax = qtyDelta > 0m && unitCost is > 0m
@@ -1665,6 +1666,7 @@ namespace MyApp.Api.Controllers
                     SourceId = null,
                     MovementDate = dto.MovementDate.Date,
                     Notes = dto.Notes,
+                    IsValuationCorrection = dto.IsValuationCorrection,
                     ValueAdjustmentExcludingTax = valueDelta,
                     ActualValueAdjustmentExcludingTax = actualValueDelta,
                     SalesTaxRate = rate,
@@ -2020,6 +2022,7 @@ namespace MyApp.Api.Controllers
                         CompanyId = companyId, ItemTypeId = item.ItemTypeId, Mode = StockAdjustmentModes.Set,
                         TargetQuantity = item.SheetQuantity, TargetValueExcludingTax = item.TargetValueExcludingTax,
                         MovementDate = plan.AsOf, Notes = $"Reconciled to {file}",
+                        IsValuationCorrection = req.QuantityDifferencesAreCorrections,
                     });
                     if (r is not OkObjectResult)
                         throw new InvalidOperationException($"The quantity of \"{item.ItemTypeName}\" could not be corrected: {DescribeResult(r)}.");
@@ -2261,6 +2264,9 @@ namespace MyApp.Api.Controllers
                         CompanyId = companyId, ItemTypeId = item, Mode = StockAdjustmentModes.Set,
                         TargetQuantity = qty, TargetValueExcludingTax = val, TargetActualCostExcludingTax = act,
                         MovementDate = PakistanClock.Today, Notes = note,
+                        // Value moves between two items and nets to nil: a
+                        // reclassification, never a loss.
+                        IsValuationCorrection = true,
                     });
                     if (r is not OkObjectResult)
                         throw new InvalidOperationException("The stock could not be moved: " + DescribeResult(r) + ".");

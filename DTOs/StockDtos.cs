@@ -474,6 +474,15 @@
         public string? Notes { get; set; }
 
         /// <summary>
+        /// True = this corrects an earlier figure (wrong opening or imported
+        /// value, onboarding count), posted to the "Stock value corrections"
+        /// equity account. False (default) = a loss of the period — breakage,
+        /// shrinkage, count difference — posted to the "Inventory adjustments"
+        /// expense. See <see cref="Models.StockMovement.IsValuationCorrection"/>.
+        /// </summary>
+        public bool IsValuationCorrection { get; set; }
+
+        /// <summary>
         /// What one unit is worth on an adjustment UP, excluding sales tax.
         /// Optional: left null, the stock coming in is valued at the average
         /// already on hand, which is right for a count correction and wrong
@@ -730,6 +739,11 @@
         /// <summary>Apply only: items whose quantity is corrected to the
         /// sheet's. Null on a plan request = use the proposal.</summary>
         public List<int>? UseSheetQuantityItemTypeIds { get; set; }
+        /// <summary>Apply only: true when the sheet's quantities CORRECT the
+        /// books (onboarding, a wrong earlier count) rather than record goods
+        /// lost since — decides equity vs expense for those adjustments. The
+        /// GD-line restatement is always a correction.</summary>
+        public bool QuantityDifferencesAreCorrections { get; set; }
     }
 
     public class StockReconcileLineDto

@@ -160,6 +160,22 @@ namespace MyApp.Api.Models
         public DateTime MovementDate { get; set; }
 
         public string? Notes { get; set; }
+
+        /// <summary>
+        /// True when this Adjustment / Revaluation CORRECTS an earlier figure
+        /// (a mistyped opening value, an import that carried the wrong money,
+        /// matching the client's stock sheet at onboarding) rather than
+        /// recording goods lost, damaged or miscounted since.
+        ///
+        /// It decides where the monthly stock relief posts the value: a
+        /// correction goes to the "Stock value corrections" equity account, a
+        /// loss to the "Inventory adjustments" expense. Fixing a wrong starting
+        /// figure is not the period's trading result; booking it there swung
+        /// monthly profit by hundreds of thousands with no business event
+        /// behind it (Sep–Oct 2026). Ignored on every other source type.
+        /// </summary>
+        public bool IsValuationCorrection { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         // Navigation

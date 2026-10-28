@@ -115,7 +115,7 @@ export default function StockDashboardPage() {
     // Actual-cost mirror of valueDelta / targetValue / unitCost above — same
     // three roles, own pool (gated on stock.actualcost.view at the render site).
     actualValueDelta: "", targetActualCost: "", actualUnitCost: "",
-    salesTaxRate: "", movementDate: todayYmd(), notes: "",
+    salesTaxRate: "", movementDate: todayYmd(), notes: "", isValuationCorrection: false,
   });
   // Set when the Adjustment modal is launched from a grid row — the item
   // is fixed (read-only display) so the operator just types the delta.
@@ -514,7 +514,7 @@ export default function StockDashboardPage() {
       targetQuantity: "", targetValue: "",
       actualValueDelta: "", targetActualCost: "", actualUnitCost: "",
       salesTaxRate: "",
-      movementDate: todayYmd(), notes: "",
+      movementDate: todayYmd(), notes: "", isValuationCorrection: false,
     });
   };
 
@@ -535,7 +535,7 @@ export default function StockDashboardPage() {
       targetActualCost: r.actualCostExcludingTax != null ? String(r.actualCostExcludingTax) : "",
       actualUnitCost: "",
       salesTaxRate: r.salesTaxRate ? String(r.salesTaxRate) : "",
-      movementDate: todayYmd(), notes: "",
+      movementDate: todayYmd(), notes: "", isValuationCorrection: false,
     });
     setShowAdjust(true);
   };
@@ -656,6 +656,7 @@ export default function StockDashboardPage() {
         salesTaxRate: parseFloat(adjustDraft.salesTaxRate) || null,
         movementDate: adjustDraft.movementDate,
         notes: adjustDraft.notes || null,
+        isValuationCorrection: !!adjustDraft.isValuationCorrection,
       });
       notify(data?.message || "Adjustment recorded.", "success");
       closeAdjust();
@@ -2019,6 +2020,15 @@ export default function StockDashboardPage() {
           )}
           <Field label="Date"><input type="date" required style={mInput} value={adjustDraft.movementDate} onChange={e => setAdjustDraft({ ...adjustDraft, movementDate: e.target.value })} /></Field>
           <Field label="Notes"><input type="text" style={mInput} value={adjustDraft.notes} onChange={e => setAdjustDraft({ ...adjustDraft, notes: e.target.value })} placeholder="e.g. count correction, breakage" /></Field>
+          {/* Decides where the books post it: a loss of the period is an
+              expense, a fix to an earlier wrong figure goes to equity. */}
+          <Field label="What is this?">
+            <select style={mInput} value={adjustDraft.isValuationCorrection ? "correction" : "loss"}
+                    onChange={e => setAdjustDraft({ ...adjustDraft, isValuationCorrection: e.target.value === "correction" })}>
+              <option value="loss">Loss, damage or count difference (expense)</option>
+              <option value="correction">Correction of an earlier wrong figure (equity)</option>
+            </select>
+          </Field>
         </SmallModal>
       )}
     </div>

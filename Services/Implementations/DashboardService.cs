@@ -823,7 +823,7 @@ namespace MyApp.Api.Services.Implementations
                         break;
                     default:
                         title = "Inventory adjustments, by item";
-                        note = "Breakage, count corrections and revaluations — deliberately kept out of cost of sales.";
+                        note = "Breakage, count differences and write-downs — kept out of cost of sales. Corrections to an earlier figure post to equity and are not shown here.";
                         amount = p => p.AdjustmentsDeclared;
                         include = p => p.AdjustmentsDeclared != 0m;
                         sub = p => p.HsCode;
