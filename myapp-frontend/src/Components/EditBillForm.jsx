@@ -18,6 +18,7 @@ import { useAuth } from "../contexts/AuthContext";
 import LookupAutocomplete from "./LookupAutocomplete";
 import RichText from "./RichText";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import { descriptionAfterPick } from "../utils/lineDescription";
 import { itemTypesForBook, BOOK_BILL, BOOK_INVOICE } from "../utils/itemTypeBooks";
 import { matchesScenarioSaleType, DEFAULT_SALE_TYPE } from "../utils/saleType";
 import TaxRateNotice from "./TaxRateNotice";
@@ -937,7 +938,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
       next.fbrUOMId = pickedType.fbrUOMId || null;
       next.hsCode = pickedType.hsCode || "";
       next.saleType = pickedType.saleType || "";
-      if (!next.description?.trim()) next.description = pickedType.name || "";
+      // utils/lineDescription.js: fill when empty or still the previous
+      // item's own text; a typed description is never overwritten.
+      next.description = descriptionAfterPick(current.description, current.itemTypeName, pickedType);
     } else {
       next.itemTypeName = "";
       next.uom = "";
@@ -961,7 +964,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
         nonInventoryItemId: n.id,
         itemTypeId: null, itemTypeName: "", uom: row.uom, hsCode: "", saleType: "", fbrUOMId: null,
       };
-      if (!row.description?.trim()) next.description = n.defaultLineDescription || n.name || "";
+      next.description = descriptionAfterPick(row.description, row.itemTypeName, n);
       if (!row.uom?.trim()) next.uom = n.unitName || "";
       if ((!row.unitPrice || Number(row.unitPrice) === 0) && n.defaultSalePrice != null) {
         next.unitPrice = n.defaultSalePrice;
@@ -1050,7 +1053,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
         nonInventoryItemId: n.id,
         itemTypeId: null, itemTypeName: "", hsCode: "", saleType: "", fbrUOMId: null,
       };
-      if (!row.description?.trim()) next.description = n.defaultLineDescription || n.name || "";
+      next.description = descriptionAfterPick(row.description, row.itemTypeName, n);
       if (!row.uom?.trim()) next.uom = n.unitName || "";
       if ((!row.unitPrice || Number(row.unitPrice) === 0) && n.defaultSalePrice != null) {
         next.unitPrice = n.defaultSalePrice;

@@ -15,6 +15,7 @@ import { ADVANCE_TAX_OPTIONS, advanceTaxLabel, findAdvanceTax, advanceTaxAmount 
 import { usePermissions } from "../contexts/PermissionsContext";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import { descriptionAfterPick, autoDescription } from "../utils/lineDescription";
 import { itemTypesForBook, BOOK_BILL } from "../utils/itemTypeBooks";
 import { matchesScenarioSaleType, DEFAULT_SALE_TYPE } from "../utils/saleType";
 import TaxRateNotice from "./TaxRateNotice";
@@ -243,10 +244,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     if (!newId || !picked) return;
     setItemTypeIds((prev) => {
       const next = { ...prev };
-      const newHs = {}, newSt = {}, newUom = {}, newFbrUom = {}, clearNi = {}, newAcct = {};
+      const newHs = {}, newSt = {}, newUom = {}, newFbrUom = {}, clearNi = {}, newAcct = {}, newDesc = {};
       for (const item of allItems) {
         const id = item.id;
         if (mode === "empty" && next[id]) continue;
+        const prevAuto = autoDescription(itemTypes.find((t) => t.id === next[id]));
+        newDesc[id] = { current: itemDescriptions[id] ?? item.description, prevAuto };
         next[id] = parseInt(newId);
         // Stamping an item type clears any non-inventory binding (mutually exclusive).
         clearNi[id] = null;
@@ -257,8 +260,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         if (picked.saleType) newSt[id] = picked.saleType;
         if (picked.uom) newUom[id] = picked.uom;
         if (picked.fbrUOMId) newFbrUom[id] = picked.fbrUOMId;
-        // Item Type sets ONLY the FBR fields — never the Description. Each
-        // line keeps its own product text (challan-seeded or operator-typed).
+        // The description follows utils/lineDescription.js: a challan's or
+        // typed text stays; an empty one, or the previous item's, is refilled.
       }
       // Apply the keyed updates outside this updater so each set runs.
       setTimeout(() => {
@@ -268,6 +271,11 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         if (Object.keys(newFbrUom).length) setItemFbrUomIds(p => ({ ...p, ...newFbrUom }));
         if (Object.keys(clearNi).length) setItemNonInvIds(p => ({ ...p, ...clearNi }));
         if (Object.keys(newAcct).length) setItemAccountIds(p => ({ ...p, ...newAcct }));
+        if (Object.keys(newDesc).length) setItemDescriptions(p => {
+          const out = { ...p };
+          for (const [id, d] of Object.entries(newDesc)) out[id] = descriptionAfterPick(d.current, d.prevAuto, picked);
+          return out;
+        });
       }, 0);
       return next;
     });
@@ -907,8 +915,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     setItemHsCodes((p) => ({ ...p, [id]: "" }));
     setItemSaleTypes((p) => ({ ...p, [id]: "" }));
     setItemFbrUomIds((p) => ({ ...p, [id]: null }));
-    const curDesc = (itemDescriptions[id] ?? item.description) || "";
-    if (!curDesc.trim()) setItemDescriptions((p) => ({ ...p, [id]: n.defaultLineDescription || n.name || "" }));
+    const prevAuto = autoDescription(itemTypes.find((t) => t.id === itemTypeIds[id]));
+    setItemDescriptions((p) => ({ ...p, [id]: descriptionAfterPick(p[id] ?? item.description, prevAuto, n) }));
     const curUom = (itemUoms[id] ?? item.unit) || "";
     if (!curUom.trim()) setItemUoms((p) => ({ ...p, [id]: n.unitName || "" }));
     if ((!itemPrices[id] || Number(itemPrices[id]) === 0) && n.defaultSalePrice != null) {
@@ -1717,16 +1725,17 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                         nonInventoryValue={itemNonInvIds[item.id] || ""}
                                         onPickNonInventory={(n) => handleNonInvPick(item, n)}
                                         onChange={(newId, picked) => {
+                                          const prevType = itemTypes.find((t) => t.id === itemTypeIds[item.id]);
                                           setItemTypeIds((p) => ({ ...p, [item.id]: newId ? parseInt(newId) : null }));
                                           if (picked) {
+                                            // utils/lineDescription.js: fill when empty or still the
+                                            // previous item's text; a challan's or typed text stays.
+                                            setItemDescriptions((p) => ({ ...p, [item.id]: descriptionAfterPick(p[item.id] ?? item.description, autoDescription(prevType), picked) }));
                                             // Picking an ItemType clears any non-inventory binding (mutually exclusive).
                                             setItemNonInvIds((p) => ({ ...p, [item.id]: null }));
                                             // Auto-fill the line's GL income account from the item
                                             // type's per-company overlay (null → engine derives).
                                             setItemAccountIds((p) => ({ ...p, [item.id]: picked.saleAccountId ?? null }));
-                                            // Item Type binds only the FBR fields below — it never
-                                            // touches the Description, which stays the challan line's
-                                            // own product text (editable via SmartItemAutocomplete).
                                             if (picked.hsCode) setItemHsCodes((p) => ({ ...p, [item.id]: picked.hsCode }));
                                             if (picked.saleType) setItemSaleTypes((p) => ({ ...p, [item.id]: picked.saleType }));
                                             if (picked.uom) setItemUoms((p) => ({ ...p, [item.id]: picked.uom }));

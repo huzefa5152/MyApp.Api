@@ -15,6 +15,7 @@ import { ADVANCE_TAX_OPTIONS, advanceTaxLabel, findAdvanceTax, advanceTaxAmount 
 import { defaultAccountPlaceholder } from "../utils/accountDisplay";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import { descriptionAfterPick } from "../utils/lineDescription";
 import TaxRateNotice from "./TaxRateNotice";
 import { billFormShell, billFormBody } from "./bill/billTheme";
 import BillStep from "./bill/BillStep";
@@ -572,9 +573,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // for word -- is the catalog's text, not the operator's, so it follows a
   // re-pick. Keeping it left "WEIGHT SCALE PARTS PLASTIC HOUSING" on a line
   // re-pointed at a juice blender. Anything typed, or carried in from a sales
-  // order, still stays.
-  const seededDescription = (r, picked) =>
-    (r.description?.trim() && r.description !== r.itemTypeName ? r.description : (picked.name || ""));
+  // order, still stays. utils/lineDescription.js is the one rule.
+  const seededDescription = (r, picked) => descriptionAfterPick(r.description, r.itemTypeName, picked);
 
   const handleItemTypePick = (localId, picked) => {
     if (!picked) {
@@ -631,7 +631,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         // Non-inventory posts to its own mapped account — clear any per-line override.
         accountId: null,
       };
-      if (!r.description?.trim()) next.description = n.defaultLineDescription || n.name || "";
+      next.description = descriptionAfterPick(r.description, r.itemTypeName, n);
       if (!r.uom?.trim()) next.uom = n.unitName || "";
       if ((!r.unitPrice || Number(r.unitPrice) === 0) && n.defaultSalePrice != null) next.unitPrice = String(n.defaultSalePrice);
       return next;
@@ -684,7 +684,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         itemTypeId: "", itemTypeName: "", hsCode: "", fbrUOMId: null, saleType: "",
         accountId: null,
       };
-      if (!r.description?.trim()) next.description = n.defaultLineDescription || n.name || "";
+      next.description = descriptionAfterPick(r.description, r.itemTypeName, n);
       if (!r.uom?.trim()) next.uom = n.unitName || "";
       if ((!r.unitPrice || Number(r.unitPrice) === 0) && n.defaultSalePrice != null) next.unitPrice = String(n.defaultSalePrice);
       return next;

@@ -25,6 +25,7 @@ namespace MyApp.Api.Data
         public override int SaveChanges(bool acceptAllChangesOnSuccess)
         {
             PreserveUnreadableFbrTokens();
+            FillBlankLineDescriptions();
             return base.SaveChanges(acceptAllChangesOnSuccess);
         }
 
@@ -32,6 +33,7 @@ namespace MyApp.Api.Data
             CancellationToken cancellationToken = default)
         {
             PreserveUnreadableFbrTokens();
+            FillBlankLineDescriptions();
             return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
         }
 
@@ -72,6 +74,56 @@ namespace MyApp.Api.Data
                 if (entry.State != EntityState.Modified) continue;
                 var token = entry.Property(c => c.FbrToken);
                 if (token.IsModified && token.CurrentValue == null) token.IsModified = false;
+            }
+        }
+
+        /// <summary>
+        /// An invoice line is never saved with a blank description (2026-10-28).
+        ///
+        /// FBR gets the description blank on purpose (FbrService), but the
+        /// commercial invoice, its print, the customer portal and the ledger
+        /// show the line's own words. A line saved with none printed an empty
+        /// description column. Every path that writes an InvoiceItem -- both
+        /// create forms, the edit, challan billing, copies, corrections and
+        /// the imports -- routes through SaveChanges, so the fallback lives
+        /// here once: the company's own name for the item (DisplayName), else
+        /// the line's item-type name, else the catalog name; a non-inventory
+        /// line takes its default line text, else its name. A line with
+        /// neither an item nor a description is left alone (the forms refuse
+        /// it before save).
+        /// </summary>
+        private void FillBlankLineDescriptions()
+        {
+            foreach (var entry in ChangeTracker.Entries<InvoiceItem>())
+            {
+                // A Modified row is filled only when its description is being
+                // written: a save that touches other columns of an old blank
+                // line (stock or FBR bookkeeping) is not a request to edit it.
+                if (entry.State != EntityState.Added
+                    && !(entry.State == EntityState.Modified && entry.Property(l => l.Description).IsModified)) continue;
+                var line = entry.Entity;
+                if (!string.IsNullOrWhiteSpace(line.Description)) continue;
+
+                string? text = null;
+                if (line.ItemTypeId is int itemTypeId)
+                {
+                    var companyId = line.Invoice?.CompanyId
+                        ?? Invoices.Where(i => i.Id == line.InvoiceId).Select(i => (int?)i.CompanyId).FirstOrDefault();
+                    if (companyId != null)
+                        text = CompanyItemTypeSettings
+                            .Where(s => s.CompanyId == companyId && s.ItemTypeId == itemTypeId)
+                            .Select(s => s.DisplayName).FirstOrDefault();
+                    if (string.IsNullOrWhiteSpace(text)) text = line.ItemTypeName;
+                    if (string.IsNullOrWhiteSpace(text))
+                        text = ItemTypes.Where(t => t.Id == itemTypeId).Select(t => t.Name).FirstOrDefault();
+                }
+                else if (line.NonInventoryItemId is int nonInvId)
+                {
+                    text = NonInventoryItems.Where(n => n.Id == nonInvId)
+                        .Select(n => n.DefaultLineDescription != null && n.DefaultLineDescription != "" ? n.DefaultLineDescription : n.Name)
+                        .FirstOrDefault();
+                }
+                if (!string.IsNullOrWhiteSpace(text)) line.Description = text.Trim();
             }
         }
 

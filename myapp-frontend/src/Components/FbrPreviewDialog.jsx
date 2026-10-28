@@ -219,7 +219,8 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
                           <tr key={idx}>
                             <td style={s.tdIdx}>{idx + 1}</td>
                             <td style={s.td}>
-                              <div style={{ fontWeight: 600 }}>{it.productDescription}</div>
+                              {/* FBR is sent the description blank (FbrService); show that, not the line text. */}
+                              <div style={{ fontWeight: 600 }}>{it.productDescription || <span style={s.muted} title="The line description is not filed with FBR">Description: blank (not sent to FBR)</span>}</div>
                               <div style={s.metaSub}>
                                 {it.saleType}
                                 {it.rate && ` · ${it.rate}`}
