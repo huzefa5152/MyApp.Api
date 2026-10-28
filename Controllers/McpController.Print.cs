@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Helpers;
 using MyApp.Api.Models;
@@ -35,6 +36,9 @@ namespace MyApp.Api.Controllers
                 new("get_document_print_data", "A document's actual print data as its screen prints it. The header omits inline images and lists; read a list section separately.",
                     Obj(new { companyId = CompanyProp, documentType = type, documentId = Int(), section = new { type = "string", @enum = new[] { "header" }.Concat(PrintSections).ToArray() }, offset = new { type = "integer", minimum = 0 }, limit = new { type = "integer", minimum = 1, maximum = MaxToolRows } }, "companyId", "documentType", "documentId"),
                     Read: GetDocumentPrintDataAsync),
+                new("get_document_render_bundle", "Everything needed to print one document exactly as its Print button does: the chosen company template (templateId, else the type's default), the actual print data and the company's own images inlined. signed=false prints without a signature, signed=true requires one, omitted prints as the template is set up. Read the JSON bundle in chunks by offset, verify sha256, and render it with the application's templateEngine.mergeTemplate.",
+                    Obj(new { companyId = CompanyProp, documentType = type, documentId = Int(), templateId = Int(), signed = new { type = "boolean" }, offset = new { type = "integer", minimum = 0 }, length = new { type = "integer", minimum = 1, maximum = RenderChunkMax } }, "companyId", "documentType", "documentId"),
+                    Read: RenderBundleAsync),
             });
         }
 
@@ -123,6 +127,40 @@ namespace MyApp.Api.Controllers
             var companyId = await CompanyArg(args);
             var type = PrintTypeArg(args);
             var id = IdArg(args, "documentId");
+            var (dto, _) = await LoadPrintDtoAsync(companyId, type, id);
+            var data = JsonSerializer.SerializeToElement(dto, dto.GetType(), Json);
+            var section = OptText(args, "section", 40) ?? "header";
+            if (section == "header")
+            {
+                var header = new Dictionary<string, JsonElement>();
+                var collections = new Dictionary<string, int>();
+                var omittedAssets = new List<string>();
+                foreach (var p in data.EnumerateObject())
+                {
+                    if (p.Value.ValueKind == JsonValueKind.Array) collections[p.Name] = p.Value.GetArrayLength();
+                    else if (p.Value.ValueKind == JsonValueKind.String && p.Value.GetString()!.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) omittedAssets.Add(p.Name);
+                    else header[p.Name] = p.Value.Clone();
+                }
+                return new { companyId, documentType = type, documentId = id, section, data = header, collections, omittedAssets };
+            }
+            if (!PrintSections.Contains(section) || !data.TryGetProperty(section, out var list) || list.ValueKind != JsonValueKind.Array)
+                throw new ToolError("That list is not available on this document type.");
+            var (offset, limit) = Window(args);
+            var total = list.GetArrayLength();
+            return new
+            {
+                companyId, documentType = type, documentId = id, section, totalCount = total, offset,
+                items = list.EnumerateArray().Skip(offset).Take(limit).Select(e => e.Clone()).ToArray(),
+                nextOffset = (long)offset + limit < total ? (int?)(offset + limit) : null,
+            };
+        }
+
+        /// <summary>
+        /// The print permission, the stored CompanyId and the division are checked before any
+        /// service loads the document. Returns the print DTO and the document's division.
+        /// </summary>
+        private async Task<(object Dto, int? Division)> LoadPrintDtoAsync(int companyId, string type, int id)
+        {
             var permission = type switch
             {
                 "Challan" => "challans.print.view",
@@ -165,31 +203,7 @@ namespace MyApp.Api.Controllers
                 _ => null,
             };
             if (dto == null) throw new ToolError(Denied);
-            var data = JsonSerializer.SerializeToElement(dto, dto.GetType(), Json);
-            var section = OptText(args, "section", 40) ?? "header";
-            if (section == "header")
-            {
-                var header = new Dictionary<string, JsonElement>();
-                var collections = new Dictionary<string, int>();
-                var omittedAssets = new List<string>();
-                foreach (var p in data.EnumerateObject())
-                {
-                    if (p.Value.ValueKind == JsonValueKind.Array) collections[p.Name] = p.Value.GetArrayLength();
-                    else if (p.Value.ValueKind == JsonValueKind.String && p.Value.GetString()!.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) omittedAssets.Add(p.Name);
-                    else header[p.Name] = p.Value.Clone();
-                }
-                return new { companyId, documentType = type, documentId = id, section, data = header, collections, omittedAssets };
-            }
-            if (!PrintSections.Contains(section) || !data.TryGetProperty(section, out var list) || list.ValueKind != JsonValueKind.Array)
-                throw new ToolError("That list is not available on this document type.");
-            var (offset, limit) = Window(args);
-            var total = list.GetArrayLength();
-            return new
-            {
-                companyId, documentType = type, documentId = id, section, totalCount = total, offset,
-                items = list.EnumerateArray().Skip(offset).Take(limit).Select(e => e.Clone()).ToArray(),
-                nextOffset = (long)offset + limit < total ? (int?)(offset + limit) : null,
-            };
+            return (dto, owner.Division);
 
             static async Task<(bool, int?)> Owner<T>(IQueryable<T> q) where T : class
             {
@@ -197,6 +211,111 @@ namespace MyApp.Api.Controllers
                 if (row == null) return (false, null);
                 return (true, (int?)row.GetType().GetProperty("DivisionId")!.GetValue(row));
             }
+        }
+
+        private const int RenderChunkMax = 50000;
+        private const int RenderAssetMaxBytes = 2 * 1024 * 1024;
+        private static readonly Regex OwnedImagePath = new(@"/data/uploads/(?:logos|stamps|quoteitems)/[A-Za-z0-9_./-]+\.(?:png|jpe?g|gif|webp|svg)",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        private static readonly Regex PinnedStampImage = new(@"<img\b[^>]*\{\{\s*stamps\.[a-z0-9_]+\s*\}\}[^>]*>",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+        /// <summary>
+        /// One document ready to print with its company's own template (2026-10-29, ported from
+        /// Trader): template, print data and the company's own logo / stamps / quote images as
+        /// data URIs, read in chunks. Same permission, company and division checks as
+        /// get_document_print_data; templates come from the caller's visible set only.
+        /// </summary>
+        private async Task<object> RenderBundleAsync(JsonElement args)
+        {
+            var companyId = await CompanyArg(args);
+            var type = PrintTypeArg(args);
+            var id = IdArg(args, "documentId");
+            var (dto, division) = await LoadPrintDtoAsync(companyId, type, id);
+
+            // Same choice as the screen's picker: an explicit template, else the default, else the
+            // oldest, among the company-wide designs and the document's own division.
+            var templates = (await VisibleTemplatesAsync(companyId))
+                .Where(t => t.TemplateType == type && (t.DivisionId == null || t.DivisionId == division))
+                .OrderBy(t => t.Id).ToList();
+            var template = IntArg(args, "templateId") is { } templateId
+                ? templates.SingleOrDefault(t => t.Id == templateId) ?? throw new ToolError($"That is not a {type} template of this company.")
+                : templates.FirstOrDefault(t => t.IsDefault) ?? templates.FirstOrDefault()
+                  ?? throw new ToolError("No print template exists for this document type yet. Add one on the Print Templates page.");
+
+            var stamps = await _context.CompanyStamps.AsNoTracking().Where(s => s.CompanyId == companyId).ToListAsync();
+            bool? signed = Has(args, "signed") ? args.GetProperty("signed").ValueKind switch
+            {
+                JsonValueKind.True => true, JsonValueKind.False => false,
+                _ => throw new ToolError("signed must be true or false."),
+            } : null;
+            bool CarriesSignature(PrintTemplate t) => StampSlot.Detect(t.HtmlContent) switch
+            {
+                StampSlot.Slotted => t.StampId is { } stampId && stamps.Any(s => s.Id == stampId),
+                StampSlot.Pinned => StampSlot.PinnedSlugs(t.HtmlContent).All(slug => stamps.Any(s => s.Slug == slug)),
+                _ => false,
+            };
+            var html = template.HtmlContent ?? "";
+            var state = StampSlot.Detect(html);
+            CompanyStamp? stamp = null;
+            var pinned = new List<CompanyStamp>();
+            if (signed == false)
+                html = PinnedStampImage.Replace(html, "");
+            else
+            {
+                if (signed == true && !CarriesSignature(template))
+                {
+                    var signedNames = templates.Where(CarriesSignature).Select(t => $"#{t.Id} {t.Name}").ToList();
+                    throw new ToolError($"Template #{template.Id} \"{template.Name}\" has no signature to print. " + (signedNames.Count > 0
+                        ? $"Signed {type} templates: {string.Join(", ", signedNames)}."
+                        : $"No {type} template of this company carries a signature."));
+                }
+                // As configured: the assigned stamp fills the slot; pinned tokens see every company stamp.
+                stamp = state == StampSlot.Slotted && template.StampId is { } sid ? stamps.SingleOrDefault(s => s.Id == sid) : null;
+                if (state == StampSlot.Pinned) pinned = stamps;
+            }
+
+            var logo = await _context.Companies.AsNoTracking().Where(c => c.Id == companyId).Select(c => c.LogoPath).SingleOrDefaultAsync();
+            var dataRoot = Path.GetFullPath(Path.Combine(Svc<IWebHostEnvironment>().ContentRootPath, "data"));
+            string Inline(string path)
+            {
+                // Only this company's own uploads are inlined; anything else stays as written.
+                var owned = path.StartsWith("/data/uploads/logos/", StringComparison.OrdinalIgnoreCase) ? path == logo
+                    : path.StartsWith("/data/uploads/stamps/", StringComparison.OrdinalIgnoreCase) ? stamps.Any(s => s.FilePath == path)
+                    : QuoteLineImages.IsOwnedBy(path, companyId);
+                if (!owned) return path;
+                var file = Path.GetFullPath(Path.Combine(dataRoot, path["/data/".Length..]));
+                if (!file.StartsWith(dataRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                    || !System.IO.File.Exists(file) || new FileInfo(file).Length > RenderAssetMaxBytes) return path;
+                var mime = Path.GetExtension(file).ToLowerInvariant() switch
+                {
+                    ".png" => "image/png", ".gif" => "image/gif", ".webp" => "image/webp", ".svg" => "image/svg+xml", _ => "image/jpeg",
+                };
+                return $"data:{mime};base64,{Convert.ToBase64String(System.IO.File.ReadAllBytes(file))}";
+            }
+            string InlineAll(string text) => OwnedImagePath.Replace(text, m => Inline(m.Value));
+
+            using var data = JsonDocument.Parse(InlineAll(JsonSerializer.Serialize(dto, dto.GetType(), Json)));
+            var bundle = JsonSerializer.Serialize(new
+            {
+                companyId, documentType = type, documentId = id,
+                template = new { id = template.Id, name = template.Name, isDefault = template.IsDefault, stampState = state },
+                signed = stamp != null || pinned.Count > 0,
+                html = InlineAll(html),
+                data = data.RootElement,
+                stamp = stamp == null ? null : Inline(stamp.FilePath),
+                stamps = pinned.ToDictionary(s => s.Slug, s => Inline(s.FilePath)),
+            }, Json);
+            var offset = Math.Max(0, IntArg(args, "offset") ?? 0);
+            var length = Math.Clamp(IntArg(args, "length") ?? RenderChunkMax, 1, RenderChunkMax);
+            var count = Math.Min(length, Math.Max(0, bundle.Length - offset));
+            return new
+            {
+                companyId, documentType = type, documentId = id, totalCharacters = bundle.Length,
+                sha256 = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(bundle))).ToLowerInvariant(),
+                offset, content = count == 0 ? "" : bundle.Substring(offset, count),
+                nextOffset = (long)offset + count < bundle.Length ? (int?)(offset + count) : null,
+            };
         }
     }
 }

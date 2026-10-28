@@ -4,7 +4,8 @@ namespace MyApp.Api.Helpers;
 /// <param name="Configurable">False for the connection tools every MCP user has.</param>
 public sealed record McpToolAccessDefinition(
     string Name, string Group, string Label, string[] Permissions,
-    string Scope = "read", bool Write = false, bool SeedOnly = false, bool Configurable = true, bool RequireAll = false);
+    string Scope = "read", bool Write = false, bool SeedOnly = false, bool Configurable = true, bool RequireAll = false,
+    string? GrantedWith = null);
 
 /// <summary>
 /// The ONE list of importer MCP tools: what each needs (screen permission, token scope, write
@@ -139,7 +140,10 @@ public static class McpToolAccessCatalog
         new("list_print_templates", "Print templates", "List print designs", new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead),
         new("get_print_template", "Print templates", "Read print design content", new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead),
         new("get_print_contract", "Print templates", "Read supported print fields", new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead),
-        new("get_document_print_data", "Print templates", "Read actual document print data", DocumentPrintPermissions, McpScopes.DocumentsRead),
+        new("get_document_print_data", "Print templates", "Read and print documents", DocumentPrintPermissions, McpScopes.DocumentsRead),
+        // Rides on the print-data grant: the same documents, rendered with the company's own template.
+        new("get_document_render_bundle", "Print templates", "Render documents for printing", DocumentPrintPermissions, McpScopes.DocumentsRead,
+            Configurable: false, GrantedWith: "get_document_print_data"),
     });
 
     public static McpToolAccessDefinition? Find(string name) =>

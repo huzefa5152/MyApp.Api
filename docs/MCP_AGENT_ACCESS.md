@@ -154,6 +154,7 @@ picker):
 | `search_accounts` | `accounting.coa.view` / `accounting.journal.create` | chart of accounts (with `journalPostable`) |
 | `list_print_templates`, `get_print_template`, `get_print_contract` | `printtemplates.manage.view` (scope `templates.read`) | print template repository |
 | `get_document_print_data` | the document's print key (scope `documents.read`) | each document's print data service |
+| `get_document_render_bundle` | the same key and scope; rides on the `get_document_print_data` grant (on wherever it is, off when it is removed) | the print data plus the company's visible template (`templateId`, else the default, else the oldest) and its own logo, stamps and quote images inlined, read in chunks with a sha256; `signed` true / false. `myapp-frontend/scripts/print-document.mjs` prints it as N copies |
 | `validate_bill_fbr` | `invoices.fbr.validate` (scope `fbr.validate`, agent token, 30 per hour) | `IFbrService.ValidateInvoiceAsync` |
 | `get_fbr_preview` | `invoices.fbr.preview` | `FbrController.PreviewPayload` (builds the JSON, sends nothing) |
 | `get_fbr_log`, `get_fbr_summary` | `fbrmonitor.view` | `FbrMonitorController`, always for the named company |

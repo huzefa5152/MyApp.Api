@@ -467,3 +467,6 @@ scripts/_prod_dump_out/
 docs/demo/shots/
 docs/demo/runbook.html
 docs/demo/deck.html
+
+# Local MCP print tokens (scripts/print-document.mjs)
+myapp-frontend/scripts/.print-sites.local.json

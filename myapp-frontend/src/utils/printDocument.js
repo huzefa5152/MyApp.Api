@@ -1,5 +1,21 @@
 import { paginateInvoice } from "./paginateInvoice";
 
+// Templates that don't define their own @page get a sane print default: a
+// top+bottom page margin (so a multi-page doc doesn't butt page-to-page —
+// page 1 ends with a bottom margin, page 2 starts with a top margin), rows
+// that won't split across a break, and a repeating table header. Skip this
+// when the template already sets @page so we never fight its own layout.
+// Shared with scripts/print-document.mjs, so MCP prints match the screen.
+export function withPrintCss(html) {
+  if (/@page/i.test(html)) return html;
+  const printCss =
+    "<style>@media print{@page{size:A4;margin:12mm;}thead{display:table-header-group;}"
+    + "tr,.no-break{page-break-inside:avoid;}}</style>";
+  return /<\/head>/i.test(html)
+    ? html.replace(/<\/head>/i, printCss + "</head>")
+    : printCss + html;
+}
+
 /**
  * Write merged print HTML into an already-open popup window and trigger the
  * browser print dialog only AFTER every image (logo) has finished loading.
@@ -22,19 +38,7 @@ import { paginateInvoice } from "./paginateInvoice";
  */
 export function writeAndPrint(w, html, { timeoutMs = 5000 } = {}) {
   if (!w || w.closed) return;
-  // Templates that don't define their own @page get a sane print default: a
-  // top+bottom page margin (so a multi-page doc doesn't butt page-to-page —
-  // page 1 ends with a bottom margin, page 2 starts with a top margin), rows
-  // that won't split across a break, and a repeating table header. Skip this
-  // when the template already sets @page so we never fight its own layout.
-  if (!/@page/i.test(html)) {
-    const printCss =
-      "<style>@media print{@page{size:A4;margin:12mm;}thead{display:table-header-group;}"
-      + "tr,.no-break{page-break-inside:avoid;}}</style>";
-    html = /<\/head>/i.test(html)
-      ? html.replace(/<\/head>/i, printCss + "</head>")
-      : printCss + html;
-  }
+  html = withPrintCss(html);
   w.document.open();
   w.document.write(html);
   w.document.close();
