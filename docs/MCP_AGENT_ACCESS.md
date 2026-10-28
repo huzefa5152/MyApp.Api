@@ -174,7 +174,7 @@ Writes (scope in brackets; the commit calls the service shown):
 | `prepare_quote` (`quotes.write`) | `salesquotes.manage.create`; with `quoteId` `.update` | `ISalesQuoteService.CreateAsync` / `UpdateAsync` |
 | `prepare_sales_order` (`orders.write`) | `salesorders.manage.create`; with `salesOrderId` `.update` | `ISalesOrderService.CreateAsync` / `UpdateAsync`, or `ISalesQuoteService.ConvertToSalesOrderAsync` |
 | `prepare_challan` (`challans.write`) | `challans.manage.create`; with `challanId` `.update` | `IDeliveryChallanService.CreateDeliveryChallanAsync` / `UpdateChallanAsync`, or `ISalesOrderService.CreateChallanFromOrderAsync` |
-| `prepare_bill` (`bills.write`) | `bills.manage.create` (from challans) / `bills.manage.create.standalone`; with `billId` `bills.manage.update` | `IInvoiceService.CreateAsync` / `CreateStandaloneAsync` / `UpdateAsync`; never submitted to FBR |
+| `prepare_bill` (`bills.write`) | `bills.manage.create` (from challans) / `bills.manage.create.standalone`; with `billId` `bills.manage.update`; a `newItemType` line also needs `itemtypes.manage.create` | `IInvoiceService.CreateAsync` / `CreateStandaloneAsync` / `UpdateAsync`; a `newItemType` (name + HS code) is made or reused by `Helpers/NewItemTypes` in the same transaction, as on the Invoices screen; never submitted to FBR |
 | `prepare_purchase_bill` (`purchases.write`) | `purchasebills.manage.create`; with `purchaseBillId` `.update` (supplier fixed) | `IPurchaseBillService.CreateAsync` / `UpdateAsync` |
 | `prepare_goods_receipt` (`purchases.write`) | `goodsreceipts.manage.create`; with `goodsReceiptId` `.update` | `IGoodsReceiptService.CreateAsync` / `UpdateAsync` |
 | `prepare_receipt` (`receipts.write`) | `accounting.receipts.create` | `IPaymentService.CreateAsync` (allocations to the customer's bills; the rest stays on account) |
@@ -278,3 +278,14 @@ Production `Database:AutoMigrate` may be off: apply migration `20261021140248_Ad
 serves traffic. On first start the seeder adds the three `mcp.*` permissions and the MCP Access /
 MCP Write system roles. Set `Mcp:PublicBaseUrl` if the site sits behind a proxy that hides its
 public origin. Nobody has MCP until the primary admin grants it.
+
+### Retired: the Bill print document (importer, 2026-10-28)
+
+The importer prints one sales document, the Invoice (`TaxInvoice`). The print
+tools no longer offer `Bill`: `get_print_contract`, `get_document_print_data`
+and `prepare_print_template` refuse it with a pointer to `TaxInvoice`, and
+`list_print_templates` leaves Bill designs out. Existing Bill rows are not
+touched, and a customer portal set to Bill keeps printing. The sales invoice
+prints with either `bills.print.view` or `invoices.print.view`. Tool names keep
+the old word (`prepare_bill`, `validate_bill_fbr`) so connected agents keep
+working; their descriptions say invoice.

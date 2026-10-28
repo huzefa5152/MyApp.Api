@@ -21,7 +21,7 @@ namespace MyApp.Api.Controllers
 
         private void AddPrintTools(List<Tool> t)
         {
-            var type = new { type = "string", @enum = PrintTemplateTypes.All };
+            var type = new { type = "string", @enum = PrintTemplateTypes.Offered };
             t.AddRange(new Tool[]
             {
                 new("list_print_templates", "Print designs and metadata for one company; content omitted.",
@@ -56,7 +56,11 @@ namespace MyApp.Api.Controllers
         {
             var type = OptText(args, "documentType", 40);
             if (optional && string.IsNullOrEmpty(type)) return "";
-            return PrintTemplateTypes.All.Contains(type, StringComparer.Ordinal) ? type! : throw new ToolError("Unknown document type.");
+            // Deprecated: "Bill". Invoices print as TaxInvoice (shown as "Invoice"); say so
+            // rather than "unknown", so an agent that learnt the old type can correct itself.
+            if (PrintTemplateTypes.Retired.Contains(type, StringComparer.Ordinal))
+                throw new ToolError("The Bill document is retired on this installation: invoices print as documentType \"TaxInvoice\" (shown as Invoice).");
+            return PrintTemplateTypes.Offered.Contains(type, StringComparer.Ordinal) ? type! : throw new ToolError("Unknown document type.");
         }
 
         private async Task<List<PrintTemplate>> VisibleTemplatesAsync(int companyId)
@@ -71,7 +75,9 @@ namespace MyApp.Api.Controllers
             await Need("printtemplates.manage.view");
             var companyId = await CompanyArg(args);
             var type = PrintTypeArg(args, optional: true);
-            var rows = (await VisibleTemplatesAsync(companyId)).Where(x => type == "" || x.TemplateType == type)
+            // Retired types (Bill) are not listed, as on the Print Templates screen.
+            var rows = (await VisibleTemplatesAsync(companyId))
+                .Where(x => PrintTemplateTypes.Offered.Contains(x.TemplateType) && (type == "" || x.TemplateType == type))
                 .OrderBy(x => x.TemplateType).ThenBy(x => x.Id).ToList();
             var (offset, limit) = Window(args);
             return new { companyId, totalCount = rows.Count, offset, items = rows.Skip(offset).Take(limit).Select(PrintMetadata) };
@@ -119,19 +125,22 @@ namespace MyApp.Api.Controllers
             var id = IdArg(args, "documentId");
             var permission = type switch
             {
-                "Challan" => "challans.print.view", "Bill" => "bills.print.view",
+                "Challan" => "challans.print.view",
                 "TaxInvoice" or "CreditNote" or "DebitNote" => "invoices.print.view",
                 "SalesQuote" => "salesquotes.print.view", "SalesOrder" => "salesorders.print.view",
                 "PurchaseBill" => "purchasebills.print.view", "GoodsReceipt" => "goodsreceipts.print.view",
                 "Receipt" => "accounting.receipts.print", "Payment" => "accounting.payments.print",
                 _ => throw new ToolError("That document type has no print data here."),
             };
-            await Need(permission);
+            // The sales invoice is ONE printed document on this installation; either
+            // print key opens it, as on the Invoices screen.
+            if (type == "TaxInvoice") await Need("invoices.print.view", "bills.print.view");
+            else await Need(permission);
             // Ownership and division in SQL before any service loads parties or lines.
             (bool Found, int? Division) owner = type switch
             {
                 "Challan" => await Owner(_context.DeliveryChallans.Where(x => x.Id == id && x.CompanyId == companyId).Select(x => new { x.DivisionId })),
-                "Bill" or "TaxInvoice" => await Owner(_context.Invoices.Where(x => x.Id == id && x.CompanyId == companyId && x.NoteKind == 0).Select(x => new { x.DivisionId })),
+                "TaxInvoice" => await Owner(_context.Invoices.Where(x => x.Id == id && x.CompanyId == companyId && x.NoteKind == 0).Select(x => new { x.DivisionId })),
                 "DebitNote" => await Owner(_context.Invoices.Where(x => x.Id == id && x.CompanyId == companyId && x.NoteKind == 1).Select(x => new { x.DivisionId })),
                 "CreditNote" => await Owner(_context.Invoices.Where(x => x.Id == id && x.CompanyId == companyId && x.NoteKind == 2).Select(x => new { x.DivisionId })),
                 "SalesQuote" => await Owner(_context.SalesQuotes.Where(x => x.Id == id && x.CompanyId == companyId).Select(x => new { x.DivisionId })),
@@ -147,7 +156,6 @@ namespace MyApp.Api.Controllers
             object? dto = type switch
             {
                 "Challan" => await Svc<IDeliveryChallanService>().GetPrintDataAsync(id),
-                "Bill" => await Svc<IInvoiceService>().GetPrintBillAsync(id),
                 "TaxInvoice" or "CreditNote" or "DebitNote" => await Svc<IInvoiceService>().GetPrintTaxInvoiceAsync(id),
                 "SalesQuote" => await Svc<ISalesQuoteService>().GetPrintDataAsync(id),
                 "SalesOrder" => await Svc<ISalesOrderService>().GetPrintDataAsync(id),

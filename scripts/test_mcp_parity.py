@@ -428,8 +428,8 @@ run(T, "attachment deleted", "prepare_attachment", {"companyId": A, "action": "d
 check("the attachment is gone", one(f"SELECT COUNT(*) FROM Attachments WHERE Id = {att}") == 0)
 
 for bad in ("<div><script>alert(1)</script></div>", "<img src=x onerror=alert(1)>", "<a href='javascript:alert(1)'>x</a>", "<iframe src='//x'></iframe>"):
-    refused(T, f"a design with active content ({bad[:24]})", "prepare_print_template", {"companyId": A, "action": "create", "templateType": "Bill", "name": "bad", "htmlContent": bad})
-run(T, "print design created", "prepare_print_template", {"companyId": A, "action": "create", "templateType": "Bill", "name": "mcpp design", "htmlContent": "<div>{{companyName}} MCPP design</div>"})
+    refused(T, f"a design with active content ({bad[:24]})", "prepare_print_template", {"companyId": A, "action": "create", "templateType": "TaxInvoice", "name": "bad", "htmlContent": bad})
+run(T, "print design created", "prepare_print_template", {"companyId": A, "action": "create", "templateType": "TaxInvoice", "name": "mcpp design", "htmlContent": "<div>{{companyName}} MCPP design</div>"})
 tpl = one(f"SELECT TOP 1 Id FROM PrintTemplates WHERE CompanyId = {A} AND Name = 'mcpp design' ORDER BY Id DESC")
 check("the design is on file", tpl)
 run(T, "print design edited", "prepare_print_template", {"companyId": A, "action": "update", "templateId": tpl, "name": "mcpp design 2", "htmlContent": "<div>v2</div>"})

@@ -97,8 +97,9 @@ namespace MyApp.Api.Controllers
             if (moving && division != existing.DivisionId) await AssertDivisionWriteAsync(companyId, division);
             var date = DateArg(args, "date") ?? existing.Date;
             if (PakistanClock.IsFutureInvoiceDate(date)) throw new ToolError("A bill cannot be dated in the future (FBR rule 0043).");
-            var lines = await DocLinesAsync(args, companyId, pricesRequired: true);
-            if (lines.Any(l => l.ItemTypeId == null)) throw new ToolError("Every bill line needs an itemTypeId (search_item_types).");
+            var lines = await DocLinesAsync(args, companyId, pricesRequired: true, allowNewItem: true);
+            if (lines.Any(l => l.ItemTypeId == null && l.NewItem == null)) throw new ToolError("Every bill line needs an itemTypeId (search_item_types) or a newItemType.");
+            if (lines.Any(l => l.NewItem != null)) await Need("itemtypes.manage.create");
             KeepOwnLines(lines.Select(l => l.Id), existing.Items.Select(i => i.Id), "bill");
             var stored = existing.Items.ToDictionary(i => i.Id);
             var dto = new UpdateInvoiceDto
@@ -116,20 +117,21 @@ namespace MyApp.Api.Controllers
                 {
                     Id = l.Id ?? 0, DeliveryItemId = l.Id is int k ? stored[k].DeliveryItemId : null,
                     Description = l.Description, Quantity = l.Quantity, UOM = l.Unit, UnitPrice = l.UnitPrice!.Value, ItemTypeId = l.ItemTypeId,
+                    NewItemType = l.NewItem,
                 }).ToList(),
             };
             var sub = Math.Round(lines.Sum(l => l.Quantity * l.UnitPrice!.Value), 2, MidpointRounding.AwayFromZero);
             var preview = new
             {
                 clientId, divisionId = division, date = Ymd(date), gstRate = dto.GSTRate, furtherTaxRate = dto.FurtherTaxRate,
-                lines = dto.Items.Select(i => new { i.Id, i.Description, i.Quantity, unit = i.UOM, i.UnitPrice, i.ItemTypeId }),
+                lines = dto.Items.Select(i => new { i.Id, i.Description, i.Quantity, unit = i.UOM, i.UnitPrice, i.ItemTypeId, newItem = i.NewItemType == null ? null : new { i.NewItemType.Name, i.NewItemType.HsCode } }),
                 subtotalAbout = sub, currency = "PKR", note = "Totals and taxes are worked out by the ERP when saved. Nothing is sent to FBR.",
             };
             return new Built(EditPreview("bill", id, existing.InvoiceNumber, preview),
                 $"Update bill #{existing.InvoiceNumber} in company {companyId}: {lines.Count} line(s), subtotal about {sub:0.00} PKR",
                 async () =>
                 {
-                    var b = await Svc<IInvoiceService>().UpdateAsync(id, dto) ?? throw new ToolError("The bill no longer exists.");
+                    var b = await WithNewItemsAsync(companyId, dto.Items, () => Svc<IInvoiceService>().UpdateAsync(id, dto)) ?? throw new ToolError("The bill no longer exists.");
                     return ($"Invoice:{b.Id}", $"Updated bill #{b.InvoiceNumber} (id {b.Id}), total {b.GrandTotal:0.00} PKR. Not submitted to FBR");
                 });
         }

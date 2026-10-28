@@ -27,6 +27,38 @@ namespace MyApp.Api.Controllers
             },
         };
 
+        // A bill line may name an FBR HS code the company has no item for yet,
+        // instead of an itemTypeId: the item is made when the bill is committed,
+        // in the bill's own transaction (Helpers/NewItemTypes), and only for a
+        // caller who may add catalog items. Same rule as the Invoices screen.
+        private static readonly object BillLine = new
+        {
+            type = "object", additionalProperties = false, required = new[] { "description", "quantity", "unit" },
+            properties = new
+            {
+                description = Str(500), quantity = new { type = "string", description = "Greater than 0, up to 4 decimals." },
+                unit = Str(50), unitPrice = MoneyProp, itemTypeId = Int("From search_item_types."),
+                newItemType = new
+                {
+                    type = "object", additionalProperties = false, required = new[] { "name", "hsCode" },
+                    description = "Instead of itemTypeId: an item to add to this company's catalog when the bill is committed (needs the Item Catalog add right). An item of that name and HS code the company already has is reused.",
+                    properties = new { name = Str(100), hsCode = Str(20, "A Pakistan Customs Tariff code, e.g. 8481.8090.") },
+                },
+                id = Int("When editing: the existing line's id (from the get_ tool) to keep that line; omit for a new line."),
+            },
+        };
+
+        /// <summary>Make the lines' new catalog items and save the bill in ONE transaction.</summary>
+        private async Task<T> WithNewItemsAsync<T>(int companyId, IEnumerable<INewItemTypeLine> lines, Func<Task<T>> save)
+        {
+            if (!NewItemTypes.Any(lines)) return await save();
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            await NewItemTypes.ResolveAsync(_context, Svc<IItemTypeService>(), companyId, lines);
+            var result = await save();
+            await tx.CommitAsync();
+            return result;
+        }
+
         private void AddSalesWriteTools(List<Tool> t)
         {
             var party = new Dictionary<string, object>
@@ -75,7 +107,7 @@ namespace MyApp.Api.Controllers
                         idempotencyKey = IdemProp,
                     }, "companyId", "deliveryDate"),
                     Build: BuildChallanAsync, PerHour: 30, Noun: "challans"),
-                new("prepare_bill", "Prepare a sale bill. With challanIds it bills those challans (give a unitPrice for EVERY challan line, deliveryItemId from get_challan); without, a standalone bill from items. With billId it edits that bill: send the whole bill as items, each existing line with its id from get_invoice. A new bill takes the next number of the legal invoice sequence when committed; nothing is submitted to FBR here.",
+                new("prepare_bill", "Prepare a sale invoice (the Invoices screen; the name keeps the old word). With challanIds it bills those challans (give a unitPrice for EVERY challan line, deliveryItemId from get_challan); without, a standalone invoice from items. An item line takes itemTypeId, or newItemType (name + FBR HS code) to add that item to the catalog on commit, in the same transaction; a company that blocks selling below stock refuses an item with no stock, as the screen does. With billId it edits that bill: send the whole bill as items, each existing line with its id from get_invoice. A new bill takes the next number of the legal invoice sequence when committed; nothing is submitted to FBR here.",
                     Obj(new
                     {
                         companyId = CompanyProp, billId = Int("Edit this bill."), clientId = Int(), divisionId = DivisionProp,
@@ -87,7 +119,7 @@ namespace MyApp.Api.Controllers
                         taxRateOverrideReason = Str(500, "Needed when the GST rate differs from the rate the goods were imported at."),
                         challanIds = new { type = "array", minItems = 1, maxItems = 20, items = new { type = "integer", minimum = 1 } },
                         prices = new { type = "array", maxItems = 500, items = new { type = "object", additionalProperties = false, required = new[] { "deliveryItemId", "unitPrice" }, properties = new { deliveryItemId = Int(), unitPrice = new { type = "string" }, description = Str(500), itemTypeId = Int() } } },
-                        items = new { type = "array", maxItems = MaxDocLines, items = DocLine },
+                        items = new { type = "array", maxItems = MaxDocLines, items = BillLine },
                         idempotencyKey = IdemProp,
                     }, "companyId"),
                     Build: BuildBillAsync, PerHour: 10, Noun: "bills"),
@@ -99,9 +131,9 @@ namespace MyApp.Api.Controllers
 
         // ── shared parsing ─────────────────────────────────────────────────
 
-        private sealed record Line(string Description, decimal Quantity, string Unit, decimal? UnitPrice, int? ItemTypeId, int? Id = null);
+        private sealed record Line(string Description, decimal Quantity, string Unit, decimal? UnitPrice, int? ItemTypeId, int? Id = null, NewItemTypeDto? NewItem = null);
 
-        private async Task<List<Line>> DocLinesAsync(JsonElement args, int companyId, bool pricesRequired)
+        private async Task<List<Line>> DocLinesAsync(JsonElement args, int companyId, bool pricesRequired, bool allowNewItem = false)
         {
             var lines = new List<Line>();
             foreach (var it in Items(args, "items", 1, MaxDocLines))
@@ -112,7 +144,16 @@ namespace MyApp.Api.Controllers
                 if (string.IsNullOrEmpty(unit)) throw new ToolError("Item units cannot be empty.");
                 var qty = ReqDec(it, "quantity", 0m, 999_999_999m, 4, minInclusive: false);
                 var price = pricesRequired ? ReqDec(it, "unitPrice", 0m, 999_999_999m, 4, minInclusive: false) : OptDec(it, "unitPrice", 0m, 999_999_999m, 4);
-                lines.Add(new Line(desc, qty, unit, price, await ItemInCompanyAsync(it, "itemTypeId", companyId), OptId(it, "id")));
+                NewItemTypeDto? newItem = null;
+                if (allowNewItem && it.TryGetProperty("newItemType", out var ni) && ni.ValueKind == JsonValueKind.Object)
+                {
+                    if (Has(it, "itemTypeId")) throw new ToolError("A line takes either itemTypeId or newItemType, not both.");
+                    var niName = OptText(ni, "name", 100);
+                    var niHs = OptText(ni, "hsCode", 20);
+                    if (string.IsNullOrEmpty(niName) || string.IsNullOrEmpty(niHs)) throw new ToolError("newItemType needs a name and an hsCode.");
+                    newItem = new NewItemTypeDto { Name = niName, HsCode = niHs, Uom = unit };
+                }
+                lines.Add(new Line(desc, qty, unit, price, newItem != null ? null : await ItemInCompanyAsync(it, "itemTypeId", companyId), OptId(it, "id"), newItem));
             }
             return lines;
         }
@@ -470,26 +511,28 @@ namespace MyApp.Api.Controllers
             }
 
             if (Has(args, "prices")) throw new ToolError("prices applies to challan lines. For a standalone bill give items.");
-            var lines = await DocLinesAsync(args, companyId, pricesRequired: true);
-            if (lines.Any(l => l.ItemTypeId == null)) throw new ToolError("Every bill line needs an itemTypeId (search_item_types).");
+            var lines = await DocLinesAsync(args, companyId, pricesRequired: true, allowNewItem: true);
+            if (lines.Any(l => l.ItemTypeId == null && l.NewItem == null)) throw new ToolError("Every bill line needs an itemTypeId (search_item_types) or a newItemType.");
+            if (lines.Any(l => l.NewItem != null)) await Need("itemtypes.manage.create");
             var sdto = new CreateStandaloneInvoiceDto
             {
                 CompanyId = companyId, DivisionId = division, ClientId = clientId, Date = date, GSTRate = gst, PaymentTerms = terms, PaymentMode = mode,
                 PoNumber = poNumber, PoDate = poDate, FurtherTaxRate = furtherTax, AdvanceTaxSection = advanceSection, AdvanceTaxFilerActive = advanceFiler,
                 TaxRateOverrideReason = overrideReason,
-                Items = lines.Select(l => new CreateStandaloneInvoiceItemDto { Description = l.Description, Quantity = l.Quantity, UOM = l.Unit, UnitPrice = l.UnitPrice!.Value, ItemTypeId = l.ItemTypeId }).ToList(),
+                Items = lines.Select(l => new CreateStandaloneInvoiceItemDto { Description = l.Description, Quantity = l.Quantity, UOM = l.Unit, UnitPrice = l.UnitPrice!.Value, ItemTypeId = l.ItemTypeId, NewItemType = l.NewItem }).ToList(),
             };
             var sub = Math.Round(lines.Sum(l => l.Quantity * l.UnitPrice!.Value), 2, MidpointRounding.AwayFromZero);
             var spreview = new
             {
                 clientId, clientName = name, divisionId = division, date = Ymd(date), gstRate = gst, furtherTaxRate = furtherTax, advanceTaxSection = advanceSection,
-                lines = sdto.Items.Select(i => new { i.Description, i.Quantity, unit = i.UOM, i.UnitPrice, i.ItemTypeId }), subtotalAbout = sub, currency = "PKR",
+                lines = sdto.Items.Select(i => new { i.Description, i.Quantity, unit = i.UOM, i.UnitPrice, i.ItemTypeId, newItem = i.NewItemType == null ? null : new { i.NewItemType.Name, i.NewItemType.HsCode } }),
+                subtotalAbout = sub, currency = "PKR",
                 note = "The bill number, taxes and totals are fixed by the ERP when it is saved and reported back. Nothing is sent to FBR.",
             };
             return new Built(spreview, $"Create a standalone bill for \"{name}\" in company {companyId}: {lines.Count} line(s), subtotal about {sub:0.00} PKR, GST {gst}%",
                 async () =>
                 {
-                    var b = await invoices.CreateStandaloneAsync(sdto);
+                    var b = await WithNewItemsAsync(companyId, sdto.Items, () => invoices.CreateStandaloneAsync(sdto));
                     return ($"Invoice:{b.Id}", $"Created bill #{b.InvoiceNumber} (id {b.Id}) for \"{b.ClientName}\", total {b.GrandTotal:0.00} PKR. Not submitted to FBR");
                 });
         }

@@ -239,7 +239,7 @@ for name, tool in sorted(TOOLS.items()):
         if arg not in props:
             continue
         swept += 1
-        extra = {"documentType": "Bill"} if arg == "documentId" else {}   # the id is B's bill, so ask for a bill
+        extra = {"documentType": "TaxInvoice"} if arg == "documentId" else {}   # the id is B's bill, so ask for a bill
         refused, text = call(TA, name, {**base_args(tool, A["id"]), **extra, arg: bid})
         if not refused and text.startswith("{") and "planId" in text:
             call(TA, "cancel_action", {"planId": json.loads(text)["planId"]})

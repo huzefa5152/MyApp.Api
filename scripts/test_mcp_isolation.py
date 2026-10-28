@@ -119,7 +119,7 @@ company_tools = [n for n, t in listed.items() if "companyId" in t["inputSchema"]
 leaky = []
 for n in company_tools:
     req = {k: (B if k == "companyId" else 1) for k in listed[n]["inputSchema"].get("required", [])}
-    if "documentType" in req: req["documentType"] = "Bill"
+    if "documentType" in req: req["documentType"] = "TaxInvoice"
     if "partyType" in req: req["partyType"] = "Client"
     refused, text = call(ja, n, req)
     if not refused or DENIED not in text:

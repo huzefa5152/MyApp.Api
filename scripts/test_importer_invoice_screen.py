@@ -13,6 +13,8 @@ Suites
       itemtypes.manage.create right re-checked (cases 14, 32-40)
   D8  the stock guard still refuses a sale of a brand-new item on a
       hard-block company, and nothing is left behind (cases 41, 41c)
+  MCP the hosted MCP follows the screen: prepare_bill's newItemType, and the
+      retired Bill print type refused with a pointer to TaxInvoice
 
 Run:  python scripts/test_importer_invoice_screen.py --base http://localhost:5195
 """
@@ -315,6 +317,62 @@ def suite_d7_d8(base, token):
           not find_items(base, token, other["id"], other_name) and not find_items(base, token, soft["id"], other_name))
 
 
+def suite_mcp(base, token):
+    """The hosted MCP follows the screen: prepare_bill makes a new item on commit (with the
+    catalog right, in the bill's transaction), and the retired Bill print type is refused."""
+    print("\n=== MCP: prepare_bill new items, retired Bill print type ===")
+    sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent))
+    import mcp_importer_fixture as fx
+    fx.set_base(base)
+    admin = fx.login("admin", "admin123")
+    A, B = fx.companies(admin)
+    fx.remove_users(admin, "invscr_mcp_")
+    sysr = fx.system_roles(admin)
+    staff, mcpa, mcpw = fx.staff_role(admin), sysr["MCP Access"], sysr["MCP Write"]
+    _, jw = fx.make_user(admin, "invscr_mcp_writer", [A], [staff, mcpa, mcpw])
+    T = fx.token_for(jw, [A])
+    st, clients = http("GET", f"/api/clients/company/{A}", base, token=token)
+    client = clients[0]["id"] if isinstance(clients, list) and clients else None
+    if not check("MCP fixture company has a customer", client is not None, str(clients)[:200]):
+        return
+    name = f"MCP New Item {SUFFIX}"
+    args = {"companyId": A, "clientId": client, "items": [{"description": "", "quantity": "1", "unit": UNIT, "unitPrice": "100",
+            "newItemType": {"name": name, "hsCode": "8481.8090"}}]}
+    refused, text = fx.call(T, "prepare_bill", args)
+    if refused and "description" in text.lower():   # descriptions are required on MCP lines
+        args["items"][0]["description"] = "Valve"
+        refused, text = fx.call(T, "prepare_bill", args)
+    plan = None if refused else json.loads(text)
+    check("prepare_bill takes a newItemType line", plan is not None and "newItem" in text, text[:300])
+    check("prepare saves no item", not [r for r in find_items(base, token, A, name) if r["name"] == name])
+    if plan:
+        refused, text = fx.call(T, "commit_action", {"planId": plan["planId"]})
+        made = [r for r in find_items(base, token, A, name) if r["name"] == name]
+        if refused:
+            check("commit refused only for stock (hard-block company), and no item left behind",
+                  "stock" in text.lower() and not made, text[:300])
+        else:
+            check("commit makes the item in the bill's company", len(made) == 1, text[:300])
+            check("...and not in another company", not [r for r in find_items(base, token, B, name) if r["name"] == name])
+    # a writer without the catalog right
+    keys = [p["key"] for p in http("GET", "/api/permissions", base, token=admin)[1]
+            if not p["key"].startswith(fx.ADMIN_PREFIXES) and not p["key"].startswith("itemtypes.manage.c")]
+    nocat = fx.role_with(admin, "InvScreen MCP no catalog create", keys)
+    _, jn = fx.make_user(admin, "invscr_mcp_nocat", [A], [nocat, mcpa, mcpw])
+    Tn = fx.token_for(jn, [A])
+    args["items"][0]["newItemType"]["name"] = f"MCP Denied {SUFFIX}"
+    args["items"][0]["description"] = "Valve"
+    refused, text = fx.call(Tn, "prepare_bill", args)
+    check("prepare_bill with newItemType needs itemtypes.manage.create", refused and "itemtypes.manage.create" in text, text[:300])
+    # the retired Bill print document
+    refused, text = fx.call(T, "get_print_contract", {"documentType": "Bill"})
+    check("get_print_contract refuses Bill and names TaxInvoice", refused and "TaxInvoice" in text, text[:200])
+    refused, text = fx.call(T, "list_print_templates", {"companyId": A})
+    check("list_print_templates lists no Bill designs", not refused and '"documentType": "Bill"' not in text and '"documentType":"Bill"' not in text, text[:200])
+    refused, text = fx.call(T, "prepare_print_template", {"companyId": A, "action": "create", "templateType": "Bill", "name": "x", "htmlContent": "<p>x</p>"})
+    check("prepare_print_template refuses a new Bill design", refused and "TaxInvoice" in text, text[:200])
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--base", default="http://localhost:5195")
@@ -324,6 +382,7 @@ def main():
     token = login(a.base, a.admin_user, a.admin_pw)
     suite_d6(a.base, token)
     suite_d7_d8(a.base, token)
+    suite_mcp(a.base, token)
     print(f"\n{PASSED}/{PASSED + FAILED} importer invoice screen checks passed")
     sys.exit(1 if FAILED else 0)
 

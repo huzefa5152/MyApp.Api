@@ -139,7 +139,9 @@ namespace MyApp.Api.Controllers
                 if (division != null) await AssertDivisionWriteAsync(companyId, division);
                 var dto = new CreatePrintTemplateDto
                 {
-                    TemplateType = OptText(args, "templateType", 40) ?? throw new ToolError("templateType is required."), DivisionId = division,
+                    TemplateType = OptText(args, "templateType", 40) is { Length: > 0 } tt
+                        ? (PrintTemplateTypes.Retired.Contains(tt) ? throw new ToolError("The Bill document is retired on this installation: make an invoice design with templateType \"TaxInvoice\".") : tt)
+                        : throw new ToolError("templateType is required."), DivisionId = division,
                     Name = OptText(args, "name", 200) ?? throw new ToolError("name is required."), HtmlContent = Html(), IsDefault = OptBool(args, "isDefault") ?? false,
                 };
                 return new Built(new { action, dto.TemplateType, dto.Name, dto.DivisionId, dto.IsDefault, htmlLength = dto.HtmlContent.Length }, $"Create print design \"{dto.Name}\" ({dto.TemplateType}) in company {companyId}",

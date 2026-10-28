@@ -22,6 +22,17 @@ namespace MyApp.Api.Helpers
             "Receipt", "Payment", "Transfer", "JournalEntry", "WithholdingTaxReceipt",
         };
 
+        /// <summary>
+        /// Types this installation no longer offers (importer, 2026-10-28): sales
+        /// print as one Invoice (TaxInvoice). Existing Bill rows stay in the
+        /// database and a portal set to Bill keeps printing, but the screens and
+        /// the MCP tools no longer offer the type.
+        /// </summary>
+        public static readonly string[] Retired = { "Bill" };
+
+        /// <summary><see cref="All"/> minus <see cref="Retired"/>.</summary>
+        public static readonly string[] Offered = All.Except(Retired).ToArray();
+
         /// <summary>Human-readable list for validation error messages.</summary>
         public static string AllForDisplay => string.Join(", ", All);
     }
