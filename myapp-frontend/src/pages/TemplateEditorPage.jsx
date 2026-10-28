@@ -806,7 +806,7 @@ export default function TemplateEditorPage() {
   const templateTypeLabel = TEMPLATE_TYPES.find((t) => t.value === templateType)?.label || templateType;
 
   return (
-    <div style={{ height: "calc(100vh - 80px)", display: "flex", flexDirection: "column", gap: "0" }}>
+    <div style={{ height: "calc(100dvh - 56px - 2.5rem)", display: "flex", flexDirection: "column", gap: "0" }}>
       {/* Toast */}
       {toast && (
         <div style={{

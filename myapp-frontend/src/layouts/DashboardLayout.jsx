@@ -155,6 +155,10 @@ export default function DashboardLayout() {
   const { user, logout, avatarVersion } = useAuth();
   const { hasAny, has } = usePermissions();
   const location = useLocation();
+  // The content area, not the window, is what scrolls (DashboardLayout.css
+  // .dl-shell). It lives across pages, so a new page starts at its top.
+  const mainRef = useRef(null);
+  useEffect(() => { if (mainRef.current) mainRef.current.scrollTop = 0; }, [location.pathname]);
   const navigate = useNavigate();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -945,7 +949,7 @@ export default function DashboardLayout() {
         </header>
 
         {/* Page Content */}
-        <main className="dl-main" id="main-content">
+        <main className="dl-main" id="main-content" ref={mainRef}>
           {showNoCompany ? <NoCompanyConfigured /> : <Outlet />}
         </main>
       </div>
