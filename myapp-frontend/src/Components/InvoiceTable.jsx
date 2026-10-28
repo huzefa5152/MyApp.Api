@@ -1,9 +1,8 @@
-import { useNavigate } from "react-router-dom";
 import CardActions from "./CardActions";
 import {
   MdVisibility, MdPrint, MdPictureAsPdf, MdGridOn, MdDescription,
   MdCloudUpload, MdCheckCircle, MdHourglassEmpty, MdError, MdBlock, MdRestore,
-  MdEdit, MdDelete, MdOpenInNew, MdCancel, MdPayments, MdUndo, MdPostAdd, MdCopyAll,
+  MdEdit, MdDelete, MdCancel, MdPayments, MdUndo, MdPostAdd, MdCopyAll,
   MdLocalShipping,
 } from "react-icons/md";
 import DataTable from "./DataTable";
@@ -15,7 +14,7 @@ import { documentReference } from "../utils/invoiceReference";
 import { colors } from "../theme";
 
 // Renders the FBR-status pill in compact form for the table.
-function fbrStatusBadge(inv, isBillsMode, fbrEnabled = true) {
+function fbrStatusBadge(inv, fbrEnabled = true) {
   if (inv.isCancelled) {
     return (
       <StatusBadge tone="danger" title={inv.cancelReason ? `Cancelled — ${inv.cancelReason}` : "This bill has been cancelled (voided)"}>
@@ -26,12 +25,12 @@ function fbrStatusBadge(inv, isBillsMode, fbrEnabled = true) {
   if (inv.fbrStatus === "Submitted") {
     return (
       <StatusBadge tone="submitted" title={inv.fbrIRN ? `IRN: ${inv.fbrIRN}` : inv.fbrFiledManually ? `Filed by hand on the FBR portal as ${inv.fbrInvoiceNumber || "—"}` : undefined}>
-        {inv.fbrFiledManually ? "Filed manually" : isBillsMode ? "Submitted" : "FBR Submitted"}
+        {inv.fbrFiledManually ? "Filed manually" : "Filed with FBR"}
       </StatusBadge>
     );
   }
   if (inv.fbrAdjustmentStale) {
-    return <StatusBadge tone="warning" title={`The bill changed after it was adjusted for FBR — bill Rs. ${Number(inv.subtotal || 0).toLocaleString()} vs FBR Rs. ${Number(inv.fbrAdjustedSubtotal ?? inv.subtotal ?? 0).toLocaleString()}. Re-adjust on the Invoices tab before validating.`}>Re-adjust</StatusBadge>;
+    return <StatusBadge tone="warning" title={`The bill changed after it was adjusted for FBR — bill Rs. ${Number(inv.subtotal || 0).toLocaleString()} vs FBR Rs. ${Number(inv.fbrAdjustedSubtotal ?? inv.subtotal ?? 0).toLocaleString()}. Edit and save the invoice, then validate again.`}>Re-adjust</StatusBadge>;
   }
   if (inv.fbrStatus === "Submitting") {
     return <StatusBadge tone="info" title="A submission is in progress. Please wait and refresh — do not submit again.">Submitting…</StatusBadge>;
@@ -45,9 +44,6 @@ function fbrStatusBadge(inv, isBillsMode, fbrEnabled = true) {
   // one because the company later switched FBR off would hide the very state
   // an operator must act on.
   if (!fbrEnabled) return null;
-  if (isBillsMode) {
-    return <StatusBadge tone="warning">Pending FBR</StatusBadge>;
-  }
   if (inv.fbrStatus === "Failed") {
     return <StatusBadge tone="danger" title={inv.fbrErrorMessage || "FBR rejected this submission"}>FBR Failed</StatusBadge>;
   }
@@ -77,13 +73,11 @@ function fbrStatusBadge(inv, isBillsMode, fbrEnabled = true) {
 
 export default function InvoiceTable({
   invoices,
-  isBillsMode,
   // Note tabs — rows are Credit Notes or Debit Notes in their own
   // numbering sequences; number column reads "Credit Note # / Debit Note #".
   isReturnsMode = false,
   noteDocType = null,
   perms,
-  hasExcelBill,
   hasExcelTax,
   selectedCompanyHasFbrToken,
   fbrEnabled = true,
@@ -94,10 +88,7 @@ export default function InvoiceTable({
   onView,
   onRecordReceipt,
   onShowPayments,
-  onPrintBill,
   onPrintTax,
-  onExportBillPdf,
-  onExportBillExcel,
   onExportTaxPdf,
   onExportTaxExcel,
   onFbrPreview,
@@ -113,12 +104,10 @@ export default function InvoiceTable({
   onReverse,
   onCorrect,
 }) {
-  const navigate = useNavigate();
-
   const columns = [
     {
       key: "invoiceNumber",
-      header: isReturnsMode ? (noteDocType === 10 ? "Credit Note #" : "Debit Note #") : isBillsMode ? "Bill #" : "Invoice #",
+      header: isReturnsMode ? (noteDocType === 10 ? "Credit Note #" : "Debit Note #") : "Invoice #",
       width: 130,
       accessor: (i) => Number(i.invoiceNumber) || i.invoiceNumber,
       render: (i) => (
@@ -290,14 +279,14 @@ export default function InvoiceTable({
     },
     {
       key: "fbrStatus",
-      header: isBillsMode ? "FBR" : "FBR Status",
+      header: "FBR Status",
       width: 140,
       accessor: (i) => i.fbrStatus || "",
       // The rate check sits beside the filing status: a rate conflict is what
       // the person about to file needs to see.
       render: (i) => (
         <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
-          {fbrStatusBadge(i, isBillsMode, fbrEnabled)}
+          {fbrStatusBadge(i, fbrEnabled)}
           <TaxRateBadge inv={i} />
         </span>
       ),
@@ -314,7 +303,7 @@ export default function InvoiceTable({
     return (
       <CardActions nowrap label={`More actions for ${inv.invoiceNumber}`}>
         {!isReturnsMode && (
-          <button data-label="View" data-primary={(isBillsMode || isReturnsMode) || undefined} style={btn.view} onClick={() => onView?.(inv)} title={isBillsMode ? "View bill" : "View invoice (read-only)"}>
+          <button data-label="View" data-primary style={btn.view} onClick={() => onView?.(inv)} title="View invoice (read-only)">
             <MdVisibility size={14} />
           </button>
         )}
@@ -323,36 +312,12 @@ export default function InvoiceTable({
             <MdPayments size={14} />
           </button>
         )}
-        {isBillsMode && (
-          <button data-label="Open in Invoices"
-            style={btn.teal}
-            onClick={() => navigate(`/invoices?search=${encodeURIComponent(inv.invoiceNumber)}`)}
-            title="Open this bill on the Invoices tab"
-          >
-            <MdOpenInNew size={14} />
-          </button>
-        )}
-        {isBillsMode && perms.canPrint && (
-          <button data-label="Print bill" data-primary style={{ ...btn.print, ...(perms.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={perms.noTemplate} onClick={() => onPrintBill?.(inv)} title={perms.noTemplate ? perms.noTemplateReason : "Print bill"}>
-            <MdPrint size={14} />
-          </button>
-        )}
-        {!isBillsMode && perms.canPrint && (
+        {perms.canPrint && (
           <button data-label="Print tax invoice" data-primary={(isSubmitted || inv.isCancelled || isReturnsMode) || undefined} style={{ ...btn.tax, ...(perms.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={perms.noTemplate} onClick={() => onPrintTax?.(inv)} title={perms.noTemplate ? perms.noTemplateReason : "Print tax invoice"}>
             <MdDescription size={14} />
           </button>
         )}
-        {isBillsMode && perms.canPrint && (
-          <button data-label="Bill PDF"
-            style={{ ...btn.pdf, opacity: (exportingId || perms.noTemplate) ? 0.55 : 1, ...(perms.noTemplate ? { cursor: "not-allowed" } : {}) }}
-            disabled={!!exportingId || perms.noTemplate}
-            onClick={() => onExportBillPdf?.(inv)}
-            title={perms.noTemplate ? perms.noTemplateReason : "Export Bill PDF"}
-          >
-            {exportingId === inv.id + "-bill-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />}
-          </button>
-        )}
-        {!isBillsMode && perms.canPrint && (
+        {perms.canPrint && (
           <button data-label="Tax invoice PDF"
             style={{ ...btn.pdf, opacity: (exportingId || perms.noTemplate) ? 0.55 : 1, ...(perms.noTemplate ? { cursor: "not-allowed" } : {}) }}
             disabled={!!exportingId || perms.noTemplate}
@@ -362,17 +327,7 @@ export default function InvoiceTable({
             {exportingId === inv.id + "-tax-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />}
           </button>
         )}
-        {isBillsMode && perms.canPrint && hasExcelBill && (
-          <button data-label="Bill XLS"
-            style={{ ...btn.excel, opacity: exportingId ? 0.55 : 1 }}
-            disabled={!!exportingId}
-            onClick={() => onExportBillExcel?.(inv)}
-            title="Export Bill XLS"
-          >
-            {exportingId === inv.id + "-bill-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />}
-          </button>
-        )}
-        {!isBillsMode && perms.canPrint && hasExcelTax && (
+        {perms.canPrint && hasExcelTax && (
           <button data-label="Tax invoice XLS"
             style={{ ...btn.excel, opacity: exportingId ? 0.55 : 1 }}
             disabled={!!exportingId}
@@ -382,12 +337,12 @@ export default function InvoiceTable({
             {exportingId === inv.id + "-tax-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />}
           </button>
         )}
-        {!isBillsMode && perms.canFbrPreview && (
+        {perms.canFbrPreview && (
           <button data-label="View FBR payload" data-primary={(isSubmitted) || undefined} style={btn.view} onClick={() => onFbrPreview?.(inv)} title="Preview FBR payload">
             <MdVisibility size={14} />
           </button>
         )}
-        {!isBillsMode && canReset && (
+        {canReset && (
           <button data-label="Reset FBR" data-primary
             style={{ ...btn.neutral, backgroundColor: "#fff8e1", color: "#8a6d00", border: "1px solid #ffe082" }}
             onClick={() => onFbrReset?.(inv)}
@@ -396,7 +351,7 @@ export default function InvoiceTable({
             <MdRestore size={14} />
           </button>
         )}
-        {!isBillsMode && perms.canFbrAny && selectedCompanyHasFbrToken && !isSubmitted && !isFbrPending && !inv.isCancelled && !isFutureDocDate(inv.date) && (
+        {perms.canFbrAny && selectedCompanyHasFbrToken && !isSubmitted && !isFbrPending && !inv.isCancelled && !isFutureDocDate(inv.date) && (
           <>
             {perms.canFbrValidate && (
               <button data-label="Validate with FBR" data-primary
@@ -462,12 +417,12 @@ export default function InvoiceTable({
           <button data-label="Edit" data-primary
             style={btn.edit}
             onClick={() => onEdit?.(inv)}
-            title={isBillsMode ? "Edit bill" : "Edit item type, qty & unit price (saved as an adjustment over the bill)"}
+            title="Edit this invoice"
           >
             <MdEdit size={14} />
           </button>
         )}
-        {!isBillsMode && perms.canFbrExclude && !isSubmitted && !inv.isCancelled && (
+        {perms.canFbrExclude && !isSubmitted && !inv.isCancelled && (
           <button data-label={inv.isFbrExcluded ? "Include in FBR bulk" : "Exclude from FBR bulk"}
             style={{
               ...btn.neutral,
@@ -488,7 +443,7 @@ export default function InvoiceTable({
             <MdDelete size={14} />
           </button>
         )}
-        {(isBillsMode || isReturnsMode) && perms.canVoid && !isSubmitted && !inv.isCancelled && (
+        {perms.canVoid && !isSubmitted && !inv.isCancelled && (
           <button data-label="Void"
             style={btn.void}
             onClick={() => onVoid?.(inv)}
@@ -536,8 +491,8 @@ export default function InvoiceTable({
       rowKey={(i) => i.id}
       actions={renderActions}
       quickSearchPlaceholder="Quick filter visible rows..."
-      storageKey={isBillsMode ? "bills" : "invoices"}
-      emptyMessage={isBillsMode ? "No bills on this page." : "No invoices on this page."}
+      storageKey="invoices"
+      emptyMessage="No invoices on this page."
     />
   );
 }

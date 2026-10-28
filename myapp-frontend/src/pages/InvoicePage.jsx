@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { MdInfoOutline, MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo, MdPostAdd, MdCopyAll, MdLocalShipping, MdDownload } from "react-icons/md";
+import { MdInfoOutline, MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdViewList, MdPayments, MdUndo, MdPostAdd, MdCopyAll, MdLocalShipping, MdDownload } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import PaymentForm from "../Components/PaymentForm";
 import PaymentHistoryDialog from "../Components/PaymentHistoryDialog";
@@ -21,7 +21,7 @@ import FbrResetModal from "../Components/FbrResetModal";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import CardActions from "../Components/CardActions";
 import { useListViewMode } from "../hooks/useListViewMode";
-import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice, deleteInvoice, cancelInvoice, setInvoiceFbrExcluded } from "../api/invoiceApi";
+import { getPagedInvoicesByCompany, getInvoicePrintTaxInvoice, deleteInvoice, cancelInvoice, setInvoiceFbrExcluded } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { submitInvoiceToFbr, validateInvoiceWithFbr } from "../api/fbrApi";
 import { dropdownStyles, cardStyles, cardHover } from "../theme";
@@ -30,7 +30,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { getTemplate, hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
-import { defaultBillTemplate, defaultTaxInvoiceTemplate } from "../utils/defaultTemplates";
+import { defaultTaxInvoiceTemplate } from "../utils/defaultTemplates";
 import { defaultCreditNoteTemplate, defaultDebitNoteTemplate } from "../utils/purchaseNoteDocTemplates";
 import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
@@ -68,16 +68,14 @@ const colors = {
 // HAS been applied to this document, which is a fact rather than a verdict.
 
 export default function InvoicePage({ mode = "invoices" }) {
-  // Tab split: `bills` mode is pre-FBR data entry — no item-type column
-  // in the create/edit forms, no Validate All / Submit All bulk bar, no
-  // per-card FBR Validate / Submit / Exclude buttons. The FBR-submitted
-  // status badge still renders in both modes so the operator can see at
-  // a glance which rows are locked. `invoices` mode keeps everything.
-  const isBillsMode = mode === "bills";
+  // One sales screen (2026-10-28): the importer used to split one document
+  // across a Bills tab (create / edit / void) and an Invoices tab (FBR
+  // classification and filing). Importers never adjust quantity or item type
+  // for FBR, so both live here now. Each action keeps its own permission key.
   // Note tabs: `creditnotes` (returns / reversals, DocumentType 10) and
   // `debitnotes` (upward adjustments, DocumentType 9). Each lists ONLY its
   // type, numbered from its own per-company sequence (Credit Note #1…,
-  // Debit Note #1…). Both behave like the Invoices tab (FBR validate /
+  // Debit Note #1…). Both behave like the sales screen (FBR validate /
   // submit visible) but with no create/edit — notes are generated from the
   // note screen and are immutable (void + recreate to change).
   const noteDocType = mode === "creditnotes" ? 10 : mode === "debitnotes" ? 9 : null;
@@ -85,8 +83,8 @@ export default function InvoicePage({ mode = "invoices" }) {
   const noteLabel = noteDocType === 10 ? "Credit Note" : "Debit Note";
   // Persist view-mode per tab so each tab remembers its own setting
   // (e.g. operator wants cards on Bills but table on Invoices).
-  const [viewMode, setViewMode, isBigScreen] = useListViewMode(isBillsMode ? "bills" : isNotesMode ? mode : "invoices");
-  const filterScreen = isBillsMode ? "bills" : isNotesMode ? mode : "invoices";
+  const [viewMode, setViewMode, isBigScreen] = useListViewMode(isNotesMode ? mode : "invoices");
+  const filterScreen = isNotesMode ? mode : "invoices";
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
   const { has } = usePermissions();
   const confirm = useConfirm();
@@ -98,29 +96,11 @@ export default function InvoicePage({ mode = "invoices" }) {
   // Only point at the setting if the reader can actually change it.
   const canManageCompany = has("companies.manage.update");
   const canUpdate = has("bills.manage.update");
-  // Users with only the narrow ItemType-only permission still need the
-  // Edit button to reach the form, even though they can only change the
-  // ItemType column inside it. EditBillForm enforces the field-level
-  // restriction on its own.
-  const canEditItemType = has("invoices.manage.update.itemtype");
-  // Slightly broader narrow permission — Item Type AND Quantity. Same
-  // Edit button entry point, EditBillForm enforces field-level lock.
-  const canEditItemTypeAndQty = has("invoices.manage.update.itemtype.qty");
-  // Edit entry point is gated PER TAB to match the backend authorization:
-  //   • Bills tab    → full bill PUT (InvoicesController.Update) → requires
-  //     bills.manage.update.
-  //   • Invoices tab → item-type(+qty) PATCH → requires the narrow
-  //     invoices.manage.update.itemtype[.qty] perms.
-  // A user holding ONLY the narrow item-type perms must NOT get an Edit
-  // button on the Bills tab (the full PUT would 403); the item-type/qty
-  // perms drive the Invoices tab only. A bills.manage.update user edits on
-  // the Bills tab, not the item-type classification flow.
+  // Edit is always the full edit (PUT, bills.manage.update). The importer has
+  // no FBR quantity / item-type adjustment, so the narrow
+  // invoices.manage.update.itemtype[.qty] keys open nothing here.
   // Note tabs: notes are immutable (server rejects edits too) — no Edit.
-  const canEditInThisMode = isNotesMode
-    ? false
-    : isBillsMode
-      ? canUpdate
-      : (canEditItemType || canEditItemTypeAndQty);
+  const canEditInThisMode = !isNotesMode && canUpdate;
   const canDelete = has("bills.manage.delete");
   // Void is its own permission (bills.manage.void), distinct from delete, so a
   // role can be allowed to void bills without also gaining hard-delete rights.
@@ -128,21 +108,17 @@ export default function InvoicePage({ mode = "invoices" }) {
   // Reverse an FBR-submitted bill by generating a Credit/Debit Note. Its own
   // permission so the right to reverse a filed document is granted separately.
   const canReverse = has("invoices.note.create");
-  // Print is split now: bills.print.view → Bill print/PDF/XLS,
-  // invoices.print.view → Tax-Invoice print/PDF/XLS. Bills tab uses
-  // canPrintBill, Invoices tab uses canPrintTax.
-  const canPrintBill = has("bills.print.view");
-  const canPrintTax  = has("invoices.print.view");
-  const canPrint = isBillsMode ? canPrintBill : canPrintTax;
+  // One printed document, the Invoice (TaxInvoice template). Either print key
+  // opens it: bills.print.view and invoices.print.view both meant "print this
+  // sale" when the screen was two tabs.
+  const canPrint = has("bills.print.view") || has("invoices.print.view");
   // Bulk download produces the same documents the per-row Print / PDF
   // buttons do, so it carries the same permission. Notes are excluded:
   // a credit/debit note has its own numbering and is not an invoice.
   const canBulkPrint = canPrint && !isNotesMode;
-  // Each tab prints with its own template type: Bills → Bill, Invoices →
-  // TaxInvoice, note tabs → CreditNote / DebitNote (notes previously reused
-  // the TaxInvoice template; they now have their own type + starter set).
-  const printTemplateType = isBillsMode ? "Bill"
-    : noteDocType === 9 ? "DebitNote"
+  // Sales print with the TaxInvoice template (the type every live customer's
+  // layout uses); note tabs → CreditNote / DebitNote.
+  const printTemplateType = noteDocType === 9 ? "DebitNote"
     : noteDocType === 10 ? "CreditNote"
     : "TaxInvoice";
   // Division scope for the print-template picker (declared here so the hook can
@@ -151,8 +127,7 @@ export default function InvoicePage({ mode = "invoices" }) {
   // an empty scope hides the picker and blocks Print/PDF.
   const [divisionFilter, setDivisionFilter] = usePersistentFilter(filterScreen, "divisionFilter", "");
   const tplPicker = usePrintTemplates(printTemplateType, { divisionId: divisionFilter });
-  const printFallbackTemplate = isBillsMode ? defaultBillTemplate
-    : noteDocType === 9 ? defaultDebitNoteTemplate
+  const printFallbackTemplate = noteDocType === 9 ? defaultDebitNoteTemplate
     : noteDocType === 10 ? defaultCreditNoteTemplate
     : defaultTaxInvoiceTemplate;
   // Explicit dropdown pick wins; else the company default from the loaded
@@ -239,12 +214,10 @@ export default function InvoicePage({ mode = "invoices" }) {
   const [loadingInvoices, setLoadingInvoices] = useState(false);
 
   const navigate = useNavigate();
-  // ?search=<bill-number> deep-link support — let a Bill card on the
-  // Bills tab jump directly to the matching record on the Invoices tab.
-  // The card's "Open in Invoices" button navigates to
-  // `/invoices?search={billNumber}`; this hook seeds the search-box
-  // state with that value on mount and the existing fetch pipeline
-  // narrows the list to a single card automatically. Distinct route
+  // ?search=<invoice-number> deep-link support — dashboard drills, document
+  // copy and the old /bills links land on `/invoices?search={number}`; this
+  // hook seeds the search-box state with that value on mount and the existing
+  // fetch pipeline narrows the list to a single card automatically. Distinct route
   // keys in App.jsx force a remount on tab switch so this initializer
   // always sees the current URL.
   //
@@ -259,12 +232,12 @@ export default function InvoicePage({ mode = "invoices" }) {
   const [totalPages, setTotalPages] = useState(0);
   // Rows-per-page is remembered per tab (Bills / Invoices / each note tab),
   // matching the per-tab view-mode persistence above.
-  const [size, setSize] = usePageSize(isBillsMode ? "bills" : isNotesMode ? mode : "invoices");
+  const [size, setSize] = usePageSize(isNotesMode ? mode : "invoices");
   const [search, setSearch] = usePersistentFilter(filterScreen, "search", "");
   // Keep the URL's ?search= in sync with the search-box state. Without
   // this, clearing the box would still leave the param in the URL, and
-  // a page reload would re-seed the box from the stale value (which is
-  // exactly what bit us when "Open in Invoices" left a sticky filter).
+  // a page reload would re-seed the box from the stale value (a stale
+  // deep-link filter used to stick that way).
   // replace:true so each keystroke doesn't pollute browser history.
   useEffect(() => {
     const current = searchParams.get("search") || "";
@@ -293,7 +266,6 @@ export default function InvoicePage({ mode = "invoices" }) {
     if (qClient) setClientFilter(qClient);
   }
   const [filterCompanyId, setFilterCompanyId] = usePersistentFilter(filterScreen, "companyId", null);
-  const [hasExcelBill, setHasExcelBill] = useState(false);
   const [hasExcelTax, setHasExcelTax] = useState(false);
   const [exportingId, setExportingId] = useState(null);
 
@@ -359,16 +331,12 @@ export default function InvoicePage({ mode = "invoices" }) {
       // division request racing the corrected one).
       if (divisionFilter && !sameCompany) setDivisionFilter("");
       else fetchInvoices(selectedCompany.id, 1);
-      hasExcelTemplate(selectedCompany.id, "Bill")
-        .then(r => setHasExcelBill(r.data.hasExcelTemplate))
-        .catch(() => setHasExcelBill(false));
       hasExcelTemplate(selectedCompany.id, "TaxInvoice")
         .then(r => setHasExcelTax(r.data.hasExcelTemplate))
         .catch(() => setHasExcelTax(false));
     } else {
       setInvoices([]);
       setClients([]);
-      setHasExcelBill(false);
       setHasExcelTax(false);
     }
   }, [selectedCompany]);
@@ -389,51 +357,16 @@ export default function InvoicePage({ mode = "invoices" }) {
     fetchInvoices(selectedCompany.id, 1);
   };
 
-  const handlePrintBill = async (inv) => {
-    const w = window.open("", "_blank");
-    if (!w) { notify("Popup blocked. Please allow popups for this site.", "warning"); return; }
-    w.document.write("<p>Loading bill...</p>");
-    try {
-      const { data } = await getInvoicePrintBill(inv.id);
-      const template = await resolvePrintTemplate(inv);
-      const html = mergeTemplate(template, data);
-      writeAndPrint(w, html);
-    } catch { w.close(); notify("Failed to load bill data.", "error"); }
-  };
-
   const handlePrintTax = async (inv) => {
     const w = window.open("", "_blank");
     if (!w) { notify("Popup blocked. Please allow popups for this site.", "warning"); return; }
-    w.document.write("<p>Loading tax invoice...</p>");
+    w.document.write("<p>Loading invoice...</p>");
     try {
       const { data } = await getInvoicePrintTaxInvoice(inv.id);
       const template = await resolvePrintTemplate(inv);
       const html = mergeTemplate(template, data);
       writeAndPrint(w, html);
-    } catch { w.close(); notify("Failed to load tax invoice data.", "error"); }
-  };
-
-  const handleExportBillPdf = async (inv) => {
-    if (exportingId) return;
-    setExportingId(inv.id + "-bill-pdf");
-    try {
-      const { data } = await getInvoicePrintBill(inv.id);
-      const template = await resolvePrintTemplate(inv);
-      const html = mergeTemplate(template, data);
-      await exportToPdf(html, `Bill # ${documentReference(data) || data.invoiceNumber} ${data.clientName}`);
-    } catch { notify("Failed to export Bill PDF.", "error"); }
-    finally { setExportingId(null); }
-  };
-
-  const handleExportBillExcel = async (inv) => {
-    if (exportingId) return;
-    setExportingId(inv.id + "-bill-excel");
-    try {
-      const { data } = await getInvoicePrintBill(inv.id);
-      const res = await exportExcel(selectedCompany.id, "Bill", data);
-      saveAs(res.data, `Bill # ${documentReference(data) || data.invoiceNumber} ${data.clientName}.xlsx`);
-    } catch { notify("Failed to export Bill Excel.", "error"); }
-    finally { setExportingId(null); }
+    } catch { w.close(); notify("Failed to load invoice data.", "error"); }
   };
 
   const handleExportTaxPdf = async (inv) => {
@@ -443,12 +376,11 @@ export default function InvoicePage({ mode = "invoices" }) {
       const { data } = await getInvoicePrintTaxInvoice(inv.id);
       const template = await resolvePrintTemplate(inv);
       const html = mergeTemplate(template, data);
-      // Tax invoice uses "INVOICE # ..." prefix to distinguish from the non-tax
-      // Bill exports (which keep the "Bill # ..." prefix). Note tabs name the
-      // file after the note kind ("CREDIT NOTE # 3 ...").
+      // "INVOICE # ..."; note tabs name the file after the note kind
+      // ("CREDIT NOTE # 3 ...").
       const pdfLabel = isNotesMode ? noteLabel.toUpperCase() : "INVOICE";
       await exportToPdf(html, `${pdfLabel} # ${documentReference(data) || data.invoiceNumber} ${data.buyerName || data.clientName}`);
-    } catch { notify("Failed to export Tax Invoice PDF.", "error"); }
+    } catch { notify("Failed to export the invoice PDF.", "error"); }
     finally { setExportingId(null); }
   };
 
@@ -466,7 +398,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       // prefix MUST be correct on this line — fixing only the backend wasn't enough.
       const xlsLabel = isNotesMode ? noteLabel.toUpperCase() : "INVOICE";
       saveAs(res.data, `${xlsLabel} # ${documentReference(data) || data.invoiceNumber} ${data.buyerName || data.clientName}.xlsx`);
-    } catch { notify("Failed to export Tax Invoice Excel.", "error"); }
+    } catch { notify("Failed to export the invoice Excel.", "error"); }
     finally { setExportingId(null); }
   };
 
@@ -814,23 +746,19 @@ export default function InvoicePage({ mode = "invoices" }) {
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <div style={styles.headerIcon}>{isNotesMode ? <MdUndo size={28} color="#fff" /> : <MdReceipt size={28} color="#fff" />}</div>
           <div>
-            <h2 style={styles.pageTitle}>{isNotesMode ? `${noteLabel}s` : isBillsMode ? "Bills" : "Invoices"}</h2>
+            <h2 style={styles.pageTitle}>{isNotesMode ? `${noteLabel}s` : "Invoices"}</h2>
             <p style={styles.pageSubtitle}>
               {selectedCompany
                 ? (isNotesMode
                     ? `${noteDocType === 10 ? "Returns / reversals of submitted invoices" : "Upward adjustments against submitted invoices"} — ${totalCount} note${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
-                    : isBillsMode
-                    ? `${totalCount} bill${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
-                    : `Classify items and submit to FBR — ${totalCount} record${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`)
+                    : `${totalCount} invoice${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`)
                 : "Select a company"}
             </p>
           </div>
         </div>
-        {/* Creation buttons live on the Bills tab only — Invoices tab is
-            for FBR classification & submission of existing records. */}
         {/* alignItems flex-start, or the row stretches New Bill to the
             height of the SO-only note beside it. */}
-        {isBillsMode && companies.length > 0 && (canCreate || canCreateStandalone) && (
+        {!isNotesMode && companies.length > 0 && (canCreate || canCreateStandalone) && (
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "flex-start" }}>
             {canCreate && (
               <button style={styles.addBtn} onClick={() => setShowForm(true)}>
@@ -913,10 +841,8 @@ export default function InvoicePage({ mode = "invoices" }) {
 
           {/* FBR Bulk Actions — bar shows if caller has either FBR perm.
               Validate All is gated on canFbrValidate; Submit All on
-              canFbrSubmit. Asymmetric grants render a partial bar.
-              Bills tab hides the bar entirely — bulk FBR ops live on
-              the Invoices tab. */}
-          {!isBillsMode && canFbrAny && selectedCompany?.hasFbrToken && (unsubmittedInvoices.length > 0 || incompleteCount > 0) && (
+              canFbrSubmit. Asymmetric grants render a partial bar. */}
+          {canFbrAny && selectedCompany?.hasFbrToken && (unsubmittedInvoices.length > 0 || incompleteCount > 0) && (
             <div style={styles.fbrBulkBar}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                 <MdCloudUpload size={18} color="#0d47a1" />
@@ -1012,7 +938,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                   className="filter-clear-btn"
                   style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
                   onClick={() => setBulkPrintOpen(true)}
-                  title={`Download every ${printTemplateType === "TaxInvoice" ? "Sales Tax Invoice" : "Bill"} matching these filters`}
+                  title={`Download every ${isNotesMode ? noteLabel.toLowerCase() : "invoice"} matching these filters`}
                 >
                   <MdDownload size={14} /> Bulk PDF
                 </button>
@@ -1022,7 +948,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                   <ViewModeToggle
                     mode={viewMode}
                     onChange={setViewMode}
-                    ariaLabel={isBillsMode ? "Bills view mode" : "Invoices view mode"}
+                    ariaLabel={isNotesMode ? `${noteLabel}s view mode` : "Invoices view mode"}
                   />
                 </div>
               )}
@@ -1047,7 +973,6 @@ export default function InvoicePage({ mode = "invoices" }) {
           {viewMode === "table" ? (
             <InvoiceTable
               invoices={invoices}
-              isBillsMode={isBillsMode}
               isReturnsMode={isNotesMode}
               noteDocType={noteDocType}
               perms={{
@@ -1072,7 +997,6 @@ export default function InvoicePage({ mode = "invoices" }) {
                 noTemplateReason: tplPicker.noTemplateReason,
               }}
               onCreateChallan={(inv) => setChallanFor(inv)}
-              hasExcelBill={hasExcelBill}
               hasExcelTax={hasExcelTax}
               selectedCompanyHasFbrToken={!!selectedCompany?.hasFbrToken}
               fbrEnabled={fbrEnabled}
@@ -1082,10 +1006,7 @@ export default function InvoicePage({ mode = "invoices" }) {
               onView={(inv) => setViewingId(inv.id)}
               onRecordReceipt={(inv) => setReceiptPreset({ contactId: inv.clientId, documentId: inv.id, divisionId: inv.divisionId })}
               onShowPayments={(inv) => setPaymentHistoryDoc(inv)}
-              onPrintBill={handlePrintBill}
               onPrintTax={handlePrintTax}
-              onExportBillPdf={handleExportBillPdf}
-              onExportBillExcel={handleExportBillExcel}
               onExportTaxPdf={handleExportTaxPdf}
               onExportTaxExcel={handleExportTaxExcel}
               onFbrPreview={(inv) => setFbrPreviewId(inv.id)}
@@ -1113,7 +1034,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                   <div>
                     <h5 style={cardStyles.title}>
                       <MdReceipt style={{ color: colors.blue, marginRight: 6 }} />
-                      {isNotesMode ? noteLabel : isBillsMode ? "Bill" : "Invoice"} #{inv.invoiceNumber}
+                      {isNotesMode ? noteLabel : "Invoice"} #{inv.invoiceNumber}
                     </h5>
                     {/* The company's own prefix ("PTC-52"): the reference the
                         customer quotes back. Hidden when it would just repeat
@@ -1195,15 +1116,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         ))}
                       </div>
                     )}
-                    {/* FBR status row — shows current status OR 'Setup Incomplete' when fields are missing.
-                        In Bills mode we keep only the binary "Submitted to FBR" / "Pending FBR submission"
-                        identifier as a pill so the operator sees at a glance which rows are locked.
-                        Workflow detail (Ready / Setup Incomplete / Excluded) lives on the Invoices tab. */}
-                    {/* 2026-05-08: Bills + Invoices modes now share the
-                        same green pill for Submitted. The Invoices mode
-                        previously rendered plain inline text so the
-                        styling was inconsistent with the other status
-                        pills (Ready / Validated / Failed / etc.). */}
+                    {/* FBR status row — current status, or 'Setup Incomplete' when fields are missing. */}
                     {/* Goods billed at a rate other than the one they came in at. */}
                     <TaxRateBadge inv={inv} />
                     {inv.isCancelled && (
@@ -1247,13 +1160,13 @@ export default function InvoicePage({ mode = "invoices" }) {
                     {!inv.isCancelled && inv.fbrStatus === "Submitted" && (
                       <div style={styles.fbrPillSubmitted} title={inv.fbrIRN ? `IRN: ${inv.fbrIRN}` : "This bill has been submitted to FBR and is locked from edits."}>
                         <MdCheckCircle size={14} color="#1b5e20" />
-                        <span>{isBillsMode ? "Submitted to FBR" : "FBR: Submitted"}</span>
+                        <span>Filed with FBR</span>
                         {inv.fbrIRN && <span style={styles.fbrPillIrn}>IRN {inv.fbrIRN}</span>}
                       </div>
                     )}
                     {!inv.isCancelled && inv.fbrAdjustmentStale && (
                       <div style={styles.fbrPillReadjust}
-                           title={`The bill was changed after it was adjusted for FBR. Bill Rs. ${Number(inv.subtotal || 0).toLocaleString()} vs FBR Rs. ${Number(inv.fbrAdjustedSubtotal ?? inv.subtotal ?? 0).toLocaleString()}. Open the Invoices tab, re-adjust the quantities and unit prices to match the bill total, then validate again.`}>
+                           title={`The bill was changed after it was adjusted for FBR. Bill Rs. ${Number(inv.subtotal || 0).toLocaleString()} vs FBR Rs. ${Number(inv.fbrAdjustedSubtotal ?? inv.subtotal ?? 0).toLocaleString()}. This invoice carries an old FBR adjustment that no longer matches its total; edit and save the invoice, then validate again.`}>
                         <MdError size={14} color="#8a4b00" />
                         <span>Re-adjust for FBR</span>
                       </div>
@@ -1279,24 +1192,18 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <span>FBR outcome unconfirmed</span>
                       </div>
                     )}
-                    {isBillsMode && fbrEnabled && !inv.isCancelled && !isFbrInFlight(inv) && inv.fbrStatus !== "Submitted" && (
-                      <div style={styles.fbrPillPending} title="This bill hasn't been submitted to FBR yet. Open the Invoices tab to validate and submit.">
-                        <MdHourglassEmpty size={14} color="#b26a00" />
-                        <span>Pending FBR submission</span>
-                      </div>
-                    )}
-                    {!isBillsMode && !inv.isCancelled && inv.fbrStatus === "Failed" && (
+                    {!inv.isCancelled && inv.fbrStatus === "Failed" && (
                       <div style={styles.fbrPillFailed} title={inv.fbrErrorMessage || "FBR rejected this submission. Open View FBR for details."}>
                         <MdError size={14} color="#b71c1c" />
                         <span>FBR Failed</span>
                       </div>
                     )}
-                    {!isBillsMode && !inv.isCancelled && inv.fbrStatus === "Failed" && inv.fbrErrorMessage && (
+                    {!inv.isCancelled && inv.fbrStatus === "Failed" && inv.fbrErrorMessage && (
                       <p style={{ fontSize: "0.72rem", color: "#c62828", marginTop: "0.35rem", wordBreak: "break-word", lineHeight: 1.35 }}>
                         {inv.fbrErrorMessage}
                       </p>
                     )}
-                    {!isBillsMode && fbrEnabled && !inv.isCancelled && inv.fbrStatus !== "Submitted" && !inv.fbrReady && (
+                    {fbrEnabled && !inv.isCancelled && inv.fbrStatus !== "Submitted" && !inv.fbrReady && (
                       <div
                         style={styles.fbrPillIncomplete}
                         title={inv.fbrMissing?.length ? `Missing:\n• ${inv.fbrMissing.join("\n• ")}` : ""}
@@ -1313,7 +1220,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         </div>
                       </div>
                     )}
-                    {!isBillsMode && fbrEnabled && !inv.isCancelled && inv.fbrStatus !== "Submitted" && inv.fbrReady && !inv.isFbrExcluded && !isFutureDocDate(inv.date) && (
+                    {fbrEnabled && !inv.isCancelled && inv.fbrStatus !== "Submitted" && inv.fbrReady && !inv.isFbrExcluded && !isFutureDocDate(inv.date) && (
                       <div style={styles.fbrPillReady} title="All FBR fields are set. Click Validate to dry-run, or Submit to issue the IRN.">
                         <MdCheckCircle size={14} color="#0d47a1" />
                         <span>Ready to Validate</span>
@@ -1324,7 +1231,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         Submit are hidden until the bill's own date arrives.
                         The pill says so, otherwise the missing buttons read
                         as a bug. (2026-08-28) */}
-                    {!isBillsMode && fbrEnabled && !inv.isCancelled && inv.fbrStatus !== "Submitted" && isFutureDocDate(inv.date) && (
+                    {fbrEnabled && !inv.isCancelled && inv.fbrStatus !== "Submitted" && isFutureDocDate(inv.date) && (
                       <div
                         style={styles.fbrPillIncomplete}
                         title="FBR rejects a future-dated invoice [0043]. Validate and Submit unlock on this bill's own date."
@@ -1338,7 +1245,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         </div>
                       </div>
                     )}
-                    {!isBillsMode && fbrEnabled && !inv.isCancelled && inv.fbrStatus !== "Submitted" && inv.isFbrExcluded && (
+                    {fbrEnabled && !inv.isCancelled && inv.fbrStatus !== "Submitted" && inv.isFbrExcluded && (
                       <div
                         style={styles.fbrPillExcluded}
                         title="This bill is excluded from Validate All / Submit All bulk actions. Per-bill Validate / Submit still work."
@@ -1364,56 +1271,25 @@ export default function InvoicePage({ mode = "invoices" }) {
                         Invoices card: Tax Print, Tax PDF, Tax XLS, View FBR, Validate, Submit. */}
                     {!isNotesMode && (
                       <button
-                        data-primary={isBillsMode || undefined}
+                        data-primary
                         style={{ ...styles.printBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" }}
                         onClick={() => setViewingId(inv.id)}
-                        title={isBillsMode ? "View bill details (read-only)" : "View invoice details (read-only)"}
+                        title="View invoice details (read-only)"
                       >
                         <MdVisibility size={14} /> View
                       </button>
                     )}
-                    {/* Cross-tab locator — Bills tab only. Navigates to
-                        the Invoices tab with ?search=<billNumber> seeded;
-                        the Invoices page reads the param on mount so the
-                        list filters down to a single card. Operator can
-                        clear the search box to see the full Invoices list
-                        again. Reuses the existing search pipeline so no
-                        new filter logic is needed. */}
-                    {isBillsMode && (
-                      <button
-                        style={{ ...styles.printBtn, backgroundColor: "#e0f2f1", color: "#00695c", border: "1px solid #80cbc4" }}
-                        onClick={() => navigate(`/invoices?search=${encodeURIComponent(inv.invoiceNumber)}`)}
-                        title="Find this bill on the Invoices tab so you can classify items and submit to FBR"
-                      >
-                        <MdOpenInNew size={14} /> Open in Invoices
-                      </button>
-                    )}
-                    {isBillsMode && canPrint && (
-                      <button data-primary style={{ ...styles.printBtn, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print bill"} onClick={() => handlePrintBill(inv)}>
-                        <MdPrint size={14} /> Bill
-                      </button>
-                    )}
-                    {!isBillsMode && canPrint && (
+                    {canPrint && (
                       <button data-primary={isNotesMode || inv.fbrStatus === "Submitted" || inv.isCancelled || undefined} style={{ ...styles.taxBtn, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print tax invoice"} onClick={() => handlePrintTax(inv)}>
                         <MdDescription size={14} /> Tax Invoice
                       </button>
                     )}
-                    {isBillsMode && canPrint && (
-                      <button style={{ ...styles.pdfBtn, opacity: (tplPicker.noTemplate || exportingId) ? 0.5 : 1, ...(tplPicker.noTemplate ? { cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download Bill PDF"} onClick={() => handleExportBillPdf(inv)}>
-                        {exportingId === inv.id + "-bill-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} Bill PDF
-                      </button>
-                    )}
-                    {!isBillsMode && canPrint && (
+                    {canPrint && (
                       <button style={{ ...styles.pdfBtn, opacity: (tplPicker.noTemplate || exportingId) ? 0.5 : 1, ...(tplPicker.noTemplate ? { cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download Tax PDF"} onClick={() => handleExportTaxPdf(inv)}>
                         {exportingId === inv.id + "-tax-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} Tax PDF
                       </button>
                     )}
-                    {isBillsMode && canPrint && hasExcelBill && (
-                      <button style={{ ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportBillExcel(inv)}>
-                        {exportingId === inv.id + "-bill-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Bill XLS
-                      </button>
-                    )}
-                    {!isBillsMode && canPrint && hasExcelTax && (
+                    {canPrint && hasExcelTax && (
                       <button style={{ ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportTaxExcel(inv)}>
                         {exportingId === inv.id + "-tax-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Tax XLS
                       </button>
@@ -1423,11 +1299,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         any bill (even submitted ones — useful to inspect
                         what was sent historically). Gated by its own perm
                         so it can be granted without Validate/Submit rights. */}
-                    {/* Bills tab hides FBR preview / validate / submit /
-                        exclude — those live on the Invoices tab. The FBR
-                        status badge above the buttons still shows in both
-                        modes so the operator can see locked rows. */}
-                    {!isBillsMode && canFbrPreview && (
+                    {canFbrPreview && (
                       <button
                         data-primary={inv.fbrStatus === "Submitted" || undefined}
                         style={{ ...styles.printBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" }}
@@ -1437,7 +1309,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdVisibility size={14} /> View FBR
                       </button>
                     )}
-                    {!isBillsMode && canFbrReset && (inv.fbrStatus === "Submitting" || inv.fbrStatus === "Uncertain") && (
+                    {canFbrReset && (inv.fbrStatus === "Submitting" || inv.fbrStatus === "Uncertain") && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#fff8e1", color: "#8a6d00", border: "1px solid #ffe082" }}
                         onClick={() => handleFbrReset(inv)}
@@ -1446,7 +1318,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdRestore size={14} /> Reset FBR
                       </button>
                     )}
-                    {!isBillsMode && canFbrAny && selectedCompany?.hasFbrToken && inv.fbrStatus !== "Submitted" && inv.fbrStatus !== "Submitting" && inv.fbrStatus !== "Uncertain" && !inv.isCancelled && !isFutureDocDate(inv.date) && (
+                    {canFbrAny && selectedCompany?.hasFbrToken && inv.fbrStatus !== "Submitted" && inv.fbrStatus !== "Submitting" && inv.fbrStatus !== "Uncertain" && !inv.isCancelled && !isFutureDocDate(inv.date) && (
                       <>
                         {canFbrValidate && (
                           <button
@@ -1492,12 +1364,10 @@ export default function InvoicePage({ mode = "invoices" }) {
                         )}
                       </>
                     )}
-                    {/* Edit on Bills tab: full bill edit (per the user's
-                        permissions) — items, prices, dates, etc. Item Type
-                        column is hidden so classification only happens on
-                        the Invoices tab. Hidden once FBR-submitted (locks
-                        edits permanently). */}
-                    {isBillsMode && canEditInThisMode && inv.fbrStatus !== "Submitted" && !inv.isCancelled && !inv.isMigrated && (
+                    {/* Edit: the full edit — items, prices, dates. Hidden once
+                        filed with FBR (a filed invoice is corrected with a
+                        credit or debit note). */}
+                    {canEditInThisMode && inv.fbrStatus !== "Submitted" && !inv.isCancelled && !inv.isMigrated && (
                       <button
                         data-primary
                         style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
@@ -1534,23 +1404,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdLocalShipping size={14} /> Challan
                       </button>
                     )}
-                    {/* Edit on Invoices tab (invoice-mode edit): item type, qty
-                        and unit price — kept as an adjustment OVERLAY over the
-                        bill (base bill untouched; total reconciles to it). Shown
-                        for FBR-off companies too: they have no Bills-tab FBR
-                        step, so this is their line-adjust surface. Hidden once
-                        FBR-submitted or cancelled. */}
-                    {!isBillsMode && canEditInThisMode && inv.fbrStatus !== "Submitted" && !inv.isCancelled && !inv.isMigrated && (
-                      <button
-                        data-primary
-                        style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
-                        onClick={() => setEditingId(inv.id)}
-                        title="Edit item type, qty & unit price (saved as an adjustment over the bill)"
-                      >
-                        <MdEdit size={14} /> Edit
-                      </button>
-                    )}
-                    {!isBillsMode && canFbrExclude && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
+                    {canFbrExclude && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
                       <button
                         style={{
                           ...styles.printBtn,
@@ -1582,11 +1436,11 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdDelete size={14} /> Delete
                       </button>
                     )}
-                    {/* Void: Bills tab, ANY non-submitted, non-cancelled bill
+                    {/* Void: ANY non-submitted, non-cancelled invoice
                         (not just the latest). Keeps the bill number so the
                         sequence stays gap-free, marks the bill Cancelled, and
                         reverts its delivery challan(s) to Pending for re-billing. */}
-                    {(isBillsMode || isNotesMode) && canVoid && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
+                    {canVoid && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#fff8e1", color: "#b26a00", border: "1px solid #ffe082" }}
                         onClick={() => handleVoidInvoice(inv)}
@@ -1648,17 +1502,14 @@ export default function InvoicePage({ mode = "invoices" }) {
         </>
       )}
 
-      {/* Bills mode shows the Item Type column (item-type pick is the
-          ONE FBR-classification field exposed in Bills) but hides the
-          rest of the FBR machinery (HS Code, Sale Type, scenario picker).
-          Picking an item type still auto-fills HS / UOM / Sale Type
-          behind the scenes so the bill is ready for FBR validation on
-          the Invoices tab. */}
+      {/* The create and edit forms run in bill mode: item type per line
+          (it fills HS / UOM / sale type) and the full edit. There is no
+          separate FBR classification step on the importer. */}
       {showForm && selectedCompany && (
         <InvoiceForm
           companyId={selectedCompany.id}
           company={selectedCompany}
-          billsMode={isBillsMode}
+          billsMode
           defaultDivisionId={divisionFilter}
           onClose={() => setShowForm(false)}
           onSaved={handleCreated}
@@ -1669,7 +1520,7 @@ export default function InvoicePage({ mode = "invoices" }) {
         <StandaloneInvoiceForm
           companyId={selectedCompany.id}
           company={selectedCompany}
-          billsMode={isBillsMode}
+          billsMode
           defaultDivisionId={divisionFilter}
           onClose={() => setShowStandaloneForm(false)}
           onSaved={() => { setShowStandaloneForm(false); handleCreated(); }}
@@ -1778,15 +1629,10 @@ export default function InvoicePage({ mode = "invoices" }) {
       {editingId && (
         <EditBillForm
           invoiceId={editingId}
-          billsMode={isBillsMode}
+          billsMode
           fbrEnabled={fbrEnabled}
           stockHardBlock={!!selectedCompany?.stockGuardHardBlock}
           inventoryOverlay={!!selectedCompany?.inventoryOverlayEnabled}
-          // Invoices-tab edit lets the FBR officer set Item Type AND Qty —
-          // descriptions, prices, dates, payment terms etc. stay read-only
-          // and reflect whatever was last saved on the Bills tab. Set on
-          // the Invoice card's Edit button only.
-          forceItemTypeAndQty={!isBillsMode}
           onClose={() => setEditingId(null)}
           onSaved={() => {
             setEditingId(null);
@@ -1806,7 +1652,7 @@ export default function InvoicePage({ mode = "invoices" }) {
         <EditBillForm
           invoiceId={viewingId}
           readOnly
-          billsMode={isBillsMode}
+          billsMode
           fbrEnabled={fbrEnabled}
           stockHardBlock={!!selectedCompany?.stockGuardHardBlock}
           inventoryOverlay={!!selectedCompany?.inventoryOverlayEnabled}
