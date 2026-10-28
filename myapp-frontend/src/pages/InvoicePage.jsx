@@ -802,6 +802,9 @@ export default function InvoicePage({ mode = "invoices" }) {
 
   return (
     <div>
+      {/* Title, company and filters stay pinned while the list scrolls under
+          them (tablet and up; see .page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={styles.pageHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <div style={styles.headerIcon}>{isNotesMode ? <MdUndo size={28} color={colors.white} /> : <MdReceipt size={28} color={colors.white} />}</div>
@@ -1023,6 +1026,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       ) : (
         <div style={styles.emptyState}><p style={{ color: colors.textSecondary }}>No companies available.</p></div>
       )}
+      </div>
 
       {justSaved && !isNotesMode && (
         <div style={styles.savedBanner} role="status">
