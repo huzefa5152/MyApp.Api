@@ -62,7 +62,7 @@ async function downloadXlsx(data, filename) {
 export default function KpiDrilldown({
   open, onClose, kind, period, from, to, companyId, cardValue, initialGroupKey = null,
 }) {
-  const { has } = usePermissions();
+  const { hasAny } = usePermissions();
   const [, setSearchParams] = useSearchParams();
   const [groupKey, setGroupKey] = useState(initialGroupKey);
   const [data, setData] = useState(null);
@@ -176,7 +176,7 @@ export default function KpiDrilldown({
             </div>
           ))}
         </div>
-        {r.invoiceNumber != null && has(openDocScreen(r.values?.docType).permission) && (
+        {r.invoiceNumber != null && hasAny(openDocScreen(r.values?.docType).permissions) && (
           <Link to={openBillPath(r.invoiceNumber, r.values?.docType)} style={{
             display: "inline-flex", alignItems: "center", minHeight: 44, marginTop: "0.4rem",
             color: colors.blue, fontWeight: 600, fontSize: "0.85rem",

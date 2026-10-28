@@ -382,7 +382,7 @@ function documentRoute(row) {
         ? `/receipts?highlight=${id}`
         : `/payments?highlight=${id}`;
     case "PurchaseBill": return `/purchase-bills?highlight=${id}`;
-    case "Invoice": return `/bills?highlight=${id}`;
+    case "Invoice": return `/invoices?highlight=${id}`;
     case "ManualJournal": return `/journal-entries?highlight=${id}`;
     case "AccountTransfer": return `/transfers?highlight=${id}`;
     default: return null;

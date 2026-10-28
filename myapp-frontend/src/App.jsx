@@ -1,6 +1,6 @@
 // App.jsx
 import { lazy, Suspense } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import DashboardLayout from "./layouts/DashboardLayout";
 import PublicLayout from "./layouts/PublicLayout";
 import CompanyPage from "./pages/CompanyPage";
@@ -116,17 +116,13 @@ export default function App() {
           <Route path="/po-formats" element={<RequirePermission anyPrefix="poformats."><POFormatsPage /></RequirePermission>} />
           <Route path="/challans" element={<RequirePermission anyPrefix="challans."><ChallansPage /></RequirePermission>} />
           <Route path="/challans/import" element={<RequirePermission anyPrefix="challans."><ImportChallansPage /></RequirePermission>} />
-          {/* Bills tab — pre-FBR data entry. No item-type column, no FBR
-              bulk actions, but shows a per-row "Submitted to FBR" badge so
-              the operator knows which bills are locked. */}
-          {/* Distinct keys force a fresh mount when switching tabs so
-              filter state (search, client, dates) doesn't leak between
-              modes — and so the ?search= deep-link from a Bill card's
-              "Open in Invoices" button always re-seeds the search box. */}
-          <Route path="/bills" element={<RequirePermission anyPrefix="bills."><InvoicePage key="bills" mode="bills" /></RequirePermission>} />
-          {/* Invoices tab — FBR classification & submission. Item-type
-              editing + Validate All / Submit All bulk actions live here. */}
-          <Route path="/invoices" element={<RequirePermission anyPrefix="invoices."><InvoicePage key="invoices" mode="invoices" /></RequirePermission>} />
+          {/* One Invoices screen (2026-10-28): create, edit, print and FBR
+              filing. The old Bills tab's URL redirects here with its query
+              string, so bookmarks and stored return paths keep working.
+              Distinct keys force a fresh mount between this and the note
+              screens so filter state doesn't leak between them. */}
+          <Route path="/bills" element={<BillsRedirect />} />
+          <Route path="/invoices" element={<RequirePermission anyPrefix={["bills.", "invoices."]}><InvoicePage key="invoices" mode="invoices" /></RequirePermission>} />
           {/* Sales Quote (priced quotation) + Sales Order (qty-only, drives
               challan fulfilment). Pre-sale documents; not FBR. */}
           <Route path="/sales-quotes" element={<RequirePermission anyPrefix="salesquotes."><SalesQuotePage /></RequirePermission>} />
@@ -227,4 +223,11 @@ export default function App() {
       <Route path="*" element={<h2 style={{ padding: "2rem" }}>Page Not Found</h2>} />
     </Routes>
   );
+}
+
+// /bills was the Bills tab; it is part of /invoices now. Keep ?search= and
+// friends so a stored deep link still lands on its row.
+function BillsRedirect() {
+  const { search, hash } = useLocation();
+  return <Navigate to={{ pathname: "/invoices", search, hash }} replace />;
 }

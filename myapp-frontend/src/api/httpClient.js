@@ -124,7 +124,7 @@ httpClient.interceptors.response.use(
       && !p.startsWith("/login") && !p.startsWith("/portal/");
 
     // The app is served under Vite's BASE_URL ("/admin/" in this build).
-    // Stored return-paths stay ROUTER-relative ("/bills", not "/admin/bills")
+    // Stored return-paths stay ROUTER-relative ("/invoices", not "/admin/invoices")
     // so navigate(returnTo) works under the router basename; only the hard
     // window.location redirect below needs the real /admin-prefixed URL.
     const appBase = (import.meta.env.BASE_URL || "/").replace(/\/+$/, "");

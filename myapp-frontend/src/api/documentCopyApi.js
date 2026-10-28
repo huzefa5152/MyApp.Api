@@ -19,7 +19,7 @@ export const DOC_COPY_ROUTES = {
   SalesQuote: "/sales-quotes",
   SalesOrder: "/sales-orders",
   DeliveryChallan: "/challans",
-  Invoice: "/bills",
+  Invoice: "/invoices",
   PurchaseBill: "/purchase-bills",
   GoodsReceipt: "/goods-receipts",
 };

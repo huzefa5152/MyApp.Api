@@ -55,11 +55,12 @@ export function invoiceBreakdown(values, statusLabel) {
 }
 
 // Credit and debit notes are numbered per kind, so each opens on its own
-// screen (gated like the sidebar link to it); everything else is a bill.
+// screen (gated like the sidebar link to it); everything else is an invoice,
+// which either list key opens (the Invoices screen merged the Bills tab).
 const DOC_SCREENS = {
-  bill: { path: "/bills", permission: "bills.list.view", label: "Open bill" },
-  creditNote: { path: "/credit-notes", permission: "invoices.list.view", label: "Open credit note" },
-  debitNote: { path: "/debit-notes", permission: "invoices.list.view", label: "Open debit note" },
+  bill: { path: "/invoices", permissions: ["bills.list.view", "invoices.list.view"], label: "Open invoice" },
+  creditNote: { path: "/credit-notes", permissions: ["invoices.list.view"], label: "Open credit note" },
+  debitNote: { path: "/debit-notes", permissions: ["invoices.list.view"], label: "Open debit note" },
 };
 
 export function openDocScreen(docType) {

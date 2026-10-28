@@ -221,7 +221,7 @@ export default function DashboardLayout() {
   ]), companies);
   const salesKeys = visibleNavPermissions([
     // Sales tab visible if the user has any of: sales quotes, sales orders,
-    // see-bills (Bills + Invoices tabs), see-challans, import-challans,
+    // see-invoices (either list key), see-challans, import-challans,
     // item-rate-history.
     "salesquotes.list.view",
     "salesorders.list.view",
@@ -300,7 +300,7 @@ export default function DashboardLayout() {
     // Data-import/migration ops live under Administration.
     if (p.startsWith("/users") || p.startsWith("/roles") || p.startsWith("/tenant-access") || p.startsWith("/administrators") || p.startsWith("/audit-logs")
       || p.startsWith("/accounting/data-migration") || p.startsWith("/accounting/manager-import")) return "administration";
-    if (p.startsWith("/challans") || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders") || p.startsWith("/withholding-tax") || p === "/bills" || p === "/invoices" || p === "/credit-notes" || p === "/debit-notes" || p === "/credit-debit-notes" || p === "/item-rate-history") return "sales";
+    if (p.startsWith("/challans") || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders") || p.startsWith("/withholding-tax") || p === "/invoices" || p === "/credit-notes" || p === "/debit-notes" || p === "/credit-debit-notes" || p === "/item-rate-history") return "sales";
     if (p.startsWith("/purchase-bills") || p.startsWith("/purchase-debit-notes") || p.startsWith("/goods-receipts") || p.startsWith("/fbr-import/purchase") || p.startsWith("/imports/") || p.startsWith("/guides/import")) return "purchases";
     if (p.startsWith("/receipts") || p.startsWith("/help/accounting") || p.startsWith("/payments") || p.startsWith("/customer-ledger") || p.startsWith("/chart-of-accounts") || p.startsWith("/bank-cash-accounts") || p.startsWith("/transfers") || p.startsWith("/journal-entries") || p.startsWith("/accounting/")) return "accounting";
     if (p.startsWith("/clients") || p.startsWith("/suppliers") || p.startsWith("/item-types") || p.startsWith("/non-inventory-items") || p.startsWith("/units")) return "masterdata";
@@ -452,17 +452,9 @@ export default function DashboardLayout() {
                   <span>Delivery Challans</span>
                 </NavLink>
               </Can>
-              {/* Sales tab is split: Bills = data entry (gated by
-                  bills.list.view); Invoices = FBR classification + submission
-                  (gated by invoices.list.view). Same underlying dataset, two
-                  views with their own permission namespaces — see catalog. */}
-              <Can permission="bills.list.view">
-                <NavLink to="/bills" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
-                  <MdReceipt className="dl-subitem__icon" aria-hidden="true" />
-                  <span>Bills</span>
-                </NavLink>
-              </Can>
-              <Can permission="invoices.list.view">
+              {/* One Invoices screen: create, edit, print and FBR filing.
+                  Either list key opens it (the Bills tab merged into it). */}
+              <Can anyOf={["bills.list.view", "invoices.list.view"]}>
                 <NavLink to="/invoices" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdReceipt className="dl-subitem__icon" aria-hidden="true" />
                   <span>Invoices</span>
@@ -977,7 +969,6 @@ const BREADCRUMBS = {
   "/sales-orders": ["Sales", "Sales Orders"],
   "/challans/import": ["Sales", "Import Challans"],
   "/challans": ["Sales", "Delivery Challans"],
-  "/bills": ["Sales", "Bills"],
   "/invoices": ["Sales", "Invoices"],
   "/credit-notes": ["Sales", "Credit Notes"],
   "/debit-notes": ["Sales", "Debit Notes"],
