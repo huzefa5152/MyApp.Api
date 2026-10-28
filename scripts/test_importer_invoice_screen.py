@@ -373,6 +373,73 @@ def suite_mcp(base, token):
     check("prepare_print_template refuses a new Bill design", refused and "TaxInvoice" in text, text[:200])
 
 
+def suite_filed_manually(base, token):
+    """Recording an invoice as filed by hand on FBR's portal (case 53): never sent, keeps the
+    portal number, leaves stock as the save left it, stays editable, and MCP can record it."""
+    print("\n=== Filed manually on FBR's portal ===")
+    co = make_company(base, token, f"_test_manual {SUFFIX}")
+    cl = make_client(base, token, co["id"])
+    st, it = http("POST", f"/api/itemtypes?companyId={co['id']}", base, token=token, body={
+        "name": f"Manual Valve {SUFFIX}", "hsCode": "8481.8090", "uom": UNIT, "isFavorite": True})
+    if not check("an HS item for the stock check", st in (200, 201), f"{st} {it}"):
+        return
+    st, inv = standalone(base, token, co, cl, [
+        {"itemTypeId": it["id"], "description": "Valve", "quantity": 2, "uom": UNIT, "unitPrice": 100}])
+    if not check("an unfiled invoice", st in (200, 201), f"{st} {inv}"):
+        return
+
+    def on_hand():
+        s, rows = http("GET", f"/api/itemtypes?companyId={co['id']}&search={urllib.parse.quote(it['name'])}", base, token=token)
+        row = next((r for r in (rows or []) if r.get("id") == it["id"]), {}) if isinstance(rows, list) else {}
+        return row.get("availableQty")
+
+    before = on_hand()
+    st, body = http("POST", f"/api/fbr/{inv['id']}/reset-submission", base, token=token, body={"mode": "recordManual", "reason": "test"})
+    check("a portal number is required", st == 400, f"{st} {body}")
+    st, body = http("POST", f"/api/fbr/{inv['id']}/reset-submission", base, token=token,
+                    body={"mode": "recordManual", "manualFbrInvoiceNumber": "PORTAL-7", "reason": "filed by hand in a test"})
+    check("53: recorded as filed manually", st == 200, f"{st} {body}")
+    st, full = http("GET", f"/api/invoices/{inv['id']}", base, token=token)
+    check("53: marked filed, no IRN, the portal's number kept",
+          full.get("fbrStatus") == "Submitted" and full.get("fbrFiledManually") and not full.get("fbrIRN")
+          and full.get("fbrInvoiceNumber") == "PORTAL-7", {k: full.get(k) for k in ("fbrStatus", "fbrFiledManually", "fbrIRN", "fbrInvoiceNumber")})
+    check("recording it changes no stock (the save already took the goods out)", on_hand() == before, (before, on_hand()))
+    items_in = [{"id": i["id"], "itemTypeId": i.get("itemTypeId"), "description": "Valve, corrected",
+                 "quantity": float(i["quantity"]), "uom": i.get("uom"), "unitPrice": float(i["unitPrice"])} for i in full["items"]]
+    st, upd = http("PUT", f"/api/invoices/{inv['id']}", base, token=token, body={"gstRate": 18, "items": items_in})
+    check("a manually filed invoice can still be edited", st == 200, f"{st} {str(upd)[:200]}")
+    st, body = http("POST", f"/api/fbr/{inv['id']}/reset-submission", base, token=token,
+                    body={"mode": "recordManual", "manualFbrInvoiceNumber": "PORTAL-8", "reason": "again"})
+    check("it cannot be recorded twice", st == 400, f"{st} {body}")
+
+    # MCP: prepare_fbr_reset takes recordManual
+    sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent))
+    import mcp_importer_fixture as fx
+    fx.set_base(base)
+    admin = fx.login("admin", "admin123")
+    A, _ = fx.companies(admin)
+    fx.remove_users(admin, "invscr_mcpm_")
+    sysr = fx.system_roles(admin)
+    _, jw = fx.make_user(admin, "invscr_mcpm_writer", [A], [fx.staff_role(admin), sysr["MCP Access"], sysr["MCP Write"]])
+    T = fx.token_for(jw, [A])
+    st, clients = http("GET", f"/api/clients/company/{A}", base, token=token)
+    st, inv2 = http("POST", "/api/invoices/standalone", base, token=token, body={
+        "date": TODAY, "companyId": A, "clientId": clients[0]["id"], "gstRate": 18,
+        "items": [{"description": "x", "quantity": 1, "uom": UNIT, "unitPrice": 10,
+                   "newItemType": {"name": f"MCP Manual {SUFFIX}", "hsCode": "8481.8090", "uom": UNIT}}]})
+    if not check("an unfiled invoice in the MCP fixture company", st in (200, 201), f"{st} {str(inv2)[:200]}"):
+        return
+    refused, text = fx.call(T, "prepare_fbr_reset", {"companyId": A, "invoiceId": inv2["id"], "mode": "recordManual", "reason": "t"})
+    check("MCP recordManual without the portal number is refused", refused and "manualFbrInvoiceNumber" in text, text[:200])
+    refused, text = fx.call(T, "prepare_fbr_reset", {"companyId": A, "invoiceId": inv2["id"], "mode": "recordManual",
+                                                     "manualFbrInvoiceNumber": "PORTAL-9", "reason": "filed by hand"})
+    plan = None if refused else json.loads(text)
+    if check("MCP prepare_fbr_reset accepts recordManual", plan is not None, text[:200]):
+        refused, text = fx.call(T, "commit_action", {"planId": plan["planId"]})
+        st, f2 = http("GET", f"/api/invoices/{inv2['id']}", base, token=token)
+        check("MCP commit records it as filed manually", not refused and f2.get("fbrFiledManually") and f2.get("fbrInvoiceNumber") == "PORTAL-9", text[:200])
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--base", default="http://localhost:5195")
@@ -383,6 +450,7 @@ def main():
     suite_d6(a.base, token)
     suite_d7_d8(a.base, token)
     suite_mcp(a.base, token)
+    suite_filed_manually(a.base, token)
     print(f"\n{PASSED}/{PASSED + FAILED} importer invoice screen checks passed")
     sys.exit(1 if FAILED else 0)
 

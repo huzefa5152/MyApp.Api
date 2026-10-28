@@ -18,6 +18,7 @@ import BulkFbrPreviewDialog from "../Components/BulkFbrPreviewDialog";
 import InvoiceTable from "../Components/InvoiceTable";
 import CorrectionWizard from "../Components/CorrectionWizard";
 import FbrResetModal from "../Components/FbrResetModal";
+import FbrRecordManualModal from "../Components/FbrRecordManualModal";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import InvoiceActionBar, { InvoiceFbrChip } from "../Components/InvoiceActionBar";
 import { buildInvoiceActions, statusReason, fbrChip, isFiled } from "../utils/invoiceActions";
@@ -197,6 +198,8 @@ export default function InvoicePage({ mode = "invoices" }) {
   const [correctTarget, setCorrectTarget] = useState(null);
   // Bill selected for the admin "Reset FBR state" modal (Submitting/Uncertain).
   const [resetTarget, setResetTarget] = useState(null);
+  // Invoice being recorded as filed by hand on FBR's portal (null when closed).
+  const [manualTarget, setManualTarget] = useState(null);
   const [showForm, setShowForm] = useState(false);
   // Separate visibility flag for the "Create Bill (No Challan)" modal so
   // it doesn't share state with the regular New Bill flow.
@@ -781,6 +784,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     preview: () => setFbrPreviewId(inv.id),
     exclude: () => handleToggleFbrExcluded(inv),
     reset: () => handleFbrReset(inv),
+    recordManual: () => setManualTarget(inv),
     receipt: () => setReceiptPreset({ contactId: inv.clientId, documentId: inv.id, divisionId: inv.divisionId }),
     copy: () => copy.openCopy(inv.id, `Invoice #${inv.invoiceNumber}`),
     challan: () => setChallanFor(inv),
@@ -1348,6 +1352,19 @@ export default function InvoicePage({ mode = "invoices" }) {
               const kind = correctionMode === "credit" ? "Credit" : "Debit";
               notify(`${kind} Note #${doc.invoiceNumber} created — open the ${kind} Notes tab to validate and submit it to FBR.`, "success");
             }
+          }}
+        />
+      )}
+
+      {manualTarget && (
+        <FbrRecordManualModal
+          invoice={manualTarget}
+          onClose={() => setManualTarget(null)}
+          onDone={() => {
+            const done = manualTarget;
+            setManualTarget(null);
+            if (selectedCompany) fetchInvoices(selectedCompany.id, page);
+            notify(`${docName} #${done.invoiceNumber} recorded as filed on FBR's portal.`, "success");
           }}
         />
       )}

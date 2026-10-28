@@ -1,7 +1,7 @@
 import {
   MdEdit, MdPrint, MdVisibility, MdPictureAsPdf, MdGridOn, MdCheckCircle, MdCloudUpload,
   MdPreview, MdBlock, MdRestore, MdPayments, MdCopyAll, MdLocalShipping, MdUndo, MdPostAdd,
-  MdCancel, MdDelete,
+  MdCancel, MdDelete, MdAssignmentTurnedIn,
 } from "react-icons/md";
 import CardActions from "./CardActions";
 import { colors } from "../theme";
@@ -20,7 +20,7 @@ const ICONS = {
   edit: MdEdit, print: MdPrint, view: MdVisibility, pdf: MdPictureAsPdf, excel: MdGridOn,
   validate: MdCheckCircle, submit: MdCloudUpload, preview: MdPreview, exclude: MdBlock, reset: MdRestore,
   receipt: MdPayments, copy: MdCopyAll, challan: MdLocalShipping, creditNote: MdUndo, correct: MdPostAdd,
-  void: MdCancel, delete: MdDelete,
+  void: MdCancel, delete: MdDelete, recordManual: MdAssignmentTurnedIn,
 };
 
 export default function InvoiceActionBar({ inv, actions, onAction, busy, compact = false, style }) {

@@ -149,6 +149,24 @@ check("once validated, Submit takes Validate's place inline", () =>
   assert.deepStrictEqual(inline(unfiled, ctx({ validated: true })), ["edit", "print", "pdf", "submit"]));
 check("a filed invoice shows Print, View and PDF inline (no Edit)", () =>
   assert.deepStrictEqual(inline(filed, ctx()), ["print", "view", "pdf"]));
+const manual = { ...filed, fbrIRN: null, fbrFiledManually: true, fbrInvoiceNumber: "ABC-1" };
+check("53: an unsent invoice offers 'Filed on FBR portal' to a reset-key holder", () =>
+  assert.ok(keys(unfiled, ctx()).includes("recordManual")));
+check("53: ...not without invoices.fbr.reset, and not with FBR off", () => {
+  assert.ok(!keys(unfiled, ctx({ perms: { ...all, canFbrReset: false } })).includes("recordManual"));
+  assert.ok(!keys(unfiled, ctx({ fbrEnabled: false })).includes("recordManual"));
+});
+check("53: ...not on a filed, stuck or voided invoice", () => {
+  for (const inv of [filed, { ...unfiled, fbrStatus: "Uncertain" }, { ...unfiled, isCancelled: true }])
+    assert.ok(!keys(inv, ctx()).includes("recordManual"), JSON.stringify(inv));
+});
+check("a manually filed invoice keeps Edit, offers no credit note or correction", () => {
+  const k = keys(manual, ctx());
+  assert.ok(k.includes("edit") && !k.includes("creditNote") && !k.includes("correct") && !k.includes("void"));
+});
+check("a manually filed invoice says where it was filed", () =>
+  assert.match(statusReason(manual), /by hand on FBR's portal as ABC-1/));
+check("67: its chip reads Filed manually", () => assert.strictEqual(fbrChip(manual).label, "Filed manually"));
 
 console.log("\n=== FBR chip (67) ===");
 const chip = (inv, o) => fbrChip(inv, o)?.label ?? null;

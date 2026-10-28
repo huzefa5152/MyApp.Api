@@ -31,10 +31,14 @@ export function buildInvoiceActions(inv, ctx) {
   // Inline on the card (primary): Edit, Print, PDF and the next FBR step;
   // View joins them when there is no Edit (filed, voided, imported). The
   // rest sit under "More".
-  const editable = p.canEdit && !filed && live && !inv.isMigrated;
+  // A bill filed BY HAND on FBR's portal stays editable (the server allows it,
+  // so its date or lines can be corrected); nothing here is sent to FBR.
+  const editable = p.canEdit && (!filed || !!inv.fbrFiledManually) && live && !inv.isMigrated;
   if (editable)
     add({ key: "edit", label: "Edit", group: "primary", primary: true,
-      title: "Change the lines, prices and dates. Allowed until the invoice is filed with FBR." });
+      title: inv.fbrFiledManually
+        ? "Correct this invoice here. It was filed by hand on FBR's portal; changes are not sent to FBR."
+        : "Change the lines, prices and dates. Allowed until the invoice is filed with FBR." });
   if (p.canPrint)
     add({ key: "print", label: "Print", group: "primary", primary: true, disabled: !!ctx.noTemplate,
       title: ctx.noTemplate ? ctx.noTemplateReason : `Print this ${doc} with your Invoice template.` });
@@ -68,6 +72,9 @@ export function buildInvoiceActions(inv, ctx) {
       title: inv.isFbrExcluded
         ? "Put this invoice back into Validate all / Submit all."
         : "Leave this invoice out of Validate all / Submit all. Its own Validate / Submit still work." });
+  if (p.canFbrReset && ctx.fbrEnabled && !filed && !isInFlight(inv) && live)
+    add({ key: "recordManual", label: "Filed on FBR portal", group: "fbr",
+      title: "Record that this invoice was already filed by hand on FBR's portal. It is never sent from here." });
   if (p.canFbrReset && isInFlight(inv))
     add({ key: "reset", label: "Reset FBR", group: "fbr",
       title: "Clear a stuck submission. Check on FBR's portal first whether it was filed." });
@@ -81,10 +88,12 @@ export function buildInvoiceActions(inv, ctx) {
   if (p.canCreateChallan && live && Number(inv.challanRemainingQuantity || 0) > 0)
     add({ key: "challan", label: "Challan", group: "money",
       title: `Make a delivery challan for what is still to deliver (${Number(inv.challanRemainingQuantity).toLocaleString()}).` });
-  if (p.canReverse && filed && live && !inv.fbrCancelledAt && !isNote(inv))
+  // Not on a bill filed by hand: a note is filed against the original's IRN,
+  // and that bill has none here (it is corrected with Edit instead).
+  if (p.canReverse && filed && live && !inv.fbrFiledManually && !inv.fbrCancelledAt && !isNote(inv))
     add({ key: "creditNote", label: "Credit note", group: "money",
       title: "Reverse all or part of this filed invoice with a credit note, then file the note with FBR." });
-  if (p.canReverse && filed && live && ctx.fbrEnabled && !inv.hasSupplement && !inv.isMigrated && !isNote(inv))
+  if (p.canReverse && filed && live && !inv.fbrFiledManually && ctx.fbrEnabled && !inv.hasSupplement && !inv.isMigrated && !isNote(inv))
     add({ key: "correct", label: "Correct", group: "money",
       title: "Bill quantity that was under-reported on this filed invoice, as a new invoice." });
 
@@ -102,6 +111,8 @@ export function buildInvoiceActions(inv, ctx) {
 export function statusReason(inv) {
   if (inv.isCancelled) return `Voided${inv.cancelReason ? ` — ${inv.cancelReason}` : ""}. Kept for its number.`;
   if (inv.fbrCancelledAt) return "Withdrawn on FBR's portal — no longer counts as a sale.";
+  if (isFiled(inv) && inv.fbrFiledManually)
+    return `Filed by hand on FBR's portal${inv.fbrInvoiceNumber ? ` as ${inv.fbrInvoiceNumber}` : ""} — edits here are not sent to FBR.`;
   if (isFiled(inv)) return "Filed with FBR — correct it with a credit or debit note.";
   if (inv.fbrStatus === "Submitting") return "Being sent to FBR — wait and refresh; do not submit again.";
   if (inv.fbrStatus === "Uncertain") return "FBR's answer was lost — check FBR's portal before anything else.";

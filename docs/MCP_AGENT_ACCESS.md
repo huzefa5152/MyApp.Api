@@ -289,3 +289,7 @@ touched, and a customer portal set to Bill keeps printing. The sales invoice
 prints with either `bills.print.view` or `invoices.print.view`. Tool names keep
 the old word (`prepare_bill`, `validate_bill_fbr`) so connected agents keep
 working; their descriptions say invoice.
+
+`prepare_fbr_reset` also takes mode `recordManual` (with `manualFbrInvoiceNumber`)
+for a bill filed by hand on FBR's portal: marked filed with no IRN, never sent,
+still editable. It does not move stock -- the invoice took its stock when saved.

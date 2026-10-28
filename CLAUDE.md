@@ -1763,8 +1763,16 @@ string. Importers never adjust quantity or item type for FBR, so:
   guard does not honour `stock.overcommit.allow` on invoices), and "Add item
   and record stock" opens the item form prefilled -- an opening quantity there
   must carry a value, or the sale would carry no cost.
-- Suites: `python scripts/test_importer_invoice_screen.py --base <url>` (44),
-  `node scripts/test_invoice_screen.mjs` (42).
+- **Filed by hand on FBR's portal** (2026-10-28): the card's "Filed on FBR portal"
+  action (`invoices.fbr.reset`, unsent invoices, FBR on) and MCP
+  `prepare_fbr_reset` mode `recordManual` both call the reset valve, which marks
+  the bill filed with no IRN and the portal's number. It never moves stock: an
+  invoice takes its goods out when it is SAVED, whatever its FBR state (all
+  manual filings on production carry their stock-out). Such a bill stays
+  editable (`IsInvoiceEditable`), so the screen shows Edit; it gets no credit
+  note or correction, because a note is filed against an IRN it does not have.
+- Suites: `python scripts/test_importer_invoice_screen.py --base <url>` (56),
+  `node scripts/test_invoice_screen.mjs` (51).
 
 ### 5c. Customer Portal — the only anonymous surface
 
@@ -2279,8 +2287,8 @@ them can be resolved from FBR.
 | FBR permissions (validate / submit / reset are separate) | `python scripts/test_fbr_rbac.py --fbr-token <sandbox>` | `18/18 checks passed` |
 | Billing at the rate the goods came in at (evidence, refuse vs advise, override, picker, isolation) | `python scripts/test_imported_tax_rate.py` (add `--db "<conn>"` for the GD-line cases) | `56/56 checks passed` (with `--db`) |
 | Bill screens' shared checklist + totals rows (offline) | `node scripts/test_bill_entry.mjs` | `24/24 checks passed` |
-| One Invoices screen: descriptions, new items on save, stock guard, MCP prepare_bill, retired Bill print type | `python scripts/test_importer_invoice_screen.py --base <url>` | `44/44 importer invoice screen checks passed` |
-| Invoice screen decisions (offline): description fill, stock before save, card/table actions, FBR chip | `node scripts/test_invoice_screen.mjs` | `42/42 checks passed` |
+| One Invoices screen: descriptions, new items on save, stock guard, MCP prepare_bill, retired Bill print type | `python scripts/test_importer_invoice_screen.py --base <url>` | `56/56 importer invoice screen checks passed` |
+| Invoice screen decisions (offline): description fill, stock before save, card/table actions, FBR chip | `node scripts/test_invoice_screen.mjs` | `51/51 checks passed` |
 | GD costing import: line rules on both paths, leave-out, choose item, file identity | `python scripts/test_gd_import_costing.py`; `node scripts/test_gd_costing_entry.mjs`; `cd scripts/gd_costing_harness && dotnet run -c Release` | `476 passed, 0 failed`; `54/54 checks passed`; `145 checks, 0 failed` |
 | Invoice Sales Detail: periods, filters, Excel = screen, Excel format pinned, access | `python scripts/test_invoice_sales_detail.py` (add `--db "<conn>"` for the FBR-submitted cases); `node scripts/test_invoice_sales_detail.mjs` | `64/64 checks passed` (with `--db`; 61 + 3 skipped without); `45/45 checks passed` |
 | FIFO by GD (claimed first, never blocks, WA unchanged) | `cd scripts/stock_fifo_harness && dotnet run -c Release`; `python scripts/test_stock_fifo.py`; `node scripts/test_fifo_pricing.mjs` | `159 checks, 0 failed`; `61/61 checks passed`; `11/11 checks passed` |
