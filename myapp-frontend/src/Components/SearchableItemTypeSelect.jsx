@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { MdArrowDropDown, MdSearch, MdStar, MdAddCircleOutline, MdFiberNew } from "react-icons/md";
 import ItemTypeForm from "./ItemTypeForm";
-import { getItemTypes } from "../api/itemTypeApi";
+import { getItemTypes, getItemTypeFbrHints } from "../api/itemTypeApi";
 import { searchHsCodes } from "../api/hsCodeApi";
 import { getFbrHSCodes } from "../api/fbrApi";
 import { pendingFromFbrCode } from "../utils/lineStock";
@@ -238,6 +238,24 @@ export default function SearchableItemTypeSelect({
       (it.fbrDescription || "").toLowerCase().includes(term)
     );
   }, [sortedItems, query]);
+
+  // Picking an FBR code makes a pending new item. The tariff carries no unit,
+  // so the unit hints are asked first (the code's FBR unit, or what this
+  // company's similar items use) and the line gets ONE update -- a second,
+  // late update would overwrite a name the operator had started typing.
+  const pickFbrCode = async (r) => {
+    if (selected) onChange?.("", null);
+    setOpen(false);
+    let pending = pendingFromFbrCode(r);
+    if (!pending.uom && effectiveCompanyId) {
+      try {
+        const { data } = await getItemTypeFbrHints(effectiveCompanyId, r.hsCode);
+        const uom = data?.defaultUom || data?.catalogUomSuggestion;
+        if (uom) pending = { ...pending, uom };
+      } catch { /* no hint: the operator types the unit */ }
+    }
+    onPickNewItem(pending);
+  };
 
   // A code the company already has an item for is offered only under its
   // catalog. The placeholder row, when one exists, rides along as a hint the
@@ -514,7 +532,7 @@ export default function SearchableItemTypeSelect({
                 {fbrGroup.map((r) => (
                   <div
                     key={`fbr-${r.hsCode}`}
-                    onMouseDown={() => { if (selected) onChange?.("", null); onPickNewItem(pendingFromFbrCode(r)); setOpen(false); }}
+                    onMouseDown={() => pickFbrCode(r)}
                     style={styles.row}
                     title="Adds a new item to your catalog when the invoice is saved"
                   >

@@ -18,7 +18,7 @@ import { colors } from "../theme";
  *
  * The server's stock guard is never bypassed: this only says it in advance.
  */
-export default function NewItemChip({ pending, onRename, stock, quantity, companyId, fbrOn = true, onStocked }) {
+export default function NewItemChip({ pending, onRename, stock, quantity, uom, companyId, fbrOn = true, onStocked }) {
   const { has } = usePermissions();
   const [recording, setRecording] = useState(false);
   const canRecord = has("itemtypes.manage.create") && has("stock.opening.manage");
@@ -67,7 +67,7 @@ export default function NewItemChip({ pending, onRename, stock, quantity, compan
         <ItemTypeForm
           companyId={companyId}
           fbrOn={fbrOn}
-          prefill={{ ...pending, openingQuantity: quantity || "" }}
+          prefill={{ ...pending, uom: uom || pending.uom || "", openingQuantity: quantity || "" }}
           onClose={() => setRecording(false)}
           onSaved={(saved, extra) => {
             setRecording(false);

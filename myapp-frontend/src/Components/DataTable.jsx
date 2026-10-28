@@ -221,7 +221,7 @@ export default function DataTable({
                 );
               })}
               {actions && (
-                <th style={{ ...styles.th, padding: headPad, textAlign: "right", width: 1 }}>
+                <th style={{ ...styles.th, ...styles.stickyEnd, zIndex: 2, padding: headPad, textAlign: "right", width: 1 }}>
                   {actionsHeader}
                 </th>
               )}
@@ -245,6 +245,9 @@ export default function DataTable({
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
                   style={{
                     ...styles.tr,
+                    // Opaque, so the sticky actions cell (background: inherit)
+                    // hides the columns scrolling under it.
+                    backgroundColor: "#fff",
                     cursor: onRowClick ? "pointer" : "default",
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#f8fafc"; }}
@@ -268,7 +271,7 @@ export default function DataTable({
                   ))}
                   {actions && (
                     <td
-                      style={{ ...styles.td, padding: cellPad, textAlign: "right" }}
+                      style={{ ...styles.td, ...styles.stickyEnd, background: "inherit", padding: cellPad, textAlign: "right" }}
                       onClick={(e) => e.stopPropagation()}
                     >
                       <div style={styles.actionsCell}>{actions(row)}</div>
@@ -420,6 +423,9 @@ const styles = {
     padding: "2rem 1rem",
     fontStyle: "italic",
   },
+  // The actions column stays in view when the other columns overflow and
+  // the table scrolls sideways: the row's buttons are what the user came for.
+  stickyEnd: { position: "sticky", right: 0, boxShadow: "-6px 0 8px -6px rgba(12,24,48,0.18)" },
   actionsCell: {
     display: "inline-flex",
     gap: 6,

@@ -899,6 +899,15 @@ body.dl-body--locked {
     width: 100%;
   }
 
+  /* A picker wrapper sized with an inline flex-basis (desktop width) would
+     take that basis as its HEIGHT once the row stacks: the client filter on
+     the Invoices screen left a 170px gap. On a phone it is full width and
+     as tall as its content. */
+  .filters-row > .filter-client {
+    flex: 0 0 auto !important;
+    max-width: none !important;
+  }
+
   /* Print-template picker: full-width on phones (CLAUDE.md picker rule).
      The select carries an inline max-width:260 for the desktop cap, so the
      override needs !important to win on mobile; the wrapper stretches too. */
@@ -2401,4 +2410,22 @@ body.dl-body--locked {
   .dl-overlay {
     background: rgba(0, 0, 0, 0.5);
   }
+}
+
+/* Invoice line items on a phone: each line is a card, each cell a labelled
+   row, so nothing scrolls sideways (RESPONSIVE_UI_GUIDE: wide tables get a
+   card view below 760px). The desktop table is untouched. */
+@media (max-width: 760px) {
+  table.inv-lines { min-width: 0 !important; display: block; }
+  table.inv-lines thead { display: none; }
+  table.inv-lines tbody, table.inv-lines tr, table.inv-lines td { display: block; width: 100% !important; box-sizing: border-box; }
+  table.inv-lines tr { border: 1px solid #e8edf3; border-radius: 10px; margin: 0 0 0.75rem; padding: 0.4rem 0.5rem; background: #fff; position: relative; }
+  table.inv-lines td { border-bottom: none !important; padding: 0.3rem 0 !important; text-align: left !important; }
+  table.inv-lines td[data-label]:not([data-label=""])::before {
+    content: attr(data-label); display: block; font-size: 0.68rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em; color: #5f6d7e; margin-bottom: 2px;
+  }
+  table.inv-lines td.inv-line-remove { position: absolute; top: 0.25rem; right: 0.35rem; width: auto !important; padding: 0 !important; }
+  table.inv-lines td.inv-line-remove button { width: 44px; height: 44px; display: grid; place-items: center; padding: 0; box-shadow: none; }
+  table.inv-lines td.inv-line-remove + td, table.inv-lines tr > td:first-child { padding-right: 3rem !important; }
 }

@@ -1701,7 +1701,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
         <div style={formStyles.header}>
           <div style={{ minWidth: 0 }}>
             <h5 style={formStyles.title}>
-              {readOnly ? "View Bill" : "Edit Bill"} {invoice?.fbrInvoiceNumber || `#${invoice?.invoiceNumber || ""}`}
+              {readOnly ? "Invoice" : "Edit invoice"} {invoice?.fbrInvoiceNumber || `#${invoice?.invoiceNumber || ""}`}
             </h5>
             <div style={styles.headerSub}>
               {readOnly
@@ -1716,7 +1716,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
             {loading ? (
               <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>Loading...</div>
             ) : !invoice ? (
-              <div style={styles.errorAlert}>Bill not found.</div>
+              <div style={styles.errorAlert}>Invoice not found.</div>
             ) : !invoice.isEditable && !readOnly ? (
               <div style={styles.errorAlert}>
                 This bill has been submitted to FBR and cannot be edited.
@@ -1856,7 +1856,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                     n={1}
                     title="FBR Scenario"
                     status={readOnly ? "view" : rateBlocked ? "warn" : "done"}
-                    help={readOnly ? null : "The scenario narrows the item types offered below to its sale type. The GST rate is set in Buyer & Bill Details."}
+                    help={readOnly ? null : "The scenario narrows the item types offered below to its sale type. The GST rate is set in Buyer & invoice details."}
                     summary={chosenScenario ? (
                       <>
                         <span style={{ fontWeight: 700, color: colors.blue, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{chosenScenario.code}</span>
@@ -1904,7 +1904,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                 <BillStep
                   id={BILL_ANCHORS.details}
                   n={stepNo(2)}
-                  title="Buyer & Bill Details"
+                  title="Buyer & invoice details"
                   status={readOnly ? "view" : billNumberOk ? "done" : "warn"}
                   help={readOnly ? null : "The buyer, number, dates and taxes of this bill. A greyed field is set by a linked challan or by your role."}
                   summary={(
@@ -1981,7 +1981,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                     </div>
                   )}
                   <div style={{ flex: 1, minWidth: 140 }}>
-                    <label style={styles.label}>Bill Date</label>
+                    <label style={styles.label}>Invoice date</label>
                     <input
                       type="date"
                       style={{ ...styles.input, ...(lockNonItemType ? styles.readOnlyInput : {}) }}
@@ -2423,6 +2423,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                                   onRename={(name) => renameNewItem(idx, name)}
                                   stock={item.newItemType ? lineStock({ pending: item.newItemType, quantity: item.quantity, company: stockCompany }) : null}
                                   quantity={item.quantity}
+                                  uom={item.uom}
                                   companyId={invoice?.companyId}
                                   fbrOn={fbrEnabled}
                                   onStocked={(saved) => {
@@ -2659,7 +2660,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                   n={stepNo(4)}
                   title="Total"
                   status={readOnly ? "view" : "done"}
-                  help={readOnly ? null : "Worked out from the lines and the taxes set in Buyer & Bill Details."}
+                  help={readOnly ? null : "Worked out from the lines and the taxes set in Buyer & invoice details."}
                   summary={<span>Grand total <strong>{money(grandTotal)}</strong></span>}
                 >
                   <BillTotals rows={editTotalsRows} />

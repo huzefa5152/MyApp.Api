@@ -187,7 +187,7 @@ export default function BillNumberField({
   return (
     <div>
       <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary }}>
-        Bill / Invoice No.
+        Invoice No.
       </label>
 
       {isEdit ? null : (

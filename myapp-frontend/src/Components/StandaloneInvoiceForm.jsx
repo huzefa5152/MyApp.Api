@@ -558,6 +558,25 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const updateRow = (localId, patch) =>
     setRows((prev) => prev.map((r) => (r.localId === localId ? { ...r, ...patch } : r)));
   const addRow = () => setRows((prev) => [...prev, blankRow()]);
+  // Keyboard quick-add (desktop): Enter in a field of the LAST line, once that
+  // line is complete, adds a line and opens its item picker. Enter anywhere
+  // else, or on an incomplete line, does what it did before (nothing here).
+  const [openPickerFor, setOpenPickerFor] = useState(null);
+  useEffect(() => {
+    if (!openPickerFor) return;
+    document.querySelector(`[data-row-picker="${openPickerFor}"] button`)?.click();
+    setOpenPickerFor(null);
+  }, [openPickerFor, rows]);
+  const handleQuickAddKey = (e) => {
+    if (e.key !== "Enter" || e.shiftKey || e.target.tagName !== "INPUT") return;
+    const last = rows[rows.length - 1];
+    if (!last || !e.target.closest("tr")?.querySelector(`[data-row-picker="${last.localId}"]`)) return;
+    if (rowErrors(last).length > 0) return;
+    e.preventDefault();
+    const fresh = blankRow();
+    setRows((prev) => [...prev, fresh]);
+    setOpenPickerFor(fresh.localId);
+  };
   const removeRow = (localId) =>
     setRows((prev) => (prev.length === 1 ? prev : prev.filter((r) => r.localId !== localId)));
 
@@ -1354,9 +1373,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <div style={{ minWidth: 0 }}>
-            <h5 style={formStyles.title}>Create Bill (No Challan)</h5>
+            <h5 style={formStyles.title}>New invoice — without challan</h5>
             <div style={styles.headerSub}>
-              A bill straight from stock: the goods leave inventory when you save. Each step turns green when it is complete.
+              An invoice straight from stock: the goods leave inventory when you save. Each step turns green when it is complete.
             </div>
           </div>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
@@ -1380,7 +1399,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                   <label style={styles.label}>Sales Order <span style={{ fontWeight: 400 }}>(optional — loads buyer &amp; items)</span></label>
                   {salesOrderOptions.length === 0 ? (
                     <p style={{ color: colors.textSecondary, fontSize: "0.82rem", margin: 0 }}>
-                      No sales orders{divisionId ? " in this division" : ""} — enter the bill manually below.
+                      No sales orders{divisionId ? " in this division" : ""} — enter the invoice below.
                     </p>
                   ) : (
                     <SearchableSelect
@@ -1590,7 +1609,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                 {/* Steps 3-5 wait for the scenario and the buyer. They show,
                     folded, so the operator can see the whole road ahead and
                     the numbers never jump from 2 to 6. */}
-                {!linesVisible && [["details", 3, "Bill Details"], ["items", 4, "Items"], ["taxes", 5, "Taxes & Total"]].map(([k, n, t]) => (
+                {!linesVisible && [["details", 3, "Invoice details"], ["items", 4, "Items"], ["taxes", 5, "Taxes & Total"]].map(([k, n, t]) => (
                   <BillStep
                     key={k}
                     id={BILL_ANCHORS[k]}
@@ -1615,7 +1634,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                     <BillStep
                       id={BILL_ANCHORS.details}
                       n={stepNo(3)}
-                      title="Bill Details"
+                      title="Invoice details"
                       status={billNumberMode === "custom" && !billNumberOk ? "warn" : "done"}
                       open={billHeaderOpen}
                       onToggle={() => setBillHeaderOpen((v) => !v)}
@@ -1648,7 +1667,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               />
                             </div>
                             <div style={{ flex: 1, minWidth: 140 }}>
-                              <label style={styles.label}>Bill Date</label>
+                              <label style={styles.label}>Invoice date</label>
                               <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
                             </div>
                             <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={styles.label} style={styles.input} wrapStyle={{ flex: 1, minWidth: 140 }} />
@@ -1763,7 +1782,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                             unused pixels on a 1280 desktop; the OPTIONAL
                             columns (GL account, MRP, SRO) are what actually
                             make it wide, so they are what raise the floor. */}
-                        <table style={{ ...styles.unifiedTable, minWidth: 900 + (glOn ? 120 : 0) + (showMRP ? 110 : 0) + (showSRO ? 240 : 0) }}>
+                        <table className="inv-lines" style={{ ...styles.unifiedTable, minWidth: 900 + (glOn ? 120 : 0) + (showMRP ? 110 : 0) + (showSRO ? 240 : 0) }}>
                           <thead>
                             <tr style={styles.unifiedThead}>
                               {/* Optional in Bills mode — a type picked at
@@ -1793,7 +1812,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               <th style={{ ...styles.unifiedTh, width: "4%" }}></th>
                             </tr>
                           </thead>
-                          <tbody>
+                          <tbody onKeyDown={handleQuickAddKey}>
                             {rows.map((r) => {
                               const q = parseFloat(r.quantity) || 0;
                               const p = parseFloat(r.unitPrice) || 0;
@@ -1811,7 +1830,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               const derivedFromAmount = canDerive && !!r.lineTotal;
                               return (
                                 <tr key={r.localId} id={lineAnchor(r.localId)} style={styles.unifiedRow}>
-                                  <td style={styles.unifiedTd}>
+                                  <td data-label="Item" style={styles.unifiedTd}>
+                                    <div data-row-picker={r.localId}>
                                     <SearchableItemTypeSelect
                                       divisionId={divisionId}
                                       items={filteredItemTypes}
@@ -1827,11 +1847,13 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       placeholder="Required — pick item or non-inventory…"
                                       style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
                                     />
+                                    </div>
                                     <NewItemChip
                                       pending={r.newItemType}
                                       onRename={(name) => renameNewItem(r.localId, name)}
                                       stock={r.newItemType ? lineStock({ pending: r.newItemType, quantity: r.quantity, company }) : null}
                                       quantity={r.quantity}
+                                      uom={r.uom}
                                       companyId={companyId}
                                       fbrOn={fbrEnabled}
                                       onStocked={(item) => handleNewItemStocked(r.localId, item)}
@@ -1846,7 +1868,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                         {Number(priced.availableQuantity).toLocaleString(undefined, { maximumFractionDigits: 4 })} {priced.uom || r.uom || ""} on hand
                                         {" · "}
                                         {Number(priced.unitCost).toLocaleString(undefined, { maximumFractionDigits: 4 })} each
-                                        {fifoTierText(priced, priced.uom || r.uom) && (
+                                        {/* The GD breakdown only when it adds something: one
+                                            untagged pool just repeats "on hand" above. */}
+                                        {fifoTierText(priced, priced.uom || r.uom) && !(priced.tiers?.length === 1 && !priced.tiers[0].gdNumber) && (
                                           <div style={{ fontSize: "0.66rem", opacity: 0.85, marginTop: 2 }}>
                                             {fifoTierText(priced, priced.uom || r.uom)}
                                           </div>
@@ -1857,10 +1881,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                             <button
                                               type="button"
                                               style={styles.stockChipBtn}
-                                              title={`Bill everything on hand: ${Number(priced.availableQuantity).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${priced.uom || r.uom || ""} for ${Number(priced.availableValueExcludingTax).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                              title={`Sell everything on hand: ${Number(priced.availableQuantity).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${priced.uom || r.uom || ""} for ${Number(priced.availableValueExcludingTax).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                                               onClick={() => billAllOnHand(r.localId)}
                                             >
-                                              Bill all ({Number(priced.availableValueExcludingTax).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                                              Sell all ({Number(priced.availableValueExcludingTax).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
                                             </button>
                                           </>
                                         )}
@@ -1926,7 +1950,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       can pick from previously-typed descriptions or type
                                       free-text. Picking an Item Type seeds it when blank. */}
                                   {billsMode ? (
-                                    <td style={styles.unifiedTd}>
+                                    <td data-label="Description" style={styles.unifiedTd}>
                                       <LookupAutocomplete
                                         label="Description"
                                         endpoint="/lookup/items"
@@ -1947,12 +1971,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       || r.itemTypeName
                                       || "";
                                     return (
-                                      <td style={{ ...styles.unifiedTd, color: display ? colors.textPrimary : colors.textSecondary, fontStyle: display ? "normal" : "italic" }}>
+                                      <td data-label="Description" style={{ ...styles.unifiedTd, color: display ? colors.textPrimary : colors.textSecondary, fontStyle: display ? "normal" : "italic" }}>
                                         {display || "(pick an item type)"}
                                       </td>
                                     );
                                   })()}
-                                  <td style={styles.unifiedTd}>
+                                  <td data-label="Qty" style={styles.unifiedTd}>
                                     <input
                                       type="number" min={0} step="any"
                                       style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", ...(derivedFromAmount ? styles.derivedInput : null), minWidth: `calc(${Math.min(20, Math.max(4, String(r.quantity ?? "").length + 1))}ch + 2.4rem)` }}
@@ -1968,7 +1992,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                           : ""}
                                     />
                                   </td>
-                                  <td style={styles.unifiedTd}>
+                                  <td data-label="UOM" style={styles.unifiedTd}>
                                     {/* Bills mode (no challan): Unit autocomplete
                                         bound to /lookup/units — same UX the
                                         challan item form uses. New units the
@@ -2001,7 +2025,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       />
                                     )}
                                   </td>
-                                  <td style={styles.unifiedTd}>
+                                  <td data-label="Unit price" style={styles.unifiedTd}>
                                     <input
                                       type="number" min={0} step="any"
                                       style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", ...(derivedFromAmount ? styles.derivedInput : null), minWidth: `calc(${Math.min(20, Math.max(4, String((derivedFromAmount && r.unitPrice !== "" ? String(Math.round(Number(r.unitPrice) * 10000) / 10000) : r.unitPrice) ?? "").length + 1))}ch + 2.4rem)` }}
@@ -2045,7 +2069,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                     const rateMoved = ready && typed > 0 && p > 0
                                       && Math.abs(p - Number(price.unitCost)) > 0.005;
                                     return (
-                                      <td style={{ ...styles.unifiedTd, textAlign: "right" }}>
+                                      <td data-label="Line total" style={{ ...styles.unifiedTd, textAlign: "right" }}>
                                         <input
                                           type="text"
                                           inputMode="decimal"
@@ -2077,7 +2101,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                             applyLineTotal(r.localId, cleaned);
                                           }}
                                           onBlur={() => commitLineTotal(r.localId)}
-                                          placeholder={!r.itemTypeId ? "pick an item" : noStock ? "n/a" : "0.00"}
+                                          placeholder={r.newItemType ? "qty × rate" : !r.itemTypeId ? "pick an item" : noStock ? "qty × rate" : "0.00"}
                                           title={!r.itemTypeId
                                             ? "Pick an item type first — the quantity is worked out from what that stock is worth"
                                             : ready
@@ -2107,7 +2131,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                     );
                                   })()}
                                   {glOn && (
-                                    <td style={styles.unifiedTd}>
+                                    <td data-label="Account (GL)" style={styles.unifiedTd}>
                                       <AccountSelect
                                         accounts={accounts}
                                         value={r.accountId ?? null}
@@ -2135,7 +2159,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                     </td>
                                   )}
                                   {showMRP && (
-                                    <td style={{ ...styles.unifiedTd, backgroundColor: colors.cautionTint }}>
+                                    <td data-label="MRP / unit" style={{ ...styles.unifiedTd, backgroundColor: colors.cautionTint }}>
                                       <input
                                         type="number" min={0} step="any"
                                         style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
@@ -2147,7 +2171,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                     </td>
                                   )}
                                   {showMRP && (
-                                    <td style={{ ...styles.unifiedTd, backgroundColor: colors.cautionTint, textAlign: "right", fontWeight: 600, fontSize: "0.82rem" }}>
+                                    <td data-label="MRP × Qty" style={{ ...styles.unifiedTd, backgroundColor: colors.cautionTint, textAlign: "right", fontWeight: 600, fontSize: "0.82rem" }}>
                                       {(() => {
                                         const m = parseFloat(r.mrp) || 0;
                                         const total = m * q;
@@ -2158,7 +2182,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                     </td>
                                   )}
                                   {showSRO && (
-                                    <td style={{ ...styles.unifiedTd, backgroundColor: colors.surface }}>
+                                    <td data-label="SRO schedule" style={{ ...styles.unifiedTd, backgroundColor: colors.surface }}>
                                       <input
                                         type="text"
                                         style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
@@ -2173,7 +2197,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                     </td>
                                   )}
                                   {showSRO && (
-                                    <td style={{ ...styles.unifiedTd, backgroundColor: colors.surface }}>
+                                    <td data-label="SRO item no" style={{ ...styles.unifiedTd, backgroundColor: colors.surface }}>
                                       <input
                                         type="text"
                                         style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
@@ -2184,7 +2208,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       />
                                     </td>
                                   )}
-                                  <td style={{ ...styles.unifiedTd, textAlign: "center" }}>
+                                  <td data-label="" className="inv-line-remove" style={{ ...styles.unifiedTd, textAlign: "center" }}>
                                     <button
                                       type="button"
                                       style={styles.removeRowBtn}
@@ -2346,7 +2370,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
               disabled={saving || !(chosenScenario || !fbrEnabled) || !selectedClientId || !allRowsValid || !billNumberOk || rateBlocked}
               title={rateBlocked ? "These goods came in at a different sales tax rate. Switch to the matching scenario, or write a reason in the red box." : undefined}
             >
-              {saving ? "Creating…" : `Create Bill${chosenScenario ? ` · ${chosenScenario.code}` : ""}`}
+              {saving ? "Creating…" : `Save invoice${chosenScenario ? ` · ${chosenScenario.code}` : ""}`}
             </button>
           </div>
         </form>

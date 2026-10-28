@@ -83,5 +83,77 @@ check("32: name is the FBR description, trimmed to 100 characters", () => {
 check("32: no FBR description falls back to the row name", () =>
   assert.strictEqual(pendingFromFbrCode({ id: null, hsCode: "1", name: "HS Code 1" }).name, "HS Code 1"));
 
+const { buildInvoiceActions, statusReason, fbrChip } = await import(src("utils/invoiceActions.js"));
+const all = { canEdit: true, canPrint: true, canVoid: true, canDelete: true, canCopy: true, canCreateChallan: true,
+  canRecordReceipt: true, canReverse: true, canFbrPreview: true, canFbrValidate: true, canFbrSubmit: true,
+  canFbrExclude: true, canFbrReset: true };
+const ctx = (over = {}) => ({ perms: all, fbrEnabled: true, hasFbrToken: true, validated: false, hasExcel: true, ...over });
+const unfiled = { id: 1, invoiceNumber: 7, fbrStatus: null, fbrReady: true, isCancelled: false };
+const filed = { ...unfiled, fbrStatus: "Submitted", fbrIRN: "IRN-1" };
+const keys = (inv, c) => buildInvoiceActions(inv, c).map((x) => x.key);
+
+console.log("\n=== card / table actions (D10) ===");
+check("64: every action has a label and a one-line tooltip", () => {
+  for (const x of buildInvoiceActions(unfiled, ctx()).concat(buildInvoiceActions(filed, ctx())))
+    assert.ok(x.label && x.title && !x.title.includes("\n"), JSON.stringify(x));
+});
+check("65: order is primary, FBR, money, danger last", () => {
+  const order = { primary: 0, fbr: 1, money: 2, danger: 3 };
+  const g = buildInvoiceActions(unfiled, ctx()).map((x) => order[x.group]);
+  assert.deepStrictEqual(g, [...g].sort((x, y) => x - y));
+});
+check("66: Void and Delete are the danger actions, and come last", () => {
+  const a = buildInvoiceActions(unfiled, ctx());
+  assert.deepStrictEqual(a.filter((x) => x.danger).map((x) => x.key), ["void", "delete"]);
+  assert.deepStrictEqual(a.slice(-2).map((x) => x.key), ["void", "delete"]);
+});
+check("43: a filed invoice offers no Edit / Void / Delete / Validate / Submit", () => {
+  const k = keys(filed, ctx());
+  for (const gone of ["edit", "void", "delete", "validate", "submit", "exclude"]) assert.ok(!k.includes(gone), gone);
+  assert.ok(k.includes("creditNote") && k.includes("print"));
+});
+check("43: and the status line says why", () =>
+  assert.strictEqual(statusReason(filed), "Filed with FBR — correct it with a credit or debit note."));
+check("10: only bills.* keys -> no FBR actions", () => {
+  const perms = { canEdit: true, canPrint: true, canVoid: true, canDelete: true, canCopy: true };
+  const k = keys(unfiled, ctx({ perms }));
+  assert.ok(!k.some((x) => ["validate", "submit", "preview", "exclude", "reset"].includes(x)));
+  assert.ok(k.includes("edit") && k.includes("void"));
+});
+check("11: only invoices.* keys -> FBR + print, no Edit / Void", () => {
+  const perms = { canPrint: true, canFbrValidate: true, canFbrSubmit: true, canFbrPreview: true };
+  const k = keys(unfiled, ctx({ perms }));
+  assert.ok(k.includes("validate") && k.includes("print") && !k.includes("edit") && !k.includes("void"));
+});
+check("13: no print key -> no Print / PDF / Excel", () => {
+  const k = keys(unfiled, ctx({ perms: { ...all, canPrint: false } }));
+  assert.ok(!k.includes("print") && !k.includes("pdf") && !k.includes("excel"));
+});
+check("Submit waits for Validate", () => {
+  const sub = buildInvoiceActions(unfiled, ctx()).find((x) => x.key === "submit");
+  assert.ok(sub.disabled);
+  assert.ok(!buildInvoiceActions(unfiled, ctx({ validated: true })).find((x) => x.key === "submit").disabled);
+});
+check("FBR off -> no FBR actions at all", () =>
+  assert.ok(!keys(unfiled, ctx({ fbrEnabled: false })).some((x) => ["validate", "submit", "preview", "exclude"].includes(x))));
+check("a stuck submission offers Reset and nothing to submit", () => {
+  const k = keys({ ...unfiled, fbrStatus: "Uncertain" }, ctx());
+  assert.ok(k.includes("reset") && !k.includes("submit") && !k.includes("validate"));
+});
+check("a voided invoice offers only View and printing", () =>
+  assert.deepStrictEqual(keys({ ...unfiled, isCancelled: true }, ctx({ perms: { ...all, canFbrPreview: false } })), ["print", "view", "pdf", "excel"]));
+
+console.log("\n=== FBR chip (67) ===");
+const chip = (inv, o) => fbrChip(inv, o)?.label ?? null;
+check("unfiled -> Not filed", () => assert.strictEqual(chip(unfiled), "Not filed"));
+check("validated -> Checked", () => assert.strictEqual(chip(unfiled, { validated: true }), "Checked"));
+check("filed -> Filed, with the IRN", () => assert.strictEqual(fbrChip(filed).irn, "IRN-1"));
+check("filed manually -> Filed manually", () => assert.strictEqual(chip({ ...filed, fbrFiledManually: true }), "Filed manually"));
+check("excluded -> Kept out of FBR", () => assert.strictEqual(chip({ ...unfiled, isFbrExcluded: true }), "Kept out of FBR"));
+check("withdrawn -> Withdrawn", () => assert.strictEqual(chip({ ...filed, fbrCancelledAt: "2026-10-01" }), "Withdrawn"));
+check("voided -> Voided", () => assert.strictEqual(chip({ ...unfiled, isCancelled: true }), "Voided"));
+check("FBR off and never filed -> no chip", () => assert.strictEqual(chip(unfiled, { fbrEnabled: false }), null));
+check("FBR off but filed -> still Filed", () => assert.strictEqual(chip(filed, { fbrEnabled: false }), "Filed"));
+
 console.log(`\n${pass}/${pass + failures.length} checks passed`);
 if (failures.length) process.exit(1);

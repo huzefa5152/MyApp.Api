@@ -404,6 +404,13 @@ export default function ItemTypeForm({
     // tree and fires the PARENT form's onSubmit — saving and closing it. Stop it
     // here so creating an item type only closes this mini-modal.
     e.stopPropagation();
+    // Opening stock recorded so an invoice can sell it (the invoice screen's
+    // "Add item and record stock") must carry a value: stock worth nothing
+    // makes that sale cost nothing, and its profit reads too high.
+    if (prefill && (parseFloat(openingBalance) || 0) > 0 && !((parseFloat(openingValue) || 0) > 0)) {
+      setError("Enter what this opening stock is worth (excluding sales tax), so the sale carries its real cost.");
+      return;
+    }
     setError("");
     if (!name.trim()) {
       setError("Name is required.");
@@ -801,6 +808,11 @@ export default function ItemTypeForm({
                     <small style={{ color: "#5f6d7e" }}>
                       What the opening quantity is worth in total, not per unit.
                     </small>
+                    {(parseFloat(openingBalance) || 0) > 0 && !((parseFloat(openingValue) || 0) > 0) && (
+                      <small style={{ display: "block", color: "#8a4b00", fontWeight: 600, marginTop: 2 }}>
+                        Without a value this stock costs nothing, so a sale of it shows no cost.
+                      </small>
+                    )}
                   </div>
                   <div style={{ flex: 1 }}>
                     <label style={formStyles.label}>

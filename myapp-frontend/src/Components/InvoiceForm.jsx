@@ -1089,7 +1089,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         if (created?.id) await attachmentRef.current?.flush(created.id);
       } catch { /* attachments are best-effort */ }
 
-      onSaved();
+      onSaved(created);
     } catch (err) {
       setError(err.response?.data?.error || "Failed to create invoice.");
     } finally {
@@ -1213,9 +1213,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
       <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <div style={{ minWidth: 0 }}>
-            <h5 style={formStyles.title}>Create Bill</h5>
+            <h5 style={formStyles.title}>New invoice — from delivery challans</h5>
             <div style={styles.headerSub}>
-              Bill goods already delivered: choose the buyer, tick their challans, then price each line. Each step turns green when it is complete.
+              Invoice goods already delivered: choose the buyer, tick their challans, then price each line. Each step turns green when it is complete.
             </div>
           </div>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
@@ -1426,7 +1426,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
 
                 {/* Steps 3-6 wait for the scenario and the buyer. They show,
                     folded, so the operator can see the whole road ahead. */}
-                {!detailsVisible && [["details", 3, "Bill Details"], ["challans", 4, "Challans to Bill"], ["items", 5, "Items"], ["taxes", 6, "Taxes & Total"]].map(([k, n, t]) => (
+                {!detailsVisible && [["details", 3, "Invoice details"], ["challans", 4, "Challans to invoice"], ["items", 5, "Items"], ["taxes", 6, "Taxes & Total"]].map(([k, n, t]) => (
                   <BillStep
                     key={k}
                     id={BILL_ANCHORS[k]}
@@ -1448,7 +1448,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                     <BillStep
                       id={BILL_ANCHORS.details}
                       n={stepNo(3)}
-                      title="Bill Details"
+                      title="Invoice details"
                       status={billNumberMode === "custom" && !billNumberOk ? "warn" : "done"}
                       open={billHeaderOpen}
                       onToggle={() => setBillHeaderOpen((v) => !v)}
@@ -1482,7 +1482,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             </div>
                             <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={styles.label} style={styles.input} wrapStyle={{ flex: 1, minWidth: 140 }} />
                             <div style={{ flex: 1, minWidth: 140 }}>
-                              <label style={styles.label}>Bill Date</label>
+                              <label style={styles.label}>Invoice date</label>
                               <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
                             </div>
                             <div style={{ flex: 1, minWidth: 140 }}>
@@ -1525,7 +1525,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                     <BillStep
                       id={BILL_ANCHORS.challans}
                       n={stepNo(4)}
-                      title="Challans to Bill"
+                      title="Challans to invoice"
                       status={selectedIds.length > 0 ? "done" : "todo"}
                       summary={selectedIds.length > 0
                         ? <span>{selectedIds.length} challan{selectedIds.length === 1 ? "" : "s"} ticked · {allItems.length} line{allItems.length === 1 ? "" : "s"}</span>
@@ -1804,6 +1804,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                         onRename={(name) => renameNewItem(item, name)}
                                         stock={newItemStock(item)}
                                         quantity={item.quantity}
+                                        uom={itemUoms[item.id] || item.unit}
                                         companyId={companyId}
                                         fbrOn={company?.fbrEnabled !== false}
                                         onStocked={(saved) => {
@@ -2150,7 +2151,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
               disabled={saving || !selectedClientId || selectedIds.length === 0 || !allLinesComplete || !billNumberOk || rateBlocked}
               title={rateBlocked ? "These goods came in at a different sales tax rate. Switch to the matching scenario, or write a reason in the red box." : undefined}
             >
-              {saving ? "Creating..." : "Create Bill"}
+              {saving ? "Saving…" : "Save invoice"}
             </button>
           </div>
         </form>
