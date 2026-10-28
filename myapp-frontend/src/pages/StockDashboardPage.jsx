@@ -783,6 +783,8 @@ export default function StockDashboardPage() {
 
   return (
     <div className="stock-page stk">
+      {/* Pinned while the stock list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <header className="stk-head">
         <div style={{ minWidth: 0 }}>
           <h2>Stock</h2>
@@ -901,6 +903,7 @@ export default function StockDashboardPage() {
           )}
         </div>
       </header>
+      </div>
 
       {loadingCompanies ? (
         <div className="stk-loading"><div className="stk-spinner" /></div>

@@ -205,6 +205,8 @@ export default function ItemTypesPage() {
 
   return (
     <div>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.7rem" }}>
           <div style={styles.headerIcon}><MdCategory size={24} color="#fff" /></div>
@@ -248,6 +250,7 @@ export default function ItemTypesPage() {
             </button>
           )}
         </div>
+      </div>
       </div>
 
       {canImportHsCodes && hsCodeCount === 0 && (

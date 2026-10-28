@@ -260,6 +260,8 @@ export default function CustomerLedgerPage() {
 
   return (
     <div style={st.page}>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={st.headerRow}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", minWidth: 0 }}>
           <span style={st.headerIcon}><MdAccountBalance size={24} /></span>
@@ -283,6 +285,7 @@ export default function CustomerLedgerPage() {
           </select>
         </div>
       )}
+      </div>
 
       {!companyId ? (
         <div style={st.empty}>Select a company to view the customer ledger.</div>

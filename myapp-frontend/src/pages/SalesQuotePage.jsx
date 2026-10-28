@@ -213,6 +213,8 @@ export default function SalesQuotePage() {
 
   return (
     <div>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={st.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <div style={st.icon}><MdRequestQuote size={28} color="#fff" /></div>
@@ -265,6 +267,7 @@ export default function SalesQuotePage() {
           )}
         </>
       ) : <Empty label="No companies available. Add a company first." />}
+      </div>
 
       {loading ? <Spinner label="Loading quotes..." /> : quotes.length === 0 && selectedCompany ? (
         <Empty label="No sales quotes found." />

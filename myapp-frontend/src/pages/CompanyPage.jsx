@@ -115,6 +115,8 @@ export default function CompanyPage() {
 
   return (
     <div>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={styles.header}>
         <div style={styles.titleWrap}>
           <div style={styles.titleIcon}><MdBusiness /></div>
@@ -147,6 +149,7 @@ export default function CompanyPage() {
           />
         </div>
       )}
+      </div>
 
       {filtered.length === 0 ? (
         <div style={styles.empty}>

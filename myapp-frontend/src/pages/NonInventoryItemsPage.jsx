@@ -88,6 +88,8 @@ export default function NonInventoryItemsPage() {
 
   return (
     <div>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <div style={styles.headerIcon}><MdRequestQuote size={26} color="#fff" /></div>
@@ -129,6 +131,7 @@ export default function NonInventoryItemsPage() {
       ) : (
         <div style={styles.emptyState}><MdBusiness size={40} color={colors.cardBorder} /><p style={{ color: colors.textSecondary, marginTop: 8 }}>No companies available.</p></div>
       )}
+      </div>
 
       {loading ? (
         <div style={styles.loading}><div style={styles.spinner} /></div>

@@ -94,6 +94,8 @@ export default function StockSplitPage() {
 
   return (
     <div style={st.page}>
+      {/* Pinned while the GD lines scroll (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <Link to="/stock" style={st.back}><MdArrowBack style={{ flexShrink: 0 }} size={16} /> Stock Dashboard</Link>
       <h1 style={st.h1}>Split an item by GD line</h1>
       <p style={st.muted}>
@@ -108,6 +110,7 @@ export default function StockSplitPage() {
           {items.map((i) => <option key={i.itemTypeId} value={i.itemTypeId}>{i.itemTypeName} — {qty(i.onHand)} held</option>)}
         </select>
       </label>
+      </div>
 
       {source && lines.length > 0 && (
         <section style={st.card}>

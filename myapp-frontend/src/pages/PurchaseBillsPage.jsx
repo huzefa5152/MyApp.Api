@@ -370,6 +370,8 @@ export default function PurchaseBillsPage() {
 
   return (
     <div>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={styles.pageHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <div style={styles.headerIcon}><MdShoppingCart size={28} color="#fff" /></div>
@@ -420,11 +422,7 @@ export default function PurchaseBillsPage() {
         )}
       </div>
 
-      {loadingCompanies ? (
-        <div style={styles.loading}><div style={styles.spinner} /></div>
-      ) : companies.length === 0 ? (
-        <div style={styles.empty}>No companies available.</div>
-      ) : (
+      {!loadingCompanies && companies.length > 0 && (
         <>
           <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
             <MdBusiness size={20} color={colors.blue} />
@@ -464,7 +462,16 @@ export default function PurchaseBillsPage() {
               )}
             </div>
           )}
+        </>
+      )}
+      </div>
 
+      {loadingCompanies ? (
+        <div style={styles.loading}><div style={styles.spinner} /></div>
+      ) : companies.length === 0 ? (
+        <div style={styles.empty}>No companies available.</div>
+      ) : (
+        <>
           {loading ? (
             <div style={styles.loading}><div style={styles.spinner} /></div>
           ) : bills.length === 0 ? (

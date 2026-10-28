@@ -138,6 +138,8 @@ export default function FbrSettingsPage() {
 
   return (
     <div>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.7rem" }}>
           <div style={styles.headerIcon}><MdTune size={24} color="#fff" /></div>
@@ -162,6 +164,7 @@ export default function FbrSettingsPage() {
             <option key={c} value={c}>{categoryLabels[c] || c}</option>
           ))}
         </select>
+      </div>
       </div>
 
       {Object.keys(grouped).length === 0 ? (

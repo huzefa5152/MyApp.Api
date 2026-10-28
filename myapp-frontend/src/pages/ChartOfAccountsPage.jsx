@@ -176,6 +176,8 @@ export default function ChartOfAccountsPage() {
 
   return (
     <div>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={st.headerRow}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
           <MdAccountTree size={26} color={colors.blue} />
@@ -218,6 +220,7 @@ export default function ChartOfAccountsPage() {
           </select>
         </div>
       )}
+      </div>
 
       {!companyId ? (
         <div style={st.empty}>Select a company to view its chart of accounts.</div>

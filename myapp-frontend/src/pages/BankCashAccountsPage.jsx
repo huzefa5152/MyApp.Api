@@ -163,6 +163,8 @@ export default function BankCashAccountsPage() {
 
   return (
     <div>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={st.headerRow}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
           <div style={st.headerIcon}><MdAccountBalance size={26} color="#fff" /></div>
@@ -202,6 +204,7 @@ export default function BankCashAccountsPage() {
           />
         </div>
         {glOff && <span style={st.glChipOff}>GL off — balances show opening only</span>}
+      </div>
       </div>
 
       {!companyId ? (

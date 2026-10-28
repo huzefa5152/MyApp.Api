@@ -535,6 +535,8 @@ export default function PrintTemplatesPage() {
           </div>
         </div>
       )}
+      {/* Pinned while the templates scroll (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={st.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <div style={st.icon}><MdDescription size={26} color="#fff" /></div>
@@ -550,10 +552,7 @@ export default function PrintTemplatesPage() {
           </div>
         )}
       </div>
-
-      {loadingCompanies ? <Spinner label="Loading companies…" /> : companies.length === 0 ? (
-        <Empty label="No companies available. Add a company first." />
-      ) : (
+      {!loadingCompanies && companies.length > 0 && (
         <>
           <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
             <MdBusiness size={20} color={colors.blue} />
@@ -576,7 +575,14 @@ export default function PrintTemplatesPage() {
               );
             })}
           </div>
+        </>
+      )}
+      </div>
 
+      {loadingCompanies ? <Spinner label="Loading companies…" /> : companies.length === 0 ? (
+        <Empty label="No companies available. Add a company first." />
+      ) : (
+        <>
           {/* ── Tab: Print Templates ── */}
           {tab === "print" && (
             <>

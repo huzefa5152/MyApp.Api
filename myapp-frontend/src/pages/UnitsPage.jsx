@@ -94,6 +94,8 @@ export default function UnitsPage() {
 
   return (
     <div>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       {/* Header */}
       <div style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
@@ -107,6 +109,7 @@ export default function UnitsPage() {
             </p>
           </div>
         </div>
+      </div>
       </div>
 
       {/* Info banner */}

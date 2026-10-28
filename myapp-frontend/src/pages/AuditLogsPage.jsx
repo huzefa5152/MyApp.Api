@@ -105,6 +105,8 @@ export default function AuditLogsPage() {
 
   return (
     <div className="audit-page" style={{ maxWidth: 1200, margin: "0 auto" }}>
+      {/* Pinned while the report scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
         <div style={{ width: 44, height: 44, borderRadius: 12, background: `linear-gradient(135deg, ${colors.danger}, #b71c1c)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -156,6 +158,7 @@ export default function AuditLogsPage() {
         <span style={{ fontSize: "0.82rem", color: colors.textSecondary, marginLeft: "auto" }}>
           {totalCount} total
         </span>
+      </div>
       </div>
 
       {/* Table (desktop) */}

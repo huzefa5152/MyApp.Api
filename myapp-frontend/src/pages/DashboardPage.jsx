@@ -130,6 +130,8 @@ export default function DashboardPage() {
 
   return (
     <Shell>
+      {/* Pinned while the figures scroll (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <DashboardHeader
         company={selectedCompany}
         companies={companies}
@@ -138,6 +140,7 @@ export default function DashboardPage() {
         onChange={(r) => setRange({ period: r.period, from: r.from || "", to: r.to || "" })}
         asOf={data ? asOf : ""}
       />
+      </div>
 
       {!ready && <EmptyState heading="Choose the dates" body="Pick a From and a To date for the custom range." />}
 

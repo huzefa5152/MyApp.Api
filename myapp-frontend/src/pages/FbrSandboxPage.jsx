@@ -187,6 +187,8 @@ export default function FbrSandboxPage() {
 
   return (
     <div className="fbr-page" style={styles.page}>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <header className="fbr-header">
         <div className="fbr-header__title-block">
           <h2 className="fbr-header__title"><MdScience size={22} style={{ verticalAlign: "middle", marginRight: "0.4rem" }} />FBR Sandbox</h2>
@@ -219,6 +221,7 @@ export default function FbrSandboxPage() {
           )}
         </div>
       </header>
+      </div>
 
       {!selectedCompany ? (
         <div style={styles.emptyState}>

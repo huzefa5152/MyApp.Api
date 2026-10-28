@@ -105,6 +105,8 @@ export default function POFormatsPage() {
 
   return (
     <div className="pof-page" style={styles.page}>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div className="pof-header">
         <div className="pof-header__title-block">
           <h1 className="pof-header__title">PO Formats</h1>
@@ -135,6 +137,7 @@ export default function POFormatsPage() {
           </select>
         </div>
       )}
+      </div>
 
       {error && (
         <div style={styles.errorAlert}>

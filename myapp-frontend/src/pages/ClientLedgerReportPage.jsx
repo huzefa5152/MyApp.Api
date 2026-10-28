@@ -213,6 +213,8 @@ export default function ClientLedgerReportPage() {
 
   return (
     <div style={{ padding: "clamp(12px, 3vw, 24px)" }}>
+      {/* Pinned while the report scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
         <MdReceiptLong size={26} color={colors.blue} />
@@ -311,6 +313,7 @@ export default function ClientLedgerReportPage() {
             </button>
           )}
         </div>
+      </div>
       </div>
 
       {error && (

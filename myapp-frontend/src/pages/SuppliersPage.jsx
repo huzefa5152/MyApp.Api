@@ -159,6 +159,8 @@ export default function SuppliersPage() {
 
   return (
     <div>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <div style={styles.headerIcon}>
@@ -247,6 +249,7 @@ export default function SuppliersPage() {
           ))}
         </div>
       )}
+      </div>
 
       {loadingSuppliers ? (
         <div style={styles.loadingContainer}>

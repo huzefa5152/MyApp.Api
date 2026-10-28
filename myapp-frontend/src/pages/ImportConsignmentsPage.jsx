@@ -396,6 +396,8 @@ export default function ImportConsignmentsPage() {
 
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <h1 style={{ fontSize: 22, margin: "0 0 0.25rem", color: colors.textPrimary }}>Consignments</h1>
       <p style={{ margin: "0 0 1rem", color: colors.textSecondary, fontSize: 14, maxWidth: "62ch" }}>
         Every GD costing consignment imported into this company. Expand a row to see its lines and
@@ -434,6 +436,7 @@ export default function ImportConsignmentsPage() {
             </strong>
           </div>
         )}
+      </div>
       </div>
 
       {!companyId ? (

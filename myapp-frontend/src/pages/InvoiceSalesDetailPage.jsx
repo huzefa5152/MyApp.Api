@@ -129,6 +129,8 @@ export default function InvoiceSalesDetailPage() {
 
   return (
     <div style={st.page}>
+      {/* Pinned while the report scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={st.pageHead}>
         <div style={st.titleRow}>
           <MdAssessment size={24} color={colors.blue} />
@@ -148,24 +150,26 @@ export default function InvoiceSalesDetailPage() {
           </label>
         )}
       </div>
+      {companyId && (
+        <ReportFilterBar
+          companyId={companyId}
+          filters={FILTER_SET}
+          value={filters}
+          onApply={applyFilters}
+          loading={loading}
+          periodOptions={ISD_PERIOD_OPTIONS}
+          clientOptions={clientOptions}
+          statusOptions={FBR_STATUS_OPTIONS}
+          statusLabel="FBR status"
+          searchPlaceholder="Bill no, party, NTN, HS code, item…"
+        />
+      )}
+      </div>
 
       {!companyId ? (
         <div style={st.state}>Select a company to view this report.</div>
       ) : (
         <>
-          <ReportFilterBar
-            companyId={companyId}
-            filters={FILTER_SET}
-            value={filters}
-            onApply={applyFilters}
-            loading={loading}
-            periodOptions={ISD_PERIOD_OPTIONS}
-            clientOptions={clientOptions}
-            statusOptions={FBR_STATUS_OPTIONS}
-            statusLabel="FBR status"
-            searchPlaceholder="Bill no, party, NTN, HS code, item…"
-          />
-
           {error && <div role="alert" style={st.error}>{error}</div>}
 
           {envelope && (

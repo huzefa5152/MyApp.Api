@@ -396,6 +396,8 @@ export default function ChallanPage() {
 
   return (
     <div>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={styles.pageHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <div style={styles.headerIcon}>
@@ -528,6 +530,7 @@ export default function ChallanPage() {
           <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>No companies available. Add a company first.</p>
         </div>
       )}
+      </div>
 
       {loadingChallans ? (
         <div style={styles.loadingContainer}>

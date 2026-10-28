@@ -405,6 +405,8 @@ export default function SpreadsheetImportPage() {
 
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+      {/* Title and tabs pinned while the steps scroll (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <h1 style={{ fontSize: 22, margin: "0 0 0.25rem", color: colors.textPrimary }}>Spreadsheet Import</h1>
       <p style={{ margin: "0 0 1rem", color: colors.textSecondary, fontSize: 14, maxWidth: "62ch" }}>
         Load a business's own Excel books into a company. Nothing is written until you have
@@ -420,6 +422,7 @@ export default function SpreadsheetImportPage() {
             <MdHistory size={18} /> History
           </button>
         )}
+      </div>
       </div>
 
       {/* ── Step 1 ─────────────────────────────────────────────── */}

@@ -194,6 +194,8 @@ export default function AdministratorsPage() {
 
   return (
     <div style={styles.page}>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       {/* Header */}
       <div style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0 }}>
@@ -225,6 +227,7 @@ export default function AdministratorsPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
+      </div>
       </div>
 
       {loading ? (

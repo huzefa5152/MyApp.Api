@@ -29,6 +29,8 @@ export default function NavigationMenuPage() {
 
   return (
     <div>
+      {/* Pinned while the tab content scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={st.header}>
         <div style={st.icon}><MdMenu size={26} color="#fff" /></div>
         <div>
@@ -46,6 +48,7 @@ export default function NavigationMenuPage() {
             </button>
           );
         })}
+      </div>
       </div>
 
       {activeKey === "folders" && <FoldersManager />}

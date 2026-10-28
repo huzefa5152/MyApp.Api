@@ -47,6 +47,8 @@ export default function ImportTaxDeskPage() {
 
   return (
     <div style={st.page}>
+      {/* Title, company and tabs pinned while the tab scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <header style={st.header}>
         <div style={{ minWidth: 0 }}>
           <h1 style={st.h1}>Import Tax Desk</h1>
@@ -67,6 +69,7 @@ export default function ImportTaxDeskPage() {
           <button key={k} role="tab" aria-selected={tab === k} type="button" onClick={() => setTab(k)}
             style={{ ...st.tab, ...(tab === k ? st.tabOn : null) }}>{label}</button>
         ))}
+      </div>
       </div>
 
       {!companyId ? <p style={st.muted}>Choose a company to see its figures.</p>

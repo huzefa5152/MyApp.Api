@@ -238,6 +238,8 @@ export default function FbrPurchaseImportPage() {
 
   return (
     <div className="fbr-imp-page" style={{ maxWidth: 1400, margin: "0 auto" }}>
+      {/* Title and upload row pinned while the preview scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <header className="fbr-imp-header" style={{ display: "flex", alignItems: "center", gap: "0.85rem", marginBottom: "0.75rem" }}>
         <div className="fbr-imp-header__icon" style={styles.headerIcon}><MdCloudUpload size={28} color="#fff" /></div>
         <div style={{ minWidth: 0 }}>
@@ -301,6 +303,7 @@ export default function FbrPurchaseImportPage() {
           </div>
         </div>
       </section>
+      </div>
 
       {/* ── Commit result panel ─────────────────────────────────────────
            Shown after Commit completes. Replaces the preview view and

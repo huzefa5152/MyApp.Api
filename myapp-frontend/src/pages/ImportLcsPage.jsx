@@ -76,6 +76,8 @@ export default function ImportLcsPage() {
 
   return (
     <div style={st.page}>
+      {/* Pinned while the LC list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <header style={st.header}>
         <div style={{ minWidth: 0 }}>
           <h1 style={st.h1}>Letters of Credit</h1>
@@ -89,6 +91,7 @@ export default function ImportLcsPage() {
           </select>
         </label>
       </header>
+      </div>
 
       {companyId && canManage && !form && (
         <button type="button" onClick={() => setForm(blank())} style={st.primary}><MdAdd size={18} style={{ flexShrink: 0 }} /> New LC</button>

@@ -219,6 +219,8 @@ export default function AccountingDashboardPage() {
   return (
     <Shell>
       <style>{`@keyframes acctdash-spin { to { transform: rotate(360deg); } }`}</style>
+      {/* Pinned while the figures scroll (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <DashboardHeader
         company={selectedCompany}
         companies={companies}
@@ -227,6 +229,7 @@ export default function AccountingDashboardPage() {
         onChange={(r) => setSel({ period: r.period, from: r.from || "", to: r.to || "" })}
         asOf={summary ? asOf : ""}
       />
+      </div>
 
       {!companyId && <Notice>Select a company to view its accounting summary.</Notice>}
       {companyId && !range && <Notice>Pick a From and a To date for the custom range.</Notice>}

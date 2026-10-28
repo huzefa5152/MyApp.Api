@@ -161,6 +161,8 @@ export default function PaymentsPage({ mode = "receipts" }) {
 
   return (
     <div>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={st.headerRow}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
           <span style={{ ...st.headerIcon, background: `${accent}15`, color: accent }}><Icon size={24} /></span>
@@ -199,10 +201,7 @@ export default function PaymentsPage({ mode = "receipts" }) {
         </div>
       )}
 
-      {!companyId ? (
-        <div style={st.empty}>Select a company to view {title.toLowerCase()}.</div>
-      ) : (
-        <>
+      {companyId && (
           <div style={st.toolbar}>
             <div style={{ position: "relative", flex: "1 1 240px", minWidth: 0, maxWidth: 360 }}>
               <MdSearch size={18} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: colors.textSecondary }} />
@@ -223,7 +222,13 @@ export default function PaymentsPage({ mode = "receipts" }) {
               </div>
             )}
           </div>
+      )}
+      </div>
 
+      {!companyId ? (
+        <div style={st.empty}>Select a company to view {title.toLowerCase()}.</div>
+      ) : (
+        <>
           {loading ? (
             <div style={st.empty}>Loading…</div>
           ) : rows.length === 0 ? (

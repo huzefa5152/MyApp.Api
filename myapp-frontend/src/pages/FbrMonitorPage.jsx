@@ -135,6 +135,8 @@ export default function FbrMonitorPage() {
 
   return (
     <Shell>
+      {/* Pinned while the log scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <Header
         company={selectedCompany.name}
         companies={companies}
@@ -150,6 +152,7 @@ export default function FbrMonitorPage() {
         onWindowChange={(h) => { setWindowHours(h); setPage(1); }}
         onRefresh={() => setPage((p) => p)}
       />
+      </div>
 
       <Summary summary={summary} windowHours={windowHours} />
 

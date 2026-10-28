@@ -286,6 +286,8 @@ export default function RolesPage() {
 
   return (
     <div>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       {/* Page Header */}
       <div style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
@@ -317,6 +319,7 @@ export default function RolesPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
+      </div>
       </div>
 
       {/* List */}

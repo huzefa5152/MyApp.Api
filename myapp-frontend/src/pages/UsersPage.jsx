@@ -300,6 +300,8 @@ export default function UsersPage() {
 
   return (
     <div>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       {/* Page Header */}
       <div style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
@@ -329,6 +331,7 @@ export default function UsersPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
+      </div>
       </div>
 
       {/* Users List */}

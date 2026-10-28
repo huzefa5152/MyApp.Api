@@ -725,8 +725,11 @@ body.dl-body--locked {
 /* A list screen's title, picker and filters, pinned to the top of the
    scrolling content so only the list moves (2026-10-29). The negative margins
    reach over .dl-main's padding so rows scroll out of sight under a solid
-   band, not through a gap above it. Phones keep it unpinned: there the filter
-   block alone is a third of the screen. */
+   band, not through a gap above it. On a page centred at a max width the band
+   is widened to .dl-main's edges with a spread shadow, clipped back to the
+   head's own height (a shadow adds no scroll width, unlike a wide pseudo
+   element). Phones keep it unpinned: there the filter block alone is a third
+   of the screen. */
 @media (min-width: 768px) {
   .page-sticky-head {
     position: sticky;
@@ -735,7 +738,8 @@ body.dl-body--locked {
     margin: -1.25rem -1.5rem 0;
     padding: 1.25rem 1.5rem 0.25rem;
     background: #f0f4f8;
-    box-shadow: 0 6px 8px -8px rgba(15, 23, 42, 0.25);
+    box-shadow: 0 6px 8px -8px rgba(15, 23, 42, 0.25), 0 0 0 100vmax #f0f4f8;
+    clip-path: inset(0 -100vmax -12px);
   }
 }
 
@@ -970,7 +974,8 @@ body.dl-body--locked {
   }
   /* Header summary chips wrap below the title rather than getting squeezed
      to the right. */
-  .audit-page > div:first-child {
+  .audit-page > div:first-child,
+  .audit-page > .page-sticky-head > div:first-child {
     gap: 0.6rem !important;
   }
   /* Filter row stacks: level select is full-width, search form is full-

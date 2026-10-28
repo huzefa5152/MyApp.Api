@@ -179,6 +179,8 @@ export default function JournalEntriesPage() {
 
   return (
     <div>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={st.headerRow}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
           <span style={st.headerIcon}><MdMenuBook size={24} /></span>
@@ -213,10 +215,7 @@ export default function JournalEntriesPage() {
         </div>
       )}
 
-      {!companyId ? (
-        <div style={st.empty}>Select a company to view journal entries.</div>
-      ) : (
-        <>
+      {companyId && (
           <div style={st.toolbar}>
             <div style={{ position: "relative", flex: "1 1 240px", minWidth: 0, maxWidth: 360 }}>
               <MdSearch size={18} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: colors.textSecondary }} />
@@ -239,7 +238,13 @@ export default function JournalEntriesPage() {
               </div>
             )}
           </div>
+      )}
+      </div>
 
+      {!companyId ? (
+        <div style={st.empty}>Select a company to view journal entries.</div>
+      ) : (
+        <>
           {loading ? (
             <div style={st.empty}>Loading…</div>
           ) : rows.length === 0 ? (

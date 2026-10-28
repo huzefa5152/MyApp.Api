@@ -56,6 +56,8 @@ export default function AccountingReportsPage() {
 
   return (
     <div style={st.page}>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={st.pageHead}>
         <div style={st.pageTitleRow}>
           <MdAssessment size={26} color={colors.blue} />
@@ -79,6 +81,7 @@ export default function AccountingReportsPage() {
             </select>
           </label>
         )}
+      </div>
       </div>
 
       {!companyId ? (

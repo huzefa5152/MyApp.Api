@@ -157,6 +157,8 @@ export default function ClientsPage() {
 
   return (
     <div>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       {/* Page Header */}
       <div style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
@@ -261,6 +263,7 @@ export default function ClientsPage() {
           ))}
         </div>
       )}
+      </div>
 
       {/* Client List */}
       {loadingClients ? (

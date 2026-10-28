@@ -190,6 +190,8 @@ export default function TenantAccessPage() {
 
   return (
     <div className="tenant-page" style={pageStyles.shell}>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={pageStyles.header}>
         <div style={pageStyles.headerInner}>
           <MdAdminPanelSettings size={28} color={colors.blue} />
@@ -218,6 +220,7 @@ export default function TenantAccessPage() {
         <span style={pageStyles.count}>
           {filtered.length} user{filtered.length === 1 ? "" : "s"}
         </span>
+      </div>
       </div>
 
       {loading ? (

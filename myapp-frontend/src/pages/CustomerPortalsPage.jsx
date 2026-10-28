@@ -255,6 +255,8 @@ export default function CustomerPortalsPage() {
 
   return (
     <div>
+      {/* Pinned while the portals scroll (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={st.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <div style={st.icon}><MdPublic size={26} color="#fff" /></div>
@@ -335,6 +337,7 @@ export default function CustomerPortalsPage() {
           )}
         </div>
       )}
+      </div>
 
       {loading ? (
         <div style={st.loading}><div style={st.spinner} /></div>

@@ -211,6 +211,8 @@ export default function ImportChallansPage() {
 
   return (
     <div className="imp-page" style={styles.wrap}>
+      {/* Pinned while the review list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={styles.header}>
         <div>
           <h2 style={styles.title}>Import Historical Challans</h2>
@@ -227,6 +229,7 @@ export default function ImportChallansPage() {
       </div>
 
       <Stepper step={step} />
+      </div>
 
       {templateReady === false && step === 1 && targetCompany && (
         <div style={styles.warnBanner}>

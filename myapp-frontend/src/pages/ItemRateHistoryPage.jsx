@@ -152,6 +152,8 @@ export default function ItemRateHistoryPage() {
 
   return (
     <div className="irh-page">
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={styles.pageHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
           <div style={styles.headerIcon}>
@@ -168,11 +170,7 @@ export default function ItemRateHistoryPage() {
         </div>
       </div>
 
-      {loadingCompanies ? (
-        <div style={styles.loadingContainer}>
-          <div style={styles.spinner} />
-        </div>
-      ) : companies.length > 0 ? (
+      {!loadingCompanies && companies.length > 0 && (
         <>
           {/* Company picker */}
           <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
@@ -259,7 +257,16 @@ export default function ItemRateHistoryPage() {
               )}
             </div>
           )}
+        </>
+      )}
+      </div>
 
+      {loadingCompanies ? (
+        <div style={styles.loadingContainer}>
+          <div style={styles.spinner} />
+        </div>
+      ) : companies.length > 0 ? (
+        <>
           {/* Summary band — avg / min / max across the FULL filtered set */}
           {selectedCompany && summary.total > 0 && (
             <div style={styles.summaryBand}>

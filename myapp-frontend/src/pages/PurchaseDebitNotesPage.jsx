@@ -130,6 +130,8 @@ export default function PurchaseDebitNotesPage() {
 
   return (
     <div>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={styles.headerRow}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
           <div style={styles.iconBadge}><MdReceiptLong size={22} color="#fff" /></div>
@@ -162,6 +164,7 @@ export default function PurchaseDebitNotesPage() {
           <MdSearch size={18} color={colors.textSecondary} style={{ position: "absolute", left: 10, top: 10 }} />
           <input style={styles.searchInput} placeholder="Search supplier / description / #…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
+      </div>
       </div>
 
       {loading ? (

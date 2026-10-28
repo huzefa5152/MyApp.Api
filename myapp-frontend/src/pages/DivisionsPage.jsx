@@ -66,6 +66,8 @@ export default function DivisionsPage() {
 
   return (
     <div style={{ padding: 24, maxWidth: 1040, margin: "0 auto" }}>
+      {/* Pinned while the list scrolls (.page-sticky-head). */}
+      <div className="page-sticky-head">
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
         <MdAccountTree size={28} color="#0d47a1" />
         <div>
@@ -98,6 +100,7 @@ export default function DivisionsPage() {
             <MdAdd /> New Division
           </button>
         )}
+      </div>
       </div>
 
       {!companyId ? (
