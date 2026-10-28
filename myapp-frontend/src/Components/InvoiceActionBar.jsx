@@ -7,6 +7,9 @@ import CardActions from "./CardActions";
 import { colors } from "../theme";
 
 /**
+ * No `data-label`: CardActions adds that text beside a menu item's icon, and
+ * these buttons already carry their label (it doubled: "View View").
+ *
  * Renders utils/invoiceActions.js's list for one invoice -- on the card and
  * in the table alike, so the two cannot drift. Every action is an icon AND a
  * short label with a one-line tooltip; primary ones sit inline, the rest go
@@ -38,13 +41,12 @@ export default function InvoiceActionBar({ inv, actions, onAction, busy, compact
             key={a.key}
             type="button"
             data-primary={a.primary || undefined}
-            data-label={a.label}
             disabled={a.disabled || !!busy}
             title={a.title}
             onClick={() => onAction(a.key, inv)}
             style={{ ...btn(a, compact), ...(a.disabled ? disabledStyle : null) }}
           >
-            {working ? <span className="btn-spinner" /> : Icon ? <Icon size={15} aria-hidden="true" /> : null}
+            {working ? <span className="btn-spinner" /> : Icon ? <Icon size={15} aria-hidden="true" style={{ flexShrink: 0 }} /> : null}
             <span>{a.label}</span>
           </button>
         );
@@ -67,7 +69,9 @@ const btn = (a, compact) => {
     minHeight: compact ? 32 : 44, padding: compact ? "0 0.55rem" : "0 0.75rem",
     borderRadius: 8, fontSize: compact ? "0.74rem" : "0.8rem", fontWeight: 600,
     background: t.bg, color: t.fg, border: `1px solid ${t.line}`,
-    boxShadow: "none", cursor: "pointer", whiteSpace: "nowrap",
+    // Inline buttons keep one line; in the "More" menu a long label wraps
+    // instead of pushing the menu sideways (and squeezing its icon to nothing).
+    boxShadow: "none", cursor: "pointer", whiteSpace: a.primary ? "nowrap" : "normal",
   };
 };
 const disabledStyle = { opacity: 0.5, cursor: "not-allowed" };
