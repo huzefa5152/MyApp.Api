@@ -24,13 +24,14 @@ const ICONS = {
 };
 
 export default function InvoiceActionBar({ inv, actions, onAction, busy, compact = false, style }) {
-  // A table row has room for two inline actions; the rest go into "More".
-  let shown = 0;
-  const list = actions.map((a) => {
-    const primary = a.primary && (!compact || shown < 2);
-    if (primary) shown += 1;
-    return { ...a, primary };
-  });
+  // A table row has room for three inline actions: the most used of the
+  // primary ones (the FBR step, Edit, Print, then PDF / View); the rest go
+  // into "More". A card shows every primary action.
+  const RANK = { validate: 0, submit: 0, edit: 1, print: 2, pdf: 3, view: 4 };
+  const keep = new Set(actions.filter((a) => a.primary)
+    .sort((x, y) => (RANK[x.key] ?? 9) - (RANK[y.key] ?? 9))
+    .slice(0, compact ? 3 : undefined).map((a) => a.key));
+  const list = actions.map((a) => ({ ...a, primary: keep.has(a.key) }));
   return (
     <CardActions nowrap={compact} label={`More actions for invoice ${inv.invoiceNumber}`} style={style}>
       {list.map((a) => {

@@ -28,16 +28,20 @@ export function buildInvoiceActions(inv, ctx) {
   const add = (x) => a.push(x);
 
   // ── primary: what an operator does most ──────────────────────────────
-  if (p.canEdit && !filed && live && !inv.isMigrated)
+  // Inline on the card (primary): Edit, Print, PDF and the next FBR step;
+  // View joins them when there is no Edit (filed, voided, imported). The
+  // rest sit under "More".
+  const editable = p.canEdit && !filed && live && !inv.isMigrated;
+  if (editable)
     add({ key: "edit", label: "Edit", group: "primary", primary: true,
       title: "Change the lines, prices and dates. Allowed until the invoice is filed with FBR." });
   if (p.canPrint)
     add({ key: "print", label: "Print", group: "primary", primary: true, disabled: !!ctx.noTemplate,
       title: ctx.noTemplate ? ctx.noTemplateReason : `Print this ${doc} with your Invoice template.` });
-  add({ key: "view", label: "View", group: "primary",
+  add({ key: "view", label: "View", group: "primary", primary: !editable,
     title: `Open this ${doc} read-only, with every line and total.` });
   if (p.canPrint)
-    add({ key: "pdf", label: "PDF", group: "primary", disabled: !!ctx.noTemplate,
+    add({ key: "pdf", label: "PDF", group: "primary", primary: true, disabled: !!ctx.noTemplate,
       title: ctx.noTemplate ? ctx.noTemplateReason : `Download this ${doc} as a PDF.` });
   if (p.canPrint && ctx.hasExcel)
     add({ key: "excel", label: "Excel", group: "primary", title: `Download this ${doc} as an Excel sheet.` });

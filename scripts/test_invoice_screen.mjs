@@ -142,6 +142,13 @@ check("a stuck submission offers Reset and nothing to submit", () => {
 });
 check("a voided invoice offers only View and printing", () =>
   assert.deepStrictEqual(keys({ ...unfiled, isCancelled: true }, ctx({ perms: { ...all, canFbrPreview: false } })), ["print", "view", "pdf", "excel"]));
+const inline = (inv, c) => buildInvoiceActions(inv, c).filter((x) => x.primary).map((x) => x.key);
+check("an open invoice shows Edit, Print, PDF and Validate on the card", () =>
+  assert.deepStrictEqual(inline(unfiled, ctx()), ["edit", "print", "pdf", "validate"]));
+check("once validated, Submit takes Validate's place inline", () =>
+  assert.deepStrictEqual(inline(unfiled, ctx({ validated: true })), ["edit", "print", "pdf", "submit"]));
+check("a filed invoice shows Print, View and PDF inline (no Edit)", () =>
+  assert.deepStrictEqual(inline(filed, ctx()), ["print", "view", "pdf"]));
 
 console.log("\n=== FBR chip (67) ===");
 const chip = (inv, o) => fbrChip(inv, o)?.label ?? null;
