@@ -69,7 +69,7 @@ const colors = {
  * Description and UOM use LookupAutocomplete with /api/lookup/items and /api/lookup/units,
  * matching the delivery challan form — picks existing values, creates new ones if needed.
  */
-export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: readOnlyProp = false, billsMode = false, forceItemTypeAndQty = false, fbrEnabled = true, stockHardBlock = false, inventoryOverlay = false }) {
+export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: readOnlyProp = false, billsMode = false, fbrEnabled = true, stockHardBlock = false, inventoryOverlay = false }) {
   // FBR-off Invoices tab (2026-08-11): print-grouping selection ONLY — item type,
   // quantity and every other field are read-only so no qty/overlay edit can move
   // stock. Implemented by shadowing readOnly (reuses the proven read-only render:
@@ -98,12 +98,11 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   // type bindings on the bill are preserved on save — Bills mode just
   // doesn't expose editing them. HS Code, Sale Type, scenario stay visible.
   //
-  // forceItemTypeAndQty: true when this form is mounted from the Invoices
-  // tab. Forces the existing itemTypeAndQtyMode flow regardless of the
-  // user's permission tier — only Item Type and Qty are editable, every
-  // other field locks read-only. Use case: FBR officer classifies items
-  // and corrects qty without touching prices/dates that the bookkeeper
-  // set on Bills.
+  // forceItemTypeAndQty: the old Invoices tab forced an item-type / quantity
+  // edit kept as an FBR adjustment overlay. The importer has one Invoices
+  // screen and never adjusts for FBR (2026-10-28), so it is off for good and
+  // every save writes the invoice itself (writeMode "bill").
+  const forceItemTypeAndQty = false;
   const { has } = usePermissions();
   // 2026-05-09: pull the live narrow-edit tolerance from the user object
   // (populated by /api/auth/me from the server's appsettings). Falls back
@@ -1522,12 +1521,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
             `Adjust qty / unit price so totals match within Rs. ${NARROW_EDIT_TOLERANCE_PKR}, or use full-edit access to change the bill amount.`
           );
         }
-        // writeMode (2026-05-11): Invoice-mode saves go through the
-        // dual-book overlay so the printed bill keeps its real
-        // qty/price. Bill-mode saves on this narrow path (rare —
-        // billsMode normally takes the full-edit branch) stay on the
-        // original "write straight to InvoiceItem" semantics.
-        const writeMode = forceItemTypeAndQty && !billsMode ? "adjustment" : "bill";
+        // Always "bill": the importer never writes the FBR adjustment
+        // overlay (InvoiceItemAdjustment), only the invoice's own lines.
+        const writeMode = "bill";
         await updateInvoiceItemTypesAndQty(
           invoiceId,
           items.map((i) => ({
@@ -1775,21 +1771,6 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                   </div>
                 )}
 
-                {/* The filing book no longer matches the bill it was built
-                    from. Says both figures, because "re-adjust" is useless
-                    advice without the number to adjust TO. */}
-                {invoice?.fbrAdjustmentStale && (
-                  <div style={{ ...styles.narrowPermissionBanner, borderColor: colors.warn, background: "#fff4e0" }}>
-                    <MdInfo size={16} style={{ color: colors.warn, flexShrink: 0, marginTop: 2 }} />
-                    <div>
-                      <b>This bill changed after it was adjusted for FBR.</b> The bill now totals{" "}
-                      <b>Rs. {Number(invoice.subtotal || 0).toLocaleString()}</b>, but the FBR adjustment totals{" "}
-                      <b>Rs. {Number(invoice.fbrAdjustedSubtotal ?? invoice.subtotal ?? 0).toLocaleString()}</b>.
-                      Re-adjust the quantities and unit prices here so they add up to the bill total,
-                      then validate again — the invoice cannot be validated or submitted until they match.
-                    </div>
-                  </div>
-                )}
                 {/* Narrow-permission banner */}
                 {itemTypeOnlyMode && !groupingOnly && (
                   <div style={styles.narrowPermissionBanner}>
