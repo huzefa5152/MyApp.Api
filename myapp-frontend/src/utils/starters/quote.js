@@ -976,7 +976,7 @@ table.items td:last-child{border-right:none;}
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quotation #{{quoteNumber}}</title><style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
 body{font-family:"Segoe UI",Arial,sans-serif;font-size:12px;color:#1a2332;padding:6px;}
-.bismillah{text-align:center;font-size:22px;font-family:"Traditional Arabic","Arial Unicode MS",serif;color:#1a5c2a;margin-bottom:6px;letter-spacing:2px;line-height:1.6;}
+.bismillah {text-align:center;font-size:22px;color:#1a5c2a;margin-bottom:6px;line-height:1.6; font-family: "Amiri", "Noto Naskh Arabic", "Scheherazade New", "Traditional Arabic", "Arabic Typesetting", "Simplified Arabic", "Geeza Pro", "Segoe UI", Tahoma, serif; direction: rtl; letter-spacing: 0; line-height: 1.6; }
 .hdr{display:flex;justify-content:space-between;align-items:flex-start;border-top:2px solid #1a5c2a;border-bottom:2px solid #1a5c2a;padding:10px 0;margin-bottom:12px;}
 .brand img{height:58px;margin-bottom:4px;}
 .cname{font-size:20px;font-weight:700;text-transform:uppercase;color:#1a5c2a;}
@@ -1008,7 +1008,7 @@ tbody tr:nth-child(even) td{background:#f1f8f2 !important;}
   .qimgbox{width:96px;height:96px;margin:0 auto;display:flex;align-items:flex-start;justify-content:center;overflow:hidden;}
   .qimgbox img{max-width:100%;max-height:100%;object-fit:contain;display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 .stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
-  <div class="bismillah">Ø¨ÙØ³Ù’Ù…Ù Ø§Ù„Ù„ÛÙ Ø§Ù„Ø±ÙŽÙ‘Ø­Ù’Ù…Ù°Ù†Ù Ø§Ù„Ø±ÙŽÙ‘Ø­ÙÙŠÙ’Ù…</div>
+  <div class="bismillah" lang="ar" dir="rtl">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
   <div class="hdr">
     <div>
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:58px">{{/if}}
