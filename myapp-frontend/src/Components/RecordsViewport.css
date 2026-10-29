@@ -1,5 +1,9 @@
-/* Scope viewport containment to list screens; forms and dashboards keep their layout. */
-@media screen {
+/* Scope viewport containment to list screens; forms and dashboards keep their layout.
+   Tablets and laptops only (2026-10-30): on a phone, or a screen too short for it
+   (a phone held sideways), the header, filters and notes above the list took most
+   of the screen and the list scrolled in a strip at the bottom. There the page
+   scrolls as a whole and only the top bar stays put. */
+@media screen and (min-width:768px) and (min-height:520px) {
  .dl-shell:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *)) { height:100dvh; min-height:0; overflow:hidden; }
  .dl-content-wrapper:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *)) { height:100dvh; min-height:0; }
  .dl-content-wrapper:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *))>.dl-topbar { flex-shrink:0; }
@@ -47,6 +51,6 @@
  .records-viewport .isd-register [data-admin-table-region]>table>thead th { position:sticky !important; top:0; }
 }
 
-@media screen {
+@media screen and (min-width:768px) and (min-height:520px) {
  .dl-main:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *)) [data-secondary-records] { max-height:22dvh; overflow:auto; overscroll-behavior:contain; padding:2px 4px 2px 2px; }
 }
