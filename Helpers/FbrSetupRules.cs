@@ -20,13 +20,16 @@ public static class FbrSetupRules
         if (string.IsNullOrWhiteSpace(company.FbrToken)) return false;
         if (string.IsNullOrWhiteSpace(company.FbrEnvironment)) return false;
 
-        // Client fields
-        if (string.IsNullOrWhiteSpace(client.NTN)) return false;
+        // Client fields -- the same buyer rule FbrService's pre-flight applies:
+        // a registered buyer files under its NTN or CNIC; an unregistered one
+        // (Unregistered, or CNIC-only) needs neither. Demanding an NTN from
+        // every buyer, and a CNIC from an unregistered one, held fileable bills
+        // in "Setup" and their challans in "Setup Required".
         if (string.IsNullOrWhiteSpace(client.RegistrationType)) return false;
         if (client.FbrProvinceCode == null) return false;
-        // CNIC required for Unregistered/CNIC registration types
-        if ((client.RegistrationType == "Unregistered" || client.RegistrationType == "CNIC")
-            && string.IsNullOrWhiteSpace(client.CNIC)) return false;
+        var unregistered = client.RegistrationType is "Unregistered" or "CNIC";
+        if (!unregistered && string.IsNullOrWhiteSpace(client.NTN) && string.IsNullOrWhiteSpace(client.CNIC))
+            return false;
 
         return true;
     }

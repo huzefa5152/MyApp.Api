@@ -305,6 +305,50 @@ def test_standalone_bill(base: str, token: str, company: dict, client: dict) -> 
     return bill
 
 
+# ── Suite 3b: buyer FBR readiness follows FBR's own buyer rule ──────
+# An unregistered buyer needs neither NTN nor CNIC; a registered one needs
+# one of them. The readiness check used to demand an NTN from every buyer and
+# a CNIC from an unregistered one, holding fileable bills in "Setup" and their
+# challans in "Setup Required". Billing never depends on it either way.
+def test_buyer_readiness(base: str, token: str, company: dict, classified: dict | None) -> None:
+    suite = "3b. Buyer FBR readiness"
+    print(f"\n=== {suite} ===")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z")
+    stamp = datetime.now().strftime("%H%M%S%f")
+    setup_gap = "Seller or buyer FBR setup"
+    for label, extra, ready in (
+        ("unregistered, no NTN or CNIC", {"registrationType": "Unregistered"}, True),
+        ("unregistered, NTN only", {"registrationType": "Unregistered", "ntn": "7654321"}, True),
+        ("CNIC type, no CNIC", {"registrationType": "CNIC"}, True),
+        ("registered, CNIC only", {"registrationType": "Registered", "cnic": "4210112345671"}, True),
+        ("registered, no NTN or CNIC", {"registrationType": "Registered"}, False),
+    ):
+        status, client = http("POST", "/api/clients", base, token=token, body={
+            "name": f"Readiness {label} {stamp}", "address": "2 Test Road, Karachi",
+            "companyId": company["id"], "fbrProvinceCode": 8, **extra})
+        if not must(f"create client ({label})", status):
+            continue
+        status, bill = http("POST", "/api/invoices/standalone", base, token=token, body={
+            "date": today, "companyId": company["id"], "clientId": client["id"], "gstRate": 18,
+            "items": [{"description": "Readiness item", "quantity": 1, "uom": "Pcs", "unitPrice": 100,
+                       **({"itemTypeId": classified["id"]} if classified else {})}]})
+        check(suite, f"{label}: bill saves", status in (200, 201), f"got {status} {bill}")
+        if status in (200, 201):
+            missing = bill.get("fbrMissing") or []
+            check(suite, f"{label}: buyer setup {'complete' if ready else 'flagged'}",
+                  (setup_gap not in missing) == ready, f"fbrMissing = {missing}")
+        if classified:
+            status, ch = http("POST", f"/api/deliverychallans/company/{company['id']}", base, token=token, body={
+                "companyId": company["id"], "clientId": client["id"], "poNumber": f"PO-RD-{stamp}",
+                "deliveryDate": today,
+                "items": [{"description": "Readiness item", "quantity": 1, "unit": "Pcs",
+                           "itemTypeId": classified["id"]}]})
+            check(suite, f"{label}: challan saves", status in (200, 201), f"got {status} {ch}")
+            if status in (200, 201):
+                check(suite, f"{label}: challan {'billable' if ready else 'Setup Required'}",
+                      (ch.get("status") != "Setup Required") == ready, f"status = {ch.get('status')}")
+
+
 # ── Suite: private supplier / actual cost on challans → purchase bills ─
 
 def test_challan_supplier_purchase_gst(base, token, company, client):
@@ -820,6 +864,7 @@ def main() -> int:
             check("2. Bill creation FROM a challan", "skipped — challan not billable", False,
                   f"challan status = {challan.get('status')}")
         standalone = test_standalone_bill(args.base, token, company, client)
+        test_buyer_readiness(args.base, token, company, classified)
         test_invoice_update(args.base, token, standalone)
         test_item_rate_history(args.base, token, company, classified)
         test_tax_calculations(args.base, token, company, client)
