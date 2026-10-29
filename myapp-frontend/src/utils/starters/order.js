@@ -957,7 +957,7 @@ tbody tr:nth-child(even) td.rem { background:#eaf1fb !important; }
 <style>
 * { box-sizing:border-box; margin:0; padding:0; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
 body { font-family:"Segoe UI",Arial,sans-serif; font-size:12px; color:#1a1a1a; padding:4px; }
-.bismillah { text-align:center; font-family:"Noto Nastaliq Urdu","Jameel Noori Nastaleeq","Arabic Typesetting",serif; font-size:22px; color:#1a6e3a; padding:10px 0 6px; border-bottom:1px solid #ddd; margin-bottom:14px; direction:rtl; }
+.bismillah { text-align:center; font-size:22px; color:#1a6e3a; padding:10px 0 6px; border-bottom:1px solid #ddd; margin-bottom:14px; font-family: "Amiri", "Noto Naskh Arabic", "Scheherazade New", "Traditional Arabic", "Arabic Typesetting", "Simplified Arabic", "Geeza Pro", "Segoe UI", Tahoma, serif; direction: rtl; letter-spacing: 0; line-height: 1.6; }
 .hdr { display:flex; justify-content:space-between; align-items:flex-start; padding-bottom:12px; border-bottom:3px solid #1a6e3a; margin-bottom:14px; }
 .brand { display:flex; align-items:center; gap:12px; }
 .brand img { height:60px; }
@@ -988,7 +988,7 @@ tbody tr:nth-child(even) td.rem { background:#d4f0dc !important; }
 .delivery-note { margin-top:12px; font-size:11px; color:#444; border:1px dashed #1a6e3a; padding:7px 10px; border-radius:2px; }
 @media print { @page { size:A4; margin:11mm; } }
 .stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
-  <div class="bismillah">بسم Ø§Ù„Ù„Û الرحمٰن الرحیم</div>
+  <div class="bismillah" lang="ar" dir="rtl">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
 
   <div class="hdr">
     <div class="brand">

@@ -1151,7 +1151,7 @@ table.items tbody tr:nth-child(even) td { background: #f4f4f4 !important; }
 body { font-family: Calibri, "Segoe UI", Arial, sans-serif; padding: 8mm 10mm; color: #000; display: flex; flex-direction: column; min-height: 100vh; }
 .main { flex: 1; }
 .footer-sect { margin-top: auto; }
-.bismillah { text-align: center; font-size: 20pt; color: #14532d; margin-bottom: 4px; font-family: "Noto Naskh Arabic", "Scheherazade New", "Traditional Arabic", serif; direction: rtl; letter-spacing: 1px; }
+.bismillah { text-align: center; font-size: 20pt; color: #14532d; margin-bottom: 4px; font-family: "Amiri", "Noto Naskh Arabic", "Scheherazade New", "Traditional Arabic", "Arabic Typesetting", "Simplified Arabic", "Geeza Pro", "Segoe UI", Tahoma, serif; direction: rtl; letter-spacing: 0; line-height: 1.6; }
 .top-rule { border-top: 2px solid #14532d; border-bottom: 1px solid #14532d; padding: 2px 0; margin-bottom: 10px; }
 .hdr { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
 .co-name { font-size: 22pt; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #14532d; }
@@ -1191,7 +1191,7 @@ table.items tbody tr:nth-child(even) td { background: #f0fdf4 !important; }
 .bot-rule { border-top: 2px solid #14532d; margin-top: 8px; }
 .stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="main">
-<div class="bismillah">Ø¨ÙØ³Ù’Ù…Ù Ø§Ù„Ù„ÙŽÙ‘Ù‡Ù Ø§Ù„Ø±ÙŽÙ‘Ø­Ù’Ù…ÙŽÙ°Ù†Ù Ø§Ù„Ø±ÙŽÙ‘Ø­ÙÙŠÙ…Ù</div>
+<div class="bismillah" lang="ar" dir="rtl">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
 <div class="top-rule"></div>
 <div class="hdr">
   <div>
