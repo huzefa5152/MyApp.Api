@@ -158,7 +158,8 @@ export default function DashboardLayout() {
   // The content area, not the window, is what scrolls (DashboardLayout.css
   // .dl-shell). It lives across pages, so a new page starts at its top.
   const mainRef = useRef(null);
-  useEffect(() => { if (mainRef.current) mainRef.current.scrollTop = 0; }, [location.pathname]);
+  // On a phone the window scrolls instead, so reset both.
+  useEffect(() => { if (mainRef.current) mainRef.current.scrollTop = 0; window.scrollTo(0, 0); }, [location.pathname]);
   const navigate = useNavigate();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);

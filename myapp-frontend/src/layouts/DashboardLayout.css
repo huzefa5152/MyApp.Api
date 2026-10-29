@@ -34,16 +34,26 @@ body.dl-body--locked {
 }
 
 /* ---------- Layout Shell ---------- */
-/* The app frame is exactly one viewport tall and never scrolls the window:
-   the sidebar and the top bar stay put and only the page content (.dl-main)
-   scrolls (2026-10-28). dvh, where supported, follows a phone's moving
-   address bar, so the content's last row is never hidden behind it. */
+/* On a tablet or laptop the app frame is exactly one viewport tall and never
+   scrolls the window: the sidebar and the top bar stay put and only the page
+   content (.dl-main) scrolls (2026-10-28). dvh, where supported, follows a
+   phone's moving address bar, so the content's last row is never hidden
+   behind it. Phones, and any screen too short for it (a phone on its side),
+   scroll the window instead (2026-10-30): an inner scroller keeps the
+   browser's own bars from folding away, and with the top bar and a pinned
+   page head on top the list was left a sliver at the bottom. There only the
+   56px top bar sticks. Keep this query and the .page-sticky-head one equal. */
 .dl-shell {
   display: flex;
-  height: 100vh;
-  height: 100dvh;
-  overflow: hidden;
+  min-height: 100vh;
   background: #f0f4f8;
+}
+@media (min-width: 768px) and (min-height: 520px) {
+  .dl-shell {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
 }
 
 /* ---------- Sidebar ---------- */
@@ -510,9 +520,13 @@ body.dl-body--locked {
   margin-left: var(--sidebar-width);
   display: flex;
   flex-direction: column;
-  height: 100%;
-  min-height: 0;
   transition: margin-left var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+}
+@media (min-width: 768px) and (min-height: 520px) {
+  .dl-content-wrapper {
+    height: 100%;
+    min-height: 0;
+  }
 }
 
 @media (max-width: 991.98px) {
@@ -718,8 +732,12 @@ body.dl-body--locked {
   min-height: 0;
   padding: 1.25rem 1.5rem;
   overflow-x: auto;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+}
+@media (min-width: 768px) and (min-height: 520px) {
+  .dl-main {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 }
 
 /* A list screen's title, picker and filters, pinned to the top of the
@@ -731,9 +749,9 @@ body.dl-body--locked {
    width and cut every page's right edge. The head must NOT clip (no
    clip-path, no overflow): its menus (Export, Tools, New invoice) open below
    it, and a clip cut them off. .dl-main's own overflow already stops the
-   shadow at its edges. Phones keep it unpinned: there the filter block alone
-   is a third of the screen. */
-@media (min-width: 768px) {
+   shadow at its edges. Phones and short screens keep it unpinned: there the
+   filter block alone is a third of the screen. */
+@media (min-width: 768px) and (min-height: 520px) {
   .page-sticky-head {
     position: sticky;
     top: -1.25rem;
