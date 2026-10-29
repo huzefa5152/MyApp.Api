@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { MdClose, MdDescription, MdReceipt, MdLocalShipping, MdRequestQuote, MdAssignment, MdUndo, MdTrendingUp, MdShoppingCart, MdInventory2 } from "react-icons/md";
-import { STARTER_TEMPLATES } from "../../utils/starterTemplates";
+import useStarterTemplates from "../../hooks/useStarterTemplates";
 // Pulled from shared formStyles so this picker matches every other popup —
 // blurred backdrop, fixed centered modal, non-movable, standard z-index.
 import { formStyles, modalSizes } from "../../theme";
@@ -32,7 +32,8 @@ const TYPE_COLORS = {
 export default function StarterTemplatePicker({ templateType, onSelect, onClose }) {
   const [hoveredId, setHoveredId] = useState(null);
 
-  const templates = STARTER_TEMPLATES.filter(
+  const starters = useStarterTemplates();
+  const templates = starters.filter(
     (t) => !templateType || t.type === templateType
   );
 
@@ -65,6 +66,7 @@ export default function StarterTemplatePicker({ templateType, onSelect, onClose 
                 </div>
                 <div style={s.cardName}>{t.name}</div>
                 <div style={{ ...s.typeBadge, background: color + "14", color }}>{t.type}</div>
+                {t.source === "shared" && <div style={s.sharedTag}>Added by administrator</div>}
                 <div style={s.cardDesc}>{t.description}</div>
               </button>
             );
@@ -121,6 +123,7 @@ const s = {
     fontSize: "0.68rem", fontWeight: 600, padding: "2px 8px", borderRadius: 4,
     textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6,
   },
+  sharedTag: { fontSize: "0.68rem", fontWeight: 700, color: "#1b5e20", background: "#e8f5e9", borderRadius: 999, padding: "0.1rem 0.45rem", marginBottom: "0.25rem" },
   cardDesc: {
     fontSize: "0.78rem", color: "#5f6d7e", lineHeight: 1.4,
   },

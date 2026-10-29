@@ -121,6 +121,7 @@ public static class McpToolAccessCatalog
         new("get_attachment", "Attachments", "Download an attachment", new[] { "attachments.list.view" }),
         new("prepare_attachment", "Attachments", "Prepare attaching or deleting a file", new[] { "attachments.manage.upload", "attachments.manage.delete" }, McpScopes.Attachments, Write: true),
         new("prepare_print_template", "Print templates", "Prepare a print design change", new[] { "printtemplates.manage.update" }, McpScopes.TemplatesWrite, Write: true),
+        new("prepare_starter_template", "Print templates", "Add or change shared starter designs (system administrator)", new[] { "printtemplates.manage.update" }, McpScopes.TemplatesWrite, Write: true, SeedOnly: true),
         new("find_late_gd_value_fixes", "Stock", "Find items valued wrong by a late GD", new[] { "stock.policy.manage" }),
         new("prepare_late_gd_value_fix", "Stock", "Prepare the late GD value fix", new[] { "stock.policy.manage" }, McpScopes.Stock, Write: true),
 
@@ -139,6 +140,8 @@ public static class McpToolAccessCatalog
 
         new("list_print_templates", "Print templates", "List print designs", new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead),
         new("get_print_template", "Print templates", "Read print design content", new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead),
+        new("list_starter_templates", "Print templates", "List shared starter designs", new[] { "printtemplates.manage.view", "printtemplates.starter.apply" }, McpScopes.TemplatesRead),
+        new("get_starter_template", "Print templates", "Read a shared starter design", new[] { "printtemplates.manage.view", "printtemplates.starter.apply" }, McpScopes.TemplatesRead),
         new("get_print_contract", "Print templates", "Read supported print fields", new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead),
         new("get_document_print_data", "Print templates", "Read and print documents", DocumentPrintPermissions, McpScopes.DocumentsRead),
         // Rides on the print-data grant: the same documents, rendered with the company's own template.

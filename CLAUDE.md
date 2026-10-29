@@ -2014,6 +2014,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 - `IsTenantIsolated` flip: gated by `tenantaccess.manage.update`.
 - Role string assignment of "Admin": **seed admin only** (`_seedAdminUserId`).
 - Server-side `/auth/logout` rotates `SecurityStamp` → previous JWTs reject on next request.
+- Shared starter templates (`StarterTemplates`, `/api/starter-templates`, MCP `prepare_starter_template`) are written by the **seed admin only** (`[SeedAdminOnly]` plus a check in `StarterTemplateService`): every company sees them, so a tenant Administrator holding every key is still refused. Reading takes `printtemplates.manage.view` or `printtemplates.starter.apply`.
 
 ### 10. FBR integration specifics
 
@@ -2314,6 +2315,7 @@ them can be resolved from FBR.
 | Hosted MCP reads equal the screens, every tool swept against another company, tokens, self service, OAuth | `python scripts/test_mcp_reads.py`; `test_mcp_tenant_sweep.py`; `test_mcp_agent_tokens.py`; `test_mcp_self_service.py`; `test_mcp_oauth.py` (see `docs/MCP_AGENT_ACCESS.md`) | `24/24`; `14/14`; `55/55`; `33/33`; `69/69` |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
+| Shared starter templates: seed-admin-only writes over HTTP and MCP, every rule refuses and saves nothing, hide/show/delete, apply like a code starter, audit with no company | `python scripts/test_shared_starters.py --base <url>` | `62/62 shared starter checks passed` |
 | No production identifiers in tracked files | `python scripts/verify_no_production_identifiers.py` | `no production identifiers in tracked files` |
 
 **PO parser / import changes — MANDATORY.** Any change to
