@@ -744,6 +744,54 @@ body.dl-body--locked {
     box-shadow: 0 6px 8px -8px rgba(15, 23, 42, 0.25), 0 -100vmax 0 100vmax #f0f4f8;
     clip-path: inset(0 -100vmax -12px);
   }
+
+  /* One compact header for every list screen (2026-10-29). Each page still
+     builds its own header with inline styles (48px icon tile, 1.5rem title,
+     large padded buttons, 1.5rem gaps), which on a laptop let the pinned head
+     take up to 40% of the screen. These rules set one size for all of them,
+     hence !important over the inline styles. Tablet and desktop only: phones
+     keep their 44px tap targets and are not pinned. */
+  .page-sticky-head > * {
+    margin-bottom: 0.65rem !important;
+  }
+  .page-sticky-head > :last-child {
+    margin-bottom: 0.4rem !important;
+  }
+  .page-sticky-head > :first-child {
+    gap: 0.75rem !important;
+  }
+  .page-sticky-head > :first-child :is(h1, h2) {
+    font-size: 1.25rem !important;
+    line-height: 1.25 !important;
+    letter-spacing: -0.01em;
+  }
+  .page-sticky-head > :first-child :is(h1, h2) + p {
+    margin-top: 1px !important;
+    font-size: 0.8rem !important;
+    line-height: 1.35 !important;
+  }
+  /* The coloured icon tile beside the title: a box holding one icon. */
+  .page-sticky-head > :first-child div:has(> svg:only-child) {
+    width: 38px !important;
+    height: 38px !important;
+    border-radius: 10px !important;
+  }
+  .page-sticky-head > :first-child div:has(> svg:only-child) > svg {
+    width: 20px !important;
+    height: 20px !important;
+  }
+  .page-sticky-head > :first-child div:has(> div:has(> svg:only-child)) {
+    gap: 0.65rem !important;
+  }
+  /* Header actions: one height, one radius, no lift-on-hover shadow. */
+  .page-sticky-head > :first-child button:not([role="menuitem"]) {
+    min-height: 36px;
+    padding: 0.4rem 0.95rem !important;
+    font-size: 0.84rem !important;
+    border-radius: 8px !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08) !important;
+    transform: none !important;
+  }
 }
 
 @media (max-width: 767.98px) {

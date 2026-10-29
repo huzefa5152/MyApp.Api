@@ -214,6 +214,8 @@ export default function SuppliersPage() {
         </div>
       )}
 
+      {/* Search and the scope chips share one row; they wrap on a phone. */}
+      <div style={styles.toolRow}>
       {suppliers.length > 3 && (
         <div style={styles.searchWrap}>
           <MdSearch style={styles.searchIcon} />
@@ -249,6 +251,7 @@ export default function SuppliersPage() {
           ))}
         </div>
       )}
+      </div>
       </div>
 
       {loadingSuppliers ? (
@@ -361,10 +364,11 @@ const styles = {
   pageTitle: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
   pageSubtitle: { margin: "0.15rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
   addBtn: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.25rem", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #0d47a1, #00897b)", color: "#fff", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", transition: "filter 0.2s, transform 0.2s", boxShadow: "0 4px 14px rgba(13,71,161,0.25)" },
-  scopeRow: { display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" },
+  toolRow: { display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1rem" },
+  scopeRow: { display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: 0 },
   scopeChip: { minHeight: 44, padding: "0 1rem", borderRadius: 22, border: "1px solid #b7d4f0", background: "#fff", color: "#0d47a1", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit" },
   scopeChipOn: { background: "#0d47a1", color: "#fff", borderColor: "#0d47a1" },
-  searchWrap: { position: "relative", marginBottom: "1.25rem", maxWidth: 360 },
+  searchWrap: { position: "relative", flex: "1 1 260px", maxWidth: 360 },
   searchIcon: { position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", fontSize: "1.1rem" },
   searchInput: { width: "100%", padding: "0.55rem 0.75rem 0.55rem 2.3rem", border: "1px solid #d0d7e2", borderRadius: 10, fontSize: "0.88rem", backgroundColor: "#f8f9fb", color: "#1a2332", outline: "none", transition: "border-color 0.2s" },
   loadingContainer: { display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", padding: "3rem 0" },

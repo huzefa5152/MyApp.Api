@@ -226,6 +226,8 @@ export default function ClientsPage() {
         </div>
       )}
 
+      {/* Search and the scope chips share one row; they wrap on a phone. */}
+      <div style={styles.toolRow}>
       {/* Search */}
       {clients.length > 3 && (
         <div style={styles.searchWrap}>
@@ -263,6 +265,7 @@ export default function ClientsPage() {
           ))}
         </div>
       )}
+      </div>
       </div>
 
       {/* Client List */}
@@ -476,12 +479,13 @@ const styles = {
     transition: "filter 0.2s, transform 0.2s",
     boxShadow: "0 4px 14px rgba(13,71,161,0.25)",
   },
-  scopeRow: { display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" },
+  toolRow: { display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1rem" },
+  scopeRow: { display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: 0 },
   scopeChip: { minHeight: 44, padding: "0 1rem", borderRadius: 22, border: "1px solid #b7d4f0", background: "#fff", color: "#0d47a1", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit" },
   scopeChipOn: { background: "#0d47a1", color: "#fff", borderColor: "#0d47a1" },
   searchWrap: {
     position: "relative",
-    marginBottom: "1.25rem",
+    flex: "1 1 260px",
     maxWidth: 360,
   },
   searchIcon: {
