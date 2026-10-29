@@ -311,13 +311,13 @@ export default function ProfilePage() {
     // MCP tabs hold tables and catalogs, so they get the full content width.
     <div style={{ maxWidth: tab === "profile" ? 800 : 1200, margin: "0 auto", minWidth: 0 }}>
       {/* Page header */}
-      <div style={styles.pageHeader}>
+      <div className="page-head" style={styles.pageHeader}>
         <div style={styles.headerIcon}>
           <MdAccountCircle size={28} color="#fff" />
         </div>
         <div>
-          <h2 style={styles.pageTitle}>My Profile</h2>
-          <p style={styles.pageSubtitle}>{tabs.length > 2 ? "Manage your account, AI connections and MCP access" : "Manage your account settings and AI connections"}</p>
+          <h2 className="page-title" style={styles.pageTitle}>My Profile</h2>
+          <p className="page-subtitle" style={styles.pageSubtitle}>{tabs.length > 2 ? "Manage your account, AI connections and MCP access" : "Manage your account settings and AI connections"}</p>
         </div>
       </div>
 

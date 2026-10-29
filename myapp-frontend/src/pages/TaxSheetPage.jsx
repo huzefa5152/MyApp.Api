@@ -127,13 +127,13 @@ export default function TaxSheetPage() {
         <MdFactCheck size={26} color={colors.blue} />
         <h1 style={{ margin: 0, fontSize: "clamp(1.2rem, 3vw, 1.6rem)", color: colors.textPrimary }}>Tax Sheet</h1>
       </div>
-      <p style={{ margin: "0 0 16px", color: colors.textSecondary, fontSize: "0.9rem" }}>
+      <p className="report-intro" style={{ margin: "0 0 16px", color: colors.textSecondary, fontSize: "0.9rem" }}>
         Invoice lines whose item type still has <strong>no HS code</strong> — send to the tax consultant to classify.
         The <strong>HS Code</strong> column shows the item-type name that needs a real HS code.
       </p>
 
       {/* Controls */}
-      <div style={{
+      <div className="report-controls" style={{
         display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end",
         background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: 14, marginBottom: 16,
       }}>

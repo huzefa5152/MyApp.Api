@@ -176,7 +176,7 @@ export default function WithholdingTaxReceiptsPage() {
         <div style={styles.loading}><div style={styles.spinner} /></div>
       ) : companies.length > 0 ? (
         <div style={styles.filters}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", minWidth: 0, maxWidth: "100%" }}>
+          <div className="psh-company" style={{ display: "flex", alignItems: "center", gap: "0.6rem", minWidth: 0, maxWidth: "100%" }}>
             <MdBusiness size={20} color={colors.blue} style={{ flexShrink: 0 }} />
             <select
               style={{ ...dropdownStyles.base, minWidth: 0, flex: "1 1 250px" }}

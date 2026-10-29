@@ -762,12 +762,14 @@ body.dl-body--locked {
   .page-sticky-head > :first-child {
     gap: 0.75rem !important;
   }
-  .page-sticky-head > :first-child :is(h1, h2) {
+  .page-sticky-head > :first-child :is(h1, h2, h3, h4),
+  .page-sticky-head > :is(h1, h2) {
     font-size: 1.25rem !important;
     line-height: 1.25 !important;
     letter-spacing: -0.01em;
   }
-  .page-sticky-head > :first-child :is(h1, h2) + p {
+  .page-sticky-head > :first-child :is(h1, h2, h3, h4) + p,
+  .page-sticky-head > :is(h1, h2) + p {
     margin-top: 1px !important;
     font-size: 0.8rem !important;
     line-height: 1.35 !important;
@@ -793,6 +795,136 @@ body.dl-body--locked {
     border-radius: 8px !important;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08) !important;
     transform: none !important;
+  }
+
+  /* The company picker that sat alone on its own row under the title moves
+     INTO the title row: title, then the picker, then the actions pushed right.
+     Found by shape, so no page needs a class: the head's second child holds a
+     select and nothing else you can type in or press (a row that also has a
+     search box or a button is a filter row and stays where it is). The title
+     row is unwrapped with display: contents so its title and its actions
+     become items of the head itself; everything after the picker keeps a row
+     of its own. */
+  .page-sticky-head:has(> .psh-company) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 1rem;
+    row-gap: 0.55rem;
+  }
+  .page-sticky-head:has(> .psh-company) > * {
+    margin-bottom: 0 !important;
+  }
+  .page-sticky-head:has(> .psh-company) > :first-child {
+    display: contents !important;
+  }
+  .page-sticky-head:has(> .psh-company) > :first-child > :first-child {
+    order: 0;
+    flex: 1 1 220px;
+    min-width: 0;
+  }
+  .page-sticky-head:has(> .psh-company) > .psh-company {
+    order: 1;
+    flex: 0 1 260px;
+    min-width: 200px;
+    flex-wrap: nowrap !important;
+  }
+  .page-sticky-head .psh-company select {
+    width: auto !important;
+    min-width: 0 !important;
+    flex: 1 1 auto;
+    max-width: 280px !important;
+  }
+  .page-sticky-head:has(> .psh-company) > :first-child > :not(:first-child) {
+    order: 2;
+    margin-left: auto !important;
+  }
+  .page-sticky-head:has(> .psh-company) > :nth-child(n + 3) {
+    order: 3;
+    flex: 1 1 100%;
+  }
+  .page-sticky-head:has(> .psh-company) > :last-child {
+    margin-bottom: 0.4rem !important;
+  }
+
+  /* A filter row in a pinned head: tighter, and its pickers and dates give up
+     width before the Cards / Table switch is pushed onto a line of its own. */
+  .page-sticky-head .filters-row {
+    margin-bottom: 0.4rem !important;
+    padding: 0.4rem 0.6rem;
+    gap: 0.4rem;
+  }
+  .page-sticky-head .filters-row > div[style*="min-width: 170px"] {
+    min-width: 130px !important;
+    flex-basis: 130px !important;
+  }
+  .page-sticky-head .filter-search-wrap {
+    flex-basis: 140px;
+  }
+  .page-sticky-head .filter-date-input {
+    width: 118px;
+  }
+  .page-sticky-head .filters-row > .filter-select {
+    flex: 0 1 auto !important;
+    min-width: 120px !important;
+    max-width: 230px !important;
+  }
+
+  /* Report pages (Sales Report, Tax Sheet, Client Ledger): the explanation
+     under the title is kept but smaller, at most two lines, and the filter
+     card is tightened so its fields sit on one line on a laptop. */
+  .page-sticky-head > .report-intro {
+    margin: 0 0 0.5rem !important;
+    font-size: 0.8rem !important;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .page-sticky-head > .report-controls {
+    padding: 8px 12px !important;
+    gap: 8px 10px !important;
+    margin-bottom: 0.4rem !important;
+  }
+  .page-sticky-head > .report-controls label {
+    font-size: 0.7rem !important;
+  }
+  .page-sticky-head > .report-controls :is(select, input:not([type="checkbox"]), button) {
+    min-height: 34px !important;
+    font-size: 0.82rem !important;
+  }
+  .page-sticky-head > .report-controls select {
+    min-width: 0 !important;
+    max-width: 210px !important;
+    padding-top: 0.3rem !important;
+    padding-bottom: 0.3rem !important;
+  }
+  .page-sticky-head > .report-controls button {
+    padding: 0.35rem 0.8rem !important;
+  }
+  .page-sticky-head > .report-controls [style*="min-width: 220px"] {
+    min-width: 180px !important;
+  }
+  /* Pages that are a form or a step-by-step tool, not a list, keep their
+     title unpinned but the same size as every pinned one. */
+  .page-title {
+    font-size: 1.25rem !important;
+    line-height: 1.25 !important;
+    letter-spacing: -0.01em;
+  }
+  .page-subtitle {
+    font-size: 0.8rem !important;
+    line-height: 1.35 !important;
+  }
+  .page-head div:has(> svg:only-child) {
+    width: 38px !important;
+    height: 38px !important;
+    border-radius: 10px !important;
+  }
+  .page-head div:has(> svg:only-child) > svg {
+    width: 20px !important;
+    height: 20px !important;
   }
 }
 

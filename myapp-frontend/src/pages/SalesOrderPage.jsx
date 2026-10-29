@@ -260,7 +260,7 @@ export default function SalesOrderPage() {
 
       {loadingCompanies ? <Spinner label="Loading companies..." /> : companies.length > 0 ? (
         <>
-          <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+          <div className="psh-company" style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
             <MdBusiness size={20} color={colors.blue} />
             <select style={dropdownStyles.base} value={selectedCompany?.id || ""} onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))}>
               {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}

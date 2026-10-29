@@ -273,7 +273,7 @@ export default function CustomerLedgerPage() {
       </div>
 
       {companies.length > 0 && (
-        <div style={st.companyRow}>
+        <div className="psh-company" style={st.companyRow}>
           <MdBusiness size={20} color={colors.blue} />
           <select
             style={{ ...dropdownStyles.base, minHeight: 44 }}

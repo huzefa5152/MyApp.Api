@@ -111,7 +111,7 @@ export default function NonInventoryItemsPage() {
         <div style={styles.loading}><div style={styles.spinner} /></div>
       ) : companies.length > 0 ? (
         <div style={styles.filters}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+          <div className="psh-company" style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
             <MdBusiness size={20} color={colors.blue} />
             <select
               style={dropdownStyles.base}

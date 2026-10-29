@@ -158,8 +158,8 @@ export default function StockReconcilePage() {
   return (
     <div style={st.page}>
       <Link to="/stock" style={st.back}><MdArrowBack style={{ flexShrink: 0 }} size={16} /> Stock Dashboard</Link>
-      <h1 style={st.h1}>Reconcile to my stock sheet</h1>
-      <p style={st.muted}>
+      <h1 className="page-title" style={st.h1}>Reconcile to my stock sheet</h1>
+      <p className="page-subtitle" style={st.muted}>
         Upload the month's stock sheet. Each row is matched to an item and its GD; the plan shows what would make the books
         hold the sheet. Nothing changes until you press Reconcile.
       </p>

@@ -281,15 +281,6 @@ export default function CustomerPortalsPage() {
         </div>
       </div>
 
-      <div style={st.warning}>
-        <MdWarningAmber size={18} style={{ flexShrink: 0, marginTop: 1 }} />
-        <span>
-          Anyone with a portal link can see that client's invoices — no password is
-          required. Share a link only with the customer it belongs to, and revoke it
-          if it is ever forwarded by mistake.
-        </span>
-      </div>
-
       {/* Filter bar. Shown whenever there is anything to filter, like the
           Invoices screen's — NOT only once a second portal exists. Hiding it
           below a threshold makes the control invisible to the person looking
@@ -337,6 +328,16 @@ export default function CustomerPortalsPage() {
           )}
         </div>
       )}
+      </div>
+
+      {/* A standing notice, not a control: it scrolls with the list. */}
+      <div style={st.warning}>
+        <MdWarningAmber size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+        <span>
+          Anyone with a portal link can see that client's invoices — no password is
+          required. Share a link only with the customer it belongs to, and revoke it
+          if it is ever forwarded by mistake.
+        </span>
       </div>
 
       {loading ? (

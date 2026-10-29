@@ -95,9 +95,9 @@ export default function DataMigrationPage() {
     <div style={{ maxWidth: 820 }}>
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
         <MdCloudUpload size={26} color={colors.blue} />
-        <h2 style={{ margin: 0, fontSize: "1.4rem", color: colors.textPrimary }}>Data Migration</h2>
+        <h2 className="page-title" style={{ margin: 0, fontSize: "1.4rem", color: colors.textPrimary }}>Data Migration</h2>
       </div>
-      <p style={{ color: colors.textSecondary, marginTop: 0 }}>
+      <p className="page-subtitle" style={{ color: colors.textSecondary, marginTop: 0 }}>
         Upload a legacy <strong>.bak</strong> backup; the server restores it and the steps import it into the
         selected company. Each step is idempotent — re-running skips already-imported rows. Disabled in production.
       </p>

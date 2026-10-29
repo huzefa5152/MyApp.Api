@@ -209,7 +209,7 @@ export default function ChartOfAccountsPage() {
       </div>
 
       {companies.length > 0 && (
-        <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+        <div className="psh-company" style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
           <MdBusiness size={20} color={colors.blue} />
           <select
             style={dropdownStyles.base}

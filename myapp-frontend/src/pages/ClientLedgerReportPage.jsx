@@ -220,14 +220,14 @@ export default function ClientLedgerReportPage() {
         <MdReceiptLong size={26} color={colors.blue} />
         <h1 style={{ margin: 0, fontSize: "clamp(1.2rem, 3vw, 1.6rem)", color: colors.textPrimary }}>Client Ledger</h1>
       </div>
-      <p style={{ margin: "0 0 16px", color: colors.textSecondary, fontSize: "0.9rem" }}>
+      <p className="report-intro" style={{ margin: "0 0 16px", color: colors.textSecondary, fontSize: "0.9rem" }}>
         Every customer's statement for the period — opening balance, the full trail, and the balance carried out.
         Invoices and debit notes sit in <strong>Credit</strong>; receipts, credit notes and adjustments in{" "}
         <strong>Debit</strong>. A positive balance means the customer owes.
       </p>
 
       {/* Controls */}
-      <div style={{
+      <div className="report-controls" style={{
         display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end",
         background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: 14, marginBottom: 16,
       }}>

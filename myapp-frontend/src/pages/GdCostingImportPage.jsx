@@ -466,8 +466,8 @@ export default function GdCostingImportPage() {
 
   return (
     <div ref={pageRef} style={{ padding: "0 0 7.5rem", maxWidth: 1100, margin: "0 auto" }}>
-      <h1 style={{ fontSize: 22, margin: "0 0 0.25rem", color: colors.textPrimary }}>Import Costing</h1>
-      <p style={{ margin: "0 0 0.35rem", color: colors.textSecondary, fontSize: 14, maxWidth: "68ch" }}>
+      <h1 className="page-title" style={{ fontSize: 22, margin: "0 0 0.25rem", color: colors.textPrimary }}>Import Costing</h1>
+      <p className="page-subtitle" style={{ margin: "0 0 0.35rem", color: colors.textSecondary, fontSize: 14, maxWidth: "68ch" }}>
         Bring a customs GD's goods and their landed cost onto the books. Every line is checked first,
         and nothing is saved until you press the button at the bottom.
       </p>

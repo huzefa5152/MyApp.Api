@@ -159,12 +159,12 @@ export default function SalesReportPage() {
         <MdAssessment size={26} color={colors.blue} />
         <h1 style={{ margin: 0, fontSize: "clamp(1.2rem, 3vw, 1.6rem)", color: colors.textPrimary }}>Sales Report</h1>
       </div>
-      <p style={{ margin: "0 0 16px", color: colors.textSecondary, fontSize: "0.9rem" }}>
+      <p className="report-intro" style={{ margin: "0 0 16px", color: colors.textSecondary, fontSize: "0.9rem" }}>
         FBR-submitted invoices, grouped by document date. Quantities shown are what was <strong>filed to FBR</strong>.
       </p>
 
       {/* Controls */}
-      <div style={{
+      <div className="report-controls" style={{
         display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end",
         background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: 14, marginBottom: 16,
       }}>
