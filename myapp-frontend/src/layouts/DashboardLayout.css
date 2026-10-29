@@ -726,10 +726,13 @@ body.dl-body--locked {
    scrolling content so only the list moves (2026-10-29). The negative top
    margin covers .dl-main's top padding so rows scroll out of sight under a
    solid band, not through a gap above it. The band reaches .dl-main's side
-   edges through a spread shadow clipped to the head's height, never through
-   negative side margins: those reached into .dl-main's padding, which adds
-   that padding again as scroll width and cut every page's right edge. Phones keep it unpinned: there the filter block alone is a third
-   of the screen. */
+   edges through a spread shadow, never through negative side margins: those
+   reached into .dl-main's padding, which adds that padding again as scroll
+   width and cut every page's right edge. The head must NOT clip (no
+   clip-path, no overflow): its menus (Export, Tools, New invoice) open below
+   it, and a clip cut them off. .dl-main's own overflow already stops the
+   shadow at its edges. Phones keep it unpinned: there the filter block alone
+   is a third of the screen. */
 @media (min-width: 768px) {
   .page-sticky-head {
     position: sticky;
@@ -742,7 +745,6 @@ body.dl-body--locked {
        head's bottom: only the soft shadow falls below, never a solid strip
        over the first row of content (it hid the top of buttons and tables). */
     box-shadow: 0 6px 8px -8px rgba(15, 23, 42, 0.25), 0 -100vmax 0 100vmax #f0f4f8;
-    clip-path: inset(0 -100vmax -12px);
   }
 
   /* One compact header for every list screen (2026-10-29). Each page still
