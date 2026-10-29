@@ -25,11 +25,12 @@ namespace MyApp.Api.Controllers
         // activity row is filed under that company like every companyId call.
         private int? _activityCompanyId;
 
-        private static readonly string[] WriteToolNameList = { "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "commit_action", "cancel_action" };
+        private static readonly string[] WriteToolNameList = { "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "prepare_starter_template", "commit_action", "cancel_action" };
         private static bool IsWriteTool(string name) => WriteToolNameList.Contains(name, StringComparer.Ordinal);
 
         private static string PrepareToolFor(string kind) => kind switch
         {
+            "starter.create" or "starter.update" or "starter.activate" or "starter.deactivate" or "starter.delete" => "prepare_starter_template",
             "client.create" or "client.update" => "prepare_client",
             "quote.create" => "prepare_quote",
             "challan.create" => "prepare_challan",
@@ -368,6 +369,7 @@ namespace MyApp.Api.Controllers
 
         private static string ScopeFor(string kind) => kind switch
         {
+            "starter.create" or "starter.update" or "starter.activate" or "starter.deactivate" or "starter.delete" => McpScopes.TemplatesWrite,
             "client.create" or "client.update" => McpScopes.Clients,
             "challan.create" => McpScopes.Challans,
             "bill.create" or "bill.standalone" => McpScopes.Bills,
@@ -384,6 +386,7 @@ namespace MyApp.Api.Controllers
 
         private static string PermissionFor(string kind) => kind switch
         {
+            "starter.create" or "starter.update" or "starter.activate" or "starter.deactivate" or "starter.delete" => "printtemplates.manage.update",
             "client.create" => "clients.manage.create",
             "client.update" => "clients.manage.update",
             "challan.create" => "challans.manage.create",
@@ -442,6 +445,15 @@ namespace MyApp.Api.Controllers
                 var p = JsonSerializer.Deserialize<JsonElement>(plan.Payload);
                 switch (plan.Kind)
                 {
+                    case "starter.create":
+                    case "starter.update":
+                    case "starter.activate":
+                    case "starter.deactivate":
+                    case "starter.delete":
+                    {
+                        (resultRef, resultSummary) = await CommitStarterAsync(plan, p);
+                        break;
+                    }
                     case "client.create":
                     {
                         var created = await _clients.CreateAsync(ClientFromPlan(p));

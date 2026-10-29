@@ -16,16 +16,19 @@ public static class McpScopes
     public const string Challans = "challans.write";
     public const string Bills = "bills.write";
     public const string TemplatesRead = "templates.read";
+    /// <summary>Shared starter designs only on this line; its one tool is the seed admin's (SeedOnly).</summary>
+    public const string TemplatesWrite = "templates.write";
     public const string DocumentsRead = "documents.read";
 
     /// <summary>Write scopes that have tools behind them today. Others are refused, not pre-granted.</summary>
-    public static readonly string[] Write = { Clients, Quotes, Challans, Bills };
-    public static readonly string[] Implemented = { Read, TemplatesRead, DocumentsRead, Clients, Quotes, Challans, Bills };
+    public static readonly string[] Write = { Clients, Quotes, Challans, Bills, TemplatesWrite };
+    public static readonly string[] Implemented = { Read, TemplatesRead, DocumentsRead, Clients, Quotes, Challans, Bills, TemplatesWrite };
 
     // Permissions the owner must hold: ALL of "All", and at least one of "Any" (when listed).
     private static readonly Dictionary<string, (string[] All, string[] Any)> Needs = new()
     {
         [Clients] = (new[] { "clients.manage.create", "clients.manage.update" }, Array.Empty<string>()),
+        [TemplatesWrite] = (new[] { "printtemplates.manage.view", "printtemplates.manage.update" }, Array.Empty<string>()),
         [Quotes] = (new[] { "salesquotes.manage.create" }, Array.Empty<string>()),
         [Challans] = (new[] { "challans.manage.create", "challans.list.view" }, Array.Empty<string>()),
         // A bill is made from challans or on its own; the two are separately grantable screens.

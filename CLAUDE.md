@@ -379,7 +379,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 - Server-side `/auth/logout` rotates `SecurityStamp` → previous JWTs reject on next request.
 - MCP agent tokens are NOT bound to `SecurityStamp` on this line, because logout rotates it and that would end every AI connection at each browser logout. A password change and an admin reset revoke the user's tokens explicitly (`Helpers/McpTokenRevocation`).
 - Print templates are operator HTML printed in a same-origin window: `Helpers/TemplateHtmlSafety` strips script on save and `utils/printSafety.js` strips it again (plus a script-blocking CSP) on render. Do not add a print path that bypasses `mergeTemplate`.
-- Installation-wide tables (FBR lookup codes, merge fields) are written by the seed admin only (`[SeedAdminOnly]`): a permission key alone reaches tenant Administrators.
+- Installation-wide tables (FBR lookup codes, merge fields, shared starter templates) are written by the seed admin only (`[SeedAdminOnly]`): a permission key alone reaches tenant Administrators. Shared starters (`StarterTemplates`, no CompanyId) are read by anyone holding `printtemplates.manage.view` or `printtemplates.starter.apply`, so `StarterTemplateRules` refuses active content and anything shaped like one tenant's data (NTN/CNIC/STRN, phone, e-mail, a logo-sized inline image).
 
 ### 10. FBR integration specifics
 
@@ -478,6 +478,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Withholding lines + stamp slot on every starter/default (offline) | `node scripts/test_print_templates_wht.mjs` | `693 passed, 0 failed` |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
+| Shared starter templates: seed-admin-only writes over HTTP and MCP, every rule refuses and saves nothing, hide/show/delete, apply like a code starter, audit with no company | `python scripts/test_shared_starters.py --base <url>` | `59/59 shared starter checks passed` |
 | No production identifiers in tracked files | `python scripts/verify_no_production_identifiers.py` | `no production identifiers in tracked files` |
 
 **PO parser / import changes — MANDATORY.** Any change to

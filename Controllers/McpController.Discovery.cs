@@ -31,6 +31,7 @@ public partial class McpController
                 ExpandedSchema(new { planId = new { type = "string", maxLength = 64 } }, "planId"), Array.Empty<string>())
         };
         AddPrintTools(tools);
+        AddStarterTools(tools);
         AddDocumentPrintTools(tools);
         AddOnboardingTools(tools);
         AddOperationsTools(tools);
@@ -96,6 +97,7 @@ public partial class McpController
             "get_action_status" => await GetActionStatusAsync(args),
             "list_print_templates" or "get_print_template" or "get_print_contract" => await CallPrintToolAsync(name, args),
             "get_document_print_data" or "get_document_render_bundle" => await CallDocumentPrintToolAsync(name, args),
+            "list_starter_templates" or "get_starter_template" or "prepare_starter_template" => await CallStarterToolAsync(name, args),
             "get_onboarding_schema" or "get_company_onboarding_status" => await CallOnboardingToolAsync(name, args),
             _ => await CallOperationsToolAsync(name, args)
         };
