@@ -50,3 +50,31 @@ export function fifoTierText(price, uom, max = 3) {
   const more = tiers.length > max ? `, then ${tiers.length - max} more` : "";
   return `Uses ${parts.join(", then ")}${more}`;
 }
+
+/**
+ * The GD pools a sale of `quantity` draws on, in order, each with what it
+ * takes (`take`) and that slice's value; given the line's amount, the values
+ * add up to it. Rows the sale does not reach carry
+ * take 0. Beyond the last pool the last pool takes the rest, as the walk does.
+ */
+export function fifoTierTakes(price, quantity, lineTotal) {
+  const tiers = usable(price);
+  if (tiers.length === 0) return null;
+  let left = Math.max(0, Number(quantity) || 0);
+  const rows = tiers.map((t, i) => {
+    const q = Number(t.quantity);
+    const take = i === tiers.length - 1 ? left : Math.min(left, q);
+    left -= take;
+    const whole = take === q && Number(t.valueExcludingTax) > 0;
+    return { ...t, take, takeValue: whole ? Number(t.valueExcludingTax) : take * Number(t.unitCost) };
+  });
+  // The line's amount is what is billed, so the last GD the line reaches
+  // carries the rounding and the values add up to it exactly.
+  const total = Number(lineTotal);
+  const last = rows.map((r) => r.take > 0).lastIndexOf(true);
+  if (total > 0 && last >= 0) {
+    const before = rows.slice(0, last).reduce((sum, r) => sum + r.takeValue, 0);
+    rows[last] = { ...rows[last], takeValue: Math.max(0, total - before) };
+  }
+  return rows;
+}

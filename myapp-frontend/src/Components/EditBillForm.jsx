@@ -2528,11 +2528,16 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                                       : "Enter the amount; the quantity stays and the rate follows"}
                                   />
                                   {fromStock && (
-                                    <div style={{ fontSize: "0.66rem", color: colors.textSecondary, marginTop: 2 }}>
-                                      {Number(price.unitCost).toLocaleString(undefined, { maximumFractionDigits: 4 })} each
-                                      {fifoTierText(price, price.uom || item.uom) && (
-                                        <div>{fifoTierText(price, price.uom || item.uom)}</div>
-                                      )}
+                                    <div
+                                      style={{ fontSize: "0.66rem", color: colors.textSecondary, marginTop: 2 }}
+                                      title={fifoTierText(price, price.uom || item.uom) || undefined}
+                                    >
+                                      {/* Under FIFO the rate is a blend across GDs, so one
+                                          GD's unit cost here contradicted the line's rate.
+                                          The GD list stays on hover. */}
+                                      {price.tiers?.length
+                                        ? "at cost, oldest claimed GD first"
+                                        : `${Number(price.unitCost).toLocaleString(undefined, { maximumFractionDigits: 4 })} each`}
                                     </div>
                                   )}
                                   {(() => {

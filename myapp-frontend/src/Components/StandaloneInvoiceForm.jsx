@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { Fragment, useState, useEffect, useMemo, useRef } from "react";
 import { MdAdd, MdDelete, MdCheck, MdInfo, MdLock, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
 import { createStandaloneInvoice, getStockPricing } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
@@ -39,7 +39,7 @@ import PermissionLackedHint from "./PermissionLackedHint";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import AttachmentManager from "./AttachmentManager";
 import ManualFilingStep, { emptyManualFiling, keptCodes, manualFilingPayload } from "./ManualFilingStep";
-import { fifoQuantityForAmount, fifoTierText } from "../utils/fifoPricing";
+import { fifoQuantityForAmount, fifoTierTakes } from "../utils/fifoPricing";
 
 // Bill-without-challan flow ("Standalone Bill"). Per FBR DI-API V1.12:
 //   • §9 (Scenarios) — locks Sale Type per SN.
@@ -147,6 +147,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // "Already filed by hand on FBR's portal?" -- saved and recorded in one request.
   const showFiling = canRecordManual && fbrEnabled;
   const [manualFiling, setManualFiling] = useState(emptyManualFiling);
+  // Lines whose GD breakdown is open (localId -> true). Closed by default.
+  const [gdOpen, setGdOpen] = useState({});
   const keptByFiling = (r) => keptCodes(manualFiling).has(((r.newItemType?.hsCode || r.hsCode) || "").trim());
 
   const [clients, setClients] = useState([]);
@@ -1843,7 +1845,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               const noStock = !!r.itemTypeId && !!priced && !priced.canPrice;
                               const derivedFromAmount = canDerive && !!r.lineTotal;
                               return (
-                                <tr key={r.localId} id={lineAnchor(r.localId)} style={styles.unifiedRow}>
+                                <Fragment key={r.localId}>
+                                <tr id={lineAnchor(r.localId)} style={styles.unifiedRow}>
                                   <td data-label="Item" style={styles.unifiedTd}>
                                     <div data-row-picker={r.localId}>
                                     <SearchableItemTypeSelect
@@ -1877,33 +1880,45 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                         found out that a line could not be priced
                                         after typing an amount into a box that
                                         then did nothing. */}
-                                    {canDerive && (
-                                      <div style={styles.stockChipOk}>
-                                        {Number(priced.availableQuantity).toLocaleString(undefined, { maximumFractionDigits: 4 })} {priced.uom || r.uom || ""} on hand
-                                        {" · "}
-                                        {Number(priced.unitCost).toLocaleString(undefined, { maximumFractionDigits: 4 })} each
-                                        {/* The GD breakdown only when it adds something: one
-                                            untagged pool just repeats "on hand" above. */}
-                                        {fifoTierText(priced, priced.uom || r.uom) && !(priced.tiers?.length === 1 && !priced.tiers[0].gdNumber) && (
-                                          <div style={{ fontSize: "0.66rem", opacity: 0.85, marginTop: 2 }}>
-                                            {fifoTierText(priced, priced.uom || r.uom)}
-                                          </div>
-                                        )}
-                                        {Number(priced.availableValueExcludingTax) > 0 && (
-                                          <>
-                                            {" · "}
+                                    {/* One short line: what is in stock, which GDs it
+                                        came on (folded), and Sell all. The per-GD
+                                        detail opens below the line on demand -- a
+                                        paragraph of GD numbers here buried the row. */}
+                                    {canDerive && (() => {
+                                      const gds = (priced.tiers || []).filter((t) => t.gdNumber);
+                                      const uomLabel = priced.uom || r.uom || "";
+                                      return (
+                                        <div style={styles.stockChipRow}>
+                                          <span style={styles.stockPill}>
+                                            {Number(priced.availableQuantity).toLocaleString(undefined, { maximumFractionDigits: 0 })} {uomLabel} in stock
+                                          </span>
+                                          {gds.length > 0 && (
                                             <button
                                               type="button"
                                               style={styles.stockChipBtn}
-                                              title={`Sell everything on hand: ${Number(priced.availableQuantity).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${priced.uom || r.uom || ""} for ${Number(priced.availableValueExcludingTax).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                              aria-expanded={!!gdOpen[r.localId]}
+                                              title="Show which GDs this line takes stock from"
+                                              onClick={() => setGdOpen((o) => ({ ...o, [r.localId]: !o[r.localId] }))}
+                                            >
+                                              {gds.length} GD{gds.length === 1 ? "" : "s"}
+                                              {gdOpen[r.localId]
+                                                ? <MdExpandLess size={14} style={{ verticalAlign: "-3px" }} />
+                                                : <MdExpandMore size={14} style={{ verticalAlign: "-3px" }} />}
+                                            </button>
+                                          )}
+                                          {Number(priced.availableValueExcludingTax) > 0 && (
+                                            <button
+                                              type="button"
+                                              style={styles.stockChipBtn}
+                                              title={`Sell everything on hand: ${Number(priced.availableQuantity).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${uomLabel} for ${Number(priced.availableValueExcludingTax).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                                               onClick={() => billAllOnHand(r.localId)}
                                             >
-                                              Sell all ({Number(priced.availableValueExcludingTax).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                                              Sell all
                                             </button>
-                                          </>
-                                        )}
-                                      </div>
-                                    )}
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
                                     {noStock && (
                                       <div style={styles.stockChipNone}>
                                         No stock — type the quantity and rate
@@ -2136,9 +2151,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                           <div style={{ fontSize: "0.7rem", color: overStock ? colors.warn : colors.textSecondary, marginTop: 3, lineHeight: 1.3 }}>
                                             {overStock
                                               ? `only ${Number(price.availableValueExcludingTax).toLocaleString(undefined, { maximumFractionDigits: 0 })} in stock`
-                                              : rateMoved
-                                                ? `${q} x ${p.toLocaleString(undefined, { maximumFractionDigits: 6 })}`
-                                                : `${Number(price.unitCost).toLocaleString()} each`}
+                                              : price.tiers?.length
+                                                ? "at cost, oldest claimed GD first"
+                                                : rateMoved
+                                                  ? `${q} x ${p.toLocaleString(undefined, { maximumFractionDigits: 6 })}`
+                                                  : `${Number(price.unitCost).toLocaleString()} each`}
                                           </div>
                                         )}
                                       </td>
@@ -2234,6 +2251,51 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                     </button>
                                   </td>
                                 </tr>
+                                {canDerive && gdOpen[r.localId] && (() => {
+                                  const takes = fifoTierTakes(priced, q, r.lineTotal);
+                                  if (!takes) return null;
+                                  const n2 = (v) => Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                                  const nq = (v) => Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
+                                  const span = 7 + (glOn ? 1 : 0) + (billsMode ? 0 : 1) + (showMRP ? 2 : 0) + (showSRO ? 2 : 0);
+                                  return (
+                                    <tr style={styles.unifiedRow}>
+                                      <td colSpan={span} style={{ ...styles.unifiedTd, paddingTop: 0 }}>
+                                        <div style={styles.gdDrawer}>
+                                          <div style={styles.gdDrawerHead}>
+                                            {q > 0 ? "This line takes stock from these GDs, in this order" : "The next sale takes stock from these GDs, in this order"}
+                                          </div>
+                                          <div style={{ overflowX: "auto" }}>
+                                            <table style={styles.gdTable}>
+                                              <thead>
+                                                <tr>
+                                                  <th style={styles.gdTh}>GD</th>
+                                                  <th style={styles.gdTh}>Claimed</th>
+                                                  <th style={{ ...styles.gdTh, textAlign: "right" }}>In stock</th>
+                                                  <th style={{ ...styles.gdTh, textAlign: "right" }}>Cost each</th>
+                                                  {q > 0 && <th style={{ ...styles.gdTh, textAlign: "right" }}>This line takes</th>}
+                                                  {q > 0 && <th style={{ ...styles.gdTh, textAlign: "right" }}>Value</th>}
+                                                </tr>
+                                              </thead>
+                                              <tbody>
+                                                {takes.map((t, k) => (
+                                                  <tr key={k} style={q > 0 && !t.take ? { color: colors.textSecondary } : undefined}>
+                                                    <td style={styles.gdTd}>{t.gdNumber || "Other stock"}</td>
+                                                    <td style={styles.gdTd}>{t.claimed ? "Yes" : "No"}</td>
+                                                    <td style={{ ...styles.gdTd, textAlign: "right" }}>{nq(t.quantity)}</td>
+                                                    <td style={{ ...styles.gdTd, textAlign: "right" }}>{n2(t.unitCost)}</td>
+                                                    {q > 0 && <td style={{ ...styles.gdTd, textAlign: "right" }}>{t.take ? nq(t.take) : "-"}</td>}
+                                                    {q > 0 && <td style={{ ...styles.gdTd, textAlign: "right" }}>{t.take ? n2(t.takeValue) : "-"}</td>}
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })()}
+                                </Fragment>
                               );
                             })}
                           </tbody>
@@ -2450,6 +2512,23 @@ const styles = {
     marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: colors.tealDark,
     fontVariantNumeric: "tabular-nums",
   },
+  stockChipRow: {
+    marginTop: 4, display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.15rem 0.6rem",
+    fontSize: "0.72rem", lineHeight: 1.3,
+  },
+  stockPill: {
+    background: colors.tealSoft, color: colors.tealDark, borderRadius: 6,
+    padding: "1px 7px", fontWeight: 600, fontVariantNumeric: "tabular-nums",
+  },
+  // The GD breakdown, opened from the stock line under the item.
+  gdDrawer: {
+    border: `1px solid ${colors.inputBorder}`, borderRadius: 8, background: colors.surface,
+    padding: "0.45rem 0.7rem",
+  },
+  gdDrawerHead: { fontSize: "0.74rem", color: colors.textSecondary, marginBottom: 4 },
+  gdTable: { width: "100%", borderCollapse: "collapse", fontSize: "0.76rem", fontVariantNumeric: "tabular-nums" },
+  gdTh: { textAlign: "left", fontWeight: 600, color: colors.textSecondary, padding: "3px 8px", borderBottom: `1px solid ${colors.inputBorder}`, whiteSpace: "nowrap" },
+  gdTd: { padding: "3px 8px", borderBottom: `1px solid ${colors.inputBorder}`, whiteSpace: "nowrap" },
   stockChipNone: {
     marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: colors.cautionInk,
     fontWeight: 600,

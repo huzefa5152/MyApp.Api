@@ -9,7 +9,7 @@
  */
 import assert from "node:assert";
 
-const { fifoQuantityForAmount, fifoTierText } = await import(
+const { fifoQuantityForAmount, fifoTierText, fifoTierTakes } = await import(
   new URL("../myapp-frontend/src/utils/fifoPricing.js", import.meta.url).href
 );
 
@@ -54,6 +54,22 @@ check("hint caps the list", () => {
   const many = { tiers: Array.from({ length: 5 }, (_, i) => ({ gdNumber: `G${i}`, quantity: 1, unitCost: 1 })) };
   assert.ok(fifoTierText(many).endsWith("then 2 more"), fifoTierText(many));
 });
+
+check("tier takes: a sale crossing into the second GD", () => {
+  const t = fifoTierTakes(price, 15);
+  assert.deepStrictEqual(t.map((x) => x.take), [10, 5]);
+  near(t[1].takeValue, 250);
+});
+check("tier takes: beyond the stock the last GD takes the rest", () =>
+  assert.deepStrictEqual(fifoTierTakes(price, 32).map((x) => x.take), [10, 22]));
+check("tier takes: no quantity yet -> every GD takes 0", () =>
+  assert.deepStrictEqual(fifoTierTakes(price, "").map((x) => x.take), [0, 0]));
+check("tier takes: values add up to the line amount", () => {
+  const t = fifoTierTakes(price, 32, 2100);
+  near(t[0].takeValue + t[1].takeValue, 2100);
+  near(t[0].takeValue, 1000);
+});
+check("tier takes: no tiers -> null", () => assert.strictEqual(fifoTierTakes({}, 5), null));
 
 for (const f of failures) console.log(`FAIL  ${f}`);
 console.log(`${pass}/${pass + failures.length} checks passed`);
