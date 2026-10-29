@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import BillTaxTreatmentField, { isOutsideFbr, taxLabel, outsideFbrRate } from "./BillTaxTreatmentField";
 import { toLocalYmd, todayYmd } from "../utils/dateInput";
 import { MdInfo, MdAdd, MdCheckCircle, MdWarning, MdInventory2, MdLightbulb, MdRefresh, MdError, MdExpandMore, MdExpandLess, MdAutoAwesome, MdDelete } from "react-icons/md";
 import { getInvoiceById, updateInvoice, updateInvoiceItemTypes, updateInvoiceItemTypesAndQty, setPrintGrouping, getStockPricing } from "../api/invoiceApi";
@@ -170,6 +171,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   // Default grouped — mirrors the FBR submission granularity.
   const [groupedView, setGroupedView] = useState(true);
   const [gstRate, setGstRate] = useState(18);
+  // SRB / no-tax bill: a sale outside FBR (company switch AllowNonFbrBills).
+  const [taxTreatment, setTaxTreatment] = useState("FBR");
+  const outsideFbr = isOutsideFbr(taxTreatment);
   // Withholding tax (income tax that sits ON TOP of GST — never changes
   // subtotal / GST / grand total). "none" | "rate" (a %) | "amount" (fixed PKR).
   // Prefilled from the loaded bill below.
@@ -289,6 +293,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
         setClientId(data.clientId ? String(data.clientId) : "");
         setDivisionId(data.divisionId ? String(data.divisionId) : "");
         setGstRate(data.gstRate ?? 18);
+        setTaxTreatment(data.taxTreatment || "FBR");
         // Print grouping: the importer prints one document, the Invoice
         // (TaxInvoice template), so the toggle reads and writes its flag.
         // null → individual lines.
@@ -392,8 +397,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   // The chosen scenario record drives both the item-type filter and the
   // bill-level GST rate when it differs from the canonical scenario rate.
   const chosenScenario = useMemo(
-    () => scenarios.find((s) => s.code === scenarioCode) || null,
-    [scenarios, scenarioCode],
+    () => outsideFbr ? null : scenarios.find((s) => s.code === scenarioCode) || null,
+    [scenarios, scenarioCode, outsideFbr],
   );
 
   // ── The rate the goods came in at ─────────────────────────────────────────
@@ -414,7 +419,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   const widenForRate = chosenScenario
     && (chosenScenario.saleType || "").trim().toLowerCase() !== DEFAULT_SALE_TYPE.toLowerCase()
     ? Number(chosenScenario.defaultRate) : null;
-  const rateCheck = useImportedTaxRates(invoice?.companyId, pickedItemIds, gstRate, { widenForRate });
+  const rateCheck = useImportedTaxRates(invoice?.companyId, outsideFbr ? [] : pickedItemIds, gstRate, { widenForRate });
   const rateSplitNeeded = rateCheck.billRates.length > 1;
   // On this form the GST rate is its own field and does not follow the
   // scenario, so the one-click fix sets both.
@@ -1572,19 +1577,20 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
         // operator's scenario choice — same convention as the create form
         // so FbrService's auto-detect routes the right scenarioId on submit.
         const cleaned = (paymentTerms || "").replace(/^\s*\[\s*SN\d{3}\s*\]\s*/i, "").trim();
-        const ptToSave = scenarioCode
+        const ptToSave = scenarioCode && !outsideFbr
           ? `[${scenarioCode}] ${cleaned || chosenScenario?.description || ""}`.trim()
           : (cleaned || null);
 
         await updateInvoice(invoiceId, {
           date: billDate || null,
           gstRate: parseFloat(gstRate),
+          taxTreatment,
           // Withholding tax: rate-mode ships the %, fixed-amount mode ships null
           // rate + the typed amount. Backend recomputes/clamps the amount.
           withholdingTaxRate: whtMode === "rate" ? (parseFloat(whtRate) || 0) : null,
           withholdingTaxAmount: whtResolved,
           // 0 clears the charge, which the server distinguishes from absent.
-          furtherTaxRate: parseFloat(furtherTaxRate) > 0 ? parseFloat(furtherTaxRate) : 0,
+          furtherTaxRate: !outsideFbr && parseFloat(furtherTaxRate) > 0 ? parseFloat(furtherTaxRate) : 0,
           // The server owns the rate and the amount (Helpers/AdvanceTaxRates);
           // the form only states the section and the filer status. A null
           // section is "None" and clears it.
@@ -1649,7 +1655,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   // The shared bill layout (Components/bill, utils/billEntry), in the same
   // order as the create screens. The totals keep THIS screen's meaning:
   // balance due is the grand total less withholding plus advance income tax.
-  const hasScenarioStep = fbrEnabled && scenarios.length > 0;
+  const hasScenarioStep = fbrEnabled && scenarios.length > 0 && !outsideFbr;
   const stepNo = (k) => k - (hasScenarioStep ? 0 : 1);
   const money = (n) => `Rs. ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const totalsOff = showTotalsGuard && !totalsMatch;
@@ -1661,7 +1667,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
       note: "3rd Schedule goods: sales tax is charged on this",
     }] : []),
     {
-      key: "gst", label: `GST (${gstRate}%)`, amount: gstAmount,
+      key: "gst", label: `${taxLabel(taxTreatment)} (${gstRate}%)`, amount: gstAmount,
       note: onRetail
         ? `${gstRate}% of the retail value${chosenScenario ? `, scenario ${chosenScenario.code}` : ""}`
         : chosenScenario ? `Rate of scenario ${chosenScenario.code}` : "Rate charged on this bill",
@@ -1850,7 +1856,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                     can pick from. The narrow PATCH path doesn't persist
                     paymentTerms, so the [SNxxx] tag only updates on the
                     full-edit save path. */}
-                {fbrEnabled && scenarios.length > 0 && (
+                {fbrEnabled && scenarios.length > 0 && !outsideFbr && (
                   <BillStep
                     id={BILL_ANCHORS.scenario}
                     n={1}
@@ -1915,6 +1921,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                     </>
                   )}
                 >
+                <BillTaxTreatmentField enabled={!!invoice?.allowNonFbrBills} value={taxTreatment} rate={gstRate} onRateChange={setGstRate}
+                  disabled={readOnly || lockNonItemType}
+                  onChange={(value) => { setTaxTreatment(value); setGstRate(isOutsideFbr(value) ? outsideFbrRate(value) : 18); if (isOutsideFbr(value)) setFurtherTaxRate(""); }} />
                 <div style={styles.fieldGrid}>
                   <div style={{ minWidth: 180 }}>
                     <BillNumberField
@@ -1991,7 +2000,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                       readOnly={lockNonItemType}
                     />
                   </div>
-                  <div style={{ flex: 1, minWidth: 120 }}>
+                  <div style={{ flex: 1, minWidth: 120, display: outsideFbr ? "none" : undefined }}>
                     <label style={styles.label}>GST Rate (%)</label>
                     <input
                       type="number"
@@ -2018,7 +2027,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                       <option value="amount">Fixed amount</option>
                     </select>
                   </div>
-                  <div style={{ flex: 1, minWidth: 120 }}>
+                  <div style={{ flex: 1, minWidth: 120, display: outsideFbr ? "none" : undefined }}>
                     <label style={styles.label}>Further Tax (%)</label>
                     <input
                       type="number"

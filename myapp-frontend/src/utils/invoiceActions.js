@@ -51,7 +51,10 @@ export function buildInvoiceActions(inv, ctx) {
     add({ key: "excel", label: "Excel", group: "primary", title: `Download this ${doc} as an Excel sheet.` });
 
   // ── FBR: only the steps that apply to the row's state ─────────────────
-  const fbrOpen = ctx.fbrEnabled && ctx.hasFbrToken && !filed && !isInFlight(inv) && live && !ctx.futureDated;
+  // An SRB / no-tax bill is a sale outside FBR: no FBR step applies to it.
+  const outsideFbr = inv.taxTreatment === "SRB" || inv.taxTreatment === "NoTax";
+  const fbrFlow = ctx.fbrEnabled && !outsideFbr;
+  const fbrOpen = fbrFlow && ctx.hasFbrToken && !filed && !isInFlight(inv) && live && !ctx.futureDated;
   if (fbrOpen && p.canFbrValidate)
     add({ key: "validate", label: ctx.validated ? "Validated" : "Validate", group: "fbr",
       primary: !ctx.validated, disabled: !inv.fbrReady,
@@ -64,15 +67,15 @@ export function buildInvoiceActions(inv, ctx) {
       title: !ctx.validated
         ? "Validate first, then submit."
         : "Send this invoice to FBR. You get an IRN; after this the invoice is locked." });
-  if (p.canFbrPreview && ctx.fbrEnabled)
+  if (p.canFbrPreview && fbrFlow)
     add({ key: "preview", label: "FBR preview", group: "fbr",
       title: "See exactly what is (or was) sent to FBR. Nothing is sent." });
-  if (p.canFbrExclude && ctx.fbrEnabled && !filed && live)
+  if (p.canFbrExclude && fbrFlow && !filed && live)
     add({ key: "exclude", label: inv.isFbrExcluded ? "Include in FBR" : "Keep out of FBR", group: "fbr",
       title: inv.isFbrExcluded
         ? "Put this invoice back into Validate all / Submit all."
         : "Leave this invoice out of Validate all / Submit all. Its own Validate / Submit still work." });
-  if (p.canFbrReset && ctx.fbrEnabled && !filed && !isInFlight(inv) && live)
+  if (p.canFbrReset && fbrFlow && !filed && !isInFlight(inv) && live)
     add({ key: "recordManual", label: "Filed on FBR portal", group: "fbr",
       title: "Record that this invoice was already filed by hand on FBR's portal. It is never sent from here." });
   if (p.canFbrReset && isInFlight(inv))
@@ -137,6 +140,8 @@ export function fbrChip(inv, { fbrEnabled = true, validated = false, futureDated
   if (inv.fbrStatus === "Submitting") return { label: "Sending to FBR…", tone: "info", title: "Wait and refresh. Do not submit again." };
   if (inv.fbrStatus === "Uncertain") return { label: "Outcome unknown", tone: "caution",
     title: "The submission timed out. An administrator must check FBR and reset it." };
+  if (inv.taxTreatment === "SRB" || inv.taxTreatment === "NoTax")
+    return { label: `${inv.taxTreatment === "NoTax" ? "No tax" : "SRB"} · Outside FBR`, tone: "info", title: "A sale outside FBR. It is never sent to FBR." };
   if (!fbrEnabled) return null;
   if (inv.isFbrExcluded) return { label: "Kept out of FBR", tone: "neutral", title: "Skipped by Validate all / Submit all." };
   if (inv.fbrStatus === "Failed") return { label: "FBR rejected", tone: "danger", title: inv.fbrErrorMessage || "FBR rejected this invoice." };

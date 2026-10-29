@@ -112,6 +112,7 @@ namespace MyApp.Api.Services.Implementations
                 var items = inv.Items.OrderBy(i => i.Id).ToList();
                 challansByInvoice.TryGetValue(inv.Id, out var challanNumbers);
                 var status = inv.FbrCancelledAt.HasValue ? "FBR cancelled"
+                    : BillTaxTreatment.IsOutsideFbr(inv.TaxTreatment) ? inv.TaxTreatment + " · Outside FBR"
                     : inv.IsFbrExcluded ? "Excluded from FBR"
                     : string.IsNullOrWhiteSpace(inv.FbrStatus) ? "Not submitted" : inv.FbrStatus!;
                 var fbrNumber = status == "Submitted" ? inv.FbrIRN ?? inv.FbrInvoiceNumber ?? "" : "";
@@ -563,7 +564,8 @@ namespace MyApp.Api.Services.Implementations
                          && i.Date >= from && i.Date < toExclusive
                          && i.NoteKind == 0
                          && !i.IsCancelled
-                         && !i.IsDemo)
+                         && !i.IsDemo
+                         && i.TaxTreatment == "FBR") // the FBR tax sheet: SRB / no-tax bills are outside it
                 .OrderBy(i => i.Date).ThenBy(i => i.InvoiceNumber)
                 .ToListAsync();
 

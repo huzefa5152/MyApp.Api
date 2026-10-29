@@ -84,6 +84,9 @@ namespace MyApp.Api.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
+            // SRB / non-FBR billing is switched on by the seed admin only.
+            if (dto.AllowNonFbrBills && CurrentUserId != _configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1)) return Forbid();
+
             try
             {
                 var createdCompany = await _companyService.CreateAsync(dto);
@@ -171,6 +174,8 @@ namespace MyApp.Api.Controllers
             // change.
             var existing = await _companyService.GetByIdAsync(id);
             if (existing == null) return NotFound();
+            if (dto.AllowNonFbrBills.HasValue && dto.AllowNonFbrBills.Value != existing.AllowNonFbrBills
+                && CurrentUserId != _configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1)) return Forbid();
 
             // Tenant-isolation flip — only the dedicated perm OR seed admin.
             if (dto.IsTenantIsolated != existing.IsTenantIsolated

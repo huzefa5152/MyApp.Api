@@ -113,7 +113,8 @@ namespace MyApp.Api.Services.Implementations
             // Output tax, month by month: a credit note takes tax back, a debit
             // note adds it; void, demo and FBR-cancelled bills are not supplies.
             var sales = await _db.Invoices.AsNoTracking()
-                .Where(i => i.CompanyId == companyId && !i.IsCancelled && !i.IsDemo && i.FbrCancelledAt == null && i.Date < end)
+                .Where(i => i.CompanyId == companyId && !i.IsCancelled && !i.IsDemo && i.FbrCancelledAt == null && i.Date < end
+                         && i.TaxTreatment == "FBR") // SRB / no-tax bills are outside FBR's return
                 .GroupBy(i => new { i.Date.Year, i.Date.Month })
                 .Select(g => new
                 {

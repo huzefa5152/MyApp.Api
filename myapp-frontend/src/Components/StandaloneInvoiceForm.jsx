@@ -26,6 +26,7 @@ import BillTotals from "./bill/BillTotals";
 import { BILL_ANCHORS, lineAnchor, rateBlockText, billChecklist, billTotalsRows, salesTaxBase, isThirdScheduleSaleType } from "../utils/billEntry";
 import useImportedTaxRates from "../hooks/useImportedTaxRates";
 import useScenarioFollowsGoods from "../hooks/useScenarioFollowsGoods";
+import BillTaxTreatmentField, { isOutsideFbr, taxLabel, outsideFbrRate, outsideFbrScenario } from "./BillTaxTreatmentField";
 import { itemTypesForBook, BOOK_BILL } from "../utils/itemTypeBooks";
 import { matchesScenarioSaleType, DEFAULT_SALE_TYPE } from "../utils/saleType";
 import BulkItemTypeBar from "./BulkItemTypeBar";
@@ -145,7 +146,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // non-FBR bill: no scenario step, editable GST, no scenario saved.
   const fbrEnabled = company?.fbrEnabled !== false;
   // "Already filed by hand on FBR's portal?" -- saved and recorded in one request.
-  const showFiling = canRecordManual && fbrEnabled;
+  // SRB / no-tax bill: a sale outside FBR (company switch AllowNonFbrBills).
+  const [taxTreatment, setTaxTreatment] = useState("FBR");
+  const outsideFbr = isOutsideFbr(taxTreatment);
+  const showFiling = canRecordManual && fbrEnabled && !outsideFbr;
   const [manualFiling, setManualFiling] = useState(emptyManualFiling);
   // Lines whose GD breakdown is open (localId -> true). Closed by default.
   const [gdOpen, setGdOpen] = useState({});
@@ -440,18 +444,23 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   }, [enrichedScenarios, scenarioCode]);
 
   const chosenScenario = useMemo(
-    () => enrichedScenarios.find((s) => s.code === scenarioCode) || null,
-    [enrichedScenarios, scenarioCode],
+    () => outsideFbr ? outsideFbrScenario(taxTreatment) : enrichedScenarios.find((s) => s.code === scenarioCode) || null,
+    [enrichedScenarios, scenarioCode, outsideFbr, taxTreatment],
   );
+  const changeTaxTreatment = (value) => {
+    setTaxTreatment(value);
+    if (isOutsideFbr(value)) { setGstRate(outsideFbrRate(value)); setFurtherTaxRate(""); }
+    else setGstRate(enrichedScenarios.find((s) => s.code === scenarioCode)?.defaultRate ?? 18);
+  };
 
   // GST rate auto-syncs to scenario's canonical rate when one is picked.
   // The input itself is locked when a scenario is active — operators
   // override only by switching scenario.
   useEffect(() => {
-    if (chosenScenario && chosenScenario.defaultRate != null) {
+    if (!outsideFbr && chosenScenario && chosenScenario.defaultRate != null) {
       setGstRate(chosenScenario.defaultRate);
     }
-  }, [chosenScenario]);
+  }, [chosenScenario, outsideFbr]);
 
   // ── The rate the goods came in at ─────────────────────────────────────────
   // The company's own GD / opening stock say what each item was imported at;
@@ -468,10 +477,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // Under a non-standard scenario the picker keeps only items whose sale type IS
   // that scenario's; the goods imported at its rate carry none, so they are
   // fetched and let back in.
-  const widenForRate = chosenScenario
+  const widenForRate = !outsideFbr && chosenScenario
     && (chosenScenario.saleType || "").trim().toLowerCase() !== DEFAULT_SALE_TYPE.toLowerCase()
     ? Number(chosenScenario.defaultRate) : null;
-  const rateCheck = useImportedTaxRates(companyId, pickedItemIds, gstRate, { widenForRate });
+  const rateCheck = useImportedTaxRates(companyId, outsideFbr ? [] : pickedItemIds, gstRate, { widenForRate });
 
   // Buyer pool filter. The currently-selected buyer always stays visible
   // even when it doesn't match the scenario's buyer kind (e.g. seeded by
@@ -548,8 +557,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     const client = clients.find((c) => String(c.id) === String(selectedClientId));
     if (!client) return;
     const registered = (client.registrationType || "").toLowerCase() === "registered";
-    setFurtherTaxRate(registered ? "" : "4");
-  }, [selectedClientId, clients]);
+    setFurtherTaxRate(registered || outsideFbr ? "" : "4");
+  }, [selectedClientId, clients, outsideFbr]);
 
   // Prefill the WHT rate from the company default (rate-mode) when one is
   // configured. Runs once when the default becomes available; the primitive
@@ -782,7 +791,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     // carries no sale type at all, so applying both filters leaves the picker
     // empty and the operator with nothing to choose.
     if (overlayOn) return forBook;
-    if (!chosenScenario) return forBook;
+    if (!chosenScenario || outsideFbr) return forBook;
     // An item type with NO sale type counts as the standard-rate default
     // (utils/saleType.js) -- otherwise the bill's own item vanished from
     // this list and the picker rendered blank on edit.
@@ -796,7 +805,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         || onBill.has(Number(t.id))
         || rateCheck.importedAtRate.has(Number(t.id)),
     );
-  }, [itemTypes, chosenScenario, overlayOn, pickedItemIds, rateCheck.importedAtRate]);
+  }, [itemTypes, chosenScenario, overlayOn, pickedItemIds, rateCheck.importedAtRate, outsideFbr]);
 
   // One click to the scenario whose rate the goods came in at -- offered only
   // when every item with a record agrees on one rate AND exactly one scenario
@@ -1247,6 +1256,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         divisionId: divisionId ? parseInt(divisionId) : null,
         clientId: parseInt(selectedClientId),
         gstRate: parseFloat(gstRate),
+        taxTreatment,
         // null = Auto (server allocates the next number in sequence).
         invoiceNumber: billNumberPayload(billNumberMode, billNumber),
         // Withholding tax: rate-mode ships the %, fixed-amount mode ships null
@@ -1255,11 +1265,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         withholdingTaxAmount: whtResolved,
         // The server recomputes the amount from this rate; it never trusts a
         // client-side money figure.
-        furtherTaxRate: parseFloat(furtherTaxRate) > 0 ? parseFloat(furtherTaxRate) : null,
+        furtherTaxRate: !outsideFbr && parseFloat(furtherTaxRate) > 0 ? parseFloat(furtherTaxRate) : null,
         advanceTaxSection: advTaxOption?.section ?? null,
         advanceTaxFilerActive: advTaxOption ? advTaxOption.filerActive : null,
         paymentTerms: paymentTerms || null,
-        scenarioId: scenarioCode || null,
+        scenarioId: outsideFbr ? null : scenarioCode || null,
         // Sent only when the rates disagree; the server ignores it otherwise.
         taxRateOverrideReason: rateCheck.enforced.length > 0 ? rateReason.trim() || null : null,
         documentType: documentType || null,
@@ -1379,9 +1389,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     withholdingAmount: whtResolved, withholdingRate: whtMode === "rate" ? whtRate : null, balanceDue,
     advanceTaxAmount: advTaxResolved, advanceTaxSection: advTaxOption?.section,
     advanceTaxRate: advTaxOption?.rate, totalWithAdvance: totalWithAdvTax,
-  });
+  }).map((r) => (r.key === "gst" && outsideFbr ? { ...r, label: `${taxLabel(taxTreatment)} (${gstRate}%)`, note: "Not sent to FBR" } : r));
   // Without FBR there is no scenario step, so every later step moves up one.
-  const stepNo = (k) => k - (fbrEnabled ? 0 : 1);
+  const stepNo = (k) => k - (fbrEnabled && !outsideFbr ? 0 : 1);
   const money = (n) => `Rs. ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
@@ -1435,7 +1445,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                     of the auto-defaulted scenario and can expand to change
                     it. Auto-collapses again when a card is picked so the
                     flow keeps moving down to Buyer / Bill Details. */}
-                {fbrEnabled && (
+                <BillTaxTreatmentField enabled={!!company?.allowNonFbrBills} value={taxTreatment} onChange={changeTaxTreatment} rate={gstRate} onRateChange={setGstRate} disabled={saving} />
+                {fbrEnabled && !outsideFbr && (
                   <BillStep
                     id={BILL_ANCHORS.scenario}
                     n={1}
@@ -1546,7 +1557,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       status={selectedBuyer ? "done" : "todo"}
                       open={buyerOpen}
                       onToggle={() => setBuyerOpen((v) => !v)}
-                      help={fbrEnabled
+                      help={outsideFbr ? "Pick the customer. Outside FBR every buyer is listed and no further tax is charged."
+                        : fbrEnabled
                         ? "Pick the customer. Only buyers that fit the scenario are listed: SN001 is for registered buyers, SN002 for unregistered ones. An unregistered buyer is also charged 4% further tax."
                         : "Pick the customer. An unregistered buyer is charged 4% further tax."}
                       summary={selectedBuyer ? (
@@ -1662,7 +1674,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                           <span>·</span>
                           <span>{invoiceDate || "—"}</span>
                           <span>·</span>
-                          <span>{gstRate}% GST</span>
+                          <span>{gstRate}% {outsideFbr ? taxLabel(taxTreatment) : "GST"}</span>
                           <span>·</span>
                           <span>{documentType === 4 ? "Sale Invoice" : documentType === 9 ? "Debit Note" : documentType === 10 ? "Credit Note" : "—"}</span>
                           {paymentMode && <><span>·</span><span>{paymentMode}</span></>}
@@ -1734,7 +1746,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                         ? "Add each item the customer ordered, with the quantity and price agreed."
                         : "Find each item by name or HS code. Type the Line Total and the quantity and rate are worked out from stock at cost; with no stock on hand, type the quantity and rate. A line marked in red came in at a different sales tax rate."}
                     >
-                    {chosenScenario && (
+                    {chosenScenario && !outsideFbr && (
                       <div style={styles.lockedSaleType}>
                         <MdLock size={14} color={colors.teal} />
                         <span><b>Sale Type locked:</b> {chosenScenario.saleType}</span>
@@ -2333,10 +2345,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       title="Taxes & Total"
                       status="done"
                       summary={<span>Grand total <strong>{money(grandTotal)}</strong></span>}
-                      help="GST follows the scenario. Further tax is added for an unregistered buyer. Withholding is what the buyer deducts from your payment; advance income tax (236G / 236H) is collected on top of the bill."
+                      help={outsideFbr ? "Outside FBR: the tax rate is set at the top of the form, and no further tax is charged. Withholding and advance income tax (236G / 236H) work as on any invoice." : "GST follows the scenario. Further tax is added for an unregistered buyer. Withholding is what the buyer deducts from your payment; advance income tax (236G / 236H) is collected on top of the bill."}
                     >
                       <div style={styles.taxGrid}>
-                            <div style={{ flex: 1, minWidth: 100 }}>
+                            <div style={{ flex: 1, minWidth: 100, display: outsideFbr ? "none" : undefined }}>
                               <label style={{ ...styles.label, whiteSpace: "nowrap" }}>
                                 GST Rate (%) {chosenScenario && <span style={styles.lockedTag} title={`Locked by ${chosenScenario.code}`}><MdLock size={10} /> locked</span>}
                               </label>
@@ -2371,7 +2383,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                 ))}
                               </select>
                             </div>
-                            <div style={{ flex: 1, minWidth: 120 }}>
+                            <div style={{ flex: 1, minWidth: 120, display: outsideFbr ? "none" : undefined }}>
                               <label style={styles.label}>Further Tax (%)</label>
                               <input
                                 type="number" min={0} step={0.01}

@@ -86,6 +86,7 @@ namespace MyApp.Api.Services.Implementations
             FbrDefaultPaymentModeUnregistered = c.FbrDefaultPaymentModeUnregistered,
             DefaultSalesAccountId = c.DefaultSalesAccountId,
             DefaultPurchaseAccountId = c.DefaultPurchaseAccountId,
+            AllowNonFbrBills = c.AllowNonFbrBills,
             InventoryTrackingEnabled = c.InventoryTrackingEnabled,
             DefaultWithholdingTaxRate = c.DefaultWithholdingTaxRate,
             StockGuardHardBlock = c.StockGuardHardBlock,
@@ -191,6 +192,7 @@ namespace MyApp.Api.Services.Implementations
                 FbrDefaultUOM = dto.FbrDefaultUOM,
                 FbrDefaultPaymentModeRegistered = dto.FbrDefaultPaymentModeRegistered,
                 FbrDefaultPaymentModeUnregistered = dto.FbrDefaultPaymentModeUnregistered,
+                AllowNonFbrBills = dto.AllowNonFbrBills,
                 InventoryTrackingEnabled = dto.InventoryTrackingEnabled,
                 DefaultWithholdingTaxRate = dto.DefaultWithholdingTaxRate,
                 InventoryFlowVersion = dto.InventoryFlowVersion,
@@ -305,6 +307,7 @@ namespace MyApp.Api.Services.Implementations
             // Inventory module — flag is freely toggleable; starting numbers
             // only apply if no purchase docs exist yet (same rule as the
             // sales-side starting numbers).
+            if (dto.AllowNonFbrBills.HasValue) company.AllowNonFbrBills = dto.AllowNonFbrBills.Value;
             company.InventoryTrackingEnabled = dto.InventoryTrackingEnabled;
             company.DefaultWithholdingTaxRate = dto.DefaultWithholdingTaxRate;
             company.StockGuardHardBlock = dto.StockGuardHardBlock;

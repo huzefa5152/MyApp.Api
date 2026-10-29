@@ -204,5 +204,20 @@ check("voided -> Voided", () => assert.strictEqual(chip({ ...unfiled, isCancelle
 check("FBR off and never filed -> no chip", () => assert.strictEqual(chip(unfiled, { fbrEnabled: false }), null));
 check("FBR off but filed -> still Filed", () => assert.strictEqual(chip(filed, { fbrEnabled: false }), "Filed"));
 
+console.log("\n=== SRB / no-tax bills: outside FBR ===");
+const srb = { ...unfiled, taxTreatment: "SRB", fbrReady: false };
+check("SRB -> SRB · Outside FBR chip", () => assert.strictEqual(chip(srb), "SRB · Outside FBR"));
+check("no tax -> No tax · Outside FBR chip, even with FBR off", () =>
+  assert.strictEqual(chip({ ...srb, taxTreatment: "NoTax" }, { fbrEnabled: false }), "No tax · Outside FBR"));
+check("SRB bill offers no FBR action", () => {
+  const k = keys(srb, ctx());
+  for (const f of ["validate", "submit", "preview", "exclude", "recordManual"]) assert.ok(!k.includes(f), f);
+});
+check("SRB bill keeps Edit, Print and Receipt", () => {
+  const k = keys(srb, ctx());
+  for (const f of ["edit", "print", "receipt"]) assert.ok(k.includes(f), f);
+});
+check("an FBR bill still offers Validate", () => assert.ok(keys({ ...unfiled, taxTreatment: "FBR" }, ctx()).includes("validate")));
+
 console.log(`\n${pass}/${pass + failures.length} checks passed`);
 if (failures.length) process.exit(1);

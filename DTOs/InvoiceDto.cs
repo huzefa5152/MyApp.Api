@@ -75,6 +75,8 @@
         public int ClientId { get; set; }
         public string ClientName { get; set; } = "";
         public decimal Subtotal { get; set; }
+        public bool AllowNonFbrBills { get; set; }
+        public string TaxTreatment { get; set; } = "FBR";
         public decimal GSTRate { get; set; }
         public decimal GSTAmount { get; set; }
         public decimal GrandTotal { get; set; }
@@ -385,6 +387,7 @@
         public int CompanyId { get; set; }
         public int? DivisionId { get; set; }
         public int ClientId { get; set; }
+        public string TaxTreatment { get; set; } = "FBR";
         public decimal GSTRate { get; set; }
         public string? PaymentTerms { get; set; }
         /// <summary>FBR document type: 4 = Sale Invoice (default), 9 = Debit Note, 10 = Credit Note.</summary>
@@ -508,6 +511,7 @@
         public int CompanyId { get; set; }
         public int? DivisionId { get; set; }
         public int ClientId { get; set; }
+        public string TaxTreatment { get; set; } = "FBR";
         public decimal GSTRate { get; set; }
         public string? PaymentTerms { get; set; }
         /// <summary>FBR document type: 4 = Sale Invoice (default), 9 = Debit Note, 10 = Credit Note.</summary>
@@ -775,6 +779,8 @@
         /// see <see cref="MyApp.Api.Helpers.PakistanClock"/>.
         /// </summary>
         public DateTime? Date { get; set; }
+        /// <summary>null keeps the bill's saved treatment (FBR / SRB / NoTax).</summary>
+        public string? TaxTreatment { get; set; }
         public decimal GSTRate { get; set; }
         public string? PaymentTerms { get; set; }
         public int? DocumentType { get; set; }

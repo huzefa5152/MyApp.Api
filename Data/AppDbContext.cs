@@ -280,6 +280,7 @@ namespace MyApp.Api.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<Invoice>().Property(i => i.TaxTreatment).HasMaxLength(16).HasDefaultValue("FBR");
             // Hosted MCP: per-agent credentials (hash only), prepared plans, OAuth sign-in
             // rows, per-user access policy and the append-only activity record.
             // Activities carry no foreign keys on purpose.

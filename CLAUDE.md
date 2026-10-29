@@ -2315,6 +2315,7 @@ them can be resolved from FBR.
 | Hosted MCP reads equal the screens, every tool swept against another company, tokens, self service, OAuth | `python scripts/test_mcp_reads.py`; `test_mcp_tenant_sweep.py`; `test_mcp_agent_tokens.py`; `test_mcp_self_service.py`; `test_mcp_oauth.py` (see `docs/MCP_AGENT_ACCESS.md`) | `24/24`; `14/14`; `55/55`; `33/33`; `69/69` |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
+| SRB / non-FBR bills: seed-admin switch, never sent to FBR, stock still moves, imported-rate guard skipped, out of tax sheet / Tax Desk / Payable to FBR | `python scripts/test_importer_non_fbr_bills.py --base <url>` | `30/30 non-FBR bill checks passed` |
 | Shared starter templates: seed-admin-only writes over HTTP and MCP, every rule refuses and saves nothing, hide/show/delete, apply like a code starter, audit with no company | `python scripts/test_shared_starters.py --base <url>` | `62/62 shared starter checks passed` |
 | No production identifiers in tracked files | `python scripts/verify_no_production_identifiers.py` | `no production identifiers in tracked files` |
 

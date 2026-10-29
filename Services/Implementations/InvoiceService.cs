@@ -355,7 +355,9 @@ namespace MyApp.Api.Services.Implementations
             NoteAffectsStock = inv.NoteAffectsStock,
             PrintGroupBillByItemType = inv.PrintGroupBillByItemType,
             PrintGroupTaxInvoiceByItemType = inv.PrintGroupTaxInvoiceByItemType,
-            FbrReady = missing.Count == 0 && !adjustmentStale,
+            AllowNonFbrBills = inv.Company?.AllowNonFbrBills ?? false,
+            TaxTreatment = inv.TaxTreatment,
+            FbrReady = !BillTaxTreatment.IsOutsideFbr(inv.TaxTreatment) && missing.Count == 0 && !adjustmentStale,
             FbrAdjustmentStale = adjustmentStale,
             FbrAdjustedSubtotal = fbrAdjustedSubtotal,
             FbrMissing = missing,
@@ -792,6 +794,14 @@ namespace MyApp.Api.Services.Implementations
         /// <returns>The findings the reason overrode — empty when none.</returns>
         private async Task<List<ImportedTaxRate.Finding>> GuardImportedTaxRatesAsync(Invoice invoice, string? reason)
         {
+            // A bill outside FBR (SRB / no tax) charges the rate the operator
+            // chose; the import rate only governs what is filed with FBR.
+            if (BillTaxTreatment.IsOutsideFbr(invoice.TaxTreatment))
+            {
+                invoice.TaxRateOverrideReason = null;
+                return new List<ImportedTaxRate.Finding>();
+            }
+
             // The EFFECTIVE item, as FbrService files it.
             var lines = invoice.Items
                 .Select(ii => new
@@ -875,6 +885,9 @@ namespace MyApp.Api.Services.Implementations
             if (buyer == null) throw new KeyNotFoundException("Client not found.");
             if (buyer.CompanyId != dto.CompanyId)
                 throw new InvalidOperationException("Client does not belong to this company.");
+            var taxTreatment = BillTaxTreatment.Validate(dto.TaxTreatment, company, dto.GSTRate);
+            if (BillTaxTreatment.IsOutsideFbr(taxTreatment) && dto.FurtherTaxRate.GetValueOrDefault() != 0)
+                throw new InvalidOperationException("Further tax is only available for FBR bills.");
 
             // Future-dated bills are ALLOWED at creation (2026-08-28, operator
             // request): a wholesaler routinely raises a bill ahead of its billing
@@ -1160,6 +1173,7 @@ namespace MyApp.Api.Services.Implementations
                     DivisionId = dto.DivisionId,
                     ClientId = dto.ClientId,
                     Subtotal = subtotal,
+                    TaxTreatment = taxTreatment,
                     GSTRate = dto.GSTRate,
                     GSTAmount = gstAmount,
                     GrandTotal = grandTotal,
@@ -1302,6 +1316,9 @@ namespace MyApp.Api.Services.Implementations
             if (client == null) throw new KeyNotFoundException("Client not found.");
             if (client.CompanyId != dto.CompanyId)
                 throw new InvalidOperationException("Client does not belong to this company.");
+            var taxTreatment = BillTaxTreatment.Validate(dto.TaxTreatment, company, dto.GSTRate);
+            if (BillTaxTreatment.IsOutsideFbr(taxTreatment) && dto.FurtherTaxRate.GetValueOrDefault() != 0)
+                throw new InvalidOperationException("Further tax is only available for FBR bills.");
 
             // Optional Sales Order lineage for a standalone bill: validate it
             // belongs to this company (never trust the DTO), then prefill the
@@ -1533,6 +1550,7 @@ namespace MyApp.Api.Services.Implementations
                     DivisionId = dto.DivisionId,
                     ClientId = dto.ClientId,
                     Subtotal = subtotal,
+                    TaxTreatment = taxTreatment,
                     GSTRate = dto.GSTRate,
                     GSTAmount = gstAmount,
                     GrandTotal = grandTotal,
@@ -1699,6 +1717,10 @@ namespace MyApp.Api.Services.Implementations
         {
             var invoice = await _invoiceRepo.GetByIdAsync(id);
             if (invoice == null) return null;
+            var taxCompany = await _companyRepo.GetByIdAsync(invoice.CompanyId) ?? throw new KeyNotFoundException("Company not found.");
+            var taxTreatment = BillTaxTreatment.Validate(dto.TaxTreatment, taxCompany, dto.GSTRate, invoice.TaxTreatment);
+            if (BillTaxTreatment.IsOutsideFbr(taxTreatment) && dto.FurtherTaxRate.GetValueOrDefault() != 0)
+                throw new InvalidOperationException("Further tax is only available for FBR bills.");
             AssertNotOpeningBalance(invoice);
 
             if (!IsInvoiceEditable(invoice))
@@ -1861,6 +1883,12 @@ namespace MyApp.Api.Services.Implementations
                         : $"{numberingCompany.InvoiceNumberPrefix}{renumbered}";
                 }
 
+                if (invoice.TaxTreatment != taxTreatment)
+                {
+                    invoice.FbrStatus = null;
+                    invoice.FbrErrorMessage = null;
+                }
+                invoice.TaxTreatment = taxTreatment;
                 invoice.GSTRate = dto.GSTRate;
                 // Further tax: null = the caller did not mention it, so the bill
                 // keeps what it had; a value (including 0) sets it. Same
@@ -1868,6 +1896,8 @@ namespace MyApp.Api.Services.Implementations
                 // the items must not silently drop the charge.
                 if (dto.FurtherTaxRate.HasValue)
                     invoice.FurtherTaxRate = dto.FurtherTaxRate.Value > 0m ? dto.FurtherTaxRate : null;
+                // Further tax is FBR sales tax; a bill outside FBR never carries it.
+                if (BillTaxTreatment.IsOutsideFbr(taxTreatment)) invoice.FurtherTaxRate = null;
                 invoice.WithholdingTaxRate = dto.WithholdingTaxRate;
                 invoice.WithholdingTaxAmount = dto.WithholdingTaxAmount;   // reflowed below from rate/amount mode
                 // Advance income tax on an EDIT. Until now the recompute further
@@ -3532,6 +3562,7 @@ namespace MyApp.Api.Services.Implementations
                     DivisionId    = original.DivisionId,
                     ClientId      = original.ClientId,
                     Subtotal      = subtotal,
+                    TaxTreatment  = original.TaxTreatment,
                     GSTRate       = gstRate,
                     GSTAmount     = gstAmount,
                     GrandTotal    = grandTotal,
@@ -3764,6 +3795,7 @@ namespace MyApp.Api.Services.Implementations
                     DivisionId = original.DivisionId,
                     ClientId = original.ClientId,
                     Subtotal = subtotal,
+                    TaxTreatment = original.TaxTreatment,
                     GSTRate = gstRate,
                     GSTAmount = gstAmount,
                     GrandTotal = grandTotal,
@@ -3932,6 +3964,7 @@ namespace MyApp.Api.Services.Implementations
 
             return new PrintBillDto
             {
+                TaxTreatment = inv.TaxTreatment,
                 DivisionId = inv.DivisionId,
                 CompanyBrandName = inv.Company?.BrandName ?? inv.Company?.Name ?? "",
                 CompanyLogoPath = inv.Company?.LogoPath,
@@ -4064,6 +4097,7 @@ namespace MyApp.Api.Services.Implementations
 
             var dto = new PrintTaxInvoiceDto
             {
+                TaxTreatment = inv.TaxTreatment,
                 DivisionId = inv.DivisionId,
                 SupplierName = inv.Company?.BrandName ?? inv.Company?.Name ?? "",
                 SupplierAddress = inv.Company?.FullAddress,

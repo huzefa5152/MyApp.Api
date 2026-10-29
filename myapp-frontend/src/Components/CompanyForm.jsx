@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { createCompany, updateCompany, uploadCompanyLogo, getCompanyById } from "../api/companyApi";
 import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
 import { formStyles, modalSizes } from "../theme";
+import { usePermissions } from "../contexts/PermissionsContext";
 
 const {
     backdrop,
@@ -38,9 +39,11 @@ const TABS = [
 
 export default function CompanyForm({ company, onClose, onSaved }) {
     const [activeTab, setActiveTab] = useState("general");
+    const { isSeedAdmin } = usePermissions();
     const [form, setForm] = useState({
         name: "",
         brandName: "",
+        allowNonFbrBills: false,
         fullAddress: "",
         phone: "",
         ntn: "",
@@ -132,6 +135,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
             setForm({
                 name: freshCompany.name || "",
                 brandName: freshCompany.brandName || "",
+                allowNonFbrBills: !!freshCompany.allowNonFbrBills,
                 fullAddress: freshCompany.fullAddress || "",
                 phone: freshCompany.phone || "",
                 ntn: freshCompany.ntn || "",
@@ -464,6 +468,12 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                     <label style={label}>Brand Name (for print header)</label>
                                     <input type="text" name="brandName" value={form.brandName} onChange={handleChange} style={input} placeholder="e.g. HAKIMI TRADERS" />
                                 </div>
+                                {isSeedAdmin && (
+                                    <label style={{ display: "block", marginBottom: 16 }}>
+                                        <input type="checkbox" checked={!!form.allowNonFbrBills} onChange={e => setForm(prev => ({ ...prev, allowNonFbrBills: e.target.checked }))} /> Allow SRB / non-FBR bills
+                                        <small style={{ display: "block" }}>Off by default. Enables SRB / non-FBR billing.</small>
+                                    </label>
+                                )}
                                 <div style={formGroup}>
                                     <label style={label}>Full Address</label>
                                     <input type="text" name="fullAddress" value={form.fullAddress} onChange={handleChange} style={input} />

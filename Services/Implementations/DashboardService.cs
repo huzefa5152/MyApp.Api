@@ -236,8 +236,9 @@ namespace MyApp.Api.Services.Implementations
             // notes are DocumentType 10 here; the worksheet tests NoteKind == 2
             // for the same documents.)
             var docs = await DashboardSalesFilter.SaleDocs(_context.Invoices.AsNoTracking(), companyId, first, end)
+                // Output tax is FBR's: an SRB / no-tax bill's sales tax is not payable to FBR.
                 .Select(i => new TaxDoc(i.Date.Year, i.Date.Month, i.DocumentType == 10 ? -1m : 1m,
-                    i.GSTAmount, i.FurtherTaxAmount, i.AdvanceTaxAmount, i.AdvanceTaxSection))
+                    i.TaxTreatment == "FBR" ? i.GSTAmount : 0m, i.FurtherTaxAmount, i.AdvanceTaxAmount, i.AdvanceTaxSection))
                 .ToListAsync();
             dto.OutputTax = Round(docs.Sum(d => d.Sign * d.GSTAmount));
             dto.FurtherTax = Round(docs.Sum(d => d.Sign * d.FurtherTaxAmount));
@@ -1445,7 +1446,7 @@ namespace MyApp.Api.Services.Implementations
                 {
                     IQueryable<Invoice> q = key switch
                     {
-                        "output" => docs.Where(i => i.GSTAmount != 0m),
+                        "output" => docs.Where(i => i.TaxTreatment == "FBR" && i.GSTAmount != 0m),
                         "further" => docs.Where(i => i.FurtherTaxAmount != 0m),
                         _ => docs.Where(i => i.AdvanceTaxSection == key && i.AdvanceTaxAmount != 0m),
                     };
@@ -1604,10 +1605,11 @@ namespace MyApp.Api.Services.Implementations
                         && (i.AdvanceTaxSection == null || i.AdvanceTaxSection == ""));
                 case "health-missing-ft":
                     return q.Where(i => i.DocumentType != 9 && i.DocumentType != 10
-                        && i.Client!.RegistrationType == "Unregistered" && i.FurtherTaxAmount == 0m);
+                        && i.Client!.RegistrationType == "Unregistered" && i.FurtherTaxAmount == 0m
+                        && i.TaxTreatment == "FBR"); // further tax is FBR's; SRB bills never carry it
                 case "health-unfiled":
                     var fbr = await _context.Companies.Where(c => c.Id == companyId).Select(c => c.FbrEnabled).FirstOrDefaultAsync();
-                    return fbr ? q.Where(i => !i.FbrFiledManually
+                    return fbr ? q.Where(i => !i.FbrFiledManually && i.TaxTreatment == "FBR"
                         // FbrSubmissionStatus.IsSubmittable inlined (EF cannot translate the call):
                         // Submitting / Uncertain may already be at FBR, so they are NOT "unfiled".
                         && (i.FbrStatus == null || i.FbrStatus == "" || i.FbrStatus == "Failed" || i.FbrStatus == "Validated")) : q.Where(i => false);
@@ -2128,6 +2130,7 @@ namespace MyApp.Api.Services.Implementations
                 // sales — including them would double-count a reversed sale
                 // instead of netting it. Excluded from every sales KPI.
                 .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
+                         && i.TaxTreatment == "FBR"
                          && i.DocumentType != 9 && i.DocumentType != 10);
             // Division-RBAC scope (null = unrestricted); company-level rows
             // (DivisionId == null) stay visible — policy D1.

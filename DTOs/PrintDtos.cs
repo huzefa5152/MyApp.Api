@@ -31,6 +31,8 @@ namespace MyApp.Api.DTOs
     // Data for printing a Bill (Invoice)
     public class PrintBillDto
     {
+        public string TaxTreatment { get; set; } = "FBR";
+        public string TaxLabel => MyApp.Api.Helpers.BillTaxTreatment.Label(TaxTreatment);
         // See PrintChallanDto.DivisionId — drives division-aware Excel export.
         public int? DivisionId { get; set; }
         public string CompanyBrandName { get; set; } = "";
@@ -160,6 +162,8 @@ namespace MyApp.Api.DTOs
     // Data for printing a Sales Tax Invoice
     public class PrintTaxInvoiceDto
     {
+        public string TaxTreatment { get; set; } = "FBR";
+        public string TaxLabel => MyApp.Api.Helpers.BillTaxTreatment.Label(TaxTreatment);
         // See PrintChallanDto.DivisionId — drives division-aware Excel export.
         public int? DivisionId { get; set; }
         // Supplier (company) details

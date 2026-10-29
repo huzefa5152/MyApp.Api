@@ -879,6 +879,11 @@ namespace MyApp.Api.Services.Implementations
             if (invoice.IsCancelled)
                 return Fail("This bill has been cancelled and cannot be sent to FBR.");
 
+            // An SRB / no-tax bill is a sale outside FBR: never previewed,
+            // validated or submitted, whatever path the request came by.
+            if (BillTaxTreatment.IsOutsideFbr(invoice.TaxTreatment))
+                return Fail("This bill is outside FBR and cannot be previewed, validated or submitted to FBR.");
+
             // Audit C-4 (2026-05-08) + double-submit incident (2026-08-05):
             // a network drop AFTER FBR received the submit but BEFORE we got the
             // response, OR two concurrent clicks, would let a second Submit POST
@@ -1730,6 +1735,8 @@ namespace MyApp.Api.Services.Implementations
             var invoice = await _invoiceRepo.GetByIdAsync(invoiceId);
             if (invoice == null)
                 return new FbrResetResult { Success = false, Message = "Invoice not found." };
+            if (BillTaxTreatment.IsOutsideFbr(invoice.TaxTreatment))
+                return new FbrResetResult { Success = false, Message = "This bill is outside FBR, so it has no FBR filing to record or reset." };
 
             // HS codes whose goods stay in stock — only meaningful when recording
             // a filing made by hand. Every other mode puts the invoice back on

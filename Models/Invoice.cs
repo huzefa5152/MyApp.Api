@@ -11,6 +11,7 @@ namespace MyApp.Api.Models
         public int? DivisionId { get; set; }
         public int ClientId { get; set; }
         public decimal Subtotal { get; set; }
+        public string TaxTreatment { get; set; } = "FBR";
         public decimal GSTRate { get; set; }
         public decimal GSTAmount { get; set; }
         public decimal GrandTotal { get; set; }

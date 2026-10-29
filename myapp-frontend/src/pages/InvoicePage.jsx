@@ -558,7 +558,9 @@ export default function InvoicePage({ mode = "invoices" }) {
   // Submit All would only collect guaranteed failures. They rejoin the queue by
   // themselves on their own date — nothing to un-exclude. (2026-08-28)
   const unsubmittedInvoices = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && inv.fbrReady && !inv.isFbrExcluded && !isFutureDocDate(inv.date));
-  const incompleteCount = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && !inv.fbrReady && !inv.isFbrExcluded).length;
+  // An SRB / no-tax bill is outside FBR, so it is never "incomplete" for FBR.
+  const outsideFbr = (inv) => inv.taxTreatment === "SRB" || inv.taxTreatment === "NoTax";
+  const incompleteCount = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && !inv.fbrReady && !inv.isFbrExcluded && !outsideFbr(inv)).length;
   const validatedCount = unsubmittedInvoices.filter(inv => fbrValidated.has(inv.id)).length;
 
   // Copy always produces an ordinary standalone bill, so it is gated on the
@@ -1223,7 +1225,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                     {!inv.isCancelled && inv.fbrStatus === "Failed" && inv.fbrErrorMessage && (
                       <p style={{ ...styles.statusReason, color: colors.error, wordBreak: "break-word" }}>{inv.fbrErrorMessage}</p>
                     )}
-                    {fbrEnabled && !inv.isCancelled && !isFiled(inv) && !inv.fbrReady && inv.fbrMissing?.length > 0 && (
+                    {fbrEnabled && !inv.isCancelled && !isFiled(inv) && !inv.fbrReady && !outsideFbr(inv) && inv.fbrMissing?.length > 0 && (
                       <p style={styles.statusReason}>Missing for FBR: {inv.fbrMissing.slice(0, 3).join(" · ")}{inv.fbrMissing.length > 3 ? ` · +${inv.fbrMissing.length - 3} more` : ""}</p>
                     )}
                   </div>
