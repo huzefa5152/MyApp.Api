@@ -103,6 +103,7 @@ namespace MyApp.Api.Data
         public DbSet<PrintTemplate> PrintTemplates { get; set; }
         public DbSet<CompanyStamp> CompanyStamps { get; set; }
         public DbSet<MergeField> MergeFields { get; set; }
+        public DbSet<StarterTemplate> StarterTemplates { get; set; }
         public DbSet<AuditLog> AuditLogs { get; set; }
         // Audit H-3 (2026-05-08): dedicated FBR communication log so the
         // FBR sync trail is queryable without sifting through general
@@ -744,6 +745,15 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<MergeField>()
                 .HasIndex(mf => new { mf.TemplateType, mf.FieldExpression })
                 .IsUnique();
+
+            // Shared starter designs: installation-wide (no CompanyId), read per type by the gallery.
+            modelBuilder.Entity<StarterTemplate>(e =>
+            {
+                e.Property(s => s.TemplateType).HasMaxLength(40);
+                e.Property(s => s.Name).HasMaxLength(200);
+                e.Property(s => s.Description).HasMaxLength(500);
+                e.HasIndex(s => new { s.TemplateType, s.IsActive });
+            });
 
             // POFormat: fingerprint hash is the primary routing key — indexed
             // for O(1) lookup. Not unique because different companies can

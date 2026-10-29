@@ -26,12 +26,13 @@ namespace MyApp.Api.Controllers
         // activity row is filed under that company like every companyId call.
         private int? _activityCompanyId;
 
-        private static readonly string[] WriteToolNameList = { "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "prepare_email_decision", "prepare_email_quotation", "prepare_print_template_update", "prepare_supplier", "prepare_item_type", "prepare_bill_tax_filing", "prepare_fbr_exclusion", "commit_action", "cancel_action" };
+        private static readonly string[] WriteToolNameList = { "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "prepare_email_decision", "prepare_email_quotation", "prepare_print_template_update", "prepare_starter_template", "prepare_supplier", "prepare_item_type", "prepare_bill_tax_filing", "prepare_fbr_exclusion", "commit_action", "cancel_action" };
         private static bool IsWriteTool(string name) => WriteToolNameList.Contains(name, StringComparer.Ordinal);
 
         private static string PrepareToolFor(string kind) => kind switch
         {
             "template.update" => "prepare_print_template_update",
+            "starter.create" or "starter.update" or "starter.activate" or "starter.deactivate" or "starter.delete" => "prepare_starter_template",
             "client.create" or "client.update" => "prepare_client",
             "quote.create" => "prepare_quote",
             "email.decision" => "prepare_email_decision",
@@ -381,6 +382,7 @@ namespace MyApp.Api.Controllers
         private static string ScopeFor(string kind) => kind switch
         {
             "template.update" => McpScopes.TemplatesWrite,
+            "starter.create" or "starter.update" or "starter.activate" or "starter.deactivate" or "starter.delete" => McpScopes.TemplatesWrite,
             "client.create" or "client.update" => McpScopes.Clients,
             "challan.create" => McpScopes.Challans,
             "bill.create" or "bill.standalone" => McpScopes.Bills,
@@ -408,6 +410,7 @@ namespace MyApp.Api.Controllers
         private static string[] PermissionFor(string kind) => kind switch
         {
             "template.update" => new[] { "printtemplates.manage.update" },
+            "starter.create" or "starter.update" or "starter.activate" or "starter.deactivate" or "starter.delete" => new[] { "printtemplates.manage.update" },
             "client.create" => new[] { "clients.manage.create" },
             "client.update" => new[] { "clients.manage.update" },
             "challan.create" => new[] { "challans.manage.create" },
@@ -480,6 +483,15 @@ namespace MyApp.Api.Controllers
                     case "template.update":
                     {
                         (resultRef, resultSummary) = await CommitPrintTemplateAsync(plan, p);
+                        break;
+                    }
+                    case "starter.create":
+                    case "starter.update":
+                    case "starter.activate":
+                    case "starter.deactivate":
+                    case "starter.delete":
+                    {
+                        (resultRef, resultSummary) = await CommitStarterAsync(plan, p);
                         break;
                     }
                     case "email.decision":

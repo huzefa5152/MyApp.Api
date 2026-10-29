@@ -53,3 +53,15 @@ Before an authorized production template write, back up its complete DTO in an i
 Re-read the saved template and verify the live render after writing. If the row changed concurrently, reassess rather than overwrite. Roll back only your own changes when verification fails and the row still matches your written version. Never store credentials, tokens, production connection details, tenant PDFs, or customer data in this skill or committed fixtures.
 
 Before committing, inspect the index and branch again: other tasks can alter a shared checkout. Stage only owned files; if HEAD/index changes unexpectedly, stop Git mutations and inspect instead of blindly committing or pushing another task's work. Report exactly which variant, saved templates, shared defaults, code, and deployment were changed, with verification and any limitations.
+
+## Shared starters via MCP (2026-10-29)
+
+A design every company should see as a starter is added through this line's MCP, by the system administrator only:
+`get_print_contract` for the type, then `prepare_starter_template` (action `create`, `documentType`, `name`, `description`,
+`htmlContent`, any `companyId` you can reach -- it only files the activity) and `commit_action` after approval. Change, hide,
+show or delete with actions `update` / `deactivate` / `activate` / `delete` and the starter's `revision` from
+`list_starter_templates`. Refused: script, event handlers, iframes and similar active content; anything that looks like one
+company's data (NTN, CNIC, STRN, phone, e-mail, a logo-sized inline image) -- use merge fields and generic text. Merge fields the
+type does not offer print blank and need `acceptUnknownFields: true`. Each installation has its own starters, merge fields and
+sample data: adding one design to three lines is three calls, adapted per line. Starters shipped in code are not listed and
+change only with a release.

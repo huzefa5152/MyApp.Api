@@ -78,6 +78,9 @@ public static class McpToolAccessCatalog
         new("get_print_template", "Print templates", "Read print design content", new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead),
         new("prepare_print_template_update", "Print templates", "Prepare print design changes", new[] { "printtemplates.manage.view", "printtemplates.manage.update" }, McpScopes.TemplatesWrite, Write: true, RequireAll: true),
         new("get_print_contract", "Print templates", "Read supported print fields", new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead),
+        new("list_starter_templates", "Print templates", "List shared starter designs", new[] { "printtemplates.manage.view", "printtemplates.starter.apply" }, McpScopes.TemplatesRead),
+        new("get_starter_template", "Print templates", "Read a shared starter design", new[] { "printtemplates.manage.view", "printtemplates.starter.apply" }, McpScopes.TemplatesRead),
+        new("prepare_starter_template", "Print templates", "Add or change shared starter designs (system administrator)", new[] { "printtemplates.manage.update" }, McpScopes.TemplatesWrite, Write: true, SeedOnly: true),
         new("get_document_print_data", "Print templates", "Read and print documents", DocumentPrintKeys, McpScopes.DocumentsRead),
         // Rides on the print-data grant: the same documents, rendered with the company's own template.
         new("get_document_render_bundle", "Print templates", "Render documents for printing", DocumentPrintKeys, McpScopes.DocumentsRead,

@@ -63,7 +63,7 @@ Never infer unrestricted access from a role NAME. As verified on 2026-10-10:
 
 | Who | What the code actually grants | Where |
 |---|---|---|
-| **Seed admin** — the single user whose id equals `AppSettings:SeedAdminUserId` (default `1`); an id comparison, not a role | Every company, and every permission key. The two MCP keys (`mcp.access.use` / `mcp.write.use`) are not short-circuited: they follow the account's MCP access policy, which can switch them off. Only this account may pick **All companies** on an MCP token. Unscoped audit log (passes `null`). Installation-wide tables (`[SeedAdminOnly]`). | `CompanyAccessGuard.HasAccessAsync` / `GetAccessibleCompanyIdsAsync`, `PermissionService.HasPermissionAsync` / `GetUserPermissionsAsync`, `docs/MCP_AGENT_ACCESS.md` |
+| **Seed admin** — the single user whose id equals `AppSettings:SeedAdminUserId` (default `1`); an id comparison, not a role | Every company, and every permission key. The two MCP keys (`mcp.access.use` / `mcp.write.use`) are not short-circuited: they follow the account's MCP access policy, which can switch them off. Only this account may pick **All companies** on an MCP token. Unscoped audit log (passes `null`). Installation-wide tables (`[SeedAdminOnly]`), including the shared starter templates (HTTP `[SeedAdminOnly]` + `StarterTemplateService`; MCP `prepare_starter_template` is seed-admin-only at prepare and at commit). | `CompanyAccessGuard.HasAccessAsync` / `GetAccessibleCompanyIdsAsync`, `PermissionService.HasPermissionAsync` / `GetUserPermissionsAsync`, `docs/MCP_AGENT_ACCESS.md` |
 | **Administrator / Tenant Administrator roles** | **No isolation exception at all.** They reach only their assigned companies and can grant only keys they hold (`RolesController.GrantableKeysAsync`). | see "Tenant administrators" below |
 | **Customer portal** (anonymous) | Not an authenticated user: scope is the resolved portal token, and every query filters on both its CompanyId and ClientId. Never synthesise a user id to reuse a guard. | `PublicCustomerPortalController`, `[ResolvePortal]` |
 
@@ -304,7 +304,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 - Role string assignment of "Admin": **seed admin only** (`_seedAdminUserId`).
 - Server-side `/auth/logout` revokes THIS device's session row, so that session's JWTs reject on the next request. It does not rotate `SecurityStamp`; a password change, an admin reset and the seed admin's "sign out everywhere" do, and each of those also revokes the user's MCP agent tokens (`Helpers/McpTokenRevocation`). Tokens minted since 2026-10-09 carry the stamp and are refused on mismatch (`McpAgentAuthHandler`).
 - Print templates are operator HTML printed in a same-origin window: `Helpers/TemplateHtmlSafety` strips script on save and `utils/printSafety.js` adds a script-blocking CSP on render. Do not add a print path that bypasses `mergeTemplate`.
-- Installation-wide tables (FBR lookup codes, merge fields) are written by the seed admin only (`[SeedAdminOnly]`): a permission key alone reaches tenant Administrators.
+- Installation-wide tables (FBR lookup codes, merge fields, shared starter templates) are written by the seed admin only (`[SeedAdminOnly]`): a permission key alone reaches tenant Administrators. Shared starters (`StarterTemplates`, no CompanyId) are read by anyone holding `printtemplates.manage.view` or `printtemplates.starter.apply`, so `StarterTemplateRules` refuses active content and anything shaped like one tenant's data (NTN/CNIC/STRN, phone, e-mail, a logo-sized inline image).
 
 ### 10. FBR integration specifics
 
@@ -399,6 +399,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | PDF export pagination | `python scripts/test_pdf_pagination.py` | `all checks passed` (230 cases) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
+| Shared starter templates: seed-admin-only writes over HTTP and MCP, every rule refuses and saves nothing, hide/show/delete, apply like a code starter, audit with no company | `python scripts/test_shared_starters.py --base <url>` | `57/57 shared starter checks passed` |
 | No production identifiers in tracked files | `python scripts/verify_no_production_identifiers.py` | `no production identifiers in tracked files` |
 
 **PO parser / import changes — MANDATORY.** Any change to
