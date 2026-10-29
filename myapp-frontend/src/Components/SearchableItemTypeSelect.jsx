@@ -5,7 +5,7 @@ import ItemTypeForm from "./ItemTypeForm";
 import { getItemTypes, getItemTypeFbrHints } from "../api/itemTypeApi";
 import { searchHsCodes } from "../api/hsCodeApi";
 import { getFbrHSCodes } from "../api/fbrApi";
-import { pendingFromFbrCode } from "../utils/lineStock";
+import { pendingFromFbrCode, applyFbrHint } from "../utils/lineStock";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 
@@ -250,8 +250,7 @@ export default function SearchableItemTypeSelect({
     if (!pending.uom && effectiveCompanyId) {
       try {
         const { data } = await getItemTypeFbrHints(effectiveCompanyId, r.hsCode);
-        const uom = data?.defaultUom || data?.catalogUomSuggestion;
-        if (uom) pending = { ...pending, uom };
+        pending = applyFbrHint(pending, data);
       } catch { /* no hint: the operator types the unit */ }
     }
     onPickNewItem(pending);

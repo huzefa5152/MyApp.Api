@@ -47,3 +47,19 @@ export function pendingFromFbrCode(row) {
     saleType: row.saleType || "",
   };
 }
+
+/**
+ * Fill a pending new item's unit from GET /itemtypes/fbr-hints. `defaultUom` is FBR's unit as an
+ * OBJECT ({ uoM_ID, description }) -- only present where the HS master holds units, which is why a
+ * local install without them never saw it -- and `catalogUomSuggestion` is a plain string. Putting
+ * the object itself on the line made its unit field render an object and broke the form (2026-10-29).
+ */
+export function applyFbrHint(pending, data) {
+  const fbr = data?.defaultUom;
+  if (fbr && typeof fbr === "object" && fbr.description)
+    return { ...pending, uom: fbr.description, fbrUOMId: pending.fbrUOMId || fbr.uoM_ID || null };
+  if (typeof fbr === "string" && fbr) return { ...pending, uom: fbr };
+  if (typeof data?.catalogUomSuggestion === "string" && data.catalogUomSuggestion)
+    return { ...pending, uom: data.catalogUomSuggestion };
+  return pending;
+}

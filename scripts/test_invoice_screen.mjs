@@ -47,7 +47,20 @@ check("an item with no text leaves the description alone", () =>
 check("26: a challan line's own text is kept when an item is picked", () =>
   assert.strictEqual(descriptionAfterPick("As per challan 41, 12 cartons", "", valve), "As per challan 41, 12 cartons"));
 
-const { lineStock, isHardBlock, pendingFromFbrCode } = await import(src("utils/lineStock.js"));
+const { lineStock, isHardBlock, pendingFromFbrCode, applyFbrHint } = await import(src("utils/lineStock.js"));
+check("FBR's unit hint (an object) becomes the line's unit text and UOM id", () => {
+  // The exact shape the live server returns where the HS master holds units.
+  const live = { uoms: [{ uoM_ID: 69, description: "Numbers, pieces, units" }], defaultUom: { uoM_ID: 69, description: "Numbers, pieces, units" }, catalogUomSuggestion: null };
+  const p = applyFbrHint({ hsCode: "8410.1100", uom: "", fbrUOMId: null }, live);
+  assert.strictEqual(p.uom, "Numbers, pieces, units");
+  assert.strictEqual(typeof p.uom, "string");
+  assert.strictEqual(p.fbrUOMId, 69);
+});
+check("with no FBR unit, the catalog suggestion (a string) is used; with neither, nothing changes", () => {
+  assert.strictEqual(applyFbrHint({ uom: "" }, { defaultUom: null, catalogUomSuggestion: "Pcs" }).uom, "Pcs");
+  assert.deepStrictEqual(applyFbrHint({ uom: "" }, { defaultUom: null, catalogUomSuggestion: null }), { uom: "" });
+  assert.deepStrictEqual(applyFbrHint({ uom: "" }, undefined), { uom: "" });
+});
 const hard = { inventoryTrackingEnabled: true, stockGuardHardBlock: true, inventoryFlowVersion: 1 };
 const soft = { inventoryTrackingEnabled: true, stockGuardHardBlock: false, inventoryFlowVersion: 1 };
 const off = { inventoryTrackingEnabled: false, stockGuardHardBlock: true };
