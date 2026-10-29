@@ -710,7 +710,7 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
 @media print { @page { size: A4; margin: 10mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 body { font-family: "Times New Roman", Times, serif; padding: 12mm; color: #000; font-size: 11pt; }
-.bismillah { text-align: center; font-family: "Traditional Arabic", "Arial Unicode MS", serif; font-size: 22px; color: #1a5c2a; margin-bottom: 8px; letter-spacing: 2px; }
+.bismillah { text-align: center; font-size: 22px; color: #1a5c2a; margin-bottom: 8px; font-family: "Amiri", "Noto Naskh Arabic", "Scheherazade New", "Traditional Arabic", "Arabic Typesetting", "Simplified Arabic", "Geeza Pro", "Segoe UI", Tahoma, serif; direction: rtl; letter-spacing: 0; line-height: 1.6; }
 .header { display: flex; justify-content: space-between; align-items: flex-start; border-top: 2px solid #1a5c2a; border-bottom: 2px solid #1a5c2a; padding: 10px 0; margin-bottom: 14px; }
 .brand { font-size: 24px; font-weight: 900; text-transform: uppercase; color: #123c1c; letter-spacing: 1px; }
 .addr { font-size: 9px; color: #2e7d32; margin-top: 4px; line-height: 1.5; }
@@ -736,7 +736,7 @@ tbody tr:nth-child(even) td { background: #e8f5e9 !important; }
 .sig .line { width: 200px; border-top: 1.5px solid #1a5c2a; margin: 0 auto 4px; }
 .sig .label { font-size: 9pt; color: #1a5c2a; font-style: italic; }
 .stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
-<div class="bismillah">&#1576;&#1587;&#1605; &#1575;&#1604;&#1604;&#1729; &#1575;&#1604;&#1585;&#1581;&#1605;&#1606; &#1575;&#1604;&#1585;&#1581;&#1740;&#1605;</div>
+<div class="bismillah" lang="ar" dir="rtl">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
 <div class="header">
   <div>
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:54px;margin-bottom:6px;display:block">{{/if}}
