@@ -49,3 +49,12 @@
 .commercial-qty input{min-height:44px;width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #d0d7e2;border-radius:6px;text-align:right}
 .commercial-qty input[aria-invalid="true"]{border-color:#c62828}
 @media (max-width:480px){.commercial-qty{flex:1 1 100%}}
+.commercial-purchases h3{font-size:14px;margin:4px 0 8px}
+.commercial-purchases ul{list-style:none;margin:0 0 8px;padding:0;border:1px solid #d0d7e2;border-radius:8px}
+.commercial-purchases li{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:13px}
+.commercial-purchases li:last-child{border-bottom:0}
+.commercial-purchases li>div{flex:1 1 240px;min-width:0;overflow-wrap:anywhere}
+.commercial-purchases li small{display:block;color:#5f6d7e;font-size:12px;margin-top:2px}
+.commercial-purchases li>span{font-weight:600;white-space:nowrap}
+.commercial-purchases li>button{min-height:36px}
+@media(max-width:759px){.commercial-purchases li>button{min-height:44px;flex:1 1 100%}}

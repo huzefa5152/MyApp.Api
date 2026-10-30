@@ -1,7 +1,7 @@
 import ListFilters from "../Components/ListFilters";
 import RecordsViewport from "../Components/RecordsViewport";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   MdAccountBalance, MdAccountBalanceWallet, MdArrowBack, MdAssessment, MdBusiness,
   MdCheckCircle, MdChevronRight, MdInsights, MdLocalShipping, MdPeople,
@@ -42,6 +42,12 @@ export default function AccountingCatalogPage() {
   const { has, loading: permsLoading } = usePermissions();
   const { reportId } = useParams();
   const navigate = useNavigate();
+  // A screen that opens a report (e.g. a supplier's Statement from Suppliers)
+  // passes { backTo, backLabel } as router state, so the report leads back there.
+  const { state: navState } = useLocation();
+  const backTo = navState?.backTo;
+  const toReports = () => navigate("/accounting/reports/catalog");
+  const goBack = () => (backTo ? navigate(backTo) : toReports());
 
   const canView = has("accounting.reports.view");
   const canExport = has("accounting.reports.export");
@@ -73,6 +79,14 @@ export default function AccountingCatalogPage() {
       </select>
     </label>
   ) : null;
+  const reportHeaderExtra = backTo ? (
+    <>
+      <button type="button" className="rw-back-link" onClick={goBack}>
+        <MdArrowBack size={16} /> Back to {navState?.backLabel || "previous screen"}
+      </button>
+      {companyPicker}
+    </>
+  ) : companyPicker;
 
   return (
     <div className="accounting-reports-page" style={st.page}>
@@ -107,9 +121,9 @@ export default function AccountingCatalogPage() {
           kind={report.legacy}
           title={report.title}
           categoryTitle={report.categoryTitle}
-          onBack={() => navigate("/accounting/reports/catalog")}
+          onBack={toReports}
           companyName={selectedCompany?.brandName || selectedCompany?.name}
-          headerExtra={companyPicker}
+          headerExtra={reportHeaderExtra}
         />
       ) : !isAvailable(report) ? (
         <div className="rw">
@@ -133,9 +147,9 @@ export default function AccountingCatalogPage() {
           companyId={companyId}
           report={report}
           canExport={canExport}
-          onBack={() => navigate("/accounting/reports/catalog")}
+          onBack={toReports}
           onNavigate={navigate}
-          headerExtra={companyPicker}
+          headerExtra={reportHeaderExtra}
         />
       )}
     </div>

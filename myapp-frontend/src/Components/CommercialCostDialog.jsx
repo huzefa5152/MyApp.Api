@@ -25,6 +25,7 @@ export default function CommercialCostDialog({ kind = "bill", id, companyId, onC
   const [message, setMessage] = useState("");
   const [payables, setPayables] = useState([]);
   const [formOpen, setFormOpen] = useState(false);
+  const [viewPurchaseId, setViewPurchaseId] = useState(null);
   const feedback = useRef(null);
   const dialog = useRef(null);
   const suppliers = useChallanSuppliers(companyId);
@@ -38,6 +39,12 @@ export default function CommercialCostDialog({ kind = "bill", id, companyId, onC
   const actualFor = i => purchasedAmountFor(i) + estimatedFor(i);
   const actual = items.reduce((s, i) => s + actualFor(i), 0);
   const complete = items.length > 0 && items.every(i => remainingFor(i) <= 0 || hasCost(i));
+  // A supplier's own invoice can take only what is not already on a fixed
+  // purchase (paid, credited or entered by hand); the server refuses the rest.
+  const invoiceRoom = (data?.items || []).some(i => Number(i.quantity) - Number(i.lockedQuantity || 0) > 0);
+  // Room that is all covered by automatic purchases: the invoice replaces them.
+  const replacesAuto = invoiceRoom && (data?.items || []).every(i => Number(i.quantity) - Number(i.lockedQuantity || 0) <= 0 || remainingFor(i) <= 0);
+  const purchases = data?.purchases || [];
 
   const load = async () => {
     const { data: result } = await readCosts(kind, id);
@@ -56,7 +63,7 @@ export default function CommercialCostDialog({ kind = "bill", id, companyId, onC
     const previous = document.activeElement;
     dialog.current?.querySelector("button")?.focus();
     const handle = e => {
-      if (formOpen) return;
+      if (formOpen || viewPurchaseId) return;
       if (e.key === "Escape" && !busy) onClose();
       if (e.key === "Tab") {
         const fields = [...dialog.current.querySelectorAll("button:not(:disabled),input:not(:disabled),select:not(:disabled),summary,[tabindex='0']")];
@@ -67,7 +74,7 @@ export default function CommercialCostDialog({ kind = "bill", id, companyId, onC
     };
     document.addEventListener("keydown", handle);
     return () => { document.removeEventListener("keydown", handle); previous?.focus?.(); };
-  }, [busy, onClose, formOpen]);
+  }, [busy, onClose, formOpen, viewPurchaseId]);
   const run = async action => {
     if (busy) return;
     setBusy(true); setError(""); setMessage("");
@@ -104,19 +111,31 @@ export default function CommercialCostDialog({ kind = "bill", id, companyId, onC
           <div className="commercial-metrics"><div>Selling value<strong>Rs. {money(data.sellingAmount)}</strong></div><div>Actual cost<strong>Rs. {money(actual)}</strong></div><div>{complete ? "Commercial profit" : "Provisional profit · Cost incomplete"}<strong>Rs. {money(data.sellingAmount - actual)}</strong></div><div>Margin<strong>{data.sellingAmount ? `${((data.sellingAmount - actual) / data.sellingAmount * 100).toFixed(2)}%` : "—"}</strong></div></div>
           <ChallanPrivateCosts companyId={companyId} suppliers={suppliers} items={items} getActualLineTotal={actualFor} readOnly={busy || !has("bills.costs.update")} onItemsChange={rows => { setItems(rows); setDirty(true); }} />
           <div className="commercial-grid">{items.map(i => <article key={i.id}><strong>{i.description}</strong><p>{lineStatus(i)}</p><span>Profit: {remainingFor(i) > 0 && !hasCost(i) ? "Cost missing" : `Rs. ${money(i.sellingAmount - actualFor(i))}`}</span></article>)}</div>
+          {purchases.length > 0 && <section className="commercial-purchases" aria-label={`Supplier purchases for this ${kind === "bill" ? "bill" : "challan"}`}>
+            <h3>Supplier purchases for this {kind === "bill" ? "bill" : "challan"}</h3>
+            <ul>{purchases.map(p => <li key={p.id}>
+              <div><strong>Purchase #{p.number} · {p.supplierName}</strong>
+                <small>{p.date?.slice(0, 10)}{p.supplierBillNumber ? ` · Supplier bill ${p.supplierBillNumber}` : ""} · {p.followsCosts ? "Automatic, follows these costs" : "Fixed"}{Number(p.quantity) > 0 ? ` · Qty ${p.quantity}` : ""}</small></div>
+              <span>Rs. {money(p.amount)}</span>
+              {has("purchasebills.list.view") && <button type="button" style={formStyles.button} disabled={busy} onClick={() => setViewPurchaseId(p.id)}>Open</button>}
+            </li>)}</ul>
+          </section>}
           {payables.length > 0 && <section><h3>Supplier payables for this bill</h3><div className="commercial-grid">{payables.map(p => <article key={p.id}><strong>{p.supplierName} · Purchase #{p.number}</strong><p>Liability Rs. {money(p.liability)} · Cash paid Rs. {money(p.cashPaid)}</p><p>Credits Rs. {money(p.creditAmount)} · Other settlement Rs. {money(p.adjustment)} · Outstanding Rs. {money(p.outstanding)}</p>{p.costChanged && <p>Costing changed. Review this supplier liability.</p>}</article>)}</div><Link to="/supplier-payables">Open supplier payables & ledger</Link></section>}
         </>}
       </div>
       <footer style={{ ...formStyles.footer, flexWrap: "wrap" }}>
         <button style={{ ...formStyles.button, ...formStyles.cancel }} disabled={busy} onClick={onClose}>Close</button>
-        {data && has("purchasebills.manage.create") && <button style={{ ...formStyles.button, ...disabledLook(busy || dirty) }} disabled={busy || dirty}
-          title={dirty ? "Save costs first" : "Only when the supplier's own invoice differs from these costs (price, GST or their bill number). It takes the place of the automatic purchase."}
-          onClick={() => setFormOpen(true)}>Enter supplier's invoice</button>}
+        {data && invoiceRoom && has("purchasebills.manage.create") && <button style={{ ...formStyles.button, ...disabledLook(busy || dirty) }} disabled={busy || dirty}
+          title={dirty ? "Save costs first" : replacesAuto
+            ? "These lines are on an automatic purchase made from the costs. Enter the supplier's own invoice only when it differs (price, GST or their bill number); it takes that purchase's place."
+            : "Record the supplier's own invoice for lines not yet bought. It takes the place of any automatic purchase for those lines."}
+          onClick={() => setFormOpen(true)}>{replacesAuto ? "Replace with supplier's invoice" : "Enter supplier's invoice"}</button>}
         {data && has("bills.costs.update") && <button style={{ ...formStyles.button, ...formStyles.submit, ...disabledLook(busy || !dirty) }} disabled={busy || !dirty}
           title={dirty ? undefined : "Change a supplier or cost to save"} onClick={save}>{busy ? "Saving…" : "Save costs"}</button>}
       </footer>
     </section>
     {formOpen && <PurchaseBillForm companyId={companyId} localSource={{ kind, id }} onClose={() => setFormOpen(false)}
       onSaved={() => run(async () => { await load(); setMessage("Supplier purchase saved."); })} />}
+    {viewPurchaseId && <PurchaseBillForm companyId={companyId} billId={viewPurchaseId} readOnly onClose={() => setViewPurchaseId(null)} onSaved={() => setViewPurchaseId(null)} />}
   </div>;
 }

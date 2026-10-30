@@ -1,4 +1,4 @@
-import { MdEdit, MdDelete, MdContentCopy, MdReceiptLong, MdInventory2 } from "react-icons/md";
+import { MdEdit, MdDelete, MdContentCopy, MdReceiptLong, MdInventory2, MdPayments } from "react-icons/md";
 import { useNavigate } from "react-router-dom";
 import { deleteSupplier } from "../api/supplierApi";
 import { useConfirm } from "./ConfirmDialog";
@@ -6,7 +6,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import PartyCard from "./party/PartyCard";
 
-export default function SupplierList({ suppliers, commonGroups, onEdit, onEditCommon, onCopy, fetchSuppliers }) {
+export default function SupplierList({ suppliers, commonGroups, onEdit, onEditCommon, onCopy, fetchSuppliers, payables }) {
   const confirm = useConfirm();
   const { has } = usePermissions();
   const canUpdate = has("suppliers.manage.update");
@@ -19,7 +19,12 @@ export default function SupplierList({ suppliers, commonGroups, onEdit, onEditCo
   const canStatement = has("accounting.reports.view");
   const navigate = useNavigate();
   const openStatement = (s) =>
-    navigate(`/accounting/reports/catalog/supplier-statement?${new URLSearchParams({ period: "allPeriods", supplierId: String(s.id) })}`);
+    navigate(`/accounting/reports/catalog/supplier-statement?${new URLSearchParams({ period: "allPeriods", supplierId: String(s.id) })}`,
+      { state: { backTo: "/Suppliers", backLabel: "Suppliers" } });
+  // Pay opens the supplier's payables, where each unpaid purchase has its own
+  // Pay button; that screen needs both keys, so the shortcut does too.
+  const canPay = !!payables && has("purchasebills.payables.view") && has("accounting.payments.create");
+  const money = (n) => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const handleDelete = async (s) => {
     if (s.hasPurchaseBills) {
@@ -53,15 +58,23 @@ export default function SupplierList({ suppliers, commonGroups, onEdit, onEditCo
           party={supplier}
           shared={shared}
           style={{ animationDelay: `${Math.min(i, 12) * 0.03}s` }}
-          footnote={supplier.hasPurchaseBills && (
-            <span className="pd-contact__row" style={{ color: "#00695c", fontSize: "0.76rem", fontWeight: 600 }}>
-              <MdInventory2 style={{ color: "#00897b" }} /><span>Has purchase bills</span>
-            </span>
-          )}
+          footnote={<>
+            {payables && (payables.get(supplier.id) || 0) > 0 && (
+              <span className="pd-contact__row" style={{ color: "#b45309", fontSize: "0.8rem", fontWeight: 700 }}>
+                <MdPayments style={{ color: "#d97706" }} /><span>Payable Rs. {money(payables.get(supplier.id))}</span>
+              </span>
+            )}
+            {supplier.hasPurchaseBills && (
+              <span className="pd-contact__row" style={{ color: "#00695c", fontSize: "0.76rem", fontWeight: 600 }}>
+                <MdInventory2 style={{ color: "#00897b" }} /><span>Has purchase bills</span>
+              </span>
+            )}
+          </>}
           actions={[
             canUpdate && (shared && onEditCommon
               ? { key: "edit", label: "Edit", icon: <MdEdit size={16} />, variant: "primary", onClick: () => onEditCommon(shared.groupId), title: "Edit for every company that has this supplier" }
               : { key: "edit", label: "Edit", icon: <MdEdit size={16} />, variant: "primary", onClick: () => onEdit(supplier) }),
+            canPay && (payables.get(supplier.id) || 0) > 0 && { key: "pay", label: "Pay", icon: <MdPayments size={16} />, onClick: () => navigate(`/supplier-payables?supplierId=${supplier.id}`), title: "Open this supplier's unpaid purchases and pay them" },
             canStatement && { key: "statement", label: "Statement", icon: <MdReceiptLong size={16} />, onClick: () => openStatement(supplier), title: "Open this supplier's statement" },
             canCopy && onCopy && { key: "copy", label: "Copy", icon: <MdContentCopy size={16} />, iconOnly: true, onClick: () => onCopy(supplier), title: "Copy this supplier into another company" },
             canDelete && {

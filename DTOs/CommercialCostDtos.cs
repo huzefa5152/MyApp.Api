@@ -26,6 +26,21 @@ public class CommercialCostLineDto
     public bool PurchaseRecorded { get; set; }
 }
 
+/// <summary>A supplier purchase that buys lines of this challan or bill.</summary>
+public class CommercialCostPurchaseDto
+{
+    public int Id { get; set; }
+    public int Number { get; set; }
+    public DateTime Date { get; set; }
+    public string SupplierName { get; set; } = "";
+    public string? SupplierBillNumber { get; set; }
+    /// <summary>Made from the costs and still following them (no payment, allocation or credit).</summary>
+    public bool FollowsCosts { get; set; }
+    /// <summary>Quantity and line value of THIS document's lines on that purchase (the whole bill for a legacy one).</summary>
+    public decimal Quantity { get; set; }
+    public decimal Amount { get; set; }
+}
+
 public class CommercialCostDto
 {
     public int Id { get; set; }
@@ -33,6 +48,7 @@ public class CommercialCostDto
     public int CompanyId { get; set; }
     public string Version { get; set; } = "";
     public List<CommercialCostLineDto> Items { get; set; } = new();
+    public List<CommercialCostPurchaseDto> Purchases { get; set; } = new();
     public decimal SellingAmount => Items.Sum(i => i.SellingAmount);
     public decimal ActualAmount => Items.Sum(i => i.ActualAmount ?? 0);
     public bool CostComplete => Items.Count > 0 && Items.All(i => i.RemainingQuantity <= 0 || i.ActualUnitCost.HasValue);

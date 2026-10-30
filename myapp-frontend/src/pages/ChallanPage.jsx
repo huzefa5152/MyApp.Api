@@ -99,7 +99,8 @@ export default function ChallanPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [pageSize, setPageSize] = useState(10); // server-echoed size (drives page math)
   const [userPageSize, setUserPageSize] = usePageSize("challans"); // operator-chosen override
-  const [search, setSearch] = useState("");
+  // A link may open the list on one challan (?search=4535, e.g. from a purchase bill).
+  const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get("search") || "");
   const [statusFilter, setStatusFilter] = useState(() => new URLSearchParams(window.location.search).get("status") || "");
   const [clientFilter, setClientFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -204,7 +205,7 @@ export default function ChallanPage() {
     setDateFrom("");
     setDateTo(""); setCostingStatus("");
     setSalesOrderFilter("");
-    if (searchParams.get("salesOrderId")) setSearchParams({}, { replace: true });
+    if (searchParams.get("salesOrderId") || searchParams.get("search")) setSearchParams({}, { replace: true });
     setPage(1);
   };
 

@@ -1,6 +1,8 @@
 import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useMemo } from "react";
-import { MdLocalShipping, MdAdd, MdBusiness, MdSearchOff } from "react-icons/md";
+import { MdLocalShipping, MdAdd, MdBusiness, MdSearchOff, MdPayments } from "react-icons/md";
+import { useNavigate } from "react-router-dom";
+import { supplierSummary } from "../api/commercialCostApi";
 import SupplierList from "../Components/SupplierList";
 import SupplierForm from "../Components/SupplierForm";
 import CommonSupplierForm from "../Components/CommonSupplierForm";
@@ -40,6 +42,21 @@ export default function SuppliersPage() {
 
   // Copy-to-companies dialog source.
   const [copyingSupplier, setCopyingSupplier] = useState(null);
+  // What each supplier is still owed (Supplier Payables' own figure). Only for a
+  // role that can see payables; everyone else gets the screen as before.
+  const navigate = useNavigate();
+  const canSeePayables = has("purchasebills.payables.view");
+  const [payables, setPayables] = useState(null);
+  useEffect(() => {
+    setPayables(null);
+    if (!canSeePayables || !selectedCompany?.id) return;
+    let active = true;
+    supplierSummary(selectedCompany.id)
+      .then(({ data }) => { if (active) setPayables(new Map((data || []).map((r) => [r.supplierId, Number(r.netBalance) || 0]))); })
+      .catch(() => { if (active) setPayables(null); });
+    return () => { active = false; };
+  }, [canSeePayables, selectedCompany?.id, suppliers]);
+  const totalPayable = payables ? [...payables.values()].reduce((sum, v) => sum + Math.max(0, v), 0) : 0;
 
   // Common Supplier groups this company shares with others, by group id.
   // Every supplier is listed once; one whose group is here carries a
@@ -113,6 +130,13 @@ export default function SuppliersPage() {
           </div>
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
+          {payables && (
+            <button type="button" style={styles.payableBtn} onClick={() => navigate("/supplier-payables")}
+              title="Open Supplier Payables to see and pay what each supplier is owed">
+              <MdPayments size={18} />
+              <span>Total payable <strong>Rs. {totalPayable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+            </button>
+          )}
           <ImportFromExcelButton sheet="suppliers" />
           {companies.length > 0 && canCreate && (
             <button
@@ -179,6 +203,7 @@ export default function SuppliersPage() {
           onEditCommon={(groupId) => setEditingGroupId(groupId)}
           onCopy={(s) => setCopyingSupplier(s)}
           fetchSuppliers={() => fetchSuppliers(selectedCompany?.id)}
+          payables={payables}
         />
       )}</RecordsViewport>
 
@@ -254,6 +279,7 @@ const styles = {
   headerIcon: { width: 48, height: 48, borderRadius: 14, background: "linear-gradient(135deg, #0d47a1, #00897b)", boxShadow: "0 10px 22px -10px rgba(13,71,161,0.6)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
   pageTitle: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
   pageSubtitle: { margin: "0.15rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
+  payableBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.45rem", padding: "0.45rem 0.9rem", borderRadius: 10, border: "1px solid #f3c78a", background: "#fff8ec", color: "#92400e", fontSize: "0.86rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
   addBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.25rem", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #0d47a1, #00897b)", color: "#fff", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", transition: "filter 0.2s, transform 0.2s", boxShadow: "0 4px 14px rgba(13,71,161,0.25)" },
   loadingContainer: { display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", padding: "3rem 0" },
   spinner: { width: 28, height: 28, border: `3px solid ${colors.cardBorder}`, borderTopColor: colors.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite" },

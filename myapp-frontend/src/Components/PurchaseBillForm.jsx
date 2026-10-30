@@ -23,6 +23,7 @@ import CopyLineButton from "./CopyLineButton";
 import SearchableSelect from "./SearchableSelect";
 import { purchaseBillTotals } from "../utils/purchaseBillTotals.mjs";
 import "./PurchaseBillFlow.css";
+import { Link } from "react-router-dom";
 
 const colors = {
   blue: "#0d47a1",
@@ -42,6 +43,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const [isNonStock, setIsNonStock] = useState(opensLocal);
   const [isGeneratedLocal, setIsGeneratedLocal] = useState(false);
   const [isAuto, setIsAuto] = useState(false);
+  const [sourceDocs, setSourceDocs] = useState([]);
   const isAgainstSale = !!prefillFromInvoiceId;
   const [choosingCategory, setChoosingCategory] = useState(!billId && !prefillFromInvoiceId && !opensLocal);
   const [categoryChoice, setCategoryChoice] = useState(opensLocal ? "LocalDirect" : "");
@@ -201,6 +203,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
         setIsNonStock(!!data.isNonStockSupplierPurchase);
         setIsGeneratedLocal(data.source === "local-direct");
         setIsAuto(data.source === "auto-cost");
+        setSourceDocs(data.sourceDocuments || []);
         setCurrentNumber(data.purchaseBillNumber);
         setCustomNumber(String(data.purchaseBillNumber));
         setSupplierId(String(data.supplierId));
@@ -409,6 +412,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
             {categoryConfirmed && (categoryChoice === "LocalDirect") !== isNonStock && <p className="purchase-category-warning" role="status">Changing category clears item classifications and source links. Descriptions, quantities and prices are kept.</p>}
           </section> : <>
           {!isEdit && <div className="purchase-category-selected"><div><strong ref={detailHeading} tabIndex={-1}>{isNonStock ? "Local direct purchase" : "Stock purchase"}</strong><small>{isNonStock ? "Supplier payable only · No stock movement" : isAgainstSale ? "Linked to a customer sale bill" : "Catalog items · Inventory controls apply"}</small></div>{!isAgainstSale && <button type="button" onClick={() => { setCategoryChoice(isNonStock ? "LocalDirect" : "Inventory"); setChoosingCategory(true); setError(""); }}>Change category</button>}</div>}
+          {sourceDocs.length > 0 && <p className="purchase-linked-note">Bought for {sourceDocs.map((d, n) => <span key={`${d.kind}-${d.id}`}>{n > 0 && ", "}<Link to={d.kind === "challan" ? `/challans?search=${d.number}` : `/bills?search=${d.number}`} onClick={onClose}>{d.kind === "challan" ? "Challan" : "Bill"} #{d.number}</Link></span>)}</p>}
           {isAuto && <p className="purchase-linked-note">This purchase follows the supplier and cost entered on its challan or bill. Change lines there; here you can add the supplier's invoice reference, IRN and GST.</p>}
           {isGeneratedLocal && <p className="purchase-linked-note">Linked lines keep their challan or bill. Quantities are re-checked against what is left to purchase. Once this purchase is paid or credited, correct it with a supplier credit instead.</p>}
           <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>

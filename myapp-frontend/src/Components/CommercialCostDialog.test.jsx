@@ -10,7 +10,7 @@ const { permissions } = vi.hoisted(() => ({ permissions: new Set() }));
 vi.mock("../contexts/PermissionsContext", () => ({ usePermissions: () => ({ has: key => permissions.has(key) }) }));
 vi.mock("../api/commercialCostApi", () => ({ readCosts: vi.fn(), saveCosts: vi.fn(), billPayables: vi.fn() }));
 vi.mock("../utils/notify", () => ({ notify: vi.fn() }));
-vi.mock("./PurchaseBillForm", () => ({ default: ({ localSource }) => <div role="dialog" aria-label="Purchase form">{localSource.kind}:{localSource.id}</div> }));
+vi.mock("./PurchaseBillForm", () => ({ default: ({ localSource, billId, readOnly }) => <div role="dialog" aria-label="Purchase form">{localSource ? `${localSource.kind}:${localSource.id}` : `view:${billId}:${!!readOnly}`}</div> }));
 vi.mock("./ChallanPrivateCosts", () => ({
   useChallanSuppliers: () => [{ id: 5, name: "Sample supplier" }],
   default: ({ items, onItemsChange, readOnly }) => <input aria-label="Actual cost" disabled={readOnly} value={items[0]?.actualUnitCost ?? ""}
@@ -95,4 +95,45 @@ it("shows the server's reason when a save is refused", async () => {
   fireEvent.change(screen.getByLabelText("Actual cost"), { target: { value: "5" } });
   fireEvent.click(screen.getByText("Save costs"));
   expect((await screen.findByRole("alert")).textContent).toContain("accounting period is closed");
+});
+
+// The supplier's own invoice can only take what is not on a fixed purchase.
+const autoBooked = { ...source.items[0], supplierId: 5, actualUnitCost: 20, purchasedQuantity: 2, remainingQuantity: 0, purchasedAmount: 40, purchaseRecorded: true, lockedQuantity: 0 };
+it("calls the button Replace while an automatic purchase covers the lines", async () => {
+  permissions.add("purchasebills.manage.create");
+  readCosts.mockResolvedValue({ data: { ...source, items: [autoBooked] } });
+  mount();
+  expect(await screen.findByText("Replace with supplier's invoice")).toBeTruthy();
+  expect(screen.queryByText("Enter supplier's invoice")).toBeNull();
+});
+it("offers no supplier invoice once every line is on a fixed purchase", async () => {
+  permissions.add("purchasebills.manage.create");
+  readCosts.mockResolvedValue({ data: { ...source, items: [{ ...autoBooked, lockedQuantity: 2 }] } });
+  mount(); await screen.findByText("Booked to suppliers · Rs. 40.00");
+  expect(screen.queryByText("Replace with supplier's invoice")).toBeNull();
+  expect(screen.queryByText("Enter supplier's invoice")).toBeNull();
+});
+it("keeps Enter supplier's invoice for a line partly on a fixed purchase", async () => {
+  permissions.add("purchasebills.manage.create");
+  readCosts.mockResolvedValue({ data: { ...source, items: [{ ...source.items[0], quantity: 5, purchasedQuantity: 2, lockedQuantity: 2, remainingQuantity: 3, purchasedAmount: 40, actualUnitCost: 25 }] } });
+  mount();
+  expect(await screen.findByText("Enter supplier's invoice")).toBeTruthy();
+});
+it("lists the purchases for the document and opens one read-only", async () => {
+  permissions.add("purchasebills.list.view");
+  readCosts.mockResolvedValue({ data: { ...source, items: [autoBooked], purchases: [
+    { id: 39, number: 39, date: "2026-10-28T00:00:00", supplierName: "CASH", supplierBillNumber: null, followsCosts: true, quantity: 2, amount: 9580 },
+    { id: 41, number: 41, date: "2026-10-29T00:00:00", supplierName: "Sample supplier", supplierBillNumber: "INV-7", followsCosts: false, quantity: 0, amount: 120 },
+  ] } });
+  mount();
+  expect(await screen.findByText("Purchase #39 · CASH")).toBeTruthy();
+  expect(screen.getByText(/Automatic, follows these costs · Qty 2/)).toBeTruthy();
+  expect(screen.getByText(/Supplier bill INV-7 · Fixed/)).toBeTruthy();
+  fireEvent.click(screen.getAllByText("Open")[0]);
+  expect(screen.getByRole("dialog", { name: "Purchase form" }).textContent).toBe("view:39:true");
+});
+it("hides the Open button without the purchase bill list permission", async () => {
+  readCosts.mockResolvedValue({ data: { ...source, items: [autoBooked], purchases: [{ id: 39, number: 39, date: "2026-10-28", supplierName: "CASH", followsCosts: true, quantity: 2, amount: 9580 }] } });
+  mount(); await screen.findByText("Purchase #39 · CASH");
+  expect(screen.queryByText("Open")).toBeNull();
 });

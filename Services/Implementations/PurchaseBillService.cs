@@ -256,7 +256,25 @@ namespace MyApp.Api.Services.Implementations
             if (pb == null) return null;
             var dto = ToDto(pb);
             dto.SupplierLockedReason = await SupplierLockedReasonAsync(pb);
+            dto.SourceDocuments = await SourceDocumentsAsync(pb);
             return dto;
+        }
+
+        /// <summary>The challans and sale bills this purchase buys for: its own
+        /// source plus whatever its lines are linked to, same company only.</summary>
+        private async Task<List<PurchaseSourceDocumentDto>> SourceDocumentsAsync(PurchaseBill pb)
+        {
+            var deliveryIds = pb.Items.Where(i => i.LocalDeliveryItemId.HasValue).Select(i => i.LocalDeliveryItemId!.Value).ToList();
+            var invoiceItemIds = pb.Items.Where(i => i.LocalInvoiceItemId.HasValue).Select(i => i.LocalInvoiceItemId!.Value).ToList();
+            var challans = await _context.DeliveryChallans.AsNoTracking()
+                .Where(c => c.CompanyId == pb.CompanyId && (c.Id == pb.SourceDeliveryChallanId || c.Items.Any(i => deliveryIds.Contains(i.Id))))
+                .OrderBy(c => c.ChallanNumber).Select(c => new PurchaseSourceDocumentDto { Kind = "challan", Id = c.Id, Number = c.ChallanNumber })
+                .ToListAsync();
+            var bills = await _context.Invoices.AsNoTracking()
+                .Where(b => b.CompanyId == pb.CompanyId && (b.Id == pb.SourceInvoiceId || b.Items.Any(i => invoiceItemIds.Contains(i.Id))))
+                .OrderBy(b => b.InvoiceNumber).Select(b => new PurchaseSourceDocumentDto { Kind = "bill", Id = b.Id, Number = b.InvoiceNumber })
+                .ToListAsync();
+            return challans.Concat(bills).ToList();
         }
 
         private async Task<string?> SupplierLockedReasonAsync(PurchaseBill bill)

@@ -93,6 +93,29 @@ public class CommercialCostService(AppDbContext db, LocalPurchaseSyncService pur
                 i.PurchasedQuantity = i.LockedQuantity = i.Quantity;
             i.PurchaseRecorded = i.RemainingQuantity <= 0;
         }
+        // The purchases behind those figures, so the screen can name and open
+        // them: the same company and line links as above, plus a legacy challan
+        // bill (no line links) through its source challan.
+        var challanIds = result.Items.Where(i => i.SourceChallanId.HasValue).Select(i => i.SourceChallanId!.Value).Distinct().ToList();
+        var purchaseRows = await db.PurchaseBills.AsNoTracking()
+            .Where(p => p.CompanyId == result.CompanyId && (
+                p.Items.Any(x => (x.LocalDeliveryItemId.HasValue && deliveryIds.Contains(x.LocalDeliveryItemId.Value))
+                    || (x.LocalInvoiceItemId.HasValue && invoiceIds.Contains(x.LocalInvoiceItemId.Value)))
+                || (p.SourceDeliveryChallanId.HasValue && challanIds.Contains(p.SourceDeliveryChallanId.Value)
+                    && !p.Items.Any(x => x.LocalDeliveryItemId.HasValue))))
+            .OrderBy(p => p.Date).ThenBy(p => p.Id)
+            .Select(p => new {
+                p.Id, p.PurchaseBillNumber, p.Date, SupplierName = p.Supplier.Name, p.SupplierBillNumber, p.GrandTotal,
+                FollowsCosts = openAuto.Contains(p.Id),
+                Lines = p.Items.Where(x => (x.LocalDeliveryItemId.HasValue && deliveryIds.Contains(x.LocalDeliveryItemId.Value))
+                    || (x.LocalInvoiceItemId.HasValue && invoiceIds.Contains(x.LocalInvoiceItemId.Value)))
+                    .Select(x => new { x.Quantity, x.LineTotal }).ToList() })
+            .ToListAsync();
+        result.Purchases = purchaseRows.Select(p => new CommercialCostPurchaseDto {
+            Id = p.Id, Number = p.PurchaseBillNumber, Date = p.Date, SupplierName = p.SupplierName,
+            SupplierBillNumber = p.SupplierBillNumber, FollowsCosts = p.FollowsCosts,
+            Quantity = p.Lines.Sum(x => x.Quantity),
+            Amount = p.Lines.Count > 0 ? p.Lines.Sum(x => x.LineTotal) : p.GrandTotal }).ToList();
         result.Version = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(result.Items))));
         return result;
     }

@@ -263,9 +263,11 @@
 }
 
 /* ── Card actions ────────────────────────────────────────────────────── */
+/* Wraps rather than squeezing: a card with Edit, Pay, Statement, Copy and
+   Delete is wider than the card, and nowrap crushed Edit and cut off Delete. */
 .pd-actions {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 0.4rem;
   padding: 0.65rem 0.8rem;
   border-top: 1px solid #eef2f7;
@@ -290,7 +292,7 @@
   transition: filter 0.2s, background 0.2s, border-color 0.2s, transform 0.2s;
 }
 .pd-btn:focus-visible { outline: 2px solid #0d47a1; outline-offset: 2px; }
-.pd-btn--primary { flex: 1 1 0; min-width: 0; padding: 0 0.6rem; background: linear-gradient(135deg, #0d47a1, #1565c0); color: #fff; }
+.pd-btn--primary { flex: 1 1 0; min-width: 76px; padding: 0 0.6rem; background: linear-gradient(135deg, #0d47a1, #1565c0); color: #fff; }
 .pd-btn--primary:hover { filter: brightness(1.08); }
 .pd-btn--soft { background: #fff; border-color: #e1e8f1; color: #1a2332; }
 .pd-btn--soft:hover { border-color: #b7cbe6; color: #0d47a1; background: #f4f8fd; }

@@ -19,6 +19,8 @@ namespace MyApp.Api.DTOs
         public string CompanyName { get; set; } = "";
         public int SupplierId { get; set; }
         public int? SourceDeliveryChallanId { get; set; }
+        /// <summary>The challans and sale bills this purchase buys for (read only; filled on a single-bill read).</summary>
+        public List<PurchaseSourceDocumentDto> SourceDocuments { get; set; } = new();
         public string PurchaseCategory { get; set; } = "Inventory";
         public string Source { get; set; } = "manual";
         public int? SourceInvoiceId { get; set; }
@@ -301,4 +303,15 @@ public class LocalPurchaseSourceLineDto
     /// <summary>Private costing; null unless the caller holds bills.costs.view.</summary>
     public decimal? EstimatedUnitCost { get; set; }
     public int? SupplierId { get; set; }
+}
+
+namespace MyApp.Api.DTOs
+{
+    /// <summary>A challan ("challan") or sale bill ("bill") a purchase buys for.</summary>
+    public class PurchaseSourceDocumentDto
+    {
+        public string Kind { get; set; } = "";
+        public int Id { get; set; }
+        public int Number { get; set; }
+    }
 }
