@@ -13,10 +13,13 @@
   padding: 9px 12px 8px; margin-bottom: 8px;
   background: #fff; border: 1px solid #e8edf3; border-radius: 12px;
   box-shadow: 0 1px 2px rgba(16, 32, 64, 0.04);
-  position: relative; overflow: hidden;
+  /* No overflow clip: the Columns menu opens below this card, and a clip cut
+     it off. The accent strip rounds its own corners instead. */
+  position: relative;
 }
 .rw-head::before {
   content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px;
+  border-radius: 11px 11px 0 0;
   background: linear-gradient(90deg, #0d47a1, #00897b);
 }
 .rw-head__id { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 320px; }
