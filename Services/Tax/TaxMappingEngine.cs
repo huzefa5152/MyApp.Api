@@ -18,10 +18,8 @@ namespace MyApp.Api.Services.Tax
         private readonly AppDbContext _db;
         private readonly ILogger<TaxMappingEngine>? _logger;
 
-        // Cache keys are scoped per company because the FBR token is
-        // per-company and PRAL bills the call. TTL is process lifetime —
-        // a redeploy invalidates everything, which matches our weekly
-        // deploy cadence.
+        // HS code -> units, process lifetime. The stored copy in FbrLookups
+        // (see GetValidUomsForHsCodeAsync) is what survives a restart.
         private static readonly ConcurrentDictionary<string, List<FbrUOMDto>> _hsUomCache = new();
         private static readonly ConcurrentDictionary<string, List<FbrSaleTypeRateDto>> _saleTypeRateCache = new();
 
@@ -54,13 +52,26 @@ namespace MyApp.Api.Services.Tax
 
         // ─── HS_UOM ────────────────────────────────────────────────
 
+        // FBR's HS_UOM answer belongs to the HS code, not to a company, so it is kept
+        // once for the whole installation in FbrLookups (Category "HsUom", Code
+        // "<hs>|<uomId>", Label = unit name, SortOrder = FBR's order) beside the stored
+        // HS list. Order of lookup: memory, stored table, then PRAL with the asking
+        // company's own token; a good PRAL answer is stored, so each code is slow once.
+        public const string HsUomCategory = "HsUom";
+
         public async Task<List<FbrUOMDto>> GetValidUomsForHsCodeAsync(int companyId, string hsCode)
         {
             if (string.IsNullOrWhiteSpace(hsCode)) return new();
 
             var trimmed = hsCode.Trim();
-            var key = $"{companyId}:{trimmed}";
-            if (_hsUomCache.TryGetValue(key, out var cached)) return cached;
+            if (_hsUomCache.TryGetValue(trimmed, out var cached)) return cached;
+
+            var stored = await LoadStoredUomsAsync(trimmed);
+            if (stored.Count > 0)
+            {
+                _hsUomCache.TryAdd(trimmed, stored);
+                return stored;
+            }
 
             // Retry-on-empty: PRAL occasionally returns an empty array on the
             // first call for a real HS code (operator-reported, see comment
@@ -80,11 +91,51 @@ namespace MyApp.Api.Services.Tax
                         _logger?.LogWarning(
                             "PRAL HS_UOM returned empty on attempt 1 for HS {HsCode} (company {CompanyId}); recovered on attempt {Attempt}.",
                             trimmed, companyId, attempt + 1);
-                    _hsUomCache.TryAdd(key, fresh);
+                    _hsUomCache.TryAdd(trimmed, fresh);
+                    await StoreUomsAsync(trimmed, fresh);
                     return fresh;
                 }
             }
             return fresh ?? new();
+        }
+
+        private async Task<List<FbrUOMDto>> LoadStoredUomsAsync(string hsCode)
+        {
+            var prefix = hsCode + "|";
+            var rows = await _db.FbrLookups.AsNoTracking()
+                .Where(l => l.Category == HsUomCategory && l.IsActive && l.Code.StartsWith(prefix))
+                .OrderBy(l => l.SortOrder).ToListAsync();
+            var list = new List<FbrUOMDto>();
+            foreach (var r in rows)
+                if (int.TryParse(r.Code[prefix.Length..], out var id))
+                    list.Add(new FbrUOMDto { UOM_ID = id, Description = r.Label });
+            return list;
+        }
+
+        // Plain INSERT ... WHERE NOT EXISTS, never SaveChanges: the caller may be
+        // mid-edit with tracked changes that must not be flushed from here, and two
+        // requests storing the same code at once must not duplicate it.
+        private async Task StoreUomsAsync(string hsCode, List<FbrUOMDto> uoms)
+        {
+            try
+            {
+                var order = 0;
+                foreach (var u in uoms)
+                {
+                    var code = $"{hsCode}|{u.UOM_ID}";
+                    var label = (u.Description ?? "").Trim();
+                    var sort = order++;
+                    await _db.Database.ExecuteSqlInterpolatedAsync($@"
+INSERT INTO FbrLookups (Category, Code, Label, SortOrder, IsActive)
+SELECT {HsUomCategory}, {code}, {label}, {sort}, 1
+WHERE NOT EXISTS (SELECT 1 FROM FbrLookups WHERE Category = {HsUomCategory} AND Code = {code})");
+                }
+            }
+            catch (Exception ex)
+            {
+                // Storing is an optimisation; the live answer is still returned.
+                _logger?.LogWarning(ex, "Could not store FBR units for HS {HsCode}", hsCode);
+            }
         }
 
         public async Task<FbrUOMDto?> SuggestDefaultUomAsync(int companyId, string hsCode)
@@ -357,7 +408,7 @@ namespace MyApp.Api.Services.Tax
                 // token; an empty list then means FBR genuinely has no UOM
                 // restriction for this code (common for many codes), NOT a
                 // failure. Without a token the lookup never ran.
-                UomLookupRan: !string.IsNullOrEmpty(company?.FbrToken),
+                UomLookupRan: uoms.Count > 0 || !string.IsNullOrEmpty(company?.FbrToken),
                 SaleTypes: TaxScenarios.All.Select(s => s.SaleType).Distinct().ToList()
             );
         }

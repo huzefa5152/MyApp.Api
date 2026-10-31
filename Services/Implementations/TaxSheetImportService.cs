@@ -251,8 +251,7 @@ namespace MyApp.Api.Services.Implementations
             FbrUOMDto? chosen = null;
             if (sheetUnit.Length > 0 || type == null)
             {
-                var hints = await _taxEngine.GetHsCodeHintsAsync(companyId, code);
-                var uoms = hints?.Uoms ?? new();
+                var uoms = await _taxEngine.GetValidUomsForHsCodeAsync(companyId, code);
                 if (sheetUnit.Length > 0)
                 {
                     chosen = uoms.FirstOrDefault(u => string.Equals(u.Description?.Trim(), sheetUnit, StringComparison.OrdinalIgnoreCase)

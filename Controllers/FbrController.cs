@@ -20,12 +20,14 @@ namespace MyApp.Api.Controllers
         private readonly IFbrService _fbrService;
         private readonly AppDbContext _db;
         private readonly ICompanyAccessGuard _access;
+        private readonly ITaxMappingEngine _taxEngine;
 
-        public FbrController(IFbrService fbrService, AppDbContext db, ICompanyAccessGuard access)
+        public FbrController(IFbrService fbrService, AppDbContext db, ICompanyAccessGuard access, ITaxMappingEngine taxEngine)
         {
             _fbrService = fbrService;
             _db = db;
             _access = access;
+            _taxEngine = taxEngine;
         }
 
         private int CurrentUserId =>
@@ -212,6 +214,69 @@ namespace MyApp.Api.Controllers
             if (stored == 0)
                 return BadRequest(new { message = "FBR returned no HS codes. Check this company's FBR token." });
             return Ok(new { stored });
+        }
+
+        /// <summary>
+        /// One-off fill of the stored FBR unit list (FbrLookups "HsUom") from every HS
+        /// code already in use anywhere: item types, invoice lines and consultant
+        /// adjustments. Each code is stored once for the whole installation. Each lookup
+        /// uses the token of a company that actually uses the code. Works in batches so
+        /// the request stays short; call again with the returned nextOffset until done.
+        /// Seed admin only, like the HS list sync.
+        /// </summary>
+        [HttpPost("hscodes/uom/seed")]
+        [HasPermission("fbr.config.update")]
+        [SeedAdminOnly]
+        public async Task<IActionResult> SeedHsUnits([FromQuery] int offset = 0, [FromQuery] int batch = 100)
+        {
+            batch = Math.Clamp(batch, 1, 300);
+            offset = Math.Max(0, offset);
+
+            var pairs = new List<(string Hs, int CompanyId)>();
+            pairs.AddRange((await _db.ItemTypes.AsNoTracking()
+                .Where(i => !i.IsDeleted && i.HSCode != null && i.HSCode != "")
+                .Select(i => new { i.HSCode, i.CompanyId }).Distinct().ToListAsync())
+                .Where(x => x.CompanyId != null).Select(x => (x.HSCode!.Trim(), x.CompanyId!.Value)));
+            pairs.AddRange((await _db.InvoiceItems.AsNoTracking()
+                .Where(i => i.HSCode != null && i.HSCode != "")
+                .Select(i => new { i.HSCode, CompanyId = (int?)i.Invoice.CompanyId }).Distinct().ToListAsync())
+                .Where(x => x.CompanyId != null).Select(x => (x.HSCode!.Trim(), x.CompanyId!.Value)));
+            pairs.AddRange((await _db.InvoiceItemAdjustments.AsNoTracking()
+                .Where(a => a.AdjustedHSCode != null && a.AdjustedHSCode != "")
+                .Select(a => new { a.AdjustedHSCode, CompanyId = (int?)a.InvoiceItem.Invoice.CompanyId }).Distinct().ToListAsync())
+                .Where(x => x.CompanyId != null).Select(x => (x.AdjustedHSCode!.Trim(), x.CompanyId!.Value)));
+
+            var withToken = (await _db.Companies.AsNoTracking()
+                .Where(c => c.FbrToken != null && c.FbrToken != "").Select(c => c.Id).ToListAsync()).ToHashSet();
+            var stored = (await _db.FbrLookups.AsNoTracking()
+                .Where(l => l.Category == TaxMappingEngine.HsUomCategory).Select(l => l.Code).ToListAsync())
+                .Select(c => c[..c.IndexOf('|')]).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // One row per HS code, whichever token-holding company uses it first.
+            var todo = pairs.Where(p => withToken.Contains(p.CompanyId))
+                .GroupBy(p => p.Hs, StringComparer.OrdinalIgnoreCase)
+                .Where(g => !stored.Contains(g.Key))
+                .OrderBy(g => g.Key, StringComparer.Ordinal)
+                .Select(g => (Hs: g.Key, CompanyId: g.Min(x => x.CompanyId))).ToList();
+            var noToken = pairs.Select(p => p.Hs).Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count(h => !stored.Contains(h) && !todo.Any(t => string.Equals(t.Hs, h, StringComparison.OrdinalIgnoreCase)));
+
+            var done = 0; var empty = new List<string>();
+            foreach (var (hs, companyId) in todo.Skip(offset).Take(batch))
+            {
+                var units = await _taxEngine.GetValidUomsForHsCodeAsync(companyId, hs);
+                if (units.Count > 0) done++; else empty.Add(hs);
+                await Task.Delay(100); // be gentle with PRAL
+            }
+            var next = offset + batch;
+            return Ok(new
+            {
+                storedNow = done,
+                noUnitsFromFbr = empty,
+                codesWithoutAnyToken = noToken,
+                stillToDo = Math.Max(0, todo.Count - next),
+                nextOffset = next < todo.Count ? next : (int?)null,
+            });
         }
 
         [HttpGet("uom/{companyId}")]

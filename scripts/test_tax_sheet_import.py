@@ -165,6 +165,39 @@ try:
     check(ed["hasSavedRows"] and len(ed["rows"]) == 2, "filing rows saved")
     check(sorted(len(r["sourceLineIds"]) for r in ed["rows"]) == [1, 2], "two allen keys share one row")
 
+
+    print("--- stored FBR units: a new HS code resolves with no FBR call")
+    # Unit rows are installation-wide (FbrLookups, Category HsUom, Code "<hs>|<uomId>").
+    code = "9999.9999"
+    existing = call("GET", "/api/FbrLookup/category/HsUom")
+    for row in existing:
+        if row["code"].startswith(code + "|"):
+            call("DELETE", f"/api/FbrLookup/{row['id']}")
+    for n, (uid, name) in enumerate([(13, "KG"), (69, "Numbers, pieces, units")]):
+        call("POST", "/api/FbrLookup", {"category": "HsUom", "code": f"{code}|{uid}", "label": name, "sortOrder": n, "isActive": True})
+    nw, ncl = make_company("NewHs", True)
+    b3 = bill(nw, ncl, [("Brand new thing", 3, 100)])
+    blob3 = export(nw)
+    ws3, head3, cols3 = sheet_rows(blob3)
+    wb3 = openpyxl.load_workbook(io.BytesIO(blob3)); w3 = wb3.worksheets[0]
+    for r in range(head3 + 1, w3.max_row + 1):
+        if w3.cell(r, cols3["Description"]).value == "Brand new thing":
+            w3.cell(r, cols3["Real Hscode"]).value = code
+            w3.cell(r, cols3["FBR Unit (only if the HS code has several)"]).value = "kg"   # any capitals
+    o3 = io.BytesIO(); wb3.save(o3)
+    s, pv = upload(f"/api/reports/company/{nw['id']}/tax-sheet/import/preview", o3.getvalue())
+    check(s == 200 and not any("not recognised" in i["message"] or "not an FBR unit" in i["message"] for i in pv["issues"]),
+          "stored units are used, lower-case 'kg' accepted", f"{pv}")
+    # a unit that is not one of the stored ones is refused with the valid list
+    for r in range(head3 + 1, w3.max_row + 1):
+        if w3.cell(r, cols3["Description"]).value == "Brand new thing":
+            w3.cell(r, cols3["FBR Unit (only if the HS code has several)"]).value = "Parsecs"
+    o4 = io.BytesIO(); wb3.save(o4)
+    s, pv2 = upload(f"/api/reports/company/{nw['id']}/tax-sheet/import/preview", o4.getvalue())
+    check(any("Parsecs" in i["message"] and "KG" in i["message"] for i in pv2["issues"]), "an unknown unit lists the valid ones", f"{pv2}")
+    for row in call("GET", "/api/FbrLookup/category/HsUom"):
+        if row["code"].startswith(code + "|"):
+            call("DELETE", f"/api/FbrLookup/{row['id']}")
 finally:
     for cid in made:
         http("DELETE", f"/api/companies/{cid}", base, token=token)
