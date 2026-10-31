@@ -198,7 +198,7 @@ check("…nor FBR validation, which needs an agent token with fbr.validate", "va
 
 # ── suppliers ────────────────────────────────────────────────────────
 print("\n== prepare_supplier ==")
-made_suppliers, made_items, made_bills = [], [], []
+made_suppliers, made_items, made_bills, made_companies = [], [], [], []
 
 
 def supplier_count():
@@ -341,6 +341,71 @@ else:
     err, m = tool(TW, "prepare_bill_tax_filing", base)
     check("the old version is refused once the rows were saved", err and "changed" in m.lower(), m)
 
+# ── a company that prints its original bill lines (2026-10-31) ──────
+# Its own throwaway company: an existing company's settings are never flipped for a test.
+print("\n== original bill lines ==")
+from test_tenant_leak_sweep import company_payload
+s, C = http("POST", "/api/companies", admin, {**company_payload(f"[TEMP] MCP original {RUN}"), "fbrToken": "synthetic-local-token"})
+assert s in (200, 201), f"company: {s} {C}"
+made_companies.append(C["id"])
+assert http("PUT", f"/api/companies/{C['id']}", admin, {**C, "taxInvoiceUseOriginalBillLines": True})[0] == 200
+s, cl = http("POST", "/api/clients", admin, {"companyId": C["id"], "name": f"Buyer {RUN}", "address": "Sample",
+                                             "ntn": "1234567", "registrationType": "Registered", "fbrProvinceCode": 8})
+assert s in (200, 201), f"client: {s} {cl}"
+LINES = [f"Spanner 10mm {RUN}", f"Spanner 12mm {RUN}"]
+s, ob = http("POST", "/api/invoices/standalone", admin, {"companyId": C["id"], "clientId": cl["id"], "date": today, "gstRate": 18,
+             "items": [{"description": LINES[0], "quantity": 2, "unitPrice": 100, "uom": "Numbers, pieces, units"},
+                       {"description": LINES[1], "quantity": 3, "unitPrice": 50, "uom": "Numbers, pieces, units"}]})
+assert s in (200, 201), f"bill: {s} {ob}"
+assert http("PUT", f"/api/usercompanies/user/{uids['mcpm_w']}", admin, {"companyIds": [A["id"], B["id"], C["id"]]})[0] == 200
+TC = mk(W, [C["id"]], ["read", "itemtypes.write", "taxfiling.write"], "original")
+check("search_fbr_hs_codes comes with search_item_types, on read and write tokens alike",
+      "search_fbr_hs_codes" in names(TC) and "search_fbr_hs_codes" in names(TRO), sorted(names(TC)))
+
+err, found = tool(TC, "search_fbr_hs_codes", {"companyId": C["id"], "search": "8204.1100"})
+first = found["items"][0] if not err and found["items"] else {}
+check("search_fbr_hs_codes returns the code, a one-line short name and FBR's full text",
+      first.get("hsCode") == "8204.1100" and 0 < len(first.get("shortName") or "") <= 60
+      and len(first.get("fbrDescription") or "") > len(first["shortName"]), found)
+check("…with no company item on it yet", first.get("companyItems") == [], first)
+err, m = tool(TC, "search_fbr_hs_codes", {"companyId": A["id"], "search": "8204"})
+check("…and only for the token's own companies", err, m)
+
+def new_item(code):
+    e, plan = tool(TC, "prepare_item_type", {"companyId": C["id"], "hsCode": code, "uom": "Numbers, pieces, units",
+                                             "saleType": "Goods at Standard Rate (default)"})
+    if e:
+        return e, plan, 0
+    e, done = tool(TC, "commit_action", {"planId": plan["planId"]})
+    return e, plan, (int(done["resultRef"].split(":")[1]) if not e else 0)
+
+err, plan, item_c1 = new_item("8204.1100")
+check("a new item with an HS code and no name takes the code's short name", not err and plan["details"]["name"] == first.get("shortName") and item_c1, plan)
+err, tfc = tool(TC, "get_bill_tax_filing", {"companyId": C["id"], "invoiceId": ob["id"]})
+check("get_bill_tax_filing reports the company's filing rules",
+      not err and tfc["companyRules"]["printsOriginalBillLines"] is True and tfc["companyRules"]["omitsFbrProductDescription"] is False
+      and len(tfc["rows"]) == 2, tfc)
+crow = [{"sourceLineIds": r["sourceLineIds"], "itemTypeId": item_c1, "quantity": str(r["quantity"]), "valueExclTax": str(r["valueExclTax"])}
+        for r in tfc["rows"]]
+cbase = {"companyId": C["id"], "invoiceId": ob["id"], "version": tfc["version"]}
+
+def commit_rows(rows):
+    e, plan = tool(TC, "prepare_bill_tax_filing", {**cbase, "rows": rows})
+    return tool(TC, "commit_action", {"planId": plan["planId"]}) if not e else (True, plan)
+
+merged = {"sourceLineIds": sorted(i for r in crow for i in r["sourceLineIds"]), "itemTypeId": item_c1,
+          "quantity": str(sum(float(r["quantity"]) for r in crow)), "valueExclTax": str(sum(float(r["valueExclTax"]) for r in crow))}
+err, m = commit_rows([merged])
+check("combining two bill lines is refused", err and "own row" in str(m), m)
+err, m = commit_rows(crow)
+check("one HS code on two bill lines is refused as already in use", err and "already in use" in str(m), m)
+err, _, item_c2 = new_item("8204.1200")
+err, m = commit_rows([crow[0], {**crow[1], "itemTypeId": item_c2}])
+check("one HS code per line saves", not err, m)
+err, tfs = tool(TC, "get_bill_tax_filing", {"companyId": C["id"], "invoiceId": ob["id"]})
+check("…and each row is filed under its own bill description, not the item name",
+      not err and tfs["hasSavedRows"] and sorted(r["description"] for r in tfs["rows"]) == sorted(LINES), tfs.get("rows"))
+
 # ── activity log ─────────────────────────────────────────────────────
 print("\n== activity log ==")
 q = f"&userId={uids['mcpm_w']}&pageSize=100"
@@ -365,6 +430,8 @@ for i in made_items:
     http("DELETE", f"/api/itemtypes/{i}?companyId={A['id']}", admin)
 for sid in made_suppliers:
     http("DELETE", f"/api/suppliers/{sid}", admin)
+for cid in made_companies:
+    http("DELETE", f"/api/companies/{cid}", admin)
 for n in ("mcpm_k", "mcpm_w", "mcpm_r", "mcpm_ta"):
     http("DELETE", f"/api/users/{uids[n]}", admin)
 for r in http("GET", "/api/roles", admin)[1] or []:

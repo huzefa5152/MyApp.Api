@@ -24,10 +24,10 @@ public partial class McpController
     {
         var company = new { type = "integer", minimum = 1 };
         var id = new { type = "integer", minimum = 1 };
-        tools.Add(new("get_bill_tax_filing", "Read a bill's tax filing rows for FBR: the bill lines, the current filing rows (saved or the initial grouping), and the version prepare_bill_tax_filing needs.",
+        tools.Add(new("get_bill_tax_filing", "Read a bill's tax filing rows for FBR: the bill lines, the current filing rows (saved or the initial grouping), the company's filing rules, and the version prepare_bill_tax_filing needs.",
             ExpandedSchema(new { companyId = company, invoiceId = id }, "companyId", "invoiceId"),
             new[] { "invoices.list.view" }));
-        tools.Add(new("prepare_bill_tax_filing", "Prepare the FBR classification of a bill: every bill line must be in exactly one row, each row naming an item from this company's catalog (search_item_types) with a complete HS code. Changing quantities or amounts needs the consultant quantity permission. Read get_bill_tax_filing first and pass its version. Nothing is saved: returns a plan to show the user. Call commit_action only after they approve. Never submits to FBR.",
+        tools.Add(new("prepare_bill_tax_filing", "Prepare the FBR classification of a bill: every bill line must be in exactly one row, each row naming an item from this company's catalog (search_item_types; for a new code, search_fbr_hs_codes then prepare_item_type) with a complete HS code. Follow companyRules from get_bill_tax_filing: when printsOriginalBillLines is true every bill line is its own row (no combining) and FBR receives each line's own bill description, so several rows may share one item; otherwise rows may combine lines and FBR receives the row description, which defaults to the item name. FBR receives a blank description when omitsFbrProductDescription is true. Changing quantities or amounts needs the consultant quantity permission. Read get_bill_tax_filing first and pass its version. Nothing is saved: returns a plan to show the user. Call commit_action only after they approve. Never submits to FBR.",
             ExpandedSchema(new
             {
                 companyId = company, invoiceId = id,
@@ -91,6 +91,14 @@ public partial class McpController
             invoiceId = bill.Id, bill.InvoiceNumber, date = Ymd(bill.Date), bill.ClientName, bill.FbrStatus, bill.TaxTreatment,
             bill.Subtotal, bill.GSTAmount, bill.GrandTotal,
             editor.Version, editor.HasSavedRows, editor.RequiresReview,
+            companyRules = new
+            {
+                printsOriginalBillLines = editor.Bill.TaxInvoiceUseOriginalBillLines,
+                omitsFbrProductDescription = editor.Bill.FbrOmitProductDescription,
+                rows = editor.Bill.TaxInvoiceUseOriginalBillLines
+                    ? "One row per bill line; never combine lines. Several lines may share one item: FBR receives each line's own bill description."
+                    : "Rows may combine bill lines that share an item, unit and tax treatment. FBR receives the row description (default: the item name).",
+            },
             lines = editor.Bill.Items.Select(i => new { i.Id, i.Description, i.Quantity, i.UOM, i.UnitPrice, i.LineTotal, i.ItemTypeId, i.ItemTypeName, i.HSCode }),
             rows = editor.Rows.Select(FilingRow),
             initialRows = editor.Rows.Count == editor.InitialRows.Count ? null : editor.InitialRows.Select(FilingRow),
@@ -151,6 +159,14 @@ public partial class McpController
         if (types.Count != typeIds.Count) throw new ToolError("An item is outside this company's catalog.");
         if (types.Values.FirstOrDefault(i => string.IsNullOrWhiteSpace(i.HSCode) || i.IsHsCodePartial) is { } partial)
             throw new ToolError($"Item \"{partial.Name}\" has no complete HS code. Classify it first (prepare_item_type).");
+        // The save's own rules for a company that prints its original lines, answered now with their reason.
+        if (editor.Bill.TaxInvoiceUseOriginalBillLines)
+        {
+            var problem = TaxFilingProjection.MergedRow(editor.HasSavedRows ? editor.Rows : null, rows)
+                ?? TaxFilingProjection.RepeatedHsCode(editor.Bill.Items.Select(i => new MyApp.Api.Models.InvoiceItem { Id = i.Id, Description = i.Description }),
+                    rows.Select(r => new TaxFilingRowDto { SourceLineIds = r.SourceLineIds, HSCode = types[r.ItemTypeId!.Value].HSCode }));
+            if (problem != null) throw new ToolError(problem);
+        }
 
         var payload = new
         {

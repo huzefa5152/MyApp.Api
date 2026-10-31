@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
@@ -28,6 +29,7 @@ public partial class McpController
             new("get_sales_order", "Order header and a capped page of remaining delivery quantities.", ExpandedSchema(new { companyId = company, orderId = id, offset = new { type = "integer", minimum = 0 }, limit = size }, "companyId", "orderId"), new[] { "salesorders.list.view" }),
             new("search_suppliers", "Find supplier IDs and names; contact and tax identifiers are omitted.", ExpandedSchema(new { companyId = company, search = text, offset = new { type = "integer", minimum = 0 }, limit = size }, "companyId"), new[] { "suppliers.manage.view" }),
             new("search_item_types", "Find catalog IDs, names, HS codes and units in the selected company. No stock/cost figures.", ExpandedSchema(new { companyId = company, search = text, offset = new { type = "integer", minimum = 0 }, limit = size }, "companyId"), new[] { "itemtypes.manage.view" }),
+            new("search_fbr_hs_codes", "Search FBR's HS code list (stored offline; a typed code it lacks is looked up at FBR) by code or product word. Each result has a one-line shortName to use as a new item's name, FBR's full description, and this company's catalog items already on that code.", ExpandedSchema(new { companyId = company, search = new { type = "string", minLength = 2, maxLength = 100 } }, "companyId", "search"), new[] { "itemtypes.manage.view", "fbr.reference.read" }),
             new("search_purchase_bills", "Purchase bill totals; settlement fields require payment visibility.", search, new[] { "purchasebills.list.view" }),
             new("get_purchase_bill", "Purchase bill totals and a capped page of lines; settlement fields require payment visibility.", ExpandedSchema(new { companyId = company, purchaseBillId = id, offset = new { type = "integer", minimum = 0 }, limit = size }, "companyId", "purchaseBillId"), new[] { "purchasebills.list.view" }),
             new("search_goods_receipts", "Goods receipts with supplier, source purchase bill and status.", search, new[] { "goodsreceipts.list.view" }),
@@ -100,6 +102,19 @@ public partial class McpController
             case "search_item_types":
                 var types = (await OperationService<IItemTypeService>().GetAllAsync(companyId)).Where(x => x.CompanyId == companyId && (x.Name + " " + x.HSCode).Contains(search, StringComparison.OrdinalIgnoreCase)).ToList();
                 return new { totalCount = types.Count, offset, limit, items = types.Skip(offset).Take(limit).Select(x => new { x.Id, x.Name, x.HSCode, x.UOM }) };
+            case "search_fbr_hs_codes":
+                if (search.Trim().Length < 2) throw new ToolError("search needs at least 2 characters: an HS code or a product word.");
+                var codes = (await OperationService<IFbrService>().GetHSCodesAsync(companyId, search.Trim())).Take(25).ToList();
+                var codeKeys = codes.Select(c => c.HS_CODE).ToList();
+                var onCode = await _context.ItemTypes.AsNoTracking()
+                    .Where(t => t.CompanyId == companyId && !t.IsDeleted && t.HSCode != null && codeKeys.Contains(t.HSCode))
+                    .Select(t => new { t.Id, t.Name, t.HSCode }).ToListAsync();
+                return new
+                {
+                    items = codes.Select(c => new { hsCode = c.HS_CODE, c.ShortName, fbrDescription = c.Description,
+                        companyItems = onCode.Where(t => t.HSCode == c.HS_CODE).Select(t => new { itemTypeId = t.Id, t.Name }) }),
+                    note = "Use a companyItems entry when one fits. Otherwise create the item with prepare_item_type (its name defaults to shortName).",
+                };
             case "search_purchase_bills":
                 var purchases = await OperationService<IPurchaseBillService>().GetPagedByCompanyAsync(companyId, page, size, search, null, from, to);
                 var visibility = await OperationPurchasePaymentVisibleAsync();

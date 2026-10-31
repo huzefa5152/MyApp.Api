@@ -52,6 +52,9 @@ public static class McpToolAccessCatalog
 
         new("get_stock", "Inventory", "Read stock balances", new[] { "stock.dashboard.view" }),
         new("search_item_types", "Inventory", "Find items", new[] { "itemtypes.manage.view" }),
+        // Rides on the item search grant, so every user who can find items can also find FBR's HS codes.
+        new("search_fbr_hs_codes", "Inventory", "Find FBR HS codes and short names", new[] { "itemtypes.manage.view", "fbr.reference.read" },
+            Configurable: false, GrantedWith: "search_item_types"),
         new("prepare_item_type", "Inventory", "Prepare catalog item creation or changes", new[] { "itemtypes.manage.create", "itemtypes.manage.update" }, McpScopes.ItemTypes, Write: true),
         new("item_rate_history", "Inventory", "Read item rate history", new[] { "itemratehistory.view" }),
 

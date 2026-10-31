@@ -33,7 +33,7 @@ public partial class McpController
                 idempotencyKey = idem,
             }, "companyId"),
             new[] { "suppliers.manage.create", "suppliers.manage.update" }, McpScopes.Suppliers, Writes: true));
-        tools.Add(new("prepare_item_type", "Prepare a new catalog item for one company, or an update when itemTypeId is given (only the fields you pass change). An HS code is checked against FBR's catalog when committed; leave it out to save an unclassified draft item. Nothing is saved: returns a plan to show the user. Call commit_action only after they approve.",
+        tools.Add(new("prepare_item_type", "Prepare a new catalog item for one company, or an update when itemTypeId is given (only the fields you pass change). Find the HS code with search_fbr_hs_codes; a new item without a name takes that code's shortName. The item name is what FBR receives as the product description when a bill is filed with this item (blank when the company omits descriptions). An HS code is checked against FBR's catalog when committed; leave it out to save an unclassified draft item. Nothing is saved: returns a plan to show the user. Call commit_action only after they approve.",
             ExpandedSchema(new
             {
                 companyId = company, itemTypeId = new { type = "integer", minimum = 1 },
@@ -148,7 +148,11 @@ public partial class McpController
         else
         {
             var name0 = OptText(args, "name", 200);
-            if (string.IsNullOrEmpty(name0)) throw new ToolError("name is required to create an item.");
+            // Without a name, a new item takes its HS code's one-line short name, as the screens do.
+            if (string.IsNullOrEmpty(name0) && OptText(args, "hsCode", 20) is { Length: > 0 } code0)
+                name0 = (await OperationService<IFbrService>().GetHSCodesAsync(companyId, code0))
+                    .FirstOrDefault(h => h.HS_CODE == code0)?.ShortName;
+            if (string.IsNullOrEmpty(name0)) throw new ToolError("name is required to create an item, unless hsCode is an FBR code (its short name is used).");
             // A new item is a favourite, the form's own default.
             dto = new ItemTypeDto { CompanyId = companyId, Name = name0, IsFavorite = true };
         }

@@ -216,7 +216,7 @@ TC = d["secret"]
 
 print("\n== tool catalogue follows the token ==")
 READ6 = ["get_challan", "get_invoice", "get_stock", "list_companies", "search_challans", "search_clients", "search_invoices", "search_quotes", "item_rate_history", "outstanding_ledger", "receivables_by_client", "sales_summary", "tax_sheet_summary"]
-SALES_READS = set(READ6) | {"get_mcp_capabilities", "get_action_status", "get_onboarding_schema", "get_company_onboarding_status", "get_daily_work_queue", "get_quote", "search_sales_orders", "get_sales_order", "search_suppliers", "search_item_types", "search_purchase_bills", "get_purchase_bill", "search_goods_receipts", "search_receipts", "search_payments", "get_bill_tax_filing"}
+SALES_READS = set(READ6) | {"get_mcp_capabilities", "get_action_status", "get_onboarding_schema", "get_company_onboarding_status", "get_daily_work_queue", "get_quote", "search_sales_orders", "get_sales_order", "search_suppliers", "search_item_types", "search_purchase_bills", "get_purchase_bill", "search_goods_receipts", "search_receipts", "search_payments", "get_bill_tax_filing", "search_fbr_hs_codes"}
 PRINT_READS = {"list_print_templates", "get_print_template", "get_print_contract", "get_document_print_data", "get_document_render_bundle", "list_starter_templates", "get_starter_template"}
 ACCOUNTING_READS = {"get_trial_balance", "get_profit_and_loss", "get_balance_sheet", "get_cash_book", "get_aged_payables", "get_party_ledger"}
 
