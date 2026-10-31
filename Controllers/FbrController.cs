@@ -260,8 +260,11 @@ namespace MyApp.Api.Controllers
                     .Where(l => l.Category == "HsCode" && l.IsActive).Select(l => l.Code).ToListAsync())
                     .Select(c => (c.Trim(), catalogCompany)));
             }
+            // A "<hs>|none" row marks a code FBR has no unit for: it stays in todo (the paging below
+            // relies on that) and its lookup answers from the mark without asking PRAL.
             var stored = (await _db.FbrLookups.AsNoTracking()
-                .Where(l => l.Category == TaxMappingEngine.HsUomCategory).Select(l => l.Code).ToListAsync())
+                .Where(l => l.Category == TaxMappingEngine.HsUomCategory && !l.Code.EndsWith("|none"))
+                .Select(l => l.Code).ToListAsync())
                 .Select(c => c[..c.IndexOf('|')]).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             // One row per HS code, whichever token-holding company uses it first.
@@ -351,7 +354,7 @@ namespace MyApp.Api.Controllers
             int companyId,
             [FromQuery] string hsCode,
             [FromQuery] int annexureId)
-            => Ok(await _fbrService.GetHSCodeUOMAsync(companyId, hsCode, annexureId));
+            => Ok(await _fbrService.GetHSCodeUOMAsync(companyId, hsCode, annexureId) ?? new());
 
         // ── STATL / Registration ────────────────────────────────
 

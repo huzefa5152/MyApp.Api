@@ -2244,15 +2244,15 @@ namespace MyApp.Api.Services.Implementations
         }
 
         // §5.9 — HS_UOM (v2)
-        public async Task<List<FbrUOMDto>> GetHSCodeUOMAsync(
+        public async Task<List<FbrUOMDto>?> GetHSCodeUOMAsync(
             int companyId, string hsCode, int annexureId)
         {
             var company = await _companyRepo.GetByIdAsync(companyId);
-            if (company == null || string.IsNullOrEmpty(company.FbrToken)) return new();
+            if (company == null || string.IsNullOrEmpty(company.FbrToken)) return null;
 
             var httpClient = CreateClient(company);
             var url = $"{RefBaseV2}/HS_UOM?hs_code={hsCode}&annexure_id={annexureId}";
-            return await GetReferenceListAsync<FbrUOMDto>(httpClient, url, "HS_UOM");
+            return await TryGetReferenceListAsync<FbrUOMDto>(httpClient, url, "HS_UOM");
         }
 
         // ═══════════════════════════════════════════════════════════
@@ -2358,6 +2358,11 @@ namespace MyApp.Api.Services.Implementations
         // logging behaviour. JsonException is caught separately so the operator
         // sees "FBR returned malformed JSON" rather than a generic 500.
         private async Task<List<T>> GetReferenceListAsync<T>(HttpClient httpClient, string url, string endpoint)
+            => await TryGetReferenceListAsync<T>(httpClient, url, endpoint) ?? new();
+
+        // Null when FBR was not reached or did not answer properly, so a caller can tell that apart
+        // from FBR answering with an empty list.
+        private async Task<List<T>?> TryGetReferenceListAsync<T>(HttpClient httpClient, string url, string endpoint)
         {
             try
             {
@@ -2365,7 +2370,7 @@ namespace MyApp.Api.Services.Implementations
                 if (!response.IsSuccessStatusCode)
                 {
                     _logger.LogWarning("FBR ref {Endpoint} non-success {Status}", endpoint, (int)response.StatusCode);
-                    return new();
+                    return null;
                 }
                 var json = await response.Content.ReadAsStringAsync();
                 try
@@ -2376,13 +2381,13 @@ namespace MyApp.Api.Services.Implementations
                 {
                     _logger.LogError(jx, "FBR ref {Endpoint} returned malformed JSON (first 300 chars): {Body}",
                         endpoint, json.Length > 300 ? json[..300] : json);
-                    return new();
+                    return null;
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "FBR ref {Endpoint} request failed", endpoint);
-                return new();
+                return null;
             }
         }
 

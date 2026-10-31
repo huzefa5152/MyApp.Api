@@ -64,7 +64,8 @@ namespace MyApp.Api.Services.Interfaces
         Task<List<FbrSaleTypeRateDto>> GetSaleTypeRatesAsync(int companyId, string date, int transTypeId, int provinceId);
         Task<List<FbrSRODto>> GetSROScheduleAsync(int companyId, int rateId, string date, int provinceId);
         Task<List<FbrSROItemDto>> GetSROItemsAsync(int companyId, string date, int sroId);
-        Task<List<FbrUOMDto>> GetHSCodeUOMAsync(int companyId, string hsCode, int annexureId);
+        // Null when FBR could not be asked or did not answer (no token, HTTP error), as opposed to an empty answer.
+        Task<List<FbrUOMDto>?> GetHSCodeUOMAsync(int companyId, string hsCode, int annexureId);
 
         // STATL / Registration (V1.12 §5.11, §5.12)
         Task<FbrRegStatusDto?> CheckRegistrationStatusAsync(int companyId, string regNo, string date);

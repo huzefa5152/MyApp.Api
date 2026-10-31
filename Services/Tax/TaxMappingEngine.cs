@@ -68,12 +68,16 @@ namespace MyApp.Api.Services.Tax
             var trimmed = hsCode.Trim();
             if (_hsUomCache.TryGetValue(trimmed, out var cached)) return cached;
 
-            var stored = await LoadStoredUomsAsync(trimmed);
+            var (stored, noUnitsCheckedOn) = await LoadStoredUomsAsync(trimmed);
             if (stored.Count > 0)
             {
                 _hsUomCache.TryAdd(trimmed, stored);
                 return stored;
             }
+            // FBR has no unit for some codes (mostly 98xx services). Without this marker every pick of
+            // one asked PRAL three times (1-2 s); now it is asked again only once the marker is a week old.
+            if (noUnitsCheckedOn is { } checkedOn && DateTime.UtcNow.Date - checkedOn < NoUnitsRecheckAfter)
+                return new();
 
             // Retry-on-empty: PRAL occasionally returns an empty array on the
             // first call for a real HS code (operator-reported, see comment
@@ -82,11 +86,13 @@ namespace MyApp.Api.Services.Tax
             // exception through Polly's HttpClient pipeline and never reaches
             // here, so this loop won't paper over real network failures.
             List<FbrUOMDto>? fresh = null;
+            var fbrAnsweredEveryTime = true;
             for (var attempt = 0; attempt < HsUomMaxAttempts; attempt++)
             {
                 if (HsUomBackoffMs[attempt] > 0)
                     await Task.Delay(HsUomBackoffMs[attempt]);
                 fresh = await _fbr.GetHSCodeUOMAsync(companyId, trimmed, DefaultAnnexureId);
+                if (fresh == null) fbrAnsweredEveryTime = false;
                 if (fresh != null && fresh.Count > 0)
                 {
                     if (attempt > 0)
@@ -95,23 +101,68 @@ namespace MyApp.Api.Services.Tax
                             trimmed, companyId, attempt + 1);
                     _hsUomCache.TryAdd(trimmed, fresh);
                     await StoreUomsAsync(trimmed, fresh);
+                    if (noUnitsCheckedOn != null) await ClearNoUnitsMarkerAsync(trimmed);
                     return fresh;
                 }
             }
-            return fresh ?? new();
+            // Only a real empty answer earns the marker: a failed request (no token, HTTP error) says
+            // nothing about the code and must not hide its units for a week.
+            if (fbrAnsweredEveryTime) await MarkNoUnitsAsync(trimmed);
+            return new();
         }
 
-        private async Task<List<FbrUOMDto>> LoadStoredUomsAsync(string hsCode)
+        // Code "<hs>|none", Label = the UTC day FBR last answered with no unit. Its suffix is not a
+        // number, so it never reads as a unit.
+        private static readonly TimeSpan NoUnitsRecheckAfter = TimeSpan.FromDays(7);
+        private static string NoUnitsCode(string hsCode) => hsCode + "|none";
+
+        private async Task<(List<FbrUOMDto> Units, DateTime? NoUnitsCheckedOn)> LoadStoredUomsAsync(string hsCode)
         {
             var prefix = hsCode + "|";
             var rows = await _db.FbrLookups.AsNoTracking()
                 .Where(l => l.Category == HsUomCategory && l.IsActive && l.Code.StartsWith(prefix))
                 .OrderBy(l => l.SortOrder).ToListAsync();
             var list = new List<FbrUOMDto>();
+            DateTime? noUnits = null;
             foreach (var r in rows)
                 if (int.TryParse(r.Code[prefix.Length..], out var id))
                     list.Add(new FbrUOMDto { UOM_ID = id, Description = r.Label });
-            return list;
+                else if (r.Code == NoUnitsCode(hsCode) && DateTime.TryParseExact(r.Label, "yyyy-MM-dd",
+                             System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d))
+                    noUnits = d;
+            return (list, noUnits);
+        }
+
+        private async Task MarkNoUnitsAsync(string hsCode)
+        {
+            try
+            {
+                var code = NoUnitsCode(hsCode);
+                var today = DateTime.UtcNow.Date.ToString("yyyy-MM-dd");
+                await _db.Database.ExecuteSqlInterpolatedAsync($@"
+UPDATE FbrLookups SET Label = {today} WHERE Category = {HsUomCategory} AND Code = {code};
+INSERT INTO FbrLookups (Category, Code, Label, SortOrder, IsActive)
+SELECT {HsUomCategory}, {code}, {today}, 0, 1
+WHERE NOT EXISTS (SELECT 1 FROM FbrLookups WHERE Category = {HsUomCategory} AND Code = {code})");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Could not mark HS {HsCode} as having no FBR unit", hsCode);
+            }
+        }
+
+        private async Task ClearNoUnitsMarkerAsync(string hsCode)
+        {
+            try
+            {
+                var code = NoUnitsCode(hsCode);
+                await _db.Database.ExecuteSqlInterpolatedAsync(
+                    $"DELETE FROM FbrLookups WHERE Category = {HsUomCategory} AND Code = {code}");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Could not clear the no-unit mark for HS {HsCode}", hsCode);
+            }
         }
 
         // Plain INSERT ... WHERE NOT EXISTS, never SaveChanges: the caller may be
