@@ -266,11 +266,10 @@ namespace MyApp.Api.Services.Implementations
                 else if (uoms.Count == 1) chosen = uoms[0];
                 else
                 {
+                    // Several units and none named: take the system's suggestion, else FBR's first.
                     FbrUOMDto? suggested = null;
-                    try { suggested = await _taxEngine.SuggestDefaultUomAsync(companyId, code); } catch { /* no default available */ }
-                    chosen = suggested == null ? null : uoms.FirstOrDefault(u => u.UOM_ID == suggested.UOM_ID);
-                    if (chosen == null)
-                        throw new InvalidOperationException($"HS code {code} has several FBR units ({string.Join(", ", uoms.Select(u => u.Description))}). Enter one in the FBR Unit column.");
+                    try { suggested = await _taxEngine.SuggestDefaultUomAsync(companyId, code); } catch { /* fall back to the first */ }
+                    chosen = (suggested == null ? null : uoms.FirstOrDefault(u => u.UOM_ID == suggested.UOM_ID)) ?? uoms[0];
                 }
             }
 

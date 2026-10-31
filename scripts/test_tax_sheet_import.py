@@ -195,6 +195,13 @@ try:
     o4 = io.BytesIO(); wb3.save(o4)
     s, pv2 = upload(f"/api/reports/company/{nw['id']}/tax-sheet/import/preview", o4.getvalue())
     check(any("Parsecs" in i["message"] and "KG" in i["message"] for i in pv2["issues"]), "an unknown unit lists the valid ones", f"{pv2}")
+    # blank unit with several stored units: the first one is used, no error
+    for r in range(head3 + 1, w3.max_row + 1):
+        if w3.cell(r, cols3["Description"]).value == "Brand new thing":
+            w3.cell(r, cols3["FBR Unit (only if the HS code has several)"]).value = None
+    o5 = io.BytesIO(); wb3.save(o5)
+    s, pv3 = upload(f"/api/reports/company/{nw['id']}/tax-sheet/import/preview", o5.getvalue())
+    check(s == 200 and pv3["invoicesReady"] == 1 and not pv3["issues"], "blank unit with several units picks one", f"{pv3}")
     for row in call("GET", "/api/FbrLookup/category/HsUom"):
         if row["code"].startswith(code + "|"):
             call("DELETE", f"/api/FbrLookup/{row['id']}")
