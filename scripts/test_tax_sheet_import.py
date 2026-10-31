@@ -8,6 +8,7 @@ import argparse
 import io
 import json
 import sys
+import time
 import urllib.request
 import uuid
 from datetime import date
@@ -62,6 +63,9 @@ def upload(path, blob, name="sheet.xlsx"):
             "Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\r\n\r\n").encode() \
         + blob + f"\r\n--{b}--\r\n".encode()
     s, d = raw("POST", path, body, {"Content-Type": f"multipart/form-data; boundary={b}"})
+    if s == 429:  # the import endpoint allows 10 uploads a minute; this suite makes more
+        time.sleep(61)
+        s, d = raw("POST", path, body, {"Content-Type": f"multipart/form-data; boundary={b}"})
     try:
         return s, json.loads(d)
     except Exception:
