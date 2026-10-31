@@ -45,12 +45,14 @@ public partial class InvoiceService
         return result;
     }
 
+    private static bool OriginalLinesOnly(Invoice bill) => bill.Company?.TaxInvoiceUseOriginalBillLines == true;
+
     private TaxFilingEditorDto FilingEditor(Invoice bill) => new() {
         Bill = ToDto(bill), Version = TaxFilingProjection.EditVersion(bill),
         HasSavedRows = bill.TaxFilingRowsJson != null,
         RequiresReview = TaxFilingProjection.NeedsReReview(bill),
-        Rows = TaxFilingProjection.Plan(bill)?.Rows ?? TaxFilingProjection.InitialRows(bill),
-        InitialRows = TaxFilingProjection.InitialRows(bill, commercial: true)
+        Rows = TaxFilingProjection.Plan(bill)?.Rows ?? TaxFilingProjection.InitialRows(bill, perLine: OriginalLinesOnly(bill)),
+        InitialRows = TaxFilingProjection.InitialRows(bill, commercial: true, perLine: OriginalLinesOnly(bill))
     };
 
     public async Task<TaxFilingEditorDto?> GetTaxFilingAsync(int id)
@@ -122,7 +124,7 @@ public partial class InvoiceService
             throw new InvalidOperationException("The bill or filing rows changed while you were editing. Reload and review the latest values.");
         TaxFilingProjection.ValidateCoverage(bill, dto.Rows);
         if (!allowNumericalChanges) {
-            var baseline = TaxFilingProjection.Plan(bill)?.Rows ?? TaxFilingProjection.InitialRows(bill);
+            var baseline = TaxFilingProjection.Plan(bill)?.Rows ?? TaxFilingProjection.InitialRows(bill, perLine: OriginalLinesOnly(bill));
             var references = new List<TaxFilingRowDto>();
             foreach (var group in baseline) {
                 var source = bill.Items.Where(i => group.SourceLineIds.Contains(i.Id)).Select(TaxFilingProjection.LegacyLine).ToList();

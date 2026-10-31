@@ -67,16 +67,39 @@ public static class TaxFilingProjection
         FixedNotifiedValueOrRetailPrice = i.FixedNotifiedValueOrRetailPrice
     };
 
-    public static List<TaxFilingRowDto> InitialRows(Invoice bill, bool commercial = false) => bill.Items.Select(i => commercial ? i : LegacyLine(i))
-        .GroupBy(i => new { Classification = TaxInvoiceGrouping.Key(i), i.UOM }).Select(g => new TaxFilingRowDto {
+    /// <summary>
+    /// The starting rows of the filing editor. <paramref name="perLine"/> gives every original bill line its own row
+    /// (a company that prints its original lines never starts from item-type groups) and names the row by the bill's
+    /// own description, so the consultant sees the line the customer was billed.
+    /// </summary>
+    public static List<TaxFilingRowDto> InitialRows(Invoice bill, bool commercial = false, bool perLine = false) => bill.Items.Select(i => commercial ? i : LegacyLine(i))
+        .GroupBy(i => perLine ? (object)i.Id : new { Classification = TaxInvoiceGrouping.Key(i), i.UOM }).Select(g => new TaxFilingRowDto {
             SourceLineIds = g.Select(i => i.Id).ToList(), ItemTypeId = g.First().ItemTypeId,
-            Description = g.First().ItemTypeName ?? g.First().Description,
+            Description = perLine && !string.IsNullOrWhiteSpace(g.First().Description) ? g.First().Description : g.First().ItemTypeName ?? g.First().Description,
             HSCode = g.First().HSCode, UOM = g.First().UOM, FbrUOMId = g.First().FbrUOMId,
             SaleType = g.First().SaleType, RateId = g.First().RateId,
             SroScheduleNo = g.First().SroScheduleNo, SroItemSerialNo = g.First().SroItemSerialNo,
             Quantity = g.Sum(i => i.Quantity), ValueExclTax = g.Sum(i => i.LineTotal),
             RetailPrice = g.Sum(i => i.FixedNotifiedValueOrRetailPrice ?? 0m)
         }).ToList();
+
+    /// <summary>
+    /// The HS code a bill line is filed under, for documents that print the ORIGINAL line: the saved filing row
+    /// that holds it (a combined row gives every source line the same code), else the line's own overlay or code.
+    /// Empty until someone classifies the line.
+    /// </summary>
+    public static Dictionary<int, string?> HsCodeByLine(Invoice bill)
+    {
+        var result = new Dictionary<int, string?>();
+        if (bill.TaxFilingRowsJson != null)
+        {
+            Plan(bill)!.Rows.ForEach(r => r.SourceLineIds.ForEach(id => result[id] = r.HSCode));
+        }
+        foreach (var i in bill.Items)
+            if (!result.TryGetValue(i.Id, out var code) || string.IsNullOrWhiteSpace(code))
+                result[i.Id] = i.Adjustment?.AdjustedHSCode ?? i.HSCode;
+        return result;
+    }
 
     public static List<InvoiceItem> Lines(Invoice bill) => Plan(bill) is { } p
         ? p.Rows.Select((r, n) => new InvoiceItem {

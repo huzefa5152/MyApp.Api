@@ -26,6 +26,8 @@ namespace MyApp.Api.DTOs
         public string ClientName { get; set; } = "";
         public decimal Subtotal { get; set; }
         public bool AllowNonFbrBills { get; set; }
+        /// <summary>The company prints its original bill lines on every Tax Invoice, so the adjust screen offers no grouping.</summary>
+        public bool TaxInvoiceUseOriginalBillLines { get; set; }
         public string TaxTreatment { get; set; } = "FBR";
         public decimal GSTRate { get; set; }
         public decimal GSTAmount { get; set; }

@@ -27,7 +27,7 @@ var invoice = new Invoice {
 };
 var repo = DispatchProxy.Create<IInvoiceRepository, InvoiceProxy>();
 ((InvoiceProxy)(object)repo).Invoice = invoice;
-var service = new InvoiceService(repo, null!, null!, null!, null!, new ConfigurationBuilder().Build(), null!, null!, null!, null!, NullLogger<InvoiceService>.Instance, null!, null!);
+var service = new InvoiceService(repo, null!, null!, null!, null!, new ConfigurationBuilder().Build(), null!, null!, null!, null!, NullLogger<InvoiceService>.Instance, null!, null!, null!);
 Check(!invoice.GroupTaxInvoiceByItemType && !invoice.Company.DefaultGroupTaxInvoiceByItemType, "Existing documents and companies default to individual.");
 var individual = (await service.GetPrintTaxInvoiceAsync(1))!;
 Check(individual.Items.Count == 2 && individual.BillItems.Count == 2, "Individual output keeps each source line in both template loops.");
@@ -79,6 +79,31 @@ Check(originalPrint.Items[0].UnitPrice == 100m && originalPrint.Items[1].UnitPri
 Check(originalPrint.Items[0].InvoiceQuantity == 2m && originalPrint.Items[0].InvoiceUnitPrice == 100m, "Legacy display aliases cannot leak adjusted quantities into original-line prints.");
 Check(originalPrint.Items.Sum(i => i.ValueExclTax) == 800m && originalPrint.Items.Sum(i => i.GSTAmount) == 144m, "Original lines reconcile to document totals.");
 Check(invoice.Items.First().Adjustment!.AdjustedQuantity == 4m, "Printing never changes the filing adjustment.");
+invoice.Items.First().HSCode = null;
+invoice.Items.First().Adjustment!.AdjustedHSCode = "9999.0000";
+originalPrint = (await service.GetPrintTaxInvoiceAsync(1))!;
+Check(originalPrint.Items[0].HSCode == "9999.0000" && originalPrint.Items[0].Quantity == 2m && originalPrint.Items[0].Description == "First line", "Original-line print shows the consultant's HS code on the unchanged bill line.");
+invoice.Items.First().Adjustment!.AdjustedHSCode = null;
+originalPrint = (await service.GetPrintTaxInvoiceAsync(1))!;
+Check(string.IsNullOrEmpty(originalPrint.Items[0].HSCode), "Original-line print has no HS code until a line is classified.");
+invoice.Items.First().HSCode = "1111.0000";
+// A saved filing plan that combines both lines under one code: the original lines still print one row each, at their own quantity.
+var savedAdjustment = invoice.Items.First().Adjustment;
+invoice.Items.First().Adjustment = null;
+invoice.TaxFilingRowsJson = System.Text.Json.JsonSerializer.Serialize(new TaxFilingPlan {
+    SourceVersion = TaxFilingProjection.SourceVersion(invoice),
+    Rows = new List<TaxFilingRowDto> { new() { SourceLineIds = new List<int> { 1, 2 }, Description = "Combined", HSCode = "5555.0000", UOM = "KG", Quantity = 4m, ValueExclTax = 800m } }
+});
+originalPrint = (await service.GetPrintTaxInvoiceAsync(1))!;
+Check(originalPrint.Items.Count == 2 && originalPrint.Items.All(i => i.HSCode == "5555.0000"), "A combined filing row gives every original line its code, and each still prints on its own row.");
+Check(originalPrint.Items[0].Quantity == 2m && originalPrint.Items[1].Quantity == 3m && originalPrint.Items[0].UOM == "PCS", "Original lines keep their own quantity and unit after the filing rows are saved.");
+var billPrint = (await service.GetPrintBillAsync(1))!;
+Check(billPrint.Items.Count == 2 && billPrint.Items.All(i => i.HSCode == "5555.0000") && billPrint.Items[0].Quantity == 2m && billPrint.Items[1].Description == "Second line", "The commercial bill shows the filed code on each unchanged line.");
+var perLine = TaxFilingProjection.InitialRows(invoice, perLine: true);
+Check(perLine.Count == 2 && perLine[0].Description == "First line" && perLine[1].SourceLineIds.SequenceEqual(new[] { 2 }), "A company that prints original lines starts the filing editor with one row per bill line.");
+Check(TaxFilingProjection.InitialRows(invoice).Count == 1, "Other companies still start from item-type groups.");
+invoice.TaxFilingRowsJson = null;
+invoice.Items.First().Adjustment = savedAdjustment;
 invoice.Company.TaxInvoiceUseOriginalBillLines = false;
 Check((await service.GetPrintTaxInvoiceAsync(1))!.Items.Count == 1, "Turning policy off preserves existing grouped invoice behavior.");
 

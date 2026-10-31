@@ -340,6 +340,7 @@ namespace MyApp.Api.Services.Implementations
             SalesOrders = inv.DeliveryChallans.Where(c => c.SalesOrderId != null).GroupBy(c => c.SalesOrderId!.Value)
                 .Select(g => new BillSalesOrderLinkDto { Id=g.Key, Number=g.First().SalesOrder?.SalesOrderNumber ?? 0 }).ToList(),
             AllowNonFbrBills = inv.Company?.AllowNonFbrBills ?? false,
+            TaxInvoiceUseOriginalBillLines = inv.Company?.TaxInvoiceUseOriginalBillLines ?? false,
             TaxTreatment = inv.TaxTreatment,
             IsFbrExcluded = inv.IsFbrExcluded,
             IsCancelled = inv.IsCancelled,
@@ -3883,6 +3884,8 @@ namespace MyApp.Api.Services.Implementations
                     .Distinct()
                     .ToList()!;
 
+            // The code each ORIGINAL line is filed under: its saved filing row (a combined row gives every line the same code).
+            var filedHs = TaxFilingProjection.HsCodeByLine(inv);
             return new PrintBillDto
             {
                 TaxTreatment = inv.TaxTreatment,
@@ -3935,7 +3938,7 @@ namespace MyApp.Api.Services.Implementations
                 AmountInWords = NumberToWordsConverter.Convert(CommercialTotalCalculator.Total(inv.GrandTotal, inv.FreightCharges)),
                 PaymentTerms = inv.PaymentTerms,
                 Notes = inv.Notes,
-                Items = MergeSameBillLines(inv).Select((g, idx) => new PrintBillItemDto
+                Items = MergeSameBillLines(inv, filedHs).Select((g, idx) => new PrintBillItemDto
                 {
                     SNo = idx + 1,
                     ItemTypeName = g[0].ItemTypeName,
@@ -3952,12 +3955,13 @@ namespace MyApp.Api.Services.Implementations
                     // rate and line total deliberately stay the bill's own: this
                     // is the delivery document the buyer signs for goods
                     // received, and it must keep matching what shipped.
-                    HSCode = BillLineHsCode(g[0])
+                    HSCode = BillLineHsCode(g[0], filedHs)
                 }).ToList()
             };
         }
 
-        private static string? BillLineHsCode(InvoiceItem ii) => ii.Adjustment?.AdjustedHSCode ?? ii.HSCode;
+        private static string? BillLineHsCode(InvoiceItem ii, IReadOnlyDictionary<int, string?> filedHs) =>
+            filedHs.TryGetValue(ii.Id, out var code) && !string.IsNullOrWhiteSpace(code) ? code : ii.Adjustment?.AdjustedHSCode ?? ii.HSCode;
 
         /// <summary>
         /// The same item delivered on several challans of one PO prints as ONE
@@ -3967,14 +3971,14 @@ namespace MyApp.Api.Services.Implementations
         /// sees. Lines merge only when PO, description, unit, rate, item type and
         /// HS code all match, so a different rate or PO always stays its own row.
         /// </summary>
-        private static List<List<InvoiceItem>> MergeSameBillLines(Invoice inv)
+        private static List<List<InvoiceItem>> MergeSameBillLines(Invoice inv, IReadOnlyDictionary<int, string?> filedHs)
         {
             var poByChallan = inv.DeliveryChallans.ToDictionary(c => c.Id, c => c.PoNumber?.Trim() ?? "");
             static string Norm(string? s) => string.Join(' ', (s ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToUpperInvariant();
             string Po(InvoiceItem ii) => ii.DeliveryItem != null && poByChallan.TryGetValue(ii.DeliveryItem.DeliveryChallanId, out var po)
                 ? po : inv.PoNumber?.Trim() ?? "";
             return inv.Items
-                .GroupBy(ii => (Norm(Po(ii)), Norm(ii.Description), Norm(ii.UOM), ii.UnitPrice, Norm(ii.ItemTypeName), Norm(BillLineHsCode(ii))))
+                .GroupBy(ii => (Norm(Po(ii)), Norm(ii.Description), Norm(ii.UOM), ii.UnitPrice, Norm(ii.ItemTypeName), Norm(BillLineHsCode(ii, filedHs))))
                 .Select(g => g.ToList()).ToList();
         }
 
@@ -4229,11 +4233,13 @@ namespace MyApp.Api.Services.Implementations
             else ReconcilePrintTaxes(result.Items, inv.GSTRate);
             if (inv.Company?.TaxInvoiceUseOriginalBillLines == true)
             {
+                var filedHsByLine = TaxFilingProjection.HsCodeByLine(inv);
                 result.Items = inv.Items.Select(ii => PrintItemChoices.Apply(new PrintTaxItemDto
                 {
                     ItemTypeName = ii.ItemTypeName, Description = ii.Description,
                     Quantity = ii.Quantity, UnitPrice = ii.UnitPrice,
-                    UOM = ii.UOM, HSCode = ii.HSCode, ValueExclTax = ii.LineTotal,
+                    // The line stays the bill's own; only its code follows the consultant's classification (empty until classified).
+                    UOM = ii.UOM, HSCode = filedHsByLine.TryGetValue(ii.Id, out var filedCode) && !string.IsNullOrWhiteSpace(filedCode) ? filedCode : ii.Adjustment?.AdjustedHSCode ?? ii.HSCode, ValueExclTax = ii.LineTotal,
                     GSTRate = inv.GSTRate, GSTAmount = Math.Round(ii.LineTotal * inv.GSTRate / 100, 2),
                     TotalInclTax = ii.LineTotal + Math.Round(ii.LineTotal * inv.GSTRate / 100, 2)
                 }, new[] { new PrintItemSource(ii.Quantity, ii.Quantity, ii.ItemTypeName, ii.ItemTypeName, ii.UOM, ii.UOM, ii.LineTotal) }, inv.GSTRate)).ToList();

@@ -245,7 +245,8 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
           getAllUnits(data.companyId),
         ]);
         setInvoice(data);
-        setGroupedView(forceItemTypeAndQty || !!data.groupTaxInvoiceByItemType);
+        // A company that prints its original bill lines never groups: the adjust screen opens on separate lines.
+        setGroupedView(!data.taxInvoiceUseOriginalBillLines && (forceItemTypeAndQty || !!data.groupTaxInvoiceByItemType));
         setAnyOverlay((data.items || []).some((it) => it.adjustment));
         // Bill-mode source-of-truth: every InvoiceItem field as the
         // bill carries it. Used to seed both `items[]` (when no
@@ -1223,7 +1224,10 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
 
   // The TOGGLE is offered only when switching actually changes something —
   // with one line per Item Type the two views list the same rows.
-  const showGroupToggle = !billsMode && items.length > 0;
+  // Company policy "Print original bill lines on tax invoices": always separate lines, so there is nothing to choose.
+  const originalLinesOnly = !!invoice?.taxInvoiceUseOriginalBillLines;
+  // Grouping a single line changes nothing, so the choice is offered only when there are several.
+  const showGroupToggle = !billsMode && items.length > 1 && !originalLinesOnly;
   // ...but the grouped row is where the adjustment controls live (Qty & Unit
   // Price vs Exact Line Total), so it renders on the Invoices tab regardless.
   // Gating it on `showGroupToggle` meant a SINGLE-LINE bill fell through to the
@@ -1231,7 +1235,7 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
   // an exact total was unreachable on exactly the bills that most need it. A
   // live bill printed 220,000.20 against a 220,000.00 total with no way to
   // correct it (2026-09-18).
-  const renderGrouped = !billsMode && groupedView;
+  const renderGrouped = !billsMode && groupedView && !originalLinesOnly;
 
   // Derived: what's the common Item Type across rows? Used to drive
   // the bulk picker's `value` so the dropdown actually reflects what's
@@ -1859,7 +1863,10 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                   </div>
                 </div>
 
-                {!billsMode && <div style={{ fontSize: "0.82rem", color: "#526174", marginBottom: 12 }}>
+                {!billsMode && originalLinesOnly && <div style={{ fontSize: "0.82rem", color: "#526174", marginBottom: 12 }}>
+                  The tax invoice prints your original bill lines, one row per line. Item types and codes you set here are what is filed.
+                </div>}
+                {!billsMode && !originalLinesOnly && <div style={{ fontSize: "0.82rem", color: "#526174", marginBottom: 12 }}>
                   Consultant groups use the item type’s tax unit. Bill and challan units stay unchanged.
                   {invoice.groupTaxInvoiceByItemType
                     ? " Tax invoice printing uses grouped, adjusted items."
