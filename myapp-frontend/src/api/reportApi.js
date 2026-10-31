@@ -26,9 +26,9 @@ export const getTaxSheetExcel = (companyId, params = {}) =>
 // Bulk adjust from a filled-in tax sheet. Preview saves nothing; commit re-reads the file.
 const sheetForm = (file) => { const f = new FormData(); f.append("file", file); return f; };
 export const previewTaxSheetImport = (companyId, file) =>
-  http.post(`/reports/company/${companyId}/tax-sheet/import/preview`, sheetForm(file));
+  http.post(`/reports/company/${companyId}/tax-sheet/import/preview`, sheetForm(file), { headers: { "Content-Type": "multipart/form-data" } });
 export const commitTaxSheetImport = (companyId, file) =>
-  http.post(`/reports/company/${companyId}/tax-sheet/import/commit`, sheetForm(file));
+  http.post(`/reports/company/${companyId}/tax-sheet/import/commit`, sheetForm(file), { headers: { "Content-Type": "multipart/form-data" } });
 
 // Defer the still-unclassified invoices of a period to a new date (next month).
 // body: { year?, month?, dateFrom?, dateTo?, clientId?, targetDate }
