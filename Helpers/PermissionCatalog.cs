@@ -392,6 +392,7 @@ namespace MyApp.Api.Helpers
             new("reports.taxsheet.view",    "Reports", "Tax Sheet", "View",   "View the Tax Sheet (invoice lines still missing a valid HS code, for the tax consultant)"),
             new("reports.taxsheet.export",  "Reports", "Tax Sheet", "Export", "Export the Tax Sheet to Excel"),
             new("reports.taxsheet.transfer","Reports", "Tax Sheet", "Transfer", "Move the still-unclassified invoices of a period to a new date (defer to next month); changes invoice dates"),
+            new("reports.taxsheet.import",  "Reports", "Tax Sheet", "Import", "Upload a filled-in Tax Sheet to set HS codes and filing quantities on many invoices at once (also needs invoice classification permission)"),
             new("reports.outstanding.view",   "Reports", "Outstanding Ledger", "View",   "View the Outstanding Ledger (per-client receivables: amount, paid, balance, payment status + settling receipts)"),
             new("reports.outstanding.export", "Reports", "Outstanding Ledger", "Export", "Export the Outstanding Ledger to Excel / PDF"),
 

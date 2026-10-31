@@ -24,6 +24,10 @@ namespace MyApp.Api.DTOs
         /// <summary>Un-classified item-type name — shown under the "HS Code" column.</summary>
         public string ItemTypeName { get; set; } = "";
         public string Description { get; set; } = "";
+        /// <summary>Original bill line this row is (0 when the row is a whole item-type group).</summary>
+        public int LineId { get; set; }
+        /// <summary>HS code already filed for the line, if any.</summary>
+        public string CurrentHsCode { get; set; } = "";
         public decimal ExcludingAmount { get; set; }
         public decimal SalesTax { get; set; }
         public decimal Total { get; set; }
@@ -45,6 +49,8 @@ namespace MyApp.Api.DTOs
         public string PeriodLabel { get; set; } = "";
 
         public List<TaxSheetRowDto> Rows { get; set; } = new();
+        /// <summary>True when rows are the original bill lines (company prints original lines on tax invoices).</summary>
+        public bool OriginalLines { get; set; }
 
         public decimal GrandExcluding { get; set; }
         public decimal GrandTax { get; set; }
@@ -81,5 +87,25 @@ namespace MyApp.Api.DTOs
         public DateTime TargetDate { get; set; }
         /// <summary>Invoice numbers that were skipped (already submitted to FBR / cancelled) so the UI can explain.</summary>
         public List<string> SkippedInvoiceNumbers { get; set; } = new();
+    }
+
+    /// <summary>One problem found while reading or applying an uploaded tax sheet.</summary>
+    public class TaxSheetImportIssueDto
+    {
+        public string InvoiceNumber { get; set; } = "";
+        public string Message { get; set; } = "";
+    }
+
+    /// <summary>Preview / commit outcome of a bulk tax-sheet upload.</summary>
+    public class TaxSheetImportResultDto
+    {
+        public bool Committed { get; set; }
+        /// <summary>Invoices in the file with at least one HS code filled in.</summary>
+        public int InvoicesInFile { get; set; }
+        /// <summary>Invoices that will be (preview) or were (commit) adjusted.</summary>
+        public int InvoicesReady { get; set; }
+        public int FilingRows { get; set; }
+        public int LinesRead { get; set; }
+        public List<TaxSheetImportIssueDto> Issues { get; set; } = new();
     }
 }

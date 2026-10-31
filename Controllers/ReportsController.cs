@@ -1,5 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using MyApp.Api.Services.Implementations;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
@@ -22,13 +26,25 @@ namespace MyApp.Api.Controllers
 
         private readonly AppDbContext _db;
         private readonly IWebHostEnvironment _env;
+        private readonly TaxSheetImportService _taxSheetImport;
+        private readonly IPermissionService _permissions;
 
-        public ReportsController(IReportService reports, AppDbContext db, IWebHostEnvironment env)
+        public ReportsController(IReportService reports, AppDbContext db, IWebHostEnvironment env,
+            TaxSheetImportService taxSheetImport, IPermissionService permissions)
         {
             _reports = reports;
             _db = db;
             _env = env;
+            _taxSheetImport = taxSheetImport;
+            _permissions = permissions;
         }
+
+        private int CurrentUserId =>
+            int.TryParse(
+                User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
+                out var id) ? id : 0;
+
+        private const long TaxSheetUploadMax = 10 * 1024 * 1024;
 
         // The company's letterhead and its Bill template's header colours for an
         // Excel export, when the screen asks for it (letterhead=true). Any other
@@ -194,6 +210,50 @@ namespace MyApp.Api.Controllers
             return File(bytes,
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 fileName);
+        }
+
+        /// <summary>
+        /// Bulk adjust: read a filled-in Tax Sheet workbook and report what would
+        /// change (nothing is saved). Each invoice goes through the same rules as
+        /// the Adjust screen, so the caller also needs a filing permission.
+        /// </summary>
+        [HttpPost("company/{companyId}/tax-sheet/import/preview")]
+        [HasPermission("reports.taxsheet.import")]
+        [AuthorizeCompany]
+        [RequestSizeLimit(TaxSheetUploadMax + 64 * 1024)]
+        [EnableRateLimiting("import")]
+        public async Task<IActionResult> PreviewTaxSheetImport(int companyId, [FromForm] IFormFile? file)
+        {
+            if (await CheckTaxSheetUploadAsync(file) is { } bad) return bad;
+            await using var stream = file!.OpenReadStream();
+            return Ok(await _taxSheetImport.PreviewAsync(companyId, stream));
+        }
+
+        /// <summary>Apply the filled-in Tax Sheet. The file is read again; nothing the browser kept is trusted.</summary>
+        [HttpPost("company/{companyId}/tax-sheet/import/commit")]
+        [HasPermission("reports.taxsheet.import")]
+        [AuthorizeCompany]
+        [RequestSizeLimit(TaxSheetUploadMax + 64 * 1024)]
+        [EnableRateLimiting("import")]
+        public async Task<IActionResult> CommitTaxSheetImport(int companyId, [FromForm] IFormFile? file)
+        {
+            if (await CheckTaxSheetUploadAsync(file) is { } bad) return bad;
+            var canQty = await _permissions.HasPermissionAsync(CurrentUserId, "invoices.manage.update.itemtype.qty");
+            await using var stream = file!.OpenReadStream();
+            return Ok(await _taxSheetImport.CommitAsync(companyId, stream, CurrentUserId, User.Identity?.Name ?? "", canQty));
+        }
+
+        private async Task<IActionResult?> CheckTaxSheetUploadAsync(IFormFile? file)
+        {
+            // Same gate as saving filing rows by hand: the upload is only a faster way in.
+            if (!await _permissions.HasPermissionAsync(CurrentUserId, "invoices.manage.update.itemtype")
+                && !await _permissions.HasPermissionAsync(CurrentUserId, "invoices.manage.update.itemtype.qty"))
+                return StatusCode(403, new { message = "You need permission to classify invoices to upload a tax sheet." });
+            if (file == null || file.Length == 0) return BadRequest(new { message = "No file uploaded." });
+            if (file.Length > TaxSheetUploadMax) return BadRequest(new { message = "The file is larger than 10 MB." });
+            if (!string.Equals(Path.GetExtension(file.FileName ?? ""), ".xlsx", StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { message = "Only .xlsx files are supported." });
+            return null;
         }
 
         /// <summary>

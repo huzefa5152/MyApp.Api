@@ -483,6 +483,7 @@ builder.Services.AddScoped<IStockService, StockService>();
 builder.Services.AddScoped<StockEntryService>();
 // Reporting module (read-only, company-scoped reports for the Reports navbar).
 builder.Services.AddScoped<IReportService, ReportService>();
+builder.Services.AddScoped<MyApp.Api.Services.Implementations.TaxSheetImportService>();
 // Tax mapping engine: single source of truth for HS_UOM, SaleTypeToRate
 // and scenario rules. Used by ItemType save (auto-pick UOM) and FBR
 // pre-validate (combination check before submitting).

@@ -23,6 +23,13 @@ export const getTaxSheet = (companyId, params = {}) =>
 export const getTaxSheetExcel = (companyId, params = {}) =>
   http.get(`/reports/company/${companyId}/tax-sheet/excel`, { params, responseType: "blob" });
 
+// Bulk adjust from a filled-in tax sheet. Preview saves nothing; commit re-reads the file.
+const sheetForm = (file) => { const f = new FormData(); f.append("file", file); return f; };
+export const previewTaxSheetImport = (companyId, file) =>
+  http.post(`/reports/company/${companyId}/tax-sheet/import/preview`, sheetForm(file));
+export const commitTaxSheetImport = (companyId, file) =>
+  http.post(`/reports/company/${companyId}/tax-sheet/import/commit`, sheetForm(file));
+
 // Defer the still-unclassified invoices of a period to a new date (next month).
 // body: { year?, month?, dateFrom?, dateTo?, clientId?, targetDate }
 export const transferTaxSheet = (companyId, body) =>

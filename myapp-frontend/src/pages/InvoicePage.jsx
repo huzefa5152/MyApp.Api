@@ -36,6 +36,7 @@ import { submitInvoiceToFbr, validateInvoiceWithFbr } from "../api/fbrApi";
 import { dropdownStyles, cardStyles, cardHover } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
+import TaxSheetImportDialog from "../Components/TaxSheetImportDialog";
 import { hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
 import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
@@ -167,6 +168,9 @@ export default function InvoicePage({ mode = "invoices" }) {
     catch (e) { notify(e.response?.data?.error || "Could not create sales order.", "error"); }
     finally { setCreatingOrderFor(null); }
   };
+  const canImportTaxSheet = mode === "invoices" && has("reports.taxsheet.import")
+    && (has("invoices.manage.update.itemtype") || has("invoices.manage.update.itemtype.qty"));
+  const [taxSheetOpen, setTaxSheetOpen] = useState(false);
   const canCreate = has("bills.manage.create");
   // Gates the payment-status badge (AR receipts). No key → no badge, either mode.
   const canViewPaymentStatus = has("accounting.paymentstatus.view");
@@ -1121,6 +1125,12 @@ export default function InvoicePage({ mode = "invoices" }) {
                 <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>
               )}
               <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                {canImportTaxSheet && selectedCompany && (
+                  <button type="button" className="filter-clear-btn" onClick={() => setTaxSheetOpen(true)}
+                    title="Adjust many invoices at once from a filled-in Tax Sheet (Excel)">
+                    Import tax sheet
+                  </button>
+                )}
                 {canPrint && <PrintTemplateSelect picker={tplPicker} />}
                 {isBigScreen && (
                   <ViewModeToggle
@@ -1568,6 +1578,11 @@ export default function InvoicePage({ mode = "invoices" }) {
           )}
         </>
       )}</RecordsViewport>
+
+      {taxSheetOpen && selectedCompany && (
+        <TaxSheetImportDialog companyId={selectedCompany.id} onClose={() => setTaxSheetOpen(false)}
+          onApplied={() => fetchInvoices(selectedCompany.id, page)} />
+      )}
 
       {/* Bills mode shows the Item Type column (item-type pick is the
           ONE FBR-classification field exposed in Bills) but hides the

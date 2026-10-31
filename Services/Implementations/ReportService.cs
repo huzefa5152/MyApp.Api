@@ -439,6 +439,13 @@ namespace MyApp.Api.Services.Implementations
                 PeriodLabel = periodLabel,
             };
 
+            // A company that prints original bill lines on tax invoices works line
+            // by line: the screen lists every original line of an invoice that
+            // still has pending work, not one row per item-type group.
+            var useOriginal = company?.TaxInvoiceUseOriginalBillLines == true;
+            var perLine = originalLines || useOriginal;
+            report.OriginalLines = perLine;
+
             foreach (var inv in invoices)
             {
                 // The bill was edited AFTER the consultant reconciled the FBR
@@ -452,27 +459,31 @@ namespace MyApp.Api.Services.Implementations
                 // (physical line, dual-book overlay, or item type) OR the whole
                 // invoice's overlay is out of date.
                 var order = new List<string>();
-                var groups = new Dictionary<string, (decimal qty, decimal amount, decimal tax, string uom, string category, string description)>();
-                var plan = originalLines && !outOfDate ? TaxFilingProjection.Plan(inv) : null;
+                var groups = new Dictionary<string, (decimal qty, decimal amount, decimal tax, string uom, string category, string description, int lineId)>();
+                var plan = perLine && !outOfDate ? TaxFilingProjection.Plan(inv) : null;
                 var pendingSources = plan?.Rows.Where(r => string.IsNullOrWhiteSpace(r.HSCode))
                     .SelectMany(r => r.SourceLineIds).ToHashSet();
-                var lines = originalLines ? inv.Items
+                var lines = perLine ? inv.Items
                     : inv.TaxFilingRowsJson == null || outOfDate ? inv.Items : TaxFilingProjection.Lines(inv);
+                bool IsPending(InvoiceItem item) => pendingSources != null
+                    ? pendingSources.Contains(item.Id)
+                    : outOfDate || string.IsNullOrWhiteSpace(EffectiveHs(item));
+                var anyPending = lines.Any(IsPending);
+                var filedHs = useOriginal ? TaxFilingProjection.HsCodeByLine(inv) : new Dictionary<int, string?>();
                 foreach (var item in lines)
                 {
-                    if (pendingSources != null ? !pendingSources.Contains(item.Id)
-                        : !outOfDate && !string.IsNullOrWhiteSpace(EffectiveHs(item)))
+                    if (!(useOriginal && anyPending) && !IsPending(item))
                         continue; // classified + current — not our concern
                     var name = !string.IsNullOrWhiteSpace(item.ItemTypeName) ? item.ItemTypeName
                              : (!string.IsNullOrWhiteSpace(item.ItemType?.Name) ? item.ItemType!.Name : item.Description);
                     if (string.IsNullOrWhiteSpace(name)) name = "(unnamed)";
                     var tax = ComputeLineTax(item.SaleType, item.LineTotal, item.FixedNotifiedValueOrRetailPrice, inv.GSTRate);
                     // The screen keeps category groups; Excel needs each original bill description.
-                    var key = originalLines ? item.Id.ToString() : name;
-                    if (!groups.ContainsKey(key)) { groups[key] = (0m, 0m, 0m, item.UOM ?? "", name, item.Description); order.Add(key); }
+                    var key = perLine ? item.Id.ToString() : name;
+                    if (!groups.ContainsKey(key)) { groups[key] = (0m, 0m, 0m, item.UOM ?? "", name, item.Description, perLine ? item.Id : 0); order.Add(key); }
                     var g = groups[key];
                     groups[key] = (g.qty + item.Quantity, g.amount + item.LineTotal, g.tax + tax,
-                        string.IsNullOrWhiteSpace(g.uom) ? (item.UOM ?? "") : g.uom, g.category, g.description);
+                        string.IsNullOrWhiteSpace(g.uom) ? (item.UOM ?? "") : g.uom, g.category, g.description, g.lineId);
                 }
                 if (groups.Count == 0) continue; // invoice fully classified + current — skip
 
@@ -493,6 +504,8 @@ namespace MyApp.Api.Services.Implementations
                         QuantityLabel = FormatQty(g.qty, g.uom),
                         ItemTypeName = g.category,
                         Description = g.description,
+                        LineId = g.lineId,
+                        CurrentHsCode = g.lineId != 0 && filedHs.TryGetValue(g.lineId, out var hs) ? hs ?? "" : "",
                         ExcludingAmount = Round2(g.amount),
                         SalesTax = g.tax,
                         Total = Round2(g.amount) + g.tax,
@@ -514,11 +527,15 @@ namespace MyApp.Api.Services.Implementations
         {
             var report = await BuildTaxSheetAsync(companyId, year, month, dateFrom, dateTo, clientId, true);
 
-            const int COLS = 11;
+            // 11 original columns, then the consultant's two blanks and the
+            // hidden ids that let the upload find the exact bill line again.
+            const int COLS = 13;
+            const int ID_COL = 14, LINE_COL = 15;
             const string MONEY = "#,##0.00";
             var grey = XLColor.FromHtml("#EBEBEB");
             var headers = new[] { "NTN Number", "Party Name", "Inv Number", "Inv Date",
-                "Item Total QTY", "Category for Hscode", "Description", "Hscode", "Excluding Amount", "Sales Tax", "Total" };
+                "Item Total QTY", "Category for Hscode", "Description", "Real Hscode", "Excluding Amount", "Sales Tax", "Total",
+                "Real Item Description", "Filing Qty (blank = bill qty)" };
             var moneyCols = new[] { 9, 10, 11 };
 
             using var wb = new XLWorkbook();
@@ -527,6 +544,7 @@ namespace MyApp.Api.Services.Implementations
             ws.Column(4).Width = 13; ws.Column(5).Width = 15; ws.Column(6).Width = 20;
             ws.Column(7).Width = 40; ws.Column(8).Width = 16; ws.Column(9).Width = 16;
             ws.Column(10).Width = 13; ws.Column(11).Width = 15;
+            ws.Column(12).Width = 34; ws.Column(13).Width = 18;
 
             int r = 1;
             if (letterhead != null) r = letterhead.Write(ws, COLS, r) - 1;
@@ -560,10 +578,16 @@ namespace MyApp.Api.Services.Implementations
                 if (moneyCols.Contains(c)) hc.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
                 letterhead?.StyleHeaderCell(hc);
             }
+            ws.Cell(r, ID_COL).Value = "Invoice Id"; ws.Cell(r, LINE_COL).Value = "Line Id";
+            ws.Column(ID_COL).Hide(); ws.Column(LINE_COL).Hide();
             var headerRow = r; r++;
 
             foreach (var row in report.Rows)
             {
+                ws.Cell(r, ID_COL).Value = row.InvoiceId;
+                if (row.LineId != 0) ws.Cell(r, LINE_COL).Value = row.LineId;
+                ws.Cell(r, 12).Style.NumberFormat.Format = "@";
+                ws.Cell(r, 13).Style.NumberFormat.Format = "General";
                 ws.Cell(r, 1).Value = SpreadsheetFormulaGuard.Neutralise(row.Ntn);
                 ws.Cell(r, 2).Value = SpreadsheetFormulaGuard.Neutralise(row.PartyName);
                 ws.Cell(r, 3).Value = SpreadsheetFormulaGuard.Neutralise(row.DocumentNumber);

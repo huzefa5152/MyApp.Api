@@ -1,7 +1,7 @@
 import ListFilters from "../Components/ListFilters";
 import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback } from "react";
-import { MdFactCheck, MdBusiness, MdRefresh, MdDownload, MdPerson, MdEventRepeat, MdClose } from "react-icons/md";
+import { MdFactCheck, MdBusiness, MdRefresh, MdDownload, MdPerson, MdEventRepeat, MdClose, MdUpload } from "react-icons/md";
 import { getTaxSheet, getTaxSheetExcel, transferTaxSheet } from "../api/reportApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { dropdownStyles } from "../theme";
@@ -13,6 +13,7 @@ import { excelBrandParams } from "../utils/reportExcelBrand";
 import useIsNarrow from "../hooks/useIsNarrow";
 import ColumnPicker, { useHiddenColumns } from "../Components/reports/ColumnPicker";
 import { CompanyPicker, Dot, PrintPdfButtons, ReportBar, ReportKpis } from "../Components/reports/ReportChrome";
+import TaxSheetImportDialog from "../Components/TaxSheetImportDialog";
 import { fileSlug, pdfReport, printReport } from "../utils/reportPrintKit";
 
 const colors = {
@@ -36,6 +37,7 @@ const TS_COLS = [
   { key: "doc", label: "Inv Number" },
   { key: "date", label: "Inv Date" },
   { key: "qty", label: "Item Total QTY" },
+  { key: "desc", label: "Bill Item", lineOnly: true },
   { key: "hs", label: "HS Code" },
   { key: "excl", label: "Excluding Amount", format: "money", total: true },
   { key: "tax", label: "Sales Tax", format: "money", total: true },
@@ -65,6 +67,8 @@ export default function TaxSheetPage() {
   const canView = has("reports.taxsheet.view");
   const canExport = has("reports.taxsheet.export");
   const canTransfer = has("reports.taxsheet.transfer");
+  const canImport = has("reports.taxsheet.import")
+    && (has("invoices.manage.update.itemtype") || has("invoices.manage.update.itemtype.qty"));
   const isNarrow = useIsNarrow();
   const [hiddenCols, setHiddenCols] = useHiddenColumns("tax-sheet");
   const [printBusy, setPrintBusy] = useState(null);
@@ -86,6 +90,8 @@ export default function TaxSheetPage() {
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferDate, setTransferDate] = useState("");
   const [transferring, setTransferring] = useState(false);
+
+  const [importOpen, setImportOpen] = useState(false);
 
   // Load the company's clients for the filter; reset the filter on switch.
   useEffect(() => {
@@ -193,7 +199,7 @@ export default function TaxSheetPage() {
     return <div style={{ padding: 24, color: colors.textSecondary }}>You don't have permission to view reports.</div>;
   }
 
-  const visibleCols = TS_COLS.filter((c) => !hiddenCols.has(c.key));
+  const visibleCols = TS_COLS.filter((c) => !hiddenCols.has(c.key) && (!c.lineOnly || report?.originalLines));
   const cols = visibleCols.length ? visibleCols : TS_COLS;
   const clientName = clientId ? clients.find((c) => String(c.id) === String(clientId))?.name : "";
 
@@ -210,7 +216,7 @@ export default function TaxSheetPage() {
     rows: report.rows.map((row) => ({
       ntn: row.ntn, party: row.partyName, doc: row.documentNumber,
       date: new Date(row.documentDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
-      qty: row.quantityLabel, hs: row.itemTypeName,
+      qty: row.quantityLabel, desc: row.description, hs: row.itemTypeName,
       excl: row.excludingAmount, tax: row.salesTax, total: row.total,
     })),
     totals: { excl: report.grandExcluding, tax: report.grandTax, total: report.grandTotal },
@@ -235,6 +241,11 @@ export default function TaxSheetPage() {
       case "doc": return <td key={key} className="rw-nowrap" style={{ fontWeight: 700, color: colors.blue }}>{row.documentNumber}</td>;
       case "date": return <td key={key} className="rw-nowrap">{new Date(row.documentDate).toLocaleDateString()}</td>;
       case "qty": return <td key={key} className="rw-nowrap">{row.quantityLabel}</td>;
+      case "desc": return (
+        <td key={key} className="rw-text"><span className="rw-clamp">{row.description}</span>
+          {row.currentHsCode && <div style={{ fontSize: "0.72rem", color: colors.textSecondary }}>Filed HS: {row.currentHsCode}</div>}
+        </td>
+      );
       case "hs": return (
         <td key={key}>
           <span style={{ background: colors.pill, color: colors.pillText, padding: "2px 8px", borderRadius: 6, fontSize: "0.78rem", fontWeight: 600, display: "inline-block", lineHeight: 1.3 }}>
@@ -274,6 +285,12 @@ export default function TaxSheetPage() {
           {canExport && (
             <button type="button" className="rw-btn" onClick={exportExcel} disabled={!report || loading || exporting || rangeInvalid}>
               <MdDownload size={17} /><span>{exporting ? "Exporting…" : "Excel"}</span>
+            </button>
+          )}
+          {canImport && (
+            <button type="button" className="rw-btn" onClick={() => setImportOpen(true)} disabled={!selectedCompany}
+              title="Upload the Excel sheet with Real Hscode filled in to adjust many invoices at once">
+              <MdUpload size={17} /><span>Import adjusted sheet</span>
             </button>
           )}
           <PrintPdfButtons onPrint={doPrint} onPdf={doPdf} busy={printBusy} disabled={!report || loading || !report.rows.length} />
@@ -409,6 +426,8 @@ export default function TaxSheetPage() {
         )
       )}</RecordsViewport>
 
+
+      {importOpen && <TaxSheetImportDialog companyId={selectedCompany.id} onClose={() => setImportOpen(false)} onApplied={fetchReport} />}
 
       {transferOpen && (
         <div data-admin-backdrop="" style={overlay} onClick={() => !transferring && setTransferOpen(false)}>
