@@ -2020,6 +2020,14 @@ namespace MyApp.Api.Services.Implementations
             {
                 if (_hsCodeCatalog != null) return _hsCodeCatalog;
 
+                // Offline copy first: no FBR call, no token needed once synced.
+                var stored = await LoadStoredHsCodesAsync();
+                if (stored.Count > 0)
+                {
+                    _hsCodeCatalog = stored;
+                    return _hsCodeCatalog;
+                }
+
                 // Try the requesting company first (they may have a token).
                 var fresh = await GetReferenceData<FbrHSCodeDto>(
                     requestingCompanyId, $"{RefBaseV1}/itemdesccode");
@@ -2039,6 +2047,58 @@ namespace MyApp.Api.Services.Implementations
                     "FBR catalog fetch refused: company {CompanyId} has no FBR token configured (audit H-9, cross-tenant token bleed).",
                     requestingCompanyId);
                 return new List<FbrHSCodeDto>();
+            }
+            finally
+            {
+                _hsCacheLock.Release();
+            }
+        }
+
+        private const string HsCodeLookupCategory = "HsCode";
+
+        private async Task<List<FbrHSCodeDto>> LoadStoredHsCodesAsync()
+        {
+            var rows = await _db.FbrLookups.AsNoTracking()
+                .Where(l => l.Category == HsCodeLookupCategory && l.IsActive)
+                .OrderBy(l => l.SortOrder)
+                .ToListAsync();
+            return rows.Select(l => new FbrHSCodeDto { HS_CODE = l.Code, Description = l.Label }).ToList();
+        }
+
+        // Replaces the stored HS list in one transaction. The list is FBR's
+        // public master catalog, so the copy is installation-wide (the endpoint
+        // that calls this is seed-admin-only). Duplicate codes keep the first row.
+        public async Task<int> SyncHsCodeCatalogAsync(int companyId)
+        {
+            var fresh = await GetReferenceData<FbrHSCodeDto>(companyId, $"{RefBaseV1}/itemdesccode");
+            if (fresh.Count == 0) return 0;
+
+            var rows = fresh
+                .Where(h => !string.IsNullOrWhiteSpace(h.HS_CODE))
+                .GroupBy(h => h.HS_CODE.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Select((g, i) => new FbrLookup
+                {
+                    Category = HsCodeLookupCategory,
+                    Code = g.Key,
+                    Label = g.First().Description?.Trim() ?? "",
+                    SortOrder = i,
+                    IsActive = true,
+                })
+                .ToList();
+
+            await _hsCacheLock.WaitAsync();
+            try
+            {
+                await using var tx = await _db.Database.BeginTransactionAsync();
+                await _db.FbrLookups
+                    .Where(l => l.Category == HsCodeLookupCategory)
+                    .ExecuteDeleteAsync();
+                _db.FbrLookups.AddRange(rows);
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync();
+
+                _hsCodeCatalog = null; // next lookup reloads from the table
+                return rows.Count;
             }
             finally
             {

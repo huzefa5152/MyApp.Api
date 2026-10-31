@@ -49,6 +49,13 @@ namespace MyApp.Api.Services.Interfaces
         /// a cryptic [0007] / [0052].
         /// </summary>
         Task<bool> IsKnownHsCodeAsync(int companyId, string hsCode);
+
+        /// <summary>
+        /// Copies FBR's full HS code list into the FbrLookup table (category
+        /// HsCode) using this company's token, so HS lookups work offline.
+        /// Returns the number of codes stored; 0 when FBR returned nothing.
+        /// </summary>
+        Task<int> SyncHsCodeCatalogAsync(int companyId);
         Task<List<FbrUOMDto>> GetUOMsAsync(int companyId);
         Task<List<FbrTransactionTypeDto>> GetTransactionTypesAsync(int companyId);
         Task<List<FbrSROItemDto>> GetSROItemCodesAsync(int companyId);

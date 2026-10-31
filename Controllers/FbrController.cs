@@ -198,6 +198,22 @@ namespace MyApp.Api.Controllers
             [FromQuery] bool excludeSaved = false, [FromQuery] string? includeHsCode = null)
             => Ok(await _fbrService.GetHSCodesAsync(companyId, search, saleType, excludeSaved, includeHsCode));
 
+        /// <summary>
+        /// Refreshes the offline HS code list from FBR, using this company's
+        /// token. Seed admin only: the stored list is shared by every company.
+        /// </summary>
+        [HttpPost("hscodes/sync/{companyId}")]
+        [HasPermission("fbr.config.update")]
+        [SeedAdminOnly]
+        public async Task<IActionResult> SyncHSCodes(int companyId)
+        {
+            await _access.AssertAccessAsync(CurrentUserId, companyId);
+            var stored = await _fbrService.SyncHsCodeCatalogAsync(companyId);
+            if (stored == 0)
+                return BadRequest(new { message = "FBR returned no HS codes. Check this company's FBR token." });
+            return Ok(new { stored });
+        }
+
         [HttpGet("uom/{companyId}")]
         [AuthorizeCompany]
         [HasPermission("fbr.reference.read")]
