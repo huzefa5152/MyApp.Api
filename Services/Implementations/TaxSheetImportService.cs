@@ -37,10 +37,10 @@ namespace MyApp.Api.Services.Implementations
             _db = db; _invoices = invoices; _taxEngine = taxEngine; _logger = logger;
         }
 
-        private sealed record SheetLine(int InvoiceId, int LineId, string Hs, string Description, decimal? Qty, int Row);
+        private sealed record SheetLine(int InvoiceId, int LineId, string Hs, string Description, decimal? Qty, string Unit, int Row);
 
-        public Task<TaxSheetImportResultDto> PreviewAsync(int companyId, Stream file)
-            => RunAsync(companyId, file, false, 0, "", false);
+        public Task<TaxSheetImportResultDto> PreviewAsync(int companyId, Stream file, bool allowNumericalChanges)
+            => RunAsync(companyId, file, false, 0, "", allowNumericalChanges);
 
         public Task<TaxSheetImportResultDto> CommitAsync(int companyId, Stream file, int actorId, string actorName, bool allowNumericalChanges)
             => RunAsync(companyId, file, true, actorId, actorName, allowNumericalChanges);
@@ -126,7 +126,8 @@ namespace MyApp.Api.Services.Implementations
                     return 0;
                 }
                 int inv = Col("Invoice Id"), line = Col("Line Id"), hs = Col("Real Hscode"),
-                    desc = Col("Real Item Description"), qty = Col("Filing Qty"), num = Col("Inv Number");
+                    desc = Col("Real Item Description"), qty = Col("Filing Qty"), num = Col("Inv Number"),
+                    unitCol = Col("FBR Unit");
                 if (inv == 0 || line == 0 || hs == 0)
                 {
                     result.Issues.Add(new() { Message = "The sheet is missing the Real Hscode, Invoice Id or Line Id column. Download a fresh sheet and fill that." });
@@ -147,6 +148,7 @@ namespace MyApp.Api.Services.Implementations
                     result.LinesRead++;
                     var code = (ws.Cell(r, hs).GetString() ?? "").Replace(" ", "").Trim();
                     var text = desc == 0 ? "" : (ws.Cell(r, desc).GetString() ?? "").Trim();
+                    var unit = unitCol == 0 ? "" : (ws.Cell(r, unitCol).GetString() ?? "").Trim();
                     decimal? q = null;
                     var qText = qty == 0 ? "" : ws.Cell(r, qty).GetString().Trim();
                     var invNo = num == 0 ? "#" + invoiceId : ws.Cell(r, num).GetString().Trim();
@@ -162,8 +164,8 @@ namespace MyApp.Api.Services.Implementations
                     }
                     if (code.Length == 0)
                     {
-                        if (q != null || text.Length > 0)
-                            result.Issues.Add(new() { InvoiceNumber = invNo, Message = $"Row {r}: a quantity or description was entered without an HS code, so it was ignored." });
+                        if (q != null || text.Length > 0 || unit.Length > 0)
+                            result.Issues.Add(new() { InvoiceNumber = invNo, Message = $"Row {r}: a quantity, description or unit was entered without an HS code, so it was ignored." });
                         continue;
                     }
                     if (code.Length > 20 || !code.All(ch => char.IsDigit(ch) || ch == '.'))
@@ -176,7 +178,7 @@ namespace MyApp.Api.Services.Implementations
                         result.Issues.Add(new() { InvoiceNumber = invNo, Message = $"Row {r}: the real item description is longer than 500 characters." });
                         continue;
                     }
-                    list.Add(new SheetLine(invoiceId, lineId, code, text, q, r));
+                    list.Add(new SheetLine(invoiceId, lineId, code, text, q, unit, r));
                 }
                 return list;
             }
@@ -198,7 +200,7 @@ namespace MyApp.Api.Services.Implementations
 
             var filed = bill.Company?.TaxInvoiceUseOriginalBillLines == true || bill.TaxFilingRowsJson != null
                 ? TaxFilingProjection.HsCodeByLine(bill) : new Dictionary<int, string?>();
-            var chosen = new List<(InvoiceItem Line, string Hs, string Desc, decimal Qty)>();
+            var chosen = new List<(InvoiceItem Line, string Hs, string Desc, decimal Qty, string Unit)>();
             foreach (var line in lines)
             {
                 var s = sheet.FirstOrDefault(x => x.LineId == line.Id);
@@ -210,7 +212,7 @@ namespace MyApp.Api.Services.Implementations
                 var qty = s?.Qty ?? line.Quantity;
                 if (qty != line.Quantity && !allowNumbers)
                     throw new InvalidOperationException("Your permission allows HS classification only. A changed filing quantity needs consultant quantity permission.");
-                chosen.Add((line, hs, s?.Description ?? "", qty));
+                chosen.Add((line, hs, s?.Description ?? "", qty, s?.Unit ?? ""));
             }
 
             var rows = new List<TaxFilingRowDto>();
@@ -225,35 +227,66 @@ namespace MyApp.Api.Services.Implementations
                     Quantity = decimal.Round(members.Sum(m => m.Qty), 4),
                     ValueExclTax = members.Sum(m => m.Line.LineTotal),
                 };
-                await ResolveClassificationAsync(companyId, row, members[0].Line);
+                var units = members.Select(m => m.Unit).Where(u => u.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                if (units.Count > 1)
+                    throw new InvalidOperationException($"HS code {g.Key.Hs} has different FBR units on this invoice ({string.Join(", ", units)}). Use one.");
+                await ResolveClassificationAsync(companyId, row, members[0].Line, units.FirstOrDefault() ?? "");
                 rows.Add(row);
             }
             return rows;
         }
 
         // An HS code the company already uses maps to its catalog item; a new one is
-        // created by the save, which verifies it with FBR and needs a unit.
-        private async Task ResolveClassificationAsync(int companyId, TaxFilingRowDto row, InvoiceItem firstLine)
+        // created by the save, which verifies it with FBR. The FBR unit is a property
+        // of the HS code, never of the bill line (the printed documents keep the bill's
+        // own unit): the sheet's FBR Unit wins, then FBR's single unit, then the
+        // system's default suggestion; otherwise the operator is asked to name one.
+        private async Task ResolveClassificationAsync(int companyId, TaxFilingRowDto row, InvoiceItem firstLine, string sheetUnit)
         {
             var code = row.HSCode!;
             var type = await _db.ItemTypes.AsNoTracking()
                 .Where(t => t.CompanyId == companyId && !t.IsDeleted && !t.IsHsCodePartial && t.HSCode == code)
                 .OrderBy(t => t.Id).FirstOrDefaultAsync();
-            if (type != null) { row.ItemTypeId = type.Id; return; }
+
+            FbrUOMDto? chosen = null;
+            if (sheetUnit.Length > 0 || type == null)
+            {
+                var hints = await _taxEngine.GetHsCodeHintsAsync(companyId, code);
+                var uoms = hints?.Uoms ?? new();
+                if (sheetUnit.Length > 0)
+                {
+                    chosen = uoms.FirstOrDefault(u => string.Equals(u.Description?.Trim(), sheetUnit, StringComparison.OrdinalIgnoreCase)
+                                                   || u.UOM_ID.ToString() == sheetUnit);
+                    if (chosen == null)
+                        throw new InvalidOperationException(uoms.Count == 0
+                            ? $"HS code {code} was not recognised by FBR."
+                            : $"\"{sheetUnit}\" is not an FBR unit for HS code {code}. Choose one of: {string.Join(", ", uoms.Select(u => u.Description))}.");
+                }
+                else if (uoms.Count == 0)
+                    throw new InvalidOperationException($"HS code {code} was not recognised by FBR.");
+                else if (uoms.Count == 1) chosen = uoms[0];
+                else
+                {
+                    FbrUOMDto? suggested = null;
+                    try { suggested = await _taxEngine.SuggestDefaultUomAsync(companyId, code); } catch { /* no default available */ }
+                    chosen = suggested == null ? null : uoms.FirstOrDefault(u => u.UOM_ID == suggested.UOM_ID);
+                    if (chosen == null)
+                        throw new InvalidOperationException($"HS code {code} has several FBR units ({string.Join(", ", uoms.Select(u => u.Description))}). Enter one in the FBR Unit column.");
+                }
+            }
+
+            if (type != null)
+            {
+                row.ItemTypeId = type.Id;
+                if (chosen != null && chosen.UOM_ID != type.FbrUOMId) row.SelectedFbrUOMId = chosen.UOM_ID;
+                return;
+            }
 
             if (string.IsNullOrWhiteSpace(row.Description)) row.Description = (firstLine.Description ?? "").Trim();
             if (row.Description.Length == 0 || row.Description.Length > 500)
                 throw new InvalidOperationException($"HS code {code} is new to this company: enter a Real Item Description (up to 500 characters).");
-            var hints = await _taxEngine.GetHsCodeHintsAsync(companyId, code);
-            var uoms = hints?.Uoms ?? new();
-            var unit = uoms.Count == 1 ? uoms[0]
-                : uoms.FirstOrDefault(u => string.Equals(u.Description, firstLine.UOM, StringComparison.OrdinalIgnoreCase));
-            if (unit == null)
-                throw new InvalidOperationException(uoms.Count == 0
-                    ? $"HS code {code} was not recognised by FBR."
-                    : $"HS code {code} is new and FBR offers several units. Adjust this invoice on its own screen once to choose the unit.");
-            row.UOM = unit.Description;
-            row.FbrUOMId = unit.UOM_ID;
+            row.UOM = chosen!.Description;
+            row.FbrUOMId = chosen.UOM_ID;
         }
 
         private static string Short(string? s)

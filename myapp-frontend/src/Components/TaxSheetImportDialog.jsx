@@ -55,7 +55,7 @@ export default function TaxSheetImportDialog({ companyId, onClose, onApplied }) 
           </button>
         </div>
         <p style={{ margin: "0 0 12px", fontSize: "0.86rem", color: "#5f6d7e", lineHeight: 1.55 }}>
-          Export the sheet from <strong>Reports, Tax Sheet, Excel</strong>, fill <strong>Real Hscode</strong> on every line (and <strong>Real Item Description</strong> or <strong>Filing Qty</strong> only where the filing differs), then upload it. Lines with the same HS code on one invoice are filed as one row. Nothing is saved until you press Apply.
+          Export the sheet from <strong>Reports, Tax Sheet, Excel</strong>, fill <strong>Real Hscode</strong> on every line (and <strong>Real Item Description</strong> or <strong>Filing Qty</strong> only where the filing differs, and <strong>FBR Unit</strong> only when the HS code has several units; capitals do not matter), then upload it. Lines with the same HS code on one invoice are filed as one row. Nothing is saved until you press Apply.
         </p>
         <input type="file" accept=".xlsx" disabled={busy} onChange={(e) => pick(e.target.files?.[0] || null)} />
         {busy && <div style={{ marginTop: 10, color: "#5f6d7e" }} role="status">Working…</div>}

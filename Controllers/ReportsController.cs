@@ -225,8 +225,9 @@ namespace MyApp.Api.Controllers
         public async Task<IActionResult> PreviewTaxSheetImport(int companyId, [FromForm] IFormFile? file)
         {
             if (await CheckTaxSheetUploadAsync(file) is { } bad) return bad;
+            var canQty = await _permissions.HasPermissionAsync(CurrentUserId, "invoices.manage.update.itemtype.qty");
             await using var stream = file!.OpenReadStream();
-            return Ok(await _taxSheetImport.PreviewAsync(companyId, stream));
+            return Ok(await _taxSheetImport.PreviewAsync(companyId, stream, canQty));
         }
 
         /// <summary>Apply the filled-in Tax Sheet. The file is read again; nothing the browser kept is trusted.</summary>

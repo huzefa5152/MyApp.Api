@@ -529,22 +529,22 @@ namespace MyApp.Api.Services.Implementations
 
             // 11 original columns, then the consultant's two blanks and the
             // hidden ids that let the upload find the exact bill line again.
-            const int COLS = 13;
-            const int ID_COL = 14, LINE_COL = 15;
+            const int COLS = 14;
+            const int ID_COL = 15, LINE_COL = 16;
             const string MONEY = "#,##0.00";
             var grey = XLColor.FromHtml("#EBEBEB");
             var headers = new[] { "NTN Number", "Party Name", "Inv Number", "Inv Date",
-                "Item Total QTY", "Category for Hscode", "Description", "Real Hscode", "Excluding Amount", "Sales Tax", "Total",
-                "Real Item Description", "Filing Qty (blank = bill qty)" };
-            var moneyCols = new[] { 9, 10, 11 };
+                "Item Total QTY", "Category for Hscode", "Description", "Excluding Amount", "Sales Tax", "Total",
+                "Real Hscode", "FBR Unit (only if the HS code has several)", "Filing Qty (blank = bill qty)", "Real Item Description" };
+            var moneyCols = new[] { 8, 9, 10 };
 
             using var wb = new XLWorkbook();
             var ws = wb.Worksheets.Add("Tax Sheet");
             ws.Column(1).Width = 14; ws.Column(2).Width = 28; ws.Column(3).Width = 12;
             ws.Column(4).Width = 13; ws.Column(5).Width = 15; ws.Column(6).Width = 20;
-            ws.Column(7).Width = 40; ws.Column(8).Width = 16; ws.Column(9).Width = 16;
-            ws.Column(10).Width = 13; ws.Column(11).Width = 15;
-            ws.Column(12).Width = 34; ws.Column(13).Width = 18;
+            ws.Column(7).Width = 40; ws.Column(8).Width = 16; ws.Column(9).Width = 13;
+            ws.Column(10).Width = 15;
+            ws.Column(11).Width = 16; ws.Column(12).Width = 26; ws.Column(13).Width = 18; ws.Column(14).Width = 34;
 
             int r = 1;
             if (letterhead != null) r = letterhead.Write(ws, COLS, r) - 1;
@@ -586,8 +586,12 @@ namespace MyApp.Api.Services.Implementations
             {
                 ws.Cell(r, ID_COL).Value = row.InvoiceId;
                 if (row.LineId != 0) ws.Cell(r, LINE_COL).Value = row.LineId;
-                ws.Cell(r, 12).Style.NumberFormat.Format = "@";
-                ws.Cell(r, 13).Style.NumberFormat.Format = "General";
+                ws.Cell(r, 11).Style.NumberFormat.Format = "@";   // Real Hscode
+                ws.Cell(r, 12).Style.NumberFormat.Format = "@";   // FBR Unit
+                ws.Cell(r, 13).Style.NumberFormat.Format = "General"; // Filing Qty
+                ws.Cell(r, 14).Style.NumberFormat.Format = "@";   // Real Item Description
+                // The four entry columns are tinted so they read as "type here".
+                for (int c = 11; c <= 14; c++) ws.Cell(r, c).Style.Fill.BackgroundColor = XLColor.FromHtml("#FFF8E1");
                 ws.Cell(r, 1).Value = SpreadsheetFormulaGuard.Neutralise(row.Ntn);
                 ws.Cell(r, 2).Value = SpreadsheetFormulaGuard.Neutralise(row.PartyName);
                 ws.Cell(r, 3).Value = SpreadsheetFormulaGuard.Neutralise(row.DocumentNumber);
@@ -596,22 +600,20 @@ namespace MyApp.Api.Services.Implementations
                 ws.Cell(r, 6).Value = SpreadsheetFormulaGuard.Neutralise(row.ItemTypeName);
                 ws.Cell(r, 7).Value = SpreadsheetFormulaGuard.Neutralise(row.Description);
                 ws.Cell(r, 7).Style.Alignment.WrapText = true;
-                // Column 8 is intentionally empty for the consultant's HS code.
-                ws.Cell(r, 8).Style.NumberFormat.Format = "@";
-                ws.Cell(r, 9).Value = row.ExcludingAmount;
-                ws.Cell(r, 10).Value = row.SalesTax;
-                ws.Cell(r, 11).Value = row.Total;
+                ws.Cell(r, 8).Value = row.ExcludingAmount;
+                ws.Cell(r, 9).Value = row.SalesTax;
+                ws.Cell(r, 10).Value = row.Total;
                 foreach (var c in moneyCols) ws.Cell(r, c).Style.NumberFormat.Format = MONEY;
                 r++;
             }
 
             ws.Cell(r, 1).Value = "TOTAL:";
-            var totalLabel = ws.Range(r, 1, r, 8).Merge();
+            var totalLabel = ws.Range(r, 1, r, 7).Merge();
             totalLabel.Style.Font.Bold = true;
             totalLabel.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
-            ws.Cell(r, 9).Value = report.GrandExcluding;
-            ws.Cell(r, 10).Value = report.GrandTax;
-            ws.Cell(r, 11).Value = report.GrandTotal;
+            ws.Cell(r, 8).Value = report.GrandExcluding;
+            ws.Cell(r, 9).Value = report.GrandTax;
+            ws.Cell(r, 10).Value = report.GrandTotal;
             foreach (var c in moneyCols) ws.Cell(r, c).Style.NumberFormat.Format = MONEY;
             var totalRow = ws.Range(r, 1, r, COLS);
             totalRow.Style.Font.Bold = true;

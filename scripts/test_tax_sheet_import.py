@@ -113,7 +113,7 @@ try:
 
     blob = export(on)
     ws, head, cols = sheet_rows(blob)
-    for need in ("Real Hscode", "Real Item Description", "Filing Qty (blank = bill qty)", "Invoice Id", "Line Id"):
+    for need in ("Real Hscode", "Real Item Description", "Filing Qty (blank = bill qty)", "FBR Unit (only if the HS code has several)", "Invoice Id", "Line Id"):
         check(need in cols, f"excel has column {need}")
 
     print("--- default company keeps its grouped screen")
