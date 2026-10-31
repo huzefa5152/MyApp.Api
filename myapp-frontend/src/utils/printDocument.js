@@ -60,7 +60,14 @@ export function writeAndPrint(w, html, { timeoutMs = 5000 } = {}) {
   const imgs = Array.from(w.document.images || []);
   const pending = imgs.filter((img) => !img.complete);
   if (pending.length === 0) {
-    triggerPrint();
+    // `complete` can be true while a large image (the stamp) is only partly
+    // decoded; printing then rasterises its top half. Wait for decode().
+    const decodes = imgs.map((img) => (img.decode ? img.decode().catch(() => {}) : null)).filter(Boolean);
+    if (decodes.length === 0) { triggerPrint(); return; }
+    let done = false;
+    const go = () => { if (!done) { done = true; triggerPrint(); } };
+    Promise.all(decodes).then(go);
+    w.setTimeout(go, timeoutMs);
     return;
   }
 
@@ -72,7 +79,10 @@ export function writeAndPrint(w, html, { timeoutMs = 5000 } = {}) {
   };
   let remaining = pending.length;
   const onSettled = () => {
-    if (--remaining <= 0) fire();
+    if (--remaining <= 0) {
+      const d = imgs.map((img) => (img.decode ? img.decode().catch(() => {}) : null)).filter(Boolean);
+      Promise.all(d).then(fire);
+    }
   };
   pending.forEach((img) => {
     img.addEventListener("load", onSettled);
