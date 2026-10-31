@@ -59,3 +59,12 @@
 .invoice-document-totals > div { display:flex; justify-content:space-between; gap:16px; padding:8px 0; flex-wrap:wrap; }
 .invoice-document-totals > div:last-child { border-top:1px solid #d0d7e2; color:#0d47a1; font-size:1.1rem; }
 @media(max-width:759px) { .invoice-document-line.invoice-document-head { display:none; } .invoice-document-line { display:block; margin-bottom:12px; border:1px solid #e8edf3; border-radius:10px; } .invoice-document-line > * { display:flex; justify-content:space-between; gap:16px; padding:7px 0; text-align:right; } .invoice-document-line > ::before { content:attr(data-label); color:#5f6d7e; font-weight:400; text-align:left; flex-shrink:0; } }
+.tf-bulk { padding: 14px; margin-bottom: 16px; border: 1px dashed #9fb6d1; border-radius: 12px; background: #f4f8fd; display: grid; gap: 10px; }
+.tf-bulk h3 { margin: 0; font-size: 1rem; color: #174579; }
+.tf-bulk p { margin: 0; color: #4e6074; font-size: .9rem; }
+.tf-bulk button { justify-self: start; }
+.tf-bill-line { margin: 0 0 14px; overflow-wrap: anywhere; }
+.tf-bill-line span { display: block; margin-top: 4px; font-size: 14px; color: #4e6074; }
+.tf-bulk label { display: block; font-size: .85rem; font-weight: 600; color: #5f6d7e; margin-bottom: 6px; }
+.tf-bulk input, .tf-bulk select { width: 100%; box-sizing: border-box; min-height: 44px; padding: 10px; border: 1px solid #bccbdd; border-radius: 8px; font-size: 16px; color: #1a2332; background: #fff; }
+.tf-bulk small { display: block; color: #4e6074; font-size: 13px; line-height: 1.5; margin-top: 6px; overflow-wrap: anywhere; }

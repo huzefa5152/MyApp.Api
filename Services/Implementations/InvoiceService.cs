@@ -3885,7 +3885,9 @@ namespace MyApp.Api.Services.Implementations
                     .ToList()!;
 
             // The code each ORIGINAL line is filed under: its saved filing row (a combined row gives every line the same code).
-            var filedHs = TaxFilingProjection.HsCodeByLine(inv);
+            // Only for a company that prints original lines; every other company's bill keeps reading the line's own code.
+            var filedHs = inv.Company?.TaxInvoiceUseOriginalBillLines == true
+                ? TaxFilingProjection.HsCodeByLine(inv) : new Dictionary<int, string?>();
             return new PrintBillDto
             {
                 TaxTreatment = inv.TaxTreatment,

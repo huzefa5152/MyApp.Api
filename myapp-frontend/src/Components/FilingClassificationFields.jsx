@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { getItemTypeFbrHints } from "../api/itemTypeApi";
 import HsCodeAutocomplete from "./HsCodeAutocomplete";
 
-export default function FilingClassificationFields({ row, index, companyId, types, onChange, canAdjustNumbers }) {
+export default function FilingClassificationFields({ row, index, companyId, types, onChange, canAdjustNumbers, label }) {
   const [hints, setHints] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -48,7 +48,7 @@ export default function FilingClassificationFields({ row, index, companyId, type
   };
   const saleTypes = [...(hints?.saleTypes || []), hints?.defaultSaleType, row.saleType].filter(Boolean)
     .filter((s, i, all) => all.findIndex(value => value.toLowerCase() === s.toLowerCase()) === i);
-  const prefix = `Row ${index + 1}`;
+  const prefix = label || `Row ${index + 1}`;
   const completeCode = /^\d{4}\.\d{4}(\.\d{2})?$/.test(row.hsCode || "");
   return <div>
     <label>HS code or company item</label>

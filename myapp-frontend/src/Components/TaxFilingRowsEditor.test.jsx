@@ -15,9 +15,7 @@ it("preserves the consultant adjustment controls and guidance", async () => {
  render(<TaxFilingRowsEditor invoiceId={7} onClose={()=>{}} />);
  await screen.findByText("Classification picker");
  expect(screen.getByText(/Combine selected groups or classify each separately/)).toBeTruthy();
- // One row has nothing to combine, so no selection controls are offered.
- expect(screen.queryByRole("button",{name:/Combine selected/})).toBeNull();
- expect(screen.queryByRole("checkbox")).toBeNull();
+ expect(screen.getByRole("button",{name:"Combine selected (0)"})).toBeTruthy();
  expect(screen.getByRole("button",{name:"Save filing rows & complete review"})).toBeTruthy();
  expect(screen.getByLabelText("Row 1 filing quantity")).toBeTruthy();
  expect(getItemTypes).toHaveBeenCalledWith(1);

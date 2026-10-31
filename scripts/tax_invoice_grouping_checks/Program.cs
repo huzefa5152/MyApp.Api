@@ -102,6 +102,10 @@ Check(billPrint.Items.Count == 2 && billPrint.Items.All(i => i.HSCode == "5555.0
 var perLine = TaxFilingProjection.InitialRows(invoice, perLine: true);
 Check(perLine.Count == 2 && perLine[0].Description == "First line" && perLine[1].SourceLineIds.SequenceEqual(new[] { 2 }), "A company that prints original lines starts the filing editor with one row per bill line.");
 Check(TaxFilingProjection.InitialRows(invoice).Count == 1, "Other companies still start from item-type groups.");
+invoice.Company.TaxInvoiceUseOriginalBillLines = false;
+billPrint = (await service.GetPrintBillAsync(1))!;
+Check(billPrint.Items.All(i => i.HSCode == "1111.0000"), "A company that groups keeps its bill reading the line's own code, whatever the filing rows say.");
+invoice.Company.TaxInvoiceUseOriginalBillLines = true;
 invoice.TaxFilingRowsJson = null;
 invoice.Items.First().Adjustment = savedAdjustment;
 invoice.Company.TaxInvoiceUseOriginalBillLines = false;

@@ -1226,8 +1226,7 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
   // with one line per Item Type the two views list the same rows.
   // Company policy "Print original bill lines on tax invoices": always separate lines, so there is nothing to choose.
   const originalLinesOnly = !!invoice?.taxInvoiceUseOriginalBillLines;
-  // Grouping a single line changes nothing, so the choice is offered only when there are several.
-  const showGroupToggle = !billsMode && items.length > 1 && !originalLinesOnly;
+  const showGroupToggle = !billsMode && items.length > 0 && !originalLinesOnly;
   // ...but the grouped row is where the adjustment controls live (Qty & Unit
   // Price vs Exact Line Total), so it renders on the Invoices tab regardless.
   // Gating it on `showGroupToggle` meant a SINGLE-LINE bill fell through to the
