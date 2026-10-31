@@ -12,9 +12,9 @@ vi.mock("./HsCodeAutocomplete", () => ({ default: ({ value, onChange, onSelect, 
 vi.mock("./SearchableItemTypeSelect", () => ({ default: () => null }));
 const initial = { sourceLineIds: [4], quantity: 3, valueExclTax: 100, itemTypeId: null, hsCode: "", uom: "Nos", description: "Commercial name" };
 const hints = { uoms: [{ uoM_ID: 13, description: "Numbers" }], defaultSaleType: "Goods at standard rate (default)" };
-function Harness({ types = [], omitDescription = false }) {
+function Harness({ types = [], omitDescription = false, lineDescriptions = false }) {
   const [row, setRow] = useState(initial);
-  return <><FilingClassificationFields row={row} index={0} companyId={7} types={types} onChange={setRow} omitDescription={omitDescription} /><output data-testid="row">{JSON.stringify(row)}</output></>;
+  return <><FilingClassificationFields row={row} index={0} companyId={7} types={types} onChange={setRow} omitDescription={omitDescription} lineDescriptions={lineDescriptions} /><output data-testid="row">{JSON.stringify(row)}</output></>;
 }
 beforeEach(() => { vi.clearAllMocks(); getItemTypeFbrHints.mockResolvedValue({ data: hints }); });
 afterEach(cleanup);
@@ -66,4 +66,10 @@ it("a company that omits descriptions is told FBR receives a blank one", () => {
   render(<Harness omitDescription />);
   fireEvent.click(screen.getByRole("button", { name: "Pick offline code" }));
   expect(screen.getByText(/FBR receives a blank description \(company setting\)/)).toBeTruthy();
+});
+it("an original-lines company is told FBR receives each bill line's own description, not the item name", () => {
+  render(<Harness lineDescriptions />);
+  fireEvent.click(screen.getByRole("button", { name: "Pick offline code" }));
+  expect(screen.getByText(/FBR receives each bill line's own description/)).toBeTruthy();
+  expect(screen.queryByText(/sent to FBR/)).toBeNull();
 });

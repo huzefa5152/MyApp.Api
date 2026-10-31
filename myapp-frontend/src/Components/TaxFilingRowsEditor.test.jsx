@@ -51,10 +51,9 @@ it("for a company that prints its original lines, shows each bill line and never
  expect(screen.getByText("Bill line 1")).toBeTruthy();
  expect(screen.getByText("Bill line 2")).toBeTruthy();
  expect(screen.queryByRole("button",{name:/Combine selected/})).toBeNull();
- fireEvent.click(screen.getByRole("button",{name:"Select all lines"}));
- expect(screen.getByRole("heading",{name:"2 lines selected"})).toBeTruthy();
- expect(screen.queryByRole("button",{name:/Combine selected/})).toBeNull();
- expect(screen.getByRole("button",{name:"Apply to ticked lines (2)"})).toBeTruthy();
+ // Each line takes its own HS code, so there is nothing to select lines for.
+ expect(screen.queryByRole("checkbox")).toBeNull();
+ expect(screen.queryByRole("button",{name:"Select all lines"})).toBeNull();
 });
 it("lets an original-lines company split a row merged before combining was removed", async () => {
  const merged = twoLines(true);

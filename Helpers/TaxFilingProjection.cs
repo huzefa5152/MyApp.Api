@@ -112,6 +112,39 @@ public static class TaxFilingProjection
             FixedNotifiedValueOrRetailPrice = r.RetailPrice
         }).ToList() : bill.Items.Select(LegacyLine).ToList();
 
+    /// <summary>
+    /// For a company that files every bill line as its own row: the message for a row that combines lines,
+    /// unless that exact group was already saved (a row merged before the rule stays until it is separated).
+    /// </summary>
+    public static string? MergedRow(IEnumerable<TaxFilingRowDto>? saved, IEnumerable<TaxFilingRowDto> rows)
+    {
+        var kept = (saved ?? Enumerable.Empty<TaxFilingRowDto>()).Where(r => r.SourceLineIds.Count > 1)
+            .Select(r => string.Join(',', r.SourceLineIds.Order())).ToHashSet();
+        return rows.Any(r => r.SourceLineIds.Count > 1 && !kept.Contains(string.Join(',', r.SourceLineIds.Order())))
+            ? "This company files every bill line as its own row. Give each line its own HS code instead of combining them."
+            : null;
+    }
+
+    /// <summary>
+    /// For a company that gives each bill line its own HS code: the operator message for the first code
+    /// used on more than one row, naming the line that already holds it; null when every code is unique.
+    /// </summary>
+    public static string? RepeatedHsCode(IEnumerable<InvoiceItem> lines, IEnumerable<TaxFilingRowDto> rows)
+    {
+        var seen = new Dictionary<string, TaxFilingRowDto>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+        {
+            var code = row.HSCode?.Trim();
+            if (string.IsNullOrEmpty(code)) continue;
+            if (!seen.TryAdd(code, row))
+            {
+                var holder = lines.FirstOrDefault(i => seen[code].SourceLineIds.Contains(i.Id))?.Description?.Trim();
+                return $"HS code {code} is already in use on the line \"{holder}\". Each bill line of this company needs its own HS code.";
+            }
+        }
+        return null;
+    }
+
     public static void ValidateCoverage(Invoice bill, List<TaxFilingRowDto> rows)
     {
         if (rows == null || rows.Count == 0 || rows.Count > 500 || rows.Any(r => r == null))

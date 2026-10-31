@@ -152,18 +152,33 @@ try:
     check(s == 200 and res["invoicesReady"] == 0 and res["issues"] and "not found" in res["issues"][0]["message"],
           "foreign invoice ids are 'not found in this company'", f"{s} {res}")
     print("--- commit with HS codes the company already uses")
-    for code in ("8204.1100", "8204.1200"):
+    for code in ("8204.1100", "8204.1200", "8204.2000"):
         call("POST", f"/api/itemtypes?companyId={on['id']}", {"companyId": on["id"], "name": f"Tool {code} {stamp}",
              "hsCode": code, "uom": "Numbers, pieces, units", "fbrUOMId": 69, "saleType": "Goods at Standard Rate (default)"})
+    # 2026-10-31: an original-lines company gives each bill line its own HS code. This sheet put both
+    # allen keys on 8204.1200, which used to combine them into one filing row; it is now refused.
     s, pre2 = upload(f"/api/reports/company/{on['id']}/tax-sheet/import/preview", out.getvalue())
-    check(s == 200 and pre2["invoicesReady"] == 1 and pre2["filingRows"] == 2 and not pre2["issues"],
-          "preview: 1 invoice, same-HS lines combine into 2 filing rows", f"{pre2}")
+    check(s == 200 and pre2["invoicesReady"] == 0 and pre2["issues"]
+          and "8204.1200 is already in use on the line" in pre2["issues"][0]["message"],
+          "preview: one HS code on two lines of an original-lines company is refused", f"{pre2}")
+    s, done = upload(f"/api/reports/company/{on['id']}/tax-sheet/import/commit", out.getvalue())
+    check(s == 200 and done["invoicesReady"] == 0 and not call("GET", f"/api/invoices/{b1['id']}/tax-filing")["hasSavedRows"],
+          "commit of that sheet saves nothing", f"{done}")
+    for r in range(head + 1, w.max_row + 1):
+        if w.cell(r, cols["Description"]).value == "Allen key 5mm":
+            w.cell(r, hs_c).value = "8204.2000"
+    out = io.BytesIO(); wb.save(out)
+    s, pre3 = upload(f"/api/reports/company/{on['id']}/tax-sheet/import/preview", out.getvalue())
+    check(s == 200 and pre3["invoicesReady"] == 1 and pre3["filingRows"] == 3 and not pre3["issues"],
+          "preview: one code per line -> 3 filing rows", f"{pre3}")
     s, done = upload(f"/api/reports/company/{on['id']}/tax-sheet/import/commit", out.getvalue())
     check(s == 200 and done["committed"] and done["invoicesReady"] == 1 and done["invoicesInFile"] == 1,
           "commit reports how many invoices were adjusted", f"{done}")
     ed = call("GET", f"/api/invoices/{b1['id']}/tax-filing")
-    check(ed["hasSavedRows"] and len(ed["rows"]) == 2, "filing rows saved")
-    check(sorted(len(r["sourceLineIds"]) for r in ed["rows"]) == [1, 2], "two allen keys share one row")
+    check(ed["hasSavedRows"] and len(ed["rows"]) == 3 and all(len(r["sourceLineIds"]) == 1 for r in ed["rows"]),
+          "filing rows saved, one per bill line")
+    check(sorted(r["description"] for r in ed["rows"]) == ["Allen key 4mm", "Allen key 5mm", "Wrench 14 inch"],
+          "each row is filed under its own bill description")
 
 
     print("--- stored FBR units: a new HS code resolves with no FBR call")
