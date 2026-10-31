@@ -19,6 +19,28 @@ export function withPrintCss(html) {
     : printCss + html;
 }
 
+
+// A big signature scan (multi-MB PNG) paints progressively in Chrome's print
+// preview, so the stamp prints as only its top strip. Re-encode anything large
+// to a small bitmap first; the printed size is a few mm, so nothing is lost.
+const MAX_PRINT_IMG_PX = 700;
+async function shrinkLargeImages(imgs) {
+  await Promise.all(imgs.map(async (img) => {
+    try {
+      if (img.decode) await img.decode();
+      const { naturalWidth: nw, naturalHeight: nh } = img;
+      if (!nw || !nh || Math.max(nw, nh) <= MAX_PRINT_IMG_PX) return;
+      const k = MAX_PRINT_IMG_PX / Math.max(nw, nh);
+      const c = img.ownerDocument.createElement("canvas");
+      c.width = Math.round(nw * k);
+      c.height = Math.round(nh * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      img.src = c.toDataURL("image/png");
+      if (img.decode) await img.decode();
+    } catch { /* tainted or unreadable: print the original */ }
+  }));
+}
+
 /**
  * Write merged print HTML into an already-open popup window and trigger the
  * browser print dialog only AFTER every image (logo) has finished loading.
@@ -62,11 +84,10 @@ export function writeAndPrint(w, html, { timeoutMs = 5000 } = {}) {
   if (pending.length === 0) {
     // `complete` can be true while a large image (the stamp) is only partly
     // decoded; printing then rasterises its top half. Wait for decode().
-    const decodes = imgs.map((img) => (img.decode ? img.decode().catch(() => {}) : null)).filter(Boolean);
-    if (decodes.length === 0) { triggerPrint(); return; }
+    if (imgs.length === 0) { triggerPrint(); return; }
     let done = false;
     const go = () => { if (!done) { done = true; triggerPrint(); } };
-    Promise.all(decodes).then(go);
+    shrinkLargeImages(imgs).then(go);
     w.setTimeout(go, timeoutMs);
     return;
   }
@@ -80,8 +101,7 @@ export function writeAndPrint(w, html, { timeoutMs = 5000 } = {}) {
   let remaining = pending.length;
   const onSettled = () => {
     if (--remaining <= 0) {
-      const d = imgs.map((img) => (img.decode ? img.decode().catch(() => {}) : null)).filter(Boolean);
-      Promise.all(d).then(fire);
+      shrinkLargeImages(imgs).then(fire);
     }
   };
   pending.forEach((img) => {
