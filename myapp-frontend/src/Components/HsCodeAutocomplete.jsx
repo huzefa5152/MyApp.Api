@@ -225,13 +225,17 @@ const styles = {
     // on every scroll (capture phase) so the dropdown re-renders glued
     // to the input as it moves on screen. position:absolute with +scrollY
     // would drift on inner-container scroll because we never re-render.
-    const r = rect ?? { bottom: 0, left: 0, width: 300 };
+    const r = rect ?? { top: 0, bottom: 0, left: 0, width: 300 };
+    // Open upward when the input sits near the bottom of the screen (e.g. a pinned action bar)
+    // and there is more room above; otherwise the list runs off-screen.
+    const below = window.innerHeight - r.bottom - 8, above = r.top - 8;
+    const up = below < 200 && above > below;
     return {
       position: "fixed",
-      top: r.bottom,
+      ...(up ? { bottom: window.innerHeight - r.top } : { top: r.bottom }),
       left: Math.min(r.left, Math.max(8, window.innerWidth - Math.min(Math.max(r.width, 400), window.innerWidth - 16) - 8)),
       width: Math.min(Math.max(r.width, 400), window.innerWidth - 16),
-      maxHeight: 340,
+      maxHeight: Math.max(120, Math.min(340, up ? above : below)),
       overflowY: "auto",
       backgroundColor: "#fff",
       border: "1px solid #d0d7e2",

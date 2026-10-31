@@ -68,3 +68,22 @@
 .tf-bulk label { display: block; font-size: .85rem; font-weight: 600; color: #5f6d7e; margin-bottom: 6px; }
 .tf-bulk input, .tf-bulk select { width: 100%; box-sizing: border-box; min-height: 44px; padding: 10px; border: 1px solid #bccbdd; border-radius: 8px; font-size: 16px; color: #1a2332; background: #fff; }
 .tf-bulk small { display: block; color: #4e6074; font-size: 13px; line-height: 1.5; margin-top: 6px; overflow-wrap: anywhere; }
+/* Selection actions follow the operator down a long bill instead of living above the first row.
+   One line on desktop (count · HS search · actions) so the rows above stay reachable; unit and sale
+   type only appear once a code is picked. The solid second shadow fills the body's bottom padding. */
+.tf-selection-bar { position: sticky; bottom: 0; z-index: 2; margin: 16px 0 0; padding: 10px 14px; border-style: solid; border-color: #174579; box-shadow: 0 -8px 24px rgba(23, 69, 121, .18), 0 28px 0 #fff; max-height: 60vh; overflow-y: auto; align-items: start; }
+.tf-selection-bar h3 { white-space: nowrap; line-height: 44px; }
+.tf-selection-bar > div:not(.tf-selection-actions) > label:first-child,
+.tf-selection-bar > div:not(.tf-selection-actions) > small:last-child { display: none; }
+/* In the bar the picked code's unit, sale type and name sit side by side; only errors keep their notes. */
+.tf-selection-bar > div:not(.tf-selection-actions) { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; }
+.tf-selection-bar > div:not(.tf-selection-actions) > * { flex: 1 1 100%; }
+.tf-selection-bar > div:not(.tf-selection-actions) > label { flex: 1 1 180px; margin: 0 !important; }
+.tf-selection-bar > div:not(.tf-selection-actions) > button { flex: 0 0 auto; }
+.tf-selection-bar small:not(.tf-field-error):not([role="alert"]) { display: none; }
+.tf-selection-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.tf-selection-bar button { min-height: 44px; }
+.tf-selection-bar .tf-apply { background: #174579; color: #fff; border: 0; border-radius: 8px; font-weight: 600; padding: 0 16px; }
+.tf-selection-bar .tf-apply:disabled { opacity: .5; }
+@media (min-width: 760px) { .tf-selection-bar { grid-template-columns: auto minmax(220px, 1fr) auto; } }
+@media (max-width: 759px) { .tf-selection-actions button { flex: 1; } .tf-selection-bar h3 { line-height: 1.3; } }

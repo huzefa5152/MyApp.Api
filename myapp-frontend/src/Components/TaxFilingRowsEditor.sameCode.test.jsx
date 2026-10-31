@@ -34,10 +34,13 @@ it("one code can be applied to several ticked lines, which stay separate with th
   render(<TaxFilingRowsEditor invoiceId={7} onClose={() => {}} />);
   await screen.findByTestId("hs-0");
   const apply = () => screen.getByRole("button", { name: /Apply to ticked lines/ });
-  expect(apply().disabled).toBe(true);
-  fireEvent.click(screen.getByRole("button", { name: "Choose shared code" }));
+  // The shared-code bar appears only once a line is ticked, pinned below the rows.
+  expect(screen.queryByRole("button", { name: /Apply to ticked lines/ })).toBeNull();
   fireEvent.click(screen.getByLabelText("Select filing row 1"));
   fireEvent.click(screen.getByLabelText("Select filing row 3"));
+  expect(screen.getByRole("heading", { name: "2 lines selected" })).toBeTruthy();
+  expect(apply().disabled).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Choose shared code" }));
   expect(apply().disabled).toBe(false);
   fireEvent.click(apply());
   expect(screen.getByTestId("hs-0").textContent).toBe("8425.1100");
