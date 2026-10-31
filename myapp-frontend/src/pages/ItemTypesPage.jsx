@@ -442,7 +442,7 @@ const styles = {
   item: { display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.6rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#fff" },
   starBtn: { width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "none", cursor: "pointer", borderRadius: 6, padding: 0 },
   itemName: { fontWeight: 600, fontSize: "0.88rem", color: colors.textPrimary, overflowWrap: "anywhere" },
-  itemDesc: { fontSize: "0.7rem", color: colors.textSecondary, overflowWrap: "anywhere", lineHeight: 1.3 },
+  itemDesc: { fontSize: "0.7rem", color: colors.textSecondary, overflowWrap: "anywhere", lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" },
   editBtn: { display: "flex", alignItems: "center", justifyContent: "center", padding: "0.35rem", borderRadius: 6, border: "none", backgroundColor: "#e3f2fd", color: colors.blue, cursor: "pointer" },
   deleteBtn: { display: "flex", alignItems: "center", justifyContent: "center", padding: "0.35rem", borderRadius: 6, border: "none", backgroundColor: "#ffebee", color: colors.danger, cursor: "pointer" },
   field: { marginBottom: "1rem" },

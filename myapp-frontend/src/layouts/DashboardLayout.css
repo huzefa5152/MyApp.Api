@@ -1488,6 +1488,10 @@ body.dl-body--locked {
   margin-top: 2px;
   line-height: 1.4;
   word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .it-card__grid {
