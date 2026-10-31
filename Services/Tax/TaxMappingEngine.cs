@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
@@ -58,6 +59,7 @@ namespace MyApp.Api.Services.Tax
         // HS list. Order of lookup: memory, stored table, then PRAL with the asking
         // company's own token; a good PRAL answer is stored, so each code is slow once.
         public const string HsUomCategory = "HsUom";
+        public const string SaleTypeRateCategory = "SaleTypeRate";
 
         public async Task<List<FbrUOMDto>> GetValidUomsForHsCodeAsync(int companyId, string hsCode)
         {
@@ -151,14 +153,48 @@ WHERE NOT EXISTS (SELECT 1 FROM FbrLookups WHERE Category = {HsUomCategory} AND 
         {
             var province = provinceCode ?? 0;
             var dateStr = date.ToString("yyyy-MM-dd");
-            var key = $"{companyId}:{DefaultTransactionTypeId}:{province}:{dateStr}";
+            // FBR's rates depend on transaction type, province and date, not on the company, like HS units.
+            var key = $"{DefaultTransactionTypeId}|{province}|{dateStr}";
             if (_saleTypeRateCache.TryGetValue(key, out var cached)) return cached;
+
+            // The host recycles the app after a few idle minutes, emptying the static cache; without a
+            // stored copy every first lookup after that waited 2-5 s on FBR (Adjust Invoice, every row).
+            var stored = await _db.FbrLookups.AsNoTracking()
+                .Where(l => l.Category == SaleTypeRateCategory && l.Code == key)
+                .Select(l => l.Label).FirstOrDefaultAsync();
+            if (stored != null && JsonSerializer.Deserialize<List<FbrSaleTypeRateDto>>(stored) is { Count: > 0 } kept)
+            {
+                _saleTypeRateCache.TryAdd(key, kept);
+                return kept;
+            }
 
             var fresh = await _fbr.GetSaleTypeRatesAsync(
                 companyId, dateStr, DefaultTransactionTypeId, province);
             if (fresh != null && fresh.Count > 0)
+            {
                 _saleTypeRateCache.TryAdd(key, fresh);
+                await StoreSaleTypeRatesAsync(key, fresh);
+            }
             return fresh ?? new();
+        }
+
+        // ponytail: one row per transaction type, province and day, never pruned (a few hundred bytes a
+        // day); delete old SaleTypeRate rows if that ever matters. Same INSERT ... WHERE NOT EXISTS as units.
+        private async Task StoreSaleTypeRatesAsync(string key, List<FbrSaleTypeRateDto> rates)
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(rates);
+                await _db.Database.ExecuteSqlInterpolatedAsync($@"
+INSERT INTO FbrLookups (Category, Code, Label, SortOrder, IsActive)
+SELECT {SaleTypeRateCategory}, {key}, {json}, 0, 1
+WHERE NOT EXISTS (SELECT 1 FROM FbrLookups WHERE Category = {SaleTypeRateCategory} AND Code = {key})");
+            }
+            catch (Exception ex)
+            {
+                // Storing is an optimisation; the live answer is still returned.
+                _logger?.LogWarning(ex, "Could not store FBR sale type rates for {Key}", key);
+            }
         }
 
         // ─── Resolve ───────────────────────────────────────────────
