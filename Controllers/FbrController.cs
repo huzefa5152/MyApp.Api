@@ -222,12 +222,15 @@ namespace MyApp.Api.Controllers
         /// adjustments. Each code is stored once for the whole installation. Each lookup
         /// uses the token of a company that actually uses the code. Works in batches so
         /// the request stays short; call again with the returned nextOffset until done.
+        /// With <paramref name="catalogCompanyId"/>, every code on the stored FBR HS list is
+        /// covered too, looked up with that company's token, so picking any code is instant.
         /// Seed admin only, like the HS list sync.
         /// </summary>
         [HttpPost("hscodes/uom/seed")]
         [HasPermission("fbr.config.update")]
         [SeedAdminOnly]
-        public async Task<IActionResult> SeedHsUnits([FromQuery] int offset = 0, [FromQuery] int batch = 100)
+        public async Task<IActionResult> SeedHsUnits([FromQuery] int offset = 0, [FromQuery] int batch = 100,
+            [FromQuery] int? catalogCompanyId = null)
         {
             batch = Math.Clamp(batch, 1, 300);
             offset = Math.Max(0, offset);
@@ -248,6 +251,15 @@ namespace MyApp.Api.Controllers
 
             var withToken = (await _db.Companies.AsNoTracking()
                 .Where(c => c.FbrToken != null && c.FbrToken != "").Select(c => c.Id).ToListAsync()).ToHashSet();
+            if (catalogCompanyId is int catalogCompany)
+            {
+                await _access.AssertAccessAsync(CurrentUserId, catalogCompany);
+                if (!withToken.Contains(catalogCompany))
+                    return BadRequest(new { message = "That company has no FBR token." });
+                pairs.AddRange((await _db.FbrLookups.AsNoTracking()
+                    .Where(l => l.Category == "HsCode" && l.IsActive).Select(l => l.Code).ToListAsync())
+                    .Select(c => (c.Trim(), catalogCompany)));
+            }
             var stored = (await _db.FbrLookups.AsNoTracking()
                 .Where(l => l.Category == TaxMappingEngine.HsUomCategory).Select(l => l.Code).ToListAsync())
                 .Select(c => c[..c.IndexOf('|')]).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -261,21 +273,25 @@ namespace MyApp.Api.Controllers
             var noToken = pairs.Select(p => p.Hs).Distinct(StringComparer.OrdinalIgnoreCase)
                 .Count(h => !stored.Contains(h) && !todo.Any(t => string.Equals(t.Hs, h, StringComparison.OrdinalIgnoreCase)));
 
+            // todo holds only codes not stored yet, so a stored code drops out of the next call's list.
+            // offset therefore counts just the codes FBR gave no units for in earlier calls (they stay
+            // at the front, in order); stepping it by the batch size would skip codes never looked up.
             var done = 0; var empty = new List<string>();
-            foreach (var (hs, companyId) in todo.Skip(offset).Take(batch))
+            var slice = todo.Skip(offset).Take(batch).ToList();
+            foreach (var (hs, companyId) in slice)
             {
                 var units = await _taxEngine.GetValidUomsForHsCodeAsync(companyId, hs);
                 if (units.Count > 0) done++; else empty.Add(hs);
                 await Task.Delay(100); // be gentle with PRAL
             }
-            var next = offset + batch;
+            var remaining = Math.Max(0, todo.Count - offset - slice.Count);
             return Ok(new
             {
                 storedNow = done,
                 noUnitsFromFbr = empty,
                 codesWithoutAnyToken = noToken,
-                stillToDo = Math.Max(0, todo.Count - next),
-                nextOffset = next < todo.Count ? next : (int?)null,
+                stillToDo = remaining,
+                nextOffset = remaining > 0 ? offset + empty.Count : (int?)null,
             });
         }
 
