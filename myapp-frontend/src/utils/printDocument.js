@@ -111,3 +111,25 @@ export function writeAndPrint(w, html, { timeoutMs = 5000 } = {}) {
   // Safety net: a stalled or broken image must never hang the print dialog.
   w.setTimeout(fire, timeoutMs);
 }
+
+/**
+ * For popups the caller already wrote into: wait until every image has loaded
+ * (stamps are ~1 MB scans; the old 3 s cap printed them half-loaded), shrink
+ * the big ones, then print. Gives up after timeoutMs so a dead image never
+ * blocks the dialog.
+ */
+export function printWhenImagesReady(w, { timeoutMs = 20000 } = {}) {
+  const imgs = Array.from(w.document.images || []);
+  const loaded = Promise.all(imgs.map((img) => (
+    img.complete && img.naturalHeight !== 0
+      ? Promise.resolve()
+      : new Promise((resolve) => {
+          img.addEventListener("load", resolve, { once: true });
+          img.addEventListener("error", resolve, { once: true });
+        })
+  ))).then(() => shrinkLargeImages(imgs));
+  const safety = new Promise((resolve) => setTimeout(resolve, timeoutMs));
+  Promise.race([loaded, safety]).then(() => {
+    try { w.focus(); w.print(); } catch { /* popup already closed */ }
+  });
+}

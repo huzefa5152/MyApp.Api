@@ -1,4 +1,5 @@
 import "./InvoiceCardActions.css";
+import { printWhenImagesReady } from "../utils/printDocument";
 import ListFilters from "../Components/ListFilters";
 import RecordsViewport from "../Components/RecordsViewport";
 import CostingStatus from "../Components/CostingStatus";
@@ -420,28 +421,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     refreshAttachCounts();
   };
 
-  // Print only once every image in the popup has finished loading. Without
-  // this, w.print() fires before the FBR QR (a base64 data-URL) and the FBR
-  // logo (/images/fbr-logo.png, a network fetch) have decoded — so the FIRST
-  // print comes out with them blank/missing and they only appear on a 2nd/3rd
-  // attempt once cached. On production the network-fetched logo is slower, so
-  // it misses consistently. `error` listeners + a 3s safety timeout guarantee
-  // a broken or slow image never blocks the print dialog.
-  const printWindowWhenImagesReady = (w) => {
-    const imgs = Array.from(w.document.images || []);
-    const ready = Promise.all(imgs.map((img) => (
-      img.complete && img.naturalHeight !== 0
-        ? Promise.resolve()
-        : new Promise((resolve) => {
-            img.addEventListener("load", resolve, { once: true });
-            img.addEventListener("error", resolve, { once: true });
-          })
-    )));
-    const safety = new Promise((resolve) => setTimeout(resolve, 3000));
-    Promise.race([ready, safety]).then(() => {
-      try { w.focus(); w.print(); } catch { /* popup already closed */ }
-    });
-  };
+  const printWindowWhenImagesReady = printWhenImagesReady;
 
   const handlePrintBill = async (inv) => {
     if (tplPicker.noTemplate) { notify(tplPicker.noTemplateReason, "warning"); return; }
