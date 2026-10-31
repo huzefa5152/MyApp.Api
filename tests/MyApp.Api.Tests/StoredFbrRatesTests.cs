@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Models;
+using MyApp.Api.Services.Interfaces;
 using MyApp.Api.Services.Tax;
 using Xunit;
 
@@ -34,5 +35,26 @@ public class StoredFbrRatesTests
         Assert.Equal(new[] { "KG" }, hints.Uoms.Select(u => u.Description));
         Assert.Equal(734, Assert.Single(hints.RateOptions).RateId);
         Assert.Equal(18m, hints.DefaultRate);
+    }
+
+    [Fact]
+    public async Task FbrIsAskedForRatesWithTheDateFormatItAccepts()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        await using var db = new AppDbContext(options);
+        db.Companies.Add(new Company { Id = 8, Name = "Rates Co", FbrProvinceCode = 8, FbrToken = "t" });
+        db.FbrLookups.Add(new FbrLookup { Category = TaxMappingEngine.HsUomCategory, Code = "5602.2100|13", Label = "KG" });
+        await db.SaveChangesAsync();
+        ((IDictionary)typeof(TaxMappingEngine).GetField("_saleTypeRateCache", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!).Clear();
+        string? asked = null;
+        var fbr = DispatchProxy.Create<IFbrService, FilingClassificationTests.Stub>();
+        ((FilingClassificationTests.Stub)(object)fbr).Call = (m, args) => m.Name == "GetSaleTypeRatesAsync"
+            ? Task.FromResult((asked = (string)args![1]!) is { } ? new List<FbrSaleTypeRateDto> { new() { RATE_ID = 734, RATE_DESC = "18%", RATE_VALUE = 18m } } : new())
+            : throw new NotSupportedException(m.Name);
+
+        var hints = await new TaxMappingEngine(fbr, db).GetHsCodeHintsAsync(8, "5602.2100");
+
+        Assert.Equal(DateTime.UtcNow.Date.ToString("dd-MMM-yyyy", System.Globalization.CultureInfo.InvariantCulture), asked);
+        Assert.Equal(734, Assert.Single(hints.RateOptions).RateId);
     }
 }

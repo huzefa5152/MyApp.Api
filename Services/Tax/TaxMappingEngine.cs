@@ -168,8 +168,11 @@ WHERE NOT EXISTS (SELECT 1 FROM FbrLookups WHERE Category = {HsUomCategory} AND 
                 return kept;
             }
 
+            // FBR's SaleTypeToRate needs dd-MMM-yyyy: an ISO date gets an HTTP error, which the FBR client
+            // retried three times (2-14 s) and then returned no rates, so nothing was ever cached or stored.
+            var fbrDate = date.ToString("dd-MMM-yyyy", System.Globalization.CultureInfo.InvariantCulture);
             var fresh = await _fbr.GetSaleTypeRatesAsync(
-                companyId, dateStr, DefaultTransactionTypeId, province);
+                companyId, fbrDate, DefaultTransactionTypeId, province);
             if (fresh != null && fresh.Count > 0)
             {
                 _saleTypeRateCache.TryAdd(key, fresh);
