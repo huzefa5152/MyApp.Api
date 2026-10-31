@@ -2,13 +2,16 @@ import { useEffect, useRef, useState } from "react";
 import { getItemTypeFbrHints } from "../api/itemTypeApi";
 import HsCodeAutocomplete from "./HsCodeAutocomplete";
 
-export default function FilingClassificationFields({ row, index, companyId, types, onChange, canAdjustNumbers, label }) {
+export default function FilingClassificationFields({ row, index, companyId, types, onChange, canAdjustNumbers, label, onBusyChange }) {
   const [hints, setHints] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [retry, setRetry] = useState(0);
   const latest = useRef({ row, onChange });
-  latest.current = { row, onChange };
+  latest.current = { row, onChange, onBusyChange };
+  // Lets the editor hold its Save button while FBR's unit for this code is still being fetched.
+  useEffect(() => { latest.current.onBusyChange?.(loading); }, [loading]);
+  useEffect(() => () => latest.current.onBusyChange?.(false), []);
   useEffect(() => {
     let active = true;
     setHints(null); setError(""); setLoading(false);

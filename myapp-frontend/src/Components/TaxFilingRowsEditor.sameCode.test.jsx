@@ -47,3 +47,24 @@ it("one code can be applied to several ticked lines, which stay separate with th
   expect(screen.getByLabelText("Row 1 filing quantity").value).toBe("4");
   expect(screen.getByLabelText("Row 3 filing quantity").value).toBe("2");
 });
+
+const coded = (original, uom) => { const p = payload([4]); p.data.bill.taxInvoiceUseOriginalBillLines = original; p.data.rows[0] = { ...p.data.rows[0], hsCode: "8425.1100", uom }; return p; };
+it("holds Save while FBR's unit for a typed code has not arrived", async () => {
+  getTaxFiling.mockResolvedValueOnce(coded(true, ""));
+  render(<TaxFilingRowsEditor invoiceId={7} onClose={() => {}} />);
+  await screen.findByTestId("hs-0");
+  const save = screen.getByRole("button", { name: /Loading FBR unit/ });
+  expect(save.disabled).toBe(true);
+});
+it("allows Save once the unit is in", async () => {
+  getTaxFiling.mockResolvedValueOnce(coded(true, "Pcs"));
+  render(<TaxFilingRowsEditor invoiceId={7} onClose={() => {}} />);
+  await screen.findByTestId("hs-0");
+  expect(screen.getByRole("button", { name: "Save filing rows & complete review" }).disabled).toBe(false);
+});
+it("leaves a grouping company's Save button as it was", async () => {
+  getTaxFiling.mockResolvedValueOnce(coded(false, ""));
+  render(<TaxFilingRowsEditor invoiceId={7} onClose={() => {}} />);
+  await screen.findByTestId("hs-0");
+  expect(screen.getByRole("button", { name: "Save filing rows & complete review" }).disabled).toBe(false);
+});
