@@ -119,8 +119,10 @@ export default function SmartItemAutocomplete({
 
   // FBR pick → use FBR description/code and auto-fetch UOM
   const pickFbr = async (fbrItem) => {
-    setQuery(fbrItem.description);
-    onChange?.(fbrItem.description);
+    // The catalog's one-line name, not FBR's paragraph-long description.
+    const name = fbrItem.shortName || fbrItem.description;
+    setQuery(name);
+    onChange?.(name);
     setShowDropdown(false);
 
     // Best-effort: fetch the allowed UOM for this HS code
@@ -137,7 +139,7 @@ export default function SmartItemAutocomplete({
     }
 
     onPick?.({
-      name: fbrItem.description,
+      name,
       hsCode: fbrItem.hS_CODE,
       uom,
       fbrUOMId,
@@ -235,6 +237,7 @@ export default function SmartItemAutocomplete({
                         <span style={styles.hsCode}>{f.hS_CODE}</span>
                         <span style={styles.fbrBadge}>FBR</span>
                       </div>
+                      {f.shortName && <div style={{ ...styles.itemDesc, fontWeight: 600 }}>{f.shortName}</div>}
                       <div style={styles.itemDesc}>{f.description}</div>
                     </li>
                   );

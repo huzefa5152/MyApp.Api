@@ -5,13 +5,16 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import FilingClassificationFields from "./FilingClassificationFields";
 import { getItemTypeFbrHints } from "../api/itemTypeApi";
 vi.mock("../api/itemTypeApi", () => ({ getItemTypeFbrHints: vi.fn() }));
-vi.mock("./HsCodeAutocomplete", () => ({ default: ({ value, onChange, ariaLabel }) => <input aria-label={ariaLabel} value={value} onChange={e => onChange(e.target.value)} /> }));
+vi.mock("./HsCodeAutocomplete", () => ({ default: ({ value, onChange, onSelect, ariaLabel }) => <>
+  <input aria-label={ariaLabel} value={value} onChange={e => onChange(e.target.value)} />
+  <button type="button" onClick={() => onSelect({ hS_CODE: "8301.1000", description: "MISCELLANEOUS ARTICLES OF BASE METAL. - PADLOCKS AND LOCKS (KEY)", shortName: "Padlocks and locks" })}>Pick offline code</button>
+</> }));
 vi.mock("./SearchableItemTypeSelect", () => ({ default: () => null }));
 const initial = { sourceLineIds: [4], quantity: 3, valueExclTax: 100, itemTypeId: null, hsCode: "", uom: "Nos", description: "Commercial name" };
 const hints = { uoms: [{ uoM_ID: 13, description: "Numbers" }], defaultSaleType: "Goods at standard rate (default)" };
-function Harness({ types = [] }) {
+function Harness({ types = [], omitDescription = false }) {
   const [row, setRow] = useState(initial);
-  return <><FilingClassificationFields row={row} index={0} companyId={7} types={types} onChange={setRow} /><output data-testid="row">{JSON.stringify(row)}</output></>;
+  return <><FilingClassificationFields row={row} index={0} companyId={7} types={types} onChange={setRow} omitDescription={omitDescription} /><output data-testid="row">{JSON.stringify(row)}</output></>;
 }
 beforeEach(() => { vi.clearAllMocks(); getItemTypeFbrHints.mockResolvedValue({ data: hints }); });
 afterEach(cleanup);
@@ -50,4 +53,17 @@ it("a late lookup for the previous code cannot replace the current unit choices"
   await screen.findByLabelText("Row 1 filing unit");
   complete({ data: { ...hints, uoms: [{ uoM_ID: 99, description: "Wrong old unit" }] } });
   await waitFor(() => expect(screen.queryByText("Wrong old unit")).toBeNull());
+});
+it("an offline catalog pick names the new item with its one-line short name, editable, and says FBR receives it", () => {
+  render(<Harness />);
+  fireEvent.click(screen.getByRole("button", { name: "Pick offline code" }));
+  expect(screen.getByLabelText("Row 1 new item name").value).toBe("Padlocks and locks");
+  expect(screen.getByText(/FBR receives this name as the item description/)).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("Row 1 new item name"), { target: { value: "Door locks" } });
+  expect(JSON.parse(screen.getByTestId("row").textContent)).toMatchObject({ hsCode: "8301.1000", description: "Door locks" });
+});
+it("a company that omits descriptions is told FBR receives a blank one", () => {
+  render(<Harness omitDescription />);
+  fireEvent.click(screen.getByRole("button", { name: "Pick offline code" }));
+  expect(screen.getByText(/FBR receives a blank description \(company setting\)/)).toBeTruthy();
 });

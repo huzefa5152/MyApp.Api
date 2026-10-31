@@ -1957,6 +1957,10 @@ namespace MyApp.Api.Services.Implementations
             bool excludeSaved = false, string? includeHsCode = null)
         {
             var all = await GetHsCodeCatalogAsync(companyId);
+            // Offline list first. A typed code it does not hold may be new at FBR since the last sync.
+            var typed = search?.Trim() ?? "";
+            if (HsCodeTerm.IsMatch(typed) && !all.Any(h => h.HS_CODE.StartsWith(typed, StringComparison.OrdinalIgnoreCase)))
+                all = await TopUpHsCatalogFromPralAsync(companyId);
 
             if (excludeSaved)
             {
@@ -2104,6 +2108,47 @@ namespace MyApp.Api.Services.Implementations
             {
                 _hsCacheLock.Release();
             }
+        }
+
+        private static readonly System.Text.RegularExpressions.Regex HsCodeTerm =
+            new(@"^\d{4}(\.\d{0,4}(\.\d{0,2})?)?$", System.Text.RegularExpressions.RegexOptions.Compiled);
+        // ponytail: in-memory 30-minute throttle per company, so a typo cannot hit PRAL on every keystroke.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, DateTime> _lastPralTopUp = new();
+
+        // Asks PRAL with the asking company's OWN token (never another tenant's, audit H-9) and appends
+        // the codes the stored list lacks, so the next lookup finds them offline. Skips the write when the
+        // caller has unsaved changes on this context (e.g. a filing save): SaveChanges would commit them early.
+        private async Task<List<FbrHSCodeDto>> TopUpHsCatalogFromPralAsync(int companyId)
+        {
+            var current = await GetHsCodeCatalogAsync(companyId);
+            if (_db.ChangeTracker.HasChanges()
+                || DateTime.UtcNow - _lastPralTopUp.GetValueOrDefault(companyId) < TimeSpan.FromMinutes(30)) return current;
+            _lastPralTopUp[companyId] = DateTime.UtcNow;
+            var live = await GetReferenceData<FbrHSCodeDto>(companyId, $"{RefBaseV1}/itemdesccode");
+            if (live.Count == 0) return current;
+
+            await _hsCacheLock.WaitAsync();
+            try
+            {
+                var stored = await _db.FbrLookups.AsNoTracking().Where(l => l.Category == HsCodeLookupCategory)
+                    .Select(l => new { l.Code, l.SortOrder }).ToListAsync();
+                if (stored.Count == 0) return current; // never synced: the catalog already came from PRAL
+                var known = stored.Select(s => s.Code.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var next = stored.Max(s => s.SortOrder) + 1;
+                var added = live.Where(h => !string.IsNullOrWhiteSpace(h.HS_CODE) && known.Add(h.HS_CODE.Trim()))
+                    .Select(h => new FbrLookup { Category = HsCodeLookupCategory, Code = h.HS_CODE.Trim(),
+                        Label = h.Description?.Trim() ?? "", SortOrder = next++, IsActive = true }).ToList();
+                if (added.Count == 0) return current;
+                _db.FbrLookups.AddRange(added);
+                await _db.SaveChangesAsync();
+                _hsCodeCatalog = null;
+                _logger.LogInformation("Added {Count} new FBR HS codes to the offline list from PRAL (company {CompanyId}).", added.Count, companyId);
+            }
+            finally
+            {
+                _hsCacheLock.Release();
+            }
+            return await GetHsCodeCatalogAsync(companyId);
         }
 
         public async Task<List<FbrUOMDto>> GetUOMsAsync(int companyId)

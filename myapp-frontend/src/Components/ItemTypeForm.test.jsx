@@ -5,7 +5,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import ItemTypeForm from "./ItemTypeForm";
 import * as api from "../api/itemTypeApi";
 vi.mock("../api/itemTypeApi", () => ({ createItemType: vi.fn(), updateItemType: vi.fn(), getItemTypeFbrHints: vi.fn() }));
-vi.mock("./HsCodeAutocomplete", () => ({ default: ({ value, onChange }) => <input aria-label="HS code" value={value} onChange={e => onChange(e.target.value)} /> }));
+vi.mock("./HsCodeAutocomplete", () => ({ default: ({ value, onChange, onSelect }) => <>
+  <input aria-label="HS code" value={value} onChange={e => onChange(e.target.value)} />
+  <button type="button" onClick={() => onSelect?.({ hS_CODE: "8301.1000", description: "MISCELLANEOUS ARTICLES OF BASE METAL. - PADLOCKS AND LOCKS (KEY)", shortName: "Padlocks and locks" })}>Pick catalog code</button>
+</> }));
 vi.mock("./LookupAutocomplete", () => ({ default: ({ value, onChange }) => <input aria-label="Usual unit" value={value} onChange={e => onChange(e.target.value)} /> }));
 beforeEach(() => {
   vi.clearAllMocks(); Element.prototype.scrollIntoView = vi.fn();
@@ -31,4 +34,13 @@ it("allows either FBR-supported unit as the classification default", async () =>
   fireEvent.click(screen.getByRole("button", { name: "Create" }));
   await waitFor(() => expect(api.createItemType).toHaveBeenCalled());
   expect(api.createItemType.mock.calls[0]).toEqual([expect.objectContaining({ hsCode: "3004.9099", uom: "KG", fbrUOMId: 11 }), 42]);
+});
+it("names a new item from the catalog's one-line short name, never over a typed name", async () => {
+  render(<ItemTypeForm purpose="classification" companyId={42} />);
+  fireEvent.click(screen.getByRole("button", { name: "Pick catalog code" }));
+  expect(screen.getByLabelText("Name *").value).toBe("Padlocks and locks");
+  expect(screen.getByLabelText("HS code").value).toBe("8301.1000");
+  fireEvent.change(screen.getByLabelText("Name *"), { target: { value: "Door locks" } });
+  fireEvent.click(screen.getByRole("button", { name: "Pick catalog code" }));
+  expect(screen.getByLabelText("Name *").value).toBe("Door locks");
 });

@@ -380,6 +380,8 @@ export default function ItemTypeForm({
                 companyId={companyId}
                 value={hsCode}
                 onChange={onHsChange}
+                // A new item picked from the catalog starts with its one-line name, not FBR's paragraph.
+                onSelect={(option) => { if (mode === "create" && !name.trim() && option.shortName) setName(option.shortName); onHsChange(option.hS_CODE); }}
                 saleType={scenarioSaleType || null}
                 style={{ ...styles.input, fontFamily: "monospace" }}
                 placeholder={

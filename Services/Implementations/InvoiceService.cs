@@ -341,6 +341,7 @@ namespace MyApp.Api.Services.Implementations
                 .Select(g => new BillSalesOrderLinkDto { Id=g.Key, Number=g.First().SalesOrder?.SalesOrderNumber ?? 0 }).ToList(),
             AllowNonFbrBills = inv.Company?.AllowNonFbrBills ?? false,
             TaxInvoiceUseOriginalBillLines = inv.Company?.TaxInvoiceUseOriginalBillLines ?? false,
+            FbrOmitProductDescription = inv.Company?.FbrOmitProductDescription ?? false,
             TaxTreatment = inv.TaxTreatment,
             IsFbrExcluded = inv.IsFbrExcluded,
             IsCancelled = inv.IsCancelled,

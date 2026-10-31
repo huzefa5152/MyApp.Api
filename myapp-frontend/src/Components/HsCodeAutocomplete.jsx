@@ -205,6 +205,7 @@ export default function HsCodeAutocomplete({ companyId, value, onChange, onSelec
                 onMouseEnter={() => setHighlightIndex(idx)}
               >
                 <div style={styles.itemCode}>{s.hS_CODE}</div>
+                {!s.companyItem && s.shortName && s.shortName.toLowerCase() !== String(s.description).trim().toLowerCase() && <div style={{ ...styles.itemDesc, fontWeight: 600, color: "#1a2332" }}>{s.shortName}</div>}
                 <div style={styles.itemDesc}>{s.description}</div>
                 {showCompanyStatus && <div style={{ ...styles.itemDesc, color: s.companyItem ? "#17603e" : "#5f6d7e" }}>{s.companyItem
                   ? `Company item · ${Number(s.companyItem.availableQty || 0).toLocaleString("en-PK")} in stock · ${s.companyItem.uom || "Unit not set"}`

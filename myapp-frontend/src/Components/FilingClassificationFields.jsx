@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { getItemTypeFbrHints } from "../api/itemTypeApi";
 import HsCodeAutocomplete from "./HsCodeAutocomplete";
 
-export default function FilingClassificationFields({ row, index, companyId, types, onChange, canAdjustNumbers, label, onBusyChange }) {
+export default function FilingClassificationFields({ row, index, companyId, types, onChange, canAdjustNumbers, label, onBusyChange, omitDescription = false }) {
   const [hints, setHints] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -56,16 +56,16 @@ export default function FilingClassificationFields({ row, index, companyId, type
   return <div>
     <label>HS code or company item</label>
     <HsCodeAutocomplete companyId={companyId} value={row.hsCode || ""} onChange={changeCode}
-      onSelect={option => option.companyItem ? pickType(option.companyItem) : changeCode(option.hS_CODE, option.description || "")}
+      onSelect={option => option.companyItem ? pickType(option.companyItem) : changeCode(option.hS_CODE, option.shortName || option.description || "")}
       companyItems={types} showCompanyStatus placeholder="Search all FBR codes or company item names"
       ariaLabel={`${prefix} FBR HS code`} />
-    {row.itemTypeId && <small>Using company item: {types.find(t => t.id === row.itemTypeId)?.name || row.description}. Unit and sale type below apply to this filing.</small>}
+    {row.itemTypeId && <small>Using company item: {types.find(t => t.id === row.itemTypeId)?.name || row.description}. {omitDescription ? "FBR receives a blank description (company setting)." : "FBR receives this name as the item description."} Unit and sale type below apply to this filing.</small>}
     {!row.itemTypeId && completeCode && <>
-      <label style={{ marginTop: 12 }}>New item name
+      <label style={{ marginTop: 12 }}>New item name{omitDescription ? "" : " (sent to FBR)"}
         <input aria-label={`${prefix} new item name`} maxLength={500} value={row.description || ""}
           onChange={e => onChange({ ...row, description: e.target.value })} />
       </label>
-      <small>Saving adds this classification to this company. You can edit the suggested item name.</small>
+      <small>Saving adds this item to the company catalog under this name. {omitDescription ? "FBR receives a blank description (company setting)." : "FBR receives this name as the item description; FBR's full text stays on the item."}</small>
     </>}
     {completeCode && <>
       {loading && <small role="status">Loading FBR units and sale types…</small>}

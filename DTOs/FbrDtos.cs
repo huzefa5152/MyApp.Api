@@ -115,6 +115,8 @@ namespace MyApp.Api.DTOs
     {
         public string HS_CODE { get; set; } = "";
         public string Description { get; set; } = "";
+        // One-line item name for pickers; Description stays FBR's full text.
+        public string ShortName => MyApp.Api.Helpers.HsShortName.From(Description);
     }
 
     public class FbrUOMDto
