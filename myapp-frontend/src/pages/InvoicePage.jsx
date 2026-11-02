@@ -408,7 +408,11 @@ export default function InvoicePage({ mode = "invoices" }) {
     }
   }, [selectedCompany]);
 
+  // Re-fetch when filters or page change. Not on mount: the company effect above
+  // already loads page 1, and running both fetched the list twice on every open.
+  const filtersMountedRef = useRef(false);
   useEffect(() => {
+    if (!filtersMountedRef.current) { filtersMountedRef.current = true; return; }
     if (selectedCompany) fetchInvoices(selectedCompany.id, page);
   }, [page, pageSize, search, clientFilter, fbrFilter, handoverFilter, dateFrom, dateTo, costingStatus]);
 
