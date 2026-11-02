@@ -32,9 +32,17 @@ namespace MyApp.Api.Controllers
             description = "Sales report for a period: FBR-filed sale invoices with totals, a month-by-month breakdown, the top customers, and optionally the invoice list. Amounts are in PKR; 'amount' excludes tax.",
             inputSchema = Schema(new
             {
-                companyId = RCompanyId, year = RYear, month = RMonth, dateFrom = RDate, dateTo = RDate,
-                buyerType = new { type = "string", @enum = BuyerTypes, @default = "all" }, clientId = new { type = "integer", minimum = 1 },
-                topClients = RTop, includeInvoices = new { type = "boolean", @default = false }, offset = ROffset, limit = RLimit,
+                companyId = RCompanyId,
+                year = RYear,
+                month = RMonth,
+                dateFrom = RDate,
+                dateTo = RDate,
+                buyerType = new { type = "string", @enum = BuyerTypes, @default = "all" },
+                clientId = new { type = "integer", minimum = 1 },
+                topClients = RTop,
+                includeInvoices = new { type = "boolean", @default = false },
+                offset = ROffset,
+                limit = RLimit,
             }, "companyId"),
             annotations = RReadAnnotations,
         };
@@ -45,9 +53,15 @@ namespace MyApp.Api.Controllers
             description = "One client's statement: each bill with amount, paid, balance and status, plus totals and ageing (how old the unpaid balance is). Find the client with search_clients.",
             inputSchema = Schema(new
             {
-                companyId = RCompanyId, clientId = new { type = "integer", minimum = 1 },
+                companyId = RCompanyId,
+                clientId = new { type = "integer", minimum = 1 },
                 status = new { type = "string", @enum = LedgerStatuses, @default = "unpaid" },
-                year = RYear, month = RMonth, dateFrom = RDate, dateTo = RDate, offset = ROffset, limit = RLimit,
+                year = RYear,
+                month = RMonth,
+                dateFrom = RDate,
+                dateTo = RDate,
+                offset = ROffset,
+                limit = RLimit,
             }, "companyId", "clientId"),
             annotations = RReadAnnotations,
         };
@@ -66,8 +80,16 @@ namespace MyApp.Api.Controllers
             description = "Tax sheet for a period: invoice lines whose item type still has no valid HS code, grouped by item type, with totals and an optional page of the rows.",
             inputSchema = Schema(new
             {
-                companyId = RCompanyId, year = RYear, month = RMonth, dateFrom = RDate, dateTo = RDate, clientId = new { type = "integer", minimum = 1 },
-                topItems = RTop, includeRows = new { type = "boolean", @default = false }, offset = ROffset, limit = RLimit,
+                companyId = RCompanyId,
+                year = RYear,
+                month = RMonth,
+                dateFrom = RDate,
+                dateTo = RDate,
+                clientId = new { type = "integer", minimum = 1 },
+                topItems = RTop,
+                includeRows = new { type = "boolean", @default = false },
+                offset = ROffset,
+                limit = RLimit,
             }, "companyId"),
             annotations = RReadAnnotations,
         };
@@ -78,9 +100,14 @@ namespace MyApp.Api.Controllers
             description = "What an item was billed at before: past unit prices with client and date, plus the average, lowest and highest rate across the whole filtered set. Use it to price a quotation.",
             inputSchema = Schema(new
             {
-                companyId = RCompanyId, itemTypeId = new { type = "integer", minimum = 1 }, search = new { type = "string", maxLength = 200 },
-                clientId = new { type = "integer", minimum = 1 }, dateFrom = RDate, dateTo = RDate,
-                page = new { type = "integer", minimum = 1, @default = 1 }, pageSize = RLimit,
+                companyId = RCompanyId,
+                itemTypeId = new { type = "integer", minimum = 1 },
+                search = new { type = "string", maxLength = 200 },
+                clientId = new { type = "integer", minimum = 1 },
+                dateFrom = RDate,
+                dateTo = RDate,
+                page = new { type = "integer", minimum = 1, @default = 1 },
+                pageSize = RLimit,
             }, "companyId"),
             annotations = RReadAnnotations,
         };
@@ -150,16 +177,23 @@ namespace MyApp.Api.Controllers
                 var (offset, limit) = Window(args);
                 page = new
                 {
-                    offset, limit, totalCount = invoices.Count,
+                    offset,
+                    limit,
+                    totalCount = invoices.Count,
                     items = invoices.OrderBy(i => i.DocumentDate).ThenBy(i => i.InvoiceId).Skip(offset).Take(limit)
                         .Select(i => new { i.InvoiceId, i.DocumentNumber, date = Ymd(i.DocumentDate), i.Customer, amount = i.TotalAmount, tax = i.TotalTax, total = i.TotalGross, i.LineCount }),
                 };
             }
             return new
             {
-                company = new { id = r.CompanyId, name = r.CompanyName }, period = new { label = r.PeriodLabel, from = Ymd(r.DateFrom), to = Ymd(r.DateTo) }, buyerType = r.BuyerType,
+                company = new { id = r.CompanyId, name = r.CompanyName },
+                period = new { label = r.PeriodLabel, from = Ymd(r.DateFrom), to = Ymd(r.DateTo) },
+                buyerType = r.BuyerType,
                 totals = new { invoiceCount = r.InvoiceCount, lineCount = r.LineCount, quantity = r.GrandQuantity, amount = r.GrandAmount, discount = r.GrandDiscount, tax = r.GrandTax, total = r.GrandTotal },
-                byMonth, topClients, invoices = page, currency = "PKR",
+                byMonth,
+                topClients,
+                invoices = page,
+                currency = "PKR",
             };
         }
 
@@ -185,22 +219,30 @@ namespace MyApp.Api.Controllers
             var open = r.Rows.Where(x => x.Balance > 0).ToList();
             var ageing = new[] { "0-30", "31-60", "61-90", "90+" }.Select(b => new
             {
-                bucket = b, invoiceCount = open.Count(x => Bucket(Math.Max(0, (today - x.InvoiceDate.Date).Days)) == b),
+                bucket = b,
+                invoiceCount = open.Count(x => Bucket(Math.Max(0, (today - x.InvoiceDate.Date).Days)) == b),
                 balance = open.Where(x => Bucket(Math.Max(0, (today - x.InvoiceDate.Date).Days)) == b).Sum(x => x.Balance),
             });
             var (offset, limit) = Window(args);
             return new
             {
-                company = new { id = r.CompanyId, name = r.CompanyName }, client = new { id = client.Id, name = client.Name }, statusFilter = r.StatusFilter, period = r.PeriodLabel,
-                totals = new { invoiceCount = r.InvoiceCount, amount = r.GrandAmount, paid = r.GrandPaid, balance = r.GrandBalance }, ageing,
+                company = new { id = r.CompanyId, name = r.CompanyName },
+                client = new { id = client.Id, name = client.Name },
+                statusFilter = r.StatusFilter,
+                period = r.PeriodLabel,
+                totals = new { invoiceCount = r.InvoiceCount, amount = r.GrandAmount, paid = r.GrandPaid, balance = r.GrandBalance },
+                ageing,
                 bills = new
                 {
-                    offset, limit, totalCount = r.Rows.Count,
+                    offset,
+                    limit,
+                    totalCount = r.Rows.Count,
                     // Payment details (cheque numbers, bank references) stay out of the output on purpose.
                     items = r.Rows.OrderBy(x => x.InvoiceDate).ThenBy(x => x.InvoiceId).Skip(offset).Take(limit)
                         .Select(x => new { x.InvoiceId, x.BillNumber, date = Ymd(x.InvoiceDate), x.PoNumber, x.Amount, x.Paid, x.Balance, x.Status }),
                 },
-                currency = "PKR", ageingBasis = "invoice date",
+                currency = "PKR",
+                ageingBasis = "invoice date",
             };
         }
 
@@ -221,15 +263,20 @@ namespace MyApp.Api.Controllers
             var today = PakistanClock.Today;
             var rows = bills.GroupBy(i => new { i.ClientId, i.ClientName }).Select(g => new
             {
-                clientId = g.Key.ClientId, clientName = g.Key.ClientName, unpaidBills = g.Count(),
+                clientId = g.Key.ClientId,
+                clientName = g.Key.ClientName,
+                unpaidBills = g.Count(),
                 balance = g.Sum(i => i.BalanceDue ?? 0m),
                 overdue = g.Where(i => i.PaymentStatus == "Overdue").Sum(i => i.BalanceDue ?? 0m),
-                oldestUnpaidDate = Ymd(g.Min(i => i.Date)), oldestUnpaidDays = Math.Max(0, (today - g.Min(i => i.Date).Date).Days),
+                oldestUnpaidDate = Ymd(g.Min(i => i.Date)),
+                oldestUnpaidDays = Math.Max(0, (today - g.Min(i => i.Date).Date).Days),
             }).Where(c => c.balance >= minBalance).OrderByDescending(c => c.balance).ToList();
             return new
             {
-                companyId, totals = new { clientsOwing = rows.Count, unpaidBills = rows.Sum(c => c.unpaidBills), balance = rows.Sum(c => c.balance), overdue = rows.Sum(c => c.overdue) },
-                topClients = rows.Take(top), currency = "PKR",
+                companyId,
+                totals = new { clientsOwing = rows.Count, unpaidBills = rows.Sum(c => c.unpaidBills), balance = rows.Sum(c => c.balance), overdue = rows.Sum(c => c.overdue) },
+                topClients = rows.Take(top),
+                currency = "PKR",
             };
         }
 
@@ -246,8 +293,12 @@ namespace MyApp.Api.Controllers
             var r = await _reports.GetTaxSheetAsync(companyId, year, month, from, to, clientId);
             var byItem = r.Rows.GroupBy(x => x.ItemTypeName).Select(g => new
             {
-                itemType = g.Key, lines = g.Count(), invoices = g.Select(x => x.InvoiceId).Distinct().Count(),
-                excluding = g.Sum(x => x.ExcludingAmount), tax = g.Sum(x => x.SalesTax), total = g.Sum(x => x.Total),
+                itemType = g.Key,
+                lines = g.Count(),
+                invoices = g.Select(x => x.InvoiceId).Distinct().Count(),
+                excluding = g.Sum(x => x.ExcludingAmount),
+                tax = g.Sum(x => x.SalesTax),
+                total = g.Sum(x => x.Total),
             }).OrderByDescending(x => x.total).Take(Top(args, "topItems"));
             object? page = null;
             if (args.ValueKind == JsonValueKind.Object && args.TryGetProperty("includeRows", out var inc) && inc.ValueKind == JsonValueKind.True)
@@ -255,16 +306,21 @@ namespace MyApp.Api.Controllers
                 var (offset, limit) = Window(args);
                 page = new
                 {
-                    offset, limit, totalCount = r.Rows.Count,
+                    offset,
+                    limit,
+                    totalCount = r.Rows.Count,
                     items = r.Rows.OrderBy(x => x.DocumentDate).ThenBy(x => x.InvoiceId).Skip(offset).Take(limit)
                         .Select(x => new { x.InvoiceId, x.DocumentNumber, date = Ymd(x.DocumentDate), party = x.PartyName, x.ItemTypeName, x.QuantityLabel, excluding = x.ExcludingAmount, tax = x.SalesTax, x.Total }),
                 };
             }
             return new
             {
-                company = new { id = r.CompanyId, name = r.CompanyName }, period = new { label = r.PeriodLabel, from = Ymd(r.DateFrom), to = Ymd(r.DateTo) },
+                company = new { id = r.CompanyId, name = r.CompanyName },
+                period = new { label = r.PeriodLabel, from = Ymd(r.DateFrom), to = Ymd(r.DateTo) },
                 totals = new { invoicesNeedingHsCode = r.InvoiceCount, lines = r.RowCount, excluding = r.GrandExcluding, tax = r.GrandTax, total = r.GrandTotal },
-                byItemType = byItem, rows = page, currency = "PKR",
+                byItemType = byItem,
+                rows = page,
+                currency = "PKR",
             };
         }
 
@@ -284,7 +340,9 @@ namespace MyApp.Api.Controllers
             {
                 summary = new { count = r.TotalCount, average = r.AvgUnitPrice, lowest = r.MinUnitPrice, highest = r.MaxUnitPrice, currency = "PKR" },
                 items = r.Items.Select(x => new { x.InvoiceId, x.InvoiceNumber, date = Ymd(x.Date), x.ClientId, x.ClientName, x.ItemTypeId, x.ItemTypeName, x.Description, x.Quantity, unit = x.UOM, x.UnitPrice, x.LineTotal }),
-                page = r.Page, pageSize = r.PageSize, totalPages = (int)Math.Ceiling(r.TotalCount / (double)Math.Max(1, r.PageSize)),
+                page = r.Page,
+                pageSize = r.PageSize,
+                totalPages = (int)Math.Ceiling(r.TotalCount / (double)Math.Max(1, r.PageSize)),
             };
         }
     }

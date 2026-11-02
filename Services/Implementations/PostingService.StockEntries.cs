@@ -25,14 +25,26 @@ public partial class PostingService
             var group = await _context.AccountGroups.FirstOrDefaultAsync(g => g.CompanyId == entry.CompanyId && g.ExternalRef == groupKey);
             if (group == null)
             {
-                group = new AccountGroup { CompanyId = entry.CompanyId, Name = opening ? "Opening stock equity" : "Inventory adjustments",
+                group = new AccountGroup
+                {
+                    CompanyId = entry.CompanyId,
+                    Name = opening ? "Opening stock equity" : "Inventory adjustments",
                     Statement = opening ? FinancialStatement.BalanceSheet : FinancialStatement.ProfitAndLoss,
-                    ExternalRef = groupKey, IsSystem = true };
+                    ExternalRef = groupKey,
+                    IsSystem = true
+                };
                 _context.AccountGroups.Add(group);
             }
-            offset = new Account { CompanyId = entry.CompanyId, Name = opening ? "Opening stock equity" : "Inventory adjustments",
-                AccountGroup = group, AccountType = opening ? AccountType.Equity : AccountType.Expense,
-                ExternalRef = key, IsActive = true, IsControlAccount = true };
+            offset = new Account
+            {
+                CompanyId = entry.CompanyId,
+                Name = opening ? "Opening stock equity" : "Inventory adjustments",
+                AccountGroup = group,
+                AccountType = opening ? AccountType.Equity : AccountType.Expense,
+                ExternalRef = key,
+                IsActive = true,
+                IsControlAccount = true
+            };
             _context.Accounts.Add(offset);
             await _context.SaveChangesAsync();
         }

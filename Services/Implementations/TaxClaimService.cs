@@ -143,7 +143,10 @@ namespace MyApp.Api.Services.Implementations
                 .Select(x => new
                 {
                     Hs = !string.IsNullOrWhiteSpace(x.ItemTypeHs) ? x.ItemTypeHs! : x.RowHs!,
-                    x.Quantity, x.LineTotal, x.BillRate, x.BillDate,
+                    x.Quantity,
+                    x.LineTotal,
+                    x.BillRate,
+                    x.BillDate,
                 })
                 .Where(x => !string.IsNullOrWhiteSpace(x.Hs))
                 .GroupBy(x => x.Hs)
@@ -171,7 +174,10 @@ namespace MyApp.Api.Services.Implementations
                     x.PurchaseBillNumber,
                     x.SupplierBillNumber,
                     x.ReconciliationStatus,
-                    x.Quantity, x.LineTotal, x.BillRate, x.BillDate,
+                    x.Quantity,
+                    x.LineTotal,
+                    x.BillRate,
+                    x.BillDate,
                 })
                 .Where(x => !string.IsNullOrWhiteSpace(x.Hs))
                 .GroupBy(x => new { x.Hs, x.PurchaseBillId })
@@ -223,7 +229,10 @@ namespace MyApp.Api.Services.Implementations
                 .Select(x => new
                 {
                     Hs = !string.IsNullOrWhiteSpace(x.ItemTypeHs) ? x.ItemTypeHs! : x.RowHs!,
-                    x.PurchaseBillId, x.Quantity, x.LineTotal, x.BillRate,
+                    x.PurchaseBillId,
+                    x.Quantity,
+                    x.LineTotal,
+                    x.BillRate,
                 })
                 .Where(x => !string.IsNullOrWhiteSpace(x.Hs))
                 .GroupBy(x => x.Hs)
@@ -267,7 +276,10 @@ namespace MyApp.Api.Services.Implementations
                 .Select(x => new
                 {
                     Hs = !string.IsNullOrWhiteSpace(x.ItemTypeHs) ? x.ItemTypeHs! : x.RowHs!,
-                    x.PurchaseBillId, x.Quantity, x.LineTotal, x.BillRate,
+                    x.PurchaseBillId,
+                    x.Quantity,
+                    x.LineTotal,
+                    x.BillRate,
                 })
                 .Where(x => !string.IsNullOrWhiteSpace(x.Hs))
                 .GroupBy(x => x.Hs)
@@ -310,7 +322,10 @@ namespace MyApp.Api.Services.Implementations
                 .Select(x => new
                 {
                     Hs = !string.IsNullOrWhiteSpace(x.ItemTypeHs) ? x.ItemTypeHs! : x.RowHs!,
-                    x.PurchaseBillId, x.Quantity, x.LineTotal, x.BillRate,
+                    x.PurchaseBillId,
+                    x.Quantity,
+                    x.LineTotal,
+                    x.BillRate,
                 })
                 .Where(x => !string.IsNullOrWhiteSpace(x.Hs))
                 .GroupBy(x => x.Hs)
@@ -338,8 +353,8 @@ namespace MyApp.Api.Services.Implementations
                 join inv in _context.Invoices.AsNoTracking() on ii.InvoiceId equals inv.Id
                 join adj in _context.InvoiceItemAdjustments.AsNoTracking() on ii.Id equals adj.InvoiceItemId into adjJoin
                 from adj in adjJoin.DefaultIfEmpty()
-                let effQuantity   = adj != null && adj.AdjustedQuantity  != null ? adj.AdjustedQuantity.Value  : ii.Quantity
-                let effLineTotal  = adj != null && adj.AdjustedLineTotal != null ? adj.AdjustedLineTotal.Value : ii.LineTotal
+                let effQuantity = adj != null && adj.AdjustedQuantity != null ? adj.AdjustedQuantity.Value : ii.Quantity
+                let effLineTotal = adj != null && adj.AdjustedLineTotal != null ? adj.AdjustedLineTotal.Value : ii.LineTotal
                 join it in _context.ItemTypes.AsNoTracking() on ii.ItemTypeId equals it.Id into itJoin
                 from it in itJoin.DefaultIfEmpty()
                 where inv.TaxTreatment == "FBR" && inv.CompanyId == request.CompanyId
@@ -347,16 +362,16 @@ namespace MyApp.Api.Services.Implementations
                    && !inv.IsDemo
                    && !inv.IsCancelled
                    && (period.From == null || inv.Date >= period.From)
-                   && (period.To   == null || inv.Date <  period.To)
+                   && (period.To == null || inv.Date < period.To)
                    && ((it != null && it.HSCode != null && hsCodes.Contains(it.HSCode))
                         || (ii.HSCode != null && hsCodes.Contains(ii.HSCode)))
                 select new
                 {
-                    Quantity   = effQuantity,
-                    LineTotal  = effLineTotal,
-                    InvRate    = inv.GSTRate,
+                    Quantity = effQuantity,
+                    LineTotal = effLineTotal,
+                    InvRate = inv.GSTRate,
                     ItemTypeHs = it != null ? it.HSCode : null,
-                    RowHs      = ii.HSCode,
+                    RowHs = ii.HSCode,
                 }
             ).ToListAsync();
 
@@ -366,15 +381,22 @@ namespace MyApp.Api.Services.Implementations
                     && (period.To == null || i.Date < period.To)).ToListAsync();
             rawSales.AddRange(filedSales.SelectMany(i => TaxFilingProjection.Lines(i)
                 .Where(l => l.HSCode != null && hsCodes.Contains(l.HSCode))
-                .Select(l => new { Quantity = i.NoteKind == 2 ? -l.Quantity : l.Quantity,
-                    LineTotal = i.NoteKind == 2 ? -l.LineTotal : l.LineTotal, InvRate = i.GSTRate,
-                    ItemTypeHs = l.HSCode, RowHs = l.HSCode })));
+                .Select(l => new
+                {
+                    Quantity = i.NoteKind == 2 ? -l.Quantity : l.Quantity,
+                    LineTotal = i.NoteKind == 2 ? -l.LineTotal : l.LineTotal,
+                    InvRate = i.GSTRate,
+                    ItemTypeHs = l.HSCode,
+                    RowHs = l.HSCode
+                })));
 
             var salesAgg = rawSales
                 .Select(x => new
                 {
                     Hs = !string.IsNullOrWhiteSpace(x.ItemTypeHs) ? x.ItemTypeHs! : x.RowHs!,
-                    x.Quantity, x.LineTotal, x.InvRate,
+                    x.Quantity,
+                    x.LineTotal,
+                    x.InvRate,
                 })
                 .Where(x => !string.IsNullOrWhiteSpace(x.Hs))
                 .GroupBy(x => x.Hs)
@@ -436,17 +458,17 @@ namespace MyApp.Api.Services.Implementations
 
                 bill ??= new TaxClaimBillRow { HsCode = hs };
 
-                var purchasedQty   = pur?.Qty   ?? 0m;
+                var purchasedQty = pur?.Qty ?? 0m;
                 var purchasedValue = pur?.Value ?? 0m;
-                var purchasedTax   = pur?.Tax   ?? 0m;
-                var soldQty   = sal?.Qty   ?? 0m;
+                var purchasedTax = pur?.Tax ?? 0m;
+                var soldQty = sal?.Qty ?? 0m;
                 var soldValue = sal?.Value ?? 0m;
-                var soldTax   = sal?.Tax   ?? 0m;
-                var availableQty   = Math.Max(0m, purchasedQty   - soldQty);
+                var soldTax = sal?.Tax ?? 0m;
+                var availableQty = Math.Max(0m, purchasedQty - soldQty);
                 var availableValue = Math.Max(0m, purchasedValue - soldValue);
-                var availableTax   = Math.Max(0m, purchasedTax   - soldTax);
+                var availableTax = Math.Max(0m, purchasedTax - soldTax);
                 var avgUnitCost = purchasedQty > 0m ? purchasedValue / purchasedQty : 0m;
-                var avgUnitTax  = purchasedQty > 0m ? purchasedTax  / purchasedQty : 0m;
+                var avgUnitTax = purchasedQty > 0m ? purchasedTax / purchasedQty : 0m;
 
                 // Per-bill unit-cost band — drawn from actual purchase
                 // bills, not synthesized. Drives the audit-defensible
@@ -493,25 +515,25 @@ namespace MyApp.Api.Services.Implementations
                 var pending = new HsPendingSnapshot
                 {
                     BillCount = pen?.BillCount ?? 0,
-                    Qty   = R4(pen?.Qty   ?? 0m),
+                    Qty = R4(pen?.Qty ?? 0m),
                     Value = R2(pen?.Value ?? 0m),
-                    Tax   = R2(pen?.Tax   ?? 0m),
+                    Tax = R2(pen?.Tax ?? 0m),
                 };
 
                 var manualOnly = new HsManualOnlySnapshot
                 {
                     BillCount = man?.BillCount ?? 0,
-                    Qty   = R4(man?.Qty   ?? 0m),
+                    Qty = R4(man?.Qty ?? 0m),
                     Value = R2(man?.Value ?? 0m),
-                    Tax   = R2(man?.Tax   ?? 0m),
+                    Tax = R2(man?.Tax ?? 0m),
                 };
 
                 var disputed = new HsDisputedSnapshot
                 {
                     BillCount = dis?.BillCount ?? 0,
-                    Qty   = R4(dis?.Qty   ?? 0m),
+                    Qty = R4(dis?.Qty ?? 0m),
                     Value = R2(dis?.Value ?? 0m),
-                    Tax   = R2(dis?.Tax   ?? 0m),
+                    Tax = R2(dis?.Tax ?? 0m),
                 };
 
                 // Per-sale match — this is THE Phase B core change.
@@ -519,7 +541,7 @@ namespace MyApp.Api.Services.Implementations
                 // typo or downstream bug) can't produce a negative
                 // matchedQty/matchedInputTax/outputTax that would inflate
                 // the headline numbers when summed across rows.
-                var billQtyClamped   = Math.Max(0m, bill.Qty);
+                var billQtyClamped = Math.Max(0m, bill.Qty);
                 var billValueClamped = Math.Max(0m, bill.Value);
                 var matchedQty = Math.Max(0m, Math.Min(billQtyClamped, availableQty));
                 var matchedInputTax = matchedQty * avgUnitTax;
@@ -544,15 +566,15 @@ namespace MyApp.Api.Services.Implementations
                 string status;
                 if (purchasedQty <= 0m)
                 {
-                    if      ((dis?.Qty ?? 0m) > 0m)               status = "disputed-only";
-                    else if ((pen?.Qty ?? 0m) > 0m)               status = "pending-only";
-                    else if ((man?.Qty ?? 0m) > 0m)               status = "manual-only";
-                    else                                          status = "no-purchase";
+                    if ((dis?.Qty ?? 0m) > 0m) status = "disputed-only";
+                    else if ((pen?.Qty ?? 0m) > 0m) status = "pending-only";
+                    else if ((man?.Qty ?? 0m) > 0m) status = "manual-only";
+                    else status = "no-purchase";
                 }
-                else if (billQtyClamped <= 0m)                    status = "good";
-                else if (unmatchedQty > 0m)                       status = "shortfall";
-                else if (availableQty > billQtyClamped)           status = "headroom";
-                else                                              status = "good";
+                else if (billQtyClamped <= 0m) status = "good";
+                else if (unmatchedQty > 0m) status = "shortfall";
+                else if (availableQty > billQtyClamped) status = "headroom";
+                else status = "good";
 
                 // ── Optimization suggestion (2026-05-09) ─────────────
                 // For each HS row, compute the qty × unit_price split at
@@ -604,12 +626,12 @@ namespace MyApp.Api.Services.Implementations
                     decimal realisticLow, realisticHigh;
                     if (minUnitCost > 0m && maxUnitCost > 0m)
                     {
-                        realisticLow  = minUnitCost;
+                        realisticLow = minUnitCost;
                         realisticHigh = avgUnitCost * 1.5m;
                     }
                     else
                     {
-                        realisticLow  = avgUnitCost * 0.9m;  // 10% below cost = absolute floor
+                        realisticLow = avgUnitCost * 0.9m;  // 10% below cost = absolute floor
                         realisticHigh = avgUnitCost * 1.5m;
                     }
 
@@ -670,7 +692,7 @@ namespace MyApp.Api.Services.Implementations
                     long cleanQty = 0;
                     long bestTier1Qty = 0;   // largest qty with unit_price in band
                     long bestTier2Qty = 0;   // 2026-05-12: largest qty above band
-                                              // (= unit_price CLOSEST to ceiling from above)
+                                             // (= unit_price CLOSEST to ceiling from above)
                     long bestTier3Qty = 0;
                     decimal bestTier3Dist = decimal.MaxValue;
                     if (billCents > 0 && availableQtyLong >= 1)
@@ -719,9 +741,9 @@ namespace MyApp.Api.Services.Implementations
                             }
                         }
 
-                        if (bestTier1Qty > 0)      cleanQty = bestTier1Qty;
+                        if (bestTier1Qty > 0) cleanQty = bestTier1Qty;
                         else if (bestTier2Qty > 0) cleanQty = bestTier2Qty;
-                        else                       cleanQty = bestTier3Qty;
+                        else cleanQty = bestTier3Qty;
                     }
 
                     decimal suggestedQty;

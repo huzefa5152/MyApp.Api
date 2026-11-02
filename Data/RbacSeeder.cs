@@ -56,14 +56,25 @@ namespace MyApp.Api.Data
                     .Where(g => g.Key != owner).ToList();
                 foreach (var group in foreignAssignments)
                 {
-                    var copy = new Role { Name = role.Name, Description = role.Description,
-                        CreatedAt = role.CreatedAt, CreatedByUserId = seedAdminUserId, TenantAdminUserId = group.Key,
-                        RolePermissions = role.RolePermissions.Select(rp => new RolePermission { PermissionId = rp.PermissionId }).ToList() };
+                    var copy = new Role
+                    {
+                        Name = role.Name,
+                        Description = role.Description,
+                        CreatedAt = role.CreatedAt,
+                        CreatedByUserId = seedAdminUserId,
+                        TenantAdminUserId = group.Key,
+                        RolePermissions = role.RolePermissions.Select(rp => new RolePermission { PermissionId = rp.PermissionId }).ToList()
+                    };
                     db.Roles.Add(copy);
                     foreach (var assignment in group)
                     {
-                        db.UserRoles.Add(new UserRole { UserId = assignment.UserId, Role = copy,
-                            AssignedAt = assignment.AssignedAt, AssignedByUserId = assignment.AssignedByUserId });
+                        db.UserRoles.Add(new UserRole
+                        {
+                            UserId = assignment.UserId,
+                            Role = copy,
+                            AssignedAt = assignment.AssignedAt,
+                            AssignedByUserId = assignment.AssignedByUserId
+                        });
                         db.UserRoles.Remove(assignment);
                     }
                 }

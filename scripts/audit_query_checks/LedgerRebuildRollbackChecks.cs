@@ -19,9 +19,17 @@ public static class LedgerRebuildRollbackChecks
         var buyer = new Client { Name = "Sample rebuild buyer", Company = company };
         db.AddRange(company, buyer);
         await db.SaveChangesAsync();
-        var invoice = new Invoice { CompanyId = company.Id, ClientId = buyer.Id,
-            InvoiceNumber = 1, Date = new DateTime(2001, 1, 1), Subtotal = 10m,
-            GSTAmount = 1.8m, GrandTotal = 11.8m, DocumentType = 4 };
+        var invoice = new Invoice
+        {
+            CompanyId = company.Id,
+            ClientId = buyer.Id,
+            InvoiceNumber = 1,
+            Date = new DateTime(2001, 1, 1),
+            Subtotal = 10m,
+            GSTAmount = 1.8m,
+            GrandTotal = 11.8m,
+            DocumentType = 4
+        };
         db.Invoices.Add(invoice);
         await db.SaveChangesAsync();
         await new CoaPresetSeeder(new AccountRepository(db)).SeedWholesaleAsync(company.Id);
@@ -51,8 +59,13 @@ public static class LedgerRebuildRollbackChecks
         Console.WriteLine("PASS: rebuild inside an existing exclusive backfill transaction remains balanced and posts each source once.");
 
         async Task<string> Snapshot() => JsonSerializer.Serialize(await db.JournalEntries.AsNoTracking()
-            .Where(e => e.CompanyId == company.Id).Select(e => new { e.Id, e.EntryNo, e.SourceDocId,
-                Lines = e.Lines.OrderBy(l => l.Id).Select(l => new { l.Id, l.AccountId, l.Debit, l.Credit }) }).ToListAsync());
+            .Where(e => e.CompanyId == company.Id).Select(e => new
+            {
+                e.Id,
+                e.EntryNo,
+                e.SourceDocId,
+                Lines = e.Lines.OrderBy(l => l.Id).Select(l => new { l.Id, l.AccountId, l.Debit, l.Credit })
+            }).ToListAsync());
     }
 
     private sealed class FailJournalInsert : DbCommandInterceptor

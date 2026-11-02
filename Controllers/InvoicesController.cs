@@ -127,7 +127,7 @@ namespace MyApp.Api.Controllers
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
             if (dto.AttachAddedChallansToOrder && !await _permissions.HasPermissionAsync(CurrentUserId, "challans.manage.update")) return Forbid();
-                var updated = await _service.UpdateBillChallansAsync(id, dto, User.Identity?.Name);
+            var updated = await _service.UpdateBillChallansAsync(id, dto, User.Identity?.Name);
             if (updated == null) return NotFound();
             await ScrubPaymentIfDenied(new[] { updated });
             return Ok(updated);

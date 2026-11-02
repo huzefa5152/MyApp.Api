@@ -82,8 +82,15 @@ public static class CustomerWorkbookReader
                 }
                 else rate = value;
             }
-            result.Items.Add(new ParsedPOItemDto { Description = description, Quantity = quantity,
-                Unit = Read(map.UnitColumn), UnitPrice = rate, Remarks = Read(map.RemarksColumn), ItemCode = Read(map.ItemCodeColumn) });
+            result.Items.Add(new ParsedPOItemDto
+            {
+                Description = description,
+                Quantity = quantity,
+                Unit = Read(map.UnitColumn),
+                UnitPrice = rate,
+                Remarks = Read(map.RemarksColumn),
+                ItemCode = Read(map.ItemCodeColumn)
+            });
         }
         return result;
     }

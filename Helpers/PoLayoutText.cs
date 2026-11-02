@@ -82,8 +82,11 @@ namespace MyApp.Api.Helpers
             foreach (var page in ocr.Pages)
                 lines.AddRange(FromOcrPage(page
                     .Where(w => !string.IsNullOrWhiteSpace(w.Text) && w.Right >= w.Left && w.Bottom >= w.Top)
-                    .Select(w => { var t = w.Text.Trim(); return new PositionedWord(t.Length > 100 ? t[..100] : t, w.Left, w.Right, w.Top, w.Bottom,
-                        w.Right - w.Left, w.Bottom - w.Top, w.Confidence); })
+                    .Select(w =>
+                    {
+                        var t = w.Text.Trim(); return new PositionedWord(t.Length > 100 ? t[..100] : t, w.Left, w.Right, w.Top, w.Bottom,
+                        w.Right - w.Left, w.Bottom - w.Top, w.Confidence);
+                    })
                     .ToList()));
             return string.Join("\n", lines);
         }

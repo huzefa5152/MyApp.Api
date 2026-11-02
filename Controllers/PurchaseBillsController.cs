@@ -93,14 +93,29 @@ namespace MyApp.Api.Controllers
             catch (CommercialCostValidationException) { return NotFound(); }
             if (source == null || source.CompanyId != companyId) return NotFound();
             var showCost = await _permissions.HasPermissionAsync(CurrentUserId, "bills.costs.view");
-            return Ok(new LocalPurchaseSourceDto { Kind = kind, Id = id, Number = source.Number, Date = header.Date, ClientName = header.Client ?? "",
+            return Ok(new LocalPurchaseSourceDto
+            {
+                Kind = kind,
+                Id = id,
+                Number = source.Number,
+                Date = header.Date,
+                ClientName = header.Client ?? "",
                 // A supplier bill entered here takes precedence over the automatic
                 // purchase booked from costs, so only locked quantity is unavailable.
-                Items = source.Items.Where(i => i.Quantity - i.LockedQuantity > 0).Select(i => new LocalPurchaseSourceLineDto {
-                    DeliveryItemId = i.DeliveryItemId, InvoiceItemId = i.DeliveryItemId.HasValue ? null : i.Id,
-                    SourceChallanNumber = i.SourceChallanNumber, Description = i.Description, Unit = i.Unit,
-                    Quantity = i.Quantity, PurchasedQuantity = i.LockedQuantity, RemainingQuantity = i.Quantity - i.LockedQuantity,
-                    EstimatedUnitCost = showCost ? i.ActualUnitCost : null, SupplierId = showCost ? i.SupplierId : null }).ToList() });
+                Items = source.Items.Where(i => i.Quantity - i.LockedQuantity > 0).Select(i => new LocalPurchaseSourceLineDto
+                {
+                    DeliveryItemId = i.DeliveryItemId,
+                    InvoiceItemId = i.DeliveryItemId.HasValue ? null : i.Id,
+                    SourceChallanNumber = i.SourceChallanNumber,
+                    Description = i.Description,
+                    Unit = i.Unit,
+                    Quantity = i.Quantity,
+                    PurchasedQuantity = i.LockedQuantity,
+                    RemainingQuantity = i.Quantity - i.LockedQuantity,
+                    EstimatedUnitCost = showCost ? i.ActualUnitCost : null,
+                    SupplierId = showCost ? i.SupplierId : null
+                }).ToList()
+            });
         }
 
         [HttpPost("stock-preview")]

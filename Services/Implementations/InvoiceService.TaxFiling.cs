@@ -19,7 +19,8 @@ public partial class InvoiceService
             throw new InvalidOperationException("A source line may only appear once on the return note.");
         var units = await _context.Units.AsNoTracking().Where(u => u.CompanyId == original.CompanyId).ToListAsync();
         var result = new List<TaxFilingRowDto>();
-        foreach (var row in plan.Rows) {
+        foreach (var row in plan.Rows)
+        {
             var selected = row.SourceLineIds.Where(sources.Contains).ToList();
             if (selected.Count == 0) continue;
             var value = selected.Sum(id => noteItems[sources.IndexOf(id)].LineTotal);
@@ -30,12 +31,21 @@ public partial class InvoiceService
             if (qty <= 0 || (!allowsFraction && qty != decimal.Truncate(qty))
                 || Math.Round(qty * row.ValueExclTax / row.Quantity, 2, MidpointRounding.AwayFromZero) != value)
                 throw new InvalidOperationException("This partial refund cannot be represented at the filed row's rate and unit. Select a return amount that matches a valid filing quantity, or reverse the whole invoice.");
-            result.Add(new TaxFilingRowDto {
-                SourceLineIds = selected, ItemTypeId = row.ItemTypeId, Description = row.Description,
-                HSCode = row.HSCode, UOM = row.UOM, FbrUOMId = row.FbrUOMId, SaleType = row.SaleType,
-                RateId = row.RateId, SroScheduleNo = row.SroScheduleNo, SroItemSerialNo = row.SroItemSerialNo,
+            result.Add(new TaxFilingRowDto
+            {
+                SourceLineIds = selected,
+                ItemTypeId = row.ItemTypeId,
+                Description = row.Description,
+                HSCode = row.HSCode,
+                UOM = row.UOM,
+                FbrUOMId = row.FbrUOMId,
+                SaleType = row.SaleType,
+                RateId = row.RateId,
+                SroScheduleNo = row.SroScheduleNo,
+                SroItemSerialNo = row.SroItemSerialNo,
                 RetailPrice = (row.RetailPrice ?? 0) * value / row.ValueExclTax,
-                Quantity = qty, ValueExclTax = value
+                Quantity = qty,
+                ValueExclTax = value
             });
         }
         var taxBase = result.Sum(r => string.Equals(r.SaleType, "3rd Schedule Goods", StringComparison.OrdinalIgnoreCase)
@@ -47,8 +57,10 @@ public partial class InvoiceService
 
     private static bool OriginalLinesOnly(Invoice bill) => bill.Company?.TaxInvoiceUseOriginalBillLines == true;
 
-    private TaxFilingEditorDto FilingEditor(Invoice bill) => new() {
-        Bill = ToDto(bill), Version = TaxFilingProjection.EditVersion(bill),
+    private TaxFilingEditorDto FilingEditor(Invoice bill) => new()
+    {
+        Bill = ToDto(bill),
+        Version = TaxFilingProjection.EditVersion(bill),
         HasSavedRows = bill.TaxFilingRowsJson != null,
         RequiresReview = TaxFilingProjection.NeedsReReview(bill),
         Rows = TaxFilingProjection.Plan(bill)?.Rows ?? TaxFilingProjection.InitialRows(bill, perLine: OriginalLinesOnly(bill)),
@@ -90,15 +102,28 @@ public partial class InvoiceService
             var saleType = row.SelectedSaleType == null ? hints.DefaultSaleType : CanonicalFilingSaleType(row.SelectedSaleType);
             if (string.IsNullOrWhiteSpace(saleType))
                 throw new InvalidOperationException("Choose a valid tax scenario on the bill before classifying a new HS code.");
-            var created = await _itemTypes.CreateAsync(new ItemTypeDto {
-                CompanyId = companyId, Name = row.Description.Trim(), HSCode = code,
-                UOM = uom.Description, FbrUOMId = uom.UOM_ID, SaleType = saleType,
-                FbrDescription = official.Description, IsFavorite = true
+            var created = await _itemTypes.CreateAsync(new ItemTypeDto
+            {
+                CompanyId = companyId,
+                Name = row.Description.Trim(),
+                HSCode = code,
+                UOM = uom.Description,
+                FbrUOMId = uom.UOM_ID,
+                SaleType = saleType,
+                FbrDescription = official.Description,
+                IsFavorite = true
             }, companyId);
             row.ItemTypeId = created.Id;
-            return new ItemType { Id = created.Id, CompanyId = companyId,
-                Name = created.Name, HSCode = created.HSCode, UOM = created.UOM,
-                FbrUOMId = created.FbrUOMId, SaleType = created.SaleType };
+            return new ItemType
+            {
+                Id = created.Id,
+                CompanyId = companyId,
+                Name = created.Name,
+                HSCode = created.HSCode,
+                UOM = created.UOM,
+                FbrUOMId = created.FbrUOMId,
+                SaleType = created.SaleType
+            };
         }
     }
 
@@ -123,17 +148,25 @@ public partial class InvoiceService
         if (dto.Version != TaxFilingProjection.EditVersion(bill))
             throw new InvalidOperationException("The bill or filing rows changed while you were editing. Reload and review the latest values.");
         TaxFilingProjection.ValidateCoverage(bill, dto.Rows);
-        if (!allowNumericalChanges) {
+        if (!allowNumericalChanges)
+        {
             var baseline = TaxFilingProjection.Plan(bill)?.Rows ?? TaxFilingProjection.InitialRows(bill, perLine: OriginalLinesOnly(bill));
             var references = new List<TaxFilingRowDto>();
-            foreach (var group in baseline) {
+            foreach (var group in baseline)
+            {
                 var source = bill.Items.Where(i => group.SourceLineIds.Contains(i.Id)).Select(TaxFilingProjection.LegacyLine).ToList();
                 if (group.Quantity == source.Sum(i => i.Quantity) && group.ValueExclTax == source.Sum(i => i.LineTotal))
-                    references.AddRange(source.Select(i => new TaxFilingRowDto { SourceLineIds = new() { i.Id },
-                        Quantity = i.Quantity, ValueExclTax = i.LineTotal, UOM = group.UOM }));
+                    references.AddRange(source.Select(i => new TaxFilingRowDto
+                    {
+                        SourceLineIds = new() { i.Id },
+                        Quantity = i.Quantity,
+                        ValueExclTax = i.LineTotal,
+                        UOM = group.UOM
+                    }));
                 else references.Add(group);
             }
-            foreach (var row in dto.Rows) {
+            foreach (var row in dto.Rows)
+            {
                 var matched = references.Where(b => b.SourceLineIds.All(row.SourceLineIds.Contains)).ToList();
                 if (!matched.SelectMany(b => b.SourceLineIds).Order().SequenceEqual(row.SourceLineIds.Order())
                     || row.Quantity != matched.Sum(b => b.Quantity) || row.ValueExclTax != matched.Sum(b => b.ValueExclTax)
@@ -146,7 +179,8 @@ public partial class InvoiceService
             && i.CompanyId == bill.CompanyId && !i.IsDeleted).ToDictionaryAsync(i => i.Id);
         var units = await _context.Units.AsNoTracking().Where(u => u.CompanyId == bill.CompanyId)
             .ToListAsync();
-        foreach (var row in dto.Rows) {
+        foreach (var row in dto.Rows)
+        {
             if (row.ItemTypeId == null)
             {
                 var resolved = await ResolveNewFilingClassificationAsync(row, bill.CompanyId);
@@ -215,9 +249,12 @@ public partial class InvoiceService
         if (Math.Round(taxBase * bill.GSTRate / 100m, 2, MidpointRounding.AwayFromZero) != bill.GSTAmount)
             throw new InvalidOperationException("The selected classifications change the bill's sales tax. Keep incompatible tax treatments separate and reconcile the tax before saving.");
         var before = bill.TaxFilingRowsJson;
-        bill.TaxFilingRowsJson = JsonSerializer.Serialize(new TaxFilingPlan {
-            SourceVersion = TaxFilingProjection.SourceVersion(bill), Rows = dto.Rows,
-            SavedAt = DateTime.UtcNow, SavedBy = actorId
+        bill.TaxFilingRowsJson = JsonSerializer.Serialize(new TaxFilingPlan
+        {
+            SourceVersion = TaxFilingProjection.SourceVersion(bill),
+            Rows = dto.Rows,
+            SavedAt = DateTime.UtcNow,
+            SavedBy = actorId
         });
         bill.FbrReviewRequiredAt = null; bill.FbrReviewedAt = DateTime.UtcNow;
         bill.FbrStatus = null; bill.FbrErrorMessage = null;
@@ -225,15 +262,21 @@ public partial class InvoiceService
         await transaction.CommitAsync();
         await transaction.DisposeAsync();
         // Filing rows change no commercial line, stock movement or GL entry.
-        try {
-            await _auditLog.LogAsync(new AuditLog {
-                CompanyId = bill.CompanyId, UserName = actorName,
-                ExceptionType = "TAX_FILING_ROWS_SAVED", Level = "Information",
+        try
+        {
+            await _auditLog.LogAsync(new AuditLog
+            {
+                CompanyId = bill.CompanyId,
+                UserName = actorName,
+                ExceptionType = "TAX_FILING_ROWS_SAVED",
+                Level = "Information",
                 Message = $"Bill #{bill.InvoiceNumber}: {dto.Rows.Count} tax filing rows reviewed.",
                 RequestBody = JsonSerializer.Serialize(new { Before = before, After = bill.TaxFilingRowsJson }),
-                Timestamp = DateTime.UtcNow, OccurrenceCount = 1
+                Timestamp = DateTime.UtcNow,
+                OccurrenceCount = 1
             });
-        } catch (Exception ex) { _logger.LogWarning(ex, "Tax filing audit could not be recorded for invoice {InvoiceId}", id); }
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "Tax filing audit could not be recorded for invoice {InvoiceId}", id); }
         return FilingEditor(bill);
     }
 }

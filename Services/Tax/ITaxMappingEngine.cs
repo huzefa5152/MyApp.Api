@@ -69,10 +69,10 @@ namespace MyApp.Api.Services.Tax
         decimal DefaultRate,           // % — what to pre-fill on the bill
         string DefaultSaleType,        // FBR-published sale-type label
         List<string> Notes,            // human-readable explanation of the suggestions
-        // True when an FBR token was available, so the HS_UOM lookup actually
-        // queried PRAL. Lets the UI tell "FBR returned no UOM restriction for
-        // this code" (empty + ran) apart from "couldn't ask FBR" (empty + no
-        // token). Optional/defaulted so existing callers/tests still compile.
+                                       // True when an FBR token was available, so the HS_UOM lookup actually
+                                       // queried PRAL. Lets the UI tell "FBR returned no UOM restriction for
+                                       // this code" (empty + ran) apart from "couldn't ask FBR" (empty + no
+                                       // token). Optional/defaulted so existing callers/tests still compile.
         bool UomLookupRan = false,
         List<string>? SaleTypes = null
     );

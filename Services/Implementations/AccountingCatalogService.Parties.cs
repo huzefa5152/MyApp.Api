@@ -319,19 +319,19 @@ namespace MyApp.Api.Services.Implementations
         /// </summary>
         private static string DescribeTransaction(SourceDocType type, decimal debit, decimal credit,
             bool customers, int? invoiceId, int? billId) => type switch
-        {
-            SourceDocType.Invoice => debit > 0m ? "Sales Invoice" : "Credit Note",
-            SourceDocType.PurchaseBill => credit > 0m ? "Purchase Bill" : "Purchase Adjustment",
-            SourceDocType.PurchaseDebitNote => "Debit Note",
-            SourceDocType.Payment => (invoiceId == null && billId == null)
-                // No document on the line means it was money against the running
-                // balance rather than a settlement.
-                ? "Advance / On account"
-                : customers ? "Receipt" : "Payment",
-            SourceDocType.AccountTransfer => "Transfer",
-            SourceDocType.ManualJournal => "Journal",
-            _ => type.ToString(),
-        };
+            {
+                SourceDocType.Invoice => debit > 0m ? "Sales Invoice" : "Credit Note",
+                SourceDocType.PurchaseBill => credit > 0m ? "Purchase Bill" : "Purchase Adjustment",
+                SourceDocType.PurchaseDebitNote => "Debit Note",
+                SourceDocType.Payment => (invoiceId == null && billId == null)
+                    // No document on the line means it was money against the running
+                    // balance rather than a settlement.
+                    ? "Advance / On account"
+                    : customers ? "Receipt" : "Payment",
+                SourceDocType.AccountTransfer => "Transfer",
+                SourceDocType.ManualJournal => "Journal",
+                _ => type.ToString(),
+            };
 
         private async Task<PartyContactDto?> LoadPartyContactAsync(int companyId, string partyType, int partyId)
         {
@@ -340,8 +340,12 @@ namespace MyApp.Api.Services.Implementations
                     .Where(s => s.Id == partyId && s.CompanyId == companyId)
                     .Select(s => new PartyContactDto
                     {
-                        Name = s.Name, Address = s.Address, Phone = s.Phone,
-                        Email = s.Email, Ntn = s.NTN, Strn = s.STRN,
+                        Name = s.Name,
+                        Address = s.Address,
+                        Phone = s.Phone,
+                        Email = s.Email,
+                        Ntn = s.NTN,
+                        Strn = s.STRN,
                     })
                     .FirstOrDefaultAsync();
 
@@ -349,8 +353,12 @@ namespace MyApp.Api.Services.Implementations
                 .Where(c => c.Id == partyId && c.CompanyId == companyId)
                 .Select(c => new PartyContactDto
                 {
-                    Name = c.Name, Address = c.Address, Phone = c.Phone,
-                    Email = c.Email, Ntn = c.NTN, Strn = c.STRN,
+                    Name = c.Name,
+                    Address = c.Address,
+                    Phone = c.Phone,
+                    Email = c.Email,
+                    Ntn = c.NTN,
+                    Strn = c.STRN,
                 })
                 .FirstOrDefaultAsync();
         }
@@ -363,8 +371,10 @@ namespace MyApp.Api.Services.Implementations
                     Name = string.IsNullOrWhiteSpace(c.BrandName) ? c.Name : c.BrandName!,
                     // Company stores its address as FullAddress and carries no
                     // email field, unlike Client/Supplier.
-                    Address = c.FullAddress, Phone = c.Phone,
-                    Ntn = c.NTN, Strn = c.STRN,
+                    Address = c.FullAddress,
+                    Phone = c.Phone,
+                    Ntn = c.NTN,
+                    Strn = c.STRN,
                 })
                 .FirstOrDefaultAsync();
 
@@ -383,8 +393,12 @@ namespace MyApp.Api.Services.Implementations
             if (row == null) return new AgingBucketsDto();
             return new AgingBucketsDto
             {
-                Total = row.Total, Current = row.Current, Days1To30 = row.Days1To30,
-                Days31To60 = row.Days31To60, Days61To90 = row.Days61To90, Over90 = row.Over90,
+                Total = row.Total,
+                Current = row.Current,
+                Days1To30 = row.Days1To30,
+                Days31To60 = row.Days31To60,
+                Days61To90 = row.Days61To90,
+                Over90 = row.Over90,
             };
         }
 
@@ -534,8 +548,14 @@ namespace MyApp.Api.Services.Implementations
 
                 foreach (var i in await invoices.Select(i => new
                 {
-                    i.Id, i.InvoiceNumber, i.Date, i.ClientId, i.DocumentType,
-                    Owed = i.GrandTotal + i.FreightCharges - i.WithholdingTaxAmount, i.PaymentTerms, i.AmountPaid,
+                    i.Id,
+                    i.InvoiceNumber,
+                    i.Date,
+                    i.ClientId,
+                    i.DocumentType,
+                    Owed = i.GrandTotal + i.FreightCharges - i.WithholdingTaxAmount,
+                    i.PaymentTerms,
+                    i.AmountPaid,
                 }).ToListAsync())
                 {
                     // Notes carry no AmountPaid of their own, so only real invoices
@@ -543,8 +563,11 @@ namespace MyApp.Api.Services.Implementations
                     if (i.DocumentType != 9 && i.DocumentType != 10)
                         documents.Add(new PartyDocument
                         {
-                            Id = i.Id, Date = i.Date, PartyId = i.ClientId,
-                            Reference = $"INV-{i.InvoiceNumber}", AmountPaid = i.AmountPaid,
+                            Id = i.Id,
+                            Date = i.Date,
+                            PartyId = i.ClientId,
+                            Reference = $"INV-{i.InvoiceNumber}",
+                            AmountPaid = i.AmountPaid,
                         });
 
                     // A credit note reduces what the customer owes; an invoice and a
@@ -574,14 +597,22 @@ namespace MyApp.Api.Services.Implementations
 
                 foreach (var b in await bills.Select(b => new
                 {
-                    b.Id, b.PurchaseBillNumber, b.Date, b.SupplierId,
-                    Owed = b.GrandTotal - b.WithholdingTaxAmount, b.SupplierBillNumber, b.AmountPaid,
+                    b.Id,
+                    b.PurchaseBillNumber,
+                    b.Date,
+                    b.SupplierId,
+                    Owed = b.GrandTotal - b.WithholdingTaxAmount,
+                    b.SupplierBillNumber,
+                    b.AmountPaid,
                 }).ToListAsync())
                 {
                     documents.Add(new PartyDocument
                     {
-                        Id = b.Id, Date = b.Date, PartyId = b.SupplierId,
-                        Reference = $"BILL-{b.PurchaseBillNumber}", AmountPaid = b.AmountPaid,
+                        Id = b.Id,
+                        Date = b.Date,
+                        PartyId = b.SupplierId,
+                        Reference = $"BILL-{b.PurchaseBillNumber}",
+                        AmountPaid = b.AmountPaid,
                     });
 
                     // A bill increases what we owe, so it CREDITS the payable side.
@@ -605,7 +636,11 @@ namespace MyApp.Api.Services.Implementations
                 if (partyId.HasValue) notes = notes.Where(dn => dn.SupplierId == partyId.Value);
                 foreach (var dn in await notes.Select(dn => new
                 {
-                    dn.Id, dn.DebitNoteNumber, dn.Date, dn.SupplierId, dn.GrandTotal,
+                    dn.Id,
+                    dn.DebitNoteNumber,
+                    dn.Date,
+                    dn.SupplierId,
+                    dn.GrandTotal,
                 }).ToListAsync())
                 {
                     moves.Add(new PartyMovement
@@ -633,11 +668,19 @@ namespace MyApp.Api.Services.Implementations
                       && (customers ? a.InvoiceId != null : a.PurchaseBillId != null)
                 select new
                 {
-                    p.Id, p.Number, p.Date, p.Direction, p.Description, p.ContactId, p.ContactType,
-                    a.Amount, a.AdjustmentAmount,
+                    p.Id,
+                    p.Number,
+                    p.Date,
+                    p.Direction,
+                    p.Description,
+                    p.ContactId,
+                    p.ContactType,
+                    a.Amount,
+                    a.AdjustmentAmount,
                     // Carried so the per-document settled total can be reconciled
                     // against AmountPaid below.
-                    a.InvoiceId, a.PurchaseBillId,
+                    a.InvoiceId,
+                    a.PurchaseBillId,
                     ClientId = a.Invoice != null ? (int?)a.Invoice.ClientId : null,
                     SupplierId = a.PurchaseBill != null ? (int?)a.PurchaseBill.SupplierId : null,
                 }).ToListAsync();
@@ -766,9 +809,13 @@ namespace MyApp.Api.Services.Implementations
                 window, filter, glOn);
             var report = new PartyBalanceSummaryDto
             {
-                Title = envelope.Title, CompanyName = envelope.CompanyName,
-                PeriodLabel = envelope.PeriodLabel, From = envelope.From, To = envelope.To,
-                FiltersApplied = envelope.FiltersApplied, GeneratedAt = envelope.GeneratedAt,
+                Title = envelope.Title,
+                CompanyName = envelope.CompanyName,
+                PeriodLabel = envelope.PeriodLabel,
+                From = envelope.From,
+                To = envelope.To,
+                FiltersApplied = envelope.FiltersApplied,
+                GeneratedAt = envelope.GeneratedAt,
                 LedgerSourced = glOn,
                 Columns = new List<ReportColumnDto>
                 {
@@ -1029,9 +1076,16 @@ namespace MyApp.Api.Services.Implementations
 
                 rows = (await q.Select(i => new
                 {
-                    i.Id, i.InvoiceNumber, i.Date, i.DueDate, i.ClientId,
-                    Party = i.Client!.Name, GrandTotal = i.GrandTotal + i.FreightCharges, i.GSTAmount,
-                    i.WithholdingTaxAmount, i.AmountPaid,
+                    i.Id,
+                    i.InvoiceNumber,
+                    i.Date,
+                    i.DueDate,
+                    i.ClientId,
+                    Party = i.Client!.Name,
+                    GrandTotal = i.GrandTotal + i.FreightCharges,
+                    i.GSTAmount,
+                    i.WithholdingTaxAmount,
+                    i.AmountPaid,
 
                 }).ToListAsync())
                 .Select(x => BuildOutstanding($"INV-{x.InvoiceNumber}", x.Id, x.Date, x.DueDate,
@@ -1055,9 +1109,16 @@ namespace MyApp.Api.Services.Implementations
 
                 rows = (await q.Select(b => new
                 {
-                    b.Id, b.PurchaseBillNumber, b.Date, b.DueDate, b.SupplierId,
-                    Party = b.Supplier!.Name, b.GrandTotal, b.GSTAmount,
-                    b.WithholdingTaxAmount, b.AmountPaid,
+                    b.Id,
+                    b.PurchaseBillNumber,
+                    b.Date,
+                    b.DueDate,
+                    b.SupplierId,
+                    Party = b.Supplier!.Name,
+                    b.GrandTotal,
+                    b.GSTAmount,
+                    b.WithholdingTaxAmount,
+                    b.AmountPaid,
 
                 }).ToListAsync())
                 .Select(x => BuildOutstanding($"BILL-{x.PurchaseBillNumber}", x.Id, x.Date, x.DueDate,
@@ -1191,13 +1252,25 @@ namespace MyApp.Api.Services.Implementations
                     .Skip((page - 1) * size).Take(size)
                     .Select(it => new
                     {
-                        it.Invoice.Date, it.InvoiceId, it.Invoice.InvoiceNumber,
-                        it.Invoice.DocumentType, it.Invoice.ClientId,
+                        it.Invoice.Date,
+                        it.InvoiceId,
+                        it.Invoice.InvoiceNumber,
+                        it.Invoice.DocumentType,
+                        it.Invoice.ClientId,
                         Party = it.Invoice.Client!.Name,
-                        it.Description, it.ItemTypeName, it.ItemTypeId,
-                        it.Quantity, it.UOM, it.UnitPrice, it.LineTotal,
-                        DocSubtotal = it.Invoice.Subtotal, DocTax = it.Invoice.GSTAmount,
-                        it.Invoice.GrandTotal, it.Invoice.FreightCharges, it.Invoice.AmountPaid, it.Invoice.DueDate,
+                        it.Description,
+                        it.ItemTypeName,
+                        it.ItemTypeId,
+                        it.Quantity,
+                        it.UOM,
+                        it.UnitPrice,
+                        it.LineTotal,
+                        DocSubtotal = it.Invoice.Subtotal,
+                        DocTax = it.Invoice.GSTAmount,
+                        it.Invoice.GrandTotal,
+                        it.Invoice.FreightCharges,
+                        it.Invoice.AmountPaid,
+                        it.Invoice.DueDate,
                         it.Invoice.WithholdingTaxAmount,
 
                     })
@@ -1214,7 +1287,9 @@ namespace MyApp.Api.Services.Implementations
                         },
                         DocumentType = x.DocumentType switch
                         {
-                            10 => "Credit Note", 9 => "Debit Note", _ => "Sales Invoice",
+                            10 => "Credit Note",
+                            9 => "Debit Note",
+                            _ => "Sales Invoice",
                         },
                         Party = x.Party,
                         PartyId = x.ClientId,
@@ -1260,12 +1335,23 @@ namespace MyApp.Api.Services.Implementations
                     .Skip((page - 1) * size).Take(size)
                     .Select(it => new
                     {
-                        it.PurchaseBill.Date, it.PurchaseBillId, it.PurchaseBill.PurchaseBillNumber,
-                        it.PurchaseBill.SupplierId, Party = it.PurchaseBill.Supplier!.Name,
-                        it.Description, it.ItemTypeName, it.ItemTypeId,
-                        it.Quantity, it.UOM, it.UnitPrice, it.LineTotal,
-                        DocSubtotal = it.PurchaseBill.Subtotal, DocTax = it.PurchaseBill.GSTAmount,
-                        it.PurchaseBill.GrandTotal, it.PurchaseBill.AmountPaid, it.PurchaseBill.DueDate,
+                        it.PurchaseBill.Date,
+                        it.PurchaseBillId,
+                        it.PurchaseBill.PurchaseBillNumber,
+                        it.PurchaseBill.SupplierId,
+                        Party = it.PurchaseBill.Supplier!.Name,
+                        it.Description,
+                        it.ItemTypeName,
+                        it.ItemTypeId,
+                        it.Quantity,
+                        it.UOM,
+                        it.UnitPrice,
+                        it.LineTotal,
+                        DocSubtotal = it.PurchaseBill.Subtotal,
+                        DocTax = it.PurchaseBill.GSTAmount,
+                        it.PurchaseBill.GrandTotal,
+                        it.PurchaseBill.AmountPaid,
+                        it.PurchaseBill.DueDate,
                         it.PurchaseBill.WithholdingTaxAmount,
 
                     })
@@ -1386,7 +1472,8 @@ namespace MyApp.Api.Services.Implementations
                 rows = (await q.GroupBy(it => new { it.ItemTypeId, it.ItemTypeName })
                     .Select(g => new
                     {
-                        g.Key.ItemTypeId, g.Key.ItemTypeName,
+                        g.Key.ItemTypeId,
+                        g.Key.ItemTypeName,
                         Amount = g.Sum(x => x.LineTotal),
                         Count = g.Select(x => x.InvoiceId).Distinct().Count(),
                     }).ToListAsync())
@@ -1405,7 +1492,8 @@ namespace MyApp.Api.Services.Implementations
                 rows = (await q.GroupBy(it => new { it.ItemTypeId, it.ItemTypeName })
                     .Select(g => new
                     {
-                        g.Key.ItemTypeId, g.Key.ItemTypeName,
+                        g.Key.ItemTypeId,
+                        g.Key.ItemTypeName,
                         Amount = g.Sum(x => x.LineTotal),
                         Count = g.Select(x => x.PurchaseBillId).Distinct().Count(),
                     }).ToListAsync())

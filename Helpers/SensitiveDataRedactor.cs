@@ -125,9 +125,9 @@ namespace MyApp.Api.Helpers
             // Pass 2: last-4 masking for tax IDs.
             var masked = MaskRegex.Replace(redacted, m =>
             {
-                var prefix  = m.Groups[1].Value;   // ` "ntn":"`
-                var raw     = m.Groups[2].Value;   // value chars
-                var suffix  = m.Groups[3].Value;   // closing `"`
+                var prefix = m.Groups[1].Value;   // ` "ntn":"`
+                var raw = m.Groups[2].Value;   // value chars
+                var suffix = m.Groups[3].Value;   // closing `"`
                 if (raw.Length <= 4) return m.Value; // too short to meaningfully mask
                 var lastFour = raw[^4..];
                 var maskedValue = new string('*', raw.Length - 4) + lastFour;

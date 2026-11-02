@@ -19,8 +19,11 @@ public static class FreightMergeFieldSeeder
         var missing = definitions.Where(d => !existing.Contains(d.Item1))
             .Select((d, index) => new MergeField
             {
-                TemplateType = "Bill", FieldExpression = d.Item1,
-                Label = d.Item2, Category = "Totals", SortOrder = 90 + index
+                TemplateType = "Bill",
+                FieldExpression = d.Item1,
+                Label = d.Item2,
+                Category = "Totals",
+                SortOrder = 90 + index
             }).ToList();
         if (missing.Count == 0) return;
         db.MergeFields.AddRange(missing);

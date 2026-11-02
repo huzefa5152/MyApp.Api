@@ -109,9 +109,13 @@ public class McpOAuthController(
         NoStore();
         return StatusCode(201, new
         {
-            client_id = client.Id, client_name = client.Name, redirect_uris = uris,
-            token_endpoint_auth_method = "none", grant_types = new[] { "authorization_code", "refresh_token" },
-            response_types = new[] { "code" }, client_id_issued_at = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            client_id = client.Id,
+            client_name = client.Name,
+            redirect_uris = uris,
+            token_endpoint_auth_method = "none",
+            grant_types = new[] { "authorization_code", "refresh_token" },
+            response_types = new[] { "code" },
+            client_id_issued_at = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
         });
     }
 
@@ -176,11 +180,15 @@ public class McpOAuthController(
         NoStore();
         return Ok(new
         {
-            clientName = client.Name, redirectHost = new Uri(redirect_uri!).Authority,
+            clientName = client.Name,
+            redirectHost = new Uri(redirect_uri!).Authority,
             // Anyone can register an application under any name, so the consent
             // screen warns when the address the code goes to is not a known AI client.
             knownClient = IsKnownRedirectHost(new Uri(redirect_uri!)),
-            enabled, reason = enabled ? "" : "not-enabled", canUseAllCompanies = isSeed, companies,
+            enabled,
+            reason = enabled ? "" : "not-enabled",
+            canUseAllCompanies = isSeed,
+            companies,
             scopes = enabled ? await McpScopes.AvailableAsync(permissions, uid) : new List<string>(),
         });
     }
@@ -206,8 +214,13 @@ public class McpOAuthController(
         var code = B64Url(RandomNumberGenerator.GetBytes(32));
         db.McpOAuthCodes.Add(new McpOAuthCode
         {
-            CodeHash = McpAgentAuthHandler.Hash(code), ClientId = client.Id, UserId = uid, RedirectUri = req.RedirectUri!,
-            CodeChallenge = req.CodeChallenge, CompanyIds = companyValue!, Scopes = string.Join(',', granted),
+            CodeHash = McpAgentAuthHandler.Hash(code),
+            ClientId = client.Id,
+            UserId = uid,
+            RedirectUri = req.RedirectUri!,
+            CodeChallenge = req.CodeChallenge,
+            CompanyIds = companyValue!,
+            Scopes = string.Join(',', granted),
             ExpiresAt = DateTime.UtcNow.AddMinutes(CodeMinutes),
         });
         // Housekeeping: spent and expired codes carry no value.
@@ -300,11 +313,19 @@ public class McpOAuthController(
         var refresh = NewRefreshSecret();
         var token = new McpAgentToken
         {
-            UserId = user.Id, Name = $"{client.Name} (sign-in)", TokenHash = McpAgentAuthHandler.Hash(access1),
-            Hint = access1.Substring(0, McpAgentToken.Prefix.Length + 4), CompanyIds = companyValue,
-            Scopes = row.Scopes, AllowWrites = row.Scopes.Split(',').Any(McpScopes.IsWrite), CreatedAt = now, CreatedByUserId = user.Id,
-            ExpiresAt = now.AddMinutes(AccessMinutes), OAuthClientId = clientId,
-            RefreshHash = McpAgentAuthHandler.Hash(refresh), RefreshExpiresAt = now.AddDays(RefreshDays),
+            UserId = user.Id,
+            Name = $"{client.Name} (sign-in)",
+            TokenHash = McpAgentAuthHandler.Hash(access1),
+            Hint = access1.Substring(0, McpAgentToken.Prefix.Length + 4),
+            CompanyIds = companyValue,
+            Scopes = row.Scopes,
+            AllowWrites = row.Scopes.Split(',').Any(McpScopes.IsWrite),
+            CreatedAt = now,
+            CreatedByUserId = user.Id,
+            ExpiresAt = now.AddMinutes(AccessMinutes),
+            OAuthClientId = clientId,
+            RefreshHash = McpAgentAuthHandler.Hash(refresh),
+            RefreshExpiresAt = now.AddDays(RefreshDays),
             SecurityStamp = user.SecurityStamp,
         };
         db.McpAgentTokens.Add(token);
@@ -371,7 +392,11 @@ public class McpOAuthController(
 
     private IActionResult TokenResponse(string accessToken, string refreshToken, string scope) => Ok(new
     {
-        access_token = accessToken, token_type = "Bearer", expires_in = AccessMinutes * 60, refresh_token = refreshToken, scope,
+        access_token = accessToken,
+        token_type = "Bearer",
+        expires_in = AccessMinutes * 60,
+        refresh_token = refreshToken,
+        scope,
     });
 
     private IActionResult OAuthError(string error, string description, int status = 400)

@@ -15,7 +15,13 @@ namespace MyApp.Api.Services.Implementations
         public static string Revision(StarterTemplate t) =>
             Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
             {
-                t.Id, t.TemplateType, t.Name, t.Description, t.HtmlContent, t.IsActive, t.SortOrder,
+                t.Id,
+                t.TemplateType,
+                t.Name,
+                t.Description,
+                t.HtmlContent,
+                t.IsActive,
+                t.SortOrder,
                 // Ticks, not the DateTime: a saved value is Utc and a re-read one Unspecified, and JSON
                 // writes them differently, so hashing the DateTime made every fresh revision stale.
                 Updated = t.UpdatedAt?.Ticks,
@@ -76,8 +82,14 @@ namespace MyApp.Api.Services.Implementations
             var check = await ValidAsync(templateType, name, description, html, acceptUnknownFields);
             var row = new StarterTemplate
             {
-                TemplateType = templateType, Name = name.Trim(), Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
-                HtmlContent = check.Html, SortOrder = sortOrder, IsActive = true, CreatedAt = DateTime.UtcNow, CreatedByUserId = actorUserId,
+                TemplateType = templateType,
+                Name = name.Trim(),
+                Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
+                HtmlContent = check.Html,
+                SortOrder = sortOrder,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                CreatedByUserId = actorUserId,
             };
             db.StarterTemplates.Add(row);
             await db.SaveChangesAsync();
@@ -127,8 +139,15 @@ namespace MyApp.Api.Services.Implementations
         // fingerprint, because the 24h de-duplication would fold two same-day changes into one row.
         private Task AuditAsync(string type, string? actorName, string message) => audit.LogAsync(new AuditLog
         {
-            Level = "Info", UserName = actorName, HttpMethod = "POST", RequestPath = "/api/starter-templates", StatusCode = 200,
-            ExceptionType = type, Message = message, CompanyId = null, Fingerprint = Guid.NewGuid().ToString("N"),
+            Level = "Info",
+            UserName = actorName,
+            HttpMethod = "POST",
+            RequestPath = "/api/starter-templates",
+            StatusCode = 200,
+            ExceptionType = type,
+            Message = message,
+            CompanyId = null,
+            Fingerprint = Guid.NewGuid().ToString("N"),
         });
     }
 }

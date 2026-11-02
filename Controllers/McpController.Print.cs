@@ -20,17 +20,28 @@ public partial class McpController
             ExpandedSchema(new { companyId = company, documentType = type, offset = new { type = "integer", minimum = 0 }, limit = new { type = "integer", minimum = 1, maximum = 100 } }, "companyId"),
             new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead));
         tools.Add(new("get_print_template", "Read one template section (html, project, metadata), at most 16000 characters. Revision covers content and metadata.",
-            ExpandedSchema(new { companyId = company, templateId = id, section = new { type = "string", @enum = new[] { "metadata", "html", "project" } },
-                offset = new { type = "integer", minimum = 0 }, length = new { type = "integer", minimum = 1, maximum = 16000 } }, "companyId", "templateId"),
+            ExpandedSchema(new
+            {
+                companyId = company,
+                templateId = id,
+                section = new { type = "string", @enum = new[] { "metadata", "html", "project" } },
+                offset = new { type = "integer", minimum = 0 },
+                length = new { type = "integer", minimum = 1, maximum = 16000 }
+            }, "companyId", "templateId"),
             new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead));
         tools.Add(new("get_print_contract", "Merge fields and supported helpers for a document type; no business data. Reuse the existing print renderer.",
             ExpandedSchema(new { documentType = type }, "documentType"), new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead));
         tools.Add(new("prepare_print_template_update", "Prepare edits to an existing company's print template of any supported document type. Read its revision first. Nothing is saved until commit_action after human approval. Sanitized HTML is shown in the plan; saving switches to code mode and clears stale visual project data. Default, stamp and Excel assignments are preserved. Existing tokens need explicit templates.write authorization.",
-            ExpandedSchema(new { companyId = company, templateId = id, documentType = type,
+            ExpandedSchema(new
+            {
+                companyId = company,
+                templateId = id,
+                documentType = type,
                 revision = new { type = "string", minLength = 64, maxLength = 64 },
                 htmlContent = new { type = "string", minLength = 1, maxLength = 24000 },
                 name = new { type = "string", minLength = 1, maxLength = 200 },
-                idempotencyKey = new { type = "string", maxLength = 100 } },
+                idempotencyKey = new { type = "string", maxLength = 100 }
+            },
                 "companyId", "templateId", "documentType", "revision", "htmlContent"),
             new[] { "printtemplates.manage.update" }, McpScopes.TemplatesWrite, Writes: true));
     }
@@ -38,16 +49,34 @@ public partial class McpController
     private static string PrintRevision(PrintTemplate t) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
         {
-            t.Id, t.CompanyId, t.TemplateType, t.Name, t.HtmlContent, t.TemplateJson, t.EditorMode,
-            t.IsDefault, t.ExcelTemplatePath, t.ExcelSheetName, t.StampId, t.UpdatedAt
+            t.Id,
+            t.CompanyId,
+            t.TemplateType,
+            t.Name,
+            t.HtmlContent,
+            t.TemplateJson,
+            t.EditorMode,
+            t.IsDefault,
+            t.ExcelTemplatePath,
+            t.ExcelSheetName,
+            t.StampId,
+            t.UpdatedAt
         })))).ToLowerInvariant();
 
     private static object PrintMetadata(PrintTemplate t) => new
     {
-        id = t.Id, companyId = t.CompanyId, documentType = t.TemplateType, name = t.Name,
-        isDefault = t.IsDefault, editorMode = t.EditorMode, stampId = t.StampId,
-        stampState = StampSlot.Detect(t.HtmlContent), hasExcelTemplate = !string.IsNullOrEmpty(t.ExcelTemplatePath),
-        excelSheetName = t.ExcelSheetName, updatedAt = t.UpdatedAt, revision = PrintRevision(t)
+        id = t.Id,
+        companyId = t.CompanyId,
+        documentType = t.TemplateType,
+        name = t.Name,
+        isDefault = t.IsDefault,
+        editorMode = t.EditorMode,
+        stampId = t.StampId,
+        stampState = StampSlot.Detect(t.HtmlContent),
+        hasExcelTemplate = !string.IsNullOrEmpty(t.ExcelTemplatePath),
+        excelSheetName = t.ExcelSheetName,
+        updatedAt = t.UpdatedAt,
+        revision = PrintRevision(t)
     };
 
     private static int NonNegativeArg(JsonElement args, string name, int fallback = 0)
@@ -73,9 +102,13 @@ public partial class McpController
             var fields = await _context.MergeFields.AsNoTracking().Where(m => m.TemplateType == type)
                 .OrderBy(m => m.SortOrder).ThenBy(m => m.Id)
                 .Select(m => new { expression = m.FieldExpression, label = m.Label, category = m.Category }).ToListAsync();
-            return new { documentType = type, fields,
+            return new
+            {
+                documentType = type,
+                fields,
                 helpers = new[] { "fmtDate", "fmtDMY", "fmt", "fmtDec", "fmtQty", "nl2br", "richText", "join", "joinDates", "emptyRows", "math", "gt", "eq", "or", "uniqueTypes", "inc", "billEmptyRows", "taxEmptyRows", "if", "unless", "each", "with" },
-                guidance = "Render with the application's templateEngine and stamp resolution. Presentation must preserve service-computed amounts; do not infer absent fields." };
+                guidance = "Render with the application's templateEngine and stamp resolution. Presentation must preserve service-computed amounts; do not infer absent fields."
+            };
         }
         var companyId = await CompanyArg(args);
         var repo = HttpContext.RequestServices.GetRequiredService<IPrintTemplateRepository>();
@@ -86,8 +119,13 @@ public partial class McpController
                 .OrderBy(t => t.TemplateType).ThenBy(t => t.Id).ToList();
             var offset = NonNegativeArg(args, "offset");
             var limit = Size(args, "limit");
-            return new { companyId, totalCount = rows.Count, items = rows.Skip(offset).Take(limit).Select(PrintMetadata),
-                nextOffset = (long)offset + limit < rows.Count ? (int?)(offset + limit) : null };
+            return new
+            {
+                companyId,
+                totalCount = rows.Count,
+                items = rows.Skip(offset).Take(limit).Select(PrintMetadata),
+                nextOffset = (long)offset + limit < rows.Count ? (int?)(offset + limit) : null
+            };
         }
         if (name == "get_print_template")
         {
@@ -101,9 +139,17 @@ public partial class McpController
             var offset = NonNegativeArg(args, "offset");
             var length = Math.Clamp(NonNegativeArg(args, "length", 16000), 1, 16000);
             var count = Math.Min(length, Math.Max(0, text.Length - offset));
-            return new { companyId, templateId = id, revision = PrintRevision(template), section,
-                totalCharacters = text.Length, offset, content = count == 0 ? "" : text.Substring(offset, count),
-                nextOffset = (long)offset + count < text.Length ? (int?)(offset + count) : null };
+            return new
+            {
+                companyId,
+                templateId = id,
+                revision = PrintRevision(template),
+                section,
+                totalCharacters = text.Length,
+                offset,
+                content = count == 0 ? "" : text.Substring(offset, count),
+                nextOffset = (long)offset + count < text.Length ? (int?)(offset + count) : null
+            };
         }
         throw new ToolError("Unknown tool.");
     }
@@ -129,9 +175,19 @@ public partial class McpController
         if (string.IsNullOrWhiteSpace(html)) throw new ToolError("htmlContent must contain printable content.");
         var name = OptText(args, "name", 200) ?? template.Name;
         if (string.IsNullOrWhiteSpace(name)) throw new ToolError("name must not be blank.");
-        var payload = new { templateId = id, documentType = type, revision, name, htmlContent = html,
-            editorMode = "code", templateJson = (string?)null, isDefault = template.IsDefault,
-            stampId = template.StampId, clearsVisualProject = template.TemplateJson != null };
+        var payload = new
+        {
+            templateId = id,
+            documentType = type,
+            revision,
+            name,
+            htmlContent = html,
+            editorMode = "code",
+            templateJson = (string?)null,
+            isDefault = template.IsDefault,
+            stampId = template.StampId,
+            clearsVisualProject = template.TemplateJson != null
+        };
         if (Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(payload, Json)) > 40000)
             throw new ToolError("The printable content is too large for one reviewed MCP plan. Use the template editor for this design.");
         return await StorePlanAsync(agent, "template.update", companyId, payload,
@@ -158,10 +214,18 @@ public partial class McpController
         var updated = await repo.UpdateContentAsync(id, payload.GetProperty("name").GetString()!,
             payload.GetProperty("htmlContent").GetString()!, null, "code")
             ?? throw new ToolError("Resource unavailable or access denied.");
-        _context.AuditLogs.Add(new AuditLog { Timestamp = DateTime.UtcNow, Level = "Information",
-            UserName = User.Identity?.Name, CompanyId = plan.CompanyId, HttpMethod = "POST", RequestPath = "/mcp",
-            StatusCode = 200, ExceptionType = "PrintTemplateUpdated",
-            Message = $"MCP updated {updated.TemplateType} template #{id} by user #{CurrentUserId}" });
+        _context.AuditLogs.Add(new AuditLog
+        {
+            Timestamp = DateTime.UtcNow,
+            Level = "Information",
+            UserName = User.Identity?.Name,
+            CompanyId = plan.CompanyId,
+            HttpMethod = "POST",
+            RequestPath = "/mcp",
+            StatusCode = 200,
+            ExceptionType = "PrintTemplateUpdated",
+            Message = $"MCP updated {updated.TemplateType} template #{id} by user #{CurrentUserId}"
+        });
         await _context.SaveChangesAsync();
         await tx.CommitAsync();
         return ($"PrintTemplate:{id}", $"Updated {updated.TemplateType} print template #{id} \"{updated.Name}\"");

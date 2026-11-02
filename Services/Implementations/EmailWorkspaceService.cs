@@ -48,9 +48,23 @@ public sealed partial class EmailWorkspaceService(AppDbContext db, ICompanyAcces
             var owner = link.Connection.OwnerUserId == user;
             if (!owner && !canRemove && !await OwnerCanSyncAsync(link.Connection, company)) continue;
             if (!owner && !canRemove && !link.ShareMatchingEmails && !await db.EmailEnquiries.AnyAsync(e => e.CompanyId == company && e.Message.ConnectionId == link.ConnectionId && e.Decision == "Kept")) continue;
-            visible.Add(new { link.Id, link.ConnectionId, link.CompanyId, link.ShareMatchingEmails, link.AllowCompanyReplies, link.IsEnabled,
-                link.Connection.EmailAddress, link.Connection.Status, link.Connection.LastError, link.Connection.LastSyncedAt,
-                link.Connection.BackfillComplete, NeedsUpgrade = owner && !CanModify(link.Connection), IsOwner = owner, Rules = owner ? EmailWorkspaceRules.Read(link.RulesJson) : null });
+            visible.Add(new
+            {
+                link.Id,
+                link.ConnectionId,
+                link.CompanyId,
+                link.ShareMatchingEmails,
+                link.AllowCompanyReplies,
+                link.IsEnabled,
+                link.Connection.EmailAddress,
+                link.Connection.Status,
+                link.Connection.LastError,
+                link.Connection.LastSyncedAt,
+                link.Connection.BackfillComplete,
+                NeedsUpgrade = owner && !CanModify(link.Connection),
+                IsOwner = owner,
+                Rules = owner ? EmailWorkspaceRules.Read(link.RulesJson) : null
+            });
         }
         var own = await db.GmailConnections.AsNoTracking().Where(c => c.OwnerUserId == user)
             .Select(c => new { c.Id, c.EmailAddress, c.Status }).ToListAsync();
@@ -60,14 +74,21 @@ public sealed partial class EmailWorkspaceService(AppDbContext db, ICompanyAcces
     {
         await AssertWorkspaceAccessAsync(user, company);
         if (!gmail.IsConfigured) throw new EmailWorkspaceException(503, "Gmail setup is not complete. Ask the installation administrator to configure Google OAuth.");
-        if (upgradeConnectionId.HasValue && !await permissions.HasPermissionAsync(user,"email.replies.send") && !await permissions.HasPermissionAsync(user,"email.read.manage")) throw new UnauthorizedAccessException();
+        if (upgradeConnectionId.HasValue && !await permissions.HasPermissionAsync(user, "email.replies.send") && !await permissions.HasPermissionAsync(user, "email.read.manage")) throw new UnauthorizedAccessException();
         if (upgradeConnectionId.HasValue && !await db.GmailCompanyLinks.AnyAsync(l => l.CompanyId == company && l.ConnectionId == upgradeConnectionId && l.Connection.OwnerUserId == user && l.IsEnabled, ct)) throw Missing();
         var state = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         var verifier = Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(48));
         var challenge = Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlEncode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
         await db.GmailOAuthRequests.Where(r => r.ExpiresAt < DateTime.UtcNow).ExecuteDeleteAsync(ct);
-        db.GmailOAuthRequests.Add(new() { StateHash = Hash(state), UserId = user, CompanyId = company, UpgradeConnectionId = upgradeConnectionId,
-            ProtectedVerifier = Protect(verifier), ExpiresAt = DateTime.UtcNow.AddMinutes(10) });
+        db.GmailOAuthRequests.Add(new()
+        {
+            StateHash = Hash(state),
+            UserId = user,
+            CompanyId = company,
+            UpgradeConnectionId = upgradeConnectionId,
+            ProtectedVerifier = Protect(verifier),
+            ExpiresAt = DateTime.UtcNow.AddMinutes(10)
+        });
         await db.SaveChangesAsync(ct);
         return new { AuthorizationUrl = upgradeConnectionId.HasValue ? gmail.UpgradeAuthorizationUrl(state, challenge) : gmail.AuthorizationUrl(state, challenge) };
     }
@@ -234,12 +255,23 @@ public sealed partial class EmailWorkspaceService(AppDbContext db, ICompanyAcces
                 var fetched = await gmail.ReadAsync(token, id, deadline.Token);
                 if (fetched == null) { if (cached != null) cached.IsRemoved = true; continue; }
                 if (cached != null) { cached.IsRemoved = false; cached.IsUnread = fetched.IsUnread; cached.LabelsSyncedAt = DateTime.UtcNow; continue; }
-                db.GmailMessages.Add(new() { ConnectionId = connectionId, ProviderMessageId = fetched.Id, ThreadId = fetched.ThreadId,
-                    Sender = fetched.Sender, Subject = fetched.Subject, ReceivedAt = fetched.ReceivedAt, ProtectedContent = Protect(fetched.Content),
-                    SenderUnverified = fetched.SenderUnverified, IsUnread = fetched.IsUnread, LabelsSyncedAt = DateTime.UtcNow });
+                db.GmailMessages.Add(new()
+                {
+                    ConnectionId = connectionId,
+                    ProviderMessageId = fetched.Id,
+                    ThreadId = fetched.ThreadId,
+                    Sender = fetched.Sender,
+                    Subject = fetched.Subject,
+                    ReceivedAt = fetched.ReceivedAt,
+                    ProtectedContent = Protect(fetched.Content),
+                    SenderUnverified = fetched.SenderUnverified,
+                    IsUnread = fetched.IsUnread,
+                    LabelsSyncedAt = DateTime.UtcNow
+                });
             }
-            foreach (var cached in await db.GmailMessages.Where(m => m.ConnectionId == connectionId && m.LabelsSyncedAt == null && !m.IsRemoved).Take(10).ToListAsync(deadline.Token)) {
-                var live = await gmail.ReadAsync(token,cached.ProviderMessageId,deadline.Token);
+            foreach (var cached in await db.GmailMessages.Where(m => m.ConnectionId == connectionId && m.LabelsSyncedAt == null && !m.IsRemoved).Take(10).ToListAsync(deadline.Token))
+            {
+                var live = await gmail.ReadAsync(token, cached.ProviderMessageId, deadline.Token);
                 cached.IsRemoved = live == null; cached.IsUnread = live?.IsUnread; cached.LabelsSyncedAt = DateTime.UtcNow;
             }
             access.InvalidateUser(connection.OwnerUserId);
@@ -307,11 +339,22 @@ public sealed partial class EmailWorkspaceService(AppDbContext db, ICompanyAcces
         var query = from m in visible
                     join e in db.EmailEnquiries.AsNoTracking().Where(e => e.CompanyId == company) on m.Id equals e.MessageId into enquiries
                     from e in enquiries.DefaultIfEmpty()
-                    select new { m.Id, m.ConnectionId, m.Sender, m.Subject, m.ReceivedAt, m.IsUnread, m.LabelsSyncedAt,
-                        Decision = e == null ? "Unreviewed" : e.Decision, EnquiryId = e == null ? (int?)null : e.Id,
-                        SalesQuoteId = e == null ? null : e.SalesQuoteId, SalesQuoteNumber = e == null ? null : e.SalesQuoteNumber,
+                    select new
+                    {
+                        m.Id,
+                        m.ConnectionId,
+                        m.Sender,
+                        m.Subject,
+                        m.ReceivedAt,
+                        m.IsUnread,
+                        m.LabelsSyncedAt,
+                        Decision = e == null ? "Unreviewed" : e.Decision,
+                        EnquiryId = e == null ? (int?)null : e.Id,
+                        SalesQuoteId = e == null ? null : e.SalesQuoteId,
+                        SalesQuoteNumber = e == null ? null : e.SalesQuoteNumber,
                         Revision = e == null ? (Guid?)null : e.Revision,
-                        IsSuggested = suggested.Contains(m.Id) || m.Subject.ToLower().Contains("quotation") || m.Subject.ToLower().Contains("quote") || m.Subject.ToLower().Contains("rfq") || m.Subject.ToLower().Contains("requirement") || m.Subject.ToLower().Contains("indent") };
+                        IsSuggested = suggested.Contains(m.Id) || m.Subject.ToLower().Contains("quotation") || m.Subject.ToLower().Contains("quote") || m.Subject.ToLower().Contains("rfq") || m.Subject.ToLower().Contains("requirement") || m.Subject.ToLower().Contains("indent")
+                    };
         if (filter == "Unread") query = query.Where(x => x.IsUnread == true);
         if (filter == "Read") query = query.Where(x => x.IsUnread == false);
         if (filter == "Converted") query = query.Where(x => x.SalesQuoteId != null);
@@ -330,14 +373,27 @@ public sealed partial class EmailWorkspaceService(AppDbContext db, ICompanyAcces
         var m = await MessageAsync(user, company, id, ct);
         var content = Unprotect<EmailContent>(m.ProtectedContent);
         var enquiry = await db.EmailEnquiries.AsNoTracking().SingleOrDefaultAsync(e => e.CompanyId == company && e.MessageId == id, ct);
-        return new { m.Id, m.Subject, m.Sender, m.ReceivedAt, m.IsUnread, m.LabelsSyncedAt, Text = EmailEnquiryExtractor.PlainText(content),
+        return new
+        {
+            m.Id,
+            m.Subject,
+            m.Sender,
+            m.ReceivedAt,
+            m.IsUnread,
+            m.LabelsSyncedAt,
+            Text = EmailEnquiryExtractor.PlainText(content),
             // The sender's HTML, shown in a sandboxed frame. Untrusted: never rendered into the page itself.
-            Html = content.Html ?? "", content.Attachments, Decision = enquiry?.Decision ?? "Unreviewed", enquiry?.SalesQuoteId, enquiry?.SalesQuoteNumber,
+            Html = content.Html ?? "",
+            content.Attachments,
+            Decision = enquiry?.Decision ?? "Unreviewed",
+            enquiry?.SalesQuoteId,
+            enquiry?.SalesQuoteNumber,
             enquiry?.Revision,
             // The draft holds the chosen customer and the prices being quoted: it
             // is quotation work, shown to those who may prepare quotations.
             Draft = enquiry?.ProtectedDraft.Length > 0 && await permissions.HasPermissionAsync(user, "email.enquiries.manage")
-                ? Unprotect<EmailDraftDto>(enquiry.ProtectedDraft) : null };
+                ? Unprotect<EmailDraftDto>(enquiry.ProtectedDraft) : null
+        };
     }
     private static void AssertRevision(EmailEnquiry? enquiry, Guid? revision)
     {
@@ -466,11 +522,21 @@ public sealed partial class EmailWorkspaceService(AppDbContext db, ICompanyAcces
         if (!await db.Clients.AnyAsync(c => c.Id == draft.ClientId && c.CompanyId == company, ct)) throw Invalid("Customer must belong to this company.");
         var created = await quotes.CreateAsync(company, new SalesQuoteDto
         {
-            ClientId = draft.ClientId!.Value, Date = draft.Date, ValidUntil = draft.ValidUntil,
-            CustomerEnquiryRef = draft.CustomerEnquiryRef, EnquiryDate = DateTime.SpecifyKind((await db.GmailMessages.AsNoTracking().SingleAsync(m => m.Id == id, ct)).ReceivedAt, DateTimeKind.Utc).AddHours(5).Date,
-            ContactPerson = draft.ContactPerson, Notes = draft.Notes, GSTRate = draft.GSTRate,
-            Items = draft.Items.Select(i => new SalesQuoteItemDto { Description = string.IsNullOrWhiteSpace(i.Brand) ? i.Description : i.Description + "\nBrand / make: " + i.Brand.Trim(),
-                Quantity = i.Quantity, Unit = i.Unit, UnitPrice = i.UnitPrice!.Value }).ToList()
+            ClientId = draft.ClientId!.Value,
+            Date = draft.Date,
+            ValidUntil = draft.ValidUntil,
+            CustomerEnquiryRef = draft.CustomerEnquiryRef,
+            EnquiryDate = DateTime.SpecifyKind((await db.GmailMessages.AsNoTracking().SingleAsync(m => m.Id == id, ct)).ReceivedAt, DateTimeKind.Utc).AddHours(5).Date,
+            ContactPerson = draft.ContactPerson,
+            Notes = draft.Notes,
+            GSTRate = draft.GSTRate,
+            Items = draft.Items.Select(i => new SalesQuoteItemDto
+            {
+                Description = string.IsNullOrWhiteSpace(i.Brand) ? i.Description : i.Description + "\nBrand / make: " + i.Brand.Trim(),
+                Quantity = i.Quantity,
+                Unit = i.Unit,
+                UnitPrice = i.UnitPrice!.Value
+            }).ToList()
         });
         e.SalesQuoteId = created.Id; e.SalesQuoteNumber = created.QuoteNumber;
         e.ProtectedDraft = Protect(draft); e.Revision = Guid.NewGuid(); e.UpdatedAt = DateTime.UtcNow;

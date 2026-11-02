@@ -1,5 +1,6 @@
 using MyApp.Api.DTOs;
 namespace MyApp.Api.Services.Interfaces;
+
 public interface IGmailProvider
 {
     bool IsConfigured { get; }

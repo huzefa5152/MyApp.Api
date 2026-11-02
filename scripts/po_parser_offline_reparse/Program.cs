@@ -70,8 +70,11 @@ foreach (var e in manifest)
         text = ExtractTextFromPdf(fs);
         var ruleSet = JsonSerializer.Serialize(new
         {
-            version = 1, engine = "simple-headers-v1",
-            descriptionHeader = e.Desc ?? "", quantityHeader = e.Qty ?? "", unitHeader = e.Unit ?? "",
+            version = 1,
+            engine = "simple-headers-v1",
+            descriptionHeader = e.Desc ?? "",
+            quantityHeader = e.Qty ?? "",
+            unitHeader = e.Unit ?? "",
         });
         var r = parser.Parse(text, new POFormat { Id = 1, Name = "x", RuleSetJson = ruleSet });
         items = r.Items.Select(i => (object)new { description = i.Description, quantity = i.Quantity, unit = i.Unit }).ToList();

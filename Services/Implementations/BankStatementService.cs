@@ -99,8 +99,12 @@ namespace MyApp.Api.Services.Implementations
             return await q.OrderByDescending(l => l.Date).ThenByDescending(l => l.Id)
                 .Select(l => new BankStatementLineDto
                 {
-                    Id = l.Id, Date = l.Date, Description = l.Description, Amount = l.Amount,
-                    Status = l.Status.ToString(), PaymentId = l.PaymentId,
+                    Id = l.Id,
+                    Date = l.Date,
+                    Description = l.Description,
+                    Amount = l.Amount,
+                    Status = l.Status.ToString(),
+                    PaymentId = l.PaymentId,
                 }).ToListAsync();
         }
 

@@ -327,8 +327,14 @@ namespace MyApp.Api.Services.Implementations
                 .OrderByDescending(i => i.Date).ThenByDescending(i => i.InvoiceNumber)
                 .Select(i => new
                 {
-                    i.InvoiceNumber, i.Date, i.DueDate, i.PoNumber,
-                    i.GrandTotal, i.FreightCharges, i.WithholdingTaxAmount, i.AmountPaid,
+                    i.InvoiceNumber,
+                    i.Date,
+                    i.DueDate,
+                    i.PoNumber,
+                    i.GrandTotal,
+                    i.FreightCharges,
+                    i.WithholdingTaxAmount,
+                    i.AmountPaid,
                 })
                 .ToListAsync();
 
@@ -379,9 +385,20 @@ namespace MyApp.Api.Services.Implementations
                 .Where(i => i.InvoiceNumber == invoiceNumber)
                 .Select(i => new
                 {
-                    i.Id, i.InvoiceNumber, i.Date, i.DueDate, i.PoNumber,
-                    i.Subtotal, i.GSTRate, i.GSTAmount, i.FurtherTaxAmount,
-                    i.WithholdingTaxAmount, i.GrandTotal, i.FreightCharges, i.AmountPaid, i.AmountInWords,
+                    i.Id,
+                    i.InvoiceNumber,
+                    i.Date,
+                    i.DueDate,
+                    i.PoNumber,
+                    i.Subtotal,
+                    i.GSTRate,
+                    i.GSTAmount,
+                    i.FurtherTaxAmount,
+                    i.WithholdingTaxAmount,
+                    i.GrandTotal,
+                    i.FreightCharges,
+                    i.AmountPaid,
+                    i.AmountInWords,
                 })
                 .FirstOrDefaultAsync();
             if (inv == null) return null;

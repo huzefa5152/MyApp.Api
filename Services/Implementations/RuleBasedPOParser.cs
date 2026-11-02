@@ -1495,10 +1495,10 @@ namespace MyApp.Api.Services.Implementations
 
             // simple-headers-v1 inputs
             [JsonPropertyName("poNumberLabel")] public string? PoNumberLabel { get; set; }
-            [JsonPropertyName("poDateLabel")]   public string? PoDateLabel { get; set; }
+            [JsonPropertyName("poDateLabel")] public string? PoDateLabel { get; set; }
             [JsonPropertyName("descriptionHeader")] public string? DescriptionHeader { get; set; }
-            [JsonPropertyName("quantityHeader")]    public string? QuantityHeader { get; set; }
-            [JsonPropertyName("unitHeader")]        public string? UnitHeader { get; set; }
+            [JsonPropertyName("quantityHeader")] public string? QuantityHeader { get; set; }
+            [JsonPropertyName("unitHeader")] public string? UnitHeader { get; set; }
         }
 
         private class FieldRuleDto

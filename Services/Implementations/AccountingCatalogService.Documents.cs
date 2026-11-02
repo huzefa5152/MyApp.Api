@@ -182,9 +182,19 @@ namespace MyApp.Api.Services.Implementations
 
                 var rows = (await q.Select(i => new
                 {
-                    i.Id, i.InvoiceNumber, i.Date, i.DueDate, i.DocumentType, i.ClientId,
-                    Party = i.Client!.Name, i.Subtotal, i.GSTAmount, i.WithholdingTaxAmount,
-                    i.GrandTotal, i.AmountPaid, i.PoNumber,
+                    i.Id,
+                    i.InvoiceNumber,
+                    i.Date,
+                    i.DueDate,
+                    i.DocumentType,
+                    i.ClientId,
+                    Party = i.Client!.Name,
+                    i.Subtotal,
+                    i.GSTAmount,
+                    i.WithholdingTaxAmount,
+                    i.GrandTotal,
+                    i.AmountPaid,
+                    i.PoNumber,
 
                 }).ToListAsync())
                 .Select(x => BuildRegisterRow(
@@ -215,9 +225,18 @@ namespace MyApp.Api.Services.Implementations
 
                 var rows = (await q.Select(b => new
                 {
-                    b.Id, b.PurchaseBillNumber, b.Date, b.DueDate, b.SupplierId,
-                    Party = b.Supplier!.Name, b.Subtotal, b.GSTAmount, b.WithholdingTaxAmount,
-                    b.GrandTotal, b.AmountPaid, b.SupplierBillNumber,
+                    b.Id,
+                    b.PurchaseBillNumber,
+                    b.Date,
+                    b.DueDate,
+                    b.SupplierId,
+                    Party = b.Supplier!.Name,
+                    b.Subtotal,
+                    b.GSTAmount,
+                    b.WithholdingTaxAmount,
+                    b.GrandTotal,
+                    b.AmountPaid,
+                    b.SupplierBillNumber,
 
                 }).ToListAsync())
                 .Select(x => BuildRegisterRow(
@@ -421,7 +440,10 @@ namespace MyApp.Api.Services.Implementations
                 Rows = list.Select(x => new ReportGroupRowDto
                 {
                     DrillKey = x.Sort.ToString("yyyy-MM-dd"),
-                    Label = x.Label, Amount = x.Amount, Tax = x.Tax, Count = x.Count,
+                    Label = x.Label,
+                    Amount = x.Amount,
+                    Tax = x.Tax,
+                    Count = x.Count,
                 }).ToList(),
                 Total = list.Sum(x => x.Amount),
             };
@@ -474,7 +496,8 @@ namespace MyApp.Api.Services.Implementations
                     ? await q.GroupBy(it => new { Key = it.ItemTypeId, Name = it.ItemTypeName })
                         .Select(g => new
                         {
-                            g.Key.Key, g.Key.Name,
+                            g.Key.Key,
+                            g.Key.Name,
                             Amount = g.Sum(x => x.LineTotal),
                             Qty = g.Sum(x => x.Quantity),
                             Count = g.Select(x => x.InvoiceId).Distinct().Count(),
@@ -482,7 +505,8 @@ namespace MyApp.Api.Services.Implementations
                     : await q.GroupBy(it => new { Key = (int?)null, Name = it.Description })
                         .Select(g => new
                         {
-                            g.Key.Key, g.Key.Name,
+                            g.Key.Key,
+                            g.Key.Name,
                             Amount = g.Sum(x => x.LineTotal),
                             Qty = g.Sum(x => x.Quantity),
                             Count = g.Select(x => x.InvoiceId).Distinct().Count(),
@@ -504,14 +528,16 @@ namespace MyApp.Api.Services.Implementations
                     ? await q.GroupBy(it => new { Key = it.ItemTypeId, Name = it.ItemTypeName })
                         .Select(g => new
                         {
-                            g.Key.Key, g.Key.Name,
+                            g.Key.Key,
+                            g.Key.Name,
                             Amount = g.Sum(x => x.LineTotal),
                             Count = g.Select(x => x.PurchaseBillId).Distinct().Count(),
                         }).ToListAsync()
                     : await q.GroupBy(it => new { Key = (int?)null, Name = it.Description })
                         .Select(g => new
                         {
-                            g.Key.Key, g.Key.Name,
+                            g.Key.Key,
+                            g.Key.Name,
                             Amount = g.Sum(x => x.LineTotal),
                             Count = g.Select(x => x.PurchaseBillId).Distinct().Count(),
                         }).ToListAsync();
@@ -567,7 +593,8 @@ namespace MyApp.Api.Services.Implementations
                 .GroupBy(l => new { l.AccountId, Name = l.Account.Name })
                 .Select(g => new
                 {
-                    g.Key.AccountId, g.Key.Name,
+                    g.Key.AccountId,
+                    g.Key.Name,
                     // Income is credit-natural, cost debit-natural: take the side that
                     // represents the value, so both come out positive.
                     Amount = g.Sum(x => sales ? x.Credit - x.Debit : x.Debit - x.Credit),
@@ -655,7 +682,9 @@ namespace MyApp.Api.Services.Implementations
                 Rows = rows.GroupBy(r => r.DocumentType)
                     .Select(g => new ReportGroupRowDto
                     {
-                        Label = g.Key, Amount = g.Sum(x => x.GrandTotal), Count = g.Count(),
+                        Label = g.Key,
+                        Amount = g.Sum(x => x.GrandTotal),
+                        Count = g.Count(),
                     }).ToList(),
                 Total = rows.Sum(r => r.GrandTotal),
             });
@@ -667,12 +696,25 @@ namespace MyApp.Api.Services.Implementations
         /// keeps the caller's own filter untouched.</summary>
         private static ReportFilterDto CloneFilterWithStatus(ReportFilterDto f, string status) => new()
         {
-            Period = f.Period, From = f.From, To = f.To,
-            AccountId = f.AccountId, AccountGroupId = f.AccountGroupId,
-            PaymentAccountId = f.PaymentAccountId, PayeeType = f.PayeeType, PayeeId = f.PayeeId,
-            ClientId = f.ClientId, SupplierId = f.SupplierId, ItemTypeId = f.ItemTypeId,
-            Tax = f.Tax, Status = status, Search = f.Search, SortBy = f.SortBy,
-            SortDesc = f.SortDesc, GroupBy = f.GroupBy, Page = f.Page, PageSize = f.PageSize,
+            Period = f.Period,
+            From = f.From,
+            To = f.To,
+            AccountId = f.AccountId,
+            AccountGroupId = f.AccountGroupId,
+            PaymentAccountId = f.PaymentAccountId,
+            PayeeType = f.PayeeType,
+            PayeeId = f.PayeeId,
+            ClientId = f.ClientId,
+            SupplierId = f.SupplierId,
+            ItemTypeId = f.ItemTypeId,
+            Tax = f.Tax,
+            Status = status,
+            Search = f.Search,
+            SortBy = f.SortBy,
+            SortDesc = f.SortDesc,
+            GroupBy = f.GroupBy,
+            Page = f.Page,
+            PageSize = f.PageSize,
         };
     }
 }

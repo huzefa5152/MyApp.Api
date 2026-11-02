@@ -23,14 +23,16 @@ public partial class InvoiceService
         Header = Scalars(invoice),
         Items = invoice.Items.OrderBy(i => i.Id).Select(i => new
         {
-            Line = Scalars(i), Overlay = i.Adjustment == null ? null : Scalars(i.Adjustment)
+            Line = Scalars(i),
+            Overlay = i.Adjustment == null ? null : Scalars(i.Adjustment)
         }),
         Challans = invoice.DeliveryChallans.OrderBy(c => c.Id).Select(Scalars)
     });
 
     private string ChallanVersion(DeliveryChallan challan) => HashSnapshot(new
     {
-        Header = Scalars(challan), Items = challan.Items.OrderBy(i => i.Id).Select(Scalars)
+        Header = Scalars(challan),
+        Items = challan.Items.OrderBy(i => i.Id).Select(Scalars)
     });
 
     private static void AssertChallanEditAllowed(Invoice invoice)
@@ -65,17 +67,25 @@ public partial class InvoiceService
             .Select(p => p.SourceDeliveryChallanId!.Value).Distinct().ToListAsync();
         BillChallanOptionDto Map(DeliveryChallan c) => new()
         {
-            Id = c.Id, ChallanNumber = c.ChallanNumber, PoNumber = c.PoNumber, HasAutoPurchaseBills = purchasedIds.Contains(c.Id),
-            SalesOrderId = c.SalesOrderId, SalesOrderNumber = c.SalesOrder?.SalesOrderNumber,
+            Id = c.Id,
+            ChallanNumber = c.ChallanNumber,
+            PoNumber = c.PoNumber,
+            HasAutoPurchaseBills = purchasedIds.Contains(c.Id),
+            SalesOrderId = c.SalesOrderId,
+            SalesOrderNumber = c.SalesOrder?.SalesOrderNumber,
             SplitFromChallanId = c.SplitFromChallanId,
-            DeliveryDate = c.DeliveryDate, Version = ChallanVersion(c),
+            DeliveryDate = c.DeliveryDate,
+            Version = ChallanVersion(c),
             Items = c.Items.OrderBy(i => i.Id).Select(i => new BillChallanItemDto
             { Id = i.Id, Description = i.Description, Quantity = i.Quantity, Unit = i.Unit }).ToList()
         };
         return new BillChallanOptionsDto
         {
-            Bill = ToDto(invoice), Version = BillChallanVersion(invoice), Linked = linked.Select(Map).ToList(),
-            Available = available.Take(100).Select(Map).ToList(), HasMore = available.Count > 100
+            Bill = ToDto(invoice),
+            Version = BillChallanVersion(invoice),
+            Linked = linked.Select(Map).ToList(),
+            Available = available.Take(100).Select(Map).ToList(),
+            HasMore = available.Count > 100
         };
     }
 
@@ -174,7 +184,7 @@ public partial class InvoiceService
         if (newItems.Any(i => i.ItemTypeId.HasValue && (i.ItemType == null || i.ItemType.CompanyId != invoice.CompanyId || i.ItemType.IsDeleted)))
             throw new InvalidOperationException("An added challan uses an unavailable item type. Correct the challan first.");
         await ValidateUpdateItemDecimalQuantitiesAsync(newItems.Select(i => new UpdateInvoiceItemDto
-            { Id = i.Id, Quantity = i.Quantity, UOM = i.Unit }).ToList());
+        { Id = i.Id, Quantity = i.Quantity, UOM = i.Unit }).ToList());
         if (added.Any(c => c.Items.Count == 0) || newItems.Any(i => i.Quantity <= 0 || string.IsNullOrWhiteSpace(i.Unit)))
             throw new InvalidOperationException("Each added challan needs items with positive quantities and a unit.");
         if (!dto.UnitPrices.Keys.ToHashSet().SetEquals(newItems.Select(i => i.Id))
@@ -256,11 +266,16 @@ public partial class InvoiceService
                 var type = item.ItemType;
                 invoice.Items.Add(new InvoiceItem
                 {
-                    DeliveryItemId = item.Id, Description = item.Description, Quantity = item.Quantity,
-                    UOM = item.Unit, UnitPrice = dto.UnitPrices[item.Id],
+                    DeliveryItemId = item.Id,
+                    Description = item.Description,
+                    Quantity = item.Quantity,
+                    UOM = item.Unit,
+                    UnitPrice = dto.UnitPrices[item.Id],
                     LineTotal = Math.Round(item.Quantity * dto.UnitPrices[item.Id], 2, MidpointRounding.AwayFromZero),
-                    ItemTypeId = item.ItemTypeId, ItemTypeName = type?.Name ?? "",
-                    HSCode = type?.HSCode, FbrUOMId = type?.FbrUOMId,
+                    ItemTypeId = item.ItemTypeId,
+                    ItemTypeName = type?.Name ?? "",
+                    HSCode = type?.HSCode,
+                    FbrUOMId = type?.FbrUOMId,
                     SaleType = !string.IsNullOrWhiteSpace(type?.SaleType) ? type.SaleType
                         : (!string.IsNullOrWhiteSpace(company.FbrDefaultSaleType) ? company.FbrDefaultSaleType : "Goods at Standard Rate (default)")
                 });
@@ -281,11 +296,17 @@ public partial class InvoiceService
         await SalesDocumentRules.RefreshOrdersAsync(_context, invoice.CompanyId);
         var audit = new AuditLog
         {
-            Timestamp = DateTime.UtcNow, Level = "Information", UserName = actorUserName,
-            HttpMethod = "PUT", RequestPath = $"/api/invoices/{id}/challans", StatusCode = 200,
-            ExceptionType = "BILL_CHALLANS_CHANGED", CompanyId = invoice.CompanyId,
+            Timestamp = DateTime.UtcNow,
+            Level = "Information",
+            UserName = actorUserName,
+            HttpMethod = "PUT",
+            RequestPath = $"/api/invoices/{id}/challans",
+            StatusCode = 200,
+            ExceptionType = "BILL_CHALLANS_CHANGED",
+            CompanyId = invoice.CompanyId,
             Message = $"Bill #{invoice.InvoiceNumber}: added challan ids [{string.Join(",", addedIds)}], removed [{string.Join(",", removedIds)}], left out lines [{string.Join(",", leaveOutIds)}].",
-            RequestBody = JsonSerializer.Serialize(new { dto.ChallanIds, dto.UnitPrices, dto.LeaveOutDeliveryItemIds, removalAction, dto.AttachAddedChallansToOrder }), OccurrenceCount = 1
+            RequestBody = JsonSerializer.Serialize(new { dto.ChallanIds, dto.UnitPrices, dto.LeaveOutDeliveryItemIds, removalAction, dto.AttachAddedChallansToOrder }),
+            OccurrenceCount = 1
         };
         await transaction.CommitAsync();
         await transaction.DisposeAsync();
@@ -329,7 +350,8 @@ public partial class InvoiceService
         var snapshot = await GetBillChallanOptionsAsync(billId.Value, null) ?? throw new InvalidOperationException("Bill not found.");
         await UpdateBillChallansCoreAsync(billId.Value, new UpdateBillChallansDto
         {
-            Version = snapshot.Version, ChallanIds = snapshot.Linked.Where(c => c.Id != challanId).Select(c => c.Id).ToList()
+            Version = snapshot.Version,
+            ChallanIds = snapshot.Linked.Where(c => c.Id != challanId).Select(c => c.Id).ToList()
         }, null, delete ? "delete" : "cancel");
     }
 

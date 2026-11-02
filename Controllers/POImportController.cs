@@ -193,8 +193,11 @@ namespace MyApp.Api.Controllers
         private const int MaxOcrPages = PoLayoutText.MaxOcrPages;
         private static readonly Dictionary<string, string> OcrFileTypes = new(StringComparer.OrdinalIgnoreCase)
         {
-            [".png"] = "image/png", [".jpg"] = "image/jpeg", [".jpeg"] = "image/jpeg",
-            [".webp"] = "image/webp", [".pdf"] = "application/pdf",
+            [".png"] = "image/png",
+            [".jpg"] = "image/jpeg",
+            [".jpeg"] = "image/jpeg",
+            [".webp"] = "image/webp",
+            [".pdf"] = "application/pdf",
         };
 
         [HttpPost("parse-image")]

@@ -173,7 +173,9 @@ namespace MyApp.Api.Controllers
             var roots = rows.Where(u => _scope.IsSeedAdmin(u.Id) || u.CreatedByUserId == null ||
                 _scope.IsSeedAdmin(u.CreatedByUserId.Value)).Select(u => new
                 {
-                    userId = u.Id, u.Username, u.FullName,
+                    userId = u.Id,
+                    u.Username,
+                    u.FullName,
                     companies = grants.Where(g => g.UserId == u.Id).Select(g => g.Name).OrderBy(n => n).ToList()
                 });
             return Ok(roots);
@@ -304,8 +306,11 @@ namespace MyApp.Api.Controllers
             }
             var copies = targets.Select(target => new Role
             {
-                Name = name, Description = source.Description, CreatedByUserId = actor,
-                TenantAdminUserId = target, CreatedAt = DateTime.UtcNow,
+                Name = name,
+                Description = source.Description,
+                CreatedByUserId = actor,
+                TenantAdminUserId = target,
+                CreatedAt = DateTime.UtcNow,
                 RolePermissions = source.RolePermissions.Select(rp => new RolePermission { PermissionId = rp.PermissionId }).ToList()
             }).ToList();
             _context.Roles.AddRange(copies);
@@ -316,9 +321,16 @@ namespace MyApp.Api.Controllers
             var permissionIds = source.RolePermissions.Select(rp => rp.PermissionId).ToList();
             var keys = await _context.Permissions.Where(p => permissionIds.Contains(p.Id))
                 .Select(p => p.Key).OrderBy(k => k).ToListAsync();
-            return Ok(copies.Select(r => new RoleDto { Id = r.Id, Name = r.Name,
-                Description = r.Description, TenantAdminUserId = r.TenantAdminUserId, CanEdit = true,
-                CreatedAt = r.CreatedAt, PermissionKeys = keys }).ToList());
+            return Ok(copies.Select(r => new RoleDto
+            {
+                Id = r.Id,
+                Name = r.Name,
+                Description = r.Description,
+                TenantAdminUserId = r.TenantAdminUserId,
+                CanEdit = true,
+                CreatedAt = r.CreatedAt,
+                PermissionKeys = keys
+            }).ToList());
         }
 
         [HttpPut("{id}")]

@@ -116,12 +116,17 @@ public partial class McpController
         var verb = excluded ? "Exclude from FBR" : "Include in FBR";
         var payload = new
         {
-            excluded, scope = scopeText,
-            dateFrom = dateFrom?.ToString("yyyy-MM-dd"), dateTo = dateTo?.ToString("yyyy-MM-dd"),
+            excluded,
+            scope = scopeText,
+            dateFrom = dateFrom?.ToString("yyyy-MM-dd"),
+            dateTo = dateTo?.ToString("yyyy-MM-dd"),
             invoiceIds = change.Select(b => b.Id).ToArray(),
             bills = change.Take(100).Select(b => new { b.Id, b.InvoiceNumber, date = Ymd(b.Date), b.ClientName, b.GrandTotal, b.FbrStatus }),
-            billsListed = Math.Min(change.Count, 100), billsToChange = change.Count, skipped,
-            totalValue = change.Sum(b => b.GrandTotal), currency = "PKR",
+            billsListed = Math.Min(change.Count, 100),
+            billsToChange = change.Count,
+            skipped,
+            totalValue = change.Sum(b => b.GrandTotal),
+            currency = "PKR",
             note = excluded
                 ? "Excluded bills are refused by FBR validate and submit, single or bulk. Their goods leave the stock movements and each bill is re-posted to the ledger, as the Bills screen's toggle does. Include them again to undo."
                 : "These bills become eligible for FBR validation and submission again, their stock movements are re-recorded and each is re-posted to the ledger.",

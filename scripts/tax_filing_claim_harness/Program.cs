@@ -12,7 +12,8 @@ var snapshot = await db.Invoices.AsNoTracking().Include(i => i.Items).SingleAsyn
 var fixture = await db.Companies.AsNoTracking().SingleAsync(c => c.Id == snapshot.CompanyId);
 if (!fixture.Name.StartsWith("[TEMP] Filing ")) throw new InvalidOperationException("Only this suite's synthetic fixture is allowed.");
 var passed = 0;
-async Task Check(bool expected, string label) {
+async Task Check(bool expected, string label)
+{
     var actual = await FbrSubmissionClaim.Eligible(db.Invoices, snapshot).AnyAsync();
     if (actual != expected) throw new Exception(label);
     Console.WriteLine("PASS " + label); passed++;

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Models.Accounting;
 using MyApp.Api.Models;
 namespace MyApp.Api.Data;
+
 public partial class AppDbContext
 {
     public DbSet<AccountTransfer> AccountTransfers => Set<AccountTransfer>();
@@ -12,7 +13,8 @@ public partial class AppDbContext
     public DbSet<PurchaseDebitNoteItem> PurchaseDebitNoteItems => Set<PurchaseDebitNoteItem>();
     private static void ConfigureAccountingExpansion(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<PurchaseDebitNote>(e => {
+        modelBuilder.Entity<PurchaseDebitNote>(e =>
+        {
             e.HasOne(n => n.Company).WithMany().HasForeignKey(n => n.CompanyId).OnDelete(DeleteBehavior.NoAction);
             e.HasOne(n => n.Supplier).WithMany().HasForeignKey(n => n.SupplierId).OnDelete(DeleteBehavior.NoAction);
             e.HasIndex(n => new { n.CompanyId, n.DebitNoteNumber }).IsUnique();
@@ -21,7 +23,8 @@ public partial class AppDbContext
             e.Property(n => n.GSTRate).HasPrecision(5, 2);
             e.Property(n => n.GrandTotal).HasPrecision(18, 2);
         });
-        modelBuilder.Entity<PurchaseDebitNoteItem>(e => {
+        modelBuilder.Entity<PurchaseDebitNoteItem>(e =>
+        {
             e.HasOne(n => n.PurchaseDebitNote).WithMany(n => n.Items).HasForeignKey(n => n.PurchaseDebitNoteId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(n => n.ItemType).WithMany().HasForeignKey(n => n.ItemTypeId).OnDelete(DeleteBehavior.NoAction);
             e.HasOne(n => n.Account).WithMany().HasForeignKey(n => n.AccountId).OnDelete(DeleteBehavior.NoAction);

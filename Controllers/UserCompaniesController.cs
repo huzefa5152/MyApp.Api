@@ -76,7 +76,10 @@ namespace MyApp.Api.Controllers
                 .OrderBy(u => u.FullName)
                 .Select(u => new
                 {
-                    u.Id, u.Username, u.FullName, u.AvatarPath,
+                    u.Id,
+                    u.Username,
+                    u.FullName,
+                    u.AvatarPath,
                 })
                 .ToListAsync();
 

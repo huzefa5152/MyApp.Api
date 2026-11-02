@@ -499,11 +499,23 @@ namespace MyApp.Api.Services.Implementations
                 .Skip((page - 1) * size).Take(size)
                 .Select(p => new
                 {
-                    p.Id, p.Number, p.Date, p.Direction,
-                    p.ContactType, p.ContactId, p.ContactName,
-                    p.BankAccountId, p.BankAccountName, p.Method,
-                    p.ChequeNumber, p.ChequeDate, p.ChequeStatus,
-                    p.Description, p.Amount, p.IsCancelled, p.ReconciledDate,
+                    p.Id,
+                    p.Number,
+                    p.Date,
+                    p.Direction,
+                    p.ContactType,
+                    p.ContactId,
+                    p.ContactName,
+                    p.BankAccountId,
+                    p.BankAccountName,
+                    p.Method,
+                    p.ChequeNumber,
+                    p.ChequeDate,
+                    p.ChequeStatus,
+                    p.Description,
+                    p.Amount,
+                    p.IsCancelled,
+                    p.ReconciledDate,
                 })
                 .ToListAsync();
 
@@ -647,7 +659,11 @@ namespace MyApp.Api.Services.Implementations
                 .Where(a => paymentIds.Contains(a.PaymentId))
                 .Select(a => new
                 {
-                    a.PaymentId, a.Kind, a.InvoiceId, a.PurchaseBillId, a.AccountId,
+                    a.PaymentId,
+                    a.Kind,
+                    a.InvoiceId,
+                    a.PurchaseBillId,
+                    a.AccountId,
                     AccountName = a.Account != null ? a.Account.Name : null,
                     InvoiceNumber = a.Invoice != null ? (int?)a.Invoice.InvoiceNumber : null,
                     BillNumber = a.PurchaseBill != null ? (int?)a.PurchaseBill.PurchaseBillNumber : null,
@@ -715,7 +731,8 @@ namespace MyApp.Api.Services.Implementations
                 .GroupBy(a => new { AccountId = a.AccountId!.Value, Name = a.Account!.Name })
                 .Select(g => new
                 {
-                    g.Key.AccountId, g.Key.Name,
+                    g.Key.AccountId,
+                    g.Key.Name,
                     Amount = g.Sum(x => x.Amount),
                     Tax = g.Sum(x => x.TaxAmount),
                     Count = g.Select(x => x.PaymentId).Distinct().Count(),
@@ -834,8 +851,19 @@ namespace MyApp.Api.Services.Implementations
                 .Skip((page - 1) * size).Take(size)
                 .Select(p => new
                 {
-                    p.Id, p.Number, p.Date, p.Direction, p.ContactType, p.ContactId, p.ContactName,
-                    p.ChequeNumber, p.ChequeDate, p.ChequeStatus, p.BankAccountId, p.BankAccountName, p.Amount,
+                    p.Id,
+                    p.Number,
+                    p.Date,
+                    p.Direction,
+                    p.ContactType,
+                    p.ContactId,
+                    p.ContactName,
+                    p.ChequeNumber,
+                    p.ChequeDate,
+                    p.ChequeStatus,
+                    p.BankAccountId,
+                    p.BankAccountName,
+                    p.Amount,
                 })
                 .ToListAsync();
 
@@ -923,9 +951,16 @@ namespace MyApp.Api.Services.Implementations
                 .Skip((page - 1) * size).Take(size)
                 .Select(x => new
                 {
-                    x.Payment.Id, x.Payment.Number, x.Payment.Date, x.Payment.Direction,
-                    x.Payment.ContactType, x.Payment.ContactId, x.Payment.ContactName,
-                    x.Payment.BankAccountId, x.Payment.BankAccountName, x.Payment.Description,
+                    x.Payment.Id,
+                    x.Payment.Number,
+                    x.Payment.Date,
+                    x.Payment.Direction,
+                    x.Payment.ContactType,
+                    x.Payment.ContactId,
+                    x.Payment.ContactName,
+                    x.Payment.BankAccountId,
+                    x.Payment.BankAccountName,
+                    x.Payment.Description,
                     x.Alloc.Amount,
                 })
                 .ToListAsync();

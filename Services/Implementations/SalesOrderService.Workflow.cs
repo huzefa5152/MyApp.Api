@@ -11,9 +11,21 @@ namespace MyApp.Api.Services.Implementations;
 public partial class SalesOrderService
 {
     private static string OrderVersion(SalesOrder o) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
-        JsonSerializer.Serialize(new { o.Id, o.ClientId, OrderDate=o.OrderDate.ToString("yyyy-MM-ddTHH:mm:ss.fffffff"), RequiredDate=o.RequiredDate?.ToString("yyyy-MM-ddTHH:mm:ss.fffffff"), o.CustomerPoNumber,
-            CustomerPoDate=o.CustomerPoDate?.ToString("yyyy-MM-ddTHH:mm:ss.fffffff"), o.Site, o.Notes, o.Status, o.ManuallyClosed, o.SalesQuoteId,
-            Items = o.Items.OrderBy(i => i.Id).Select(i => new { i.Id, i.Description, Quantity=i.Quantity.ToString("G29",System.Globalization.CultureInfo.InvariantCulture), i.Unit, i.ItemTypeId, UnitPrice=i.UnitPrice?.ToString("G29",System.Globalization.CultureInfo.InvariantCulture) }) }))));
+        JsonSerializer.Serialize(new
+        {
+            o.Id,
+            o.ClientId,
+            OrderDate = o.OrderDate.ToString("yyyy-MM-ddTHH:mm:ss.fffffff"),
+            RequiredDate = o.RequiredDate?.ToString("yyyy-MM-ddTHH:mm:ss.fffffff"),
+            o.CustomerPoNumber,
+            CustomerPoDate = o.CustomerPoDate?.ToString("yyyy-MM-ddTHH:mm:ss.fffffff"),
+            o.Site,
+            o.Notes,
+            o.Status,
+            o.ManuallyClosed,
+            o.SalesQuoteId,
+            Items = o.Items.OrderBy(i => i.Id).Select(i => new { i.Id, i.Description, Quantity = i.Quantity.ToString("G29", System.Globalization.CultureInfo.InvariantCulture), i.Unit, i.ItemTypeId, UnitPrice = i.UnitPrice?.ToString("G29", System.Globalization.CultureInfo.InvariantCulture) })
+        }))));
 
     private Task LockCompanyAsync(int companyId) => _context.Database.ExecuteSqlRawAsync(
         "DECLARE @lock int; EXEC @lock=sp_getapplock @Resource={0}, @LockMode='Exclusive', @LockOwner='Transaction', @LockTimeout=15000; IF @lock<0 THROW 51000, 'Could not lock sales documents', 1;",
@@ -45,16 +57,23 @@ public partial class SalesOrderService
             throw new InvalidOperationException("The bill and its challan items do not match. Reconcile them before creating an order.");
         var order = await CreateAsync(bill.CompanyId, new SalesOrderDto
         {
-            ClientId = bill.ClientId, OrderDate = bill.Date,
+            ClientId = bill.ClientId,
+            OrderDate = bill.Date,
             CustomerPoNumber = bill.DeliveryChallans.Select(c => c.PoNumber).Distinct().Count() == 1 ? bill.DeliveryChallans.First().PoNumber : null,
             CustomerPoDate = bill.DeliveryChallans.Select(c => c.PoDate).Distinct().Count() == 1 ? bill.DeliveryChallans.First().PoDate : null,
             Notes = $"Recorded from existing bill #{bill.InvoiceNumber}. Existing deliveries and billing preserved.",
-            Items = deliveries.Select(d => new SalesOrderItemDto { ItemTypeId = d.ItemTypeId, Description = d.Description,
-                Quantity = d.Quantity, Unit = d.Unit, UnitPrice = billLines[d.Id].UnitPrice }).ToList()
+            Items = deliveries.Select(d => new SalesOrderItemDto
+            {
+                ItemTypeId = d.ItemTypeId,
+                Description = d.Description,
+                Quantity = d.Quantity,
+                Unit = d.Unit,
+                UnitPrice = billLines[d.Id].UnitPrice
+            }).ToList()
         });
         var entity = (await _repository.GetByIdAsync(order.Id))!;
         var lines = entity.Items.OrderBy(i => i.Id).ToList();
-        for (int n=0; n<deliveries.Count; n++) deliveries[n].SalesOrderItemId = lines[n].Id;
+        for (int n = 0; n < deliveries.Count; n++) deliveries[n].SalesOrderItemId = lines[n].Id;
         foreach (var challan in bill.DeliveryChallans) challan.SalesOrderId = order.Id;
         await _context.SaveChangesAsync();
         await SalesDocumentRules.RefreshOrdersAsync(_context, companyId);
@@ -83,19 +102,34 @@ public partial class SalesOrderService
             var mapping = group.ToDictionary(d => d.Id, d => changed[d.SalesOrderItemId!.Value]);
             await _invoices.UpdateAsync(bill.Id, new UpdateInvoiceDto
             {
-                GSTRate = bill.GSTRate, FurtherTaxRate = bill.FurtherTaxRate, WithholdingTaxRate = bill.WithholdingTaxRate,
-                WithholdingTaxAmount = bill.WithholdingTaxAmount, FreightCharges = bill.FreightCharges,
-                DocumentType = bill.DocumentType, PaymentTerms = bill.PaymentTerms, PaymentMode = bill.PaymentMode, Notes = bill.Notes,
-                Items = bill.Items.Select(i => {
+                GSTRate = bill.GSTRate,
+                FurtherTaxRate = bill.FurtherTaxRate,
+                WithholdingTaxRate = bill.WithholdingTaxRate,
+                WithholdingTaxAmount = bill.WithholdingTaxAmount,
+                FreightCharges = bill.FreightCharges,
+                DocumentType = bill.DocumentType,
+                PaymentTerms = bill.PaymentTerms,
+                PaymentMode = bill.PaymentMode,
+                Notes = bill.Notes,
+                Items = bill.Items.Select(i =>
+                {
                     mapping.TryGetValue(i.DeliveryItemId ?? -1, out var ordered);
-                    return new UpdateInvoiceItemDto { Id=i.Id,
-                        Description=request.ApplyDetailsToDeliveries && ordered != null ? ordered.Description : i.Description,
-                        Quantity=i.Quantity, UOM=request.ApplyDetailsToDeliveries && ordered != null ? ordered.Unit : i.UOM,
-                        UnitPrice=request.ApplyRatesToBills && ordered?.UnitPrice != null ? ordered.UnitPrice.Value : i.UnitPrice,
-                        ItemTypeId=request.ApplyDetailsToDeliveries && ordered != null ? ordered.ItemTypeId : i.ItemTypeId,
-                        HSCode=i.HSCode, FbrUOMId=i.FbrUOMId, SaleType=i.SaleType,
-                        RateId=i.RateId, FixedNotifiedValueOrRetailPrice=i.FixedNotifiedValueOrRetailPrice,
-                        SroScheduleNo=i.SroScheduleNo, SroItemSerialNo=i.SroItemSerialNo };
+                    return new UpdateInvoiceItemDto
+                    {
+                        Id = i.Id,
+                        Description = request.ApplyDetailsToDeliveries && ordered != null ? ordered.Description : i.Description,
+                        Quantity = i.Quantity,
+                        UOM = request.ApplyDetailsToDeliveries && ordered != null ? ordered.Unit : i.UOM,
+                        UnitPrice = request.ApplyRatesToBills && ordered?.UnitPrice != null ? ordered.UnitPrice.Value : i.UnitPrice,
+                        ItemTypeId = request.ApplyDetailsToDeliveries && ordered != null ? ordered.ItemTypeId : i.ItemTypeId,
+                        HSCode = i.HSCode,
+                        FbrUOMId = i.FbrUOMId,
+                        SaleType = i.SaleType,
+                        RateId = i.RateId,
+                        FixedNotifiedValueOrRetailPrice = i.FixedNotifiedValueOrRetailPrice,
+                        SroScheduleNo = i.SroScheduleNo,
+                        SroItemSerialNo = i.SroItemSerialNo
+                    };
                 }).ToList()
             });
         }
@@ -103,7 +137,7 @@ public partial class SalesOrderService
             foreach (var delivery in deliveries)
             {
                 var item = changed[delivery.SalesOrderItemId!.Value];
-                delivery.Description=item.Description; delivery.Unit=item.Unit; delivery.ItemTypeId=item.ItemTypeId;
+                delivery.Description = item.Description; delivery.Unit = item.Unit; delivery.ItemTypeId = item.ItemTypeId;
             }
         await _context.SaveChangesAsync();
     }

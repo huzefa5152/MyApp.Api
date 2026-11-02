@@ -154,84 +154,84 @@ namespace MyApp.Api.Services.Implementations
             Microsoft.EntityFrameworkCore.DbUpdateException? lastConflict = null;
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
-            // Wrap number allocation + receipt insert in one transaction so
-            // a concurrent create can't race the MAX(...)+1 lookup.
-            await using var tx = await _context.Database.BeginTransactionAsync();
-            try
-            {
-                var company = await _context.Companies.FindAsync(dto.CompanyId);
-                if (company == null) throw new KeyNotFoundException("Company not found.");
-                var supplier = await _context.Suppliers
-                    .FirstOrDefaultAsync(s => s.Id == dto.SupplierId && s.CompanyId == dto.CompanyId);
-                if (supplier == null) throw new KeyNotFoundException("Supplier not found.");
-                if (dto.PurchaseBillId.HasValue)
+                // Wrap number allocation + receipt insert in one transaction so
+                // a concurrent create can't race the MAX(...)+1 lookup.
+                await using var tx = await _context.Database.BeginTransactionAsync();
+                try
                 {
-                    // Cross-tenant linkage guard: a goods receipt can only
-                    // reference a purchase bill of the same company.
-                    var billCompanyId = await _context.PurchaseBills
-                        .Where(pb => pb.Id == dto.PurchaseBillId.Value)
-                        .Select(pb => (int?)pb.CompanyId)
-                        .FirstOrDefaultAsync();
-                    if (billCompanyId == null)
-                        throw new KeyNotFoundException("Purchase bill not found.");
-                    if (billCompanyId != dto.CompanyId)
-                        throw new KeyNotFoundException("Purchase bill not found."); // another company's bill answers like a missing one
-                }
-                if (dto.Items == null || dto.Items.Count == 0)
-                    throw new InvalidOperationException("At least one item is required.");
-
-                // Number allocation, mirror PurchaseBill numbering.
-                var nextNumber = await CompanyDocumentNumbers.AllocateAsync(_context, dto.CompanyId, "goods-receipt", dto.CustomNumber);
-
-                var receipt = new GoodsReceipt
-                {
-                    GoodsReceiptNumber = nextNumber,
-                    ReceiptDate = dto.ReceiptDate.Date,
-                    CompanyId = dto.CompanyId,
-                    SupplierId = dto.SupplierId,
-                    PurchaseBillId = dto.PurchaseBillId,
-                    SupplierChallanNumber = dto.SupplierChallanNumber?.Trim(),
-                    Site = dto.Site,
-                    Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
-                    Status = "Pending",
-                    CreatedAt = DateTime.UtcNow,
-                    Items = dto.Items.Select(i => new GoodsReceiptItem
+                    var company = await _context.Companies.FindAsync(dto.CompanyId);
+                    if (company == null) throw new KeyNotFoundException("Company not found.");
+                    var supplier = await _context.Suppliers
+                        .FirstOrDefaultAsync(s => s.Id == dto.SupplierId && s.CompanyId == dto.CompanyId);
+                    if (supplier == null) throw new KeyNotFoundException("Supplier not found.");
+                    if (dto.PurchaseBillId.HasValue)
                     {
-                        ItemTypeId = i.ItemTypeId,
-                        Description = i.Description?.Trim() ?? "",
-                        Quantity = i.Quantity,
-                        Unit = i.Unit ?? "",
-                    }).ToList(),
-                };
+                        // Cross-tenant linkage guard: a goods receipt can only
+                        // reference a purchase bill of the same company.
+                        var billCompanyId = await _context.PurchaseBills
+                            .Where(pb => pb.Id == dto.PurchaseBillId.Value)
+                            .Select(pb => (int?)pb.CompanyId)
+                            .FirstOrDefaultAsync();
+                        if (billCompanyId == null)
+                            throw new KeyNotFoundException("Purchase bill not found.");
+                        if (billCompanyId != dto.CompanyId)
+                            throw new KeyNotFoundException("Purchase bill not found."); // another company's bill answers like a missing one
+                    }
+                    if (dto.Items == null || dto.Items.Count == 0)
+                        throw new InvalidOperationException("At least one item is required.");
 
-                _context.GoodsReceipts.Add(receipt);
-                await _context.SaveChangesAsync();
-                await tx.CommitAsync();
-                return (await GetByIdAsync(receipt.Id))!;
-            }
-            catch (Microsoft.EntityFrameworkCore.DbUpdateException dupEx)
-                when (MyApp.Api.Helpers.NumberAllocationRetry.IsUniqueViolation(dupEx))
-            {
-                lastConflict = dupEx;
-                _logger.LogWarning(
-                    "GoodsReceipt number collided with a concurrent create for company {CompanyId}; retrying (attempt {Attempt}).",
-                    dto.CompanyId, attempt);
-                await tx.RollbackAsync();
-                foreach (var entry in _context.ChangeTracker.Entries().ToList())
-                {
-                    if (entry.State != Microsoft.EntityFrameworkCore.EntityState.Unchanged)
-                        entry.State = Microsoft.EntityFrameworkCore.EntityState.Detached;
+                    // Number allocation, mirror PurchaseBill numbering.
+                    var nextNumber = await CompanyDocumentNumbers.AllocateAsync(_context, dto.CompanyId, "goods-receipt", dto.CustomNumber);
+
+                    var receipt = new GoodsReceipt
+                    {
+                        GoodsReceiptNumber = nextNumber,
+                        ReceiptDate = dto.ReceiptDate.Date,
+                        CompanyId = dto.CompanyId,
+                        SupplierId = dto.SupplierId,
+                        PurchaseBillId = dto.PurchaseBillId,
+                        SupplierChallanNumber = dto.SupplierChallanNumber?.Trim(),
+                        Site = dto.Site,
+                        Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
+                        Status = "Pending",
+                        CreatedAt = DateTime.UtcNow,
+                        Items = dto.Items.Select(i => new GoodsReceiptItem
+                        {
+                            ItemTypeId = i.ItemTypeId,
+                            Description = i.Description?.Trim() ?? "",
+                            Quantity = i.Quantity,
+                            Unit = i.Unit ?? "",
+                        }).ToList(),
+                    };
+
+                    _context.GoodsReceipts.Add(receipt);
+                    await _context.SaveChangesAsync();
+                    await tx.CommitAsync();
+                    return (await GetByIdAsync(receipt.Id))!;
                 }
-                if (attempt < maxAttempts)
-                    await Task.Delay(10 * attempt);
-                continue;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "GoodsReceiptService: create transaction rolled back for company={CompanyId}", dto.CompanyId);
-                await tx.RollbackAsync();
-                throw;
-            }
+                catch (Microsoft.EntityFrameworkCore.DbUpdateException dupEx)
+                    when (MyApp.Api.Helpers.NumberAllocationRetry.IsUniqueViolation(dupEx))
+                {
+                    lastConflict = dupEx;
+                    _logger.LogWarning(
+                        "GoodsReceipt number collided with a concurrent create for company {CompanyId}; retrying (attempt {Attempt}).",
+                        dto.CompanyId, attempt);
+                    await tx.RollbackAsync();
+                    foreach (var entry in _context.ChangeTracker.Entries().ToList())
+                    {
+                        if (entry.State != Microsoft.EntityFrameworkCore.EntityState.Unchanged)
+                            entry.State = Microsoft.EntityFrameworkCore.EntityState.Detached;
+                    }
+                    if (attempt < maxAttempts)
+                        await Task.Delay(10 * attempt);
+                    continue;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "GoodsReceiptService: create transaction rolled back for company={CompanyId}", dto.CompanyId);
+                    await tx.RollbackAsync();
+                    throw;
+                }
             }
             throw new InvalidOperationException(
                 "Could not allocate a unique goods receipt number after " + maxAttempts +
@@ -243,56 +243,56 @@ namespace MyApp.Api.Services.Implementations
             await using var tx = await _context.Database.BeginTransactionAsync();
             try
             {
-            var gr = await _context.GoodsReceipts
-                .Include(g => g.Items)
-                .FirstOrDefaultAsync(g => g.Id == id);
-            if (gr == null) return null;
-            await CompanyDocumentNumbers.RenumberAsync(_context, gr.CompanyId, "goods-receipt", gr.Id, gr.GoodsReceiptNumber, dto.CustomNumber);
-            if (dto.CustomNumber.HasValue) gr.GoodsReceiptNumber = dto.CustomNumber.Value;
+                var gr = await _context.GoodsReceipts
+                    .Include(g => g.Items)
+                    .FirstOrDefaultAsync(g => g.Id == id);
+                if (gr == null) return null;
+                await CompanyDocumentNumbers.RenumberAsync(_context, gr.CompanyId, "goods-receipt", gr.Id, gr.GoodsReceiptNumber, dto.CustomNumber);
+                if (dto.CustomNumber.HasValue) gr.GoodsReceiptNumber = dto.CustomNumber.Value;
 
-            if (dto.PurchaseBillId.HasValue)
-            {
-                // Same cross-tenant linkage guard as Create.
-                var billCompanyId = await _context.PurchaseBills
-                    .Where(pb => pb.Id == dto.PurchaseBillId.Value)
-                    .Select(pb => (int?)pb.CompanyId)
-                    .FirstOrDefaultAsync();
-                if (billCompanyId == null)
-                    throw new KeyNotFoundException("Purchase bill not found.");
-                if (billCompanyId != gr.CompanyId)
-                    throw new KeyNotFoundException("Purchase bill not found."); // another company's bill answers like a missing one
-            }
-
-            gr.ReceiptDate = dto.ReceiptDate.Date;
-            // Cross-tenant link guard, the same one Create applies: a forged
-            // supplier id from another company would otherwise be stored and
-            // read back (name, address, phone) through this receipt.
-            if (dto.SupplierId != gr.SupplierId
-                && !await _context.Suppliers.AnyAsync(s => s.Id == dto.SupplierId && s.CompanyId == gr.CompanyId))
-                throw new KeyNotFoundException("Supplier not found.");
-            gr.SupplierId = dto.SupplierId;
-            gr.PurchaseBillId = dto.PurchaseBillId;
-            gr.SupplierChallanNumber = dto.SupplierChallanNumber?.Trim();
-            gr.Site = dto.Site;
-            gr.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
-            if (!string.IsNullOrWhiteSpace(dto.Status)) gr.Status = dto.Status;
-
-            // Replace items wholesale (lighter than diff, fine for v1)
-            _context.GoodsReceiptItems.RemoveRange(gr.Items);
-            gr.Items.Clear();
-            foreach (var i in dto.Items)
-            {
-                gr.Items.Add(new GoodsReceiptItem
+                if (dto.PurchaseBillId.HasValue)
                 {
-                    ItemTypeId = i.ItemTypeId,
-                    Description = i.Description?.Trim() ?? "",
-                    Quantity = i.Quantity,
-                    Unit = i.Unit ?? "",
-                });
-            }
-            await _context.SaveChangesAsync();
-            await tx.CommitAsync();
-            return await GetByIdAsync(gr.Id);
+                    // Same cross-tenant linkage guard as Create.
+                    var billCompanyId = await _context.PurchaseBills
+                        .Where(pb => pb.Id == dto.PurchaseBillId.Value)
+                        .Select(pb => (int?)pb.CompanyId)
+                        .FirstOrDefaultAsync();
+                    if (billCompanyId == null)
+                        throw new KeyNotFoundException("Purchase bill not found.");
+                    if (billCompanyId != gr.CompanyId)
+                        throw new KeyNotFoundException("Purchase bill not found."); // another company's bill answers like a missing one
+                }
+
+                gr.ReceiptDate = dto.ReceiptDate.Date;
+                // Cross-tenant link guard, the same one Create applies: a forged
+                // supplier id from another company would otherwise be stored and
+                // read back (name, address, phone) through this receipt.
+                if (dto.SupplierId != gr.SupplierId
+                    && !await _context.Suppliers.AnyAsync(s => s.Id == dto.SupplierId && s.CompanyId == gr.CompanyId))
+                    throw new KeyNotFoundException("Supplier not found.");
+                gr.SupplierId = dto.SupplierId;
+                gr.PurchaseBillId = dto.PurchaseBillId;
+                gr.SupplierChallanNumber = dto.SupplierChallanNumber?.Trim();
+                gr.Site = dto.Site;
+                gr.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
+                if (!string.IsNullOrWhiteSpace(dto.Status)) gr.Status = dto.Status;
+
+                // Replace items wholesale (lighter than diff, fine for v1)
+                _context.GoodsReceiptItems.RemoveRange(gr.Items);
+                gr.Items.Clear();
+                foreach (var i in dto.Items)
+                {
+                    gr.Items.Add(new GoodsReceiptItem
+                    {
+                        ItemTypeId = i.ItemTypeId,
+                        Description = i.Description?.Trim() ?? "",
+                        Quantity = i.Quantity,
+                        Unit = i.Unit ?? "",
+                    });
+                }
+                await _context.SaveChangesAsync();
+                await tx.CommitAsync();
+                return await GetByIdAsync(gr.Id);
             }
             catch (Exception ex)
             {

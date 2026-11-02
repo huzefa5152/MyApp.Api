@@ -65,9 +65,23 @@ public partial class McpController
         || await _permissions.HasPermissionAsync(CurrentUserId, "accounting.payments.create");
     private static object PurchaseSummary(PurchaseBillDto r, bool payment) => new
     {
-        r.Id, r.CompanyId, r.PurchaseBillNumber, r.Date, r.SupplierId, r.SupplierName, r.Subtotal, r.GSTRate, r.GSTAmount, r.GrandTotal,
-        r.WithholdingTaxRate, r.WithholdingTaxAmount, r.Collectible, r.ReconciliationStatus,
-        amountPaid = payment ? r.AmountPaid : null, balanceDue = payment ? r.BalanceDue : null, paymentStatus = payment ? r.PaymentStatus : null,
+        r.Id,
+        r.CompanyId,
+        r.PurchaseBillNumber,
+        r.Date,
+        r.SupplierId,
+        r.SupplierName,
+        r.Subtotal,
+        r.GSTRate,
+        r.GSTAmount,
+        r.GrandTotal,
+        r.WithholdingTaxRate,
+        r.WithholdingTaxAmount,
+        r.Collectible,
+        r.ReconciliationStatus,
+        amountPaid = payment ? r.AmountPaid : null,
+        balanceDue = payment ? r.BalanceDue : null,
+        paymentStatus = payment ? r.PaymentStatus : null,
         dueDate = payment ? r.DueDate : null
     };
 
@@ -87,8 +101,24 @@ public partial class McpController
             case "get_quote":
                 var quote = await _quotes.GetByIdAsync(OperationId(args, "quoteId"));
                 if (quote == null || quote.CompanyId != companyId) throw new ToolError("Resource unavailable or access denied.");
-                return new { quote.Id, quote.CompanyId, quote.QuoteNumber, quote.Date, quote.ValidUntil, quote.ClientId, quote.ClientName, quote.Status, quote.Subtotal, quote.GSTRate, quote.GSTAmount, quote.GrandTotal, quote.ConvertedToSalesOrderId,
-                    withholdingSupported = false, lines = new { offset, limit, totalCount = quote.Items.Count, items = quote.Items.Skip(offset).Take(limit).Select(x => new { x.Id, x.ItemTypeId, x.Description, x.Quantity, x.Unit, x.UnitPrice, x.LineTotal }) } };
+                return new
+                {
+                    quote.Id,
+                    quote.CompanyId,
+                    quote.QuoteNumber,
+                    quote.Date,
+                    quote.ValidUntil,
+                    quote.ClientId,
+                    quote.ClientName,
+                    quote.Status,
+                    quote.Subtotal,
+                    quote.GSTRate,
+                    quote.GSTAmount,
+                    quote.GrandTotal,
+                    quote.ConvertedToSalesOrderId,
+                    withholdingSupported = false,
+                    lines = new { offset, limit, totalCount = quote.Items.Count, items = quote.Items.Skip(offset).Take(limit).Select(x => new { x.Id, x.ItemTypeId, x.Description, x.Quantity, x.Unit, x.UnitPrice, x.LineTotal }) }
+                };
             case "search_sales_orders":
                 var orders = await OperationService<ISalesOrderService>().GetPagedByCompanyAsync(companyId, page, size, search, null, null, from, to);
                 return OperationPage(orders, orders.Items.Where(x => x.CompanyId == companyId).Select(OrderSummary));
@@ -111,8 +141,13 @@ public partial class McpController
                     .Select(t => new { t.Id, t.Name, t.HSCode }).ToListAsync();
                 return new
                 {
-                    items = codes.Select(c => new { hsCode = c.HS_CODE, c.ShortName, fbrDescription = c.Description,
-                        companyItems = onCode.Where(t => t.HSCode == c.HS_CODE).Select(t => new { itemTypeId = t.Id, t.Name }) }),
+                    items = codes.Select(c => new
+                    {
+                        hsCode = c.HS_CODE,
+                        c.ShortName,
+                        fbrDescription = c.Description,
+                        companyItems = onCode.Where(t => t.HSCode == c.HS_CODE).Select(t => new { itemTypeId = t.Id, t.Name })
+                    }),
                     note = "Use a companyItems entry when one fits. Otherwise create the item with prepare_item_type (its name defaults to shortName).",
                 };
             case "search_purchase_bills":

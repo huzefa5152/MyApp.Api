@@ -130,15 +130,15 @@ namespace MyApp.Api.Services.Implementations
         //     then fall back through these aliases, so both layouts parse.
         private static readonly Dictionary<string, string[]> Aliases = new(StringComparer.OrdinalIgnoreCase)
         {
-            [H.InvoiceNo]          = new[] { "Invoice No", "Invoice Number" },
-            [H.FbrInvoiceRefNo]    = new[] { "Invoice Ref No", "FBR Invoice Ref No." },
-            [H.TaxpayerType]       = new[] { "Supplier Type", "Seller Type" },
-            [H.SaleType]           = new[] { "Purchase Type" },
-            [H.ValueExclTax]       = new[] { "Value", "Value Excluding Sales Tax", "Value of Sales Excluding GST" },
-            [H.StWithheld]         = new[] { "ST Withheld as WH Agent", "Sales Tax Withheld at Source" },
+            [H.InvoiceNo] = new[] { "Invoice No", "Invoice Number" },
+            [H.FbrInvoiceRefNo] = new[] { "Invoice Ref No", "FBR Invoice Ref No." },
+            [H.TaxpayerType] = new[] { "Supplier Type", "Seller Type" },
+            [H.SaleType] = new[] { "Purchase Type" },
+            [H.ValueExclTax] = new[] { "Value", "Value Excluding Sales Tax", "Value of Sales Excluding GST" },
+            [H.StWithheld] = new[] { "ST Withheld as WH Agent", "Sales Tax Withheld at Source" },
             [H.FixedNotifiedValue] = new[] { "Fixed / notified value or Retail Price", "Fixed Notified Value or Retail Price" },
-            [H.SroScheduleNo]      = new[] { "SRO No.", "Schedule No." },
-            [H.ItemSerialNo]       = new[] { "Item Serial No.", "Sr. No." },
+            [H.SroScheduleNo] = new[] { "SRO No.", "Schedule No." },
+            [H.ItemSerialNo] = new[] { "Item Serial No.", "Sr. No." },
         };
 
         // Date formats FBR has been seen using. Leading entries are
@@ -224,37 +224,37 @@ namespace MyApp.Api.Services.Implementations
 
                 var parsed = new FbrPurchaseLedgerRow { SourceRowNumber = r + 1 }; // 1-based incl. header
 
-                parsed.FbrInvoiceRefNo  = Get(row, Idx(H.FbrInvoiceRefNo));
-                parsed.Status           = Get(row, Idx(H.Status));
+                parsed.FbrInvoiceRefNo = Get(row, Idx(H.FbrInvoiceRefNo));
+                parsed.Status = Get(row, Idx(H.Status));
                 parsed.SellerReturnStatus = Get(row, Idx(H.SellerReturnStatus));
-                parsed.InvoiceNo        = Get(row, Idx(H.InvoiceNo));
-                parsed.InvoiceType      = Get(row, Idx(H.InvoiceType));
-                parsed.InvoiceDate      = ParseDate(Get(row, Idx(H.InvoiceDate)), row, Idx(H.InvoiceDate), parsed);
-                parsed.SellerNtn        = Get(row, Idx(H.SellerNtn));
-                parsed.SellerName       = Get(row, Idx(H.SellerName));
-                parsed.TaxpayerType     = Get(row, Idx(H.TaxpayerType));
-                parsed.SaleType         = Get(row, Idx(H.SaleType));
-                parsed.Quantity         = ParseDecimal(Get(row, Idx(H.Quantity)),  parsed, H.Quantity);
+                parsed.InvoiceNo = Get(row, Idx(H.InvoiceNo));
+                parsed.InvoiceType = Get(row, Idx(H.InvoiceType));
+                parsed.InvoiceDate = ParseDate(Get(row, Idx(H.InvoiceDate)), row, Idx(H.InvoiceDate), parsed);
+                parsed.SellerNtn = Get(row, Idx(H.SellerNtn));
+                parsed.SellerName = Get(row, Idx(H.SellerName));
+                parsed.TaxpayerType = Get(row, Idx(H.TaxpayerType));
+                parsed.SaleType = Get(row, Idx(H.SaleType));
+                parsed.Quantity = ParseDecimal(Get(row, Idx(H.Quantity)), parsed, H.Quantity);
                 // HS Code cells in the "Excel Report" layout embed the
                 // description: "8539.9090:-ELECTRIC". Split the leading HS
                 // code from any trailing text; use that text as the
                 // description when the Product Description column is blank.
                 var (hsCode, hsTrailingDesc) = SplitHsCode(Get(row, Idx(H.HsCode)));
-                parsed.HsCode           = hsCode;
+                parsed.HsCode = hsCode;
                 parsed.ProductDescription = Get(row, Idx(H.ProductDescription));
                 if (string.IsNullOrWhiteSpace(parsed.ProductDescription) && !string.IsNullOrWhiteSpace(hsTrailingDesc))
                     parsed.ProductDescription = hsTrailingDesc;
-                parsed.Rate             = ParseRate(Get(row, Idx(H.Rate)), parsed);
-                parsed.Uom              = Get(row, Idx(H.Uom));
-                parsed.ValueExclTax     = ParseDecimal(Get(row, Idx(H.ValueExclTax)), parsed, H.ValueExclTax);
-                parsed.SalesTax         = ParseDecimal(Get(row, Idx(H.SalesTax)),    parsed, H.SalesTax);
-                parsed.ExtraTax         = ParseDecimal(Get(row, Idx(H.ExtraTax)),   parsed, H.ExtraTax);
+                parsed.Rate = ParseRate(Get(row, Idx(H.Rate)), parsed);
+                parsed.Uom = Get(row, Idx(H.Uom));
+                parsed.ValueExclTax = ParseDecimal(Get(row, Idx(H.ValueExclTax)), parsed, H.ValueExclTax);
+                parsed.SalesTax = ParseDecimal(Get(row, Idx(H.SalesTax)), parsed, H.SalesTax);
+                parsed.ExtraTax = ParseDecimal(Get(row, Idx(H.ExtraTax)), parsed, H.ExtraTax);
                 parsed.StWithheldAtSource = ParseDecimal(Get(row, Idx(H.StWithheld)), parsed, H.StWithheld);
-                parsed.FurtherTax       = ParseDecimal(Get(row, Idx(H.FurtherTax)), parsed, H.FurtherTax);
+                parsed.FurtherTax = ParseDecimal(Get(row, Idx(H.FurtherTax)), parsed, H.FurtherTax);
                 parsed.FixedNotifiedValueOrRetailPrice = ParseDecimal(Get(row, Idx(H.FixedNotifiedValue)), parsed, H.FixedNotifiedValue);
                 parsed.TotalValueOfSales = ParseDecimal(Get(row, Idx(H.TotalValueOfSales)), parsed, H.TotalValueOfSales);
-                parsed.SroScheduleNo    = Get(row, Idx(H.SroScheduleNo));
-                parsed.ItemSerialNo     = Get(row, Idx(H.ItemSerialNo));
+                parsed.SroScheduleNo = Get(row, Idx(H.SroScheduleNo));
+                parsed.ItemSerialNo = Get(row, Idx(H.ItemSerialNo));
 
                 result.Rows.Add(parsed);
             }

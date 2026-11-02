@@ -26,17 +26,29 @@ public sealed class GmailProvider(HttpClient http, IConfiguration config) : IGma
         if (!IsConfigured) throw new InvalidOperationException("Gmail is not configured.");
         return "https://accounts.google.com/o/oauth2/v2/auth?" + Form(new()
         {
-            ["client_id"] = ClientId, ["redirect_uri"] = RedirectUri, ["response_type"] = "code",
-            ["include_granted_scopes"] = "true", ["scope"] = "openid email " + requestedScope, ["access_type"] = "offline", ["prompt"] = "consent select_account",
-            ["state"] = state, ["code_challenge"] = challenge, ["code_challenge_method"] = "S256"
+            ["client_id"] = ClientId,
+            ["redirect_uri"] = RedirectUri,
+            ["response_type"] = "code",
+            ["include_granted_scopes"] = "true",
+            ["scope"] = "openid email " + requestedScope,
+            ["access_type"] = "offline",
+            ["prompt"] = "consent select_account",
+            ["state"] = state,
+            ["code_challenge"] = challenge,
+            ["code_challenge_method"] = "S256"
         });
     }
     private static string Form(Dictionary<string, string> fields) =>
         string.Join("&", fields.Select(x => Uri.EscapeDataString(x.Key) + "=" + Uri.EscapeDataString(x.Value)));
     public async Task<GmailIdentity> ExchangeAsync(string code, string verifier, CancellationToken ct)
     {
-        using var token = await TokenAsync(new() { ["code"] = code, ["code_verifier"] = verifier,
-            ["grant_type"] = "authorization_code", ["redirect_uri"] = RedirectUri }, ct);
+        using var token = await TokenAsync(new()
+        {
+            ["code"] = code,
+            ["code_verifier"] = verifier,
+            ["grant_type"] = "authorization_code",
+            ["redirect_uri"] = RedirectUri
+        }, ct);
         var root = token.RootElement;
         if (!root.TryGetProperty("scope", out var scope) || !(scope.GetString() ?? "").Split(' ').Any(s => s == ReadScope || s == ModifyScope))
             throw new InvalidOperationException("Gmail read access was not granted.");
@@ -131,54 +143,55 @@ public sealed class GmailProvider(HttpClient http, IConfiguration config) : IGma
     }
     private static GmailFetchedMessage ParseMessage(JsonElement r)
     {
-            var payload = r.GetProperty("payload");
-            var headers = payload.GetProperty("headers").EnumerateArray().ToList();
-            string Header(string name) => headers.FirstOrDefault(h => string.Equals(h.GetProperty("name").GetString(), name, StringComparison.OrdinalIgnoreCase))
-                is var found && found.ValueKind != JsonValueKind.Undefined ? found.GetProperty("value").GetString() ?? "" : "";
-            bool invalidRecipients = false;
-            List<string> RecipientList(string value) {
-                try { return EmailReplyRules.Addresses(value); }
-                catch (Exception e) when (e is FormatException or InvalidOperationException) { invalidRecipients=true; return []; }
-            }
-            var to = RecipientList(Header("To")); var cc = RecipientList(Header("Cc"));
-            var from = Header("From");
-            try { from = Helpers.EmailWorkspaceRules.NormalizeAddress(from); } catch { from = ""; }
-            var text = new StringBuilder(); var html = new StringBuilder(); var attachments = new List<EmailAttachmentInfo>();
-            void Walk(JsonElement part, int depth)
+        var payload = r.GetProperty("payload");
+        var headers = payload.GetProperty("headers").EnumerateArray().ToList();
+        string Header(string name) => headers.FirstOrDefault(h => string.Equals(h.GetProperty("name").GetString(), name, StringComparison.OrdinalIgnoreCase))
+            is var found && found.ValueKind != JsonValueKind.Undefined ? found.GetProperty("value").GetString() ?? "" : "";
+        bool invalidRecipients = false;
+        List<string> RecipientList(string value)
+        {
+            try { return EmailReplyRules.Addresses(value); }
+            catch (Exception e) when (e is FormatException or InvalidOperationException) { invalidRecipients = true; return []; }
+        }
+        var to = RecipientList(Header("To")); var cc = RecipientList(Header("Cc"));
+        var from = Header("From");
+        try { from = Helpers.EmailWorkspaceRules.NormalizeAddress(from); } catch { from = ""; }
+        var text = new StringBuilder(); var html = new StringBuilder(); var attachments = new List<EmailAttachmentInfo>();
+        void Walk(JsonElement part, int depth)
+        {
+            if (depth > 20) return;
+            var mime = part.TryGetProperty("mimeType", out var mt) ? mt.GetString() ?? "" : "";
+            var file = part.TryGetProperty("filename", out var fn) ? fn.GetString() ?? "" : "";
+            if (part.TryGetProperty("body", out var body))
             {
-                if (depth > 20) return;
-                var mime = part.TryGetProperty("mimeType", out var mt) ? mt.GetString() ?? "" : "";
-                var file = part.TryGetProperty("filename", out var fn) ? fn.GetString() ?? "" : "";
-                if (part.TryGetProperty("body", out var body))
+                if (body.TryGetProperty("attachmentId", out var aid) && file.Length > 0)
+                    attachments.Add(new(aid.GetString()!, Path.GetFileName(file), mime, body.TryGetProperty("size", out var size) ? size.GetInt32() : 0));
+                if (body.TryGetProperty("data", out var data) && file.Length == 0)
                 {
-                    if (body.TryGetProperty("attachmentId", out var aid) && file.Length > 0)
-                        attachments.Add(new(aid.GetString()!, Path.GetFileName(file), mime, body.TryGetProperty("size", out var size) ? size.GetInt32() : 0));
-                    if (body.TryGetProperty("data", out var data) && file.Length == 0)
+                    var encoded = data.GetString() ?? "";
+                    if (encoded.Length < 2 * 1024 * 1024)
                     {
-                        var encoded = data.GetString() ?? "";
-                        if (encoded.Length < 2 * 1024 * 1024)
-                        {
-                            var value = Encoding.UTF8.GetString(Decode(encoded));
-                            if (mime == "text/plain" && text.Length + value.Length < 1024 * 1024) text.AppendLine(value);
-                            if (mime == "text/html" && html.Length + value.Length < 1024 * 1024) html.AppendLine(value);
-                        }
+                        var value = Encoding.UTF8.GetString(Decode(encoded));
+                        if (mime == "text/plain" && text.Length + value.Length < 1024 * 1024) text.AppendLine(value);
+                        if (mime == "text/html" && html.Length + value.Length < 1024 * 1024) html.AppendLine(value);
                     }
                 }
-                // Attached messages are source files, not additional bodies of the current enquiry.
-                if (file.Length > 0 || mime == "message/rfc822") return;
-                if (part.TryGetProperty("parts", out var parts)) foreach (var p in parts.EnumerateArray()) Walk(p, depth + 1);
             }
-            Walk(payload, 0);
-            // Only an explicit DMARC failure counts: a message without the header,
-            // or with a pass, is treated exactly as before.
-            var dmarcFailed = headers.Any(h =>
-                string.Equals(h.GetProperty("name").GetString(), "Authentication-Results", StringComparison.OrdinalIgnoreCase)
-                && (h.GetProperty("value").GetString() ?? "").Contains("dmarc=fail", StringComparison.OrdinalIgnoreCase));
-            return new(r.GetProperty("id").GetString()!, r.GetProperty("threadId").GetString()!, from, Header("Subject")[..Math.Min(Header("Subject").Length, 1000)],
-                DateTimeOffset.FromUnixTimeMilliseconds(long.Parse(r.GetProperty("internalDate").GetString()!)).UtcDateTime,
-                new(text.ToString(), html.ToString(), attachments.Take(100).ToList()), dmarcFailed,
-                r.TryGetProperty("labelIds", out var statusLabels) ? statusLabels.EnumerateArray().Any(l => l.GetString() == "UNREAD") : null,
-                new(Header("Message-ID"), Header("References"), Header("Reply-To"), to, cc, invalidRecipients));
+            // Attached messages are source files, not additional bodies of the current enquiry.
+            if (file.Length > 0 || mime == "message/rfc822") return;
+            if (part.TryGetProperty("parts", out var parts)) foreach (var p in parts.EnumerateArray()) Walk(p, depth + 1);
+        }
+        Walk(payload, 0);
+        // Only an explicit DMARC failure counts: a message without the header,
+        // or with a pass, is treated exactly as before.
+        var dmarcFailed = headers.Any(h =>
+            string.Equals(h.GetProperty("name").GetString(), "Authentication-Results", StringComparison.OrdinalIgnoreCase)
+            && (h.GetProperty("value").GetString() ?? "").Contains("dmarc=fail", StringComparison.OrdinalIgnoreCase));
+        return new(r.GetProperty("id").GetString()!, r.GetProperty("threadId").GetString()!, from, Header("Subject")[..Math.Min(Header("Subject").Length, 1000)],
+            DateTimeOffset.FromUnixTimeMilliseconds(long.Parse(r.GetProperty("internalDate").GetString()!)).UtcDateTime,
+            new(text.ToString(), html.ToString(), attachments.Take(100).ToList()), dmarcFailed,
+            r.TryGetProperty("labelIds", out var statusLabels) ? statusLabels.EnumerateArray().Any(l => l.GetString() == "UNREAD") : null,
+            new(Header("Message-ID"), Header("References"), Header("Reply-To"), to, cc, invalidRecipients));
     }
     public async Task<List<GmailFetchedMessage>> ThreadAsync(string token, string threadId, CancellationToken ct)
     {

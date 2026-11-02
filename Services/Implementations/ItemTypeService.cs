@@ -213,7 +213,7 @@ namespace MyApp.Api.Services.Implementations
             {
                 var t = Norm(s);
                 if (t.EndsWith("es") && t.Length > 3) return t.Substring(0, t.Length - 2);
-                if (t.EndsWith("s")  && t.Length > 2) return t.Substring(0, t.Length - 1);
+                if (t.EndsWith("s") && t.Length > 2) return t.Substring(0, t.Length - 1);
                 return t;
             }
             int OneEditDistance(string a, string b)
@@ -285,9 +285,9 @@ namespace MyApp.Api.Services.Implementations
             // every catalog touch.
             var changedFields = new ItemTypeFieldChangeSet
             {
-                HsCodeChanged   = !StringEq(it.HSCode,   dto.HSCode),
-                UomChanged      = !StringEq(it.UOM,      dto.UOM),
-                FbrUomIdChanged = it.FbrUOMId            != dto.FbrUOMId,
+                HsCodeChanged = !StringEq(it.HSCode, dto.HSCode),
+                UomChanged = !StringEq(it.UOM, dto.UOM),
+                FbrUomIdChanged = it.FbrUOMId != dto.FbrUOMId,
                 SaleTypeChanged = !StringEq(it.SaleType, dto.SaleType),
             };
 

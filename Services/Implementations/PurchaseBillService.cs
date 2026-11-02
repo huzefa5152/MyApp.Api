@@ -26,8 +26,11 @@ namespace MyApp.Api.Services.Implementations
             var posted = request.BillId.HasValue
                 ? await _context.StockMovements.Where(m => m.CompanyId == request.CompanyId
                     && m.SourceType == StockMovementSourceType.PurchaseBill && m.SourceId == request.BillId)
-                    .GroupBy(m => m.ItemTypeId).Select(g => new { Id = g.Key,
-                        Net = g.Sum(m => m.Direction == StockMovementDirection.In ? m.Quantity : -m.Quantity) })
+                    .GroupBy(m => m.ItemTypeId).Select(g => new
+                    {
+                        Id = g.Key,
+                        Net = g.Sum(m => m.Direction == StockMovementDirection.In ? m.Quantity : -m.Quantity)
+                    })
                     .ToDictionaryAsync(g => g.Id, g => g.Net)
                 : new Dictionary<int, decimal>();
             var ids = request.Items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value)
@@ -159,17 +162,32 @@ namespace MyApp.Api.Services.Implementations
                 .Where(c => c.CompanyId == companyId && !c.IsDemo && c.Status != "Cancelled"
                     && (term == "" || c.ChallanNumber == number || c.Client.Name.Contains(term)))
                 .OrderByDescending(c => c.DeliveryDate).ThenByDescending(c => c.Id).Take(limit)
-                .Select(c => new { c.Id, c.ChallanNumber, c.DeliveryDate, Client = c.Client.Name,
-                    Lines = c.Items.Select(i => new { DeliveryId = (int?)i.Id, InvoiceId = (int?)null, i.Quantity }).ToList() })
+                .Select(c => new
+                {
+                    c.Id,
+                    c.ChallanNumber,
+                    c.DeliveryDate,
+                    Client = c.Client.Name,
+                    Lines = c.Items.Select(i => new { DeliveryId = (int?)i.Id, InvoiceId = (int?)null, i.Quantity }).ToList()
+                })
                 .ToListAsync();
             var bills = await _context.Invoices.AsNoTracking()
                 .Where(b => b.CompanyId == companyId && !b.IsDemo && !b.IsCancelled && b.NoteKind == 0
                     && (term == "" || b.InvoiceNumber == number || b.Client.Name.Contains(term)))
                 .OrderByDescending(b => b.Date).ThenByDescending(b => b.Id).Take(limit)
-                .Select(b => new { b.Id, b.InvoiceNumber, b.Date, Client = b.Client.Name,
-                    Lines = b.Items.Select(i => new { DeliveryId = i.DeliveryItemId,
+                .Select(b => new
+                {
+                    b.Id,
+                    b.InvoiceNumber,
+                    b.Date,
+                    Client = b.Client.Name,
+                    Lines = b.Items.Select(i => new
+                    {
+                        DeliveryId = i.DeliveryItemId,
                         InvoiceId = i.DeliveryItemId.HasValue ? (int?)null : i.Id,
-                        Quantity = i.DeliveryItem != null ? i.DeliveryItem.Quantity : i.Quantity }).ToList() })
+                        Quantity = i.DeliveryItem != null ? i.DeliveryItem.Quantity : i.Quantity
+                    }).ToList()
+                })
                 .ToListAsync();
             var byDelivery = await LocalPurchaseAllocations.PurchasedByDeliveryAsync(_context, companyId,
                 challans.SelectMany(c => c.Lines.Select(l => l.DeliveryId)).Concat(bills.SelectMany(b => b.Lines.Select(l => l.DeliveryId)))
@@ -178,14 +196,26 @@ namespace MyApp.Api.Services.Implementations
                 bills.SelectMany(b => b.Lines).Where(l => l.InvoiceId.HasValue).Select(l => l.InvoiceId!.Value), fixedOnly: true);
             decimal Left(int? deliveryId, int? invoiceId, decimal qty) => Math.Max(0m, qty - (deliveryId is int d
                 ? byDelivery.GetValueOrDefault(d) : byInvoice.GetValueOrDefault(invoiceId ?? 0)));
-            var rows = challans.Select(c => new LocalPurchaseSourceSummaryDto { Kind = "challan", Id = c.Id, Number = c.ChallanNumber,
-                    Date = c.DeliveryDate ?? DateTime.MinValue, ClientName = c.Client ?? "",
-                    RemainingLines = c.Lines.Count(l => Left(l.DeliveryId, l.InvoiceId, l.Quantity) > 0),
-                    RemainingQuantity = c.Lines.Sum(l => Left(l.DeliveryId, l.InvoiceId, l.Quantity)) })
-                .Concat(bills.Select(b => new LocalPurchaseSourceSummaryDto { Kind = "bill", Id = b.Id, Number = b.InvoiceNumber,
-                    Date = b.Date, ClientName = b.Client ?? "",
+            var rows = challans.Select(c => new LocalPurchaseSourceSummaryDto
+            {
+                Kind = "challan",
+                Id = c.Id,
+                Number = c.ChallanNumber,
+                Date = c.DeliveryDate ?? DateTime.MinValue,
+                ClientName = c.Client ?? "",
+                RemainingLines = c.Lines.Count(l => Left(l.DeliveryId, l.InvoiceId, l.Quantity) > 0),
+                RemainingQuantity = c.Lines.Sum(l => Left(l.DeliveryId, l.InvoiceId, l.Quantity))
+            })
+                .Concat(bills.Select(b => new LocalPurchaseSourceSummaryDto
+                {
+                    Kind = "bill",
+                    Id = b.Id,
+                    Number = b.InvoiceNumber,
+                    Date = b.Date,
+                    ClientName = b.Client ?? "",
                     RemainingLines = b.Lines.Count(l => Left(l.DeliveryId, l.InvoiceId, l.Quantity) > 0),
-                    RemainingQuantity = b.Lines.Sum(l => Left(l.DeliveryId, l.InvoiceId, l.Quantity)) }));
+                    RemainingQuantity = b.Lines.Sum(l => Left(l.DeliveryId, l.InvoiceId, l.Quantity))
+                }));
             return rows.Where(r => r.RemainingLines > 0).OrderByDescending(r => r.Date).ThenBy(r => r.Kind).ThenByDescending(r => r.Id).ToList();
         }
 
@@ -439,269 +469,269 @@ namespace MyApp.Api.Services.Implementations
             DbUpdateException? lastConflict = null;
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
-            // Single transaction across number allocation, source-line
-            // joins, sale-side back-fill and stock movements. The previous
-            // version had three SaveChangesAsync calls — if the second
-            // failed after the first committed, you got an orphaned bill
-            // with no joins / no stock movements.
-            await using var tx = await _context.Database.BeginTransactionAsync();
-            try
-            {
-            var company = await _context.Companies.FindAsync(dto.CompanyId);
-            if (company == null) throw new KeyNotFoundException("Company not found.");
-            var supplier = await _context.Suppliers
-                .FirstOrDefaultAsync(s => s.Id == dto.SupplierId && s.CompanyId == dto.CompanyId);
-            if (supplier == null) throw new KeyNotFoundException("Supplier not found.");
-            if (dto.GSTRate < 0 || dto.GSTRate > 100)
-                throw new InvalidOperationException("GST rate must be between 0 and 100.");
-            if (dto.Items == null || dto.Items.Count == 0)
-                throw new InvalidOperationException("At least one item is required.");
-            if (dto.Items.Any(i => i == null || string.IsNullOrWhiteSpace(i.Description)))
-                throw new InvalidOperationException("Every line needs a description.");
-            if (dto.Items.Any(i => i.Quantity <= 0))
-                throw new InvalidOperationException("Quantity must be greater than zero.");
-            if (dto.Items.Any(i => i.UnitPrice < 0))
-                throw new InvalidOperationException("Unit price cannot be negative.");
-
-            // Allocate next purchase-bill number — independent of the
-            // sales-side InvoiceNumber sequence.
-            var nextNumber = await CompanyDocumentNumbers.AllocateAsync(_context, dto.CompanyId, "purchase-bill", dto.CustomNumber);
-
-            if (dto.PurchaseCategory != "Inventory" && dto.PurchaseCategory != "LocalDirect")
-                throw new InvalidOperationException("Choose inventory or local direct purchase.");
-            if (dto.PurchaseCategory == "LocalDirect" && dto.Items.Any(i => i.ItemTypeId.HasValue || !string.IsNullOrWhiteSpace(i.HSCode) || (i.SourceInvoiceItemIds?.Count ?? 0) > 0))
-                throw new InvalidOperationException("Local direct purchases cannot carry inventory classifications.");
-
-            if (dto.PurchaseCategory != "LocalDirect" && dto.Items.Any(i => i.LocalDeliveryItemId.HasValue || i.LocalInvoiceItemId.HasValue))
-                throw new InvalidOperationException("Only local direct purchases can be linked to a sale or challan line.");
-            // Normalised links in dto.Items order (null = an unlinked line).
-            var links = await CheckLocalLinksAsync(dto.CompanyId, dto.Items.Select(i =>
-                i.LocalDeliveryItemId.HasValue || i.LocalInvoiceItemId.HasValue
-                    ? new LocalPurchaseAllocations.Claim(i.LocalDeliveryItemId, i.LocalInvoiceItemId, i.Quantity) : null).ToList(), null);
-            var (sourceChallanId, sourceInvoiceId) = await LocalSourceHeaderAsync(links);
-
-            // Validate "Purchase Against Sale Bill" lines BEFORE we touch
-            // anything. Any line with SourceInvoiceItemIds:
-            //   • must carry an ItemTypeId (we group sale lines by it)
-            //   • that catalog row MUST have a non-empty HSCode (the
-            //     procurement flow exists precisely to set HSCode on
-            //     unclassified sale lines)
-            //   • every linked InvoiceItem must belong to an Invoice in
-            //     this same Company (no cross-tenant linking)
-            var lineErrors = new List<string>();
-            var allSourceItemIds = dto.Items
-                .SelectMany(x => x.SourceInvoiceItemIds ?? new())
-                .Distinct()
-                .ToList();
-            Dictionary<int, InvoiceItem>? sourceLines = null;
-            if (allSourceItemIds.Count > 0)
-            {
-                sourceLines = await _context.InvoiceItems
-                    .Include(ii => ii.Invoice)
-                    .Where(ii => allSourceItemIds.Contains(ii.Id))
-                    .ToDictionaryAsync(ii => ii.Id);
-                foreach (var (id, ii) in sourceLines)
+                // Single transaction across number allocation, source-line
+                // joins, sale-side back-fill and stock movements. The previous
+                // version had three SaveChangesAsync calls — if the second
+                // failed after the first committed, you got an orphaned bill
+                // with no joins / no stock movements.
+                await using var tx = await _context.Database.BeginTransactionAsync();
+                try
                 {
-                    if (ii.Invoice.CompanyId != dto.CompanyId)
-                        lineErrors.Add($"Sale line #{id} belongs to a different company.");
-                }
-            }
-            for (int idx = 0; idx < dto.Items.Count; idx++)
-            {
-                var line = dto.Items[idx];
-                if (line.SourceInvoiceItemIds == null || line.SourceInvoiceItemIds.Count == 0)
-                    continue;
-                if (!line.ItemTypeId.HasValue)
-                    lineErrors.Add($"Line {idx + 1}: Item Type is required when procuring against a sale bill.");
-            }
-            if (lineErrors.Count > 0)
-                throw new InvalidOperationException(string.Join("\n", lineErrors));
+                    var company = await _context.Companies.FindAsync(dto.CompanyId);
+                    if (company == null) throw new KeyNotFoundException("Company not found.");
+                    var supplier = await _context.Suppliers
+                        .FirstOrDefaultAsync(s => s.Id == dto.SupplierId && s.CompanyId == dto.CompanyId);
+                    if (supplier == null) throw new KeyNotFoundException("Supplier not found.");
+                    if (dto.GSTRate < 0 || dto.GSTRate > 100)
+                        throw new InvalidOperationException("GST rate must be between 0 and 100.");
+                    if (dto.Items == null || dto.Items.Count == 0)
+                        throw new InvalidOperationException("At least one item is required.");
+                    if (dto.Items.Any(i => i == null || string.IsNullOrWhiteSpace(i.Description)))
+                        throw new InvalidOperationException("Every line needs a description.");
+                    if (dto.Items.Any(i => i.Quantity <= 0))
+                        throw new InvalidOperationException("Quantity must be greater than zero.");
+                    if (dto.Items.Any(i => i.UnitPrice < 0))
+                        throw new InvalidOperationException("Unit price cannot be negative.");
 
-            var items = new List<PurchaseItem>();
-            // Pre-load all chosen ItemTypes in one query so the HSCode
-            // gate on against-sale lines runs without N round-trips.
-            var chosenItemTypeIds = dto.Items
-                .Where(i => i.ItemTypeId.HasValue)
-                .Select(i => i.ItemTypeId!.Value)
-                .Distinct()
-                .ToList();
-            var itemTypeMap = await _context.ItemTypes
-                .Where(it => chosenItemTypeIds.Contains(it.Id))
-                .ToDictionaryAsync(it => it.Id);
+                    // Allocate next purchase-bill number — independent of the
+                    // sales-side InvoiceNumber sequence.
+                    var nextNumber = await CompanyDocumentNumbers.AllocateAsync(_context, dto.CompanyId, "purchase-bill", dto.CustomNumber);
 
-            for (int idx = 0; idx < dto.Items.Count; idx++)
-            {
-                var i = dto.Items[idx];
-                ItemType? itemType = i.ItemTypeId.HasValue
-                    ? itemTypeMap.GetValueOrDefault(i.ItemTypeId.Value)
-                    : null;
+                    if (dto.PurchaseCategory != "Inventory" && dto.PurchaseCategory != "LocalDirect")
+                        throw new InvalidOperationException("Choose inventory or local direct purchase.");
+                    if (dto.PurchaseCategory == "LocalDirect" && dto.Items.Any(i => i.ItemTypeId.HasValue || !string.IsNullOrWhiteSpace(i.HSCode) || (i.SourceInvoiceItemIds?.Count ?? 0) > 0))
+                        throw new InvalidOperationException("Local direct purchases cannot carry inventory classifications.");
 
-                // HSCode gate for procurement-against-sale lines
-                bool isAgainstSale = (i.SourceInvoiceItemIds?.Count ?? 0) > 0;
-                if (isAgainstSale && string.IsNullOrWhiteSpace(itemType?.HSCode))
-                {
-                    throw new InvalidOperationException(
-                        $"Line {idx + 1}: pick an Item Type WITH HS Code — procurement against a sale bill must be FBR-compliant.");
-                }
+                    if (dto.PurchaseCategory != "LocalDirect" && dto.Items.Any(i => i.LocalDeliveryItemId.HasValue || i.LocalInvoiceItemId.HasValue))
+                        throw new InvalidOperationException("Only local direct purchases can be linked to a sale or challan line.");
+                    // Normalised links in dto.Items order (null = an unlinked line).
+                    var links = await CheckLocalLinksAsync(dto.CompanyId, dto.Items.Select(i =>
+                        i.LocalDeliveryItemId.HasValue || i.LocalInvoiceItemId.HasValue
+                            ? new LocalPurchaseAllocations.Claim(i.LocalDeliveryItemId, i.LocalInvoiceItemId, i.Quantity) : null).ToList(), null);
+                    var (sourceChallanId, sourceInvoiceId) = await LocalSourceHeaderAsync(links);
 
-                items.Add(new PurchaseItem
-                {
-                    ItemTypeId = i.ItemTypeId,
-                    ItemTypeName = itemType?.Name ?? "",
-                    Description = i.Description?.Trim() ?? "",
-                    Quantity = i.Quantity,
-                    UOM = i.UOM ?? itemType?.UOM ?? "",
-                    UnitPrice = i.UnitPrice,
-                    LineTotal = Math.Round(i.Quantity * i.UnitPrice, 2),
-                    LocalDeliveryItemId = links[idx]?.DeliveryItemId,
-                    LocalInvoiceItemId = links[idx]?.InvoiceItemId,
-                    HSCode = itemType != null && string.IsNullOrWhiteSpace(itemType.HSCode) ? null : i.HSCode ?? itemType?.HSCode,
-                    FbrUOMId = i.FbrUOMId ?? itemType?.FbrUOMId,
-                    SaleType = i.SaleType ?? itemType?.SaleType,
-                    RateId = i.RateId,
-                    FixedNotifiedValueOrRetailPrice = i.FixedNotifiedValueOrRetailPrice,
-                });
-            }
-
-            var subtotal = items.Sum(x => x.LineTotal);
-            var gstAmount = Math.Round(subtotal * dto.GSTRate / 100m, 2);
-            var grandTotal = subtotal + gstAmount;
-            // Withholding never moves the grand total — it is derived FROM it
-            // and only reduces what the supplier is owed. Defaults to none.
-            var withholdingTaxRate = dto.WithholdingTaxRate;
-            var withholdingTaxAmount = WithholdingTaxCalculator.Resolve(
-                withholdingTaxRate, grandTotal, dto.WithholdingTaxAmount ?? 0m);
-
-            var bill = new PurchaseBill
-            {
-                PurchaseCategory = dto.PurchaseCategory,
-                Source = links.Any(l => l != null) ? "local-direct" : "manual",
-                PurchaseBillNumber = nextNumber,
-                Date = dto.Date.Date,
-                CompanyId = dto.CompanyId,
-                SupplierId = dto.SupplierId,
-                SupplierBillNumber = dto.SupplierBillNumber?.Trim(),
-                SupplierIRN = dto.SupplierIRN?.Trim(),
-                Subtotal = subtotal,
-                GSTRate = dto.GSTRate,
-                GSTAmount = gstAmount,
-                GrandTotal = grandTotal,
-                WithholdingTaxRate = withholdingTaxRate,
-                WithholdingTaxAmount = withholdingTaxAmount,
-                AmountInWords = NumberToWordsConverter.Convert(grandTotal),
-                PaymentTerms = dto.PaymentTerms,
-                Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
-                DocumentType = dto.DocumentType,
-                PaymentMode = dto.PaymentMode,
-                ReconciliationStatus = string.IsNullOrWhiteSpace(dto.SupplierIRN) ? "ManualOnly" : "Pending",
-                Items = items,
-                SourceDeliveryChallanId = sourceChallanId,
-                SourceInvoiceId = sourceInvoiceId,
-                CreatedAt = DateTime.UtcNow,
-            };
-
-            _context.PurchaseBills.Add(bill);
-            await _context.SaveChangesAsync();
-            await SyncLinkedSourcesAsync(links.Where(l => l != null).Select(l => (l!.DeliveryItemId, l.InvoiceItemId)));
-
-            // ── Source-line links + back-fill onto sale lines ─────────────
-            // For each purchase row that points at a group of InvoiceItems,
-            // write join rows AND apply the picked ItemType's HSCode/UOM/
-            // SaleType/FbrUOMId onto every linked sale line in one shot.
-            // This is the whole reason the flow exists: classify the sale
-            // by classifying the procurement.
-            for (int idx = 0; idx < dto.Items.Count; idx++)
-            {
-                var dtoLine = dto.Items[idx];
-                var savedItem = items[idx];
-                var sourceIds = dtoLine.SourceInvoiceItemIds;
-                if (sourceIds == null || sourceIds.Count == 0) continue;
-                if (sourceLines == null) continue;
-                if (!savedItem.ItemTypeId.HasValue) continue;
-                var catalog = itemTypeMap.GetValueOrDefault(savedItem.ItemTypeId.Value);
-                if (catalog == null) continue;
-
-                foreach (var srcId in sourceIds)
-                {
-                    if (!sourceLines.TryGetValue(srcId, out var src)) continue;
-
-                    // Join row
-                    _context.PurchaseItemSourceLines.Add(new PurchaseItemSourceLine
+                    // Validate "Purchase Against Sale Bill" lines BEFORE we touch
+                    // anything. Any line with SourceInvoiceItemIds:
+                    //   • must carry an ItemTypeId (we group sale lines by it)
+                    //   • that catalog row MUST have a non-empty HSCode (the
+                    //     procurement flow exists precisely to set HSCode on
+                    //     unclassified sale lines)
+                    //   • every linked InvoiceItem must belong to an Invoice in
+                    //     this same Company (no cross-tenant linking)
+                    var lineErrors = new List<string>();
+                    var allSourceItemIds = dto.Items
+                        .SelectMany(x => x.SourceInvoiceItemIds ?? new())
+                        .Distinct()
+                        .ToList();
+                    Dictionary<int, InvoiceItem>? sourceLines = null;
+                    if (allSourceItemIds.Count > 0)
                     {
-                        PurchaseItemId = savedItem.Id,
-                        InvoiceItemId = src.Id,
-                    });
+                        sourceLines = await _context.InvoiceItems
+                            .Include(ii => ii.Invoice)
+                            .Where(ii => allSourceItemIds.Contains(ii.Id))
+                            .ToDictionaryAsync(ii => ii.Id);
+                        foreach (var (id, ii) in sourceLines)
+                        {
+                            if (ii.Invoice.CompanyId != dto.CompanyId)
+                                lineErrors.Add($"Sale line #{id} belongs to a different company.");
+                        }
+                    }
+                    for (int idx = 0; idx < dto.Items.Count; idx++)
+                    {
+                        var line = dto.Items[idx];
+                        if (line.SourceInvoiceItemIds == null || line.SourceInvoiceItemIds.Count == 0)
+                            continue;
+                        if (!line.ItemTypeId.HasValue)
+                            lineErrors.Add($"Line {idx + 1}: Item Type is required when procuring against a sale bill.");
+                    }
+                    if (lineErrors.Count > 0)
+                        throw new InvalidOperationException(string.Join("\n", lineErrors));
 
-                    // Back-fill — only fields the procurement is meant to
-                    // populate. Don't touch quantity / unitPrice / description
-                    // (those reflect the sale, not the procurement).
-                    src.ItemTypeId = catalog.Id;
-                    src.ItemTypeName = catalog.Name;
-                    if (!string.IsNullOrWhiteSpace(catalog.HSCode)) src.HSCode = catalog.HSCode;
-                    if (!string.IsNullOrWhiteSpace(catalog.UOM)) src.UOM = catalog.UOM;
-                    if (catalog.FbrUOMId.HasValue) src.FbrUOMId = catalog.FbrUOMId;
-                    if (!string.IsNullOrWhiteSpace(catalog.SaleType)) src.SaleType = catalog.SaleType;
+                    var items = new List<PurchaseItem>();
+                    // Pre-load all chosen ItemTypes in one query so the HSCode
+                    // gate on against-sale lines runs without N round-trips.
+                    var chosenItemTypeIds = dto.Items
+                        .Where(i => i.ItemTypeId.HasValue)
+                        .Select(i => i.ItemTypeId!.Value)
+                        .Distinct()
+                        .ToList();
+                    var itemTypeMap = await _context.ItemTypes
+                        .Where(it => chosenItemTypeIds.Contains(it.Id))
+                        .ToDictionaryAsync(it => it.Id);
+
+                    for (int idx = 0; idx < dto.Items.Count; idx++)
+                    {
+                        var i = dto.Items[idx];
+                        ItemType? itemType = i.ItemTypeId.HasValue
+                            ? itemTypeMap.GetValueOrDefault(i.ItemTypeId.Value)
+                            : null;
+
+                        // HSCode gate for procurement-against-sale lines
+                        bool isAgainstSale = (i.SourceInvoiceItemIds?.Count ?? 0) > 0;
+                        if (isAgainstSale && string.IsNullOrWhiteSpace(itemType?.HSCode))
+                        {
+                            throw new InvalidOperationException(
+                                $"Line {idx + 1}: pick an Item Type WITH HS Code — procurement against a sale bill must be FBR-compliant.");
+                        }
+
+                        items.Add(new PurchaseItem
+                        {
+                            ItemTypeId = i.ItemTypeId,
+                            ItemTypeName = itemType?.Name ?? "",
+                            Description = i.Description?.Trim() ?? "",
+                            Quantity = i.Quantity,
+                            UOM = i.UOM ?? itemType?.UOM ?? "",
+                            UnitPrice = i.UnitPrice,
+                            LineTotal = Math.Round(i.Quantity * i.UnitPrice, 2),
+                            LocalDeliveryItemId = links[idx]?.DeliveryItemId,
+                            LocalInvoiceItemId = links[idx]?.InvoiceItemId,
+                            HSCode = itemType != null && string.IsNullOrWhiteSpace(itemType.HSCode) ? null : i.HSCode ?? itemType?.HSCode,
+                            FbrUOMId = i.FbrUOMId ?? itemType?.FbrUOMId,
+                            SaleType = i.SaleType ?? itemType?.SaleType,
+                            RateId = i.RateId,
+                            FixedNotifiedValueOrRetailPrice = i.FixedNotifiedValueOrRetailPrice,
+                        });
+                    }
+
+                    var subtotal = items.Sum(x => x.LineTotal);
+                    var gstAmount = Math.Round(subtotal * dto.GSTRate / 100m, 2);
+                    var grandTotal = subtotal + gstAmount;
+                    // Withholding never moves the grand total — it is derived FROM it
+                    // and only reduces what the supplier is owed. Defaults to none.
+                    var withholdingTaxRate = dto.WithholdingTaxRate;
+                    var withholdingTaxAmount = WithholdingTaxCalculator.Resolve(
+                        withholdingTaxRate, grandTotal, dto.WithholdingTaxAmount ?? 0m);
+
+                    var bill = new PurchaseBill
+                    {
+                        PurchaseCategory = dto.PurchaseCategory,
+                        Source = links.Any(l => l != null) ? "local-direct" : "manual",
+                        PurchaseBillNumber = nextNumber,
+                        Date = dto.Date.Date,
+                        CompanyId = dto.CompanyId,
+                        SupplierId = dto.SupplierId,
+                        SupplierBillNumber = dto.SupplierBillNumber?.Trim(),
+                        SupplierIRN = dto.SupplierIRN?.Trim(),
+                        Subtotal = subtotal,
+                        GSTRate = dto.GSTRate,
+                        GSTAmount = gstAmount,
+                        GrandTotal = grandTotal,
+                        WithholdingTaxRate = withholdingTaxRate,
+                        WithholdingTaxAmount = withholdingTaxAmount,
+                        AmountInWords = NumberToWordsConverter.Convert(grandTotal),
+                        PaymentTerms = dto.PaymentTerms,
+                        Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
+                        DocumentType = dto.DocumentType,
+                        PaymentMode = dto.PaymentMode,
+                        ReconciliationStatus = string.IsNullOrWhiteSpace(dto.SupplierIRN) ? "ManualOnly" : "Pending",
+                        Items = items,
+                        SourceDeliveryChallanId = sourceChallanId,
+                        SourceInvoiceId = sourceInvoiceId,
+                        CreatedAt = DateTime.UtcNow,
+                    };
+
+                    _context.PurchaseBills.Add(bill);
+                    await _context.SaveChangesAsync();
+                    await SyncLinkedSourcesAsync(links.Where(l => l != null).Select(l => (l!.DeliveryItemId, l.InvoiceItemId)));
+
+                    // ── Source-line links + back-fill onto sale lines ─────────────
+                    // For each purchase row that points at a group of InvoiceItems,
+                    // write join rows AND apply the picked ItemType's HSCode/UOM/
+                    // SaleType/FbrUOMId onto every linked sale line in one shot.
+                    // This is the whole reason the flow exists: classify the sale
+                    // by classifying the procurement.
+                    for (int idx = 0; idx < dto.Items.Count; idx++)
+                    {
+                        var dtoLine = dto.Items[idx];
+                        var savedItem = items[idx];
+                        var sourceIds = dtoLine.SourceInvoiceItemIds;
+                        if (sourceIds == null || sourceIds.Count == 0) continue;
+                        if (sourceLines == null) continue;
+                        if (!savedItem.ItemTypeId.HasValue) continue;
+                        var catalog = itemTypeMap.GetValueOrDefault(savedItem.ItemTypeId.Value);
+                        if (catalog == null) continue;
+
+                        foreach (var srcId in sourceIds)
+                        {
+                            if (!sourceLines.TryGetValue(srcId, out var src)) continue;
+
+                            // Join row
+                            _context.PurchaseItemSourceLines.Add(new PurchaseItemSourceLine
+                            {
+                                PurchaseItemId = savedItem.Id,
+                                InvoiceItemId = src.Id,
+                            });
+
+                            // Back-fill — only fields the procurement is meant to
+                            // populate. Don't touch quantity / unitPrice / description
+                            // (those reflect the sale, not the procurement).
+                            src.ItemTypeId = catalog.Id;
+                            src.ItemTypeName = catalog.Name;
+                            if (!string.IsNullOrWhiteSpace(catalog.HSCode)) src.HSCode = catalog.HSCode;
+                            if (!string.IsNullOrWhiteSpace(catalog.UOM)) src.UOM = catalog.UOM;
+                            if (catalog.FbrUOMId.HasValue) src.FbrUOMId = catalog.FbrUOMId;
+                            if (!string.IsNullOrWhiteSpace(catalog.SaleType)) src.SaleType = catalog.SaleType;
+                        }
+                    }
+                    await _context.SaveChangesAsync();
+
+                    // Emit Stock IN for every line that's bound to a catalog item.
+                    // No-op when Company.InventoryTrackingEnabled is false.
+                    // 2026-05-13: skip lines whose ItemType has no HSCode —
+                    // un-classified ItemTypes live outside the stock-tracking
+                    // system. Symmetric with the OUT-side gate in
+                    // StockService.SyncInvoiceStockMovementsAsync.
+                    var trackedOnCreate = await _stock.GetStockTrackedItemTypeIdsAsync(
+                        items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value));
+                    var createMovements = new List<StockMovementBatchItem>();
+                    foreach (var it in items)
+                    {
+                        if (!it.ItemTypeId.HasValue || it.Quantity <= 0) continue;
+                        if (!trackedOnCreate.Contains(it.ItemTypeId.Value) || string.IsNullOrWhiteSpace(it.HSCode)) continue;
+                        createMovements.Add(new StockMovementBatchItem(
+                            ItemTypeId: it.ItemTypeId.Value,
+                            Direction: StockMovementDirection.In,
+                            // 2026-05-12: IStockService now accepts decimal(18,4)
+                            // (matches PurchaseItem precision). Fractional UOMs
+                            // are preserved instead of being rounded to int.
+                            Quantity: it.Quantity,
+                            SourceType: StockMovementSourceType.PurchaseBill,
+                            SourceId: bill.Id,
+                            MovementDate: bill.Date,
+                            Notes: $"Purchase Bill #{bill.PurchaseBillNumber} from {supplier.Name}"));
+                    }
+                    await _stock.RecordMovementsAsync(bill.CompanyId, createMovements);
+
+                    // Post to the ledger next to the stock reflow — both are derived
+                    // state that has to follow the bill. A no-op while the company's
+                    // ledger is not live, and replace-on-edit otherwise.
+                    await _posting.PostPurchaseBillAsync(bill);
+
+                    await tx.CommitAsync();
+                    return (await GetByIdAsync(bill.Id))!;
                 }
-            }
-            await _context.SaveChangesAsync();
-
-            // Emit Stock IN for every line that's bound to a catalog item.
-            // No-op when Company.InventoryTrackingEnabled is false.
-            // 2026-05-13: skip lines whose ItemType has no HSCode —
-            // un-classified ItemTypes live outside the stock-tracking
-            // system. Symmetric with the OUT-side gate in
-            // StockService.SyncInvoiceStockMovementsAsync.
-            var trackedOnCreate = await _stock.GetStockTrackedItemTypeIdsAsync(
-                items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value));
-            var createMovements = new List<StockMovementBatchItem>();
-            foreach (var it in items)
-            {
-                if (!it.ItemTypeId.HasValue || it.Quantity <= 0) continue;
-                if (!trackedOnCreate.Contains(it.ItemTypeId.Value) || string.IsNullOrWhiteSpace(it.HSCode)) continue;
-                createMovements.Add(new StockMovementBatchItem(
-                    ItemTypeId: it.ItemTypeId.Value,
-                    Direction: StockMovementDirection.In,
-                    // 2026-05-12: IStockService now accepts decimal(18,4)
-                    // (matches PurchaseItem precision). Fractional UOMs
-                    // are preserved instead of being rounded to int.
-                    Quantity: it.Quantity,
-                    SourceType: StockMovementSourceType.PurchaseBill,
-                    SourceId: bill.Id,
-                    MovementDate: bill.Date,
-                    Notes: $"Purchase Bill #{bill.PurchaseBillNumber} from {supplier.Name}"));
-            }
-            await _stock.RecordMovementsAsync(bill.CompanyId, createMovements);
-
-            // Post to the ledger next to the stock reflow — both are derived
-            // state that has to follow the bill. A no-op while the company's
-            // ledger is not live, and replace-on-edit otherwise.
-            await _posting.PostPurchaseBillAsync(bill);
-
-            await tx.CommitAsync();
-            return (await GetByIdAsync(bill.Id))!;
-            }
-            catch (DbUpdateException dupEx) when (NumberAllocationRetry.IsUniqueViolation(dupEx))
-            {
-                lastConflict = dupEx;
-                _logger.LogWarning(
-                    "Purchase bill number collided with a concurrent create for company {CompanyId}; retrying (attempt {Attempt}).",
-                    dto.CompanyId, attempt);
-                await tx.RollbackAsync();
-                foreach (var entry in _context.ChangeTracker.Entries().ToList())
+                catch (DbUpdateException dupEx) when (NumberAllocationRetry.IsUniqueViolation(dupEx))
                 {
-                    if (entry.State != EntityState.Unchanged)
-                        entry.State = EntityState.Detached;
+                    lastConflict = dupEx;
+                    _logger.LogWarning(
+                        "Purchase bill number collided with a concurrent create for company {CompanyId}; retrying (attempt {Attempt}).",
+                        dto.CompanyId, attempt);
+                    await tx.RollbackAsync();
+                    foreach (var entry in _context.ChangeTracker.Entries().ToList())
+                    {
+                        if (entry.State != EntityState.Unchanged)
+                            entry.State = EntityState.Detached;
+                    }
+                    if (attempt < maxAttempts)
+                        await Task.Delay(10 * attempt);
+                    continue;
                 }
-                if (attempt < maxAttempts)
-                    await Task.Delay(10 * attempt);
-                continue;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "PurchaseBillService: transaction rolled back");
-                await tx.RollbackAsync();
-                throw;
-            }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "PurchaseBillService: transaction rolled back");
+                    await tx.RollbackAsync();
+                    throw;
+                }
             }
             throw new InvalidOperationException(
                 "Could not allocate a unique purchase bill number after " + maxAttempts +
@@ -713,153 +743,153 @@ namespace MyApp.Api.Services.Implementations
             await using var tx = await _context.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
             try
             {
-            var bill = await _context.PurchaseBills
-                .FromSqlInterpolated($"SELECT * FROM PurchaseBills WITH (UPDLOCK, HOLDLOCK, FORCESEEK) WHERE Id = {id}")
-                .FirstOrDefaultAsync(p => p.Id == id);
-            if (bill == null) return null;
-            await _context.Entry(bill).Collection(p => p.Items).LoadAsync();
-            if (bill.Source == LocalPurchaseSyncService.AutoSource)
-                return await UpdateAutoHeaderAsync(bill, dto, tx);
-            var isLinked = bill.Items.Any(i => i.LocalDeliveryItemId.HasValue || i.LocalInvoiceItemId.HasValue)
-                || bill.SourceDeliveryChallanId.HasValue || bill.Source == "local-direct" || bill.Source == "challan-supplier";
-            if (isLinked && (bill.AmountPaid > 0 || await _context.PaymentAllocations.AnyAsync(a => a.PurchaseBillId == bill.Id)
-                    || await _context.PurchaseDebitNotes.AnyAsync(n => n.PurchaseBillId == bill.Id)))
-                throw new InvalidOperationException("This supplier purchase has payments or credits. Correct it with a supplier credit note.");
-            if (bill.PurchaseCategory != "LocalDirect" && bill.Source != "challan-supplier"
-                && dto.Items?.Any(i => i != null && (i.LocalDeliveryItemId.HasValue || i.LocalInvoiceItemId.HasValue)) == true)
-                throw new InvalidOperationException("Only local direct purchases can be linked to a sale or challan line.");
-            var targetSupplierId = dto.SupplierId ?? bill.SupplierId;
-            var supplierChanged = targetSupplierId != bill.SupplierId;
-            if (supplierChanged)
-            {
-                var reason = await SupplierLockedReasonAsync(bill);
-                if (reason != null) throw new InvalidOperationException(reason);
-                if (!await _context.Suppliers.AnyAsync(s => s.Id == targetSupplierId && s.CompanyId == bill.CompanyId))
-                    throw new InvalidOperationException("Supplier does not belong to this company.");
-                bill.SupplierId = targetSupplierId;
-            }
-            if (dto.GSTRate < 0 || dto.GSTRate > 100)
-                throw new InvalidOperationException("GST rate must be between 0 and 100.");
-            if (dto.Items == null || dto.Items.Count == 0)
-                throw new InvalidOperationException("At least one item is required.");
-            if (dto.Items.Any(i => i == null || string.IsNullOrWhiteSpace(i.Description)))
-                throw new InvalidOperationException("Every line needs a description.");
-            if (dto.Items.Any(i => i.Quantity <= 0 || i.UnitPrice < 0))
-                throw new InvalidOperationException("Quantity must be positive and unit price cannot be negative.");
-            if ((bill.Source == "challan-supplier" || bill.PurchaseCategory == "LocalDirect") && dto.Items.Any(i => i.ItemTypeId.HasValue || !string.IsNullOrWhiteSpace(i.HSCode) || (i.SourceInvoiceItemIds?.Count ?? 0) > 0))
-                throw new InvalidOperationException("Challan supplier purchases are non-stock. Record inventory purchases separately.");
-
-
-            await CompanyDocumentNumbers.RenumberAsync(_context, bill.CompanyId, "purchase-bill", bill.Id, bill.PurchaseBillNumber, dto.CustomNumber);
-            if (dto.CustomNumber.HasValue) bill.PurchaseBillNumber = dto.CustomNumber.Value;
-
-            // Apply header changes
-            if (dto.Date.HasValue) bill.Date = dto.Date.Value.Date;
-            // Capture the old IRN BEFORE we overwrite it — the
-            // reconciliation transition below needs to know whether the
-            // IRN value actually changed (vs a no-op edit that touched
-            // other fields).
-            var oldIrn = bill.SupplierIRN?.Trim();
-            var newIrn = dto.SupplierIRN?.Trim();
-
-            bill.SupplierBillNumber = dto.SupplierBillNumber?.Trim();
-            bill.SupplierIRN = newIrn;
-            bill.GSTRate = dto.GSTRate;
-            // Re-stated on every edit so clearing the selection clears the tax.
-            // The amount is derived from the recalculated grand total below.
-            bill.WithholdingTaxRate = dto.WithholdingTaxRate;
-            bill.WithholdingTaxAmount = dto.WithholdingTaxAmount ?? 0m;
-            bill.PaymentTerms = dto.PaymentTerms;
-            bill.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
-            bill.DocumentType = dto.DocumentType;
-            bill.PaymentMode = dto.PaymentMode;
-            // Reconciliation status transitions:
-            //   • IRN cleared             → "ManualOnly" (downgrade — input
-            //                               tax claim no longer eligible)
-            //   • IRN newly added on a    → "Pending" (upgrade — eligible
-            //     "ManualOnly" bill         once supplier files in IRIS)
-            //   • IRN VALUE changed on a  → "Pending" (the previous
-            //     "Matched" or "Disputed"   reconciliation no longer holds
-            //     bill                      for the new IRN — IRIS reconcile
-            //                               job needs to re-validate)
-            //   • Otherwise               → keep current status
-            var irnChanged = !string.Equals(oldIrn, newIrn, StringComparison.OrdinalIgnoreCase);
-            if (string.IsNullOrWhiteSpace(newIrn))
-                bill.ReconciliationStatus = "ManualOnly";
-            else if (bill.ReconciliationStatus == "ManualOnly" || supplierChanged)
-                bill.ReconciliationStatus = "Pending";
-            else if (irnChanged
-                     && (bill.ReconciliationStatus == "Matched"
-                         || bill.ReconciliationStatus == "Disputed"))
-                bill.ReconciliationStatus = "Pending";
-
-            // An existing row keeps the link it was saved with; a new row may
-            // claim one. Re-checked against every OTHER bill's claims.
-            var savedLinks = bill.Items.ToDictionary(i => i.Id, i => (Delivery: i.LocalDeliveryItemId, Invoice: i.LocalInvoiceItemId));
-            var previousLinks = bill.Items.Select(i => (i.LocalDeliveryItemId, i.LocalInvoiceItemId)).ToList();
-            var links = await CheckLocalLinksAsync(bill.CompanyId, dto.Items.Select(i =>
-            {
-                var (delivery, invoice) = savedLinks.TryGetValue(i.Id, out var saved) ? saved : (i.LocalDeliveryItemId, i.LocalInvoiceItemId);
-                return delivery.HasValue || invoice.HasValue ? new LocalPurchaseAllocations.Claim(delivery, invoice, i.Quantity) : null;
-            }).ToList(), bill.Id);
-
-            // Replace items wholesale (simpler than a diff, fine for v1)
-            _context.PurchaseItems.RemoveRange(bill.Items);
-            bill.Items.Clear();
-
-            var newItems = new List<PurchaseItem>();
-            for (var idx = 0; idx < dto.Items.Count; idx++)
-            {
-                var i = dto.Items[idx];
-                ItemType? itemType = i.ItemTypeId.HasValue
-                    ? await _context.ItemTypes.FindAsync(i.ItemTypeId.Value)
-                    : null;
-                var ni = new PurchaseItem
+                var bill = await _context.PurchaseBills
+                    .FromSqlInterpolated($"SELECT * FROM PurchaseBills WITH (UPDLOCK, HOLDLOCK, FORCESEEK) WHERE Id = {id}")
+                    .FirstOrDefaultAsync(p => p.Id == id);
+                if (bill == null) return null;
+                await _context.Entry(bill).Collection(p => p.Items).LoadAsync();
+                if (bill.Source == LocalPurchaseSyncService.AutoSource)
+                    return await UpdateAutoHeaderAsync(bill, dto, tx);
+                var isLinked = bill.Items.Any(i => i.LocalDeliveryItemId.HasValue || i.LocalInvoiceItemId.HasValue)
+                    || bill.SourceDeliveryChallanId.HasValue || bill.Source == "local-direct" || bill.Source == "challan-supplier";
+                if (isLinked && (bill.AmountPaid > 0 || await _context.PaymentAllocations.AnyAsync(a => a.PurchaseBillId == bill.Id)
+                        || await _context.PurchaseDebitNotes.AnyAsync(n => n.PurchaseBillId == bill.Id)))
+                    throw new InvalidOperationException("This supplier purchase has payments or credits. Correct it with a supplier credit note.");
+                if (bill.PurchaseCategory != "LocalDirect" && bill.Source != "challan-supplier"
+                    && dto.Items?.Any(i => i != null && (i.LocalDeliveryItemId.HasValue || i.LocalInvoiceItemId.HasValue)) == true)
+                    throw new InvalidOperationException("Only local direct purchases can be linked to a sale or challan line.");
+                var targetSupplierId = dto.SupplierId ?? bill.SupplierId;
+                var supplierChanged = targetSupplierId != bill.SupplierId;
+                if (supplierChanged)
                 {
-                    LocalDeliveryItemId = links[idx]?.DeliveryItemId,
-                    LocalInvoiceItemId = links[idx]?.InvoiceItemId,
-                    ItemTypeId = i.ItemTypeId,
-                    ItemTypeName = itemType?.Name ?? "",
-                    Description = i.Description?.Trim() ?? "",
-                    Quantity = i.Quantity,
-                    UOM = i.UOM ?? itemType?.UOM ?? "",
-                    UnitPrice = i.UnitPrice,
-                    LineTotal = Math.Round(i.Quantity * i.UnitPrice, 2),
-                    HSCode = itemType != null && string.IsNullOrWhiteSpace(itemType.HSCode) ? null : i.HSCode ?? itemType?.HSCode,
-                    FbrUOMId = i.FbrUOMId ?? itemType?.FbrUOMId,
-                    SaleType = i.SaleType ?? itemType?.SaleType,
-                    RateId = i.RateId,
-                    FixedNotifiedValueOrRetailPrice = i.FixedNotifiedValueOrRetailPrice,
-                };
-                newItems.Add(ni);
-                bill.Items.Add(ni);
-            }
-            bill.Subtotal = newItems.Sum(x => x.LineTotal);
-            bill.GSTAmount = Math.Round(bill.Subtotal * dto.GSTRate / 100m, 2);
-            bill.GrandTotal = bill.Subtotal + bill.GSTAmount;
-            bill.WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(
-                bill.WithholdingTaxRate, bill.GrandTotal, bill.WithholdingTaxAmount);
-            bill.AmountInWords = NumberToWordsConverter.Convert(bill.GrandTotal);
+                    var reason = await SupplierLockedReasonAsync(bill);
+                    if (reason != null) throw new InvalidOperationException(reason);
+                    if (!await _context.Suppliers.AnyAsync(s => s.Id == targetSupplierId && s.CompanyId == bill.CompanyId))
+                        throw new InvalidOperationException("Supplier does not belong to this company.");
+                    bill.SupplierId = targetSupplierId;
+                }
+                if (dto.GSTRate < 0 || dto.GSTRate > 100)
+                    throw new InvalidOperationException("GST rate must be between 0 and 100.");
+                if (dto.Items == null || dto.Items.Count == 0)
+                    throw new InvalidOperationException("At least one item is required.");
+                if (dto.Items.Any(i => i == null || string.IsNullOrWhiteSpace(i.Description)))
+                    throw new InvalidOperationException("Every line needs a description.");
+                if (dto.Items.Any(i => i.Quantity <= 0 || i.UnitPrice < 0))
+                    throw new InvalidOperationException("Quantity must be positive and unit price cannot be negative.");
+                if ((bill.Source == "challan-supplier" || bill.PurchaseCategory == "LocalDirect") && dto.Items.Any(i => i.ItemTypeId.HasValue || !string.IsNullOrWhiteSpace(i.HSCode) || (i.SourceInvoiceItemIds?.Count ?? 0) > 0))
+                    throw new InvalidOperationException("Challan supplier purchases are non-stock. Record inventory purchases separately.");
 
-            await _context.SaveChangesAsync();
-            await SyncLinkedSourcesAsync(previousLinks.Concat(links.Where(l => l != null).Select(l => (l!.DeliveryItemId, l.InvoiceItemId))));
-            // Post to the ledger next to the stock reflow — both are derived
-            // state that has to follow the bill. A no-op while the company's
-            // ledger is not live, and replace-on-edit otherwise.
-            await _posting.PostPurchaseBillAsync(bill);
 
-            // Reconcile stock to the new line set by DELTA only: compare what
-            // this bill already posted (per ItemType, from the ledger) with
-            // what the new lines should post, and emit just the difference.
-            // A no-op edit — or any edit that doesn't change a tracked item's
-            // quantity/type — moves NO stock (fixes the phantom reversal+IN
-            // churn that used to inflate Total In / Total Out on every save).
-            // It also self-heals bills corrupted by older logic: a posted net
-            // of 0 against a desired qty yields a single IN of that qty.
-            await ReconcileStockToLinesAsync(bill, newItems);
+                await CompanyDocumentNumbers.RenumberAsync(_context, bill.CompanyId, "purchase-bill", bill.Id, bill.PurchaseBillNumber, dto.CustomNumber);
+                if (dto.CustomNumber.HasValue) bill.PurchaseBillNumber = dto.CustomNumber.Value;
 
-            await tx.CommitAsync();
-            return await GetByIdAsync(bill.Id);
+                // Apply header changes
+                if (dto.Date.HasValue) bill.Date = dto.Date.Value.Date;
+                // Capture the old IRN BEFORE we overwrite it — the
+                // reconciliation transition below needs to know whether the
+                // IRN value actually changed (vs a no-op edit that touched
+                // other fields).
+                var oldIrn = bill.SupplierIRN?.Trim();
+                var newIrn = dto.SupplierIRN?.Trim();
+
+                bill.SupplierBillNumber = dto.SupplierBillNumber?.Trim();
+                bill.SupplierIRN = newIrn;
+                bill.GSTRate = dto.GSTRate;
+                // Re-stated on every edit so clearing the selection clears the tax.
+                // The amount is derived from the recalculated grand total below.
+                bill.WithholdingTaxRate = dto.WithholdingTaxRate;
+                bill.WithholdingTaxAmount = dto.WithholdingTaxAmount ?? 0m;
+                bill.PaymentTerms = dto.PaymentTerms;
+                bill.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
+                bill.DocumentType = dto.DocumentType;
+                bill.PaymentMode = dto.PaymentMode;
+                // Reconciliation status transitions:
+                //   • IRN cleared             → "ManualOnly" (downgrade — input
+                //                               tax claim no longer eligible)
+                //   • IRN newly added on a    → "Pending" (upgrade — eligible
+                //     "ManualOnly" bill         once supplier files in IRIS)
+                //   • IRN VALUE changed on a  → "Pending" (the previous
+                //     "Matched" or "Disputed"   reconciliation no longer holds
+                //     bill                      for the new IRN — IRIS reconcile
+                //                               job needs to re-validate)
+                //   • Otherwise               → keep current status
+                var irnChanged = !string.Equals(oldIrn, newIrn, StringComparison.OrdinalIgnoreCase);
+                if (string.IsNullOrWhiteSpace(newIrn))
+                    bill.ReconciliationStatus = "ManualOnly";
+                else if (bill.ReconciliationStatus == "ManualOnly" || supplierChanged)
+                    bill.ReconciliationStatus = "Pending";
+                else if (irnChanged
+                         && (bill.ReconciliationStatus == "Matched"
+                             || bill.ReconciliationStatus == "Disputed"))
+                    bill.ReconciliationStatus = "Pending";
+
+                // An existing row keeps the link it was saved with; a new row may
+                // claim one. Re-checked against every OTHER bill's claims.
+                var savedLinks = bill.Items.ToDictionary(i => i.Id, i => (Delivery: i.LocalDeliveryItemId, Invoice: i.LocalInvoiceItemId));
+                var previousLinks = bill.Items.Select(i => (i.LocalDeliveryItemId, i.LocalInvoiceItemId)).ToList();
+                var links = await CheckLocalLinksAsync(bill.CompanyId, dto.Items.Select(i =>
+                {
+                    var (delivery, invoice) = savedLinks.TryGetValue(i.Id, out var saved) ? saved : (i.LocalDeliveryItemId, i.LocalInvoiceItemId);
+                    return delivery.HasValue || invoice.HasValue ? new LocalPurchaseAllocations.Claim(delivery, invoice, i.Quantity) : null;
+                }).ToList(), bill.Id);
+
+                // Replace items wholesale (simpler than a diff, fine for v1)
+                _context.PurchaseItems.RemoveRange(bill.Items);
+                bill.Items.Clear();
+
+                var newItems = new List<PurchaseItem>();
+                for (var idx = 0; idx < dto.Items.Count; idx++)
+                {
+                    var i = dto.Items[idx];
+                    ItemType? itemType = i.ItemTypeId.HasValue
+                        ? await _context.ItemTypes.FindAsync(i.ItemTypeId.Value)
+                        : null;
+                    var ni = new PurchaseItem
+                    {
+                        LocalDeliveryItemId = links[idx]?.DeliveryItemId,
+                        LocalInvoiceItemId = links[idx]?.InvoiceItemId,
+                        ItemTypeId = i.ItemTypeId,
+                        ItemTypeName = itemType?.Name ?? "",
+                        Description = i.Description?.Trim() ?? "",
+                        Quantity = i.Quantity,
+                        UOM = i.UOM ?? itemType?.UOM ?? "",
+                        UnitPrice = i.UnitPrice,
+                        LineTotal = Math.Round(i.Quantity * i.UnitPrice, 2),
+                        HSCode = itemType != null && string.IsNullOrWhiteSpace(itemType.HSCode) ? null : i.HSCode ?? itemType?.HSCode,
+                        FbrUOMId = i.FbrUOMId ?? itemType?.FbrUOMId,
+                        SaleType = i.SaleType ?? itemType?.SaleType,
+                        RateId = i.RateId,
+                        FixedNotifiedValueOrRetailPrice = i.FixedNotifiedValueOrRetailPrice,
+                    };
+                    newItems.Add(ni);
+                    bill.Items.Add(ni);
+                }
+                bill.Subtotal = newItems.Sum(x => x.LineTotal);
+                bill.GSTAmount = Math.Round(bill.Subtotal * dto.GSTRate / 100m, 2);
+                bill.GrandTotal = bill.Subtotal + bill.GSTAmount;
+                bill.WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(
+                    bill.WithholdingTaxRate, bill.GrandTotal, bill.WithholdingTaxAmount);
+                bill.AmountInWords = NumberToWordsConverter.Convert(bill.GrandTotal);
+
+                await _context.SaveChangesAsync();
+                await SyncLinkedSourcesAsync(previousLinks.Concat(links.Where(l => l != null).Select(l => (l!.DeliveryItemId, l.InvoiceItemId))));
+                // Post to the ledger next to the stock reflow — both are derived
+                // state that has to follow the bill. A no-op while the company's
+                // ledger is not live, and replace-on-edit otherwise.
+                await _posting.PostPurchaseBillAsync(bill);
+
+                // Reconcile stock to the new line set by DELTA only: compare what
+                // this bill already posted (per ItemType, from the ledger) with
+                // what the new lines should post, and emit just the difference.
+                // A no-op edit — or any edit that doesn't change a tracked item's
+                // quantity/type — moves NO stock (fixes the phantom reversal+IN
+                // churn that used to inflate Total In / Total Out on every save).
+                // It also self-heals bills corrupted by older logic: a posted net
+                // of 0 against a desired qty yields a single IN of that qty.
+                await ReconcileStockToLinesAsync(bill, newItems);
+
+                await tx.CommitAsync();
+                return await GetByIdAsync(bill.Id);
             }
             catch (Exception ex)
             {
@@ -1011,38 +1041,38 @@ namespace MyApp.Api.Services.Implementations
             await using var tx = await _context.Database.BeginTransactionAsync();
             try
             {
-            var bill = await _context.PurchaseBills
-                .Include(p => p.Items)
-                .FirstOrDefaultAsync(p => p.Id == id);
-            if (bill == null) return false;
+                var bill = await _context.PurchaseBills
+                    .Include(p => p.Items)
+                    .FirstOrDefaultAsync(p => p.Id == id);
+                if (bill == null) return false;
 
-            if (bill.Source == LocalPurchaseSyncService.AutoSource)
-                throw new InvalidOperationException("This purchase follows the supplier and cost on its challan or bill. Clear them there to remove it.");
-            if (await _context.PurchaseDebitNotes.AnyAsync(n => n.PurchaseBillId == id))
-                throw new InvalidOperationException("This purchase has linked supplier credits. Preserve it for the supplier ledger.");
-            if (await _context.PaymentAllocations.AnyAsync(a => a.PurchaseBillId == id))
-                throw new InvalidOperationException("This purchase has payment history. Use a supplier credit or settlement adjustment to preserve the ledger.");
+                if (bill.Source == LocalPurchaseSyncService.AutoSource)
+                    throw new InvalidOperationException("This purchase follows the supplier and cost on its challan or bill. Clear them there to remove it.");
+                if (await _context.PurchaseDebitNotes.AnyAsync(n => n.PurchaseBillId == id))
+                    throw new InvalidOperationException("This purchase has linked supplier credits. Preserve it for the supplier ledger.");
+                if (await _context.PaymentAllocations.AnyAsync(a => a.PurchaseBillId == id))
+                    throw new InvalidOperationException("This purchase has payment history. Use a supplier credit or settlement adjustment to preserve the ledger.");
 
-            // Reverse the bill's actual posted stock before deleting its rows.
-            // Compensating OUT entries are written rather than the IN rows
-            // being deleted — keeps the movement log immutable. Reverses the
-            // bill's own posted net (see ReversePostedStockAsync) so a bill
-            // whose ItemType was classified after creation isn't over-reversed.
-            await ReversePostedStockAsync(bill, bill.Date,
-                $"Reversal — Purchase Bill #{bill.PurchaseBillNumber} deleted");
+                // Reverse the bill's actual posted stock before deleting its rows.
+                // Compensating OUT entries are written rather than the IN rows
+                // being deleted — keeps the movement log immutable. Reverses the
+                // bill's own posted net (see ReversePostedStockAsync) so a bill
+                // whose ItemType was classified after creation isn't over-reversed.
+                await ReversePostedStockAsync(bill, bill.Date,
+                    $"Reversal — Purchase Bill #{bill.PurchaseBillNumber} deleted");
 
-            // The journal entry references the bill by SourceDocId, which is
-            // not a foreign key, so nothing cascades it away.
-            await _posting.RemoveForSourceAsync(
-                bill.CompanyId, MyApp.Api.Models.Accounting.SourceDocType.PurchaseBill, bill.Id);
+                // The journal entry references the bill by SourceDocId, which is
+                // not a foreign key, so nothing cascades it away.
+                await _posting.RemoveForSourceAsync(
+                    bill.CompanyId, MyApp.Api.Models.Accounting.SourceDocType.PurchaseBill, bill.Id);
 
-            var releasedLinks = bill.Items.Select(i => (i.LocalDeliveryItemId, i.LocalInvoiceItemId)).ToList();
-            _context.PurchaseBills.Remove(bill);
-            await _context.SaveChangesAsync();
-            // The quantity this bill held goes back to the costs' automatic purchase.
-            await SyncLinkedSourcesAsync(releasedLinks);
-            await tx.CommitAsync();
-            return true;
+                var releasedLinks = bill.Items.Select(i => (i.LocalDeliveryItemId, i.LocalInvoiceItemId)).ToList();
+                _context.PurchaseBills.Remove(bill);
+                await _context.SaveChangesAsync();
+                // The quantity this bill held goes back to the costs' automatic purchase.
+                await SyncLinkedSourcesAsync(releasedLinks);
+                await tx.CommitAsync();
+                return true;
             }
             catch (Exception ex)
             {

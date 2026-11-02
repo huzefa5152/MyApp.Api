@@ -38,9 +38,14 @@ namespace MyApp.Api.Controllers
             description = "Search a company's delivery challans. Unbilled Pending, Imported, No PO and Setup Required challans can be billed without a PO.",
             inputSchema = Schema(new
             {
-                companyId = DCompanyId, search = new { type = "string", maxLength = 200 }, clientId = new { type = "integer", minimum = 1 },
-                status = new { type = "string", @enum = ChallanStatuses }, dateFrom = new { type = "string", format = "date" }, dateTo = new { type = "string", format = "date" },
-                page = new { type = "integer", minimum = 1, @default = 1 }, pageSize = new { type = "integer", minimum = 1, maximum = 100, @default = 25 },
+                companyId = DCompanyId,
+                search = new { type = "string", maxLength = 200 },
+                clientId = new { type = "integer", minimum = 1 },
+                status = new { type = "string", @enum = ChallanStatuses },
+                dateFrom = new { type = "string", format = "date" },
+                dateTo = new { type = "string", format = "date" },
+                page = new { type = "integer", minimum = 1, @default = 1 },
+                pageSize = new { type = "integer", minimum = 1, maximum = 100, @default = 25 },
             }, "companyId"),
             annotations = DReadAnnotations,
         };
@@ -59,20 +64,30 @@ namespace MyApp.Api.Controllers
             description = "Prepare a delivery challan (a delivery note, no prices). Nothing is saved: returns a plan to show the user. Call commit_action only after they approve.",
             inputSchema = Schema(new
             {
-                companyId = DCompanyId, clientId = new { type = "integer", minimum = 1 }, deliveryDate = new { type = "string", format = "date" },
+                companyId = DCompanyId,
+                clientId = new { type = "integer", minimum = 1 },
+                deliveryDate = new { type = "string", format = "date" },
                 poNumber = new { type = "string", maxLength = 100, description = "PO number is optional. Challans without a PO can be billed normally." },
-                poDate = new { type = "string", format = "date" }, indentNo = new { type = "string", maxLength = 100 },
-                site = new { type = "string", maxLength = 300 }, notes = new { type = "string", maxLength = 2000 },
+                poDate = new { type = "string", format = "date" },
+                indentNo = new { type = "string", maxLength = 100 },
+                site = new { type = "string", maxLength = 300 },
+                notes = new { type = "string", maxLength = 2000 },
                 items = new
                 {
-                    type = "array", minItems = 1, maxItems = 100,
+                    type = "array",
+                    minItems = 1,
+                    maxItems = 100,
                     items = new
                     {
-                        type = "object", additionalProperties = false, required = new[] { "description", "quantity", "unit" },
+                        type = "object",
+                        additionalProperties = false,
+                        required = new[] { "description", "quantity", "unit" },
                         properties = new
                         {
-                            description = new { type = "string", maxLength = 500 }, quantity = new { type = "string", description = "Up to 4 decimals; whole numbers only for integer-only units." },
-                            unit = new { type = "string", maxLength = 50 }, itemTypeId = new { type = "integer", minimum = 1 },
+                            description = new { type = "string", maxLength = 500 },
+                            quantity = new { type = "string", description = "Up to 4 decimals; whole numbers only for integer-only units." },
+                            unit = new { type = "string", maxLength = 50 },
+                            itemTypeId = new { type = "integer", minimum = 1 },
                         },
                     },
                 },
@@ -87,35 +102,52 @@ namespace MyApp.Api.Controllers
             description = "Prepare a sales bill (invoice). With challanIds it bills those challans (give unitPrice for EVERY challan line); without, it is a standalone bill from items. Nothing is saved and no number is used until commit_action. It takes the next number of the legal invoice sequence, so only commit after the user approved. FBR submission is never done here.",
             inputSchema = Schema(new
             {
-                companyId = DCompanyId, clientId = new { type = "integer", minimum = 1 }, date = new { type = "string", format = "date", description = "Defaults to today (Pakistan time); never in the future." },
+                companyId = DCompanyId,
+                clientId = new { type = "integer", minimum = 1 },
+                date = new { type = "string", format = "date", description = "Defaults to today (Pakistan time); never in the future." },
                 gstRate = new { type = "string", description = "Percent, up to 2 decimals. Default 18." },
                 freightCharges = new { type = "string", description = "Optional non-negative PKR transport / cartage / freight charge, up to 2 decimals. Added only to the commercial bill; sales tax remains unchanged." },
-                paymentTerms = new { type = "string", maxLength = 200 }, paymentMode = new { type = "string", @enum = PaymentModes },
-                poNumber = new { type = "string", maxLength = 100 }, poDate = new { type = "string", format = "date" }, notes = new { type = "string", maxLength = 2000 },
+                paymentTerms = new { type = "string", maxLength = 200 },
+                paymentMode = new { type = "string", @enum = PaymentModes },
+                poNumber = new { type = "string", maxLength = 100 },
+                poDate = new { type = "string", format = "date" },
+                notes = new { type = "string", maxLength = 2000 },
                 challanIds = new { type = "array", minItems = 1, maxItems = 20, items = new { type = "integer", minimum = 1 }, description = "Bill these challans. Omit for a standalone bill." },
                 prices = new
                 {
-                    type = "array", maxItems = 500, description = "With challanIds: one entry per challan line (deliveryItemId from get_challan).",
+                    type = "array",
+                    maxItems = 500,
+                    description = "With challanIds: one entry per challan line (deliveryItemId from get_challan).",
                     items = new
                     {
-                        type = "object", additionalProperties = false, required = new[] { "deliveryItemId", "unitPrice" },
+                        type = "object",
+                        additionalProperties = false,
+                        required = new[] { "deliveryItemId", "unitPrice" },
                         properties = new
                         {
-                            deliveryItemId = new { type = "integer", minimum = 1 }, unitPrice = new { type = "string", description = "PKR, greater than 0, up to 4 decimals." },
-                            description = new { type = "string", maxLength = 500 }, itemTypeId = new { type = "integer", minimum = 1 },
+                            deliveryItemId = new { type = "integer", minimum = 1 },
+                            unitPrice = new { type = "string", description = "PKR, greater than 0, up to 4 decimals." },
+                            description = new { type = "string", maxLength = 500 },
+                            itemTypeId = new { type = "integer", minimum = 1 },
                         },
                     },
                 },
                 items = new
                 {
-                    type = "array", maxItems = 100, description = "Standalone bill only: the lines.",
+                    type = "array",
+                    maxItems = 100,
+                    description = "Standalone bill only: the lines.",
                     items = new
                     {
-                        type = "object", additionalProperties = false, required = new[] { "description", "quantity", "unitPrice" },
+                        type = "object",
+                        additionalProperties = false,
+                        required = new[] { "description", "quantity", "unitPrice" },
                         properties = new
                         {
-                            description = new { type = "string", maxLength = 500 }, quantity = new { type = "string", description = "Up to 4 decimals." },
-                            uom = new { type = "string", maxLength = 50 }, unitPrice = new { type = "string", description = "PKR, greater than 0, up to 4 decimals." },
+                            description = new { type = "string", maxLength = 500 },
+                            quantity = new { type = "string", description = "Up to 4 decimals." },
+                            uom = new { type = "string", maxLength = 50 },
+                            unitPrice = new { type = "string", description = "PKR, greater than 0, up to 4 decimals." },
                             itemTypeId = new { type = "integer", minimum = 1 },
                         },
                     },
@@ -142,10 +174,21 @@ namespace MyApp.Api.Controllers
             {
                 items = r.Items.Where(c => c.CompanyId == companyId).Select(c => new
                 {
-                    c.Id, c.CompanyId, c.ChallanNumber, c.ClientId, c.ClientName, c.PoNumber, deliveryDate = c.DeliveryDate?.ToString("yyyy-MM-dd"),
-                    c.Status, c.InvoiceId, billable = ChallanBillingRules.IsBillable(c.Status, c.InvoiceId),
+                    c.Id,
+                    c.CompanyId,
+                    c.ChallanNumber,
+                    c.ClientId,
+                    c.ClientName,
+                    c.PoNumber,
+                    deliveryDate = c.DeliveryDate?.ToString("yyyy-MM-dd"),
+                    c.Status,
+                    c.InvoiceId,
+                    billable = ChallanBillingRules.IsBillable(c.Status, c.InvoiceId),
                 }),
-                totalCount = r.TotalCount, page = r.Page, pageSize = r.PageSize, totalPages = r.TotalPages,
+                totalCount = r.TotalCount,
+                page = r.Page,
+                pageSize = r.PageSize,
+                totalPages = r.TotalPages,
             };
         }
 
@@ -160,8 +203,19 @@ namespace MyApp.Api.Controllers
                 throw new ToolError("Resource unavailable or access denied.");
             return new
             {
-                c.Id, c.CompanyId, c.ChallanNumber, c.ClientId, c.ClientName, c.PoNumber, poDate = c.PoDate?.ToString("yyyy-MM-dd"),
-                deliveryDate = c.DeliveryDate?.ToString("yyyy-MM-dd"), c.IndentNo, c.Site, c.Notes, c.Status, c.InvoiceId,
+                c.Id,
+                c.CompanyId,
+                c.ChallanNumber,
+                c.ClientId,
+                c.ClientName,
+                c.PoNumber,
+                poDate = c.PoDate?.ToString("yyyy-MM-dd"),
+                deliveryDate = c.DeliveryDate?.ToString("yyyy-MM-dd"),
+                c.IndentNo,
+                c.Site,
+                c.Notes,
+                c.Status,
+                c.InvoiceId,
                 billable = ChallanBillingRules.IsBillable(c.Status, c.InvoiceId),
                 items = c.Items.Select(i => new { deliveryItemId = i.Id, i.Description, i.Quantity, i.Unit, i.ItemTypeId, i.ItemTypeName }),
             };
@@ -236,8 +290,14 @@ namespace MyApp.Api.Controllers
             var hasPo = po.Length > 0;
             var payload = new
             {
-                companyId, clientId = client.Id, clientName = client.Name, deliveryDate = delivery.ToString("yyyy-MM-dd"), poNumber = po,
-                poDate = hasPo ? poDate?.ToString("yyyy-MM-dd") : null, indentNo = OptText(args, "indentNo", 100), site = OptText(args, "site", 300),
+                companyId,
+                clientId = client.Id,
+                clientName = client.Name,
+                deliveryDate = delivery.ToString("yyyy-MM-dd"),
+                poNumber = po,
+                poDate = hasPo ? poDate?.ToString("yyyy-MM-dd") : null,
+                indentNo = OptText(args, "indentNo", 100),
+                site = OptText(args, "site", 300),
                 notes = OptText(args, "notes", 2000),
                 items = lines.Select(l => new { l.Description, l.Quantity, l.Unit, l.ItemTypeId }),
                 expectedStatus = hasPo
@@ -337,12 +397,25 @@ namespace MyApp.Api.Controllers
 
             var payload = new
             {
-                companyId, clientId = client.Id, clientName = client.Name, date = date.ToString("yyyy-MM-dd"), gstRate = gst,
-                paymentTerms = OptText(args, "paymentTerms", 200), paymentMode = string.IsNullOrEmpty(mode) ? null : mode,
-                poNumber = OptText(args, "poNumber", 100), poDate = OptDate(args, "poDate")?.ToString("yyyy-MM-dd"), notes = OptText(args, "notes", 2000),
-                challanIds, standalone = !fromChallans,
+                companyId,
+                clientId = client.Id,
+                clientName = client.Name,
+                date = date.ToString("yyyy-MM-dd"),
+                gstRate = gst,
+                paymentTerms = OptText(args, "paymentTerms", 200),
+                paymentMode = string.IsNullOrEmpty(mode) ? null : mode,
+                poNumber = OptText(args, "poNumber", 100),
+                poDate = OptDate(args, "poDate")?.ToString("yyyy-MM-dd"),
+                notes = OptText(args, "notes", 2000),
+                challanIds,
+                standalone = !fromChallans,
                 items = lines.Select(l => new { l.DeliveryItemId, l.Description, l.Quantity, l.Unit, l.UnitPrice, l.ItemTypeId, lineTotal = RoundAway(l.Quantity * l.UnitPrice) }),
-                subtotal, gstAmount, grandTotal = grand, freightCharges = freight, commercialTotal = commercial, currency = "PKR",
+                subtotal,
+                gstAmount,
+                grandTotal = grand,
+                freightCharges = freight,
+                commercialTotal = commercial,
+                currency = "PKR",
                 note = "The bill number is assigned when it is saved. The ERP finalises the exact figures and reports them back. It is not submitted to FBR.",
             };
             var what = fromChallans ? $"Bill challan(s) {string.Join(", ", challanIds!)}" : "Create a standalone bill";
@@ -386,11 +459,19 @@ namespace MyApp.Api.Controllers
             DateTime? D(string n) => S(n) is { } s ? DateTime.ParseExact(s, "yyyy-MM-dd", CultureInfo.InvariantCulture) : null;
             return new DeliveryChallanDto
             {
-                CompanyId = companyId, ClientId = p.GetProperty("clientId").GetInt32(), DeliveryDate = D("deliveryDate"), PoNumber = S("poNumber") ?? "",
-                PoDate = D("poDate"), IndentNo = S("indentNo"), Site = S("site"), Notes = S("notes"),
+                CompanyId = companyId,
+                ClientId = p.GetProperty("clientId").GetInt32(),
+                DeliveryDate = D("deliveryDate"),
+                PoNumber = S("poNumber") ?? "",
+                PoDate = D("poDate"),
+                IndentNo = S("indentNo"),
+                Site = S("site"),
+                Notes = S("notes"),
                 Items = p.GetProperty("items").EnumerateArray().Select(i => new DeliveryItemDto
                 {
-                    Description = i.GetProperty("description").GetString()!, Quantity = i.GetProperty("quantity").GetDecimal(), Unit = i.GetProperty("unit").GetString()!,
+                    Description = i.GetProperty("description").GetString()!,
+                    Quantity = i.GetProperty("quantity").GetDecimal(),
+                    Unit = i.GetProperty("unit").GetString()!,
                     ItemTypeId = i.TryGetProperty("itemTypeId", out var t) && t.ValueKind == JsonValueKind.Number ? t.GetInt32() : null,
                 }).ToList(),
             };
@@ -408,13 +489,21 @@ namespace MyApp.Api.Controllers
             var h = BillHeader(p);
             return new CreateInvoiceDto
             {
-                CompanyId = companyId, ClientId = p.GetProperty("clientId").GetInt32(), Date = h.Date, GSTRate = p.GetProperty("gstRate").GetDecimal(),
-                PaymentTerms = h.Terms, PaymentMode = h.Mode, PoNumber = h.Po, PoDate = h.PoDate, Notes = h.Notes,
+                CompanyId = companyId,
+                ClientId = p.GetProperty("clientId").GetInt32(),
+                Date = h.Date,
+                GSTRate = p.GetProperty("gstRate").GetDecimal(),
+                PaymentTerms = h.Terms,
+                PaymentMode = h.Mode,
+                PoNumber = h.Po,
+                PoDate = h.PoDate,
+                Notes = h.Notes,
                 FreightCharges = p.TryGetProperty("freightCharges", out var freight) ? CommercialTotalCalculator.Validate(freight.GetDecimal()) : 0m,
                 ChallanIds = p.GetProperty("challanIds").EnumerateArray().Select(e => e.GetInt32()).ToList(),
                 Items = p.GetProperty("items").EnumerateArray().Select(i => new CreateInvoiceItemDto
                 {
-                    DeliveryItemId = i.GetProperty("deliveryItemId").GetInt32(), UnitPrice = i.GetProperty("unitPrice").GetDecimal(),
+                    DeliveryItemId = i.GetProperty("deliveryItemId").GetInt32(),
+                    UnitPrice = i.GetProperty("unitPrice").GetDecimal(),
                     Description = i.GetProperty("description").GetString(),
                     ItemTypeId = i.TryGetProperty("itemTypeId", out var t) && t.ValueKind == JsonValueKind.Number ? t.GetInt32() : null,
                 }).ToList(),
@@ -426,12 +515,20 @@ namespace MyApp.Api.Controllers
             var h = BillHeader(p);
             return new CreateStandaloneInvoiceDto
             {
-                CompanyId = companyId, ClientId = p.GetProperty("clientId").GetInt32(), Date = h.Date, GSTRate = p.GetProperty("gstRate").GetDecimal(),
-                PaymentTerms = h.Terms, PaymentMode = h.Mode, PoNumber = h.Po, PoDate = h.PoDate, Notes = h.Notes,
+                CompanyId = companyId,
+                ClientId = p.GetProperty("clientId").GetInt32(),
+                Date = h.Date,
+                GSTRate = p.GetProperty("gstRate").GetDecimal(),
+                PaymentTerms = h.Terms,
+                PaymentMode = h.Mode,
+                PoNumber = h.Po,
+                PoDate = h.PoDate,
+                Notes = h.Notes,
                 FreightCharges = p.TryGetProperty("freightCharges", out var freight) ? CommercialTotalCalculator.Validate(freight.GetDecimal()) : 0m,
                 Items = p.GetProperty("items").EnumerateArray().Select(i => new CreateStandaloneInvoiceItemDto
                 {
-                    Description = i.GetProperty("description").GetString()!, Quantity = i.GetProperty("quantity").GetDecimal(),
+                    Description = i.GetProperty("description").GetString()!,
+                    Quantity = i.GetProperty("quantity").GetDecimal(),
                     UOM = i.TryGetProperty("unit", out var u) && u.ValueKind == JsonValueKind.String && u.GetString()!.Length > 0 ? u.GetString() : null,
                     UnitPrice = i.GetProperty("unitPrice").GetDecimal(),
                     ItemTypeId = i.TryGetProperty("itemTypeId", out var t) && t.ValueKind == JsonValueKind.Number ? t.GetInt32() : null,

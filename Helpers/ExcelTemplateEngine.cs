@@ -981,7 +981,8 @@ namespace MyApp.Api.Helpers
             };
 
             static List<Dictionary<string, object?>> Rows(IEnumerable<DTOs.PrintTaxItemDto> items) =>
-                items.Select((item, idx) => {
+                items.Select((item, idx) =>
+                {
                     var row = typeof(DTOs.PrintTaxItemDto).GetProperties().ToDictionary(
                         p => System.Text.Json.JsonNamingPolicy.CamelCase.ConvertName(p.Name),
                         p => p.GetValue(item));

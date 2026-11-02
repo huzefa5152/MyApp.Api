@@ -18,8 +18,14 @@ public class SupplierPayablesService(AppDbContext db)
         var paid = await db.PaymentAllocations.AsNoTracking().Where(a => a.Payment.CompanyId == companyId && a.Payment.ContactType == "Supplier" &&
             a.Payment.ContactId.HasValue && !a.Payment.IsCancelled && a.Payment.ChequeStatus != ChequeStatus.Bounced && a.Payment.Date < end &&
             (a.Kind == AllocationKind.OnAccount || a.Kind == AllocationKind.Document && a.PurchaseBillId.HasValue))
-            .Select(a => new { Id = a.Payment.ContactId!.Value, Sign = a.Payment.Direction == PaymentDirection.Payment ? 1m : -1m,
-                a.Amount, a.AdjustmentAmount, Advance = a.Kind == AllocationKind.OnAccount }).ToListAsync();
+            .Select(a => new
+            {
+                Id = a.Payment.ContactId!.Value,
+                Sign = a.Payment.Direction == PaymentDirection.Payment ? 1m : -1m,
+                a.Amount,
+                a.AdjustmentAmount,
+                Advance = a.Kind == AllocationKind.OnAccount
+            }).ToListAsync();
         var credits = await db.PurchaseDebitNotes.AsNoTracking().Where(n => n.CompanyId == companyId && n.Date < end)
             .GroupBy(n => n.SupplierId).Select(g => new { Id = g.Key, Total = g.Sum(n => n.GrandTotal), Unallocated = g.Sum(n => n.PurchaseBillId == null ? n.GrandTotal : 0m) }).ToDictionaryAsync(g => g.Id);
         var journals = await db.JournalLines.AsNoTracking().Where(l => l.JournalEntry.CompanyId == companyId && l.JournalEntry.Date < end &&
@@ -64,17 +70,28 @@ public class SupplierPayablesService(AppDbContext db)
             var ids = sourceDeliveries.Where(d => d.InvoiceId.HasValue).Select(d => d.InvoiceId!.Value)
                 .Concat(p.SourceInvoiceId.HasValue ? new[] { p.SourceInvoiceId.Value } : Array.Empty<int>())
                 .Concat(invoiceLines.Where(i => p.Items.Any(x => x.LocalInvoiceItemId == i.Id)).Select(i => i.InvoiceId)).Distinct().ToList();
-            var row = new SupplierPurchaseBalanceDto { Id = p.Id, Number = p.PurchaseBillNumber, SupplierId = supplierId, SupplierName = supplier.Name,
+            var row = new SupplierPurchaseBalanceDto
+            {
+                Id = p.Id,
+                Number = p.PurchaseBillNumber,
+                SupplierId = supplierId,
+                SupplierName = supplier.Name,
                 SupplierBillNumber = p.SupplierBillNumber,
-                Category = p.Source == "challan-supplier" ? "LocalDirect" : p.PurchaseCategory, Date = p.Date,
-                Liability = p.GrandTotal - p.WithholdingTaxAmount, CreditAmount = credits.Where(n => n.PurchaseBillId == p.Id).Sum(n => n.GrandTotal), CashPaid = allocations.Sum(a => a.Amount), Adjustment = allocations.Sum(a => a.AdjustmentAmount),
-                InvoiceIds = ids, InvoiceNumbers = ids.Select(id => invoiceLines.First(i => i.InvoiceId == id).InvoiceNumber).ToList(),
+                Category = p.Source == "challan-supplier" ? "LocalDirect" : p.PurchaseCategory,
+                Date = p.Date,
+                Liability = p.GrandTotal - p.WithholdingTaxAmount,
+                CreditAmount = credits.Where(n => n.PurchaseBillId == p.Id).Sum(n => n.GrandTotal),
+                CashPaid = allocations.Sum(a => a.Amount),
+                Adjustment = allocations.Sum(a => a.AdjustmentAmount),
+                InvoiceIds = ids,
+                InvoiceNumbers = ids.Select(id => invoiceLines.First(i => i.InvoiceId == id).InvoiceNumber).ToList(),
                 ChallanIds = sourceDeliveries.Select(d => d.DeliveryChallanId).Distinct().ToList(),
                 ChallanNumbers = sourceDeliveries.GroupBy(d => d.DeliveryChallanId).Select(g => g.First().ChallanNumber).ToList(),
                 // A line split across suppliers is normal; flag only when this
                 // supplier's estimate moved away from the price booked here.
                 CostChanged = p.Items.Any(i => i.LocalDeliveryItemId.HasValue && sourceDeliveries.Any(d => d.Id == i.LocalDeliveryItemId && d.SupplierId == p.SupplierId && d.ActualUnitCost != i.UnitPrice) ||
-                    i.LocalInvoiceItemId.HasValue && invoiceLines.Any(d => d.Id == i.LocalInvoiceItemId && d.SupplierId == p.SupplierId && d.ActualUnitCost != i.UnitPrice)) };
+                    i.LocalInvoiceItemId.HasValue && invoiceLines.Any(d => d.Id == i.LocalInvoiceItemId && d.SupplierId == p.SupplierId && d.ActualUnitCost != i.UnitPrice))
+            };
             result.Purchases.Add(row);
             result.Rows.Add(new() { Date = p.Date, CreatedAt = p.CreatedAt, Kind = "Purchase", Id = p.Id, Reference = $"Purchase #{p.PurchaseBillNumber}", Increase = row.Liability, PurchaseBillIds = new() { p.Id } });
         }
@@ -86,8 +103,17 @@ public class SupplierPayablesService(AppDbContext db)
             var adjustment = direction * relevant.Sum(a => a.AdjustmentAmount);
             result.CashPaid += cash;
             result.UnappliedAdvances += direction * relevant.Where(a => a.Kind == AllocationKind.OnAccount).Sum(a => a.Amount + a.AdjustmentAmount);
-            result.Rows.Add(new() { Date = p.Date, CreatedAt = p.CreatedAt, Kind = p.Direction == PaymentDirection.Payment ? "Payment" : "Supplier refund", Id = p.Id, Reference = $"{p.Direction} #{p.Number}",
-                CashPaid = cash, Adjustment = adjustment, PurchaseBillIds = relevant.Where(a => a.PurchaseBillId.HasValue).Select(a => a.PurchaseBillId!.Value).Distinct().ToList() });
+            result.Rows.Add(new()
+            {
+                Date = p.Date,
+                CreatedAt = p.CreatedAt,
+                Kind = p.Direction == PaymentDirection.Payment ? "Payment" : "Supplier refund",
+                Id = p.Id,
+                Reference = $"{p.Direction} #{p.Number}",
+                CashPaid = cash,
+                Adjustment = adjustment,
+                PurchaseBillIds = relevant.Where(a => a.PurchaseBillId.HasValue).Select(a => a.PurchaseBillId!.Value).Distinct().ToList()
+            });
         }
 
         foreach (var n in credits)

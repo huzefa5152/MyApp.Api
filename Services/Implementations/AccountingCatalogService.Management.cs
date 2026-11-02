@@ -65,7 +65,9 @@ namespace MyApp.Api.Services.Implementations
                 .GroupBy(l => new { l.AccountId, Name = l.Account.Name, l.Account.AccountGroupId })
                 .Select(g => new
                 {
-                    g.Key.AccountId, g.Key.Name, g.Key.AccountGroupId,
+                    g.Key.AccountId,
+                    g.Key.Name,
+                    g.Key.AccountGroupId,
                     // Income is credit-natural, expense debit-natural: take the side
                     // that represents value so both read positive.
                     Amount = g.Sum(x => income ? x.Credit - x.Debit : x.Debit - x.Credit),
@@ -109,7 +111,9 @@ namespace MyApp.Api.Services.Implementations
                     .Select(g => new ReportGroupRowDto
                     {
                         DrillKey = g.AccountId.ToString(),
-                        Label = g.Name, Amount = g.Amount, Count = g.Count,
+                        Label = g.Name,
+                        Amount = g.Amount,
+                        Count = g.Count,
                     }).ToList(),
                 Total = grouped.Sum(g => g.Amount),
             });
@@ -174,8 +178,10 @@ namespace MyApp.Api.Services.Implementations
                 .GroupBy(l => new { l.JournalEntry.Date.Year, l.JournalEntry.Date.Month })
                 .Select(g => new
                 {
-                    g.Key.Year, g.Key.Month,
-                    In = g.Sum(x => x.Debit), Out = g.Sum(x => x.Credit),
+                    g.Key.Year,
+                    g.Key.Month,
+                    In = g.Sum(x => x.Debit),
+                    Out = g.Sum(x => x.Credit),
                 })
                 .ToListAsync())
                 .Select(x => new { Sort = new DateTime(x.Year, x.Month, 1), x.In, x.Out })

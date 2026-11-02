@@ -86,7 +86,8 @@ namespace MyApp.Api.Services.Implementations
                     var agg = await q.GroupBy(_ => 1)
                         .Select(g => new
                         {
-                            Dr = g.Sum(x => x.Debit), Cr = g.Sum(x => x.Credit),
+                            Dr = g.Sum(x => x.Debit),
+                            Cr = g.Sum(x => x.Credit),
                             Count = g.Select(x => x.JournalEntryId).Distinct().Count(),
                         })
                         .FirstOrDefaultAsync();
@@ -238,9 +239,17 @@ namespace MyApp.Api.Services.Implementations
                 .Skip((page - 1) * size).Take(size)
                 .Select(l => new
                 {
-                    l.JournalEntry.Date, l.JournalEntryId, l.JournalEntry.EntryNo,
-                    l.JournalEntry.SourceDocType, l.JournalEntry.SourceDocId,
-                    l.AccountId, l.Debit, l.Credit, l.PartyType, l.PartyId, l.Description,
+                    l.JournalEntry.Date,
+                    l.JournalEntryId,
+                    l.JournalEntry.EntryNo,
+                    l.JournalEntry.SourceDocType,
+                    l.JournalEntry.SourceDocId,
+                    l.AccountId,
+                    l.Debit,
+                    l.Credit,
+                    l.PartyType,
+                    l.PartyId,
+                    l.Description,
                 })
                 .ToListAsync();
 
@@ -514,7 +523,12 @@ namespace MyApp.Api.Services.Implementations
                 .Skip((page - 1) * size).Take(size)
                 .Select(e => new
                 {
-                    e.Id, e.EntryNo, e.Date, e.Narration, e.SourceDocType, e.SourceDocId,
+                    e.Id,
+                    e.EntryNo,
+                    e.Date,
+                    e.Narration,
+                    e.SourceDocType,
+                    e.SourceDocId,
                     Lines = e.Lines.Count,
                     Debit = e.Lines.Sum(l => l.Debit),
                     Credit = e.Lines.Sum(l => l.Credit),
@@ -544,7 +558,8 @@ namespace MyApp.Api.Services.Implementations
 
             var agg = await q.Select(e => new
             {
-                Debit = e.Lines.Sum(l => l.Debit), Credit = e.Lines.Sum(l => l.Credit),
+                Debit = e.Lines.Sum(l => l.Debit),
+                Credit = e.Lines.Sum(l => l.Credit),
             }).ToListAsync();
             report.Totals["amount"] = agg.Sum(x => x.Debit);
             report.Totals["entries"] = report.TotalCount;
@@ -604,7 +619,8 @@ namespace MyApp.Api.Services.Implementations
                 {
                     issue = "GL posting is off",
                     detail = "No document in this company writes to the general ledger.",
-                    count = 0, amount = 0m,
+                    count = 0,
+                    amount = 0m,
                     action = "Turn it on from Accounting → Dashboard, which also backfills history.",
                 });
                 report.Rows = rows;
@@ -714,7 +730,8 @@ namespace MyApp.Api.Services.Implementations
                     issue = "No exceptions",
                     detail = "Nothing in Suspense, every document has a ledger entry, and every "
                            + "entry balances.",
-                    count = 0, amount = 0m,
+                    count = 0,
+                    amount = 0m,
                     action = "Nothing to do.",
                 });
             }

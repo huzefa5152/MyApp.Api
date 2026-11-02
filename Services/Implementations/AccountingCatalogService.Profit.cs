@@ -97,7 +97,8 @@ namespace MyApp.Api.Services.Implementations
             if (margin.HasValue)
                 lines.Add(new StatementLineDto
                 {
-                    Kind = "ratio", Label = "Gross margin %",
+                    Kind = "ratio",
+                    Label = "Gross margin %",
                     Amount = margin.Value,
                     Comparative = pMargin,
                     Change = pMargin.HasValue ? margin.Value - pMargin.Value : null,
@@ -170,7 +171,9 @@ namespace MyApp.Api.Services.Implementations
                 .GroupBy(l => new { l.JournalEntry.Date.Year, l.JournalEntry.Date.Month, l.AccountId })
                 .Select(g => new
                 {
-                    g.Key.Year, g.Key.Month, g.Key.AccountId,
+                    g.Key.Year,
+                    g.Key.Month,
+                    g.Key.AccountId,
                     Net = g.Sum(x => x.Debit - x.Credit),
                 })
                 .ToListAsync();

@@ -75,8 +75,19 @@ namespace MyApp.Api.Helpers
                 throw new InvalidOperationException("A purchase line can be linked to only one source line.");
             var invoiceIds = claims.Where(c => c.InvoiceItemId.HasValue).Select(c => c.InvoiceItemId!.Value).Distinct().ToList();
             var invoiceLines = await db.InvoiceItems.AsNoTracking().Where(i => invoiceIds.Contains(i.Id))
-                .Select(i => new { i.Id, i.DeliveryItemId, i.Quantity, i.Description, i.UOM, i.Invoice.CompanyId,
-                    i.Invoice.IsDemo, i.Invoice.IsCancelled, i.Invoice.NoteKind, i.Invoice.InvoiceNumber })
+                .Select(i => new
+                {
+                    i.Id,
+                    i.DeliveryItemId,
+                    i.Quantity,
+                    i.Description,
+                    i.UOM,
+                    i.Invoice.CompanyId,
+                    i.Invoice.IsDemo,
+                    i.Invoice.IsCancelled,
+                    i.Invoice.NoteKind,
+                    i.Invoice.InvoiceNumber
+                })
                 .ToDictionaryAsync(i => i.Id);
             if (invoiceLines.Count != invoiceIds.Count || invoiceLines.Values.Any(i => i.CompanyId != companyId || i.IsDemo || i.IsCancelled || i.NoteKind != 0))
                 throw new InvalidOperationException("A selected bill line is unavailable for this company.");
@@ -91,8 +102,17 @@ namespace MyApp.Api.Helpers
 
             await LockAsync(db, deliveryIds, standaloneIds);
             var deliveryLines = await db.DeliveryItems.AsNoTracking().Where(i => deliveryIds.Contains(i.Id))
-                .Select(i => new { i.Id, i.Quantity, i.Description, i.Unit, i.DeliveryChallan.CompanyId,
-                    i.DeliveryChallan.IsDemo, i.DeliveryChallan.Status, i.DeliveryChallan.ChallanNumber })
+                .Select(i => new
+                {
+                    i.Id,
+                    i.Quantity,
+                    i.Description,
+                    i.Unit,
+                    i.DeliveryChallan.CompanyId,
+                    i.DeliveryChallan.IsDemo,
+                    i.DeliveryChallan.Status,
+                    i.DeliveryChallan.ChallanNumber
+                })
                 .ToDictionaryAsync(i => i.Id);
             if (deliveryLines.Count != deliveryIds.Count || deliveryLines.Values.Any(i => i.CompanyId != companyId || i.IsDemo || i.Status == "Cancelled"))
                 throw new InvalidOperationException("A selected challan line is unavailable for this company.");

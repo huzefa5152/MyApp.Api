@@ -26,10 +26,24 @@ public class UserSessionsController(AppDbContext db, IConfiguration configuratio
         var recent = now.AddMinutes(-5);
         var rows = from s in db.UserSessions.AsNoTracking()
                    join u in db.Users.AsNoTracking() on s.UserId equals u.Id
-                   select new { s.Id, s.UserId, u.Username, u.FullName, s.CreatedAt, s.LastSeenAt, s.ExpiresAt, s.TokenExpiresAt, s.RevokedAt,
-                       s.UserAgent, s.IpAddress, Revoked = s.IsRevoked || s.SecurityStamp != u.SecurityStamp };
+                   select new
+                   {
+                       s.Id,
+                       s.UserId,
+                       u.Username,
+                       u.FullName,
+                       s.CreatedAt,
+                       s.LastSeenAt,
+                       s.ExpiresAt,
+                       s.TokenExpiresAt,
+                       s.RevokedAt,
+                       s.UserAgent,
+                       s.IpAddress,
+                       Revoked = s.IsRevoked || s.SecurityStamp != u.SecurityStamp
+                   };
         var signedIn = rows.Where(s => !s.Revoked && s.ExpiresAt > now && s.TokenExpiresAt > now);
-        var summary = new {
+        var summary = new
+        {
             totalUsers = await db.Users.CountAsync(),
             signedInUsers = await signedIn.Select(s => s.UserId).Distinct().CountAsync(),
             signedInSessions = await signedIn.CountAsync(),
@@ -37,12 +51,14 @@ public class UserSessionsController(AppDbContext db, IConfiguration configuratio
             recentlyActiveSessions = await signedIn.CountAsync(s => s.LastSeenAt >= recent)
         };
         if (userId.HasValue) rows = rows.Where(s => s.UserId == userId.Value);
-        if (!string.IsNullOrWhiteSpace(search)) {
+        if (!string.IsNullOrWhiteSpace(search))
+        {
             search = search.Trim();
             if (search.Length > 100) return BadRequest(new { message = "Search must be at most 100 characters." });
             rows = rows.Where(s => s.Username.Contains(search) || s.FullName.Contains(search));
         }
-        rows = status switch {
+        rows = status switch
+        {
             "signed-in" => rows.Where(s => !s.Revoked && s.ExpiresAt > now && s.TokenExpiresAt > now),
             "recent" => rows.Where(s => !s.Revoked && s.ExpiresAt > now && s.TokenExpiresAt > now && s.LastSeenAt >= recent),
             "expired" => rows.Where(s => !s.Revoked && (s.ExpiresAt <= now || s.TokenExpiresAt <= now)),
@@ -55,9 +71,20 @@ public class UserSessionsController(AppDbContext db, IConfiguration configuratio
         page = Math.Min(page, Math.Max(1, (int)Math.Ceiling(total / (double)pageSize)));
         var current = User.FindFirstValue("sid");
         var items = await rows.OrderByDescending(s => s.LastSeenAt).ThenBy(s => s.Id)
-            .Skip((page - 1) * pageSize).Take(pageSize).Select(s => new {
-                s.Id, s.UserId, s.Username, s.FullName, s.CreatedAt, s.LastSeenAt, s.ExpiresAt, s.TokenExpiresAt, s.RevokedAt,
-                s.UserAgent, s.IpAddress, isCurrentSession = s.Id == current,
+            .Skip((page - 1) * pageSize).Take(pageSize).Select(s => new
+            {
+                s.Id,
+                s.UserId,
+                s.Username,
+                s.FullName,
+                s.CreatedAt,
+                s.LastSeenAt,
+                s.ExpiresAt,
+                s.TokenExpiresAt,
+                s.RevokedAt,
+                s.UserAgent,
+                s.IpAddress,
+                isCurrentSession = s.Id == current,
                 status = s.Revoked ? "Revoked" : s.ExpiresAt <= now || s.TokenExpiresAt <= now ? "Expired" : s.LastSeenAt >= recent ? "Recently active" : "Signed in"
             }).ToListAsync();
         Response.Headers.CacheControl = "no-store";

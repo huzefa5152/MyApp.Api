@@ -15,11 +15,11 @@ namespace MyApp.Api.DTOs
     public static class ImportDecision
     {
         // Imports
-        public const string WillImport       = "will-import";
+        public const string WillImport = "will-import";
         public const string ProductWillCreate = "product-will-be-created";
 
         // Skips
-        public const string AlreadyExists    = "already-exists";
+        public const string AlreadyExists = "already-exists";
         // Status=Claimed in FBR Annexure-A — operator's workflow is ERP-
         // first, IRIS-after, so a Claimed row is already in our books
         // by definition. Skip without running dedup. Conceptually
@@ -32,10 +32,10 @@ namespace MyApp.Api.DTOs
         // the supplier list (one fake supplier collapses N transactions)
         // and the ItemType catalog (with placeholder-pedigree products).
         public const string SkipUnregisteredSeller = "skip-unregistered-seller";
-        public const string SkipCancelled    = "skip-cancelled";
-        public const string SkipWrongType    = "skip-wrong-type";
-        public const string SkipNoHsCode     = "skip-no-hs-code";
-        public const string SkipZeroQty      = "skip-zero-qty";
+        public const string SkipCancelled = "skip-cancelled";
+        public const string SkipWrongType = "skip-wrong-type";
+        public const string SkipNoHsCode = "skip-no-hs-code";
+        public const string SkipZeroQty = "skip-zero-qty";
         // Kept in the constants so external consumers don't break, but
         // the filter no longer emits this — empty descriptions are valid
         // (Phase 2 will create ItemType.Name = "HS {code}" as fallback).

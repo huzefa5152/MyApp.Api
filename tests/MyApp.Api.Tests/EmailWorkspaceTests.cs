@@ -15,6 +15,7 @@ using MyApp.Api.Services.Interfaces;
 using Xunit;
 
 namespace MyApp.Api.Tests;
+
 public class EmailWorkspaceTests
 {
     private const string Table = "<table><tr><th>ITEAM</th><th>UNIT</th><th>QTY</th><th>Indent</th></tr><tr><td>Steel bolt</td><td>Nos</td><td>22</td><td>1234</td></tr></table>";
@@ -244,7 +245,8 @@ public class EmailWorkspaceTests
         public Task<bool> HasAccessAsync(int userId, int companyId) => Task.FromResult(!DeniedUsers.Contains(userId) && Allowed.Contains(companyId));
         public async Task AssertAccessAsync(int userId, int companyId) { if (!await HasAccessAsync(userId, companyId)) throw new UnauthorizedAccessException(); }
         public Task<HashSet<int>> GetAccessibleCompanyIdsAsync(int userId) => Task.FromResult(DeniedUsers.Contains(userId) ? [] : Allowed);
-        public void InvalidateUser(int userId) { } public void InvalidateAll() { }
+        public void InvalidateUser(int userId) { }
+        public void InvalidateAll() { }
     }
     private sealed class FakePermissions : IPermissionService
     {
@@ -252,7 +254,8 @@ public class EmailWorkspaceTests
         public int SeedUserId;
         public Task<bool> HasPermissionAsync(int userId, string permissionKey) => Task.FromResult(permissionKey != "email.workspace.use" || ModuleEnabled);
         public Task<IReadOnlyCollection<string>> GetUserPermissionsAsync(int userId) => Task.FromResult<IReadOnlyCollection<string>>([]);
-        public void InvalidateUser(int userId) { } public void InvalidateAll() { }
+        public void InvalidateUser(int userId) { }
+        public void InvalidateAll() { }
         public bool IsSeedAdmin(int userId) => userId > 0 && userId == SeedUserId;
         public Task<bool> HasMcpToolAccessAsync(int userId, string toolName) => Task.FromResult(false);
     }

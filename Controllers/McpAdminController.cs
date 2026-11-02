@@ -53,11 +53,22 @@ public class McpAdminController(
         Response.Headers.CacheControl = "no-store";
         return Ok(rows.Select(t => new
         {
-            t.Id, t.Name, t.Hint, t.UserId, username = t.User?.Username, fullName = t.User?.FullName, allCompanies = t.AllCompanies,
+            t.Id,
+            t.Name,
+            t.Hint,
+            t.UserId,
+            username = t.User?.Username,
+            fullName = t.User?.FullName,
+            allCompanies = t.AllCompanies,
             companies = t.CompanyIdList().Select(id => new { id, name = names.GetValueOrDefault(id, "(deleted)") }),
-            scopes = t.Scopes.Split(',', StringSplitOptions.RemoveEmptyEntries), t.AllowWrites,
-            t.CreatedAt, t.ExpiresAt, t.LastUsedAt, t.RevokedAt,
-            status = t.Status(now), signIn = t.OAuthClientId != null,
+            scopes = t.Scopes.Split(',', StringSplitOptions.RemoveEmptyEntries),
+            t.AllowWrites,
+            t.CreatedAt,
+            t.ExpiresAt,
+            t.LastUsedAt,
+            t.RevokedAt,
+            status = t.Status(now),
+            signIn = t.OAuthClientId != null,
         }));
     }
 
@@ -71,9 +82,14 @@ public class McpAdminController(
         var reachable = await access.GetAccessibleCompanyIdsAsync(userId);
         var companies = await db.Companies.AsNoTracking().Where(c => reachable.Contains(c.Id)).OrderBy(c => c.Name)
             .Select(c => new { c.Id, c.Name }).ToListAsync();
-        return Ok(new { enabled = await permissions.HasPermissionAsync(userId, "mcp.access.use"), companies,
-                        canUseAllCompanies = permissions.IsSeedAdmin(userId), maxLifetimeDays = McpScopes.MaxLifetimeDays(permissions.IsSeedAdmin(userId)),
-                        scopesAvailable = await McpScopes.AvailableAsync(permissions, userId) });
+        return Ok(new
+        {
+            enabled = await permissions.HasPermissionAsync(userId, "mcp.access.use"),
+            companies,
+            canUseAllCompanies = permissions.IsSeedAdmin(userId),
+            maxLifetimeDays = McpScopes.MaxLifetimeDays(permissions.IsSeedAdmin(userId)),
+            scopesAvailable = await McpScopes.AvailableAsync(permissions, userId)
+        });
     }
 
     [HttpPost("tokens")]
@@ -103,9 +119,16 @@ public class McpAdminController(
         var now = DateTime.UtcNow;
         var token = new McpAgentToken
         {
-            UserId = user.Id, Name = name, TokenHash = McpAgentAuthHandler.Hash(secret), Hint = secret.Substring(0, McpAgentToken.Prefix.Length + 4),
-            CompanyIds = companyValue!, Scopes = string.Join(',', scopes), AllowWrites = scopes.Any(McpScopes.IsWrite),
-            CreatedAt = now, CreatedByUserId = CurrentUserId, ExpiresAt = now.AddDays(req.ExpiresInDays),
+            UserId = user.Id,
+            Name = name,
+            TokenHash = McpAgentAuthHandler.Hash(secret),
+            Hint = secret.Substring(0, McpAgentToken.Prefix.Length + 4),
+            CompanyIds = companyValue!,
+            Scopes = string.Join(',', scopes),
+            AllowWrites = scopes.Any(McpScopes.IsWrite),
+            CreatedAt = now,
+            CreatedByUserId = CurrentUserId,
+            ExpiresAt = now.AddDays(req.ExpiresInDays),
             SecurityStamp = user.SecurityStamp,
         };
         db.McpAgentTokens.Add(token);

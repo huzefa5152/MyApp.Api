@@ -128,10 +128,17 @@ namespace MyApp.Api.Services.Implementations
                     .Where(p => p.CompanyId == companyId && paymentIds.Contains(p.Id))
                     .Select(p => new ExpensePaymentInfo
                     {
-                        Id = p.Id, Number = p.Number, Direction = p.Direction,
-                        ContactType = p.ContactType, ContactId = p.ContactId, ContactName = p.ContactName,
-                        BankAccountId = p.BankAccountId, BankAccountName = p.BankAccountName,
-                        ChequeNumber = p.ChequeNumber, Description = p.Description, Method = p.Method,
+                        Id = p.Id,
+                        Number = p.Number,
+                        Direction = p.Direction,
+                        ContactType = p.ContactType,
+                        ContactId = p.ContactId,
+                        ContactName = p.ContactName,
+                        BankAccountId = p.BankAccountId,
+                        BankAccountName = p.BankAccountName,
+                        ChequeNumber = p.ChequeNumber,
+                        Description = p.Description,
+                        Method = p.Method,
                     })
                     .ToDictionaryAsync(p => p.Id);
 
@@ -141,8 +148,11 @@ namespace MyApp.Api.Services.Implementations
                     .Where(b => b.CompanyId == companyId && billIds.Contains(b.Id))
                     .Select(b => new ExpenseBillInfo
                     {
-                        Id = b.Id, Number = b.PurchaseBillNumber, SupplierBillNumber = b.SupplierBillNumber,
-                        SupplierId = b.SupplierId, SupplierName = b.Supplier!.Name,
+                        Id = b.Id,
+                        Number = b.PurchaseBillNumber,
+                        SupplierBillNumber = b.SupplierBillNumber,
+                        SupplierId = b.SupplierId,
+                        SupplierName = b.Supplier!.Name,
                     })
                     .ToDictionaryAsync(b => b.Id);
 
@@ -828,7 +838,8 @@ namespace MyApp.Api.Services.Implementations
                 .GroupBy(x => new { x.Account.Id, x.Account.Name })
                 .Select(g => new
                 {
-                    g.Key.Id, g.Key.Name,
+                    g.Key.Id,
+                    g.Key.Name,
                     Amount = g.Sum(x => x.Alloc.Amount - x.Alloc.TaxAmount),
                     Tax = g.Sum(x => x.Alloc.TaxAmount),
                     Count = g.Select(x => x.Payment.Id).Distinct().Count(),
@@ -848,7 +859,9 @@ namespace MyApp.Api.Services.Implementations
                 .GroupBy(x => new { x.Payment.ContactType, x.Payment.ContactId, x.Payment.ContactName })
                 .Select(g => new
                 {
-                    g.Key.ContactType, g.Key.ContactId, g.Key.ContactName,
+                    g.Key.ContactType,
+                    g.Key.ContactId,
+                    g.Key.ContactName,
                     Amount = g.Sum(x => x.Alloc.Amount - x.Alloc.TaxAmount),
                     Tax = g.Sum(x => x.Alloc.TaxAmount),
                     Count = g.Select(x => x.Payment.Id).Distinct().Count(),
@@ -866,7 +879,9 @@ namespace MyApp.Api.Services.Implementations
                     DrillKey = r.ContactId?.ToString(),
                     Label = ResolvePartyName(payeeNames, r.ContactType, r.ContactId, r.ContactName)
                             ?? "Not recorded",
-                    Amount = r.Amount, Tax = r.Tax, Count = r.Count,
+                    Amount = r.Amount,
+                    Tax = r.Tax,
+                    Count = r.Count,
                 }).OrderByDescending(r => r.Amount).ToList(),
                 Total = byPayee.Sum(r => r.Amount),
             });
@@ -905,15 +920,15 @@ namespace MyApp.Api.Services.Implementations
         /// </summary>
         private static string DescribeSource(SourceDocType type, int entryNo,
             ExpensePaymentInfo? pay, ExpenseBillInfo? bill) => type switch
-        {
-            SourceDocType.Payment when pay != null => PaymentRef(pay.Direction, pay.Number),
-            SourceDocType.PurchaseBill when bill != null => $"BILL-{bill.Number}",
-            SourceDocType.ManualJournal => $"JE-{entryNo}",
-            SourceDocType.PurchaseDebitNote => $"PDN-{entryNo}",
-            SourceDocType.AccountTransfer => $"TRF-{entryNo}",
-            SourceDocType.Invoice => $"INV-{entryNo}",
-            _ => $"JE-{entryNo}",
-        };
+            {
+                SourceDocType.Payment when pay != null => PaymentRef(pay.Direction, pay.Number),
+                SourceDocType.PurchaseBill when bill != null => $"BILL-{bill.Number}",
+                SourceDocType.ManualJournal => $"JE-{entryNo}",
+                SourceDocType.PurchaseDebitNote => $"PDN-{entryNo}",
+                SourceDocType.AccountTransfer => $"TRF-{entryNo}",
+                SourceDocType.Invoice => $"INV-{entryNo}",
+                _ => $"JE-{entryNo}",
+            };
 
         private static string? FirstNonEmpty(params string?[] values) =>
             values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));

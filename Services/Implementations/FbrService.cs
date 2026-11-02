@@ -169,11 +169,11 @@ namespace MyApp.Api.Services.Implementations
                 ["Goods at Standard Rate (default)"] = "Goods at Standard Rate (default)",
                 ["Goods at standard rate (default)"] = "Goods at Standard Rate (default)",
                 ["goods at standard rate (default)"] = "Goods at Standard Rate (default)",
-                ["3rd Schedule Goods"]               = "3rd Schedule Goods",
-                ["Goods at Reduced Rate"]            = "Goods at Reduced Rate",
-                ["Goods at zero-rate"]               = "Goods at zero-rate",
-                ["Exempt Goods"]                     = "Exempt Goods",
-                ["Exempt goods"]                     = "Exempt Goods",
+                ["3rd Schedule Goods"] = "3rd Schedule Goods",
+                ["Goods at Reduced Rate"] = "Goods at Reduced Rate",
+                ["Goods at zero-rate"] = "Goods at zero-rate",
+                ["Exempt Goods"] = "Exempt Goods",
+                ["Exempt goods"] = "Exempt Goods",
             };
 
         internal static string NormalizeSaleType(string? saleType)
@@ -258,24 +258,24 @@ namespace MyApp.Api.Services.Implementations
             // overlay carries one, falling back to the bill row otherwise.
             return new InvoiceItem
             {
-                Id              = ii.Id,
-                InvoiceId       = ii.InvoiceId,
-                DeliveryItemId  = ii.DeliveryItemId,
-                ItemTypeId      = a?.AdjustedItemTypeId   ?? ii.ItemTypeId,
-                ItemTypeName    = a?.AdjustedItemTypeName ?? ii.ItemTypeName,
-                Description     = ii.Description,
-                Quantity        = a?.AdjustedQuantity   ?? ii.Quantity,
-                UOM             = TaxInvoiceGrouping.Uom(ii),
-                UnitPrice       = a?.AdjustedUnitPrice  ?? ii.UnitPrice,
-                LineTotal       = a?.AdjustedLineTotal  ?? ii.LineTotal,
-                HSCode          = a?.AdjustedHSCode      ?? ii.HSCode,
-                FbrUOMId        = TaxInvoiceGrouping.FbrUomId(ii),
-                SaleType        = a?.AdjustedSaleType    ?? ii.SaleType,
-                RateId          = ii.RateId,
+                Id = ii.Id,
+                InvoiceId = ii.InvoiceId,
+                DeliveryItemId = ii.DeliveryItemId,
+                ItemTypeId = a?.AdjustedItemTypeId ?? ii.ItemTypeId,
+                ItemTypeName = a?.AdjustedItemTypeName ?? ii.ItemTypeName,
+                Description = ii.Description,
+                Quantity = a?.AdjustedQuantity ?? ii.Quantity,
+                UOM = TaxInvoiceGrouping.Uom(ii),
+                UnitPrice = a?.AdjustedUnitPrice ?? ii.UnitPrice,
+                LineTotal = a?.AdjustedLineTotal ?? ii.LineTotal,
+                HSCode = a?.AdjustedHSCode ?? ii.HSCode,
+                FbrUOMId = TaxInvoiceGrouping.FbrUomId(ii),
+                SaleType = a?.AdjustedSaleType ?? ii.SaleType,
+                RateId = ii.RateId,
                 FixedNotifiedValueOrRetailPrice = ii.FixedNotifiedValueOrRetailPrice,
-                SroScheduleNo   = ii.SroScheduleNo,
+                SroScheduleNo = ii.SroScheduleNo,
                 SroItemSerialNo = ii.SroItemSerialNo,
-                ItemType        = ii.ItemType,
+                ItemType = ii.ItemType,
             };
         }
 
@@ -500,7 +500,7 @@ namespace MyApp.Api.Services.Implementations
             // so pre-validate and payload build always agree on the sanitised value.
             // The local aliases keep the call sites below readable.
             static string StripDigits(string? v) => StripAllDigits(v);
-            static string StripNtn(string? v)    => SanitizeNtn(v);
+            static string StripNtn(string? v) => SanitizeNtn(v);
 
             // ─ Seller ─
             // Seller identity comes from the dedicated FBR seller registration
@@ -718,7 +718,7 @@ namespace MyApp.Api.Services.Implementations
             if (invoice.TaxFilingRowsJson == null && invoice.Items != null && invoice.Items.Any(ii => ii.Adjustment != null))
             {
                 var billSubtotal = invoice.Items.Sum(ii => ii.LineTotal);
-                var fbrSubtotal  = invoice.Items.Sum(ii =>
+                var fbrSubtotal = invoice.Items.Sum(ii =>
                     ii.Adjustment != null && ii.Adjustment.AdjustedLineTotal.HasValue
                         ? ii.Adjustment.AdjustedLineTotal.Value
                         : ii.LineTotal);
@@ -952,11 +952,11 @@ namespace MyApp.Api.Services.Implementations
                             if (!line.ItemTypeId.HasValue) continue;
                             if (!liveTypes.TryGetValue(line.ItemTypeId.Value, out var t)) continue;
 
-                            if (line.HSCode       != t.HSCode)        { line.HSCode = t.HSCode;        anyChanged = true; }
+                            if (line.HSCode != t.HSCode) { line.HSCode = t.HSCode; anyChanged = true; }
                             // Commercial UOM remains on the bill; the tax view resolves the catalog UOM.
-                            if (line.FbrUOMId     != t.FbrUOMId)      { line.FbrUOMId = t.FbrUOMId;    anyChanged = true; }
-                            if (line.SaleType     != t.SaleType)      { line.SaleType = t.SaleType;    anyChanged = true; }
-                            if (line.ItemTypeName != t.Name)          { line.ItemTypeName = t.Name;    anyChanged = true; }
+                            if (line.FbrUOMId != t.FbrUOMId) { line.FbrUOMId = t.FbrUOMId; anyChanged = true; }
+                            if (line.SaleType != t.SaleType) { line.SaleType = t.SaleType; anyChanged = true; }
+                            if (line.ItemTypeName != t.Name) { line.ItemTypeName = t.Name; anyChanged = true; }
                         }
 
                         if (anyChanged)
@@ -2136,8 +2136,14 @@ namespace MyApp.Api.Services.Implementations
                 var known = stored.Select(s => s.Code.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
                 var next = stored.Max(s => s.SortOrder) + 1;
                 var added = live.Where(h => !string.IsNullOrWhiteSpace(h.HS_CODE) && known.Add(h.HS_CODE.Trim()))
-                    .Select(h => new FbrLookup { Category = HsCodeLookupCategory, Code = h.HS_CODE.Trim(),
-                        Label = h.Description?.Trim() ?? "", SortOrder = next++, IsActive = true }).ToList();
+                    .Select(h => new FbrLookup
+                    {
+                        Category = HsCodeLookupCategory,
+                        Code = h.HS_CODE.Trim(),
+                        Label = h.Description?.Trim() ?? "",
+                        SortOrder = next++,
+                        IsActive = true
+                    }).ToList();
                 if (added.Count == 0) return current;
                 _db.FbrLookups.AddRange(added);
                 await _db.SaveChangesAsync();

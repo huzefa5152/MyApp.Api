@@ -48,9 +48,9 @@ namespace MyApp.Api.Repositories.Implementations
 
             q = (sortBy?.Trim().ToLowerInvariant()) switch
             {
-                "filename"      => descending ? q.OrderByDescending(f => f.OriginalFileName) : q.OrderBy(f => f.OriginalFileName),
-                "parserversion" => descending ? q.OrderByDescending(f => f.ParserVersion)    : q.OrderBy(f => f.ParserVersion),
-                _               => descending ? q.OrderByDescending(f => f.CreatedDate)      : q.OrderBy(f => f.CreatedDate),
+                "filename" => descending ? q.OrderByDescending(f => f.OriginalFileName) : q.OrderBy(f => f.OriginalFileName),
+                "parserversion" => descending ? q.OrderByDescending(f => f.ParserVersion) : q.OrderBy(f => f.ParserVersion),
+                _ => descending ? q.OrderByDescending(f => f.CreatedDate) : q.OrderBy(f => f.CreatedDate),
             };
 
             var rows = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();

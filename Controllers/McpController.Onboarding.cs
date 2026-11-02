@@ -42,17 +42,24 @@ public partial class McpController
         }
         return new
         {
-            companyId, maxRowsPerSheet = OnboardingSchema.MaxRowsPerSheet,
+            companyId,
+            maxRowsPerSheet = OnboardingSchema.MaxRowsPerSheet,
             identifierRule = "Keep identifiers as text. Never infer missing identifiers or opening quantities.",
             existingRecordRule = "Existing records and opening balances are skipped, never overwritten.",
             sheets = allowed.Select(sheet => new
             {
-                key = sheet.Key, title = sheet.Title, purpose = sheet.Purpose,
+                key = sheet.Key,
+                title = sheet.Title,
+                purpose = sheet.Purpose,
                 columns = sheet.Columns.Select(column => new
                 {
-                    key = column.Key, heading = column.Heading, kind = column.Kind.ToString().ToLowerInvariant(),
-                    requirement = column.Requirement.ToString().ToLowerInvariant(), help = column.Help,
-                    listSource = column.List.ToString(), maxLength = column.MaxLength,
+                    key = column.Key,
+                    heading = column.Heading,
+                    kind = column.Kind.ToString().ToLowerInvariant(),
+                    requirement = column.Requirement.ToString().ToLowerInvariant(),
+                    help = column.Help,
+                    listSource = column.List.ToString(),
+                    maxLength = column.MaxLength,
                 }).ToArray(),
             }).ToArray(),
             financialOpeningImportSupported = false,

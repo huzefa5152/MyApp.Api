@@ -108,7 +108,7 @@ namespace MyApp.Api.Services.Implementations
                 switch (oneResult.Outcome)
                 {
                     case "imported": response.Counts.InvoicesImported++; break;
-                    case "skipped":  response.Counts.InvoicesSkipped++;  break;
+                    case "skipped": response.Counts.InvoicesSkipped++; break;
                     case "failed":
                         response.Counts.InvoicesFailed++;
                         _logger.LogWarning("FBR import: invoice {InvoiceNo} failed: {Error}",
@@ -178,8 +178,8 @@ namespace MyApp.Api.Services.Implementations
                 foreach (var (row, _) in group)
                 {
                     totalValueExclTax += row.ValueExclTax ?? 0m;
-                    totalSalesTax     += row.SalesTax    ?? 0m;
-                    totalGross        += row.TotalValueOfSales ?? 0m;
+                    totalSalesTax += row.SalesTax ?? 0m;
+                    totalGross += row.TotalValueOfSales ?? 0m;
                 }
                 if (totalGross == 0m) totalGross = totalValueExclTax + totalSalesTax;
 
@@ -364,17 +364,17 @@ namespace MyApp.Api.Services.Implementations
             {
                 switch (l.Decision)
                 {
-                    case ImportDecision.WillImport:         c.WillImport++; break;
-                    case ImportDecision.ProductWillCreate:  c.ProductWillCreate++; break;
-                    case ImportDecision.AlreadyExists:      c.AlreadyExists++; break;
-                    case ImportDecision.SkipAlreadyClaimed:    c.SkipAlreadyClaimed++; break;
+                    case ImportDecision.WillImport: c.WillImport++; break;
+                    case ImportDecision.ProductWillCreate: c.ProductWillCreate++; break;
+                    case ImportDecision.AlreadyExists: c.AlreadyExists++; break;
+                    case ImportDecision.SkipAlreadyClaimed: c.SkipAlreadyClaimed++; break;
                     case ImportDecision.SkipUnregisteredSeller: c.SkipUnregisteredSeller++; break;
-                    case ImportDecision.SkipCancelled:         c.SkipCancelled++; break;
-                    case ImportDecision.SkipWrongType:      c.SkipWrongType++; break;
-                    case ImportDecision.SkipNoHsCode:       c.SkipNoHsCode++; break;
-                    case ImportDecision.SkipZeroQty:        c.SkipZeroQty++; break;
-                    case ImportDecision.SkipNoDescription:  c.SkipNoDescription++; break;
-                    case ImportDecision.FailedValidation:   c.FailedValidation++; break;
+                    case ImportDecision.SkipCancelled: c.SkipCancelled++; break;
+                    case ImportDecision.SkipWrongType: c.SkipWrongType++; break;
+                    case ImportDecision.SkipNoHsCode: c.SkipNoHsCode++; break;
+                    case ImportDecision.SkipZeroQty: c.SkipZeroQty++; break;
+                    case ImportDecision.SkipNoDescription: c.SkipNoDescription++; break;
+                    case ImportDecision.FailedValidation: c.FailedValidation++; break;
                 }
             }
         }

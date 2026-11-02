@@ -43,75 +43,75 @@ namespace MyApp.Api.Helpers
                 switch (group.Key)
                 {
                     case AttachmentEntityTypes.SalesQuote:
-                    {
-                        var map = await ctx.SalesQuotes.AsNoTracking()
-                            .Where(x => ids.Contains(x.Id))
-                            .ToDictionaryAsync(x => x.Id, x => x.QuoteNumber);
-                        Apply(group, map, _ => "Sales Quote");
-                        break;
-                    }
+                        {
+                            var map = await ctx.SalesQuotes.AsNoTracking()
+                                .Where(x => ids.Contains(x.Id))
+                                .ToDictionaryAsync(x => x.Id, x => x.QuoteNumber);
+                            Apply(group, map, _ => "Sales Quote");
+                            break;
+                        }
                     case AttachmentEntityTypes.SalesOrder:
-                    {
-                        var map = await ctx.SalesOrders.AsNoTracking()
-                            .Where(x => ids.Contains(x.Id))
-                            .ToDictionaryAsync(x => x.Id, x => x.SalesOrderNumber);
-                        Apply(group, map, _ => "Sales Order");
-                        break;
-                    }
+                        {
+                            var map = await ctx.SalesOrders.AsNoTracking()
+                                .Where(x => ids.Contains(x.Id))
+                                .ToDictionaryAsync(x => x.Id, x => x.SalesOrderNumber);
+                            Apply(group, map, _ => "Sales Order");
+                            break;
+                        }
                     case AttachmentEntityTypes.DeliveryChallan:
-                    {
-                        var map = await ctx.DeliveryChallans.AsNoTracking()
-                            .Where(x => ids.Contains(x.Id))
-                            .ToDictionaryAsync(x => x.Id, x => x.ChallanNumber);
-                        Apply(group, map, _ => "Delivery Challan");
-                        break;
-                    }
+                        {
+                            var map = await ctx.DeliveryChallans.AsNoTracking()
+                                .Where(x => ids.Contains(x.Id))
+                                .ToDictionaryAsync(x => x.Id, x => x.ChallanNumber);
+                            Apply(group, map, _ => "Delivery Challan");
+                            break;
+                        }
                     case AttachmentEntityTypes.Invoice:
-                    {
-                        // Invoice covers sale invoices, bills, and credit/debit
-                        // notes — NoteKind (0 sale, 1 debit note, 2 credit note)
-                        // picks the label.
-                        var rows = await ctx.Invoices.AsNoTracking()
-                            .Where(x => ids.Contains(x.Id))
-                            .Select(x => new { x.Id, x.InvoiceNumber, x.NoteKind })
-                            .ToListAsync();
-                        var numMap = rows.ToDictionary(r => r.Id, r => r.InvoiceNumber);
-                        var kindMap = rows.ToDictionary(r => r.Id, r => r.NoteKind);
-                        Apply(group, numMap, id => kindMap.TryGetValue(id, out var k)
-                            ? k switch { 1 => "Debit Note", 2 => "Credit Note", _ => "Invoice" }
-                            : "Invoice");
-                        break;
-                    }
+                        {
+                            // Invoice covers sale invoices, bills, and credit/debit
+                            // notes — NoteKind (0 sale, 1 debit note, 2 credit note)
+                            // picks the label.
+                            var rows = await ctx.Invoices.AsNoTracking()
+                                .Where(x => ids.Contains(x.Id))
+                                .Select(x => new { x.Id, x.InvoiceNumber, x.NoteKind })
+                                .ToListAsync();
+                            var numMap = rows.ToDictionary(r => r.Id, r => r.InvoiceNumber);
+                            var kindMap = rows.ToDictionary(r => r.Id, r => r.NoteKind);
+                            Apply(group, numMap, id => kindMap.TryGetValue(id, out var k)
+                                ? k switch { 1 => "Debit Note", 2 => "Credit Note", _ => "Invoice" }
+                                : "Invoice");
+                            break;
+                        }
                     case AttachmentEntityTypes.PurchaseBill:
-                    {
-                        var map = await ctx.PurchaseBills.AsNoTracking()
-                            .Where(x => ids.Contains(x.Id))
-                            .ToDictionaryAsync(x => x.Id, x => x.PurchaseBillNumber);
-                        Apply(group, map, _ => "Purchase Bill");
-                        break;
-                    }
+                        {
+                            var map = await ctx.PurchaseBills.AsNoTracking()
+                                .Where(x => ids.Contains(x.Id))
+                                .ToDictionaryAsync(x => x.Id, x => x.PurchaseBillNumber);
+                            Apply(group, map, _ => "Purchase Bill");
+                            break;
+                        }
                     case AttachmentEntityTypes.GoodsReceipt:
-                    {
-                        var map = await ctx.GoodsReceipts.AsNoTracking()
-                            .Where(x => ids.Contains(x.Id))
-                            .ToDictionaryAsync(x => x.Id, x => x.GoodsReceiptNumber);
-                        Apply(group, map, _ => "Goods Receipt");
-                        break;
-                    }
+                        {
+                            var map = await ctx.GoodsReceipts.AsNoTracking()
+                                .Where(x => ids.Contains(x.Id))
+                                .ToDictionaryAsync(x => x.Id, x => x.GoodsReceiptNumber);
+                            Apply(group, map, _ => "Goods Receipt");
+                            break;
+                        }
                     case AttachmentEntityTypes.Payment:
-                    {
-                        // Direction flips the label: Receipt (money in) vs Payment (out).
-                        var rows = await ctx.Payments.AsNoTracking()
-                            .Where(x => ids.Contains(x.Id))
-                            .Select(x => new { x.Id, x.Number, x.Direction })
-                            .ToListAsync();
-                        var numMap = rows.ToDictionary(r => r.Id, r => r.Number);
-                        var dirMap = rows.ToDictionary(r => r.Id, r => r.Direction);
-                        Apply(group, numMap, id => dirMap.TryGetValue(id, out var dir)
-                            ? (dir == PaymentDirection.Payment ? "Payment" : "Receipt")
-                            : "Receipt");
-                        break;
-                    }
+                        {
+                            // Direction flips the label: Receipt (money in) vs Payment (out).
+                            var rows = await ctx.Payments.AsNoTracking()
+                                .Where(x => ids.Contains(x.Id))
+                                .Select(x => new { x.Id, x.Number, x.Direction })
+                                .ToListAsync();
+                            var numMap = rows.ToDictionary(r => r.Id, r => r.Number);
+                            var dirMap = rows.ToDictionary(r => r.Id, r => r.Direction);
+                            Apply(group, numMap, id => dirMap.TryGetValue(id, out var dir)
+                                ? (dir == PaymentDirection.Payment ? "Payment" : "Receipt")
+                                : "Receipt");
+                            break;
+                        }
                     default:
                         // Unknown/stale type — label by the raw type, no number.
                         foreach (var d in group) d.SourceLabel = group.Key;

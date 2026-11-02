@@ -62,11 +62,19 @@ namespace MyApp.Api.Controllers
             description = "Prepare a new client, or an update when clientId is given. Nothing is saved: returns a plan to show the user. Call commit_action only after they approve.",
             inputSchema = Schema(new
             {
-                companyId = WCompanyId, clientId = new { type = "integer", minimum = 1, description = "Omit to create; give to update only the fields you pass." },
-                name = new { type = "string", maxLength = 200 }, address = new { type = "string", maxLength = 500 }, phone = new { type = "string", maxLength = 50 },
-                email = new { type = "string", maxLength = 200 }, ntn = new { type = "string", maxLength = 50 }, strn = new { type = "string", maxLength = 50 },
-                cnic = new { type = "string", maxLength = 50 }, site = new { type = "string", maxLength = 200 }, contactPerson = new { type = "string", maxLength = 300 },
-                registrationType = new { type = "string", @enum = new[] { "Registered", "Unregistered" } }, fbrProvinceCode = new { type = "integer", minimum = 1 },
+                companyId = WCompanyId,
+                clientId = new { type = "integer", minimum = 1, description = "Omit to create; give to update only the fields you pass." },
+                name = new { type = "string", maxLength = 200 },
+                address = new { type = "string", maxLength = 500 },
+                phone = new { type = "string", maxLength = 50 },
+                email = new { type = "string", maxLength = 200 },
+                ntn = new { type = "string", maxLength = 50 },
+                strn = new { type = "string", maxLength = 50 },
+                cnic = new { type = "string", maxLength = 50 },
+                site = new { type = "string", maxLength = 200 },
+                contactPerson = new { type = "string", maxLength = 300 },
+                registrationType = new { type = "string", @enum = new[] { "Registered", "Unregistered" } },
+                fbrProvinceCode = new { type = "integer", minimum = 1 },
                 idempotencyKey = IdemKeyProp,
             }, "companyId"),
             annotations = PrepareAnnotations,
@@ -78,21 +86,31 @@ namespace MyApp.Api.Controllers
             description = "Prepare a sales quotation (never a bill or FBR invoice). Nothing is saved: returns exact totals to show the user. Call commit_action only after they approve.",
             inputSchema = Schema(new
             {
-                companyId = WCompanyId, clientId = new { type = "integer", minimum = 1 },
-                date = new { type = "string", format = "date", description = "Defaults to today." }, validUntil = new { type = "string", format = "date" },
-                customerEnquiryRef = new { type = "string", maxLength = 200 }, enquiryDate = new { type = "string", format = "date" },
-                notes = new { type = "string", maxLength = 2000 }, contactPerson = new { type = "string", maxLength = 300 },
+                companyId = WCompanyId,
+                clientId = new { type = "integer", minimum = 1 },
+                date = new { type = "string", format = "date", description = "Defaults to today." },
+                validUntil = new { type = "string", format = "date" },
+                customerEnquiryRef = new { type = "string", maxLength = 200 },
+                enquiryDate = new { type = "string", format = "date" },
+                notes = new { type = "string", maxLength = 2000 },
+                contactPerson = new { type = "string", maxLength = 300 },
                 gstRate = new { type = "string", description = "Percent, up to 2 decimals. Default 18." },
                 items = new
                 {
-                    type = "array", minItems = 1, maxItems = 100,
+                    type = "array",
+                    minItems = 1,
+                    maxItems = 100,
                     items = new
                     {
-                        type = "object", additionalProperties = false, required = new[] { "description", "quantity", "unit", "unitPrice" },
+                        type = "object",
+                        additionalProperties = false,
+                        required = new[] { "description", "quantity", "unit", "unitPrice" },
                         properties = new
                         {
-                            description = new { type = "string", maxLength = 500 }, quantity = new { type = "string", description = "Up to 4 decimals." },
-                            unit = new { type = "string", maxLength = 50 }, unitPrice = new { type = "string", description = "PKR, up to 2 decimals." },
+                            description = new { type = "string", maxLength = 500 },
+                            quantity = new { type = "string", description = "Up to 4 decimals." },
+                            unit = new { type = "string", maxLength = 50 },
+                            unitPrice = new { type = "string", description = "PKR, up to 2 decimals." },
                             itemTypeId = new { type = "integer", minimum = 1 },
                         },
                     },
@@ -220,10 +238,15 @@ namespace MyApp.Api.Controllers
             if (!await _permissions.HasMcpToolAccessAsync(CurrentUserId, PrepareToolFor(prior.Kind)))
                 throw new ToolError("Resource unavailable or access denied.");
             if (prior.CommittedAt != null)
-                return new { alreadyDone = !string.IsNullOrEmpty(prior.ResultRef) && prior.ResultRef != "FAILED",
-                    planId = prior.PlanId, prior.ResultRef, summary = prior.ResultSummary ?? prior.Summary,
+                return new
+                {
+                    alreadyDone = !string.IsNullOrEmpty(prior.ResultRef) && prior.ResultRef != "FAILED",
+                    planId = prior.PlanId,
+                    prior.ResultRef,
+                    summary = prior.ResultSummary ?? prior.Summary,
                     status = prior.ResultRef == "FAILED" ? "failedOrIncomplete" : string.IsNullOrEmpty(prior.ResultRef) ? "executingOrUnknown" : "succeeded",
-                    note = "This request was already claimed. Check its outcome; do not create a duplicate." };
+                    note = "This request was already claimed. Check its outcome; do not create a duplicate."
+                };
             if (prior.ExpiresAt > DateTime.UtcNow)
                 return PlanResponse(prior, "This request was already prepared. Reusing the same plan.");
             // Expired and never committed: the key is free again for a fresh plan.
@@ -233,10 +256,14 @@ namespace MyApp.Api.Controllers
 
         private object PlanResponse(McpPendingAction plan, string? note = null) => new
         {
-            planId = plan.PlanId, kind = plan.Kind, companyId = plan.CompanyId, summary = plan.Summary,
+            planId = plan.PlanId,
+            kind = plan.Kind,
+            companyId = plan.CompanyId,
+            summary = plan.Summary,
             details = JsonSerializer.Deserialize<JsonElement>(plan.Payload),
             expiresInSeconds = Math.Max(0, (int)(plan.ExpiresAt - DateTime.UtcNow).TotalSeconds),
-            saved = false, note,
+            saved = false,
+            note,
             instruction = "Nothing has been saved. Show this plan to the user and obtain approval, then call commit_action with the planId.",
         };
 
@@ -249,9 +276,15 @@ namespace MyApp.Api.Controllers
             var plan = new McpPendingAction
             {
                 PlanId = "plan_" + Convert.ToBase64String(RandomNumberGenerator.GetBytes(24)).Replace('+', '-').Replace('/', '_').TrimEnd('='),
-                AgentTokenId = agent.Id, UserId = CurrentUserId, CompanyId = companyId, Kind = kind,
-                Payload = JsonSerializer.Serialize(payload, Json), Summary = Trunc(summary, 1000), IdempotencyKey = key,
-                CreatedAt = now, ExpiresAt = now.AddMinutes(McpPendingAction.LifetimeMinutes),
+                AgentTokenId = agent.Id,
+                UserId = CurrentUserId,
+                CompanyId = companyId,
+                Kind = kind,
+                Payload = JsonSerializer.Serialize(payload, Json),
+                Summary = Trunc(summary, 1000),
+                IdempotencyKey = key,
+                CreatedAt = now,
+                ExpiresAt = now.AddMinutes(McpPendingAction.LifetimeMinutes),
             };
             _context.McpPendingActions.Add(plan);
             await _context.SaveChangesAsync();
@@ -312,8 +345,19 @@ namespace MyApp.Api.Controllers
             var kind = clientId.HasValue ? "client.update" : "client.create";
             var payload = new
             {
-                dto.Id, dto.CompanyId, dto.Name, dto.Address, dto.Phone, dto.Email, dto.NTN, dto.STRN, dto.CNIC, dto.Site,
-                dto.ContactPerson, dto.RegistrationType, dto.FbrProvinceCode,
+                dto.Id,
+                dto.CompanyId,
+                dto.Name,
+                dto.Address,
+                dto.Phone,
+                dto.Email,
+                dto.NTN,
+                dto.STRN,
+                dto.CNIC,
+                dto.Site,
+                dto.ContactPerson,
+                dto.RegistrationType,
+                dto.FbrProvinceCode,
             };
             var summary = clientId.HasValue
                 ? $"Update client #{dto.Id} \"{dto.Name}\" in company {companyId}"
@@ -366,12 +410,21 @@ namespace MyApp.Api.Controllers
 
             var payload = new
             {
-                companyId, clientId, clientName = client.Name, date = date.ToString("yyyy-MM-dd"),
-                validUntil = OptDate(args, "validUntil")?.ToString("yyyy-MM-dd"), customerEnquiryRef = OptText(args, "customerEnquiryRef", 200),
-                enquiryDate = OptDate(args, "enquiryDate")?.ToString("yyyy-MM-dd"), notes = OptText(args, "notes", 2000),
-                contactPerson = OptText(args, "contactPerson", 300), gstRate = gst,
+                companyId,
+                clientId,
+                clientName = client.Name,
+                date = date.ToString("yyyy-MM-dd"),
+                validUntil = OptDate(args, "validUntil")?.ToString("yyyy-MM-dd"),
+                customerEnquiryRef = OptText(args, "customerEnquiryRef", 200),
+                enquiryDate = OptDate(args, "enquiryDate")?.ToString("yyyy-MM-dd"),
+                notes = OptText(args, "notes", 2000),
+                contactPerson = OptText(args, "contactPerson", 300),
+                gstRate = gst,
                 items = lines.Select(l => new { l.Description, l.Quantity, l.Unit, l.UnitPrice, l.ItemTypeId, l.LineTotal }),
-                subtotal, gstAmount, grandTotal = subtotal + gstAmount, currency = "PKR",
+                subtotal,
+                gstAmount,
+                grandTotal = subtotal + gstAmount,
+                currency = "PKR",
             };
             var summary = $"Create a sales quotation for \"{client.Name}\" in company {companyId}: {lines.Count} line(s), subtotal {subtotal:0.00}, GST {gst}% = {gstAmount:0.00}, total {subtotal + gstAmount:0.00} PKR";
             return await StorePlanAsync(agent, "quote.create", companyId, payload, summary, key);
@@ -481,101 +534,101 @@ namespace MyApp.Api.Controllers
                 switch (plan.Kind)
                 {
                     case "template.update":
-                    {
-                        (resultRef, resultSummary) = await CommitPrintTemplateAsync(plan, p);
-                        break;
-                    }
+                        {
+                            (resultRef, resultSummary) = await CommitPrintTemplateAsync(plan, p);
+                            break;
+                        }
                     case "starter.create":
                     case "starter.update":
                     case "starter.activate":
                     case "starter.deactivate":
                     case "starter.delete":
-                    {
-                        (resultRef, resultSummary) = await CommitStarterAsync(plan, p);
-                        break;
-                    }
+                        {
+                            (resultRef, resultSummary) = await CommitStarterAsync(plan, p);
+                            break;
+                        }
                     case "email.decision":
                     case "email.quote":
-                    {
-                        (resultRef, resultSummary) = await CommitEmailPlanAsync(plan, p);
-                        break;
-                    }
+                        {
+                            (resultRef, resultSummary) = await CommitEmailPlanAsync(plan, p);
+                            break;
+                        }
                     case "client.create":
-                    {
-                        var created = await _clients.CreateAsync(ClientFromPlan(p));
-                        (resultRef, resultSummary) = ($"Client:{created.Id}", $"Created client #{created.Id} \"{created.Name}\"");
-                        break;
-                    }
+                        {
+                            var created = await _clients.CreateAsync(ClientFromPlan(p));
+                            (resultRef, resultSummary) = ($"Client:{created.Id}", $"Created client #{created.Id} \"{created.Name}\"");
+                            break;
+                        }
                     case "client.update":
-                    {
-                        var updated = await _clients.UpdateAsync(ClientFromPlan(p));
-                        (resultRef, resultSummary) = ($"Client:{updated.Id}", $"Updated client #{updated.Id} \"{updated.Name}\"");
-                        break;
-                    }
+                        {
+                            var updated = await _clients.UpdateAsync(ClientFromPlan(p));
+                            (resultRef, resultSummary) = ($"Client:{updated.Id}", $"Updated client #{updated.Id} \"{updated.Name}\"");
+                            break;
+                        }
                     case "quote.create":
-                    {
-                        var created = await _quotes.CreateAsync(plan.CompanyId, QuoteFromPlan(p));
-                        (resultRef, resultSummary) = ($"SalesQuote:{created.Id}",
-                            $"Created quotation #{created.QuoteNumber} (id {created.Id}) for \"{created.ClientName}\", total {created.GrandTotal:0.00} PKR");
-                        break;
-                    }
+                        {
+                            var created = await _quotes.CreateAsync(plan.CompanyId, QuoteFromPlan(p));
+                            (resultRef, resultSummary) = ($"SalesQuote:{created.Id}",
+                                $"Created quotation #{created.QuoteNumber} (id {created.Id}) for \"{created.ClientName}\", total {created.GrandTotal:0.00} PKR");
+                            break;
+                        }
                     case "challan.create":
-                    {
-                        var created = await _challans.CreateDeliveryChallanAsync(plan.CompanyId, ChallanFromPlan(p, plan.CompanyId));
-                        (resultRef, resultSummary) = ($"DeliveryChallan:{created.Id}",
-                            $"Created challan #{created.ChallanNumber} (id {created.Id}) for \"{created.ClientName}\", status {created.Status}");
-                        break;
-                    }
+                        {
+                            var created = await _challans.CreateDeliveryChallanAsync(plan.CompanyId, ChallanFromPlan(p, plan.CompanyId));
+                            (resultRef, resultSummary) = ($"DeliveryChallan:{created.Id}",
+                                $"Created challan #{created.ChallanNumber} (id {created.Id}) for \"{created.ClientName}\", status {created.Status}");
+                            break;
+                        }
                     case "bill.create":
-                    {
-                        var created = await _invoices.CreateAsync(BillFromChallansPlan(p, plan.CompanyId));
-                        (resultRef, resultSummary) = ($"Invoice:{created.Id}",
-                            $"Created bill #{created.InvoiceNumber} (id {created.Id}) for \"{created.ClientName}\", total {CommercialTotalCalculator.Total(created.GrandTotal, created.FreightCharges):0.00} PKR. Not submitted to FBR");
-                        break;
-                    }
+                        {
+                            var created = await _invoices.CreateAsync(BillFromChallansPlan(p, plan.CompanyId));
+                            (resultRef, resultSummary) = ($"Invoice:{created.Id}",
+                                $"Created bill #{created.InvoiceNumber} (id {created.Id}) for \"{created.ClientName}\", total {CommercialTotalCalculator.Total(created.GrandTotal, created.FreightCharges):0.00} PKR. Not submitted to FBR");
+                            break;
+                        }
                     case "bill.standalone":
-                    {
-                        var created = await _invoices.CreateStandaloneAsync(StandaloneBillFromPlan(p, plan.CompanyId));
-                        (resultRef, resultSummary) = ($"Invoice:{created.Id}",
-                            $"Created bill #{created.InvoiceNumber} (id {created.Id}) for \"{created.ClientName}\", total {CommercialTotalCalculator.Total(created.GrandTotal, created.FreightCharges):0.00} PKR. Not submitted to FBR");
-                        break;
-                    }
+                        {
+                            var created = await _invoices.CreateStandaloneAsync(StandaloneBillFromPlan(p, plan.CompanyId));
+                            (resultRef, resultSummary) = ($"Invoice:{created.Id}",
+                                $"Created bill #{created.InvoiceNumber} (id {created.Id}) for \"{created.ClientName}\", total {CommercialTotalCalculator.Total(created.GrandTotal, created.FreightCharges):0.00} PKR. Not submitted to FBR");
+                            break;
+                        }
                     case "supplier.create":
-                    {
-                        var created = await OperationService<ISupplierService>().CreateAsync(SupplierFromPlan(p));
-                        (resultRef, resultSummary) = ($"Supplier:{created.Id}", $"Created supplier #{created.Id} \"{created.Name}\"");
-                        break;
-                    }
+                        {
+                            var created = await OperationService<ISupplierService>().CreateAsync(SupplierFromPlan(p));
+                            (resultRef, resultSummary) = ($"Supplier:{created.Id}", $"Created supplier #{created.Id} \"{created.Name}\"");
+                            break;
+                        }
                     case "supplier.update":
-                    {
-                        var updated = await OperationService<ISupplierService>().UpdateAsync(SupplierFromPlan(p));
-                        (resultRef, resultSummary) = ($"Supplier:{updated.Id}", $"Updated supplier #{updated.Id} \"{updated.Name}\"");
-                        break;
-                    }
+                        {
+                            var updated = await OperationService<ISupplierService>().UpdateAsync(SupplierFromPlan(p));
+                            (resultRef, resultSummary) = ($"Supplier:{updated.Id}", $"Updated supplier #{updated.Id} \"{updated.Name}\"");
+                            break;
+                        }
                     case "itemtype.create":
-                    {
-                        var created = await OperationService<IItemTypeService>().CreateAsync(ItemTypeFromPlan(p), plan.CompanyId);
-                        (resultRef, resultSummary) = ($"ItemType:{created.Id}", $"Created item #{created.Id} \"{created.Name}\" (HS {created.HSCode ?? "none"})");
-                        break;
-                    }
+                        {
+                            var created = await OperationService<IItemTypeService>().CreateAsync(ItemTypeFromPlan(p), plan.CompanyId);
+                            (resultRef, resultSummary) = ($"ItemType:{created.Id}", $"Created item #{created.Id} \"{created.Name}\" (HS {created.HSCode ?? "none"})");
+                            break;
+                        }
                     case "itemtype.update":
-                    {
-                        var item = ItemTypeFromPlan(p);
-                        var updated = await OperationService<IItemTypeService>().UpdateAsync(item.Id, item, plan.CompanyId)
-                            ?? throw new KeyNotFoundException("The item no longer exists.");
-                        (resultRef, resultSummary) = ($"ItemType:{updated.Id}", $"Updated item #{updated.Id} \"{updated.Name}\" (HS {updated.HSCode ?? "none"})");
-                        break;
-                    }
+                        {
+                            var item = ItemTypeFromPlan(p);
+                            var updated = await OperationService<IItemTypeService>().UpdateAsync(item.Id, item, plan.CompanyId)
+                                ?? throw new KeyNotFoundException("The item no longer exists.");
+                            (resultRef, resultSummary) = ($"ItemType:{updated.Id}", $"Updated item #{updated.Id} \"{updated.Name}\" (HS {updated.HSCode ?? "none"})");
+                            break;
+                        }
                     case "taxfiling.save":
-                    {
-                        (resultRef, resultSummary) = await CommitTaxFilingAsync(plan.CompanyId, p);
-                        break;
-                    }
+                        {
+                            (resultRef, resultSummary) = await CommitTaxFilingAsync(plan.CompanyId, p);
+                            break;
+                        }
                     case "fbrexclusion.set":
-                    {
-                        (resultRef, resultSummary) = await CommitFbrExclusionAsync(plan.CompanyId, p);
-                        break;
-                    }
+                        {
+                            (resultRef, resultSummary) = await CommitFbrExclusionAsync(plan.CompanyId, p);
+                            break;
+                        }
                     default: throw new ToolError("Unknown plan type.");
                 }
             }
@@ -609,8 +662,17 @@ namespace MyApp.Api.Controllers
             return new ClientDto
             {
                 Id = p.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.Number ? id.GetInt32() : null,
-                CompanyId = p.GetProperty("companyId").GetInt32(), Name = S("name")!, Address = S("address"), Phone = S("phone"), Email = S("email"),
-                NTN = S("ntn"), STRN = S("strn"), CNIC = S("cnic"), Site = S("site"), ContactPerson = S("contactPerson"), RegistrationType = S("registrationType"),
+                CompanyId = p.GetProperty("companyId").GetInt32(),
+                Name = S("name")!,
+                Address = S("address"),
+                Phone = S("phone"),
+                Email = S("email"),
+                NTN = S("ntn"),
+                STRN = S("strn"),
+                CNIC = S("cnic"),
+                Site = S("site"),
+                ContactPerson = S("contactPerson"),
+                RegistrationType = S("registrationType"),
                 FbrProvinceCode = p.TryGetProperty("fbrProvinceCode", out var pc) && pc.ValueKind == JsonValueKind.Number ? pc.GetInt32() : null,
             };
         }
@@ -621,13 +683,20 @@ namespace MyApp.Api.Controllers
             DateTime? D(string n) => S(n) is { } s ? DateTime.ParseExact(s, "yyyy-MM-dd", CultureInfo.InvariantCulture) : null;
             return new SalesQuoteDto
             {
-                ClientId = p.GetProperty("clientId").GetInt32(), Date = D("date") ?? DateTime.UtcNow.Date, ValidUntil = D("validUntil"),
-                CustomerEnquiryRef = S("customerEnquiryRef"), EnquiryDate = D("enquiryDate"), Notes = S("notes"), ContactPerson = S("contactPerson"),
+                ClientId = p.GetProperty("clientId").GetInt32(),
+                Date = D("date") ?? DateTime.UtcNow.Date,
+                ValidUntil = D("validUntil"),
+                CustomerEnquiryRef = S("customerEnquiryRef"),
+                EnquiryDate = D("enquiryDate"),
+                Notes = S("notes"),
+                ContactPerson = S("contactPerson"),
                 GSTRate = p.GetProperty("gstRate").GetDecimal(),
                 Items = p.GetProperty("items").EnumerateArray().Select(i => new SalesQuoteItemDto
                 {
-                    Description = i.GetProperty("description").GetString()!, Unit = i.GetProperty("unit").GetString()!,
-                    Quantity = i.GetProperty("quantity").GetDecimal(), UnitPrice = i.GetProperty("unitPrice").GetDecimal(),
+                    Description = i.GetProperty("description").GetString()!,
+                    Unit = i.GetProperty("unit").GetString()!,
+                    Quantity = i.GetProperty("quantity").GetDecimal(),
+                    UnitPrice = i.GetProperty("unitPrice").GetDecimal(),
                     ItemTypeId = i.TryGetProperty("itemTypeId", out var t) && t.ValueKind == JsonValueKind.Number ? t.GetInt32() : null,
                 }).ToList(),
             };
