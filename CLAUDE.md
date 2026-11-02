@@ -219,6 +219,46 @@ comparing every role's key list before and after.
 - Icon buttons: **always verify the icon actually renders** before shipping (DOM-measure the `svg` width > 0, or reload) — a green build is not visual proof; screenshots are broken on this machine. For NEW fixed-size icon-only buttons prefer the house pattern `display: "grid", placeItems: "center"` with a fixed `width`/`height` (copy `iconBtn` from `WithholdingTaxReceiptsPage.jsx`) and pass an explicit `size` — it's the convention and a cheap hedge against the rare flex/SVG sizing quirk. (An audit of 115 icon buttons found 0 real collapse bugs, so `inline-flex` is NOT broken — don't go refactoring existing inline-flex icon buttons.)
 - Reuse existing filter/select styling — pass `style={dropdownStyles.base}` to shared components like `DivisionSelect` (a bare `<DivisionSelect>` renders an unstyled native `<select>`).
 
+### 3a. Formatting and clean code — MANDATORY on every change (2026-11-03)
+
+Every agent, every production line, every fix and every feature. The rules live
+in config files in the repository, so nobody formats by taste.
+
+- **Frontend and Node scripts (JS, JSX, TS, CSS, JSON): Prettier.** The config
+  is `.prettierrc.json` at the repository root: print width 100, double quotes,
+  semicolons, and `embeddedLanguageFormatting: "off"` so template strings that
+  build print HTML are never rewritten. `.prettierignore` keeps out generated
+  files, `public/` and every `.html` file, because printed and served HTML keeps
+  its whitespace. From `myapp-frontend`: `npm run format` writes and
+  `npm run format:check` checks.
+- **C#: `dotnet format whitespace`, driven by `.editorconfig`.** `Migrations/`
+  stays as EF generated it:
+  `dotnet format whitespace --folder --exclude Migrations bin obj node_modules myapp-frontend wwwroot`
+  (add `--include <files>` to format only what you changed).
+- **Format the files you changed before every commit.** On a line that has had
+  its one-time reformat (`TraderFbrInvoicingSystem`, 2026-11-03),
+  `npm run format:check` must pass in full. On a line that has not, format only
+  the files you change, and do it in **its own commit first** ("Format X with
+  Prettier"), then make the change. A reformat mixed into a fix hides the fix
+  from review.
+- **A formatting-only commit must not change behaviour, and that is checked,
+  not assumed.** The API must compile to a byte-identical DLL
+  (`dotnet build -p:IncludeSourceRevisionInInformationalVersion=false -p:DebugType=none -p:Deterministic=true`,
+  before and after, each from a clean checkout). Each frontend file must minify
+  to the same output with esbuild. Checks that read source as text
+  (`scripts/test_route_permissions.mjs`, `scripts/verify_tenant_scope.py`) must
+  report the same counts before and after.
+- **Do not change `.prettierrc.json` or `.editorconfig`** without the
+  maintainer's agreement. One changed option rewrites every file on every line.
+- **Clean code on every change.** Leave no unused imports, variables or
+  functions behind. Look for an existing helper or component before writing a
+  new one. Name things for what they do, and match the surrounding file's style
+  and comment density. Delete dead code instead of commenting it out.
+- **Removing code is a change like any other.** Prove nothing references it
+  (the build passes and an ESLint `no-undef` run is clean), keep a `useState` or
+  other hook call in place when only its value is unused (hook order is
+  behaviour), and keep removals out of formatting commits.
+
 ### 4. Data integrity
 
 - Document numbers (`InvoiceNumber`, `PurchaseBillNumber`, `GoodsReceiptNumber`) are **UNIQUE** per `CompanyId`. Create paths must wrap in retry-on-conflict via `MyApp.Api.Helpers.NumberAllocationRetry`.
