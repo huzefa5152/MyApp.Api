@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.Helpers;
 using MyApp.Api.Models;
@@ -12,7 +12,7 @@ namespace MyApp.Api.Services.Implementations
     /// unresolvable lands on a Suspense account created on demand, so the books
     /// stay balanced and the gap is visible on the chart instead of stopping the
     /// operator from saving their bill.</summary>
-    public class PostingService : IPostingService
+    public partial class PostingService : IPostingService
     {
         private readonly AppDbContext _context;
         private readonly IGeneralLedgerService _gl;
@@ -108,7 +108,7 @@ namespace MyApp.Api.Services.Implementations
                 var outputTax = await ResolveAsync(invoice.CompanyId, accounts, ControlType.OutputTax, "output tax");
                 AddLine(lines, outputTax.Id,
                     debit: isCreditNote ? invoice.GSTAmount : 0m,
-                    credit: isCreditNote ? 0m : invoice.GSTAmount, label);
+                    credit: isCreditNote ? 0m : invoice.GSTAmount, invoice.TaxTreatment == "SRB" ? $"{label} — SRB sales tax" : label);
             }
 
             if (invoice.FurtherTaxAmount != 0m)
@@ -259,19 +259,7 @@ namespace MyApp.Api.Services.Implementations
         {
             if (itemTypeIds.Count == 0) return new Dictionary<int, decimal>();
 
-            var rows = await _context.PurchaseItems.AsNoTracking()
-                .Where(pi => pi.PurchaseBill.CompanyId == companyId
-                          && pi.ItemTypeId.HasValue
-                          && itemTypeIds.Contains(pi.ItemTypeId.Value)
-                          && pi.Quantity > 0m)
-                .Select(pi => new
-                {
-                    ItemTypeId = pi.ItemTypeId!.Value,
-                    pi.Quantity,
-                    pi.LineTotal,
-                    Date = pi.PurchaseBill.Date,
-                })
-                .ToListAsync();
+            var rows = await InventoryCostBasis.LoadAsync(_context, companyId, itemTypeIds);
 
             var costs = new Dictionary<int, decimal>();
             foreach (var group in rows.GroupBy(r => r.ItemTypeId))
@@ -279,7 +267,7 @@ namespace MyApp.Api.Services.Implementations
                 var upToDate = group.Where(r => r.Date.Date <= asOf.Date).ToList();
                 var basis = upToDate.Count > 0 ? upToDate : group.ToList();
                 var qty = basis.Sum(r => r.Quantity);
-                if (qty > 0m) costs[group.Key] = basis.Sum(r => r.LineTotal) / qty;
+                if (qty > 0m) costs[group.Key] = basis.Sum(r => r.Value) / qty;
             }
             return costs;
         }
@@ -302,7 +290,9 @@ namespace MyApp.Api.Services.Implementations
 
             var accounts = await LoadAccountsAsync(bill.CompanyId);
             var ap = await ResolveAsync(bill.CompanyId, accounts, ControlType.AccountsPayable, "accounts payable");
-            var purchases = await ResolvePurchasesAsync(bill.CompanyId, accounts);
+            var purchases = bill.PurchaseCategory == "LocalDirect" || bill.Source == "challan-supplier"
+                ? ResolveCogs(accounts) ?? await SuspenseAsync(bill.CompanyId, accounts)
+                : await ResolvePurchasesAsync(bill.CompanyId, accounts);
 
             var label = $"Bill #{bill.PurchaseBillNumber}";
             // No further tax on the purchase side: a supplier's further tax
@@ -341,12 +331,54 @@ namespace MyApp.Api.Services.Implementations
             await WriteAsync(bill.CompanyId, SourceDocType.PurchaseBill, bill.Id, bill.Date, label, lines);
         }
 
+        public async Task PostPurchaseDebitNoteAsync(PurchaseDebitNote note)
+        {
+            if (!await IsEnabledAsync(note.CompanyId) || note.GrandTotal == 0m)
+            {
+                await RemoveForSourceAsync(note.CompanyId, SourceDocType.PurchaseDebitNote, note.Id);
+                return;
+            }
+
+            var accounts = await LoadAccountsAsync(note.CompanyId);
+            var ap = await ResolveAsync(note.CompanyId, accounts, ControlType.AccountsPayable, "accounts payable");
+            var isLocal = note.PurchaseBillId.HasValue && await _context.PurchaseBills.AnyAsync(p => p.Id == note.PurchaseBillId &&
+                p.CompanyId == note.CompanyId && (p.PurchaseCategory == "LocalDirect" || p.Source == "challan-supplier"));
+            var purchases = isLocal ? ResolveCogs(accounts) ?? await SuspenseAsync(note.CompanyId, accounts)
+                : await ResolvePurchasesAsync(note.CompanyId, accounts);
+            var inputTax = note.GSTAmount != 0m
+                ? await ResolveAsync(note.CompanyId, accounts, ControlType.InputTax, "input tax")
+                : null;
+            var label = $"Debit Note #{note.DebitNoteNumber}";
+            var lineRows = await _context.PurchaseDebitNoteItems
+                .Where(p => p.PurchaseDebitNoteId == note.Id)
+                .Select(p => new { p.LineTotal, p.AccountId })
+                .ToListAsync();
+            var accountIds = lineRows.Where(p => p.AccountId.HasValue).Select(p => p.AccountId!.Value).Distinct().ToList();
+            var validAccounts = await _context.Accounts.AsNoTracking()
+                .Where(a => a.CompanyId == note.CompanyId && accountIds.Contains(a.Id))
+                .Select(a => a.Id).ToListAsync();
+            var byAccount = lineRows.GroupBy(p => p.AccountId.HasValue && validAccounts.Contains(p.AccountId.Value)
+                    ? p.AccountId.Value : purchases.Id)
+                .ToDictionary(g => g.Key, g => g.Sum(p => p.LineTotal));
+            var lines = new List<JournalLine>
+            {
+                new() { AccountId = ap.Id, Debit = note.GrandTotal, PartyType = "Supplier",
+                    PartyId = note.SupplierId, Description = label },
+            };
+            foreach (var row in byAccount)
+                AddLine(lines, row.Key, debit: 0m, credit: row.Value, label);
+            if (inputTax != null)
+                AddLine(lines, inputTax.Id, debit: 0m, credit: note.GSTAmount, label);
+            await WriteAsync(note.CompanyId, SourceDocType.PurchaseDebitNote, note.Id,
+                note.Date, label, lines);
+        }
+
         // ── Receipts and payments ─────────────────────────────────────────────
 
         public async Task PostPaymentAsync(Payment payment)
         {
             if (!await IsEnabledAsync(payment.CompanyId)) return;
-            if (payment.IsCancelled || payment.Amount == 0m)
+            if (payment.IsCancelled || payment.ChequeStatus == ChequeStatus.Bounced || (payment.Amount == 0m && payment.Allocations.All(a => a.AdjustmentAmount == 0m)))
             {
                 await RemoveForSourceAsync(payment.CompanyId, SourceDocType.Payment, payment.Id);
                 return;
@@ -386,8 +418,17 @@ namespace MyApp.Api.Services.Implementations
             decimal allocated = 0m;
             foreach (var a in allocations)
             {
-                if (a.Amount == 0m) continue;
+                if (a.Amount == 0m && a.AdjustmentAmount == 0m) continue;
                 allocated += a.Amount;
+                if (a.AdjustmentAmount != 0m)
+                {
+                    var adjustment = await _context.Accounts.AsNoTracking().FirstOrDefaultAsync(x =>
+                        x.Id == a.AdjustmentAccountId && x.CompanyId == payment.CompanyId)
+                        ?? await SuspenseAsync(payment.CompanyId, accounts);
+                    AddLine(lines, adjustment.Id, isReceipt ? a.AdjustmentAmount : 0m,
+                        isReceipt ? 0m : a.AdjustmentAmount, label);
+                }
+
 
                 if (a.InvoiceId.HasValue)
                 {
@@ -396,8 +437,8 @@ namespace MyApp.Api.Services.Implementations
                     lines.Add(new JournalLine
                     {
                         AccountId = ar.Id,
-                        Debit = isReceipt ? 0m : a.Amount,
-                        Credit = isReceipt ? a.Amount : 0m,
+                        Debit = isReceipt ? 0m : a.Amount + a.AdjustmentAmount,
+                        Credit = isReceipt ? a.Amount + a.AdjustmentAmount : 0m,
                         PartyType = partyType ?? "Client",
                         PartyId = payment.ContactId,
                         InvoiceId = a.InvoiceId,
@@ -410,8 +451,8 @@ namespace MyApp.Api.Services.Implementations
                     lines.Add(new JournalLine
                     {
                         AccountId = ap.Id,
-                        Debit = isReceipt ? 0m : a.Amount,
-                        Credit = isReceipt ? a.Amount : 0m,
+                        Debit = isReceipt ? 0m : a.Amount + a.AdjustmentAmount,
+                        Credit = isReceipt ? a.Amount + a.AdjustmentAmount : 0m,
                         PartyType = partyType ?? "Supplier",
                         PartyId = payment.ContactId,
                         PurchaseBillId = a.PurchaseBillId,
@@ -420,20 +461,18 @@ namespace MyApp.Api.Services.Implementations
                 }
                 else if (a.AccountId.HasValue)
                 {
-                    // Direct income/expense does not change a party control balance.
-                    // The payment header retains the payer/payee for activity and vouchers.
                     var target = accounts.FirstOrDefault(x => x.Id == a.AccountId.Value)
                               ?? await _context.Accounts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == a.AccountId.Value && x.CompanyId == payment.CompanyId)
                               ?? await SuspenseAsync(payment.CompanyId, accounts);
-                    lines.Add(new JournalLine
+                    AddLine(lines, target.Id, isReceipt ? 0m : a.Amount - a.TaxAmount,
+                        isReceipt ? a.Amount - a.TaxAmount : 0m, label);
+                    if (a.TaxAmount != 0m)
                     {
-                        AccountId = target.Id,
-                        Debit = isReceipt ? 0m : a.Amount,
-                        Credit = isReceipt ? a.Amount : 0m,
-                        PartyType = null,
-                        PartyId = null,
-                        Description = label,
-                    });
+                        var tax = await ResolveAsync(payment.CompanyId, accounts,
+                            isReceipt ? ControlType.OutputTax : ControlType.InputTax, "payment tax");
+                        AddLine(lines, tax.Id, isReceipt ? 0m : a.TaxAmount,
+                            isReceipt ? a.TaxAmount : 0m, label);
+                    }
                 }
                 else
                 {
@@ -480,6 +519,17 @@ namespace MyApp.Api.Services.Implementations
 
         public Task RemoveForSourceAsync(int companyId, SourceDocType type, int sourceDocId) =>
             _gl.RemoveForDocumentAsync(companyId, type, sourceDocId);
+
+        public async Task PostTransferAsync(AccountTransfer transfer)
+        {
+            if (!await IsEnabledAsync(transfer.CompanyId)) return;
+            await WriteAsync(transfer.CompanyId, SourceDocType.AccountTransfer, transfer.Id,
+                transfer.Date, $"Transfer TRF-{transfer.Number:D4}", new List<JournalLine>
+                {
+                    new() { AccountId = transfer.ToAccountId, Debit = transfer.Amount, Description = transfer.Description },
+                    new() { AccountId = transfer.FromAccountId, Credit = transfer.Amount, Description = transfer.Description }
+                });
+        }
 
         // ── Rebuild ───────────────────────────────────────────────────────────
 
@@ -537,15 +587,31 @@ namespace MyApp.Api.Services.Implementations
                     if (b.GrandTotal != 0m) result.PostedPurchaseBills++;
                 }
 
+                var stockEntries = await _context.StockEntries.Where(e => e.CompanyId == companyId && !e.IsCancelled).ToListAsync();
+                foreach (var entry in stockEntries.Where(e => IsOpen(e.Date))) await PostStockEntryAsync(entry);
+
                 var payments = await _context.Payments
                     .Include(p => p.Allocations)
                     .Where(p => p.CompanyId == companyId).ToListAsync();
                 foreach (var p in payments.Where(p => IsOpen(p.Date)))
                 {
                     await PostPaymentAsync(p);
-                    if (!p.IsCancelled && p.Amount != 0m) result.PostedPayments++;
+                    if (!p.IsCancelled && p.ChequeStatus != ChequeStatus.Bounced && (p.Amount != 0m || p.Allocations.Any(a => a.AdjustmentAmount != 0m))) result.PostedPayments++;
                 }
 
+                var transfers = await _context.AccountTransfers.Where(t => t.CompanyId == companyId).ToListAsync();
+                foreach (var transfer in transfers.Where(t => IsOpen(t.Date)))
+                {
+                    await PostTransferAsync(transfer);
+                    if (transfer.Amount != 0m) result.PostedTransfers++;
+                }
+                var debitNotes = await _context.PurchaseDebitNotes
+                    .Where(note => note.CompanyId == companyId).ToListAsync();
+                foreach (var note in debitNotes.Where(note => IsOpen(note.Date)))
+                {
+                    await PostPurchaseDebitNoteAsync(note);
+                    if (note.GrandTotal != 0m) result.PostedPurchaseDebitNotes++;
+                }
                 if (tx != null) await tx.CommitAsync();
                 return result;
             }

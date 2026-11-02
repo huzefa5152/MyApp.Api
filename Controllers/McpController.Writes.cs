@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
 using MyApp.Api.Models;
+using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Controllers
 {
@@ -21,18 +22,27 @@ namespace MyApp.Api.Controllers
     {
         private string _resultRef = "";
         private string _resultSummary = "";
+        // The company of the plan a planId-only call (commit, cancel, status) acted on, so its
+        // activity row is filed under that company like every companyId call.
+        private int? _activityCompanyId;
 
-        private static readonly string[] WriteToolNameList = { "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "prepare_email_decision", "prepare_email_quotation", "commit_action", "cancel_action" };
+        private static readonly string[] WriteToolNameList = { "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "prepare_email_decision", "prepare_email_quotation", "prepare_print_template_update", "prepare_starter_template", "prepare_supplier", "prepare_item_type", "prepare_bill_tax_filing", "prepare_fbr_exclusion", "commit_action", "cancel_action" };
         private static bool IsWriteTool(string name) => WriteToolNameList.Contains(name, StringComparer.Ordinal);
 
         private static string PrepareToolFor(string kind) => kind switch
         {
+            "template.update" => "prepare_print_template_update",
+            "starter.create" or "starter.update" or "starter.activate" or "starter.deactivate" or "starter.delete" => "prepare_starter_template",
             "client.create" or "client.update" => "prepare_client",
             "quote.create" => "prepare_quote",
             "email.decision" => "prepare_email_decision",
             "email.quote" => "prepare_email_quotation",
             "challan.create" => "prepare_challan",
             "bill.create" or "bill.standalone" => "prepare_bill",
+            "supplier.create" or "supplier.update" => "prepare_supplier",
+            "itemtype.create" or "itemtype.update" => "prepare_item_type",
+            "taxfiling.save" => "prepare_bill_tax_filing",
+            "fbrexclusion.set" => "prepare_fbr_exclusion",
             _ => throw new ToolError("Unknown action kind.")
         };
 
@@ -41,7 +51,9 @@ namespace MyApp.Api.Controllers
         // field declared in another file while it is being initialised.
         private static readonly object WCompanyId = new { type = "integer", minimum = 1, description = "Company id from list_companies." };
         private static readonly object PrepareAnnotations = new { readOnlyHint = false, destructiveHint = false, idempotentHint = true, openWorldHint = false };
-        private static readonly object CommitAnnotations = new { readOnlyHint = false, destructiveHint = false, idempotentHint = false, openWorldHint = false };
+        // Destructive: a commit takes the next legal document number, moves stock
+        // and cannot be undone by the agent, so clients should confirm it with the user.
+        private static readonly object CommitAnnotations = new { readOnlyHint = false, destructiveHint = true, idempotentHint = false, openWorldHint = false };
         private static readonly object IdemKeyProp = new { type = "string", maxLength = 100, description = "Optional. A stable id for this request (an email message id, say). Repeating it returns the original plan or result instead of creating a duplicate." };
 
         private static readonly object PrepareClientTool = new
@@ -199,6 +211,12 @@ namespace MyApp.Api.Controllers
             await PinCompanyAsync(prior.CompanyId);
             await RequireWriterAsync(ScopeFor(prior.Kind));
             await Need(PermissionFor(prior.Kind));
+            if (prior.Kind == "template.update") await Need("printtemplates.manage.view");
+            // The plan lists bills, which either list right may read.
+            if (prior.Kind == "fbrexclusion.set") await Need("bills.list.view", "invoices.list.view");
+            // An update plan echoes the record's stored details, so the read right its prepare
+            // required is needed again before the plan is shown back.
+            if (ReadPermissionFor(prior.Kind) is { } read) await Need(read);
             if (!await _permissions.HasMcpToolAccessAsync(CurrentUserId, PrepareToolFor(prior.Kind)))
                 throw new ToolError("Resource unavailable or access denied.");
             if (prior.CommittedAt != null)
@@ -249,6 +267,9 @@ namespace MyApp.Api.Controllers
             var companyId = await CompanyArg(args);
             var clientId = IntArg(args, "clientId");
             await Need(clientId.HasValue ? "clients.manage.update" : "clients.manage.create");
+            // An update plan echoes the client's stored contact details back, so it
+            // needs the same right that reads them on screen.
+            if (clientId.HasValue) await Need("clients.manage.view");
             var key = IdemKey(args);
             if (await PriorForKeyAsync(agent, key, companyId, McpScopes.Clients) is { } prior) return prior;
 
@@ -360,25 +381,50 @@ namespace MyApp.Api.Controllers
 
         private static string ScopeFor(string kind) => kind switch
         {
+            "template.update" => McpScopes.TemplatesWrite,
+            "starter.create" or "starter.update" or "starter.activate" or "starter.deactivate" or "starter.delete" => McpScopes.TemplatesWrite,
             "client.create" or "client.update" => McpScopes.Clients,
             "challan.create" => McpScopes.Challans,
             "bill.create" or "bill.standalone" => McpScopes.Bills,
             "quote.create" => McpScopes.Quotes,
             "email.quote" => McpScopes.Quotes,
             "email.decision" => McpScopes.Email,
+            "supplier.create" or "supplier.update" => McpScopes.Suppliers,
+            "itemtype.create" or "itemtype.update" => McpScopes.ItemTypes,
+            "taxfiling.save" => McpScopes.TaxFiling,
+            "fbrexclusion.set" => McpScopes.FbrExclusion,
             _ => throw new ToolError("Unknown plan type.")
         };
 
-        private static string PermissionFor(string kind) => kind switch
+        /// <summary>The read right an update plan needs to be shown back, or null.</summary>
+        private static string? ReadPermissionFor(string kind) => kind switch
         {
-            "client.create" => "clients.manage.create",
-            "client.update" => "clients.manage.update",
-            "challan.create" => "challans.manage.create",
-            "bill.create" => "bills.manage.create",
-            "bill.standalone" => "bills.manage.create.standalone",
-            "quote.create" => "salesquotes.manage.create",
-            "email.quote" => "salesquotes.manage.create",
-            "email.decision" => "email.inbox.manage",
+            "client.update" => "clients.manage.view",
+            "supplier.update" => "suppliers.manage.view",
+            "itemtype.update" => "itemtypes.manage.view",
+            "taxfiling.save" => "invoices.list.view",
+            _ => null,
+        };
+
+        /// <summary>The screen permission a plan needs; holding any one of them is enough.</summary>
+        private static string[] PermissionFor(string kind) => kind switch
+        {
+            "template.update" => new[] { "printtemplates.manage.update" },
+            "starter.create" or "starter.update" or "starter.activate" or "starter.deactivate" or "starter.delete" => new[] { "printtemplates.manage.update" },
+            "client.create" => new[] { "clients.manage.create" },
+            "client.update" => new[] { "clients.manage.update" },
+            "challan.create" => new[] { "challans.manage.create" },
+            "bill.create" => new[] { "bills.manage.create" },
+            "bill.standalone" => new[] { "bills.manage.create.standalone" },
+            "quote.create" => new[] { "salesquotes.manage.create" },
+            "email.quote" => new[] { "salesquotes.manage.create" },
+            "email.decision" => new[] { "email.inbox.manage" },
+            "supplier.create" => new[] { "suppliers.manage.create" },
+            "supplier.update" => new[] { "suppliers.manage.update" },
+            "itemtype.create" => new[] { "itemtypes.manage.create" },
+            "itemtype.update" => new[] { "itemtypes.manage.update" },
+            "taxfiling.save" => new[] { "invoices.manage.update.itemtype", "invoices.manage.update.itemtype.qty" },
+            "fbrexclusion.set" => new[] { "invoices.fbr.exclude" },
             _ => throw new ToolError("Unknown plan type.")
         };
 
@@ -390,6 +436,7 @@ namespace MyApp.Api.Controllers
             // Someone else's plan id answers exactly like a missing one.
             if (plan == null || plan.AgentTokenId != agent.Id || plan.UserId != CurrentUserId)
                 throw new ToolError("That plan was not found. It may have expired.");
+            _activityCompanyId = plan.CompanyId;
             return plan;
         }
 
@@ -415,6 +462,7 @@ namespace MyApp.Api.Controllers
             if (plan.ExpiresAt <= DateTime.UtcNow) throw new ToolError("That plan has expired. Prepare it again.");
             await PinCompanyAsync(plan.CompanyId);
             await Need(PermissionFor(plan.Kind));
+            if (plan.Kind == "template.update") await Need("printtemplates.manage.view");
             if (plan.Kind is "email.quote" or "email.decision")
                 await ValidateEmailPlanAsync(plan);
             await EnforceHourlyCapAsync(agent, plan.Kind);
@@ -432,6 +480,20 @@ namespace MyApp.Api.Controllers
                 var p = JsonSerializer.Deserialize<JsonElement>(plan.Payload);
                 switch (plan.Kind)
                 {
+                    case "template.update":
+                    {
+                        (resultRef, resultSummary) = await CommitPrintTemplateAsync(plan, p);
+                        break;
+                    }
+                    case "starter.create":
+                    case "starter.update":
+                    case "starter.activate":
+                    case "starter.deactivate":
+                    case "starter.delete":
+                    {
+                        (resultRef, resultSummary) = await CommitStarterAsync(plan, p);
+                        break;
+                    }
                     case "email.decision":
                     case "email.quote":
                     {
@@ -478,10 +540,46 @@ namespace MyApp.Api.Controllers
                             $"Created bill #{created.InvoiceNumber} (id {created.Id}) for \"{created.ClientName}\", total {CommercialTotalCalculator.Total(created.GrandTotal, created.FreightCharges):0.00} PKR. Not submitted to FBR");
                         break;
                     }
+                    case "supplier.create":
+                    {
+                        var created = await OperationService<ISupplierService>().CreateAsync(SupplierFromPlan(p));
+                        (resultRef, resultSummary) = ($"Supplier:{created.Id}", $"Created supplier #{created.Id} \"{created.Name}\"");
+                        break;
+                    }
+                    case "supplier.update":
+                    {
+                        var updated = await OperationService<ISupplierService>().UpdateAsync(SupplierFromPlan(p));
+                        (resultRef, resultSummary) = ($"Supplier:{updated.Id}", $"Updated supplier #{updated.Id} \"{updated.Name}\"");
+                        break;
+                    }
+                    case "itemtype.create":
+                    {
+                        var created = await OperationService<IItemTypeService>().CreateAsync(ItemTypeFromPlan(p), plan.CompanyId);
+                        (resultRef, resultSummary) = ($"ItemType:{created.Id}", $"Created item #{created.Id} \"{created.Name}\" (HS {created.HSCode ?? "none"})");
+                        break;
+                    }
+                    case "itemtype.update":
+                    {
+                        var item = ItemTypeFromPlan(p);
+                        var updated = await OperationService<IItemTypeService>().UpdateAsync(item.Id, item, plan.CompanyId)
+                            ?? throw new KeyNotFoundException("The item no longer exists.");
+                        (resultRef, resultSummary) = ($"ItemType:{updated.Id}", $"Updated item #{updated.Id} \"{updated.Name}\" (HS {updated.HSCode ?? "none"})");
+                        break;
+                    }
+                    case "taxfiling.save":
+                    {
+                        (resultRef, resultSummary) = await CommitTaxFilingAsync(plan.CompanyId, p);
+                        break;
+                    }
+                    case "fbrexclusion.set":
+                    {
+                        (resultRef, resultSummary) = await CommitFbrExclusionAsync(plan.CompanyId, p);
+                        break;
+                    }
                     default: throw new ToolError("Unknown plan type.");
                 }
             }
-            catch (Exception ex) when (ex is InvalidOperationException or KeyNotFoundException || (plan.Kind.StartsWith("email.") && ex is ToolError))
+            catch (Exception ex) when (ex is InvalidOperationException or KeyNotFoundException || ((plan.Kind.StartsWith("email.") || plan.Kind == "template.update") && ex is ToolError))
             {
                 // Service rules are operator-facing messages (name clash, unknown client...).
                 await _context.McpPendingActions.Where(a => a.Id == plan.Id).ExecuteUpdateAsync(s => s.SetProperty(a => a.ResultRef, "FAILED").SetProperty(a => a.ResultSummary, "The action was refused or may be incomplete. Check the affected records."));

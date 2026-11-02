@@ -48,6 +48,7 @@ namespace MyApp.Api.Services.Implementations
             FbrUOMId = it.FbrUOMId,
             SaleType = it.SaleType,
             FbrDescription = it.FbrDescription,
+            IsHsCodePartial = it.IsHsCodePartial,
             IsFavorite = it.IsFavorite,
             UsageCount = it.UsageCount,
         };
@@ -346,7 +347,10 @@ namespace MyApp.Api.Services.Implementations
                 .CountAsync();
 
             int invoicesUpdated = await _context.InvoiceItems
-                .Where(ii => ii.ItemTypeId == updated.Id && ii.Invoice.FbrStatus != "Submitted")
+                .Where(ii => ii.ItemTypeId == updated.Id && ii.Invoice.FbrStatus != "Submitted"
+                    && (ii.Invoice.TaxFilingRowsJson == null || (ii.Invoice.NoteKind == 0 && !ii.Invoice.IsCancelled
+                        && ii.Invoice.FbrIRN == null && ii.Invoice.FbrSubmittedAt == null && ii.Invoice.FbrCancelledAt == null
+                        && (ii.Invoice.FbrStatus == null || ii.Invoice.FbrStatus == "Failed" || ii.Invoice.FbrStatus == "Validated"))))
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(ii => ii.HSCode,
                         ii => changed.HsCodeChanged ? updated.HSCode : ii.HSCode)
@@ -358,11 +362,22 @@ namespace MyApp.Api.Services.Implementations
                         ii => changed.SaleTypeChanged ? updated.SaleType : ii.SaleType)
                     .SetProperty(ii => ii.ItemTypeName, ii => updated.Name));
 
+            await _context.Invoices.Where(i => i.CompanyId == updated.CompanyId
+                && i.TaxFilingRowsJson != null && (i.FbrStatus == null || i.FbrStatus == "Failed" || i.FbrStatus == "Validated")
+                && i.NoteKind == 0 && !i.IsCancelled && i.FbrIRN == null && i.FbrSubmittedAt == null && i.FbrCancelledAt == null
+                && i.Items.Any(line => line.ItemTypeId == updated.Id))
+                .ExecuteUpdateAsync(s => s.SetProperty(i => i.FbrReviewRequiredAt, (DateTime?)DateTime.UtcNow));
+
             int challansUpdated = await _context.DeliveryItems
                 .Where(di => di.ItemTypeId == updated.Id
-                          && di.DeliveryChallan.Status != "Cancelled"
-                          && (di.DeliveryChallan.Invoice == null
-                              || di.DeliveryChallan.Invoice.FbrStatus != "Submitted"))
+                          && di.DeliveryChallan.Status != "Cancelled")
+                .Where(di => di.DeliveryChallan.Invoice == null || di.DeliveryChallan.Invoice.FbrStatus != "Submitted")
+                .Where(di => di.DeliveryChallan.Invoice == null || di.DeliveryChallan.Invoice.TaxFilingRowsJson == null
+                    || (di.DeliveryChallan.Invoice.NoteKind == 0 && !di.DeliveryChallan.Invoice.IsCancelled
+                        && di.DeliveryChallan.Invoice.FbrIRN == null && di.DeliveryChallan.Invoice.FbrSubmittedAt == null
+                        && di.DeliveryChallan.Invoice.FbrCancelledAt == null
+                        && (di.DeliveryChallan.Invoice.FbrStatus == null || di.DeliveryChallan.Invoice.FbrStatus == "Failed"
+                            || di.DeliveryChallan.Invoice.FbrStatus == "Validated")))
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(di => di.Unit,
                         di => changed.UomChanged ? (updated.UOM ?? di.Unit) : di.Unit));
@@ -430,12 +445,16 @@ namespace MyApp.Api.Services.Implementations
 
             try
             {
-                var suggested = await _taxEngine.SuggestDefaultUomAsync(
-                    enrichWithCompanyId.Value, dto.HSCode!);
-                if (suggested == null) return;
+                // Fill the blank half from the half that was chosen. FBR's default unit is only for when
+                // neither was: pairing a typed "Packs" with the default's id filed the bill as KG.
+                var units = await _taxEngine.GetValidUomsForHsCodeAsync(enrichWithCompanyId.Value, dto.HSCode!);
+                var unit = string.IsNullOrWhiteSpace(dto.UOM) && !dto.FbrUOMId.HasValue
+                    ? units.FirstOrDefault()
+                    : FbrUnitMatch.Resolve(units, dto.UOM, dto.FbrUOMId);
+                if (unit == null) return;
 
-                if (!dto.FbrUOMId.HasValue)       dto.FbrUOMId = suggested.UOM_ID;
-                if (string.IsNullOrWhiteSpace(dto.UOM)) dto.UOM = suggested.Description;
+                dto.FbrUOMId = unit.UOM_ID;
+                if (string.IsNullOrWhiteSpace(dto.UOM)) dto.UOM = unit.Description;
             }
             catch
             {

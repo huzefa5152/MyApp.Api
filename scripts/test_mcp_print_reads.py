@@ -7,6 +7,8 @@ fixtures are reported explicitly. No production host can be supplied.
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
 import json
 import os
 import secrets
@@ -37,7 +39,7 @@ if bool(args.company_a) != bool(args.company_b) or (args.company_a and (args.com
 RUN = secrets.token_hex(4)
 PASSWORD = "PrintTest-" + secrets.token_hex(8)
 checks = []
-made_users, made_roles, made_tokens, made_templates = [], [], [], []
+made_users, made_roles, made_tokens, made_templates, made_stamps = [], [], [], [], []
 rpc_id = 0
 
 
@@ -114,6 +116,36 @@ def user(role_ids, company_id, suffix, creator=None, role_string="User"):
     return login(name, PASSWORD)
 
 
+def bundle(credential, arguments):
+    """Read every chunk of a render bundle; returns (error, parsed bundle or message)."""
+    text, sha, offset = "", None, 0
+    while offset is not None:
+        error, chunk = tool(credential, "get_document_render_bundle", {**arguments, "offset": offset, "length": 4000})
+        if error:
+            return True, chunk
+        if sha not in (None, chunk["sha256"]):
+            return True, "sha changed between chunks"
+        sha, offset = chunk["sha256"], chunk["nextOffset"]
+        text += chunk["content"]
+    if hashlib.sha256(text.encode()).hexdigest() != sha:
+        return True, "sha mismatch"
+    return False, json.loads(text)
+
+
+def upload_stamp(company_id):
+    png = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
+    boundary = "----printtest" + RUN
+    body = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"name\"\r\n\r\nPrint test {RUN}\r\n"
+            f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"sig.png\"\r\nContent-Type: image/png\r\n\r\n").encode() \
+        + png + f"\r\n--{boundary}--\r\n".encode()
+    request = urllib.request.Request(f"{BASE}/api/companies/{company_id}/stamps", data=body, method="POST",
+                                     headers={"Authorization": "Bearer " + admin, "Content-Type": "multipart/form-data; boundary=" + boundary})
+    with urllib.request.urlopen(request, timeout=60) as response:
+        result = json.loads(response.read().decode())
+    made_stamps.append((company_id, result["id"]))
+    return result
+
+
 admin = login("admin", "admin123")
 try:
     company_filter = f" AND CompanyId IN ({args.company_a},{args.company_b})" if args.company_a else ""
@@ -136,11 +168,16 @@ try:
     no_scope = token(owner, [A], scopes=("read",))
     tenant_admin = user([role_ids["Sales Edition"], role_ids["MCP Access"], role_ids["Tenant Administrator"]], A, "manager", role_string="Administrator")
     role_name = "print-test-" + RUN
-    status, role = http("POST", "/api/roles", tenant_admin, {"name": role_name, "description": "Temporary MCP permission probe", "permissionKeys": ["mcp.access.use", "clients.manage.view", "printtemplates.manage.view", "challans.print.view"]})
+    # Only the seed admin may put mcp.* keys in a role (RolesController.GrantableKeysAsync), so the
+    # tenant administrator's probe role carries the business keys and MCP Access comes as its own role.
+    status, role = http("POST", "/api/roles", tenant_admin, {"name": role_name, "description": "Temporary MCP permission probe", "permissionKeys": ["clients.manage.view", "printtemplates.manage.view", "challans.print.view"]})
     require(status, (200, 201), "permission fixture")
     made_roles.append(role["id"])
-    limited = token(user([role["id"]], A, "limited", creator=tenant_admin), [A])
-    require(http("PUT", f"/api/roles/{role['id']}", tenant_admin, {"name": role_name, "description": "Temporary MCP permission probe", "permissionKeys": ["mcp.access.use", "clients.manage.view"]})[0], (200,), "revoke fixture print permissions")
+    limited_login = user([role["id"]], A, "limited", creator=tenant_admin)
+    limited_id = int(sql(f"SELECT Id FROM Users WHERE Username='mcpp_{RUN}limited'"))
+    require(http("PUT", f"/api/users/{limited_id}/roles", admin, {"roleIds": [role["id"], role_ids["MCP Access"]]})[0], (200,), "seed admin adds MCP Access")
+    limited = token(limited_login, [A])
+    require(http("PUT", f"/api/roles/{role['id']}", tenant_admin, {"name": role_name, "description": "Temporary MCP permission probe", "permissionKeys": ["clients.manage.view"]})[0], (200,), "revoke fixture print permissions")
     query = {"companyId": A, "documentType": "Bill", "documentId": invoice_a}
     for label, credential, probe, expect_error in (
         ("tenant own print", tenant, query, False),
@@ -227,10 +264,79 @@ try:
     check("print contract uses editor catalog", not error and status == 200 and {field["expression"] for field in contract["fields"]} == {field["fieldExpression"] for field in fields})
     check("print contract identifies real helpers", not error and {"richText", "fmtQty", "each"} <= set(contract["helpers"]))
     check("unknown print type refused", tool(tenant, "get_print_contract", {"documentType": "Unknown"})[0])
+
+    # Render bundle: the same document, template and permission boundary, with images inlined.
+    challan_a = sql(f"SELECT TOP 1 Id FROM DeliveryChallans WHERE CompanyId={A} ORDER BY Id")
+    challan_b = sql(f"SELECT TOP 1 Id FROM DeliveryChallans WHERE CompanyId={B} ORDER BY Id")
+    if challan_a and challan_b:
+        challan_a, challan_b = int(challan_a), int(challan_b)
+        stamp = upload_stamp(A)
+        slotted = ("<html><body><p>{{companyBrandName}} {{challanNumber}}</p>"
+                   '<span class="stamp-slot"><img class="stamp-img" src="{{stamp}}"></span></body></html>')
+        pinned = "<html><body><p>{{challanNumber}}</p><img src=\"{{stamps." + stamp["slug"] + "}}\"></body></html>"
+        ids = {}
+        for label, body in (("slotted", slotted), ("pinned", pinned), ("plain", "<html><body><p>{{challanNumber}}</p></body></html>")):
+            status, made = http("POST", f"/api/printtemplates/company/{A}", admin, {"name": f"Render {label} {RUN}", "templateType": "Challan", "htmlContent": body, "editorMode": "code", "isDefault": False})
+            require(status, (200,), "render template fixture")
+            made_templates.append((A, made["id"]))
+            ids[label] = made["id"]
+        require(http("PUT", f"/api/printtemplates/{ids['slotted']}/stamp", admin, {"stampId": stamp["id"]})[0], (200,), "assign stamp")
+        status, screen = http("GET", f"/api/deliverychallans/{challan_a}/print", admin)
+        require(status, (200,), "challan screen print")
+        own = {"companyId": A, "documentType": "Challan", "documentId": challan_a}
+
+        error, b = bundle(tenant, {**own, "templateId": ids["slotted"]})
+        check("render bundle reconstructs from chunks", not error, b)
+        scalar = lambda d: {k: v for k, v in d.items() if not (isinstance(v, str) and (v.startswith("data:") or v.startswith("/data/")))}
+        check("render data equals screen print data", not error and scalar(b["data"]) == scalar(screen))
+        check("render keeps the chosen template html", not error and b["html"] == slotted and b["template"]["id"] == ids["slotted"])
+        check("assigned stamp inlined as image", not error and b["signed"] and str(b["stamp"]).startswith("data:image/png;base64,"))
+        error, b = bundle(tenant, {**own, "templateId": ids["slotted"], "signed": False})
+        check("unsigned drops the stamp", not error and b["stamp"] is None and not b["signed"])
+        error, b = bundle(tenant, {**own, "templateId": ids["pinned"], "signed": False})
+        check("unsigned strips pinned signature images", not error and "{{stamps." not in b["html"] and b["stamps"] == {})
+        error, b = bundle(tenant, {**own, "templateId": ids["pinned"], "signed": True})
+        check("pinned signature inlined", not error and b["stamps"].get(stamp["slug"], "").startswith("data:image/"))
+        error, message = bundle(tenant, {**own, "templateId": ids["plain"], "signed": True})
+        check("signed refused on a template without signature, naming signed ones", error and f"#{ids['slotted']}" in str(message), message)
+        error, b = bundle(tenant, own)
+        check("auto template is the default or oldest", not error and b["template"]["id"] == min(t for c, t in made_templates if c == A) or (not error and b["template"]["isDefault"]))
+
+        for label, credential, probe in (
+            ("render foreign company", tenant, {**own, "companyId": B, "documentId": challan_b}),
+            ("render foreign document ID in own company", tenant, {**own, "documentId": challan_b}),
+            ("render foreign template ID", tenant, {**own, "templateId": foreign_tid}),
+            ("render template of another type", tenant, {**own, "documentType": "Bill", "documentId": invoice_a, "templateId": ids["plain"]}),
+            ("render restricted seed foreign company", seed_restricted, {**own, "companyId": B, "documentId": challan_b}),
+            ("render missing document scope", no_scope, own),
+            ("render missing print permission", limited, own),
+            ("render unknown argument", tenant, {**own, "extra": 1}),
+        ):
+            error, message = tool(credential, "get_document_render_bundle", probe)
+            check(label + " refused", error, message)
+        check("render All seed reaches another company", not bundle(seed_all, {**own, "companyId": B, "documentId": challan_b, "templateId": foreign_tid})[0])
+
+        # The render tool follows the print-data grant: on by default, off when that grant is removed.
+        owner_id = int(sql(f"SELECT Id FROM Users WHERE Username='mcpp_{RUN}tenant'"))
+        names = lambda t: {e["name"] for e in mcp(t, "tools/list")[1].get("result", {}).get("tools", [])}
+        check("render tool on by default with print data", {"get_document_print_data", "get_document_render_bundle"} <= names(tenant))
+        status, policy = http("GET", f"/api/mcp/catalog/{owner_id}", admin)
+        require(status, (200,), "catalog read")
+        keep = [t["name"] for t in policy["tools"] if t["configurable"] and t["granted"] and t["name"] != "get_document_print_data"]
+        require(http("PUT", f"/api/mcp/catalog/{owner_id}", admin, {"revision": policy["revision"], "accessGranted": policy["accessGranted"],
+            "writesGranted": policy["writesGranted"], "accessEnabled": policy["accessEnabled"], "writesEnabled": policy["writesEnabled"],
+            "grantedTools": keep, "selectedTools": keep})[0], (200,), "catalog save")
+        listed = names(tenant)
+        check("removing print data also removes render", "get_document_print_data" not in listed and "get_document_render_bundle" not in listed)
+        check("render call refused once print data is removed", tool(tenant, "get_document_render_bundle", own)[0])
+    else:
+        print("Render bundle cases skipped: need a challan in both companies.")
     print("Uncovered fixture types: " + (", ".join(missing) if missing else "none"))
     if args.require_all_types:
         check("all twelve document-type fixtures exercised", not missing)
 finally:
+    for cid, sid in made_stamps:
+        http("DELETE", f"/api/companies/{cid}/stamps/{sid}", admin)
     for _, tid in made_templates:
         http("DELETE", f"/api/printtemplates/{tid}", admin)
     for tid in made_tokens:

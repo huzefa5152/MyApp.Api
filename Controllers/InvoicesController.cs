@@ -37,6 +37,34 @@ namespace MyApp.Api.Controllers
                 User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
                 out var id) ? id : 0;
 
+        [HttpGet("{id}/tax-filing")]
+        [HasPermission("invoices.list.view")]
+        public async Task<IActionResult> GetTaxFiling(int id)
+        {
+            var bill = await _service.GetByIdAsync(id);
+            if (bill == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, bill.CompanyId);
+            var result = await _service.GetTaxFilingAsync(id);
+            if (result == null) return NotFound();
+            await ScrubPaymentIfDenied(new[] { result.Bill });
+            return Ok(result);
+        }
+
+        [HttpPut("{id}/tax-filing")]
+        [RequestSizeLimit(1048576)]
+        [HasAnyPermission("invoices.manage.update.itemtype", "invoices.manage.update.itemtype.qty")]
+        public async Task<IActionResult> SaveTaxFiling(int id, [FromBody] SaveTaxFilingDto dto)
+        {
+            var bill = await _service.GetByIdAsync(id);
+            if (bill == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, bill.CompanyId);
+            var canAdjustNumbers = await _permissions.HasPermissionAsync(CurrentUserId, "invoices.manage.update.itemtype.qty");
+            var result = await _service.SaveTaxFilingAsync(id, dto, CurrentUserId, User.Identity?.Name ?? "", canAdjustNumbers);
+            if (result == null) return NotFound();
+            await ScrubPaymentIfDenied(new[] { result.Bill });
+            return Ok(result);
+        }
+
         [HttpPatch("{id}/tax-invoice-layout")]
         [HasAnyPermission("bills.manage.update", "invoices.manage.update.itemtype", "invoices.manage.update.itemtype.qty")]
         public async Task<IActionResult> SetTaxInvoiceLayout(int id, [FromBody] TaxInvoiceGroupingDto dto)
@@ -151,8 +179,11 @@ namespace MyApp.Api.Controllers
             [FromQuery] string? fbrFilter = null,
             // Customer document-handover status filter: "pending" | "delivered"
             // | "all"/null. Applied server-side (see InvoiceRepository).
-            [FromQuery] string? handoverFilter = null)
+            [FromQuery] string? handoverFilter = null,
+            [FromQuery] string? costingStatus = null)
         {
+            if (costingStatus != null && costingStatus != "" && costingStatus != "not-costed" && costingStatus != "partial" && costingStatus != "full")
+                return BadRequest(new { error = "Choose a valid costing status." });
             var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
             var clampedPage = PaginationHelper.ClampPage(page);
             // type=debitnotes → Debit Notes only; type=creditnotes → Credit
@@ -162,7 +193,7 @@ namespace MyApp.Api.Controllers
                           : string.Equals(type, "creditnotes", StringComparison.OrdinalIgnoreCase) ? 10
                           : null;
             var result = await _service.GetPagedByCompanyAsync(
-                companyId, clampedPage, size, search, clientId, dateFrom, dateTo, noteType, fbrFilter, handoverFilter);
+                companyId, clampedPage, size, search, clientId, dateFrom, dateTo, noteType, fbrFilter, handoverFilter, costingStatus);
             await ScrubPaymentIfDenied(result.Items);
             return Ok(result);
         }

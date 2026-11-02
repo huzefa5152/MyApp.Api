@@ -2,11 +2,19 @@ namespace MyApp.Api.Helpers;
 
 public sealed record McpToolAccessDefinition(
     string Name, string Group, string Label, string[] Permissions,
-    string Scope = "read", bool Write = false, bool SeedOnly = false, bool Configurable = true, bool RequireAll = false);
+    string Scope = "read", bool Write = false, bool SeedOnly = false, bool Configurable = true, bool RequireAll = false,
+    string? GrantedWith = null);
 
 /// <summary>Named MCP grants supplement, never replace, business permissions and token limits.</summary>
 public static class McpToolAccessCatalog
 {
+    private static readonly string[] DocumentPrintKeys =
+    {
+        "challans.print.view", "bills.print.view", "invoices.print.view", "salesquotes.print.view",
+        "salesorders.print.view", "purchasebills.print.view", "goodsreceipts.print.view",
+        "accounting.receipts.print", "accounting.payments.print", "withholdingtax.print.view"
+    };
+
     public static IReadOnlyList<McpToolAccessDefinition> All { get; } = Array.AsReadOnly(new McpToolAccessDefinition[]
     {
         new("list_companies", "Connection", "List accessible companies", Array.Empty<string>(), Configurable: false),
@@ -18,6 +26,7 @@ public static class McpToolAccessCatalog
         new("search_clients", "Customers", "Find customers", new[] { "clients.manage.view" }),
         new("prepare_client", "Customers", "Prepare customer creation or changes", new[] { "clients.manage.create", "clients.manage.update" }, McpScopes.Clients, Write: true),
         new("search_suppliers", "Suppliers", "Find suppliers", new[] { "suppliers.manage.view" }),
+        new("prepare_supplier", "Suppliers", "Prepare supplier creation or changes", new[] { "suppliers.manage.create", "suppliers.manage.update" }, McpScopes.Suppliers, Write: true),
 
         new("search_quotes", "Sales", "Find quotations", new[] { "salesquotes.list.view" }),
         new("search_email_enquiries", "Email enquiries", "Find accessible email enquiries", new[] { "email.workspace.use", "email.inbox.view" }, RequireAll: true),
@@ -31,6 +40,10 @@ public static class McpToolAccessCatalog
         new("search_invoices", "Sales", "Find bills and invoices", new[] { "bills.list.view", "invoices.list.view" }),
         new("get_invoice", "Sales", "Read a bill or invoice", new[] { "bills.list.view", "invoices.list.view" }),
         new("prepare_bill", "Sales", "Prepare a bill", new[] { "bills.manage.create", "bills.manage.create.standalone" }, McpScopes.Bills, Write: true),
+        new("get_bill_tax_filing", "FBR filing", "Read a bill's FBR filing rows", new[] { "invoices.list.view" }),
+        new("prepare_bill_tax_filing", "FBR filing", "Prepare a bill's FBR classification", new[] { "invoices.manage.update.itemtype", "invoices.manage.update.itemtype.qty" }, McpScopes.TaxFiling, Write: true),
+        new("prepare_fbr_exclusion", "FBR filing", "Prepare excluding bills from FBR, or including them again", new[] { "invoices.fbr.exclude" }, McpScopes.FbrExclusion, Write: true),
+        new("validate_bill_fbr", "FBR filing", "Validate a bill with FBR (never submits)", new[] { "invoices.fbr.validate" }, McpScopes.FbrValidate),
 
         new("search_challans", "Deliveries", "Find delivery challans", new[] { "challans.list.view" }),
         new("get_challan", "Deliveries", "Read a delivery challan", new[] { "challans.list.view" }),
@@ -39,6 +52,10 @@ public static class McpToolAccessCatalog
 
         new("get_stock", "Inventory", "Read stock balances", new[] { "stock.dashboard.view" }),
         new("search_item_types", "Inventory", "Find items", new[] { "itemtypes.manage.view" }),
+        // Rides on the item search grant, so every user who can find items can also find FBR's HS codes.
+        new("search_fbr_hs_codes", "Inventory", "Find FBR HS codes and short names", new[] { "itemtypes.manage.view", "fbr.reference.read" },
+            Configurable: false, GrantedWith: "search_item_types"),
+        new("prepare_item_type", "Inventory", "Prepare catalog item creation or changes", new[] { "itemtypes.manage.create", "itemtypes.manage.update" }, McpScopes.ItemTypes, Write: true),
         new("item_rate_history", "Inventory", "Read item rate history", new[] { "itemratehistory.view" }),
 
         new("search_purchase_bills", "Purchases", "Find purchase bills", new[] { "purchasebills.list.view" }),
@@ -62,13 +79,15 @@ public static class McpToolAccessCatalog
 
         new("list_print_templates", "Print templates", "List print designs", new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead),
         new("get_print_template", "Print templates", "Read print design content", new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead),
+        new("prepare_print_template_update", "Print templates", "Prepare print design changes", new[] { "printtemplates.manage.view", "printtemplates.manage.update" }, McpScopes.TemplatesWrite, Write: true, RequireAll: true),
         new("get_print_contract", "Print templates", "Read supported print fields", new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead),
-        new("get_document_print_data", "Print templates", "Read actual document print data", new[]
-        {
-            "challans.print.view", "bills.print.view", "invoices.print.view", "salesquotes.print.view",
-            "salesorders.print.view", "purchasebills.print.view", "goodsreceipts.print.view",
-            "accounting.receipts.print", "accounting.payments.print", "withholdingtax.print.view"
-        }, McpScopes.DocumentsRead),
+        new("list_starter_templates", "Print templates", "List shared starter designs", new[] { "printtemplates.manage.view", "printtemplates.starter.apply" }, McpScopes.TemplatesRead),
+        new("get_starter_template", "Print templates", "Read a shared starter design", new[] { "printtemplates.manage.view", "printtemplates.starter.apply" }, McpScopes.TemplatesRead),
+        new("prepare_starter_template", "Print templates", "Add or change shared starter designs (system administrator)", new[] { "printtemplates.manage.update" }, McpScopes.TemplatesWrite, Write: true, SeedOnly: true),
+        new("get_document_print_data", "Print templates", "Read and print documents", DocumentPrintKeys, McpScopes.DocumentsRead),
+        // Rides on the print-data grant: the same documents, rendered with the company's own template.
+        new("get_document_render_bundle", "Print templates", "Render documents for printing", DocumentPrintKeys, McpScopes.DocumentsRead,
+            Configurable: false, GrantedWith: "get_document_print_data"),
 
         new("get_onboarding_schema", "Onboarding", "Read permitted import sheets and fields", new[] { "onboarding.import.run" }),
         new("get_company_onboarding_status", "Onboarding", "Check company onboarding progress", new[] { "onboarding.import.run" }),

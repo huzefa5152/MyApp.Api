@@ -73,6 +73,10 @@ namespace MyApp.Api.Services.Implementations
             FbrDefaultUOM = c.FbrDefaultUOM,
             FbrDefaultPaymentModeRegistered = c.FbrDefaultPaymentModeRegistered,
             FbrDefaultPaymentModeUnregistered = c.FbrDefaultPaymentModeUnregistered,
+            AllowNonFbrBills = c.AllowNonFbrBills,
+            TaxInvoiceUseOriginalBillLines = c.TaxInvoiceUseOriginalBillLines,
+            FbrOmitProductDescription = c.FbrOmitProductDescription,
+
             InventoryTrackingEnabled = c.InventoryTrackingEnabled,
             StockGuardHardBlock = c.StockGuardHardBlock,
             StartingPurchaseBillNumber = c.StartingPurchaseBillNumber,
@@ -183,6 +187,10 @@ namespace MyApp.Api.Services.Implementations
                 FbrDefaultUOM = dto.FbrDefaultUOM,
                 FbrDefaultPaymentModeRegistered = dto.FbrDefaultPaymentModeRegistered,
                 FbrDefaultPaymentModeUnregistered = dto.FbrDefaultPaymentModeUnregistered,
+                AllowNonFbrBills = dto.AllowNonFbrBills,
+                TaxInvoiceUseOriginalBillLines = dto.TaxInvoiceUseOriginalBillLines,
+                FbrOmitProductDescription = dto.FbrOmitProductDescription,
+
                 InventoryTrackingEnabled = dto.InventoryTrackingEnabled,
                 StockGuardHardBlock = dto.StockGuardHardBlock,
                 StartingPurchaseBillNumber = dto.StartingPurchaseBillNumber,
@@ -254,6 +262,10 @@ namespace MyApp.Api.Services.Implementations
             // Inventory module — flag is freely toggleable; starting numbers
             // only apply if no purchase docs exist yet (same rule as the
             // sales-side starting numbers).
+            if (dto.AllowNonFbrBills.HasValue) company.AllowNonFbrBills = dto.AllowNonFbrBills.Value;
+            if (dto.TaxInvoiceUseOriginalBillLines.HasValue) company.TaxInvoiceUseOriginalBillLines = dto.TaxInvoiceUseOriginalBillLines.Value;
+            if (dto.FbrOmitProductDescription.HasValue) company.FbrOmitProductDescription = dto.FbrOmitProductDescription.Value;
+
             company.InventoryTrackingEnabled = dto.InventoryTrackingEnabled;
             company.StockGuardHardBlock = dto.StockGuardHardBlock;
             var hasPurchaseBills = await _context.PurchaseBills.AnyAsync(p => p.CompanyId == id);
@@ -362,12 +374,19 @@ namespace MyApp.Api.Services.Implementations
                 //    operator saying its links go too.
                 await _context.CustomerPortals.Where(p => p.CompanyId == id).ExecuteDeleteAsync();
                 var emailConnectionIds = await _context.GmailCompanyLinks.Where(e => e.CompanyId == id).Select(e => e.ConnectionId).ToListAsync();
+                await _context.EmailReplyAttempts.Where(e => e.CompanyId == id).ExecuteDeleteAsync();
                 await _context.EmailEnquiries.Where(e => e.CompanyId == id).ExecuteDeleteAsync();
                 await _context.EmailWorkspaceEvents.Where(e => e.CompanyId == id).ExecuteDeleteAsync();
                 await _context.GmailOAuthRequests.Where(e => e.CompanyId == id).ExecuteDeleteAsync();
                 await _context.GmailCompanyLinks.Where(e => e.CompanyId == id).ExecuteDeleteAsync();
                 await _context.GmailConnections.Where(c => emailConnectionIds.Contains(c.Id) && !_context.GmailCompanyLinks.Any(l => l.ConnectionId == c.Id && l.IsEnabled))
                     .ExecuteUpdateAsync(s => s.SetProperty(c => c.ProtectedRefreshToken, "").SetProperty(c => c.Status, "Disconnected"));
+
+                // Remove accounting dependants before payments, suppliers and accounts.
+                await _context.BankStatementImports.Where(s => s.CompanyId == id).ExecuteDeleteAsync();
+                await _context.BankReconciliations.Where(r => r.CompanyId == id).ExecuteDeleteAsync();
+                await _context.AccountTransfers.Where(t => t.CompanyId == id).ExecuteDeleteAsync();
+                await _context.PurchaseDebitNotes.Where(n => n.CompanyId == id).ExecuteDeleteAsync();
 
                 // 1. Unlink challans from invoices
                 await _context.DeliveryChallans
@@ -387,6 +406,14 @@ namespace MyApp.Api.Services.Implementations
                         .Where(a => paymentIds.Contains(a.PaymentId)).ExecuteDeleteAsync();
                     await _context.Payments.Where(p => p.CompanyId == id).ExecuteDeleteAsync();
                 }
+
+                // Local purchase lines restrict source-line deletion. The whole
+                // company is being removed, so release only its own source links.
+                await _context.PurchaseItems.Where(pi => pi.PurchaseBill.CompanyId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(pi => pi.LocalInvoiceItemId, (int?)null)
+                        .SetProperty(pi => pi.LocalDeliveryItemId, (int?)null));
+
+                await _context.PrivateCostChanges.Where(change => change.CompanyId == id).ExecuteDeleteAsync();
 
                 // 2. Delete invoice items, then invoices
                 var invoiceIds = await _context.Invoices.Where(i => i.CompanyId == id).Select(i => i.Id).ToListAsync();

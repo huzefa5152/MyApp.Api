@@ -1,3 +1,4 @@
+import BillTaxTreatmentField from "./BillTaxTreatmentField";
 import { defaultFurtherTaxRate } from "../utils/furtherTax";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { MdCheck, MdInfo, MdLock, MdAdd, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
@@ -13,7 +14,9 @@ import { getItemTypes } from "../api/itemTypeApi";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { saveItemFbrDefaults } from "../api/lookupApi";
 import { formStyles, modalSizes } from "../theme";
-import { lineTotalFrom, unitPriceFrom } from "../utils/lineAmount";
+import { ENTRY_MODE, displayUnitPrice, lineTotalFrom, unitPriceFrom } from "../utils/lineAmount";
+import LineEntryModeSwitch, { CalculatedField } from "./LineEntryModeSwitch";
+import useLineEntryMode from "../hooks/useLineEntryMode";
 import { todayYmd } from "../utils/dateInput";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
@@ -87,14 +90,8 @@ const SCENARIO_META = {
 };
 
 export default function InvoiceForm({ companyId, company, onClose, onSaved, prefillChallanId, prefillSalesOrderId, billsMode = false }) {
-  // billsMode: true when this form is mounted from the Bills tab. Hides
-  // every FBR-classification control — Item Type column + picker, "+ New
-  // Item Type" button, bulk-apply toolbar, HS Code column, Sale Type
-  // column, FBR scenario picker. The challan items still flow through and
-  // their auto-detected FBR fields (HSCode/UOM/SaleType inherited from
-  // the catalog) are sent to the API; they're just not editable here.
-  // Item-Type classification happens on the Invoices tab. Description
-  // stays the existing challan-style SmartItemAutocomplete.
+  // Commercial bills may leave product families unclassified for the consultant.
+  // Selected item types suggest filing groups without changing commercial lines.
   const { has } = usePermissions();
   const canCreateClient   = has("clients.manage.create");
   const canCreateItemType = has("itemtypes.manage.create");
@@ -108,6 +105,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [allChallans, setAllChallans] = useState([]);
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
+  // Lines of the selected challans NOT billed now. The server moves each to a
+  // new row of its challan (same number) that stays billable.
+  const [leftOutIds, setLeftOutIds] = useState([]);
+  const toggleLeftOut = (id) => setLeftOutIds((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   // Optional "bill from a Sales Order" shortcut — picks the order's client and
   // pre-ticks its billable challans in the list below.
   const canUseOrders = has("salesorders.list.view");
@@ -123,6 +124,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // the linked challans). PO date reuses commonPoDate below.
   const [poNumber, setPoNumber] = useState("");
   const [gstRate, setGstRate] = useState(18);
+  const [taxTreatment, setTaxTreatment] = useState("FBR");
+  const outsideFbr = taxTreatment !== "FBR";
+  const changeTaxTreatment = value => { setTaxTreatment(value); setGstRate(value === "SRB" ? 15 : value === "NoTax" ? 0 : chosenScenario?.defaultRate ?? 18); setFurtherTaxRate(null); };
   // Further tax follows the buyer/scenario; withholding uses the company preference.
   // The operator can override either value.
   const [furtherTaxRate, setFurtherTaxRate] = useState(null);
@@ -383,12 +387,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // GST rate, item-type filter, AND the client dropdown filter.
   const buyerRegistrationType = clients.find((c) => String(c.id) === String(selectedClientId))?.registrationType;
   useEffect(() => {
-    setFurtherTaxRate(defaultFurtherTaxRate(scenarioCode, buyerRegistrationType));
-  }, [scenarioCode, selectedClientId, buyerRegistrationType]);
+    setFurtherTaxRate(outsideFbr ? null : defaultFurtherTaxRate(scenarioCode, buyerRegistrationType));
+  }, [scenarioCode, selectedClientId, buyerRegistrationType, outsideFbr]);
 
   const chosenScenario = useMemo(
-    () => enrichedScenarios.find((s) => s.code === scenarioCode) || null,
-    [enrichedScenarios, scenarioCode],
+    () => outsideFbr ? { code: taxTreatment, defaultRate: taxTreatment === "SRB" ? 15 : 0, saleType: "", meta: { buyerKind: "either", hint: "Outside FBR" } } : enrichedScenarios.find((s) => s.code === scenarioCode) || null,
+    [enrichedScenarios, scenarioCode, taxTreatment, outsideFbr],
   );
 
   // Item types compatible with the chosen scenario. When no scenario is
@@ -408,8 +412,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // canonical rate. Field is read-only while a scenario is locked — same
   // behaviour as StandaloneInvoiceForm. Switch scenario to change rate.
   useEffect(() => {
-    if (chosenScenario) setGstRate(chosenScenario.defaultRate);
-  }, [chosenScenario]);
+    if (!outsideFbr && chosenScenario) setGstRate(chosenScenario.defaultRate);
+  }, [chosenScenario, outsideFbr]);
 
   // Default to SN001 when applicable. Most operators bill registered
   // B2B at standard rate; opening on SN001 saves a click. We only set
@@ -535,9 +539,11 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   };
 
   const selectedChallans = clientChallans.filter((c) => selectedIds.includes(c.id));
-  const allItems = selectedChallans.flatMap((c) =>
+  const shownItems = selectedChallans.flatMap((c) =>
     c.items.map((item) => ({ ...item, challanNumber: c.challanNumber }))
   );
+  // Everything below (totals, validation, the payload) is the billed lines only.
+  const allItems = shownItems.filter((item) => !leftOutIds.includes(item.id));
 
   const subtotal = allItems.reduce((sum, item) => {
     const price = parseFloat(itemPrices[item.id]) || 0;
@@ -553,10 +559,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const grandTotal = subtotal + gstAmount + furtherTaxAmount;
   const commercialTotal = grandTotal + (billsMode ? Number(freightCharges || 0) : 0);
 
+  const allItemTypesValid = billsMode || allItems.every(i => !!itemTypeIds[i.id]);
   const allPricesValid = allItems.length > 0 && allItems.every((i) => itemPrices[i.id] && parseFloat(itemPrices[i.id]) > 0);
-  // Item Type is required on every line so the invoice can always group by
-  // it (5 hardware + 5 chemical lines → 2 grouped rows on the invoice).
-  const allItemTypesValid = allItems.length > 0 && allItems.every((i) => !!itemTypeIds[i.id]);
 
   // Drives the "Apply same Item Type to all" picker's displayed value so it
   // RETAINS the applied selection (was hardcoded "" → snapped back to the
@@ -569,6 +573,51 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     const first = ids[0];
     return first && ids.every((x) => x === first) ? String(first) : "";
   }, [allItems, itemTypeIds]);
+
+  // The quantity is fixed by the challan, so the operator either types the
+  // unit price (the line total is worked out) or the line total (the unit
+  // price is worked out); the other is read-only. Remembered for this screen.
+  const [entryMode, setEntryModePref] = useLineEntryMode("bill-challan");
+  const byTotal = entryMode === ENTRY_MODE.total;
+  const typedTotal = (item) => {
+    const price = parseFloat(itemPrices[item.id]) || 0;
+    return itemLineTotals[item.id] ?? (price > 0 ? String(lineTotalFrom(item.quantity, price)) : "");
+  };
+  const shownRate = (item) => {
+    const raw = itemPrices[item.id];
+    if (raw === "" || raw == null) return "";
+    const t = typedTotal(item);
+    return displayUnitPrice(raw, Number(item.quantity), t === "" ? null : Number(t));
+  };
+  const shownTotal = (item) => {
+    const t = typedTotal(item);
+    return t === "" || !Number.isFinite(Number(t))
+      ? "" : Number(t).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+  // Flipping the mode keeps every line's figures: Line total starts from what
+  // each line comes to now; Unit price trims a derived rate to the fewest
+  // decimals that still reproduce that total.
+  const setEntryMode = (next) => {
+    if (next === ENTRY_MODE.total) {
+      const seeded = {};
+      for (const item of allItems) {
+        const t = typedTotal(item);
+        if (t !== "") seeded[item.id] = t;
+      }
+      setItemLineTotals(seeded);
+    } else {
+      setItemPrices((prev) => {
+        const out = { ...prev };
+        for (const item of allItems) {
+          const shown = shownRate(item);
+          if (shown !== "") out[item.id] = String(shown);
+        }
+        return out;
+      });
+      setItemLineTotals({});
+    }
+    setEntryModePref(next);
+  };
 
   const handlePriceChange = (itemId, value) => {
     setItemPrices((prev) => ({ ...prev, [itemId]: value }));
@@ -622,21 +671,20 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     if (billNumberMode === "custom" && !billNumberOk)
       return setError("Enter a bill number that isn't already in use, or switch back to Auto.");
 
+    const emptied = selectedChallans.find((c) => c.items.length > 0 && c.items.every((i) => leftOutIds.includes(i.id)));
+    if (emptied) return setError(`Challan #${emptied.challanNumber}: every line is left out. Untick the challan instead.`);
+
     const missingPrices = allItems.filter((i) => !itemPrices[i.id] || parseFloat(itemPrices[i.id]) <= 0);
     if (missingPrices.length > 0) return setError("Enter unit price for all items.");
 
-    const missingItemTypes = allItems.filter((i) => !itemTypeIds[i.id]);
-    if (missingItemTypes.length > 0) return setError(
-      `Select an Item Type for every item — ${missingItemTypes.length} still missing. ` +
-      `Use "Apply same Item Type to all" to classify in bulk.`
-    );
+    if (!allItemTypesValid) return setError("Select an Item Type for each invoice line.");
 
     setSaving(true);
     try {
       // Prepend the chosen scenario tag to paymentTerms so FbrService's
       // auto-detector routes the submission to the right scenarioId. The
       // tag pattern is "[SNxxx]" — see FbrService.PostInvoiceAsync.
-      const paymentTermsToSave = scenarioCode
+      const paymentTermsToSave = !outsideFbr && scenarioCode
         ? `[${scenarioCode}] ${paymentTerms || chosenScenario?.description || ""}`.trim()
         : (paymentTerms || null);
 
@@ -645,6 +693,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         companyId,
         clientId: parseInt(selectedClientId),
         gstRate: parseFloat(gstRate),
+        taxTreatment,
         // null = Auto (server allocates the next number in sequence).
         invoiceNumber: billNumberPayload(billNumberMode, billNumber),
         // null, not 0 — "not selected" and "selected at zero" are different
@@ -741,14 +790,14 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   //   walk-in          → only Unregistered clients (counter sale, rare with challans)
   //   either           → no filter
   const clientsForScenario = useMemo(() => {
-    if (!chosenScenario) return clientsWithChallans;
+    if (outsideFbr || !chosenScenario) return clientsWithChallans;
     const k = chosenScenario.meta.buyerKind;
     if (k === "b2b-registered")
       return clientsWithChallans.filter((c) => (c.registrationType || "").toLowerCase() === "registered");
     if (k === "b2b-unregistered" || k === "walk-in")
       return clientsWithChallans.filter((c) => (c.registrationType || "").toLowerCase() !== "registered");
     return clientsWithChallans;
-  }, [clientsWithChallans, chosenScenario]);
+  }, [clientsWithChallans, chosenScenario, outsideFbr]);
 
   // Re-fetchers for inline creates so the new buyer / item type lands
   // in the dropdowns immediately. Keep the original useEffect for first
@@ -790,8 +839,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           <h5 style={formStyles.title}>Create Bill</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
-        <form onSubmit={handleSubmit}>
-          <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "70vh", overflowY: "auto" }}>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0, overflow: "hidden" }}>
+          <div data-admin-body="" style={{ ...formStyles.body, overflowY: "auto" }}>
+            <BillTaxTreatmentField enabled={!!company?.allowNonFbrBills} value={taxTreatment} onChange={changeTaxTreatment} rate={gstRate} onRateChange={setGstRate} disabled={saving} />
             {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
             {loading ? (
@@ -832,7 +882,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                     scenario and can expand to switch. Auto-collapses on
                     pick so the form scrolls back into Buyer / Items.
                     Same UX as StandaloneInvoiceForm. */}
-                <div style={{ marginBottom: "1rem" }}>
+                <div style={{ marginBottom: "1rem", display: outsideFbr ? "none" : undefined }}>
                   <button
                     type="button"
                     onClick={() => setScenarioPickerOpen((v) => !v)}
@@ -1020,7 +1070,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                           <span>·</span>
                           <span>{invoiceDate || "—"}</span>
                           <span>·</span>
-                          <span>{gstRate}% GST</span>
+                          <span>{gstRate}% {outsideFbr ? "SRB / non-FBR tax" : "GST"}</span>
                           <span>·</span>
                           <span>{documentType === 4 ? "Sale Invoice" : documentType === 9 ? "Debit Note" : documentType === 10 ? "Credit Note" : "—"}</span>
                           {paymentMode && <><span>·</span><span>{paymentMode}</span></>}
@@ -1051,9 +1101,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                               <label style={styles.label}>Bill Date</label>
                               <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
                             </div>
-                            <div style={{ flex: 1, minWidth: 100 }}>
+                            <div style={{ display: outsideFbr ? "none" : undefined, flex: 1, minWidth: 100 }}>
                               <label style={{ ...styles.label, whiteSpace: "nowrap" }}>
-                                GST Rate (%){chosenScenario && <span style={styles.lockedTag} title={`Locked by ${chosenScenario.code}`}>🔒 locked</span>}
+                                {outsideFbr ? "Tax rate (%)" : "GST Rate (%)"}{chosenScenario && <span style={styles.lockedTag} title={`Locked by ${chosenScenario.code}`}>🔒 locked</span>}
                               </label>
                               <input
                                 type="number"
@@ -1073,7 +1123,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                               <label style={styles.label}>Payment Terms</label>
                               <input type="text" style={styles.input} value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="Optional" />
                             </div>
-                            <div style={{ flex: 1, minWidth: 140 }}>
+                            <div style={{ display: outsideFbr ? "none" : undefined, flex: 1, minWidth: 140 }}>
                               <label style={styles.label}>
                                 Document Type <span style={styles.optionalTag}>FBR</span>
                               </label>
@@ -1085,7 +1135,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                 title="This screen creates Sale Invoices only. Credit / Debit Notes will get their own dedicated screens."
                               />
                             </div>
-                            <div style={{ flex: 1, minWidth: 140 }}>
+                            <div style={{ display: outsideFbr ? "none" : undefined, flex: 1, minWidth: 140 }}>
                               <label style={styles.label}>
                                 Payment Mode <span style={styles.optionalTag}>FBR</span>
                               </label>
@@ -1114,7 +1164,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                         a glance which sale type every item line will end
                         up with. Hidden when no scenario is picked
                         (auto-detect mode). */}
-                    {chosenScenario && (
+                    {!outsideFbr && chosenScenario && (
                       <div style={styles.lockedSaleType}>
                         <span style={styles.lockedSaleTypeIcon}>🔒</span>
                         <span><b>Sale Type locked:</b> {chosenScenario.saleType}</span>
@@ -1125,13 +1175,15 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                     )}
 
                     {/* Items - unified single-row table (same layout as Edit Bill) */}
-                    {allItems.length > 0 && (
+                    {shownItems.length > 0 && (
                       <div>
                         <div style={styles.itemsHeaderBar}>
                           <label style={{ ...styles.label, margin: 0 }}>
-                            Items ({allItems.length})
+                            Items ({allItems.length === shownItems.length ? allItems.length : `${allItems.length} of ${shownItems.length} billed`})
+                            <span style={styles.leaveOutHint}> — untick a line to bill it later; it stays on its challan as pending</span>
                           </label>
                           <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                            <LineEntryModeSwitch mode={entryMode} onChange={setEntryMode} />
                             {/* Bills mode hides all item-type-management
                                 controls — the catalog "+ New Item Type"
                                 button, the FBR-tip pill. Operators classify
@@ -1183,7 +1235,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             same catalog row across all lines. Saves 20+
                             picks when every item on the bill is the same
                             FBR category. Shown in both modes now that Item
-                            Type is required on every bill. */}
+                            Type is optional on a commercial bill. */}
                         {allItems.length > 1 && (
                           <div style={{
                             display: "flex", alignItems: "center", gap: "0.65rem",
@@ -1236,12 +1288,17 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
 
                         {isNarrow ? (
                           <div style={styles.mcards}>
-                            {allItems.map((item) => {
+                            {shownItems.map((item) => {
                               const price = parseFloat(itemPrices[item.id]) || 0;
                               const displayUom = itemUoms[item.id] ?? item.unit;
+                              const out = leftOutIds.includes(item.id);
                               return (
-                                <div key={item.id} style={styles.mcard}>
+                                <div key={item.id} style={{ ...styles.mcard, ...(out ? styles.leftOutRow : null) }}>
                                   <div style={styles.mcardHead}>
+                                    <label style={styles.billTick}>
+                                      <input type="checkbox" checked={!out} onChange={() => toggleLeftOut(item.id)} aria-label={`Bill ${item.description} now`} />
+                                      {out ? "Later" : "Bill"}
+                                    </label>
                                     <span style={styles.mdc}>DC #{item.challanNumber}</span>
                                     <div style={{ flex: 1, minWidth: 160 }}>
                                       <SearchableItemTypeSelect
@@ -1257,12 +1314,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                             setItemSaleTypes((p) => ({ ...p, [item.id]: "" }));
                                           }
                                         }}
-                                        placeholder="Pick item… *"
-                                        style={{ padding: "0.4rem 0.55rem", fontSize: "0.82rem", ...(itemTypeIds[item.id] ? {} : { borderColor: colors.warn }) }}
+                                        placeholder={billsMode ? "Item type (optional)…" : "Pick item… *"}
+                                        style={{ padding: "0.4rem 0.55rem", fontSize: "0.82rem" }}
                                       />
-                                      {!itemTypeIds[item.id] && (
-                                        <div style={{ marginTop: 2, fontSize: "0.62rem", color: colors.warn, fontWeight: 700 }}>Required</div>
-                                      )}
                                     </div>
                                   </div>
                                   <div style={{ marginBottom: "0.4rem" }}>
@@ -1287,7 +1341,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                     </div>
                                     <div>
                                       <label style={styles.mlabel}>Unit Price *</label>
-                                      <input type="number" min={0} step={0.01} style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right" }} value={itemPrices[item.id] || ""} onChange={(e) => handlePriceChange(item.id, e.target.value)} placeholder="0.00" />
+                                      {byTotal
+                                        ? <CalculatedField label="Unit price" value={shownRate(item)} />
+                                        : <input type="number" min={0} step="any" style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right" }} value={itemPrices[item.id] || ""} onChange={(e) => handlePriceChange(item.id, e.target.value)} placeholder="0.00" />}
                                       {lastRates[item.id]?.lastUnitPrice != null && (
                                         <div style={{
                                           fontSize: "0.68rem", marginTop: 2, lineHeight: 1.2,
@@ -1342,14 +1398,19 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                   )}
                                   <div style={styles.mamt}>
                                     <span style={styles.mlabel}>Line Total</span>
-                                    <input
-                                      type="number" min={0} step={0.01}
-                                      style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right", fontWeight: 700, maxWidth: 150 }}
-                                      value={itemLineTotals[item.id] ?? (price > 0 ? String(lineTotalFrom(item.quantity, price)) : "")}
-                                      onChange={(e) => handleLineTotalChange(item.id, e.target.value, item.quantity)}
-                                      placeholder="0.00"
-                                      title="Type the amount this line must come to — the unit price is derived from it and the challan quantity."
-                                    />
+                                    {byTotal ? (
+                                      <input
+                                        type="number" min={0} step="any"
+                                        aria-label="Line total"
+                                        style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right", fontWeight: 700, maxWidth: 150 }}
+                                        value={typedTotal(item)}
+                                        onChange={(e) => handleLineTotalChange(item.id, e.target.value, item.quantity)}
+                                        placeholder="0.00"
+                                        title="Type the amount this line must come to — the unit price is worked out from it and the challan quantity."
+                                      />
+                                    ) : (
+                                      <CalculatedField label="Line total" value={shownTotal(item)} style={{ maxWidth: 150, fontWeight: 700 }} />
+                                    )}
                                   </div>
                                 </div>
                               );
@@ -1360,11 +1421,11 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                           <table style={styles.unifiedTable}>
                             <thead>
                               <tr style={styles.unifiedThead}>
-                                <th style={{ ...styles.unifiedTh, width: "4%" }}>DC#</th>
-                                {/* Item Type is required on every bill so the
+                                <th style={{ ...styles.unifiedTh, width: "6%" }}>Bill · DC#</th>
+                                {/* Optional Item Type helps the
                                     invoice can group by it — shown in both
                                     Bills and Invoices modes. */}
-                                <th style={{ ...styles.unifiedTh, width: "14%" }}>Item Type (FBR) *</th>
+                                <th style={{ ...styles.unifiedTh, width: "14%" }}>Item Type {billsMode ? "(optional)" : "*"}</th>
                                 <th style={{ ...styles.unifiedTh, width: "16%" }}>Description</th>
                                 <th style={{ ...styles.unifiedTh, width: "9%" }}>Qty</th>
                                 <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
@@ -1385,13 +1446,17 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                               </tr>
                             </thead>
                             <tbody>
-                              {allItems.map((item) => {
+                              {shownItems.map((item) => {
                                 const price = parseFloat(itemPrices[item.id]) || 0;
                                 const displayUom = itemUoms[item.id] ?? item.unit;
+                                const out = leftOutIds.includes(item.id);
                                 return (
-                                  <tr key={item.id} style={styles.unifiedRow}>
+                                  <tr key={item.id} style={{ ...styles.unifiedRow, ...(out ? styles.leftOutRow : null) }}>
                                     <td style={{ ...styles.unifiedTd, fontSize: "0.76rem", color: colors.textSecondary }}>
-                                      {item.challanNumber}
+                                      <label style={styles.billTickCell} title={out ? "Left out: billed later" : "Billed now: untick to bill this line later"}>
+                                        <input type="checkbox" checked={!out} onChange={() => toggleLeftOut(item.id)} aria-label={`Bill ${item.description} now`} />
+                                        <span>{item.challanNumber}</span>
+                                      </label>
                                     </td>
                                     <td style={styles.unifiedTd}>
                                       {/* Picking an ItemType auto-fills HS Code, UOM, SaleType,
@@ -1422,12 +1487,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                             setItemSaleTypes((p) => ({ ...p, [item.id]: "" }));
                                           }
                                         }}
-                                        placeholder="Pick item… *"
-                                        style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem", ...(itemTypeIds[item.id] ? {} : { borderColor: colors.warn }) }}
+                                        placeholder={billsMode ? "Item type (optional)…" : "Pick item… *"}
+                                        style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
                                       />
-                                      {!itemTypeIds[item.id] && (
-                                        <div style={{ marginTop: 2, fontSize: "0.62rem", color: colors.warn, fontWeight: 700 }}>Required</div>
-                                      )}
                                     </td>
                                     <td style={styles.unifiedTd}>
                                       {/* Description stays the challan line's own product
@@ -1462,15 +1524,19 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                       />
                                     </td>
                                     <td style={styles.unifiedTd}>
-                                      <input
-                                        type="number"
-                                        min={0}
-                                        step={0.01}
-                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
-                                        value={itemPrices[item.id] || ""}
-                                        onChange={(e) => handlePriceChange(item.id, e.target.value)}
-                                        placeholder="0.00"
-                                      />
+                                      {byTotal ? (
+                                        <CalculatedField label="Unit price" value={shownRate(item)} style={{ fontSize: "0.8rem", minHeight: 32, padding: "0.3rem 0.5rem" }} />
+                                      ) : (
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          step="any"
+                                          style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+                                          value={itemPrices[item.id] || ""}
+                                          onChange={(e) => handlePriceChange(item.id, e.target.value)}
+                                          placeholder="0.00"
+                                        />
+                                      )}
                                       {lastRates[item.id]?.lastUnitPrice != null && (
                                         <div style={{
                                           fontSize: "0.68rem", marginTop: 2, lineHeight: 1.2,
@@ -1494,14 +1560,19 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                       )}
                                     </td>
                                     <td style={{ ...styles.unifiedTd, textAlign: "right", fontWeight: 600, fontSize: "0.82rem" }}>
-                                      <input
-                                        type="number" min={0} step={0.01}
-                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", textAlign: "right", fontWeight: 600 }}
-                                        value={itemLineTotals[item.id] ?? (price > 0 ? String(lineTotalFrom(item.quantity, price)) : "")}
-                                        onChange={(e) => handleLineTotalChange(item.id, e.target.value, item.quantity)}
-                                        placeholder="0.00"
-                                        title="Type the amount this line must come to — the unit price is derived from it and the challan quantity."
-                                      />
+                                      {byTotal ? (
+                                        <input
+                                          type="number" min={0} step="any"
+                                          aria-label="Line total"
+                                          style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", textAlign: "right", fontWeight: 600 }}
+                                          value={typedTotal(item)}
+                                          onChange={(e) => handleLineTotalChange(item.id, e.target.value, item.quantity)}
+                                          placeholder="0.00"
+                                          title="Type the amount this line must come to — the unit price is worked out from it and the challan quantity."
+                                        />
+                                      ) : (
+                                        <CalculatedField label="Line total" value={shownTotal(item)} style={{ fontSize: "0.8rem", minHeight: 32, padding: "0.3rem 0.5rem", fontWeight: 600 }} />
+                                      )}
                                     </td>
                                     {!billsMode && (
                                       <td
@@ -1590,7 +1661,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                         {/* Totals */}
                         <div style={styles.totalsBox}>
                           <div style={styles.totalRow}><span>Subtotal:</span><span>Rs. {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-                          <div style={styles.totalRow}><span>GST ({gstRate}%):</span><span>Rs. {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+                          <div style={styles.totalRow}><span>{taxTreatment === "SRB" ? "SRB sales tax" : taxTreatment === "NoTax" ? "Tax" : "GST"} ({gstRate}%):</span><span>Rs. {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
                           {billsMode && Number(freightCharges) > 0 && (
                             <div style={styles.totalRow}><span>Freight / cartage:</span><span>Rs. {Number(freightCharges).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
                           )}
@@ -1615,7 +1686,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                           freightCharges={billsMode ? Number(freightCharges || 0) : 0}
                           subtotal={subtotal}
                           gstAmount={gstAmount}
-                          furtherTaxRate={furtherTaxRate}
+                          furtherTaxRate={taxTreatment === "FBR" ? furtherTaxRate : undefined}
                           onFurtherTaxRateChange={setFurtherTaxRate}
                           withholdingTaxRate={withholdingTaxRate}
                           withholdingTaxAmount={withholdingTaxAmount}
@@ -1624,7 +1695,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             setWithholdingTaxAmount(amount);
                           }}
                         />
-            <TaxInvoiceGrouping value={groupTaxInvoiceByItemType} onChange={setGroupTaxInvoiceByItemType} />
+            <p style={{ color: colors.textSecondary, fontSize: "0.85rem", lineHeight: 1.5 }}>Item Type is optional on bills. Selected types suggest filing groups; unclassified lines stay separate. The tax consultant can combine or separate them in Adjust invoice.</p>
+            {!company?.taxInvoiceUseOriginalBillLines && <TaxInvoiceGrouping value={groupTaxInvoiceByItemType} onChange={setGroupTaxInvoiceByItemType} />}
             <DocumentNotesEditor value={notes} onChange={setNotes} />
             <div style={{ marginTop: "1rem" }}>
               <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="Invoice" entityId={null} mode="edit" />
@@ -1634,11 +1706,6 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
             {allItems.length > 0 && !allPricesValid && (
               <span style={{ fontSize: "0.8rem", color: colors.danger, marginRight: "auto" }}>
                 All items must have a unit price greater than 0.
-              </span>
-            )}
-            {allItems.length > 0 && allPricesValid && !allItemTypesValid && (
-              <span style={{ fontSize: "0.8rem", color: colors.warn, marginRight: "auto" }}>
-                Select an Item Type for every item (required for FBR grouping).
               </span>
             )}
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
@@ -1693,6 +1760,10 @@ const styles = {
   mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
   mcard: { border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" },
   mcardHead: { display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.5rem", flexWrap: "wrap" },
+  billTick: { display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.74rem", fontWeight: 700, color: "#0d47a1", minHeight: 44, cursor: "pointer", flexShrink: 0 },
+  billTickCell: { display: "flex", flexDirection: "column", alignItems: "center", gap: 2, cursor: "pointer" },
+  leftOutRow: { opacity: 0.5 },
+  leaveOutHint: { fontWeight: 400, fontSize: "0.72rem", color: "#5f6d7e" },
   mdc: { fontSize: "0.7rem", fontWeight: 700, color: "#0d47a1", background: "#e3f2fd", borderRadius: 6, padding: "0.15rem 0.45rem", flexShrink: 0 },
   mlabel: { display: "block", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.03em", color: colors.textSecondary, fontWeight: 700, marginBottom: "0.2rem" },
   mgrid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem", marginTop: "0.4rem" },

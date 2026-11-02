@@ -1,14 +1,15 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.DTOs;
+using MyApp.Api.DTOs.AccountingCatalog;
 using MyApp.Api.Middleware;
 using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Controllers
 {
     /// <summary>
-    /// The general ledger itself: its status, the period close, and the trial
-    /// balance.
+    /// The general ledger itself: its status, the period close, the trial
+    /// balance, and the accounting dashboard's summary.
     ///
     /// There is no endpoint that turns GL posting OFF, and that is deliberate —
     /// see <c>Company.GlPostingEnabled</c>. A company whose documents have been
@@ -22,13 +23,18 @@ namespace MyApp.Api.Controllers
     {
         private readonly IGeneralLedgerService _gl;
         private readonly IPostingService _posting;
+        private readonly IAccountingReportService _reports;
+        private readonly IAccountingCatalogService _catalog;
         private readonly ILogger<AccountingController> _logger;
 
         public AccountingController(IGeneralLedgerService gl, IPostingService posting,
+            IAccountingReportService reports, IAccountingCatalogService catalog,
             ILogger<AccountingController> logger)
         {
             _gl = gl;
             _posting = posting;
+            _reports = reports;
+            _catalog = catalog;
             _logger = logger;
         }
 
@@ -96,6 +102,49 @@ namespace MyApp.Api.Controllers
                 _logger.LogError(ex, "Trial balance failed for company {CompanyId}", companyId);
                 return StatusCode(500, new { error = "Could not build the trial balance." });
             }
+        }
+
+        /// <summary>The accounting dashboard (Dashboards → Accounting). One
+        /// read for the whole screen; every ledger figure is taken from the
+        /// report a card opens, so the two cannot disagree. From/To default to
+        /// the current month to date.</summary>
+        [HttpGet("summary/company/{companyId}")]
+        [HasPermission("accounting.dashboard.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<AccountingSummaryDto>> GetSummary(
+            int companyId, [FromQuery] DateTime? from = null, [FromQuery] DateTime? to = null)
+        {
+            AccountingSummaryDto summary;
+            try { summary = await _reports.GetSummaryAsync(companyId, from, to); }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Accounting summary failed for company {CompanyId}", companyId);
+                return StatusCode(500, new { error = "Could not build the accounting summary." });
+            }
+
+            // Gross profit and its trend come from the Monthly Profit report
+            // itself (each row is that month's P&L), never recomputed here. A
+            // failure leaves them empty: the rest of the dashboard still stands.
+            try
+            {
+                var period = await _catalog.GetMonthlyProfitAsync(companyId,
+                    new ReportFilterDto { Period = "custom", From = summary.From, To = summary.To });
+                summary.ProfitNotice = period.Notice;
+                if (period.Totals.TryGetValue("grossProfit", out var gross))
+                {
+                    summary.GrossProfit = gross;
+                    summary.CostOfSales = period.Totals.GetValueOrDefault("costOfSales");
+                }
+                var trendFrom = new DateTime(summary.To.Year, summary.To.Month, 1).AddMonths(-11);
+                var trend = await _catalog.GetMonthlyProfitAsync(companyId,
+                    new ReportFilterDto { Period = "custom", From = trendFrom, To = summary.To });
+                summary.ProfitTrend = trend.Rows.OfType<MonthlyProfitRowDto>().ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Accounting summary profit trend failed for company {CompanyId}", companyId);
+            }
+            return Ok(summary);
         }
     }
 }

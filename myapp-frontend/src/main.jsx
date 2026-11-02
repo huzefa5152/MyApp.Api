@@ -11,6 +11,8 @@ import "./ui/kit.css";
 import ErrorBoundary from "./Components/ErrorBoundary";
 import NotificationProvider from "./Components/NotificationProvider";
 import ConfirmProvider from "./Components/ConfirmDialog";
+import ReconnectingNotice from "./Components/ReconnectingNotice";
+import { startVersionWatch } from "./utils/serviceContinuity";
 import PublicPortalPage from "./pages/public/PublicPortalPage";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./index.css";
@@ -46,11 +48,13 @@ if (isPublicPortal) {
     </React.StrictMode>
   );
 } else {
+  startVersionWatch();
   root.render(
     <React.StrictMode>
       <ErrorBoundary>
         {/* basename follows Vite's base ("/admin/" in this build) so the
             whole app — routes, links, navigate() — is /admin-rooted. */}
+        <ReconnectingNotice />
         <BrowserRouter basename={(import.meta.env.BASE_URL || "/").replace(/\/+$/, "") || "/"}>
           <NotificationProvider>
             <ConfirmProvider>

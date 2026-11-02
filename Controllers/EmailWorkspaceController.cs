@@ -21,6 +21,12 @@ public sealed class EmailWorkspaceController(EmailWorkspaceService service, ILog
         catch (UnauthorizedAccessException) { return Forbid(); }
         catch (DbUpdateConcurrencyException) { return Conflict(new { message = "This enquiry changed. Reload before saving." }); }
         catch (DbUpdateException) { return Conflict(new { message = "This record changed. Reload and try again." }); }
+        catch (GmailProviderException e) when (e.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+        { return Conflict(new { message = "Gmail access needs attention. Ask the mailbox owner to reconnect and authorize this action." }); }
+        catch (GmailProviderException)
+        { return StatusCode(503, new { message = "Gmail is temporarily unavailable. Please try again shortly." }); }
+        catch (OperationCanceledException)
+        { return StatusCode(503, new { message = "Gmail did not finish in time. Refresh the workspace before trying again." }); }
         catch (Exception e)
         {
             logger.LogError("Email workspace request failed ({ExceptionType})", e.GetType().Name);
@@ -41,7 +47,7 @@ public sealed class EmailWorkspaceController(EmailWorkspaceService service, ILog
     [HttpPost("company/{companyId}/oauth/start")]
     [HasPermission("email.connections.manage")]
     [AuthorizeCompany]
-    public Task<IActionResult> Start(int companyId, CancellationToken ct) => Run(() => service.StartAsync(UserId, companyId, ct));
+    public Task<IActionResult> Start(int companyId, CancellationToken ct, int? upgradeConnectionId = null) => Run(() => service.StartAsync(UserId, companyId, ct, upgradeConnectionId));
     [HttpPost("oauth/complete")]
     [HasPermission("email.connections.manage")]
     public Task<IActionResult> Complete(GmailCompleteDto dto, CancellationToken ct) => Run(() => service.CompleteAsync(UserId, dto, ct));
@@ -74,6 +80,21 @@ public sealed class EmailWorkspaceController(EmailWorkspaceService service, ILog
     [HasPermission("email.inbox.view")]
     [AuthorizeCompany]
     public Task<IActionResult> Read(int companyId, int id, CancellationToken ct) => Run(() => service.ReadAsync(UserId, companyId, id, ct));
+    [HttpGet("company/{companyId}/messages/{id}/conversation")]
+    [HasPermission("email.inbox.view"), AuthorizeCompany]
+    public Task<IActionResult> Conversation(int companyId, int id, CancellationToken ct) => Run(() => service.ConversationAsync(UserId, companyId, id, ct));
+    [HttpPut("company/{companyId}/messages/{id}/read-status")]
+    [HasPermission("email.inbox.view"), HasPermission("email.read.manage"), AuthorizeCompany]
+    public Task<IActionResult> ReadStatus(int companyId, int id, EmailReadStatusDto dto, CancellationToken ct) => Run(() => Done(() => service.SetReadStatusAsync(UserId, companyId, id, dto.IsUnread, ct)));
+    [HttpPost("company/{companyId}/messages/{id}/reply-preview")]
+    [HasPermission("email.inbox.view"), HasPermission("email.replies.send"), AuthorizeCompany]
+    public Task<IActionResult> ReplyPreview(int companyId, int id, EmailReplyDraftDto dto, CancellationToken ct) => Run(async () => await service.PreviewReplyAsync(UserId, companyId, id, dto, ct));
+    [HttpPost("company/{companyId}/replies/{attemptId}/send")]
+    [HasPermission("email.inbox.view"), HasPermission("email.replies.send"), AuthorizeCompany, EnableRateLimiting("import")]
+    public Task<IActionResult> SendReply(int companyId, Guid attemptId, CancellationToken ct) => Run(() => service.SendReplyAsync(UserId, companyId, attemptId, ct));
+    [HttpPost("company/{companyId}/replies/{attemptId}/check")]
+    [HasPermission("email.inbox.view"), HasPermission("email.replies.send"), AuthorizeCompany]
+    public Task<IActionResult> CheckReply(int companyId, Guid attemptId, CancellationToken ct) => Run(() => service.CheckReplyAsync(UserId, companyId, attemptId, ct));
     [HttpPut("company/{companyId}/messages/{id}/decision")]
     [HasPermission("email.inbox.manage")]
     [AuthorizeCompany]

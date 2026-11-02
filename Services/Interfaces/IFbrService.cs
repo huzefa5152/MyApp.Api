@@ -29,7 +29,8 @@ namespace MyApp.Api.Services.Interfaces
         // HS-prefix heuristic maps to that sale type — used by the inline
         // New-Item-Type modal so its typeahead only suggests codes that
         // are valid under the parent bill's locked scenario.
-        Task<List<FbrHSCodeDto>> GetHSCodesAsync(int companyId, string? search = null, string? saleType = null);
+        Task<List<FbrHSCodeDto>> GetHSCodesAsync(int companyId, string? search = null, string? saleType = null,
+            bool excludeSaved = false, string? includeHsCode = null);
 
         /// <summary>
         /// Validate an HS code against the cached FBR catalog. Returns
@@ -48,6 +49,13 @@ namespace MyApp.Api.Services.Interfaces
         /// a cryptic [0007] / [0052].
         /// </summary>
         Task<bool> IsKnownHsCodeAsync(int companyId, string hsCode);
+
+        /// <summary>
+        /// Copies FBR's full HS code list into the FbrLookup table (category
+        /// HsCode) using this company's token, so HS lookups work offline.
+        /// Returns the number of codes stored; 0 when FBR returned nothing.
+        /// </summary>
+        Task<int> SyncHsCodeCatalogAsync(int companyId);
         Task<List<FbrUOMDto>> GetUOMsAsync(int companyId);
         Task<List<FbrTransactionTypeDto>> GetTransactionTypesAsync(int companyId);
         Task<List<FbrSROItemDto>> GetSROItemCodesAsync(int companyId);
@@ -56,7 +64,8 @@ namespace MyApp.Api.Services.Interfaces
         Task<List<FbrSaleTypeRateDto>> GetSaleTypeRatesAsync(int companyId, string date, int transTypeId, int provinceId);
         Task<List<FbrSRODto>> GetSROScheduleAsync(int companyId, int rateId, string date, int provinceId);
         Task<List<FbrSROItemDto>> GetSROItemsAsync(int companyId, string date, int sroId);
-        Task<List<FbrUOMDto>> GetHSCodeUOMAsync(int companyId, string hsCode, int annexureId);
+        // Null when FBR could not be asked or did not answer (no token, HTTP error), as opposed to an empty answer.
+        Task<List<FbrUOMDto>?> GetHSCodeUOMAsync(int companyId, string hsCode, int annexureId);
 
         // STATL / Registration (V1.12 §5.11, §5.12)
         Task<FbrRegStatusDto?> CheckRegistrationStatusAsync(int companyId, string regNo, string date);

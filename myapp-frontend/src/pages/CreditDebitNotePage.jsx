@@ -253,6 +253,9 @@ export default function CreditDebitNotePage() {
           </Card>
 
           {/* Lines */}
+          {selected.hasTaxFilingRows && <p style={{ color: "var(--k-muted)", lineHeight: 1.5 }}>
+            This invoice has separate tax filing rows. The return keeps those filed HS classifications and rates while the original item quantities determine stock returns. A partial amount must correspond to a valid quantity in the filed unit; otherwise reverse the whole invoice.
+          </p>}
           <TableWrap data-admin-table-region="">
             <table className="k-table">
               <thead>

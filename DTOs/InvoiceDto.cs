@@ -8,10 +8,15 @@ namespace MyApp.Api.DTOs
 
     public class InvoiceDto
     {
+        [System.ComponentModel.DataAnnotations.MaxLength(100)]
+        public string? ManualChallanNumber { get; set; }
+        public bool HasTaxFilingRows { get; set; }
         public bool CanCreateSalesOrder { get; set; }
         public List<BillSalesOrderLinkDto> SalesOrders { get; set; } = new();
         public bool GroupTaxInvoiceByItemType { get; set; }
         public string? Notes { get; set; }
+        public int CostedLineCount { get; set; }
+        public int CostingLineCount { get; set; }
         public int Id { get; set; }
         public int InvoiceNumber { get; set; }
         public DateTime Date { get; set; }
@@ -20,6 +25,12 @@ namespace MyApp.Api.DTOs
         public int ClientId { get; set; }
         public string ClientName { get; set; } = "";
         public decimal Subtotal { get; set; }
+        public bool AllowNonFbrBills { get; set; }
+        /// <summary>The company prints its original bill lines on every Tax Invoice, so the adjust screen offers no grouping.</summary>
+        public bool TaxInvoiceUseOriginalBillLines { get; set; }
+        /// <summary>The company sends FBR a blank product description, so a filing row's name stays on our documents only.</summary>
+        public bool FbrOmitProductDescription { get; set; }
+        public string TaxTreatment { get; set; } = "FBR";
         public decimal GSTRate { get; set; }
         public decimal GSTAmount { get; set; }
         public decimal GrandTotal { get; set; }
@@ -139,6 +150,7 @@ namespace MyApp.Api.DTOs
         /// false while this is true.
         /// </summary>
         public bool FbrReviewRequired { get; set; }
+        public bool FbrAdjustmentRequired { get; set; }
         public DateTime? FbrReviewRequiredAt { get; set; }
         public DateTime? FbrReviewedAt { get; set; }
         public string FbrReviewVersion { get; set; } = "";
@@ -294,6 +306,7 @@ namespace MyApp.Api.DTOs
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
         public int ClientId { get; set; }
+        public string TaxTreatment { get; set; } = "FBR";
         public decimal GSTRate { get; set; }
         public string? PaymentTerms { get; set; }
         /// <summary>FBR document type: 4 = Sale Invoice (default), 9 = Debit Note, 10 = Credit Note.</summary>
@@ -367,6 +380,8 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class CreateStandaloneInvoiceDto
     {
+        [System.ComponentModel.DataAnnotations.MaxLength(100)]
+        public string? ManualChallanNumber { get; set; }
         public decimal FreightCharges { get; set; }
         public bool? GroupTaxInvoiceByItemType { get; set; }
         // ── Document taxes — both optional, both default to NONE ──
@@ -384,6 +399,7 @@ namespace MyApp.Api.DTOs
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
         public int ClientId { get; set; }
+        public string TaxTreatment { get; set; } = "FBR";
         public decimal GSTRate { get; set; }
         public string? PaymentTerms { get; set; }
         /// <summary>FBR document type: 4 = Sale Invoice (default), 9 = Debit Note, 10 = Credit Note.</summary>
@@ -415,6 +431,8 @@ namespace MyApp.Api.DTOs
 
     public class CreateStandaloneInvoiceItemDto
     {
+        public decimal? ActualUnitCost { get; set; }
+        public int? SupplierId { get; set; }
         /// <summary>Free-text item description (typed by operator or picked from autocomplete).</summary>
         public string Description { get; set; } = "";
         /// <summary>Quantity. Server-side decimal-quantity validation applies based on the picked UOM.</summary>
@@ -593,6 +611,8 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class UpdateInvoiceDto
     {
+        [System.ComponentModel.DataAnnotations.MaxLength(100)]
+        public string? ManualChallanNumber { get; set; }
         public decimal? FreightCharges { get; set; }
         public bool? GroupTaxInvoiceByItemType { get; set; }
         // ── Document taxes — both optional, both default to NONE ──
@@ -613,6 +633,7 @@ namespace MyApp.Api.DTOs
         /// today (UTC) before persisting.
         /// </summary>
         public DateTime? Date { get; set; }
+        public string? TaxTreatment { get; set; }
         public decimal GSTRate { get; set; }
         public string? PaymentTerms { get; set; }
         public int? DocumentType { get; set; }

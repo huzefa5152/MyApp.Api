@@ -79,6 +79,47 @@ namespace MyApp.Api.Services.Implementations
             return ToDto(entry, lockDate);
         }
 
+        public async Task<PrintJournalEntryDto?> GetPrintDataAsync(int id)
+        {
+            await using var ledgerRead = await _context.LedgerReadScopeAsync();
+            var entry = await _context.JournalEntries.AsNoTracking()
+                .Include(e => e.Company)
+                .Include(e => e.Lines).ThenInclude(line => line.Account)
+                .FirstOrDefaultAsync(e => e.Id == id);
+            if (entry == null) return null;
+
+            var lineNumber = 0;
+            var lines = entry.Lines
+                .OrderByDescending(line => line.Debit > 0)
+                .ThenBy(line => line.Id)
+                .Select(line => new PrintJournalLineDto
+                {
+                    SNo = ++lineNumber,
+                    AccountCode = line.Account?.Code,
+                    AccountName = line.Account?.Name ?? "",
+                    Description = line.Description,
+                    Debit = line.Debit,
+                    Credit = line.Credit,
+                }).ToList();
+
+            return new PrintJournalEntryDto
+            {
+                CompanyBrandName = entry.Company?.BrandName ?? entry.Company?.Name ?? "",
+                CompanyLogoPath = entry.Company?.LogoPath,
+                CompanyAddress = entry.Company?.FullAddress,
+                CompanyPhone = entry.Company?.Phone,
+                CompanyNTN = entry.Company?.NTN,
+                CompanySTRN = entry.Company?.STRN,
+                Reference = $"JE-{entry.EntryNo:D4}",
+                EntryNo = entry.EntryNo,
+                Date = entry.Date,
+                Narration = entry.Narration,
+                TotalDebit = entry.Lines.Sum(line => line.Debit),
+                TotalCredit = entry.Lines.Sum(line => line.Credit),
+                Lines = lines,
+            };
+        }
+
         // ── Create ────────────────────────────────────────────────────────────
 
         public async Task<JournalEntryDto> CreateManualAsync(int companyId, CreateJournalEntryDto dto)

@@ -1,8 +1,17 @@
+import "./InvoiceCardActions.css";
+import { printWhenImagesReady } from "../utils/printDocument";
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
+import CostingStatus from "../Components/CostingStatus";
+import CommercialCostDialog from "../Components/CommercialCostDialog";
+import PurchaseBillForm from "../Components/PurchaseBillForm";
 import { createSalesOrderFromBill } from "../api/salesOrderApi";
-import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
-import { useState, useEffect, useCallback } from "react";
+import CardActions from "../Components/CardActions";
+import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdUndo, MdPostAdd, MdLocalShipping, MdAssignmentTurnedIn } from "react-icons/md";
+import useQueryAction from "../hooks/useQueryAction";
+import { MdInfo, MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdUndo, MdPostAdd, MdLocalShipping, MdAssignmentTurnedIn } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import StandaloneInvoiceForm from "../Components/StandaloneInvoiceForm";
 import EditBillForm from "../Components/EditBillForm";
@@ -29,13 +38,14 @@ import { PageHeader, CompanyPicker, Button, Toolbar, ToolbarSpacer, SearchBox, L
 import SearchableClientSelect from "../Components/SearchableClientSelect";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
+import TaxSheetImportDialog from "../Components/TaxSheetImportDialog";
 import { hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
 import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import PaymentStatusBadge from "../Components/PaymentStatusBadge";
 import { mergeTemplate } from "../utils/templateEngine";
 import { defaultBillTemplate, defaultTaxInvoiceTemplate } from "../utils/defaultTemplates";
-import { exportToPdf } from "../utils/exportUtils";
+import { exportToPdf, prepareLetterheadPrint } from "../utils/exportUtils";
 import { saveAs } from "file-saver";
 import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
@@ -62,16 +72,19 @@ function statusPill(tone, Icon, label, title) {
   );
 }
 function renderFbrPill(inv, isBillsMode) {
+  if (inv.taxTreatment && inv.taxTreatment !== "FBR" && !inv.isCancelled) return statusPill("blue", MdInfo, `${inv.taxTreatment === "NoTax" ? "No tax" : "SRB"} · Outside FBR`, "Commercial bill; not filed with FBR.");
   if (inv.isCancelled) return statusPill("red", MdCancel, "Cancelled", inv.cancelReason ? `Cancelled — ${inv.cancelReason}` : "Cancelled (voided). Its delivery challan(s) were reverted to Pending.");
   if (inv.fbrStatus === "Submitted") return statusPill("green", MdCheckCircle, "Submitted", inv.fbrIRN ? `Submitted to FBR — IRN ${inv.fbrIRN} (locked from edits)` : "Submitted to FBR (locked from edits)");
   if (inv.fbrStatus === "Submitting") return statusPill("blue", MdHourglassEmpty, "Submitting…", "A submission is in progress. Please wait and refresh — do not submit again.");
   if (inv.fbrStatus === "Uncertain") return statusPill("amber", MdError, "Uncertain", "A previous submission timed out and its FBR outcome is unconfirmed. An administrator must verify it at FBR and reset it before it can be submitted again.");
-  if (inv.fbrReviewRequired) return statusPill("amber", MdError, "Needs consultant review", "Challans changed. Next: a tax consultant opens Invoices, checks all current items and chooses Complete review. FBR submission is blocked.");
+  // Excluded wins over every pre-filing step: nothing is owed to FBR on it.
+  if (inv.isFbrExcluded) return statusPill("gray", MdBlock, "Excluded from FBR", "Kept out of FBR: it is not adjusted, validated or submitted, alone or in bulk. Include it in FBR to file it.");
+  if (inv.fbrAdjustmentRequired) return statusPill("amber", MdEdit, "Needs adjustment", "Complete the initial HS classification and filing review before validating or submitting to FBR");
+  if (inv.fbrReviewRequired) return statusPill("amber", MdError, "Needs consultant re-review", "Filing details changed. Next: a tax consultant opens Invoices, checks all current items and chooses Complete review. FBR submission is blocked.");
   if (isBillsMode) return statusPill("amber", MdHourglassEmpty, "Pending", "Pending FBR submission — open the Invoices tab to validate & submit.");
   if (inv.fbrStatus === "Failed") return statusPill("red", MdError, "Failed", inv.fbrErrorMessage || "FBR rejected this submission. Open View FBR for details.");
   if (inv.fbrAdjustmentStale) return statusPill("amber", MdError, "Re-adjust", `Bill changed after FBR adjust — Bill Rs. ${Number(inv.subtotal).toLocaleString()} vs FBR Rs. ${Number(inv.fbrAdjustedSubtotal ?? inv.subtotal).toLocaleString()}. Reopen, re-adjust qty/price, then save.`);
   if (!inv.fbrReady) return statusPill("amber", MdError, inv.fbrMissing?.length ? `Setup · ${inv.fbrMissing.length}` : "Setup", inv.fbrMissing?.length ? `FBR setup incomplete — missing:\n• ${inv.fbrMissing.join("\n• ")}` : "FBR setup incomplete");
-  if (inv.isFbrExcluded) return statusPill("gray", MdBlock, "Excluded", "Excluded from Validate All / Submit All bulk actions. Per-bill actions still work.");
   return statusPill("blue", MdCheckCircle, "Ready", "All FBR fields set — Validate to dry-run, or Submit to issue the IRN.");
 }
 function renderNotePill(inv) {
@@ -139,6 +152,8 @@ export default function InvoicePage({ mode = "invoices" }) {
   // per-card FBR Validate / Submit / Exclude buttons. The FBR-submitted
   // status badge still renders in both modes so the operator can see at
   // a glance which rows are locked. `invoices` mode keeps everything.
+  const [costTarget, setCostTarget] = useState(null);
+  const [localPurchaseTarget, setLocalPurchaseTarget] = useState(null);
   const isBillsMode = mode === "bills";
   // Note tabs: `creditnotes` (returns / reversals, DocumentType 10) and
   // `debitnotes` (upward adjustments, DocumentType 9). Each lists ONLY its
@@ -172,6 +187,9 @@ export default function InvoicePage({ mode = "invoices" }) {
     catch (e) { notify(e.response?.data?.error || "Could not create sales order.", "error"); }
     finally { setCreatingOrderFor(null); }
   };
+  const canImportTaxSheet = mode === "invoices" && has("reports.taxsheet.import")
+    && (has("invoices.manage.update.itemtype") || has("invoices.manage.update.itemtype.qty"));
+  const [taxSheetOpen, setTaxSheetOpen] = useState(false);
   const canCreate = has("bills.manage.create");
   // Gates the payment-status badge (AR receipts). No key → no badge, either mode.
   const canViewPaymentStatus = has("accounting.paymentstatus.view");
@@ -267,6 +285,7 @@ export default function InvoicePage({ mode = "invoices" }) {
   const [viewingId, setViewingId] = useState(null);
   useEffect(() => { const id = Number(new URLSearchParams(window.location.search).get("viewBill")); if (id > 0) setViewingId(id); }, []);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const listRequest = useRef(0);
 
   const navigate = useNavigate();
   // ?search=<bill-number> deep-link support — let a Bill card on the
@@ -318,6 +337,13 @@ export default function InvoicePage({ mode = "invoices" }) {
   const [handoverBulkBusy, setHandoverBulkBusy] = useState(false);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  // ?costingStatus= arrives from the dashboard ("bills with no actual cost").
+  const [costingStatus, setCostingStatus] = useState(() => (isBillsMode && searchParams.get("costingStatus")) || "");
+  // Dashboard quick actions: ?new=1 opens New Bill, ?new=standalone the no-challan form.
+  useQueryAction("new", isBillsMode && !!selectedCompany, (v) => {
+    if (v === "standalone") { if (canCreateStandalone) setShowStandaloneForm(true); }
+    else if (canCreate) setShowForm(true);
+  });
   const [hasExcelBill, setHasExcelBill] = useState(false);
   const [hasExcelTax, setHasExcelTax] = useState(false);
   const [exportingId, setExportingId] = useState(null);
@@ -335,6 +361,7 @@ export default function InvoicePage({ mode = "invoices" }) {
 
   const fetchInvoices = useCallback(async (companyId, pg) => {
     if (!companyId) return;
+    const requestId = ++listRequest.current;
     setLoadingInvoices(true);
     try {
       const params = { page: pg || page };
@@ -345,10 +372,12 @@ export default function InvoicePage({ mode = "invoices" }) {
       if (handoverFilter) params.handoverFilter = handoverFilter;
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
+      if (isBillsMode && costingStatus) params.costingStatus = costingStatus;
       // Note tabs list ONLY their own type; other tabs get sale bills
       // only (server-side split — the three groups never mix).
       if (isNotesMode) params.type = noteDocType === 10 ? "creditnotes" : "debitnotes";
       const { data } = await getPagedInvoicesByCompany(companyId, params);
+      if (requestId !== listRequest.current) return;
       setInvoices(data.items);
       setTotalCount(data.totalCount);
       setTotalPages(data.totalPages);
@@ -370,9 +399,10 @@ export default function InvoicePage({ mode = "invoices" }) {
         }
         return next;
       });
-    } catch { setInvoices([]); setTotalCount(0); setTotalPages(0); }
-    finally { setLoadingInvoices(false); }
-  }, [page, pageSize, search, clientFilter, fbrFilter, handoverFilter, dateFrom, dateTo]);
+    } catch {
+      if (requestId !== listRequest.current) return; setInvoices([]); setTotalCount(0); setTotalPages(0); }
+    finally { if (requestId === listRequest.current) setLoadingInvoices(false); }
+  }, [page, pageSize, search, clientFilter, fbrFilter, handoverFilter, dateFrom, dateTo, costingStatus]);
 
   useEffect(() => {
     if (selectedCompany) {
@@ -397,12 +427,16 @@ export default function InvoicePage({ mode = "invoices" }) {
     }
   }, [selectedCompany]);
 
+  // Re-fetch when filters or page change. Not on mount: the company effect above
+  // already loads page 1, and running both fetched the list twice on every open.
+  const filtersMountedRef = useRef(false);
   useEffect(() => {
+    if (!filtersMountedRef.current) { filtersMountedRef.current = true; return; }
     if (selectedCompany) fetchInvoices(selectedCompany.id, page);
-  }, [page, pageSize, search, clientFilter, fbrFilter, handoverFilter, dateFrom, dateTo]);
+  }, [page, pageSize, search, clientFilter, fbrFilter, handoverFilter, dateFrom, dateTo, costingStatus]);
 
   const resetFilters = () => {
-    setSearch(""); setClientFilter(""); setFbrFilter(""); setHandoverFilter(""); setDateFrom(""); setDateTo(""); setPage(1);
+    setSearch(""); setClientFilter(""); setFbrFilter(""); setHandoverFilter(""); setDateFrom(""); setDateTo(""); setCostingStatus(""); setPage(1);
   };
 
   const handleFilterChange = (setter) => (e) => { setter(e.target.value); setPage(1); };
@@ -414,28 +448,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     refreshAttachCounts();
   };
 
-  // Print only once every image in the popup has finished loading. Without
-  // this, w.print() fires before the FBR QR (a base64 data-URL) and the FBR
-  // logo (/images/fbr-logo.png, a network fetch) have decoded — so the FIRST
-  // print comes out with them blank/missing and they only appear on a 2nd/3rd
-  // attempt once cached. On production the network-fetched logo is slower, so
-  // it misses consistently. `error` listeners + a 3s safety timeout guarantee
-  // a broken or slow image never blocks the print dialog.
-  const printWindowWhenImagesReady = (w) => {
-    const imgs = Array.from(w.document.images || []);
-    const ready = Promise.all(imgs.map((img) => (
-      img.complete && img.naturalHeight !== 0
-        ? Promise.resolve()
-        : new Promise((resolve) => {
-            img.addEventListener("load", resolve, { once: true });
-            img.addEventListener("error", resolve, { once: true });
-          })
-    )));
-    const safety = new Promise((resolve) => setTimeout(resolve, 3000));
-    Promise.race([ready, safety]).then(() => {
-      try { w.focus(); w.print(); } catch { /* popup already closed */ }
-    });
-  };
+  const printWindowWhenImagesReady = printWhenImagesReady;
 
   const handlePrintBill = async (inv) => {
     if (tplPicker.noTemplate) { notify(tplPicker.noTemplateReason, "warning"); return; }
@@ -446,7 +459,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       const { data } = await getInvoicePrintBill(inv.id);
       const html = mergeTemplate(tplPicker.resolveTemplate(inv)?.htmlContent || defaultBillTemplate, data);
       w.document.open();
-      w.document.write(html);
+      w.document.write(await prepareLetterheadPrint(html));
       w.document.close();
       w.onafterprint = () => w.close();
       printWindowWhenImagesReady(w);
@@ -462,7 +475,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       const { data } = await getInvoicePrintTaxInvoice(inv.id);
       const html = mergeTemplate(tplPicker.resolveTemplate(inv)?.htmlContent || defaultTaxInvoiceTemplate, data);
       w.document.open();
-      w.document.write(html);
+      w.document.write(await prepareLetterheadPrint(html));
       w.document.close();
       w.onafterprint = () => w.close();
       printWindowWhenImagesReady(w);
@@ -654,11 +667,11 @@ export default function InvoicePage({ mode = "invoices" }) {
   // set across all pages, so users with 30 bills on page 1 of 4 can click once
   // and have all 120 (or whatever the filter returns) processed in a single go.
   // Bills the operator has flagged as "FBR-excluded" are deliberately skipped
-  // by Validate All / Submit All (bulk actions) but the per-bill buttons still
-  // work. So we exclude them from these counts too — the badges are about what
+  // by Validate All / Submit All, and the server refuses them on every path.
+  // So we exclude them from these counts too — the badges are about what
   // the bulk buttons will process.
-  const unsubmittedInvoices = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && inv.fbrReady && !inv.isFbrExcluded);
-  const incompleteCount = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && !inv.fbrReady && !inv.isFbrExcluded).length;
+  const unsubmittedInvoices = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && (inv.taxTreatment == null || inv.taxTreatment === "FBR") && inv.fbrReady && !inv.isFbrExcluded && (!inv.taxTreatment || inv.taxTreatment === "FBR"));
+  const incompleteCount = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && !(inv.taxTreatment == null || inv.taxTreatment === "FBR") && inv.fbrReady && !inv.isFbrExcluded).length;
   const validatedCount = unsubmittedInvoices.filter(inv => fbrValidated.has(inv.id)).length;
   // Documents pending handover on the CURRENT page (drives the handover bulk
   // bar's label + visibility). The bulk action itself re-fetches ALL filtered
@@ -669,11 +682,11 @@ export default function InvoicePage({ mode = "invoices" }) {
     const nextExcluded = !inv.isFbrExcluded;
     const ok = await confirm({
       title: nextExcluded
-        ? `Exclude Bill #${inv.invoiceNumber} from FBR bulk actions?`
-        : `Include Bill #${inv.invoiceNumber} back in FBR bulk actions?`,
+        ? `Exclude Bill #${inv.invoiceNumber} from FBR?`
+        : `Include Bill #${inv.invoiceNumber} in FBR again?`,
       message: nextExcluded
-        ? "Validate All / Submit All will skip this bill. Per-bill Validate / Submit still work."
-        : "This bill will be picked up by Validate All / Submit All again.",
+        ? "This bill cannot be validated or submitted to FBR, alone or in bulk, until it is included again. Its goods also leave stock."
+        : "This bill can be validated and submitted to FBR again, and its goods are taken out of stock again.",
       variant: nextExcluded ? "warning" : "info",
       confirmText: nextExcluded ? "Exclude" : "Include",
     });
@@ -682,8 +695,8 @@ export default function InvoicePage({ mode = "invoices" }) {
       await setInvoiceFbrExcluded(inv.id, nextExcluded);
       notify(
         nextExcluded
-          ? `Bill #${inv.invoiceNumber} excluded from FBR bulk actions.`
-          : `Bill #${inv.invoiceNumber} re-enabled for FBR bulk actions.`,
+          ? `Bill #${inv.invoiceNumber} excluded from FBR.`
+          : `Bill #${inv.invoiceNumber} included in FBR again.`,
         "success"
       );
       fetchInvoices(selectedCompany.id, page);
@@ -732,6 +745,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       if (clientFilter) params.clientId = clientFilter;
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
+      if (isBillsMode && costingStatus) params.costingStatus = costingStatus;
       if (isNotesMode) params.type = noteDocType === 10 ? "creditnotes" : "debitnotes";
       const { data } = await getPagedInvoicesByCompany(selectedCompany.id, params);
       const ids = (data.items || []).map((i) => i.id);
@@ -769,15 +783,16 @@ export default function InvoicePage({ mode = "invoices" }) {
     if (clientFilter) params.clientId = clientFilter;
     if (dateFrom) params.dateFrom = dateFrom;
     if (dateTo) params.dateTo = dateTo;
+      if (isBillsMode && costingStatus) params.costingStatus = costingStatus;
     if (isNotesMode) params.type = noteDocType === 10 ? "creditnotes" : "debitnotes";
     const { data } = await getPagedInvoicesByCompany(selectedCompany.id, params);
     const all = data.items || [];
     if (action === "validate") {
       // Skip FBR-excluded bills — operator explicitly opted them out of bulk actions.
-      return all.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && inv.fbrReady && !inv.isFbrExcluded);
+      return all.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && (inv.taxTreatment == null || inv.taxTreatment === "FBR") && inv.fbrReady && !inv.isFbrExcluded && (!inv.taxTreatment || inv.taxTreatment === "FBR"));
     }
     if (action === "submit") {
-      return all.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && fbrValidated.has(inv.id) && !inv.isFbrExcluded);
+      return all.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && fbrValidated.has(inv.id) && !inv.isFbrExcluded && (!inv.taxTreatment || inv.taxTreatment === "FBR"));
     }
     return all;
   };
@@ -906,7 +921,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     setBulkResults({ open: true, action: "submit", items: results });
   };
 
-  const hasFilters = search || clientFilter || fbrFilter || handoverFilter || dateFrom || dateTo;
+  const hasFilters = (isBillsMode && costingStatus) || search || clientFilter || fbrFilter || handoverFilter || dateFrom || dateTo;
 
   return (
     <DocumentLinesNavigation type={isBillsMode ? "bill" : mode === "creditnotes" ? "creditNote" : mode === "debitnotes" ? "debitNote" : "taxInvoice"}>
@@ -924,6 +939,7 @@ export default function InvoicePage({ mode = "invoices" }) {
           : "Select a company"}
         actions={(
           <>
+            <DocumentLinesHeaderLink />
             {/* Creation buttons live on the Bills tab only — Invoices tab is
                 for FBR classification & submission of existing records. */}
             {isBillsMode && companies.length > 0 && canCreate && (
@@ -1057,7 +1073,7 @@ export default function InvoicePage({ mode = "invoices" }) {
 
           {/* Filters */}
           {selectedCompany && (
-            <Toolbar>
+            <ListFilters><Toolbar>
               <SearchBox
                 placeholder="Search Bill#, Challan#, PO#, Client, Item..."
                 value={search}
@@ -1104,6 +1120,11 @@ export default function InvoicePage({ mode = "invoices" }) {
                   <option value="delivered">Docs delivered</option>
                 </select>
               )}
+              {isBillsMode && has("bills.costs.view") && (
+                <select aria-label="Costing status" className="k-select" value={costingStatus} onChange={handleFilterChange(setCostingStatus)} title="Filter by costing status">
+                  <option value="">All costing statuses</option><option value="not-costed">Not costed</option><option value="partial">Partially costed</option><option value="full">Fully costed</option>
+                </select>
+              )}
               <div style={styles.dateGroup}>
                 <input type="date" className="k-input" style={styles.dateInput} value={dateFrom} onChange={handleFilterChange(setDateFrom)} title="From date" aria-label="From date" />
                 <span style={{ color: "var(--k-muted)" }}>–</span>
@@ -1114,6 +1135,12 @@ export default function InvoicePage({ mode = "invoices" }) {
               )}
               <ToolbarSpacer />
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                {canImportTaxSheet && selectedCompany && (
+                  <Button size="sm" onClick={() => setTaxSheetOpen(true)}
+                    title="Adjust many invoices at once from a filled-in Tax Sheet (Excel)">
+                    Import tax sheet
+                  </Button>
+                )}
                 {canPrint && <PrintTemplateSelect picker={tplPicker} />}
                 {isBigScreen && (
                   <ViewModeToggle
@@ -1123,7 +1150,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                   />
                 )}
               </div>
-            </Toolbar>
+            </Toolbar></ListFilters>
           )}
         </>
       ) : (
@@ -1134,7 +1161,7 @@ export default function InvoicePage({ mode = "invoices" }) {
           submit, edit-save, delete, void…) we keep the existing list mounted
           so the browser preserves the scroll position — unmounting it here was
           why the page jumped to the top after every action. */}
-      {loadingInvoices && invoices.length === 0 ? (
+      <RecordsViewport label="Invoice records">{loadingInvoices && invoices.length === 0 ? (
         <Loading />
       ) : invoices.length === 0 && selectedCompany ? (
         <EmptyState icon={MdReceipt}>
@@ -1144,6 +1171,8 @@ export default function InvoicePage({ mode = "invoices" }) {
         <>
           {viewMode === "table" ? (
             <InvoiceTable
+              onCosts={has("bills.costs.view") && isBillsMode ? inv => setCostTarget(inv) : null}
+              onLocalPurchase={has("purchasebills.manage.create") && isBillsMode ? inv => setLocalPurchaseTarget(inv) : null}
               invoices={invoices}
               attachCounts={attachCounts}
               onAttach={(inv) => setAttachTarget(inv)}
@@ -1234,6 +1263,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                       {inv.indentNo && <div><span style={cardStyles.metaLabel}>Indent</span><span style={cardStyles.metaValue}>{inv.indentNo}</span></div>}
                       {inv.site && <div><span style={cardStyles.metaLabel}>Site</span><span style={cardStyles.metaValue}>{inv.site}</span></div>}
                       <div><span style={cardStyles.metaLabel}>Date</span><span style={cardStyles.metaValue}>{new Date(inv.date).toLocaleDateString()}</span></div>
+                      {isBillsMode && has("bills.costs.view") && <div><CostingStatus document={inv} onOpen={() => setCostTarget(inv)} /></div>}
                       <div><span style={cardStyles.metaLabel}>Lines</span><span style={cardStyles.metaValue}>{inv.items?.length || 0} item{inv.items?.length === 1 ? "" : "s"}</span></div>
                       {inv.challanNumbers?.length > 0 && <div><span style={cardStyles.metaLabel}>Challan</span><span style={cardStyles.metaValue}>#{inv.challanNumbers.join(", #")}</span></div>}
                     </div>
@@ -1255,15 +1285,23 @@ export default function InvoicePage({ mode = "invoices" }) {
                         />
                       )}
                     </div>
+                    {!isBillsMode && inv.isFbrExcluded && !inv.isCancelled && (
+                      <p style={{ margin: "10px 0 0", padding: "8px 10px", borderRadius: 8, background: "#f5f7f9", border: "1px dashed #b0bec5", color: "#546e7a", fontSize: "0.82rem", display: "flex", gap: 6, alignItems: "flex-start" }}>
+                        <MdBlock size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+                        <span>Not filed with FBR. Include it to adjust, validate and submit.</span>
+                      </p>
+                    )}
                   </div>
-                  <div style={styles.buttonGroup}>
+                  <CardActions className="invoice-card-actions" style={styles.buttonGroup}>
+                    {isBillsMode && has("bills.costs.view") && <Button size="sm" style={TONE.openTeal} onClick={() => setCostTarget(inv)}>Costs & suppliers</Button>}
+                    {isBillsMode && has("purchasebills.manage.create") && !inv.isCancelled && <Button size="sm" style={TONE.view} onClick={() => setLocalPurchaseTarget(inv)}>Local purchase</Button>}
                     {/* Bills card: View, Print Bill, Bill PDF, Bill XLS, Edit, Delete.
                         Invoices card: View, Tax Print, Tax PDF, Tax XLS, View FBR, Validate, Submit. */}
                     {/* Read-only View — shown on BOTH tabs. On the Invoices tab
                         it opens the same read-only bill view so the operator can
                         inspect the grouped-by-Item-Type and individual line
                         items without switching to the Bills tab. */}
-                    <Button size="sm"
+                    <Button size="sm" data-primary={(isBillsMode) || undefined}
                       style={TONE.view}
                       onClick={() => setViewingId(inv.id)}
                       title="View bill details (read-only) — grouped & individual line items"
@@ -1287,7 +1325,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                       </Button>
                     )}
                     {isBillsMode && canPrint && (
-                      <Button size="sm"
+                      <Button size="sm" data-primary
                         style={TONE.print}
                         disabled={tplPicker.noTemplate}
                         title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"}
@@ -1297,7 +1335,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                       </Button>
                     )}
                     {!isBillsMode && canPrint && (
-                      <Button size="sm"
+                      <Button size="sm" data-primary={(inv.fbrStatus === "Submitted" || inv.isCancelled) || undefined}
                         style={TONE.tax}
                         disabled={tplPicker.noTemplate}
                         title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"}
@@ -1335,8 +1373,8 @@ export default function InvoicePage({ mode = "invoices" }) {
                         exclude — those live on the Invoices tab. The FBR
                         status badge above the buttons still shows in both
                         modes so the operator can see locked rows. */}
-                    {!isBillsMode && canFbrPreview && (
-                      <Button size="sm"
+                    {!isBillsMode && canFbrPreview && (!inv.taxTreatment || inv.taxTreatment === "FBR") && !inv.isFbrExcluded && (
+                      <Button size="sm" data-primary={(inv.fbrStatus === "Submitted") || undefined}
                         style={TONE.view}
                         onClick={() => setFbrPreviewId(inv.id)}
                         title="Preview the FBR payload — grouped items, total qty, total value, total tax. Read-only, doesn't send anything."
@@ -1353,10 +1391,10 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdRestore size={14} /> Reset FBR
                       </Button>
                     )}
-                    {!isBillsMode && canFbrAny && selectedCompany?.hasFbrToken && inv.fbrReady && inv.fbrStatus !== "Submitted" && inv.fbrStatus !== "Submitting" && inv.fbrStatus !== "Uncertain" && !inv.isCancelled && (
+                    {!isBillsMode && canFbrAny && selectedCompany?.hasFbrToken && (inv.taxTreatment == null || inv.taxTreatment === "FBR") && inv.fbrReady && inv.fbrStatus !== "Submitted" && inv.fbrStatus !== "Submitting" && inv.fbrStatus !== "Uncertain" && !inv.isCancelled && !inv.isFbrExcluded && (
                       <>
                         {canFbrValidate && (
-                          <Button size="sm"
+                          <Button size="sm" data-primary
                             style={fbrValidated.has(inv.id) ? TONE.validated : TONE.validate}
                             disabled={!!fbrLoading || !inv.fbrReady}
                             onClick={() => handleFbrValidate(inv)}
@@ -1373,7 +1411,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                           </Button>
                         )}
                         {canFbrSubmit && (
-                          <Button size="sm"
+                          <Button size="sm" data-primary
                             style={TONE.submit}
                             disabled={!!fbrLoading || !fbrValidated.has(inv.id) || !inv.fbrReady}
                             onClick={() => handleFbrSubmit(inv)}
@@ -1397,10 +1435,10 @@ export default function InvoicePage({ mode = "invoices" }) {
                         column is hidden so classification only happens on
                         the Invoices tab. Hidden once FBR-submitted (locks
                         edits permanently). */}
-                    {isBillsMode && canCreateOrderFromBill && inv.canCreateSalesOrder && <button style={styles.printBtn} disabled={!!creatingOrderFor} onClick={() => handleCreateOrderFromBill(inv)}>Create sales order</button>}
-                    {isBillsMode && has("salesorders.list.view") && inv.salesOrders?.map(o => <button key={o.id} style={styles.printBtn} onClick={() => navigate(`/sales-orders?viewOrder=${o.id}`)}>Open sales order #{o.number || o.id}</button>)}
+                    {isBillsMode && canCreateOrderFromBill && inv.canCreateSalesOrder && <Button size="sm" disabled={!!creatingOrderFor} onClick={() => handleCreateOrderFromBill(inv)}>Create sales order</Button>}
+                    {isBillsMode && has("salesorders.list.view") && inv.salesOrders?.map(o => <Button size="sm" key={o.id} onClick={() => navigate(`/sales-orders?viewOrder=${o.id}`)}>Open sales order #{o.number || o.id}</Button>)}
                     {isBillsMode && canEditInThisMode && inv.isEditable && (
-                      <Button size="sm"
+                      <Button size="sm" data-primary
                         style={TONE.edit}
                         onClick={() => setEditingId(inv.id)}
                         title={canUpdate
@@ -1414,8 +1452,8 @@ export default function InvoicePage({ mode = "invoices" }) {
                         Type for each line. Everything else (items, prices,
                         qty, dates) is read-only and reflects whatever was
                         last saved on the Bills tab. Hidden once submitted. */}
-                    {!isBillsMode && canEditInThisMode && inv.isEditable && (
-                      <Button size="sm"
+                    {!isBillsMode && canEditInThisMode && inv.isEditable && (!inv.taxTreatment || inv.taxTreatment === "FBR") && !inv.isFbrExcluded && (
+                      <Button size="sm" data-primary
                         style={TONE.edit}
                         onClick={() => setEditingId(inv.id)}
                         title="Review and adjust the current bill for FBR; commercial bill edits are on Bills"
@@ -1423,14 +1461,14 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdEdit size={14} /> {inv.fbrReviewRequired ? "Review changes" : "Adjust invoice"}
                       </Button>
                     )}
-                    {!isBillsMode && canFbrExclude && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
-                      <Button size="sm"
-                        style={inv.isFbrExcluded ? TONE.include : TONE.exclude}
+                    {!isBillsMode && (!inv.taxTreatment || inv.taxTreatment === "FBR") && canFbrExclude && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
+                      <Button size="sm" data-primary={inv.isFbrExcluded || undefined}
+                        style={{ ...(inv.isFbrExcluded ? TONE.include : TONE.exclude), ...(inv.isFbrExcluded ? { flex: 1, justifyContent: "center", fontWeight: 600 } : {}) }}
                         onClick={() => handleToggleFbrExcluded(inv)}
                         title={
                           inv.isFbrExcluded
-                            ? "Re-enable this bill for Validate All / Submit All bulk actions."
-                            : "Exclude this bill from Validate All / Submit All. Per-bill Validate / Submit still work."
+                            ? "Include this bill in FBR again, so it can be validated and submitted."
+                            : "Keep this bill out of FBR: it cannot be validated or submitted, alone or in bulk."
                         }
                       >
                         {inv.isFbrExcluded ? <MdRestore size={14} /> : <MdBlock size={14} />}
@@ -1514,7 +1552,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdPostAdd size={14} /> Correct
                       </Button>
                     )}
-                  </div>
+                  </CardActions>
                 </div>
               </div>
             ))}
@@ -1532,6 +1570,11 @@ export default function InvoicePage({ mode = "invoices" }) {
             />
           )}
         </>
+      )}</RecordsViewport>
+
+      {taxSheetOpen && selectedCompany && (
+        <TaxSheetImportDialog companyId={selectedCompany.id} onClose={() => setTaxSheetOpen(false)}
+          onApplied={() => fetchInvoices(selectedCompany.id, page)} />
       )}
 
       {/* Bills mode shows the Item Type column (item-type pick is the
@@ -1550,6 +1593,8 @@ export default function InvoicePage({ mode = "invoices" }) {
         />
       )}
 
+      {isBillsMode && localPurchaseTarget && <PurchaseBillForm companyId={localPurchaseTarget.companyId} localSource={{ kind: "bill", id: localPurchaseTarget.id }} onClose={() => setLocalPurchaseTarget(null)} onSaved={() => fetchInvoices(selectedCompany.id, page)} />}
+      {isBillsMode && costTarget && <CommercialCostDialog id={costTarget.id} companyId={costTarget.companyId} onClose={() => { setCostTarget(null); fetchInvoices(selectedCompany.id, page); }} />}
       {showStandaloneForm && selectedCompany && (
         <StandaloneInvoiceForm
           companyId={selectedCompany.id}

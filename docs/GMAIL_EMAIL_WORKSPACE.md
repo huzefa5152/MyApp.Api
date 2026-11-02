@@ -28,6 +28,39 @@ Attachments up to 10 MB can be downloaded and previewed while the mailbox is con
 
 ## Architecture
 
+### Reply-only conversation workspace
+
+The Trader reply feature adds conversation viewing, Gmail read/unread filters,
+and explicit Reply / Reply all. There is no compose endpoint or new-email form.
+Owners can load their complete Gmail conversation; colleagues see only messages
+already shared with the selected company and replies sent through that company.
+
+Existing connections remain read-only until their owner chooses **Enable replies
+and read-status access** in Connections and completes Google consent for
+`gmail.modify`. Existing company links and cached enquiries are retained. The
+new `email.replies.send` and `email.read.manage` permissions must be granted
+explicitly; the existing Email Workspace role does not gain them automatically.
+
+Company delegation is off by default. Only the mailbox owner can enable it for
+a company link. Delegated colleagues still need the module, action permissions
+and company assignment, and cannot select private messages in the same thread.
+Revoking delegation or company access blocks a prepared reply before sending.
+
+Users enter unit prices and optional text, then preview the exact recipients,
+subject and body before selecting Send. Reply all removes the connected account
+and duplicate recipients and never adds Bcc. Replies retain the Gmail thread,
+subject and reply headers. Standard quoted-history markers are removed from the
+included enquiry; review the preview for unusual email layouts. Prices retain
+fractional precision instead of silently rounding to two decimal places.
+
+Reply previews and send outcomes are stored with company and user ownership;
+preview content is encrypted. A single preview can send only once. A timeout
+leaves an uncertain outcome and requires checking Gmail Sent before another send.
+Unconfirmed attempts are recovered from the server after reopening the workspace,
+including when browser session storage is unavailable. A new preview expires
+after thirty minutes. Real Gmail consent, sending and browser acceptance remain
+release checks; synthetic provider tests do not prove live Google acceptance.
+
 ```mermaid
 flowchart LR
   Admin[Administrator assigns optional module] --> RBAC[Existing user roles and permissions]

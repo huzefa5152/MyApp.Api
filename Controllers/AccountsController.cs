@@ -67,7 +67,9 @@ namespace MyApp.Api.Controllers
             "accounting.journal.create", "accounting.journal.update",
             "accounting.receipts.create", "accounting.payments.create",
             "bills.manage.create", "bills.manage.create.standalone", "bills.manage.update",
-            "purchasebills.manage.create", "purchasebills.manage.update")]
+            "purchasebills.manage.create", "purchasebills.manage.update",
+            "purchasedebitnotes.manage.create", "purchasedebitnotes.manage.update",
+            "accounting.reconciliation.manage")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<AccountDto>>> GetFlat(int companyId)
             => Ok(await ScopePickerBalancesAsync(await _service.GetAccountsFlatAsync(companyId)));
@@ -78,7 +80,9 @@ namespace MyApp.Api.Controllers
         [HttpGet("company/{companyId}/bank-cash")]
         [HasAnyPermission("accounting.coa.view",
             "accounting.receipts.view", "accounting.receipts.create",
-            "accounting.payments.view", "accounting.payments.create")]
+            "accounting.payments.view", "accounting.payments.create",
+            "accounting.transfers.view", "accounting.transfers.create",
+            "accounting.reconciliation.view", "accounting.reconciliation.manage")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<AccountDto>>> GetBankCash(int companyId, [FromQuery] bool includeInactive = false)
             => Ok(await ScopePickerBalancesAsync(await _service.GetBankCashAccountsAsync(companyId, includeInactive)));

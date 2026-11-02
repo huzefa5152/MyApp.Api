@@ -1,13 +1,14 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useMemo } from "react";
-import { MdPeople, MdAdd, MdBusiness } from "react-icons/md";
+import { MdPeople, MdAdd, MdBusiness, MdSearchOff } from "react-icons/md";
 import ClientList from "../Components/ClientList";
 import ClientForm from "../Components/ClientForm";
-import CommonClientsPanel from "../Components/CommonClientsPanel";
 import CommonClientForm from "../Components/CommonClientForm";
 import CopyToCompaniesDialog from "../Components/CopyToCompaniesDialog";
 import { getClientsByCompany, getCommonClients, copyClientToCompanies } from "../api/clientApi";
 import { notify } from "../utils/notify";
 import { PageHeader, CompanyPicker, Button, Toolbar, SearchBox, EmptyState, Loading } from "../ui/Kit";
+import { matchesSearch, countByType, REGISTRATION_TYPES } from "../Components/party/partyUtils";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import ImportFromExcelButton from "../Components/onboarding/ImportFromExcelButton";
@@ -20,6 +21,7 @@ export default function ClientsPage() {
   const [selectedClient, setSelectedClient] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [loadingClients, setLoadingClients] = useState(false);
 
   // Common Client edit state — separate from per-company edit because
@@ -32,27 +34,25 @@ export default function ClientsPage() {
   // Copy-to-companies dialog: holds the source client when open, null when closed.
   const [copyingClient, setCopyingClient] = useState(null);
 
-  // The set of multi-company group IDs visible right now — used to
-  // hide those clients from the per-company list below the dropdown.
-  // Same data the CommonClientsPanel renders (kept in sync via
-  // commonRefreshKey), only the IDs are needed here so it's a thin
-  // shadow query rather than a duplicate fetch.
-  const [commonGroupIds, setCommonGroupIds] = useState(() => new Set());
+  // Common Client groups this company shares with others, by group id.
+  // Every client is listed once in the grid; one whose group is here
+  // carries a "Common" tag and edits through the Common Client form,
+  // which applies the change to every company's copy.
+  const [commonGroups, setCommonGroups] = useState(() => new Map());
 
   useEffect(() => {
     if (!selectedCompany) {
-      setCommonGroupIds(new Set());
+      setCommonGroups(new Map());
       return;
     }
     let cancelled = false;
     (async () => {
       try {
         const { data } = await getCommonClients(selectedCompany.id);
-        if (!cancelled) {
-          setCommonGroupIds(new Set((data || []).map((g) => g.groupId)));
-        }
+        if (!cancelled) setCommonGroups(new Map((data || []).map((g) => [g.groupId, g])));
       } catch {
-        if (!cancelled) setCommonGroupIds(new Set());
+        // Soft-fail: the list still works, just without Common tags.
+        if (!cancelled) setCommonGroups(new Map());
       }
     })();
     return () => { cancelled = true; };
@@ -72,6 +72,7 @@ export default function ClientsPage() {
   };
 
   useEffect(() => {
+    setTypeFilter("all");
     if (selectedCompany) fetchClients(selectedCompany.id);
     else setClients([]);
   }, [selectedCompany]);
@@ -86,18 +87,20 @@ export default function ClientsPage() {
     setShowModal(true);
   };
 
-  // Hide clients that already appear in the Common Clients panel
-  // above — operator wants exactly ONE place to edit each client,
-  // not the same name listed twice on the same page.
-  const uncommonClients = useMemo(() => {
-    if (commonGroupIds.size === 0) return clients;
-    return clients.filter((c) => !c.clientGroupId || !commonGroupIds.has(c.clientGroupId));
-  }, [clients, commonGroupIds]);
+  const isCommon = (c) => c.clientGroupId != null && commonGroups.has(c.clientGroupId);
+  const commonCount = useMemo(() => clients.filter(isCommon).length, [clients, commonGroups]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const filtered = uncommonClients.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    (c.email || "").toLowerCase().includes(search.toLowerCase()) ||
-    (c.phone || "").includes(search)
+  const searched = clients.filter((c) => matchesSearch(c, search));
+  const counts = { ...countByType(searched), common: searched.filter(isCommon).length };
+  const filtered = typeFilter === "all" ? searched
+    : typeFilter === "common" ? searched.filter(isCommon)
+    : searched.filter((c) => (c.registrationType || "None") === typeFilter);
+  // Registration-type chips show only the types present, with their counts.
+  const typeChips = [...REGISTRATION_TYPES, "None"].filter((t) => counts[t] > 0);
+  const chip = (key, label, n) => (
+    <Button key={key} size="sm" variant={typeFilter === key ? "primary" : "secondary"} aria-pressed={typeFilter === key} onClick={() => setTypeFilter(key)}>
+      {label} <span style={{ opacity: 0.8 }}>{n}</span>
+    </Button>
   );
 
   return (
@@ -107,7 +110,8 @@ export default function ClientsPage() {
         tone="teal"
         title="Clients"
         subtitle={selectedCompany
-          ? `${uncommonClients.length} company-specific client${uncommonClients.length !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
+          ? `${clients.length} client${clients.length !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}` +
+            (commonCount > 0 ? ` · ${commonCount} shared with other companies` : "")
           : "Select a company to view clients"}
         actions={(
           <>
@@ -117,48 +121,52 @@ export default function ClientsPage() {
         )}
       />
 
-      {/* Common Clients panel — shows ONLY when this company shares
-          a client (by NTN, fallback to name) with at least one other
-          company. Empty / single-tenant setups render nothing here. */}
-      {selectedCompany && (
-        <CommonClientsPanel
-          companyId={selectedCompany.id}
-          refreshKey={commonRefreshKey}
-          onEdit={(c) => setEditingGroupId(c.groupId)}
-        />
-      )}
-
       {/* Company Selector */}
       {loadingCompanies ? (
         <Loading>Loading companies...</Loading>
       ) : companies.length > 0 ? (
-        <CompanyPicker />
+        <>
+          <CompanyPicker />
+          <Toolbar>
+            <SearchBox value={search} onChange={setSearch} placeholder="Search name, NTN, CNIC, phone, email, address" />
+            {(typeChips.length > 1 || counts.common > 0) && (
+              <div role="group" aria-label="Filter by registration type or shared status" style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+                {chip("all", "All", counts.all)}
+                {counts.common > 0 && chip("common", "Common", counts.common)}
+                {typeChips.length > 1 && typeChips.map((t) => chip(t, t === "None" ? "No type" : t, counts[t]))}
+              </div>
+            )}
+          </Toolbar>
+        </>
       ) : (
-        <EmptyState icon={MdBusiness}>No companies available. Add a company first.</EmptyState>
-      )}
-
-      {/* Search */}
-      {clients.length > 3 && (
-        <Toolbar>
-          <SearchBox value={search} onChange={setSearch} placeholder="Search clients..." />
-        </Toolbar>
+        <EmptyState icon={MdBusiness} title="No companies yet">Add a company first, then its clients will appear here.</EmptyState>
       )}
 
       {/* Client List */}
-      {loadingClients ? (
+      <RecordsViewport label="Clients records">{loadingClients ? (
         <Loading>Loading clients...</Loading>
       ) : filtered.length === 0 && selectedCompany ? (
-        <EmptyState icon={MdPeople}>
-          {clients.length === 0 ? "No clients for this company yet." : "No clients match your search."}
+        <EmptyState
+          icon={clients.length === 0 ? MdPeople : MdSearchOff}
+          title={clients.length === 0 ? "No clients yet" : "No matching clients"}
+          action={clients.length === 0 && canCreate
+            ? <Button variant="primary" icon={MdAdd} onClick={handleAdd}>New Client</Button>
+            : null}
+        >
+          {clients.length === 0
+            ? "Add your first client, or bring them in from an Excel file."
+            : "Try a different search or registration type."}
         </EmptyState>
       ) : (
         <ClientList
           clients={filtered}
+          commonGroups={commonGroups}
           onEdit={handleEdit}
+          onEditCommon={(groupId) => setEditingGroupId(groupId)}
           onCopy={(client) => setCopyingClient(client)}
           fetchClients={() => fetchClients(selectedCompany?.id)}
         />
-      )}
+      )}</RecordsViewport>
 
       {/* Copy client into other companies — shared dialog used by both
           the per-company list (this screen) and the Common Client edit

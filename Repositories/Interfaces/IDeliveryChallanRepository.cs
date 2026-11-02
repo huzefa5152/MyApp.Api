@@ -9,7 +9,7 @@ namespace MyApp.Api.Repositories.Interfaces
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? salesOrderId = null);
+            int? salesOrderId = null, string? costingStatus = null);
         Task<DeliveryChallan?> GetByIdAsync(int id);
         Task<List<DeliveryChallan>> GetByIdsAsync(IEnumerable<int> ids);
         Task<DeliveryChallan> CreateDeliveryChallanAsync(DeliveryChallan deliveryChallan, int? customNumber = null);

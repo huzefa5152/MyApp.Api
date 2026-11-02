@@ -1145,7 +1145,7 @@ table.items th.left { text-align: left; }
 body { font-family: Calibri, Arial, sans-serif; padding: 8mm 10mm; color: #000; display: flex; flex-direction: column; min-height: 100vh; }
 .main { flex: 1; }
 .footer { margin-top: auto; }
-.bismillah { text-align: center; font-size: 20pt; color: #4a2a00; margin-bottom: 6px; font-family: "Traditional Arabic", "Scheherazade", serif; direction: rtl; letter-spacing: 1px; }
+.bismillah { text-align: center; font-size: 20pt; color: #4a2a00; margin-bottom: 6px; font-family: "Amiri", "Noto Naskh Arabic", "Scheherazade New", "Traditional Arabic", "Arabic Typesetting", "Simplified Arabic", "Geeza Pro", "Segoe UI", Tahoma, serif; direction: rtl; letter-spacing: 0; line-height: 1.6; }
 .outer { border: 2px solid #8b6914; }
 .title-band { background: #8b6914 !important; text-align: center; padding: 5px 10px; }
 .title-band h1 { font-size: 15pt; font-weight: 900; letter-spacing: 3px; text-transform: uppercase; color: #fff !important; }
@@ -1187,7 +1187,7 @@ tbody tr:nth-child(even) td { background: #fdf6e3 !important; }
 .sig .label { font-size: 9pt; font-weight: 700; text-transform: uppercase; color: #4a2a00; }
 .stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="main">
-<div class="bismillah">Ø¨ÙØ³Ù’Ù…Ù Ø§Ù„Ù„ÙŽÙ‘Ù‡Ù Ø§Ù„Ø±ÙŽÙ‘Ø­Ù’Ù…ÙŽÙ°Ù†Ù Ø§Ù„Ø±ÙŽÙ‘Ø­ÙÙŠÙ…Ù</div>
+<div class="bismillah" lang="ar" dir="rtl">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
 <div class="outer">
   <div class="title-band"><h1>Sales Tax Invoice</h1></div>
   <div class="sup-row">

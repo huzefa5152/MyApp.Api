@@ -2,6 +2,8 @@ namespace MyApp.Api.Models
 {
     public class Invoice
     {
+        [System.ComponentModel.DataAnnotations.ConcurrencyCheck]
+        public string? TaxFilingRowsJson { get; set; }
         public bool GroupTaxInvoiceByItemType { get; set; }
         public string? Notes { get; set; }
         public int Id { get; set; }
@@ -10,6 +12,7 @@ namespace MyApp.Api.Models
         public int CompanyId { get; set; }
         public int ClientId { get; set; }
         public decimal Subtotal { get; set; }
+        public string TaxTreatment { get; set; } = "FBR";
         public decimal GSTRate { get; set; }
         public decimal GSTAmount { get; set; }
         public decimal GrandTotal { get; set; }
@@ -194,6 +197,8 @@ namespace MyApp.Api.Models
         // directly from a Sales Order — has no challan to carry the PO, so it
         // is stored here and set at bill time. Null for challan-linked bills
         // (their DTO PoNumber still derives from the challans).
+        [System.ComponentModel.DataAnnotations.MaxLength(100)]
+        public string? ManualChallanNumber { get; set; }
         public string? PoNumber { get; set; }
         public DateTime? PoDate { get; set; }
 

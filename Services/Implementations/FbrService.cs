@@ -132,6 +132,12 @@ namespace MyApp.Api.Services.Implementations
         internal static string SanitizeNtn(string? ntn)
         {
             if (string.IsNullOrWhiteSpace(ntn)) return "";
+            // Alphabetic NTNs retain their prefix; the final digit after the
+            // dash is a check digit, not part of the registration number.
+            var normalized = ntn.Trim().ToUpperInvariant();
+            var alphabetic = System.Text.RegularExpressions.Regex.Match(
+                normalized, @"^([A-Z][0-9]{6})(?:-?[0-9])?$");
+            if (alphabetic.Success) return alphabetic.Groups[1].Value;
             var digits = new string(ntn.Where(char.IsDigit).ToArray());
             if (digits.Length < 7) return digits;
             var dashCount = ntn.Count(c => c == '-');
@@ -597,6 +603,7 @@ namespace MyApp.Api.Services.Implementations
             // base (else it wrongly fails "HS Code is required" [0019]).
             var effectiveItems = (invoice.Items ?? new List<InvoiceItem>())
                 .Select(ApplyAdjustmentOverlay).ToList();
+            if (invoice.TaxFilingRowsJson != null) effectiveItems = TaxFilingProjection.Lines(invoice);
             if (invoice.Items == null || !invoice.Items.Any())
                 errors.Add("Invoice must have at least one item.");
             else
@@ -689,8 +696,13 @@ namespace MyApp.Api.Services.Implementations
                 }
             }
 
-            if (invoice.FbrReviewRequiredAt != null)
-                errors.Add("Needs consultant review: challans changed. Open Invoices, review all current items and complete review before validating or submitting to FBR.");
+            if (BillTaxTreatment.IsOutsideFbr(invoice.TaxTreatment))
+                return Fail("This bill is outside FBR and cannot be previewed, validated or submitted to FBR.");
+
+            if (TaxFilingProjection.NeedsInitialAdjustment(invoice))
+                errors.Add("Needs adjustment: open Invoices and complete the initial tax filing review before FBR validation or submission.");
+            if (TaxFilingProjection.NeedsReReview(invoice))
+                errors.Add("Needs consultant re-review: filing-relevant bill details changed. Open Invoices, review all current items and complete review before validating or submitting to FBR.");
 
             // ── Dual-book "adjustment out of date" gate (2026-07-15) ──
             // If the delivery bill was edited AFTER the tax consultant
@@ -701,7 +713,9 @@ namespace MyApp.Api.Services.Implementations
             // dry-run preview) until the consultant re-opens Invoice mode and
             // re-adjusts qty/price back to the bill total. Mirrors the
             // in-memory InvoiceDto.FbrAdjustmentStale flag the UI shows.
-            if (invoice.Items != null && invoice.Items.Any(ii => ii.Adjustment != null))
+            if (invoice.TaxFilingRowsJson != null && TaxFilingProjection.IsStale(invoice))
+                errors.Add("The bill changed after its filing rows were reviewed. Open Tax filing rows and review the current bill before validation or submission.");
+            if (invoice.TaxFilingRowsJson == null && invoice.Items != null && invoice.Items.Any(ii => ii.Adjustment != null))
             {
                 var billSubtotal = invoice.Items.Sum(ii => ii.LineTotal);
                 var fbrSubtotal  = invoice.Items.Sum(ii =>
@@ -768,8 +782,19 @@ namespace MyApp.Api.Services.Implementations
             if (invoice == null)
                 return Fail("Invoice not found.");
 
-            if (invoice.FbrReviewRequiredAt != null)
-                return Fail("Needs consultant review: open Invoices and complete review of the changed bill before FBR validation, preview or submission.");
+            if (BillTaxTreatment.IsOutsideFbr(invoice.TaxTreatment))
+                return Fail("This bill is outside FBR and cannot be previewed, validated or submitted to FBR.");
+
+            // Excluded means kept out of FBR on every path, single or bulk, screen or agent.
+            if (invoice.IsFbrExcluded)
+                return Fail("This bill is excluded from FBR. Include it in FBR first, then validate or submit it.");
+
+            if (!dryRun && TaxFilingProjection.NeedsInitialAdjustment(invoice))
+                return Fail("Needs adjustment: open Invoices and complete the initial tax filing review before FBR validation or submission.");
+            if (TaxFilingProjection.NeedsReReview(invoice))
+                return Fail("Needs consultant re-review: open Invoices and complete review of the changed bill before FBR validation or submission.");
+            if (invoice.TaxFilingRowsJson != null && TaxFilingProjection.IsStale(invoice))
+                return Fail("The bill changed after its filing rows were reviewed. Review the current bill before FBR validation or submission.");
 
             // A voided bill is a non-document — never validate, submit, or
             // even preview it against FBR.
@@ -874,7 +899,7 @@ namespace MyApp.Api.Services.Implementations
             //     item — otherwise 3rd-Schedule / Reduced-Rate scenarios get
             //     clobbered to the item's Standard-Rate sale type and FBR rejects
             //     the saleType↔scenarioId mismatch.
-            if (!dryRun
+            if (!dryRun && invoice.TaxFilingRowsJson == null
                 && !string.Equals(invoice.FbrStatus, FbrSubmissionStatus.Submitted, StringComparison.OrdinalIgnoreCase))
             {
                 if (invoice.IsDemo)
@@ -1046,12 +1071,12 @@ namespace MyApp.Api.Services.Implementations
             // projected into an "effective" copy — NULL overlay fields
             // fall back to the underlying InvoiceItem. The printed bill
             // is NEVER touched; only this in-memory view is.
-            var effectiveItems = invoice.Items.Select(ApplyAdjustmentOverlay).ToList();
+            var effectiveItems = TaxFilingProjection.Lines(invoice);
 
             // FBR groups by effective classification independently of the company's
             // print preference. Individual prints retain commercial lines and units.
             // Tax treatments stay separate; unclassified rows remain singletons.
-            var fbrItems = effectiveItems
+            var fbrItems = invoice.TaxFilingRowsJson != null ? effectiveItems : effectiveItems
                     .GroupBy(TaxInvoiceGrouping.Key)
                     .Select(g =>
                     {
@@ -1085,9 +1110,13 @@ namespace MyApp.Api.Services.Implementations
             var furtherTaxAmounts = FurtherTaxCalculator.Allocate(invoice.FurtherTaxAmount,
                 fbrItems.Select(item => item.LineTotal).ToArray());
             var furtherTaxIndex = 0;
+            var filingSalesTaxes = invoice.TaxFilingRowsJson == null ? null : FurtherTaxCalculator.Allocate(invoice.GSTAmount,
+                fbrItems.Select(item => string.Equals(item.SaleType, "3rd Schedule Goods", StringComparison.OrdinalIgnoreCase)
+                    ? item.FixedNotifiedValueOrRetailPrice ?? 0m : item.LineTotal).ToArray());
             foreach (var item in fbrItems)
             {
                 var (salesTax, retailPrice) = ComputeFbrSalesTax(item, invoice.GSTRate);
+                if (filingSalesTaxes != null) salesTax = filingSalesTaxes[furtherTaxIndex];
                 // The commercial document, accounting and FBR must charge the same tax.
                 var furtherTax = furtherTaxAmounts[furtherTaxIndex++];
                 var uomDesc = await ResolveUomDesc(company, item.FbrUOMId, item.UOM);
@@ -1140,7 +1169,7 @@ namespace MyApp.Api.Services.Implementations
                 fbrRequest.Items.Add(new FbrInvoiceItemRequest
                 {
                     HsCode = item.HSCode ?? "",
-                    ProductDescription = SanitizeForFbr(item.Description),
+                    ProductDescription = company.FbrOmitProductDescription ? "" : SanitizeForFbr(item.Description),
                     // Exempt goods carry the literal rate "Exempt", not a
                     // percentage — FBR rejects "0%" for an exempt sale type
                     // with [0046]. Every other sale type uses the numeric rate.
@@ -1166,6 +1195,14 @@ namespace MyApp.Api.Services.Implementations
                 });
             }
 
+            // FBR refuses an item listed twice ("DUPLICATE INVOICE EXISTS" on the
+            // repeat). Checked on the payload itself, so it covers saved filing
+            // rows and grouped bills alike, before anything is sent.
+            var duplicate = FbrDuplicateItems.Message(fbrRequest.Items.Select((it, n) => new FbrDuplicateItems.Item(
+                n + 1, it.HsCode, it.ProductDescription, it.SaleType, it.UoM, it.SroScheduleNo, it.SroItemSerialNo, it.Rate)));
+            if (duplicate != null)
+                return Fail($"Pre-validation failed:\n• {duplicate}");
+
             // ── Call FBR API ──
             var action = isSubmit ? "Submit" : "Validate";
             var url = isSubmit ? GetSubmitUrl(company) : GetValidateUrl(company);
@@ -1181,6 +1218,7 @@ namespace MyApp.Api.Services.Implementations
                     Success = true,
                     Preview = new FbrPayloadPreview
                     {
+                        ReviewRequired = TaxFilingProjection.NeedsInitialAdjustment(invoice) || TaxFilingProjection.NeedsReReview(invoice),
                         Json = json,
                         Url = url,
                         ItemCount = fbrRequest.Items.Count,
@@ -1193,6 +1231,7 @@ namespace MyApp.Api.Services.Implementations
             // generic catch below distinguish "never sent" (safe to retry → Failed)
             // from "sent, outcome unknown" (must not auto-retry → Uncertain).
             bool posted = false;
+            var sw = new System.Diagnostics.Stopwatch();
             try
             {
                 var httpClient = CreateClient(company);
@@ -1221,15 +1260,7 @@ namespace MyApp.Api.Services.Implementations
                     // WHERE mirrors FbrSubmissionStatus.IsSubmittable — kept as
                     // inline constant comparisons because EF cannot translate a
                     // method call to SQL. If you change one, change the other.
-                    var payloadItemIds = invoice.Items.Select(i => i.Id).ToList();
-                    var claimed = await _db.Invoices
-                        .Where(i => i.Id == invoice.Id
-                                 && i.FbrIRN == null && !i.IsCancelled && i.FbrReviewRequiredAt == null
-                                 && i.Items.Count == payloadItemIds.Count
-                                 && !i.Items.Any(line => !payloadItemIds.Contains(line.Id))
-                                 && (i.FbrStatus == null
-                                     || i.FbrStatus == FbrSubmissionStatus.Failed
-                                     || i.FbrStatus == FbrSubmissionStatus.Validated))
+                    var claimed = await FbrSubmissionClaim.Eligible(_db.Invoices, invoice)
                         .ExecuteUpdateAsync(s => s.SetProperty(i => i.FbrStatus, FbrSubmissionStatus.Submitting));
 
                     if (claimed == 0)
@@ -1250,9 +1281,11 @@ namespace MyApp.Api.Services.Implementations
                     invoice.FbrStatus = FbrSubmissionStatus.Submitting;
                 }
 
+                sw.Start();
                 var response = await httpClient.PostAsync(url, content);
                 posted = true;   // bytes are on the wire; FBR may now hold this invoice
                 var responseBody = await response.Content.ReadAsStringAsync();
+                sw.Stop();
 
                 // ── HTTP-level errors ──
                 if (!response.IsSuccessStatusCode)
@@ -1301,7 +1334,7 @@ namespace MyApp.Api.Services.Implementations
                     {
                         var gwMsg = $"FBR's API gateway could not reach their invoicing service, so nothing was sent " +
                                     $"and nothing was recorded — {gatewayFault} This is on FBR's side; try again shortly.";
-                        await AuditFbr("Error", action, invoice.Id, url, json, responseBody, statusCode, gwMsg);
+                        await AuditFbr("Error", action, invoice.Id, url, json, responseBody, statusCode, gwMsg, durationMs: (int)sw.ElapsedMilliseconds);
                         // Not sent = definitively not committed, so the bill stays
                         // re-submittable rather than being parked for reconciliation.
                         if (isSubmit) await PersistStatus(invoice, FbrSubmissionStatus.Failed, null, gwMsg);
@@ -1326,7 +1359,7 @@ namespace MyApp.Api.Services.Implementations
                         _ => $"FBR API returned HTTP {statusCode}: {responseBody}"
                     };
 
-                    await AuditFbr("Error", action, invoice.Id, url, json, responseBody, statusCode, errorMsg);
+                    await AuditFbr("Error", action, invoice.Id, url, json, responseBody, statusCode, errorMsg, durationMs: (int)sw.ElapsedMilliseconds);
                     if (isSubmit) await PersistStatus(invoice, httpOutcome, null, errorMsg);
                     return Fail(errorMsg);
                 }
@@ -1350,7 +1383,7 @@ namespace MyApp.Api.Services.Implementations
                     // auto-retry that could duplicate; an admin verifies + resets.
                     var pmsg = "FBR returned a 200 response we could not interpret, so this submission's outcome " +
                                "is UNCONFIRMED. Do NOT submit again — an administrator must verify it at FBR and reset it.";
-                    await AuditFbr("Error", action, invoice.Id, url, json, responseBody, 200, pmsg);
+                    await AuditFbr("Error", action, invoice.Id, url, json, responseBody, 200, pmsg, durationMs: (int)sw.ElapsedMilliseconds);
                     if (isSubmit) await PersistStatus(invoice, FbrSubmissionStatus.Uncertain, null, pmsg);
                     return Fail(pmsg);
                 }
@@ -1363,7 +1396,7 @@ namespace MyApp.Api.Services.Implementations
                     // FBR responded OK, outcome unconfirmed → Uncertain, not Failed.
                     var msg = "FBR returned a 200 response with no validation result, so this submission's " +
                               "outcome is UNCONFIRMED. Do NOT submit again — an administrator must verify it at FBR and reset it.";
-                    await AuditFbr("Error", action, invoice.Id, url, json, responseBody, 200, msg);
+                    await AuditFbr("Error", action, invoice.Id, url, json, responseBody, 200, msg, durationMs: (int)sw.ElapsedMilliseconds);
                     if (isSubmit) await PersistStatus(invoice, FbrSubmissionStatus.Uncertain, null, msg);
                     return Fail(msg);
                 }
@@ -1389,7 +1422,7 @@ namespace MyApp.Api.Services.Implementations
                         .ToList();
                     var itemMsg = itemErrors?.Count > 0
                         ? string.Join("; ", itemErrors.Select(e =>
-                            $"Item {e.ItemSNo}: [{e.ErrorCode}] {e.Error}"))
+                            $"Item {e.ItemSNo}: [{e.ErrorCode}] {FbrDuplicateItems.Explain(e.Error)}"))
                         : "";
 
                     var msg = !string.IsNullOrWhiteSpace(itemMsg) ? itemMsg
@@ -1403,7 +1436,7 @@ namespace MyApp.Api.Services.Implementations
                     // text (which stays at the head for support traceability).
                     msg = EnrichFbrErrorHint(validation.ErrorCode, msg, invoice);
 
-                    await AuditFbr("Warning", action, invoice.Id, url, json, responseBody, 200, msg);
+                    await AuditFbr("Warning", action, invoice.Id, url, json, responseBody, 200, msg, durationMs: (int)sw.ElapsedMilliseconds);
                     if (isSubmit) await PersistStatus(invoice, FbrSubmissionStatus.Failed, null, msg);
                     return new FbrSubmissionResult
                     {
@@ -1421,7 +1454,7 @@ namespace MyApp.Api.Services.Implementations
                         .Where(s => s.StatusCode == "01")
                         .ToList();
                     var msg = errorItems?.Count > 0
-                        ? string.Join("; ", errorItems.Select(e => $"Item {e.ItemSNo}: [{e.ErrorCode}] {e.Error}"))
+                        ? string.Join("; ", errorItems.Select(e => $"Item {e.ItemSNo}: [{e.ErrorCode}] {FbrDuplicateItems.Explain(e.Error)}"))
                         : validation.Error ?? "FBR validation failed with unspecified item errors.";
                     // Surface the same operator-friendly NTN-context hint if
                     // any line error code matches a known STATL / scenario
@@ -1429,7 +1462,7 @@ namespace MyApp.Api.Services.Implementations
                     var firstCode = errorItems?.FirstOrDefault()?.ErrorCode ?? validation.ErrorCode;
                     msg = EnrichFbrErrorHint(firstCode, msg, invoice);
 
-                    await AuditFbr("Warning", action, invoice.Id, url, json, responseBody, 200, msg);
+                    await AuditFbr("Warning", action, invoice.Id, url, json, responseBody, 200, msg, durationMs: (int)sw.ElapsedMilliseconds);
                     if (isSubmit) await PersistStatus(invoice, FbrSubmissionStatus.Failed, null, msg);
                     return new FbrSubmissionResult
                     {
@@ -1479,7 +1512,7 @@ namespace MyApp.Api.Services.Implementations
                     var successMsg = isSubmit
                         ? $"Invoice {invoice.InvoiceNumber} submitted to FBR successfully. IRN: {irn}"
                         : $"Invoice {invoice.InvoiceNumber} validated by FBR successfully.";
-                    await AuditFbr("Info", action, invoice.Id, url, json, responseBody, 200, successMsg);
+                    await AuditFbr("Info", action, invoice.Id, url, json, responseBody, 200, successMsg, durationMs: (int)sw.ElapsedMilliseconds);
 
                     return new FbrSubmissionResult
                     {
@@ -1495,7 +1528,7 @@ namespace MyApp.Api.Services.Implementations
                 // Uncertain so we never auto-resubmit into a possible duplicate.
                 var unexpectedMsg = $"FBR returned an unrecognised status ({validation.StatusCode} / {validation.Status}); " +
                                     "this submission's outcome is UNCONFIRMED. Do NOT submit again — an administrator must verify it at FBR and reset it.";
-                await AuditFbr("Warning", action, invoice.Id, url, json, responseBody, 200, unexpectedMsg);
+                await AuditFbr("Warning", action, invoice.Id, url, json, responseBody, 200, unexpectedMsg, durationMs: (int)sw.ElapsedMilliseconds);
                 if (isSubmit) await PersistStatus(invoice, FbrSubmissionStatus.Uncertain, null, unexpectedMsg);
                 return Fail(unexpectedMsg);
             }
@@ -1511,7 +1544,7 @@ namespace MyApp.Api.Services.Implementations
                       "is UNCONFIRMED. Do NOT submit again — an administrator must verify it at FBR and reset it."
                     : "Cannot connect to FBR. Check your internet connection and ensure your server IP is " +
                       "whitelisted on the FBR IRIS portal, then try again.";
-                await AuditFbr("Error", action, invoice.Id, url, json, null, 0, msg);
+                await AuditFbr("Error", action, invoice.Id, url, json, null, 0, msg, durationMs: (int)sw.ElapsedMilliseconds);
                 if (isSubmit) await PersistStatus(invoice, posted ? FbrSubmissionStatus.Uncertain : FbrSubmissionStatus.Failed, null, msg);
                 return Fail(msg);
             }
@@ -1528,7 +1561,7 @@ namespace MyApp.Api.Services.Implementations
                       "Do NOT submit again — FBR may already have this invoice. An administrator must verify " +
                       "it at FBR and, only if it is not there, reset it for resubmission."
                     : "Could not reach FBR before the request timed out (nothing was sent). Please try again.";
-                await AuditFbr("Error", action, invoice.Id, url, json, null, 0, msg);
+                await AuditFbr("Error", action, invoice.Id, url, json, null, 0, msg, durationMs: (int)sw.ElapsedMilliseconds);
                 if (isSubmit) await PersistStatus(invoice, uncertain ? FbrSubmissionStatus.Uncertain : FbrSubmissionStatus.Failed, null, msg);
                 return Fail(msg);
             }
@@ -1554,7 +1587,7 @@ namespace MyApp.Api.Services.Implementations
                           "recover. Nothing was sent and nothing was recorded — try again in a moment."
                         : "An unexpected error occurred before the request reached FBR. Nothing was sent. " +
                           "See the FBR monitor for details.";
-                await AuditFbr("Error", action, invoice.Id, url, json, null, 0, msg);
+                await AuditFbr("Error", action, invoice.Id, url, json, null, 0, msg, durationMs: (int)sw.ElapsedMilliseconds);
                 if (isSubmit) await PersistStatus(invoice, posted ? FbrSubmissionStatus.Uncertain : FbrSubmissionStatus.Failed, null, msg);
                 return Fail(msg);
             }
@@ -1920,9 +1953,23 @@ namespace MyApp.Api.Services.Implementations
             return HsCodeFormat.IsMatch(normalised);
         }
 
-        public async Task<List<FbrHSCodeDto>> GetHSCodesAsync(int companyId, string? search = null, string? saleType = null)
+        public async Task<List<FbrHSCodeDto>> GetHSCodesAsync(int companyId, string? search = null, string? saleType = null,
+            bool excludeSaved = false, string? includeHsCode = null)
         {
             var all = await GetHsCodeCatalogAsync(companyId);
+            // Offline list first. A typed code it does not hold may be new at FBR since the last sync.
+            var typed = search?.Trim() ?? "";
+            if (HsCodeTerm.IsMatch(typed) && !all.Any(h => h.HS_CODE.StartsWith(typed, StringComparison.OrdinalIgnoreCase)))
+                all = await TopUpHsCatalogFromPralAsync(companyId);
+
+            if (excludeSaved)
+            {
+                var saved = (await _db.ItemTypes.AsNoTracking()
+                    .Where(i => i.CompanyId == companyId && !i.IsDeleted && i.HSCode != null)
+                    .Select(i => i.HSCode!.Trim()).ToListAsync()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                saved.Remove(includeHsCode?.Trim() ?? "");
+                all = all.Where(h => !saved.Contains(h.HS_CODE.Trim())).ToList();
+            }
 
             // Apply sale-type filter BEFORE the text search so the cap
             // (50 / 100) operates on the already-narrowed list.
@@ -1977,6 +2024,14 @@ namespace MyApp.Api.Services.Implementations
             {
                 if (_hsCodeCatalog != null) return _hsCodeCatalog;
 
+                // Offline copy first: no FBR call, no token needed once synced.
+                var stored = await LoadStoredHsCodesAsync();
+                if (stored.Count > 0)
+                {
+                    _hsCodeCatalog = stored;
+                    return _hsCodeCatalog;
+                }
+
                 // Try the requesting company first (they may have a token).
                 var fresh = await GetReferenceData<FbrHSCodeDto>(
                     requestingCompanyId, $"{RefBaseV1}/itemdesccode");
@@ -2001,6 +2056,99 @@ namespace MyApp.Api.Services.Implementations
             {
                 _hsCacheLock.Release();
             }
+        }
+
+        private const string HsCodeLookupCategory = "HsCode";
+
+        private async Task<List<FbrHSCodeDto>> LoadStoredHsCodesAsync()
+        {
+            var rows = await _db.FbrLookups.AsNoTracking()
+                .Where(l => l.Category == HsCodeLookupCategory && l.IsActive)
+                .OrderBy(l => l.SortOrder)
+                .ToListAsync();
+            return rows.Select(l => new FbrHSCodeDto { HS_CODE = l.Code, Description = l.Label }).ToList();
+        }
+
+        // Replaces the stored HS list in one transaction. The list is FBR's
+        // public master catalog, so the copy is installation-wide (the endpoint
+        // that calls this is seed-admin-only). Duplicate codes keep the first row.
+        public async Task<int> SyncHsCodeCatalogAsync(int companyId)
+        {
+            var fresh = await GetReferenceData<FbrHSCodeDto>(companyId, $"{RefBaseV1}/itemdesccode");
+            if (fresh.Count == 0) return 0;
+
+            var rows = fresh
+                .Where(h => !string.IsNullOrWhiteSpace(h.HS_CODE))
+                .GroupBy(h => h.HS_CODE.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Select((g, i) => new FbrLookup
+                {
+                    Category = HsCodeLookupCategory,
+                    Code = g.Key,
+                    Label = g.First().Description?.Trim() ?? "",
+                    SortOrder = i,
+                    IsActive = true,
+                })
+                .ToList();
+
+            await _hsCacheLock.WaitAsync();
+            try
+            {
+                await using var tx = await _db.Database.BeginTransactionAsync();
+                await _db.FbrLookups
+                    .Where(l => l.Category == HsCodeLookupCategory)
+                    .ExecuteDeleteAsync();
+                _db.FbrLookups.AddRange(rows);
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync();
+
+                _hsCodeCatalog = null; // next lookup reloads from the table
+                return rows.Count;
+            }
+            finally
+            {
+                _hsCacheLock.Release();
+            }
+        }
+
+        private static readonly System.Text.RegularExpressions.Regex HsCodeTerm =
+            new(@"^\d{4}(\.\d{0,4}(\.\d{0,2})?)?$", System.Text.RegularExpressions.RegexOptions.Compiled);
+        // ponytail: in-memory 30-minute throttle per company, so a typo cannot hit PRAL on every keystroke.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, DateTime> _lastPralTopUp = new();
+
+        // Asks PRAL with the asking company's OWN token (never another tenant's, audit H-9) and appends
+        // the codes the stored list lacks, so the next lookup finds them offline. Skips the write when the
+        // caller has unsaved changes on this context (e.g. a filing save): SaveChanges would commit them early.
+        private async Task<List<FbrHSCodeDto>> TopUpHsCatalogFromPralAsync(int companyId)
+        {
+            var current = await GetHsCodeCatalogAsync(companyId);
+            if (_db.ChangeTracker.HasChanges()
+                || DateTime.UtcNow - _lastPralTopUp.GetValueOrDefault(companyId) < TimeSpan.FromMinutes(30)) return current;
+            _lastPralTopUp[companyId] = DateTime.UtcNow;
+            var live = await GetReferenceData<FbrHSCodeDto>(companyId, $"{RefBaseV1}/itemdesccode");
+            if (live.Count == 0) return current;
+
+            await _hsCacheLock.WaitAsync();
+            try
+            {
+                var stored = await _db.FbrLookups.AsNoTracking().Where(l => l.Category == HsCodeLookupCategory)
+                    .Select(l => new { l.Code, l.SortOrder }).ToListAsync();
+                if (stored.Count == 0) return current; // never synced: the catalog already came from PRAL
+                var known = stored.Select(s => s.Code.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var next = stored.Max(s => s.SortOrder) + 1;
+                var added = live.Where(h => !string.IsNullOrWhiteSpace(h.HS_CODE) && known.Add(h.HS_CODE.Trim()))
+                    .Select(h => new FbrLookup { Category = HsCodeLookupCategory, Code = h.HS_CODE.Trim(),
+                        Label = h.Description?.Trim() ?? "", SortOrder = next++, IsActive = true }).ToList();
+                if (added.Count == 0) return current;
+                _db.FbrLookups.AddRange(added);
+                await _db.SaveChangesAsync();
+                _hsCodeCatalog = null;
+                _logger.LogInformation("Added {Count} new FBR HS codes to the offline list from PRAL (company {CompanyId}).", added.Count, companyId);
+            }
+            finally
+            {
+                _hsCacheLock.Release();
+            }
+            return await GetHsCodeCatalogAsync(companyId);
         }
 
         public async Task<List<FbrUOMDto>> GetUOMsAsync(int companyId)
@@ -2096,15 +2244,15 @@ namespace MyApp.Api.Services.Implementations
         }
 
         // §5.9 — HS_UOM (v2)
-        public async Task<List<FbrUOMDto>> GetHSCodeUOMAsync(
+        public async Task<List<FbrUOMDto>?> GetHSCodeUOMAsync(
             int companyId, string hsCode, int annexureId)
         {
             var company = await _companyRepo.GetByIdAsync(companyId);
-            if (company == null || string.IsNullOrEmpty(company.FbrToken)) return new();
+            if (company == null || string.IsNullOrEmpty(company.FbrToken)) return null;
 
             var httpClient = CreateClient(company);
             var url = $"{RefBaseV2}/HS_UOM?hs_code={hsCode}&annexure_id={annexureId}";
-            return await GetReferenceListAsync<FbrUOMDto>(httpClient, url, "HS_UOM");
+            return await TryGetReferenceListAsync<FbrUOMDto>(httpClient, url, "HS_UOM");
         }
 
         // ═══════════════════════════════════════════════════════════
@@ -2210,6 +2358,11 @@ namespace MyApp.Api.Services.Implementations
         // logging behaviour. JsonException is caught separately so the operator
         // sees "FBR returned malformed JSON" rather than a generic 500.
         private async Task<List<T>> GetReferenceListAsync<T>(HttpClient httpClient, string url, string endpoint)
+            => await TryGetReferenceListAsync<T>(httpClient, url, endpoint) ?? new();
+
+        // Null when FBR was not reached or did not answer properly, so a caller can tell that apart
+        // from FBR answering with an empty list.
+        private async Task<List<T>?> TryGetReferenceListAsync<T>(HttpClient httpClient, string url, string endpoint)
         {
             try
             {
@@ -2217,7 +2370,7 @@ namespace MyApp.Api.Services.Implementations
                 if (!response.IsSuccessStatusCode)
                 {
                     _logger.LogWarning("FBR ref {Endpoint} non-success {Status}", endpoint, (int)response.StatusCode);
-                    return new();
+                    return null;
                 }
                 var json = await response.Content.ReadAsStringAsync();
                 try
@@ -2228,13 +2381,13 @@ namespace MyApp.Api.Services.Implementations
                 {
                     _logger.LogError(jx, "FBR ref {Endpoint} returned malformed JSON (first 300 chars): {Body}",
                         endpoint, json.Length > 300 ? json[..300] : json);
-                    return new();
+                    return null;
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "FBR ref {Endpoint} request failed", endpoint);
-                return new();
+                return null;
             }
         }
 

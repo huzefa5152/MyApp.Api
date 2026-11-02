@@ -5,7 +5,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { MdInfo, MdContentCopy } from "react-icons/md";
 import SearchableClientSelect from "./SearchableClientSelect";
 import LineItemsEditor from "./LineItemsEditor";
-import { Alert, Button, Field } from "../ui/Kit";
+import { Alert, Field } from "../ui/Kit";
 import { updateChallan } from "../api/challanApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { saveItemFbrDefaults } from "../api/lookupApi";
@@ -15,8 +15,6 @@ import { formStyles, modalSizes } from "../theme";
 import useScrollToError from "../hooks/useScrollToError";
 import DocumentNotesEditor from "./DocumentNotesEditor";
 import ChallanPrivateCosts, { useChallanSuppliers } from "./ChallanPrivateCosts";
-import { createPurchaseBillsFromChallan } from "../api/purchaseBillApi";
-import { useConfirm } from "./ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
 
 
@@ -74,6 +72,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
       unit: i.unit,
       supplierId: i.supplierId ?? null,
       actualUnitCost: i.actualUnitCost ?? null,
+      lockedPurchaseQuantity: i.lockedPurchaseQuantity ?? 0,
     }))
   );
 
@@ -82,11 +81,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   // Units list — gates each row's quantity input on the picked UOM.
   const [units, setUnits] = useState([]);
   const suppliers = useChallanSuppliers(challan.companyId);
-  const confirm = useConfirm();
   const { has } = usePermissions();
-  // Challan saved but the follow-up purchase bills failed — the form stays
-  // open with a retry instead of re-saving the challan.
-  const [savedAwaitingPurchase, setSavedAwaitingPurchase] = useState(false);
 
   // ── UI state ──
   const [error, setError] = useState("");
@@ -162,7 +157,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   // ── Submit ──
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (savedAwaitingPurchase || saving || !numberValid) return;
+    if (saving || !numberValid) return;
     setError("");
 
     if (!clientId) { setError("Client is required."); return; }
@@ -202,21 +197,6 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
           itemTypeName: "",
         })),
       });
-      // Every line carries a supplier + actual cost → offer the purchase
-      // bills (one per supplier). Never automatic: the operator confirms.
-      if (!challan.hasAutoPurchaseBills && has("purchasebills.manage.create") && validItems.every((line) =>
-        line.supplierId && line.actualUnitCost !== null && line.actualUnitCost !== undefined && line.actualUnitCost !== "")) {
-        const count = new Set(validItems.map((line) => Number(line.supplierId))).size;
-        const yes = await confirm({ title: "Create purchase bills?", message: `Create ${count} unpaid purchase bill${count === 1 ? "" : "s"} from this challan, one per supplier?`, variant: "info", confirmText: "Create purchase bills", cancelText: "Not now" });
-        if (yes) {
-          try { await createPurchaseBillsFromChallan(challan.id); }
-          catch (err) {
-            setSavedAwaitingPurchase(true);
-            setError(`Challan saved. ${err.response?.data?.error || "Could not create purchase bills."}`);
-            return;
-          }
-        }
-      }
       onSaved();
     } catch (err) {
       setError(err.response?.data?.error || "Failed to update challan.");
@@ -239,14 +219,20 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
         <form onSubmit={handleSubmit}>
           <div data-admin-body="" style={formStyles.body}>
             {challan.invoiceId && <p role="status" style={{ background: "#eff6ff", padding: 12, borderRadius: 8 }}>Saving changes updates bill #{challan.invoiceNumber || challan.invoiceId}, its totals and linked order delivery figures. Consultant review will be required before FBR validation. New items start without a rate: open the bill to price them. To cancel or remove a whole challan, use its order management actions or Bills → Manage challans.</p>}
-            <DocumentCopyPicker companyId={challan.companyId} destination="Challan" allowDetails={false} disabled={!!challan.salesOrderId || !!challan.invoiceId}
-              onCopy={(source,lines,details) => {
-                setItems(prev => appendCopiedLines(details ? [] : prev, lines, () => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""})));
-                if(details) {  }
-              }} />
-            {error && <div ref={errRef} style={formStyleformStyles.erroror}>{error}</div>}
+            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
-            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={challan.companyId} documentType="challan" clientId={clientId} currentClientId={challan.clientId} variant="edit" currentNumber={challan.challanNumber} editRecordId={challan.id} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} lockedReason={isDuplicate ? "Duplicate challan numbers are inherited and cannot be changed." : undefined} disabled={saving} /></div>
+            {/* Number and the copy shortcut share one row; the copy panel takes
+                the full row once it is opened. */}
+            <div className="doc-header-row">
+              <div className="doc-header-row__number"><BillNumberField companyId={challan.companyId} documentType="challan" clientId={clientId} currentClientId={challan.clientId} variant="edit" currentNumber={challan.challanNumber} editRecordId={challan.id} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} lockedReason={isDuplicate ? "Duplicate challan numbers are inherited and cannot be changed." : undefined} disabled={saving} /></div>
+              <div className="doc-header-row__copy">
+                <DocumentCopyPicker companyId={challan.companyId} destination="Challan" allowDetails={false} disabled={!!challan.salesOrderId || !!challan.invoiceId}
+                  onCopy={(source,lines,details) => {
+                    setItems(prev => appendCopiedLines(details ? [] : prev, lines, () => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""})));
+                    if(details) {  }
+                  }} />
+              </div>
+            </div>
 
             {/* Duplicate-mode banner — explains why so many fields are
                 read-only and what the operator IS allowed to change. */}
@@ -364,13 +350,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
               itemsLabel="Items *"
             />
             <ChallanPrivateCosts companyId={challan.companyId} items={items} onItemsChange={setItems} suppliers={suppliers} />
-            {savedAwaitingPurchase && <div style={{ padding: 12, marginTop: 10, background: "#fff3e0", borderRadius: 8 }}>
-              Your challan was saved. Purchase bills still need to be created.
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                <Button variant="primary" disabled={saving} onClick={async () => { setSaving(true); try { await createPurchaseBillsFromChallan(challan.id); onSaved(); } catch (err) { setError(err.response?.data?.error || "Could not create purchase bills."); } finally { setSaving(false); } }}>Retry purchase bills</Button>
-                <Button variant="secondary" onClick={onSaved}>Close without purchase bills</Button>
-              </div>
-            </div>}
+
 
             <DocumentNotesEditor value={notes} onChange={setNotes} />
 

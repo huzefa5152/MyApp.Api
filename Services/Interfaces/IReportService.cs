@@ -1,9 +1,12 @@
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 
 namespace MyApp.Api.Services.Interfaces
 {
     public interface IReportService
     {
+        Task<InvoiceSalesDetailReportDto> GetInvoiceSalesDetailAsync(int companyId, InvoiceSalesDetailQueryDto query);
+        Task<byte[]> GetInvoiceSalesDetailExcelAsync(int companyId, InvoiceSalesDetailQueryDto query);
         /// <summary>
         /// FBR Sales report for one company. Only invoices actually
         /// submitted to FBR are included, grouped by document date.
@@ -24,7 +27,8 @@ namespace MyApp.Api.Services.Interfaces
         /// raw file bytes for the controller to stream back.
         /// </summary>
         Task<byte[]> GetSalesReportExcelAsync(int companyId, int? year, int? month, string buyerType,
-            DateTime? dateFrom = null, DateTime? dateTo = null, int? clientId = null);
+            DateTime? dateFrom = null, DateTime? dateTo = null, int? clientId = null,
+            ReportExcelLetterhead? letterhead = null);
 
         /// <summary>
         /// Tax Sheet: every invoice line whose item type still has no valid HS
@@ -36,7 +40,8 @@ namespace MyApp.Api.Services.Interfaces
 
         /// <summary>Styled .xlsx of <see cref="GetTaxSheetAsync"/>.</summary>
         Task<byte[]> GetTaxSheetExcelAsync(int companyId, int? year, int? month,
-            DateTime? dateFrom = null, DateTime? dateTo = null, int? clientId = null);
+            DateTime? dateFrom = null, DateTime? dateTo = null, int? clientId = null,
+            ReportExcelLetterhead? letterhead = null);
 
         /// <summary>
         /// Move every STILL-UNCLASSIFIED invoice of a tax-sheet period onto
@@ -58,6 +63,7 @@ namespace MyApp.Api.Services.Interfaces
 
         /// <summary>Styled .xlsx of <see cref="GetOutstandingLedgerAsync"/>, matching the operator's manual outstanding sheet.</summary>
         Task<byte[]> GetOutstandingLedgerExcelAsync(int companyId, int? clientId, string status,
-            int? year, int? month, DateTime? dateFrom, DateTime? dateTo);
+            int? year, int? month, DateTime? dateFrom, DateTime? dateTo,
+            ReportExcelLetterhead? letterhead = null);
     }
 }

@@ -183,18 +183,10 @@ namespace MyApp.Api.Controllers
                 return NotFound(new { message = "User not found." });
 
             var requested = (dto.CompanyIds ?? new List<int>()).Distinct().ToList();
-            if (requested.Count > 0)
-            {
-                var validIds = await _context.Companies
-                    .Where(c => requested.Contains(c.Id))
-                    .Select(c => c.Id)
-                    .ToListAsync();
-                var unknown = requested.Except(validIds).ToList();
-                if (unknown.Count > 0)
-                    return BadRequest(new { message = $"Unknown company id(s): {string.Join(", ", unknown)}." });
-            }
 
-            // An Administrator may hand out only what it holds itself.
+            // An Administrator may hand out only what it holds itself. Checked
+            // BEFORE the unknown-id test, so an id outside the caller's set gets
+            // the same 403 whether or not such a company exists.
             // Seed admin's assignable set is every company, so this is a
             // no-op for it and the original semantics are preserved.
             var assignable = await _scope.GetAssignableCompanyIdsAsync(CurrentUserId);
@@ -205,6 +197,17 @@ namespace MyApp.Api.Controllers
                 {
                     message = $"Access denied: you are not authorized for company {string.Join(", ", outOfScope)}."
                 });
+            }
+
+            if (requested.Count > 0)
+            {
+                var validIds = await _context.Companies
+                    .Where(c => requested.Contains(c.Id))
+                    .Select(c => c.Id)
+                    .ToListAsync();
+                var unknown = requested.Except(validIds).ToList();
+                if (unknown.Count > 0)
+                    return BadRequest(new { message = $"Unknown company id(s): {string.Join(", ", unknown)}." });
             }
 
             await using var tx = await _context.Database.BeginTransactionAsync();
@@ -233,13 +236,31 @@ namespace MyApp.Api.Controllers
                         AssignedByUserId = CurrentUserId == 0 ? (int?)null : CurrentUserId,
                     });
                 }
+                var cascaded = 0;
                 if (toRemove.Count > 0)
+                {
                     _context.UserCompanies.RemoveRange(toRemove);
+                    // A company leaves the whole tree beneath this user with it.
+                    // An Administrator can only grant what it holds, so without
+                    // this the accounts it created would keep a company it no
+                    // longer has: the company would stay reachable from a tenant
+                    // tree that has been taken off it.
+                    var removedIds = toRemove.Select(r => r.CompanyId).ToList();
+                    var beneath = await _scope.GetManageableUserIdsAsync(userId);
+                    beneath.Remove(userId);
+                    if (beneath.Count > 0)
+                        cascaded = await _context.UserCompanies
+                            .Where(uc => beneath.Contains(uc.UserId) && removedIds.Contains(uc.CompanyId))
+                            .ExecuteDeleteAsync();
+                }
 
                 await _context.SaveChangesAsync();
                 await tx.CommitAsync();
 
-                _access.InvalidateUser(userId);
+                _access.InvalidateAll();
+                if (cascaded > 0)
+                    _logger.LogInformation("Company access removed from user {UserId} also removed {Count} grant(s) from the accounts beneath it",
+                        userId, cascaded);
 
                 return Ok(new SetUserCompaniesResultDto
                 {

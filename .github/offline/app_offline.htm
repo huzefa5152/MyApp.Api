@@ -1,5 +1,31 @@
 <!DOCTYPE html>
-<html>
-<head><title>Updating...</title></head>
-<body><h1>Application is being updated. Please try again in a moment.</h1></body>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The ERP recognises this page by the marker below and keeps open pages
+     working until the service answers again (utils/serviceContinuity.js). -->
+<meta name="erp-service-paused" content="1">
+<meta http-equiv="refresh" content="10">
+<title>One moment</title>
+<style>
+  html,body{margin:0;height:100%;font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;background:#f4f6fa;color:#1a2332}
+  .wrap{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}
+  .card{max-width:420px;width:100%;background:#fff;border:1px solid #dce5ef;border-radius:14px;padding:28px 28px 24px;text-align:center;box-shadow:0 10px 30px rgba(10,22,40,.08)}
+  .spin{width:28px;height:28px;margin:0 auto 16px;border-radius:50%;border:3px solid #d6e3f3;border-top-color:#0d47a1;animation:s .8s linear infinite}
+  h1{font-size:1.15rem;margin:0 0 8px;font-weight:700}
+  p{margin:0;color:#5f6d7e;font-size:.92rem;line-height:1.55}
+  @keyframes s{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion: reduce){.spin{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card" role="status" aria-live="polite">
+    <div class="spin" aria-hidden="true"></div>
+    <h1>One moment</h1>
+    <p>We're reconnecting you. This page will continue automatically in a few seconds.</p>
+  </div>
+</div>
+</body>
 </html>

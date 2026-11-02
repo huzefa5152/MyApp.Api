@@ -16,10 +16,12 @@ namespace MyApp.Api.Services.Implementations
         private readonly IStockService _stock;
         private readonly IPostingService _posting;
         private readonly IInvoiceService _invoices;
+        private readonly LocalPurchaseSyncService _purchases;
         private readonly ILogger<DeliveryChallanService> _logger;
 
-        public DeliveryChallanService(IDeliveryChallanRepository repository, AppDbContext context, IStockService stock, IPostingService posting, IInvoiceService invoices, ILogger<DeliveryChallanService> logger)
+        public DeliveryChallanService(IDeliveryChallanRepository repository, AppDbContext context, IStockService stock, IPostingService posting, IInvoiceService invoices, LocalPurchaseSyncService purchases, ILogger<DeliveryChallanService> logger)
         {
+            _purchases = purchases;
             _posting = posting;
             _invoices = invoices;
             _repository = repository;
@@ -80,6 +82,10 @@ namespace MyApp.Api.Services.Implementations
             var lines = items.ToList();
             if (lines.Any(i => i.ActualUnitCost < 0))
                 throw new InvalidOperationException("Actual unit cost cannot be negative.");
+            var typeIds = lines.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value).Distinct().ToList();
+            var allowedTypes = await _context.ItemTypes.AsNoTracking().Where(t => t.CompanyId == companyId && typeIds.Contains(t.Id)).Select(t => t.Id).ToListAsync();
+            if (typeIds.Any(id => !allowedTypes.Contains(id)))
+                throw new InvalidOperationException("An item type does not belong to this document's company.");
             var supplierIds = lines.Where(i => i.SupplierId.HasValue).Select(i => i.SupplierId!.Value).Distinct().ToList();
             if (supplierIds.Count == 0) return;
             var validIds = await _context.Suppliers.AsNoTracking()
@@ -90,13 +96,47 @@ namespace MyApp.Api.Services.Implementations
         }
 
         /// <summary>
-        /// A challan that already produced automatic purchase bills keeps its
-        /// lines — the bills were raised from them.
+        /// Before a challan is cancelled or deleted: its open automatic supplier
+        /// purchases go with it, but goods already on a paid, credited or
+        /// manually entered supplier bill keep the challan in place.
         /// </summary>
-        private async Task AssertNoAutoPurchaseBillsAsync(int challanId)
+        private async Task ReleasePurchasesAsync(DeliveryChallan dc)
         {
-            if (await _context.PurchaseBills.AsNoTracking().AnyAsync(p => p.SourceDeliveryChallanId == challanId))
-                throw new InvalidOperationException("Purchase bills already exist for this challan. Remove those bills before changing its delivery lines or cancelling it.");
+            var ids = dc.Items.Select(i => i.Id).ToList();
+            var (fixedByLine, _) = await _purchases.FixedAsync(dc.CompanyId, ids, Array.Empty<int>());
+            if (fixedByLine.Values.Any(q => q > 0))
+                throw new InvalidOperationException("This challan has goods on a paid, credited or manually entered supplier bill. Remove or credit that supplier bill first.");
+            await _purchases.ReleaseLinesAsync(dc.CompanyId, ids, Array.Empty<int>());
+        }
+
+        public async Task<DeliveryChallanDto?> UpdatePrivateCostsAsync(int challanId, ChallanPrivateCostsDto dto)
+        {
+            await using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            var dc = await _repository.GetByIdAsync(challanId);
+            if (dc == null) return null;
+            if (dc.Status == "Cancelled")
+                throw new InvalidOperationException("Cannot edit a cancelled challan.");
+            if (string.IsNullOrWhiteSpace(dto.Version) || dto.Version != DeliveryVersion(dc))
+                throw new InvalidOperationException("This challan changed after you opened it. Reload before saving.");
+            if (dto.Items == null || dto.Items.Count != dc.Items.Count ||
+                dto.Items.Select(i => i.Id).Distinct().Count() != dto.Items.Count ||
+                dto.Items.Any(i => !dc.Items.Any(line => line.Id == i.Id)))
+                throw new InvalidOperationException("Costs must reference the existing lines of this challan.");
+
+            await ValidatePrivateCostsAsync(dc.CompanyId, dto.Items.Select(i => new DeliveryItemDto
+            {
+                SupplierId = i.SupplierId, ActualUnitCost = i.ActualUnitCost
+            }));
+            foreach (var line in dc.Items)
+            {
+                var cost = dto.Items.Single(i => i.Id == line.Id);
+                line.SupplierId = cost.SupplierId;
+                line.ActualUnitCost = cost.ActualUnitCost;
+            }
+            await _context.SaveChangesAsync();
+            await _purchases.SyncChallanAsync(dc.Id);
+            await transaction.CommitAsync();
+            return await GetByIdAsync(challanId);
         }
 
         private async Task MarkAutoPurchaseBillsAsync(List<DeliveryChallanDto> dtos)
@@ -107,6 +147,15 @@ namespace MyApp.Api.Services.Implementations
                 .Where(p => p.SourceDeliveryChallanId.HasValue && ids.Contains(p.SourceDeliveryChallanId.Value))
                 .Select(p => p.SourceDeliveryChallanId!.Value).Distinct().ToListAsync()).ToHashSet();
             foreach (var dto in dtos) dto.HasAutoPurchaseBills = linked.Contains(dto.Id);
+
+            // Partially billed: the challan's rows (same number, split on billing)
+            // are not all on a bill, nor all off one.
+            var roots = dtos.Select(d => d.SplitFromChallanId ?? d.Id).Distinct().ToList();
+            var rows = await _context.DeliveryChallans.AsNoTracking()
+                .Where(c => (roots.Contains(c.Id) || (c.SplitFromChallanId != null && roots.Contains(c.SplitFromChallanId.Value))) && c.Status != "Cancelled")
+                .Select(c => new { Root = c.SplitFromChallanId ?? c.Id, Billed = c.InvoiceId != null }).ToListAsync();
+            var partial = rows.GroupBy(r => r.Root).Where(g => g.Any(r => r.Billed) && g.Any(r => !r.Billed)).Select(g => g.Key).ToHashSet();
+            foreach (var dto in dtos) dto.IsPartiallyBilled = partial.Contains(dto.SplitFromChallanId ?? dto.Id);
         }
 
         /// <summary>Check if company+client have all required FBR fields filled.</summary>
@@ -117,6 +166,8 @@ namespace MyApp.Api.Services.Implementations
         {
             var dto = new DeliveryChallanDto
             {
+                CostingLineCount = dc.Items.Count,
+                CostedLineCount = dc.Items.Count(i => i.ActualUnitCost.HasValue),
                 Id = dc.Id,
                 ChallanNumber = dc.ChallanNumber,
                 CompanyId = dc.CompanyId,
@@ -130,11 +181,13 @@ namespace MyApp.Api.Services.Implementations
                 Notes = dc.Notes,
                 Status = dc.Status,
                 InvoiceId = dc.InvoiceId,
+                InvoiceNumber = dc.Invoice?.InvoiceNumber,
                 InvoiceFbrStatus = dc.Invoice?.FbrStatus,
                 Version = DeliveryVersion(dc),
                 IsEditable = IsEditable(dc),
                 IsImported = dc.IsImported,
                 DuplicatedFromId = dc.DuplicatedFromId,
+                SplitFromChallanId = dc.SplitFromChallanId,
                 DuplicatedFromChallanNumber = dc.DuplicatedFrom?.ChallanNumber,
                 SalesOrderId = dc.SalesOrderId,
                 SalesOrderNumber = dc.SalesOrder?.SalesOrderNumber,
@@ -247,13 +300,13 @@ namespace MyApp.Api.Services.Implementations
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? salesOrderId = null)
+            int? salesOrderId = null, string? costingStatus = null)
         {
             // Auto-clear "Setup Required" challans where FBR is now ready (runs once per page load)
             await ReEvaluateSetupRequiredAsync(companyId);
 
             var (items, totalCount) = await _repository.GetPagedByCompanyAsync(
-                companyId, page, pageSize, search, status, clientId, dateFrom, dateTo, salesOrderId);
+                companyId, page, pageSize, search, status, clientId, dateFrom, dateTo, salesOrderId, costingStatus);
 
             // Gate the Delete button client-side — only the highest-numbered
             // challan for this company is deletable.
@@ -281,7 +334,34 @@ namespace MyApp.Api.Services.Implementations
             if (dc == null) return null;
             var dto = ToDto(dc);
             await MarkAutoPurchaseBillsAsync(new List<DeliveryChallanDto> { dto });
+            var (locked, _) = await _purchases.FixedAsync(dc.CompanyId, dc.Items.Select(i => i.Id), Array.Empty<int>());
+            foreach (var line in dto.Items) line.LockedPurchaseQuantity = locked.GetValueOrDefault(line.Id);
             return dto;
+        }
+
+        /// <summary>
+        /// Cross-tenant link guard for the Sales Order links a NEW challan
+        /// carries. The order rolls up its delivered quantities from these
+        /// links and the challan reads the order's number and selling prices
+        /// back, so a forged id from another company would both leak that
+        /// company's prices and corrupt its order. The order must belong to
+        /// this company, and every linked order line must belong to one of this
+        /// company's orders (to the linked order, when there is one).
+        /// </summary>
+        private async Task ValidateSalesOrderLinksAsync(int companyId, DeliveryChallanDto dto)
+        {
+            var lineIds = (dto.Items ?? Enumerable.Empty<DeliveryItemDto>())
+                .Where(i => i.SalesOrderItemId.HasValue).Select(i => i.SalesOrderItemId!.Value).Distinct().ToList();
+            if (dto.SalesOrderId.HasValue
+                && !await _context.SalesOrders.AnyAsync(o => o.Id == dto.SalesOrderId.Value && o.CompanyId == companyId))
+                throw new InvalidOperationException("The linked sales order was not found for this company.");
+            if (lineIds.Count == 0) return;
+            var valid = await _context.SalesOrderItems
+                .Where(it => lineIds.Contains(it.Id) && it.SalesOrder.CompanyId == companyId
+                    && (!dto.SalesOrderId.HasValue || it.SalesOrderId == dto.SalesOrderId.Value))
+                .CountAsync();
+            if (valid != lineIds.Count)
+                throw new InvalidOperationException("A challan line references a sales-order line that does not belong to the linked order.");
         }
 
         public async Task<DeliveryChallanDto> CreateDeliveryChallanAsync(int companyId, DeliveryChallanDto dto)
@@ -310,6 +390,7 @@ namespace MyApp.Api.Services.Implementations
             if (client.CompanyId != companyId)
                 throw new InvalidOperationException("Client does not belong to this company.");
             await ValidatePrivateCostsAsync(companyId, dto.Items ?? Enumerable.Empty<DeliveryItemDto>());
+            await ValidateSalesOrderLinksAsync(companyId, dto);
             var fbrReady = company != null && IsFbrReady(company, client);
 
             string status;
@@ -347,7 +428,16 @@ namespace MyApp.Api.Services.Implementations
                 }).ToList()
             };
 
+            await _purchases.AssertCanBookAsync(companyId, (dto.DeliveryDate ?? DateTime.UtcNow).Date,
+                dto.Items.Any(i => i.SupplierId.HasValue && i.ActualUnitCost.HasValue));
             var created = await _repository.CreateDeliveryChallanAsync(deliveryChallan, dto.CustomNumber);
+            string? purchaseWarning = null;
+            try { await _purchases.SyncChallanAsync(created.Id); }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Challan {ChallanId} saved but its supplier purchases could not be booked", created.Id);
+                purchaseWarning = "The challan was saved, but its supplier purchases were not booked. Open the challan and save it again.";
+            }
 
             // Upsert ItemDescription rows for any new item names. This makes
             // PO-imported items immediately visible in the bill form's
@@ -376,7 +466,9 @@ namespace MyApp.Api.Services.Implementations
                     created.ChallanNumber, created.CompanyId);
             }
 
-            return ToDto(created);
+            var result = ToDto(created);
+            result.PurchaseWarning = purchaseWarning;
+            return result;
         }
 
         private async Task EnsureItemDescriptionsAsync(IEnumerable<string?> descriptions)
@@ -441,6 +533,52 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
+        public async Task<BilledChallanEditContextDto?> GetBilledEditContextAsync(int challanId)
+        {
+            var challan = await GetByIdAsync(challanId);
+            if (challan == null) return null;
+            if (challan.InvoiceId == null || !challan.IsEditable)
+                throw new InvalidOperationException("This delivery cannot be edited. Check the bill status.");
+            var options = await _invoices.GetBillChallanOptionsAsync(challan.InvoiceId.Value, null)
+                ?? throw new InvalidOperationException("Linked bill not found.");
+            if (options.Bill.CompanyId != challan.CompanyId)
+                throw new InvalidOperationException("The linked bill does not belong to this company.");
+            return new BilledChallanEditContextDto { Challan = challan, Bill = options.Bill, BillVersion = options.Version };
+        }
+
+        public async Task<DeliveryChallanDto?> UpdateBilledItemsAsync(int challanId, BilledChallanEditDto dto)
+        {
+            var challan = await GetByIdAsync(challanId);
+            if (challan == null) return null;
+            if (!challan.IsEditable)
+                throw new InvalidOperationException("This delivery cannot be edited. Check the bill status.");
+            if (challan.InvoiceId == null || string.IsNullOrWhiteSpace(dto.Version) || string.IsNullOrWhiteSpace(dto.BillVersion))
+                throw new InvalidOperationException("Reload the linked challan and bill before editing delivery.");
+            if (dto.Items == null || dto.Items.Count == 0 || dto.Items.Count > 500 || dto.Items.Any(i =>
+                string.IsNullOrWhiteSpace(i.Description) || i.Quantity <= 0 || string.IsNullOrWhiteSpace(i.Unit)
+                || i.BillUnitPrice == null || i.BillUnitPrice < 0 || i.BillUnitPrice >= 1000000))
+                throw new InvalidOperationException("Keep at least one valid delivery item and enter each bill rate, including 0 for a free item.");
+            var typeIds = dto.Items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value).Distinct().ToList();
+            var allowedTypes = await _context.ItemTypes.AsNoTracking().Where(t => t.CompanyId == challan.CompanyId && typeIds.Contains(t.Id)).Select(t => t.Id).ToListAsync();
+            if (typeIds.Any(id => !allowedTypes.Contains(id)))
+                throw new InvalidOperationException("An item type does not belong to this document's company.");
+            var bill = await _invoices.GetByIdAsync(challan.InvoiceId.Value);
+            if (bill == null || bill.CompanyId != challan.CompanyId)
+                throw new InvalidOperationException("The linked bill does not belong to this company.");
+            challan.Version = dto.Version;
+            challan.BillEditVersion = dto.BillVersion;
+            challan.Items = dto.Items;
+            var result = await UpdateChallanAsync(challanId, challan);
+            if (result != null)
+            {
+                var effectiveTypes = await _context.InvoiceItems.AsNoTracking().Where(i => i.InvoiceId == challan.InvoiceId.Value)
+                    .Select(i => i.Adjustment != null ? i.Adjustment.AdjustedItemTypeId ?? i.ItemTypeId : i.ItemTypeId)
+                    .Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToListAsync();
+                result.StockWarnings = await _stock.GetNegativePositionsAsync(challan.CompanyId, effectiveTypes);
+            }
+            return result;
+        }
+
         public async Task<DeliveryChallanDto?> UpdateItemsAsync(int challanId, List<DeliveryItemDto> items)
         {
             var dc = await _repository.GetByIdAsync(challanId);
@@ -460,6 +598,7 @@ namespace MyApp.Api.Services.Implementations
                 if (dc.InvoiceId.HasValue) await _invoices.AssertCommercialBillMutationAsync(dc.InvoiceId.Value);
                 await ApplyItemsDiffAsync(dc, items);
                 await _repository.UpdateAsync(dc);
+                await _purchases.SyncChallanAsync(dc.Id);
 
                 await SalesDocumentRules.RefreshOrdersAsync(_context, dc.CompanyId);
                 await transaction.CommitAsync();
@@ -507,21 +646,6 @@ namespace MyApp.Api.Services.Implementations
         /// </summary>
         private async Task ApplyItemsDiffAsync(DeliveryChallan dc, List<DeliveryItemDto> items)
         {
-            // Lines that already produced automatic purchase bills are frozen:
-            // any change to them (including supplier / actual cost) is refused.
-            if (await _context.PurchaseBills.AsNoTracking().AnyAsync(p => p.SourceDeliveryChallanId == dc.Id))
-            {
-                var incomingIds = items.Where(i => i.Id > 0).Select(i => i.Id).ToHashSet();
-                var changed = incomingIds.Count != dc.Items.Count ||
-                    dc.Items.Any(old => !incomingIds.Contains(old.Id)) ||
-                    items.Any(item => {
-                        var old = dc.Items.FirstOrDefault(i => i.Id == item.Id);
-                        return old == null || old.Quantity != item.Quantity || old.Description != item.Description ||
-                            old.Unit != item.Unit || old.ItemTypeId != item.ItemTypeId ||
-                            old.SupplierId != item.SupplierId || old.ActualUnitCost != item.ActualUnitCost;
-                    });
-                if (changed) await AssertNoAutoPurchaseBillsAsync(dc.Id);
-            }
             // Cross-tenant link guard — validate against the STORED CompanyId,
             // never anything from the incoming DTO.
             await ValidatePrivateCostsAsync(dc.CompanyId, items);
@@ -537,6 +661,8 @@ namespace MyApp.Api.Services.Implementations
 
             var quantityChanges = new Dictionary<int, decimal>(); // deliveryItemId → newQuantity
             var newItems = new List<DeliveryItem>();
+            var billRates = new Dictionary<DeliveryItem, decimal>();
+            var classificationChanges = new HashSet<int>();
 
             foreach (var itemDto in items)
             {
@@ -549,12 +675,14 @@ namespace MyApp.Api.Services.Implementations
                     {
                         quantityChanges[existing.Id] = itemDto.Quantity;
                     }
+                    if (existing.ItemTypeId != itemDto.ItemTypeId) classificationChanges.Add(existing.Id);
                     existing.ItemTypeId = itemDto.ItemTypeId;
                     existing.Description = itemDto.Description;
                     existing.Quantity = itemDto.Quantity;
                     existing.Unit = itemDto.Unit;
                     existing.ActualUnitCost = itemDto.ActualUnitCost;
                     existing.SupplierId = itemDto.SupplierId;
+                    if (itemDto.BillUnitPrice.HasValue) billRates[existing] = itemDto.BillUnitPrice.Value;
                 }
                 else
                 {
@@ -582,6 +710,7 @@ namespace MyApp.Api.Services.Implementations
                     };
                     dc.Items.Add(newItem);
                     newItems.Add(newItem);
+                    if (itemDto.BillUnitPrice.HasValue) billRates[newItem] = itemDto.BillUnitPrice.Value;
                 }
             }
 
@@ -590,8 +719,12 @@ namespace MyApp.Api.Services.Implementations
             // otherwise null the FKs and prevent the sync from matching items.
             if (dc.InvoiceId.HasValue && dc.Invoice != null && dc.Invoice.FbrStatus != "Submitted")
             {
-                await SyncInvoiceItemsForChallanEditAsync(dc, removedDeliveryItemIds, quantityChanges, newItems);
+                await SyncInvoiceItemsForChallanEditAsync(dc, removedDeliveryItemIds, quantityChanges, newItems, billRates, classificationChanges);
             }
+
+            // Removed lines leave their open automatic purchases first (no
+            // cascade on that link); a fixed supplier bill refuses the removal.
+            await _purchases.ReleaseLinesAsync(dc.CompanyId, removedDeliveryItemIds, Array.Empty<int>());
 
             // Now it's safe to delete removed delivery items
             foreach (var item in toRemove)
@@ -602,7 +735,7 @@ namespace MyApp.Api.Services.Implementations
         /// Syncs invoice items when the linked challan's items change:
         ///  - removes invoice items whose delivery item was deleted
         ///  - updates quantity/description/uom where the delivery item changed
-        ///  - adds new invoice items with UnitPrice=0 (user must edit bill to set prices)
+        ///  - adds new invoice items with explicit bill rates, or zero on the legacy path
         /// Recalculates subtotal, GST, grand total and amount-in-words.
         ///
         /// IMPORTANT: Must run BEFORE EF deletes the removed DeliveryItems, because
@@ -616,12 +749,18 @@ namespace MyApp.Api.Services.Implementations
             DeliveryChallan dc,
             List<int> removedDeliveryItemIds,
             Dictionary<int, decimal> quantityChanges,
-            List<DeliveryItem> newlyAddedDeliveryItems)
+            List<DeliveryItem> newlyAddedDeliveryItems,
+            Dictionary<DeliveryItem, decimal>? billRates = null,
+            HashSet<int>? classificationChanges = null)
         {
             var invoice = await _context.Invoices
-                .Include(i => i.Items)
+                .Include(i => i.Items).ThenInclude(i => i.Adjustment)
                 .FirstOrDefaultAsync(i => i.Id == dc.InvoiceId!.Value);
             if (invoice == null) return;
+            var previousFilingSource = TaxFilingProjection.SourceVersion(invoice);
+            var hadConsultantWork = TaxFilingProjection.HasConsultantWork(invoice);
+            if (invoice.Items.Any(i => i.Adjustment != null && i.DeliveryItemId.HasValue && removedDeliveryItemIds.Contains(i.DeliveryItemId.Value)))
+                TaxFilingProjection.PreserveLegacyFiling(invoice);
 
             // Remove invoice items linked to deleted delivery items
             if (removedDeliveryItemIds.Count > 0)
@@ -646,42 +785,59 @@ namespace MyApp.Api.Services.Implementations
                     invItem.Quantity = newQty;
                     invItem.UOM = deliveryItem.Unit;
                     invItem.Description = deliveryItem.Description;
-                    invItem.ItemTypeId = deliveryItem.ItemTypeId;
-                    var type = deliveryItem.ItemTypeId == null ? null : await _context.ItemTypes.FindAsync(deliveryItem.ItemTypeId);
-                    invItem.ItemTypeName = type?.Name ?? "";
-                    invItem.HSCode = type?.HSCode;
-                    invItem.FbrUOMId = type?.FbrUOMId;
-                    invItem.SaleType = type?.SaleType ?? invItem.SaleType;
+                    if (classificationChanges?.Contains(deliveryItemId) == true)
+                    {
+                        invItem.ItemTypeId = deliveryItem.ItemTypeId;
+                        var type = deliveryItem.ItemTypeId == null ? null : await _context.ItemTypes.FindAsync(deliveryItem.ItemTypeId);
+                        invItem.ItemTypeName = type?.Name ?? "";
+                        invItem.HSCode = type?.HSCode;
+                        invItem.FbrUOMId = type?.FbrUOMId;
+                        invItem.SaleType = type?.SaleType ?? invItem.SaleType;
+                    }
                     invItem.LineTotal = Math.Round(newQty * invItem.UnitPrice, 2);
                 }
             }
 
-            // Add invoice items for newly-added delivery items (with UnitPrice=0 — user must edit).
+            if (billRates != null)
+                foreach (var (deliveryItem, rate) in billRates)
+                {
+                    var line = invoice.Items.FirstOrDefault(i => i.DeliveryItemId == deliveryItem.Id && deliveryItem.Id > 0);
+                    if (line == null) continue;
+                    line.UnitPrice = rate;
+                    line.LineTotal = Math.Round(line.Quantity * rate, 2);
+                }
+
+            // New lines carry the explicit bill rate; legacy callers still default to zero.
             // Use navigation property instead of DeliveryItemId so EF auto-populates the FK
             // when IDs are assigned on SaveChangesAsync.
             foreach (var newDi in newlyAddedDeliveryItems)
             {
+                var type = newDi.ItemTypeId == null ? null : await _context.ItemTypes.FindAsync(newDi.ItemTypeId);
                 invoice.Items.Add(new InvoiceItem
                 {
                     InvoiceId = invoice.Id,
                     DeliveryItem = newDi,  // navigation → EF picks up the generated FK
-                    ItemTypeName = newDi.ItemType?.Name ?? "",
+                    ItemTypeName = type?.Name ?? "",
+                    HSCode = type?.HSCode, FbrUOMId = type?.FbrUOMId, SaleType = type?.SaleType,
                     Description = newDi.Description,
                     Quantity = newDi.Quantity,
                     UOM = newDi.Unit,
-                    UnitPrice = 0m,
-                    LineTotal = 0m
+                    UnitPrice = billRates?.GetValueOrDefault(newDi) ?? 0m,
+                    LineTotal = Math.Round(newDi.Quantity * (billRates?.GetValueOrDefault(newDi) ?? 0m), 2),
+                    ItemTypeId = newDi.ItemTypeId
                 });
             }
 
-            await _invoices.ReconcileChallanBillAsync(invoice.Id);
+            await _invoices.ReconcileChallanBillAsync(invoice.Id, previousFilingSource, hadConsultantWork);
         }
 
         public async Task<bool> CancelAsync(int challanId)
         {
             var dc = await _repository.GetByIdAsync(challanId);
             if (dc == null) return false;
-            await AssertNoAutoPurchaseBillsAsync(challanId);
+            if (!dc.InvoiceId.HasValue && !IsEditable(dc))
+                throw new InvalidOperationException("Can only cancel Pending, No PO, or Setup Required challans.");
+            await ReleasePurchasesAsync(dc);
             // Remove a billed challan through the atomic bill reconciliation path.
             if (dc.InvoiceId.HasValue)
             {
@@ -703,9 +859,11 @@ namespace MyApp.Api.Services.Implementations
         {
             var dc = await _repository.GetByIdAsync(challanId);
             if (dc == null) return false;
-            await AssertNoAutoPurchaseBillsAsync(challanId);
+            if (!dc.InvoiceId.HasValue && !IsEditable(dc))
+                throw new InvalidOperationException("Can only delete Pending, No PO, or Setup Required challans.");
             if (dc.InvoiceId.HasValue)
             {
+                await ReleasePurchasesAsync(dc);
                 await _invoices.RemoveBilledChallanAsync(challanId, true);
                 return true;
             }
@@ -717,7 +875,8 @@ namespace MyApp.Api.Services.Implementations
             // the numbering sequence — the original keeps the number. The
             // max-number rule below only applies to canonical (non-duplicate)
             // challans.
-            var isDuplicate = dc.DuplicatedFromId != null;
+            // A row split off a partial bill shares its number too.
+            var isDuplicate = dc.DuplicatedFromId != null || dc.SplitFromChallanId != null;
             if (!isDuplicate)
             {
                 // Only the LAST challan (highest number) can be deleted so the
@@ -733,6 +892,7 @@ namespace MyApp.Api.Services.Implementations
                         "deleting earlier challans would leave gaps in the numbering.");
             }
 
+            await ReleasePurchasesAsync(dc);
             var companyId = dc.CompanyId;
             await using var transaction = await _context.Database.BeginTransactionAsync();
             await _repository.DeleteAsync(dc);
@@ -794,7 +954,6 @@ namespace MyApp.Api.Services.Implementations
             // Reload with Invoice included for proper edit check
             var dc = await _repository.GetByIdAsync(item.DeliveryChallanId);
             if (dc == null) return false;
-            await AssertNoAutoPurchaseBillsAsync(dc.Id);
             if (!IsEditable(dc))
             {
                 if (dc.Status == "Invoiced" && dc.Invoice?.FbrStatus == "Submitted")
@@ -818,7 +977,9 @@ namespace MyApp.Api.Services.Implementations
                         new List<DeliveryItem>());
                 }
 
+                await _purchases.ReleaseLinesAsync(dc.CompanyId, new[] { itemId }, Array.Empty<int>());
                 await _repository.DeleteItemAsync(item);
+                await _purchases.SyncChallanAsync(dc.Id);
 
                 await SalesDocumentRules.RefreshOrdersAsync(_context, dc.CompanyId);
                 await transaction.CommitAsync();
@@ -879,7 +1040,19 @@ namespace MyApp.Api.Services.Implementations
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                if (dc.InvoiceId.HasValue) await _invoices.AssertCommercialBillMutationAsync(dc.InvoiceId.Value);
+                if (dto.Items?.Any(i => i.BillUnitPrice < 0 || i.BillUnitPrice >= 1000000) == true)
+                    throw new InvalidOperationException("Bill rates must be non-negative and below 1,000,000.");
+                if (dto.Items?.Any(i => i.BillUnitPrice.HasValue) == true && string.IsNullOrWhiteSpace(dto.BillEditVersion))
+                    throw new InvalidOperationException("Reload the bill before saving priced delivery items.");
+                if (dc.InvoiceId.HasValue) await _invoices.AssertCommercialBillMutationAsync(dc.InvoiceId.Value, dto.BillEditVersion);
+                if (dto.BillEditVersion != null)
+                {
+                    await _context.Database.SqlQuery<int>($"SELECT [Id] AS [Value] FROM [DeliveryChallans] WITH (UPDLOCK, HOLDLOCK) WHERE [Id] = {challanId}").ToListAsync();
+                    var fresh = await _context.DeliveryChallans.AsNoTracking().Include(c => c.Items).Include(c => c.Invoice).SingleAsync(c => c.Id == challanId);
+                    if (dto.Version != DeliveryVersion(fresh))
+                        throw new InvalidOperationException("This challan changed after you opened it. Reload before saving.");
+                }
+
             if (dto.ClientId > 0 && dto.ClientId != dc.ClientId)
             {
                 if (dc.InvoiceId != null || dc.SalesOrderId != null)
@@ -939,6 +1112,8 @@ namespace MyApp.Api.Services.Implementations
                 }
 
                 await _repository.UpdateAsync(dc);
+                // Date, lines and costs may all have moved; the purchases follow.
+                await _purchases.SyncChallanAsync(dc.Id);
 
                 await SalesDocumentRules.RefreshOrdersAsync(_context, dc.CompanyId);
                 await transaction.CommitAsync();
@@ -1001,7 +1176,9 @@ namespace MyApp.Api.Services.Implementations
         public async Task<List<DeliveryChallanDto>> GetPendingChallansByCompanyAsync(int companyId)
         {
             var challans = await _repository.GetPendingChallansByCompanyAsync(companyId);
-            return challans.Select(ToDto).ToList();
+            var dtos = challans.Select(ToDto).ToList();
+            await MarkAutoPurchaseBillsAsync(dtos);
+            return dtos;
         }
 
         public async Task<PrintChallanDto?> GetPrintDataAsync(int challanId)

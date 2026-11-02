@@ -23,6 +23,7 @@ namespace MyApp.Api.Helpers
         // attachment made on the Bills tab is visible on the Invoices tab.
         public const string Invoice = "Invoice";
         public const string PurchaseBill = "PurchaseBill";
+        public const string AccountTransfer = "AccountTransfer";
         public const string GoodsReceipt = "GoodsReceipt";
         // A Receipt (money in) and a Payment (money out) are both rows of the
         // single Payment entity (distinguished by Direction), so they share ONE
@@ -39,7 +40,7 @@ namespace MyApp.Api.Helpers
 
         public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
         {
-            SalesQuote, SalesOrder, DeliveryChallan, Invoice, PurchaseBill, GoodsReceipt, Payment, WithholdingTaxReceipt
+            SalesQuote, SalesOrder, DeliveryChallan, Invoice, PurchaseBill, AccountTransfer, GoodsReceipt, Payment, WithholdingTaxReceipt
         };
 
         /// <summary>

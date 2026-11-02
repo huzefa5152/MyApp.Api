@@ -1,27 +1,27 @@
+import { createContext, useContext } from "react";
 import DocumentLinesLink from "./DocumentLinesLink";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { lineSources } from "../utils/documentLines";
-import useUi2 from "../ui2/useUi2";
 
-// `inline`: the screen places the link itself (redesign), so skip the full-width rows above and below.
-// In the compact layout the shortcut appears once, as a slim right-aligned button above the page,
-// instead of a 44px row above AND below the screen.
+// The page's document type, for the shortcut in its header.
+const DocumentLinesType = createContext(null);
+
+/**
+ * Wraps a document list page so its header can offer the Document lines
+ * shortcut. It used to render the link on a full-width row above AND below the
+ * page; it now lives in the title block (DocumentLinesHeaderLink), where it
+ * takes no row of its own. `inline` is accepted for screens that still pass it
+ * and changes nothing: no screen gets the separate rows any more.
+ */
+// eslint-disable-next-line no-unused-vars
 export default function DocumentLinesNavigation({ type, children, inline = false }) {
+  return <DocumentLinesType.Provider value={type}>{children}</DocumentLinesType.Provider>;
+}
+
+/** The shortcut beside the page title. Same permission as before. */
+export function DocumentLinesHeaderLink() {
+  const type = useContext(DocumentLinesType);
   const { has } = usePermissions();
-  const compact = useUi2();
-  if (inline || !has(lineSources[type]?.permission)) return <>{children}</>;
-  if (compact) {
-    return (
-      <>
-        <div className="k-doclines"><DocumentLinesLink type={type} className="k-doclines__link" /></div>
-        {children}
-      </>
-    );
-  }
-  const shortcut = (
-    <div style={{ display: "flex", justifyContent: "flex-end", margin: "6px 0" }}>
-      <DocumentLinesLink type={type} />
-    </div>
-  );
-  return <>{shortcut}{children}{shortcut}</>;
+  if (!type || !has(lineSources[type]?.permission)) return null;
+  return <DocumentLinesLink type={type} variant="header" />;
 }

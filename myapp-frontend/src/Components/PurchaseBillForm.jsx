@@ -1,8 +1,10 @@
+import StockEntryForm from "./StockEntryForm";
+import { usePermissions } from "../contexts/PermissionsContext";
 import DocumentCopyPicker from "./DocumentCopyPicker";
 import { appendCopiedLines, copyLine } from "../utils/documentCopy";
 import { useState, useEffect, useMemo, useRef } from "react";
-import { MdAdd, MdDelete, MdReceipt } from "react-icons/md";
-import { createPurchaseBill, updatePurchaseBill, getPurchaseBillById } from "../api/purchaseBillApi";
+import { MdAdd, MdDelete, MdReceipt, MdInventory2, MdLocalShipping, MdArrowForward, MdCheckCircle } from "react-icons/md";
+import { createPurchaseBill, updatePurchaseBill, getPurchaseBillById, previewPurchaseStock, getLocalPurchaseSources, getLocalPurchaseSource } from "../api/purchaseBillApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getPurchaseTemplate } from "../api/invoiceApi";
@@ -17,12 +19,38 @@ import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
 import DocumentNotesEditor from "./DocumentNotesEditor";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
-import SearchableClientSelect from "./SearchableClientSelect";
+import SearchableSelect from "./SearchableSelect";
 import { Alert, Button, IconButton, TableWrap } from "../ui/Kit";
+import CopyLineButton from "./CopyLineButton";
+import { purchaseBillTotals } from "../utils/purchaseBillTotals.mjs";
+import "./PurchaseBillFlow.css";
+import { Link } from "react-router-dom";
 
-export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, prefillFromInvoiceId = null, readOnly = false }) {
+// Kit tokens for the Trader panels below (inventory impact, linked-line notes).
+const colors = {
+  blue: "var(--k-blue)",
+  teal: "var(--k-teal)",
+  textPrimary: "var(--k-ink)",
+  textSecondary: "var(--k-muted)",
+  cardBorder: "var(--k-line)",
+  inputBg: "var(--k-input-bg)",
+  inputBorder: "var(--k-line-strong)",
+};
+
+export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, prefillFromInvoiceId = null, localSource = null, startLocal = false, readOnly = false }) {
+  const { has } = usePermissions();
+  const [stockEntryOpen, setStockEntryOpen] = useState(false);
   const isEdit = !!billId;
+  const opensLocal = !billId && !prefillFromInvoiceId && (!!localSource || startLocal);
+  const [isNonStock, setIsNonStock] = useState(opensLocal);
+  const [isGeneratedLocal, setIsGeneratedLocal] = useState(false);
+  const [isAuto, setIsAuto] = useState(false);
+  const [sourceDocs, setSourceDocs] = useState([]);
   const isAgainstSale = !!prefillFromInvoiceId;
+  const [choosingCategory, setChoosingCategory] = useState(!billId && !prefillFromInvoiceId && !opensLocal);
+  const [categoryChoice, setCategoryChoice] = useState(opensLocal ? "LocalDirect" : "");
+  const [categoryConfirmed, setCategoryConfirmed] = useState(opensLocal);
+  const detailHeading = useRef(null);
   const [suppliers, setSuppliers] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
   // Units list — gates each row's quantity input on the picked UOM
@@ -30,10 +58,12 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   // same behaviour as the sales bill form.
   const [units, setUnits] = useState([]);
   const [supplierId, setSupplierId] = useState("");
+  const [supplierLockedReason, setSupplierLockedReason] = useState(null);
+  const [savedSupplierName, setSavedSupplierName] = useState("");
   const [date, setDate] = useState(todayYmd());
   const [supplierBillNumber, setSupplierBillNumber] = useState("");
   const [supplierIRN, setSupplierIRN] = useState("");
-  const [gstRate, setGstRate] = useState(18);
+  const [gstRate, setGstRate] = useState(opensLocal ? 0 : 18);
   // Withholding defaults to NONE — nothing is withheld unless the operator
   // adds it. Further tax has no purchase-side counterpart (see PurchaseBill).
   const [withholdingTaxRate, setWithholdingTaxRate] = useState(null);
@@ -42,6 +72,24 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const [notes, setNotes] = useState("");
   const [paymentMode, setPaymentMode] = useState("");
   const [items, setItems] = useState([newRow()]);
+  const [stockPreview, setStockPreview] = useState(null);
+  const [stockPreviewAttempt, setStockPreviewAttempt] = useState(0);
+  const stockPreviewKey = JSON.stringify({ companyId, billId, items: items.map(i => ({ itemTypeId: i.itemTypeId || null, quantity: Math.max(0, Number(i.quantity) || 0), hsCode: i.hsCode || null })) });
+  const needsStockPreview = !readOnly && !isNonStock && (isEdit || items.some(i => i.itemTypeId));
+  const stockPreviewReady = !needsStockPreview || (stockPreview?.key === stockPreviewKey && !!stockPreview.data);
+  useEffect(() => {
+    if (!needsStockPreview) return;
+    let active = true;
+    const timer = setTimeout(async () => {
+      try {
+        const response = await previewPurchaseStock(JSON.parse(stockPreviewKey));
+        if (active) setStockPreview({ key: stockPreviewKey, data: response.data });
+      } catch {
+        if (active) setStockPreview({ key: stockPreviewKey, error: true });
+      }
+    }, 250);
+    return () => { active = false; clearTimeout(timer); };
+  }, [needsStockPreview, stockPreviewKey, stockPreviewAttempt]);
   // Responsive: the wide line-item table side-scrolls on a phone, so below
   // 760px each line renders as a tap-friendly stacked card instead.
   const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 760);
@@ -59,6 +107,13 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const [numberValid, setNumberValid] = useState(true);
   // Source-bill metadata when in "Purchase Against Sale" mode
   const [sourceBill, setSourceBill] = useState(null);
+  // Local purchase linking: one challan or sale bill at a time, any number
+  // of its lines, any quantity up to what is left to purchase.
+  const [sourceSearch, setSourceSearch] = useState("");
+  const [sourceOptions, setSourceOptions] = useState([]);
+  const [selectedSource, setSelectedSource] = useState(localSource ? `${localSource.kind}:${localSource.id}` : "");
+  const [sourceLines, setSourceLines] = useState([]);
+  const [sourceLoading, setSourceLoading] = useState(false);
   const attachmentRef = useRef(null);
 
   function newRow() {
@@ -97,14 +152,65 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
     })();
   }, [companyId]);
 
+  const canLinkSource = !readOnly && !isEdit && isNonStock && !isAgainstSale;
+  useEffect(() => {
+    if (!canLinkSource) return;
+    let active = true;
+    const timer = setTimeout(() => {
+      getLocalPurchaseSources(companyId, sourceSearch.trim() || undefined)
+        .then(r => { if (active) setSourceOptions(r.data || []); })
+        .catch(() => { if (active) setSourceOptions([]); });
+    }, 250);
+    return () => { active = false; clearTimeout(timer); };
+  }, [companyId, canLinkSource, sourceSearch]);
+
+  const lineKey = line => line.deliveryItemId ? `d${line.deliveryItemId}` : `b${line.invoiceItemId}`;
+  const rowKey = row => row.localDeliveryItemId ? `d${row.localDeliveryItemId}` : row.localInvoiceItemId ? `b${row.localInvoiceItemId}` : null;
+
+  const loadSource = async (value) => {
+    setSelectedSource(value); setSourceLines([]);
+    if (!value) { setSourceBill(null); return; }
+    const [kind, id] = value.split(":");
+    setSourceLoading(true); setError("");
+    try {
+      const { data } = await getLocalPurchaseSource(companyId, kind, id);
+      setSourceLines(data.items || []);
+      setSourceBill({ kind: data.kind, number: data.number, clientName: data.clientName, date: data.date });
+    } catch (e) { setError(e.response?.data?.error || "Could not load the document's remaining items."); }
+    finally { setSourceLoading(false); }
+  };
+  useEffect(() => { if (localSource && canLinkSource) loadSource(`${localSource.kind}:${localSource.id}`); },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [localSource?.kind, localSource?.id, canLinkSource]);
+
+  const addSourceLines = (lines) => {
+    const taken = new Set(items.map(rowKey).filter(Boolean));
+    const fresh = lines.filter(line => !taken.has(lineKey(line)));
+    if (fresh.length === 0) return;
+    // The line's own supplier is a sensible default for an empty supplier box.
+    const supplierHint = fresh.find(l => l.supplierId)?.supplierId;
+    if (!supplierId && supplierHint && suppliers.some(s => s.id === supplierHint)) setSupplierId(String(supplierHint));
+    setItems(rows => [...rows.filter(row => row.description?.trim() || rowKey(row)), ...fresh.map(line => ({ ...newRow(),
+      description: line.description, quantity: line.remainingQuantity, uom: line.unit,
+      unitPrice: line.estimatedUnitCost ?? "",
+      localDeliveryItemId: line.deliveryItemId || null, localInvoiceItemId: line.invoiceItemId || null,
+      _availableQty: line.remainingQuantity, _sourceLabel: line.sourceChallanNumber ? `Challan #${line.sourceChallanNumber}` : `Bill line` }))]);
+  };
+
   useEffect(() => {
     if (!isEdit) return;
     (async () => {
       try {
         const { data } = await getPurchaseBillById(billId);
+        setIsNonStock(!!data.isNonStockSupplierPurchase);
+        setIsGeneratedLocal(data.source === "local-direct");
+        setIsAuto(data.source === "auto-cost");
+        setSourceDocs(data.sourceDocuments || []);
         setCurrentNumber(data.purchaseBillNumber);
         setCustomNumber(String(data.purchaseBillNumber));
         setSupplierId(String(data.supplierId));
+        setSupplierLockedReason(data.supplierLockedReason || (data.isNonStockSupplierPurchase ? "Supplier is fixed by the source challan." : null));
+        setSavedSupplierName(data.supplierName || "");
         setDate(data.date.slice(0, 10));
         setSupplierBillNumber(data.supplierBillNumber || "");
         setSupplierIRN(data.supplierIRN || "");
@@ -116,10 +222,11 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
         setNotes(data.notes || "");
         setPaymentMode(data.paymentMode || "");
         setItems((data.items || []).map(i => ({
-          id: i.id, itemTypeId: i.itemTypeId, description: i.description,
+          id: i.id, itemTypeId: i.itemTypeId, itemTypeName: i.itemTypeName, description: i.description,
           quantity: i.quantity, unitPrice: i.unitPrice, uom: i.uom,
           hsCode: i.hsCode || "", saleType: i.saleType || "",
           sourceInvoiceItemIds: i.sourceInvoiceItemIds || [],
+          localDeliveryItemId: i.localDeliveryItemId || null, localInvoiceItemId: i.localInvoiceItemId || null,
         })));
       } catch {
         setError("Failed to load purchase bill.");
@@ -171,15 +278,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
     })();
   }, [prefillFromInvoiceId]);
 
-  const subtotal = useMemo(
-    () => items.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.unitPrice) || 0), 0),
-    [items]
-  );
-  const gstAmount = useMemo(
-    () => Math.round(subtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100,
-    [subtotal, gstRate]
-  );
-  const grandTotal = subtotal + gstAmount;
+  const { subtotal, gstAmount, grandTotal, lineTotals } = useMemo(() => purchaseBillTotals(items, gstRate), [items, gstRate]);
 
   const updateItem = (idx, field, value) => {
     setItems(prev => {
@@ -195,7 +294,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
       const r = { ...next[idx], itemTypeId: newId ? parseInt(newId) : null };
       if (picked) {
         if (picked.uom) r.uom = picked.uom;
-        if (picked.hsCode) r.hsCode = picked.hsCode;
+        r.hsCode = picked.hsCode || "";
         if (picked.saleType) r.saleType = picked.saleType;
         if (!r.description?.trim() && picked.name) r.description = picked.name;
       } else {
@@ -208,14 +307,20 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (saving || !numberValid) return;
+    if (choosingCategory) { continueCategory(); return; }
+    if (saving) return;
     if (readOnly) return;
     setError("");
+    if (!numberValid) return setError("Enter a valid purchase bill number or choose Auto.");
     if (!supplierId) return setError("Select a supplier.");
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00`))) return setError("Choose a valid bill date.");
     if (items.length === 0) return setError("Add at least one item.");
     if (items.some(i => !i.description?.trim())) return setError("Every line needs a description.");
-    if (items.some(i => !(parseFloat(i.quantity) > 0))) return setError("Quantity must be greater than zero on every line.");
-    if (items.some(i => parseFloat(i.unitPrice) < 0)) return setError("Unit price cannot be negative.");
+    if (items.some(i => !Number.isFinite(Number(i.quantity)) || !(Number(i.quantity) > 0))) return setError("Quantity must be greater than zero on every line.");
+    const overLinked = items.find(i => rowKey(i) && i._availableQty != null && Number(i.quantity) > Number(i._availableQty));
+    if (overLinked) return setError(`${overLinked.description}: only ${overLinked._availableQty} ${overLinked.uom || ""} remains to purchase.`.replace(" .", "."));
+    if (items.some(i => i.unitPrice === "" || i.unitPrice == null || !Number.isFinite(Number(i.unitPrice)) || Number(i.unitPrice) < 0)) return setError("Enter a non-negative unit price on every line.");
+    if (!Number.isFinite(parseFloat(gstRate)) || parseFloat(gstRate) < 0 || parseFloat(gstRate) > 100) return setError("GST rate must be between 0 and 100.");
     if (isAgainstSale) {
       // In the "Purchase Against Sale" flow every row MUST have an
       // ItemType picked — that's the whole point (binding the sale's
@@ -224,9 +329,11 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
       if (unbound.length > 0)
         return setError("Pick an FBR-compliant Item Type (with HS Code) for every row.");
     }
+    if (!stockPreviewReady) return;
     setSaving(true);
     try {
       const payload = {
+        purchaseCategory: isNonStock ? "LocalDirect" : "Inventory",
         date,
         companyId,
         customNumber: billNumberPayload(isEdit ? "custom" : numberMode, customNumber),
@@ -252,6 +359,8 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
           hsCode: i.hsCode || null,
           saleType: i.saleType || null,
           sourceInvoiceItemIds: i.sourceInvoiceItemIds || [],
+          localDeliveryItemId: i.localDeliveryItemId || null,
+          localInvoiceItemId: i.localInvoiceItemId || null,
         })),
       };
       const res = isEdit
@@ -271,37 +380,65 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
     }
   };
 
+  const continueCategory = () => {
+    if (!categoryChoice) { setError("Choose a purchase category to continue."); return; }
+    if(categoryChoice === "StockEntry") { setStockEntryOpen(true); return; }
+    const local = categoryChoice === "LocalDirect";
+    if (local !== isNonStock) setItems(rows => rows.map(i => ({ ...i, itemTypeId: "", hsCode: "", saleType: "", sourceInvoiceItemIds: [] })));
+    if (!categoryConfirmed) setGstRate(local ? 0 : 18);
+    setIsNonStock(local); setCategoryConfirmed(true); setChoosingCategory(false); setError("");
+    requestAnimationFrame(() => detailHeading.current?.focus());
+  };
+
+  if(stockEntryOpen) return <StockEntryForm companyId={companyId} onClose={onClose} onBack={()=>setStockEntryOpen(false)} />;
+
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: 1200, width: "96vw" }}>
+      <div data-admin-dialog="" className="purchase-bill-flow" style={{ ...formStyles.modal, maxWidth: choosingCategory ? 760 : 1200, width: "96vw" }}>
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{readOnly ? "View Purchase Bill" : (isEdit ? "Edit Purchase Bill" : "New Purchase Bill")}</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           {/* Scrollable body WRAPS the fieldset so the Attachments section can
               sit inside the scroll region (never clipped) yet outside the
               disabled fieldset (so view-mode preview/download stay clickable). */}
           <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
+          {!isEdit && !isAgainstSale && <ol className="purchase-flow-steps" aria-label="Purchase creation progress"><li aria-current={choosingCategory ? "step" : undefined}><span>{choosingCategory ? "1" : <MdCheckCircle aria-hidden="true" />}</span>Purchase category</li><li aria-current={!choosingCategory ? "step" : undefined}><span>2</span>Bill details</li></ol>}
+          {error && <div ref={errRef} role="alert" tabIndex={-1} style={formStyles.error}>{error}</div>}
+          {choosingCategory ? <section className="purchase-category-step" aria-labelledby="purchase-category-title">
+            <h3 id="purchase-category-title">What would you like to record?</h3><p>Choose a purchase or stock entry.</p>
+            <fieldset className="purchase-category-options"><legend>Purchase category</legend>
+              {[{value:"LocalDirect", title:"Local direct purchase", description:"Record supplier costs and payables. No inventory movement.", icon:MdLocalShipping}, {value:"Inventory", title:"Stock purchase", description:"Add stock and record the supplier payable.", icon:MdInventory2}, ...(has("stock.opening.manage") || has("stock.adjust.create") ? [{value:"StockEntry",title:"Opening stock / Stock adjustment",description:"Record existing stock or count corrections. No supplier payable.",icon:MdInventory2}] : [])].map(({value,title,description,icon:Icon}) => <label className={`purchase-category-option${categoryChoice === value ? " is-selected" : ""}`} key={value}><input type="radio" name="purchase-category" value={value} checked={categoryChoice === value} onChange={() => { setCategoryChoice(value); setError(""); }} /><Icon className="purchase-category-icon" aria-hidden="true" /><span><strong>{title}</strong><small>{description}</small></span></label>)}
+            </fieldset>
+            {categoryConfirmed && (categoryChoice === "LocalDirect") !== isNonStock && <p className="purchase-category-warning" role="status">Changing category clears item classifications and source links. Descriptions, quantities and prices are kept.</p>}
+          </section> : <>
+          {!isEdit && <div className="purchase-category-selected"><div><strong ref={detailHeading} tabIndex={-1}>{isNonStock ? "Local direct purchase" : "Stock purchase"}</strong><small>{isNonStock ? "Supplier payable only · No stock movement" : isAgainstSale ? "Linked to a customer sale bill" : "Catalog items · Inventory controls apply"}</small></div>{!isAgainstSale && <button type="button" onClick={() => { setCategoryChoice(isNonStock ? "LocalDirect" : "Inventory"); setChoosingCategory(true); setError(""); }}>Change category</button>}</div>}
+          {sourceDocs.length > 0 && <p className="purchase-linked-note">Bought for {sourceDocs.map((d, n) => <span key={`${d.kind}-${d.id}`}>{n > 0 && ", "}<Link to={d.kind === "challan" ? `/challans?search=${d.number}` : `/bills?search=${d.number}`} onClick={onClose}>{d.kind === "challan" ? "Challan" : "Bill"} #{d.number}</Link></span>)}</p>}
+          {isAuto && <p className="purchase-linked-note">This purchase follows the supplier and cost entered on its challan or bill. Change lines there; here you can add the supplier's invoice reference, IRN and GST.</p>}
+          {isGeneratedLocal && <p className="purchase-linked-note">Linked lines keep their challan or bill. Quantities are re-checked against what is left to purchase. Once this purchase is paid or credited, correct it with a supplier credit instead.</p>}
           <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
-            <DocumentCopyPicker companyId={companyId} destination="PurchaseBill" allowDetails={!isEdit && !isAgainstSale} disabled={readOnly || isAgainstSale}
-              onCopy={(source,lines,details) => {
-                setItems(prev => appendCopiedLines(details ? [] : prev, lines, newRow).map(row => ({...row,uom:row.uom || row.unit || ""})));
-                if(details) { setSupplierId(String(source.supplierId));setNotes(source.notes||"");setGstRate(source.gstRate??18);setPaymentTerms(source.paymentTerms||"");setPaymentMode(source.paymentMode||"");setSupplierIRN("");setSupplierBillNumber("");setWithholdingTaxRate(source.withholdingTaxRate??null);setWithholdingTaxAmount(null); }
-              }} />
-            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
-            {<div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="purchase-bill" variant={isEdit ? "edit" : "create"} currentNumber={currentNumber} editRecordId={billId} lockedReason={readOnly ? "Document number is read-only in View." : undefined} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>}
+            {/* Number and the copy shortcut share one row; the copy panel takes
+                the full row once it is opened. */}
+            <div className="doc-header-row">
+              <div className="doc-header-row__number"><BillNumberField companyId={companyId} documentType="purchase-bill" variant={isEdit ? "edit" : "create"} currentNumber={currentNumber} editRecordId={billId} lockedReason={readOnly ? "Document number is read-only in View." : undefined} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
+              {!readOnly && <div className="doc-header-row__copy">
+                <DocumentCopyPicker companyId={companyId} destination="PurchaseBill" allowDetails={!isEdit && !isAgainstSale} disabled={readOnly || isAgainstSale || isNonStock}
+                  onCopy={(source,lines,details) => {
+                    setItems(prev => appendCopiedLines(details ? [] : prev, lines, newRow).map(row => ({...row,uom:row.uom || row.unit || ""})));
+                    if(details) { setSupplierId(String(source.supplierId));setNotes(source.notes||"");setGstRate(source.gstRate??18);setPaymentTerms(source.paymentTerms||"");setPaymentMode(source.paymentMode||"");setSupplierIRN("");setSupplierBillNumber("");setWithholdingTaxRate(source.withholdingTaxRate??null);setWithholdingTaxAmount(null); }
+                  }} />
+              </div>}
+            </div>
 
             {sourceBill && (
               <Alert tone="warn" icon={MdReceipt}>
                 <div style={{ lineHeight: 1.4 }}>
-                  <strong>Procuring against Sale Bill #{sourceBill.invoiceNumber}</strong>
+                  <strong>{sourceBill.kind ? `Purchasing against ${sourceBill.kind === "challan" ? "Challan" : "Sale Bill"} #${sourceBill.number}` : `Procuring against Sale Bill #${sourceBill.invoiceNumber}`}</strong>
                   {" "}for <strong>{sourceBill.clientName}</strong>
                   {" "}({new Date(sourceBill.date).toLocaleDateString()})
                   <div style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", marginTop: 2 }}>
-                    Each row groups same-ItemType sale lines. Pick an HS-coded catalog item per row —
-                    on save, every linked sale line back-fills with that HSCode / UOM / Sale Type and
-                    becomes FBR-ready.
+                    {sourceBill.kind ? "Add only what you bought from this supplier. Buy the rest later or from another supplier with another purchase bill." : "Each row groups same-ItemType sale lines. Pick an HS-coded catalog item per row; linked sale lines are classified on save."}
                   </div>
                 </div>
               </Alert>
@@ -310,25 +447,56 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.75rem" }}>
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Supplier *</label>
-                <SearchableClientSelect
-                  clients={suppliers}
-                  value={supplierId}
-                  onChange={(id) => setSupplierId(String(id))}
-                  placeholder="Select supplier..."
-                  noun="suppliers"
-                  disabled={readOnly}
-                  ariaLabel="Supplier"
-                />
+                {readOnly ? <input aria-label="Supplier" readOnly style={formStyles.input} value={savedSupplierName || suppliers.find(s => String(s.id) === supplierId)?.name || "—"} />
+                  : <SearchableSelect items={suppliers} value={supplierId} onChange={id => { if (isEdit && String(id) !== supplierId) { setSupplierIRN(""); setSupplierBillNumber(""); } setSupplierId(String(id)); }}
+                    placeholder="Search supplier…" searchKeys={["name", "ntn", "phone"]} disabled={!!supplierLockedReason} allowClear={!isEdit} style={formStyles.input} />}
+                {!readOnly && supplierLockedReason && <p style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", marginTop: 6 }}>{supplierLockedReason}</p>}
               </div>
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Bill Date *</label>
-                <input type="date" style={formStyles.input} value={date} onChange={e => setDate(e.target.value)} />
+                <input aria-label="Bill date" aria-invalid={!date || undefined} disabled={isAuto} type="date" style={formStyles.input} value={date} onChange={e => { setDate(e.target.value); if (error === "Choose a valid bill date.") setError(""); }} />
+                {!date && <small className="purchase-field-error">Choose a bill date.</small>}
               </div>
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>GST Rate (%)</label>
-                <input type="number" min={0} step={0.01} style={formStyles.input} value={gstRate} onChange={e => setGstRate(e.target.value)} />
+                <input aria-label="GST rate" aria-invalid={gstRate === "" || !Number.isFinite(Number(gstRate)) || Number(gstRate) < 0 || Number(gstRate) > 100 || undefined} type="number" min={0} max={100} step={0.01} style={formStyles.input} value={gstRate} onChange={e => { setGstRate(e.target.value); if (error === "GST rate must be between 0 and 100.") setError(""); }} />
+                {(gstRate === "" || Number(gstRate) < 0 || Number(gstRate) > 100) && <small className="purchase-field-error">Enter GST from 0 to 100. Use 0 for no GST.</small>}
               </div>
             </div>
+
+            {canLinkSource && (
+              <section aria-label="Link items from a challan or sale bill" className="local-source-picker">
+                <label style={{ ...formStyles.label, display: "block" }}>Link to a challan or sale bill <span style={{ fontWeight: 400 }}>(optional)</span></label>
+                <div className="local-source-picker__controls">
+                  <input aria-label="Search challan or bill" type="search" style={formStyles.input} value={sourceSearch} onChange={e => setSourceSearch(e.target.value)} placeholder="Search by number or customer" />
+                  <select aria-label="Challan or sale bill" style={formStyles.input} value={selectedSource} onChange={e => loadSource(e.target.value)}>
+                    <option value="">Unlinked local purchase</option>
+                    {selectedSource && !sourceOptions.some(o => `${o.kind}:${o.id}` === selectedSource) && sourceBill?.kind &&
+                      <option value={selectedSource}>{sourceBill.kind === "challan" ? "Challan" : "Bill"} #{sourceBill.number} · {sourceBill.clientName}</option>}
+                    {sourceOptions.map(o => <option key={`${o.kind}:${o.id}`} value={`${o.kind}:${o.id}`}>{o.kind === "challan" ? "Challan" : "Bill"} #{o.number} · {o.clientName} · {o.remainingLines} line{o.remainingLines === 1 ? "" : "s"} to purchase</option>)}
+                  </select>
+                </div>
+                {sourceLoading && <small role="status">Loading remaining items…</small>}
+                {selectedSource && !sourceLoading && <>
+                  {sourceLines.length === 0 ? <small role="status">Everything on this document is already purchased.</small> : <>
+                    <div className="local-source-picker__bar">
+                      <small>{sourceLines.length} line{sourceLines.length === 1 ? "" : "s"} with quantity left to purchase</small>
+                      <button type="button" disabled={sourceLines.every(l => items.some(i => rowKey(i) === lineKey(l)))} onClick={() => addSourceLines(sourceLines)} style={{ ...formStyles.button, minHeight: 44 }}>Add all remaining</button>
+                    </div>
+                    <ul className="local-source-picker__lines">
+                      {sourceLines.map(line => {
+                        const added = items.some(i => rowKey(i) === lineKey(line));
+                        return <li key={lineKey(line)}>
+                          <div><strong>{line.description}</strong><small>{line.sourceChallanNumber ? `Challan #${line.sourceChallanNumber} · ` : ""}Ordered {line.quantity} · Purchased {line.purchasedQuantity} · <b>{line.remainingQuantity} {line.unit} left</b>{line.estimatedUnitCost != null ? ` · Est. Rs. ${line.estimatedUnitCost}` : ""}</small></div>
+                          <button type="button" disabled={added} onClick={() => addSourceLines([line])} style={{ ...formStyles.button, minHeight: 44, flexShrink: 0 }}>{added ? "Added" : "Add item"}</button>
+                        </li>;
+                      })}
+                    </ul>
+                  </>}
+                  <small className="local-source-picker__hint">Change a line's quantity below to record a partial purchase. Buy the rest later, or from another supplier on a new purchase bill.</small>
+                </>}
+              </section>
+            )}
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
               <div data-admin-field="" style={formStyles.formGroup}>
@@ -341,6 +509,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               </div>
             </div>
 
+            <details className="purchase-extra-details" open={readOnly || undefined}><summary>Payment terms &amp; notes (optional)</summary>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Payment Mode</label>
@@ -360,27 +529,29 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
             </div>
 
             <DocumentNotesEditor value={notes} onChange={setNotes} readOnly={readOnly} />
+            </details>
+            <fieldset disabled={isAuto} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
             <div style={itemsBox}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
                 <strong style={{ color: "var(--k-ink)" }}>Items ({items.length})</strong>
-                <Button size="sm" icon={MdAdd} onClick={() => setItems([...items, newRow()])}>Add line</Button>
+                {!readOnly && <Button size="sm" icon={MdAdd} onClick={() => setItems([...items, newRow()])}>Add line</Button>}
               </div>
               {isNarrow ? (
                 <div style={mStyles.cards}>
                   {items.map((it, idx) => {
-                    const lineTotal = (parseFloat(it.quantity) || 0) * (parseFloat(it.unitPrice) || 0);
+                    const lineTotal = lineTotals[idx];
                     const linkedToSale = (it.sourceInvoiceItemIds?.length || 0) > 0;
                     return (
                       <div key={idx} style={mStyles.card}>
                         <div style={mStyles.head}>
                           <div style={{ flex: 1 }}>
-                            <SearchableItemTypeSelect
-                              items={eligibleItemTypes}
+                            {isNonStock || readOnly ? <span>{isNonStock ? "Non-stock supplier cost" : it.itemTypeName || eligibleItemTypes.find(t => t.id === it.itemTypeId)?.name || "—"}</span> : <SearchableItemTypeSelect
+                              items={eligibleItemTypes} groupByHsCode
                               value={it.itemTypeId || ""}
                               onChange={(newId, picked) => pickItemType(idx, newId, picked)}
                               placeholder={isAgainstSale ? "— pick item with HS Code —" : "— optional —"}
                               style={{ padding: "0.4rem 0.55rem", fontSize: "0.82rem", ...(isAgainstSale && !it.itemTypeId ? { borderColor: "#dc3545" } : {}) }}
-                            />
+                            />}
                             {linkedToSale && (
                               <div style={saleNote}>
                                 {it._saleLineCount > 1
@@ -390,14 +561,15 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                               </div>
                             )}
                           </div>
-                          <button type="button" title="Copy line" style={{minHeight:44,minWidth:44,border:"1px solid #d0d7e2",borderRadius:8}} onClick={() => setItems(prev => [...prev,{...copyLine(it,newRow),uom:it.uom,hsCode:it.hsCode,saleType:it.saleType}])}>Copy</button>
-                          {items.length > 1 && (
+                          {!readOnly && <CopyLineButton onClick={() => setItems(prev => [...prev,{...copyLine(it,newRow),uom:it.uom,hsCode:it.hsCode,saleType:it.saleType}])} />}
+                          {!readOnly && items.length > 1 && (
                             <IconButton label="Remove line" icon={MdDelete} danger onClick={() => setItems(items.filter((_, i) => i !== idx))} />
                           )}
                         </div>
                         <div style={{ marginBottom: "0.4rem" }}>
                           <label style={mStyles.label}>Description *</label>
-                          <input type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} />
+                          <input aria-label={`Description for item ${idx + 1}`} type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} />
+                          {rowKey(it) && <small style={{ display: "block", marginTop: 3, color: colors.textSecondary }}>{it._sourceLabel || "Linked line"}{it._availableQty != null ? ` · ${it._availableQty} ${it.uom} left to purchase` : ""}</small>}
                         </div>
                         <div style={mStyles.grid3}>
                           <div>
@@ -406,7 +578,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                           </div>
                           <div>
                             <label style={mStyles.label}>Unit Price *</label>
-                            <input type="number" min={0} step={0.01} style={{ ...cellInput, textAlign: "right" }} value={it.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
+                            <input aria-label={`Unit price for item ${idx + 1}`} type="number" min={0} step={0.01} style={{ ...cellInput, textAlign: "right" }} value={it.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
                           </div>
                           <div>
                             <label style={mStyles.label}>UOM</label>
@@ -429,24 +601,24 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                       <th className="k-num" style={{ width: 100 }}>Unit Price *</th>
                       <th style={{ width: 100 }}>UOM</th>
                       <th className="k-num" style={{ width: 110 }}>Line Total</th>
-                      <th style={{ width: 36 }}></th>
+                      {!readOnly && <th style={{ width: 76 }}></th>}
                     </tr>
                   </thead>
                   <tbody>
                     {items.map((it, idx) => {
-                      const lineTotal = (parseFloat(it.quantity) || 0) * (parseFloat(it.unitPrice) || 0);
+                      const lineTotal = lineTotals[idx];
                       const linkedToSale = (it.sourceInvoiceItemIds?.length || 0) > 0;
                       return (
                         <tr key={idx}>
                           <td style={td}>
-                            <SearchableItemTypeSelect
-                              items={eligibleItemTypes}
+                            {isNonStock || readOnly ? <span>{isNonStock ? "Non-stock supplier cost" : it.itemTypeName || eligibleItemTypes.find(t => t.id === it.itemTypeId)?.name || "—"}</span> : <SearchableItemTypeSelect
+                              items={eligibleItemTypes} groupByHsCode
                               value={it.itemTypeId || ""}
                               onChange={(newId, picked) => pickItemType(idx, newId, picked)}
                               placeholder={isAgainstSale ? "— pick item with HS Code —" : "— optional —"}
                               style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem",
                                        ...(isAgainstSale && !it.itemTypeId ? { borderColor: "#dc3545" } : {}) }}
-                            />
+                            />}
                             {linkedToSale && (
                               <div style={saleNote}>
                                 {it._saleLineCount > 1
@@ -457,7 +629,8 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                             )}
                           </td>
                           <td style={td}>
-                            <input type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} />
+                            <input aria-label={`Description for item ${idx + 1}`} type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} />
+                            {rowKey(it) && <small style={{ display: "block", marginTop: 3, color: colors.textSecondary }}>{it._sourceLabel || "Linked line"}{it._availableQty != null ? ` · ${it._availableQty} ${it.uom} left to purchase` : ""}</small>}
                           </td>
                           <td style={td}>
                             <QuantityInput
@@ -469,18 +642,18 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                             />
                           </td>
                           <td style={td}>
-                            <input type="number" min={0} step={0.01} style={{ ...cellInput, textAlign: "right" }} value={it.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
+                            <input aria-label={`Unit price for item ${idx + 1}`} type="number" min={0} step={0.01} style={{ ...cellInput, textAlign: "right" }} value={it.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
                           </td>
                           <td style={td}>
                             <input type="text" style={cellInput} value={it.uom} onChange={e => updateItem(idx, "uom", e.target.value)} />
                           </td>
                           <td className="k-num" style={{ ...td, fontWeight: 600 }}>{lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                          <td style={td}>
-                            <button type="button" title="Copy line" style={{minHeight:44,minWidth:44,border:"1px solid #d0d7e2",borderRadius:8}} onClick={() => setItems(prev => [...prev,{...copyLine(it,newRow),uom:it.uom,hsCode:it.hsCode,saleType:it.saleType}])}>Copy</button>
-                          {items.length > 1 && (
+                          {!readOnly && <td style={{ ...td, whiteSpace: "nowrap" }}>
+                            {!readOnly && <CopyLineButton style={{ marginRight: 6 }} onClick={() => setItems(prev => [...prev,{...copyLine(it,newRow),uom:it.uom,hsCode:it.hsCode,saleType:it.saleType}])} />}
+                          {!readOnly && items.length > 1 && (
                               <IconButton label="Remove line" icon={MdDelete} size={16} danger onClick={() => setItems(items.filter((_, i) => i !== idx))} />
                             )}
-                          </td>
+                          </td>}
                         </tr>
                       );
                     })}
@@ -489,6 +662,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               </TableWrap>
               )}
             </div>
+            </fieldset>
 
             <div style={totalsBox}>
               <span style={{ color: "var(--k-muted)" }}>Subtotal:</span>
@@ -502,7 +676,30 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               <strong style={{ fontSize: "calc(var(--k-font) + 0.15rem)", color: "var(--k-blue)" }}>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
             </div>
 
+            {!readOnly && !isNonStock && <section aria-label="Inventory impact" aria-live="polite" style={{ marginTop:16, padding:16, borderRadius:10, border:`1px solid ${colors.cardBorder}`, background:"#f8faff" }}>
+              <strong style={{color:colors.blue}}>Inventory impact</strong>
+              <p style={{fontSize:"0.85rem",color:colors.textSecondary,margin:"8px 0"}}>Items without an HS code and challan supplier purchases do not move stock.</p>
+              {isNonStock ? <p>No inventory movement. This purchase records supplier costs only.</p>
+                : needsStockPreview && stockPreview?.key !== stockPreviewKey ? <p role="status">Calculating inventory impact…</p>
+                : needsStockPreview && stockPreview?.error ? <div><p role="alert">Inventory preview could not load. Retry before saving.</p><button type="button" style={formStyles.button} onClick={() => { setStockPreview(null); setStockPreviewAttempt(a => a + 1); }}>Retry inventory preview</button></div>
+                : stockPreview?.key === stockPreviewKey && stockPreview.data && <>
+                  {!stockPreview.data.trackingEnabled && <p>Inventory tracking is off for this company. No stock will move.</p>}
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(min(260px, 100%), 1fr))",gap:12}}>
+                    {stockPreview.data.items.map(item => <div key={item.itemTypeId} style={{padding:12,background:"white",borderRadius:8,border:`1px solid ${colors.cardBorder}`,overflowWrap:"anywhere"}}>
+                      <strong>{item.name}</strong><div style={{fontSize:"0.8rem",color:colors.textSecondary}}>{item.hsCode || "No HS code"}</div>
+                      {!item.tracksStock && item.changeQuantity === 0 ? <p style={{marginBottom:0}}>No stock movement</p> : <dl style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8,marginBottom:0}}>
+                        <dt>Current stock</dt><dd style={{margin:0}}>{item.currentQuantity.toLocaleString()} {item.uom}</dd>
+                        <dt>This save</dt><dd style={{margin:0,color:item.changeQuantity < 0 ? "#b45309" : colors.teal}}>{item.changeQuantity > 0 ? "+" : ""}{item.changeQuantity.toLocaleString()}</dd>
+                        <dt>After saving</dt><dd style={{margin:0,fontWeight:700}}>{item.afterQuantity.toLocaleString()} {item.uom}</dd>
+                      </dl>}
+                    </div>)}
+                  </div>
+                  <p style={{fontSize:"0.8rem",color:colors.textSecondary,marginBottom:0}}>Preview uses current inventory. Other documents saved meanwhile can change the final balance.</p>
+                </>}
+            </section>}
+
             <DocumentTaxFields
+              readOnly={readOnly}
               subtotal={subtotal}
               gstAmount={gstAmount}
               withholdingTaxRate={withholdingTaxRate}
@@ -525,11 +722,12 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               mode={readOnly ? "view" : "edit"}
             />
           </div>
+          </>}
           </div>
           <div data-admin-footer="" style={formStyles.footer}>
             <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>{readOnly ? "Close" : "Cancel"}</button>
-            {!readOnly && (
-              <button type="submit" disabled={saving || !numberValid} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}>
+            {choosingCategory ? <button type="submit" style={{ ...formStyles.button, ...formStyles.submit }}>Continue <MdArrowForward aria-hidden="true" /></button> : !readOnly && (
+              <button type="submit" disabled={saving || !numberValid || !stockPreviewReady} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving || !stockPreviewReady ? 0.6 : 1 }}>
                 {saving ? "Saving..." : (isEdit ? "Update" : "Create")}
               </button>
             )}

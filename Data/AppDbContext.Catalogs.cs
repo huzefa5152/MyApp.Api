@@ -53,7 +53,7 @@ public partial class AppDbContext
         {
             int? itemId = entry.Entity switch {
                 InvoiceItem x => x.ItemTypeId, DeliveryItem x => x.ItemTypeId,
-                PurchaseItem x => x.ItemTypeId, GoodsReceiptItem x => x.ItemTypeId,
+                PurchaseDebitNoteItem x => x.ItemTypeId, PurchaseItem x => x.ItemTypeId, GoodsReceiptItem x => x.ItemTypeId,
                 SalesOrderItem x => x.ItemTypeId, SalesQuoteItem x => x.ItemTypeId,
                 StockMovement x => x.ItemTypeId, OpeningStockBalance x => x.ItemTypeId,
                 InvoiceItemAdjustment x => x.AdjustedItemTypeId, _ => null };
@@ -61,6 +61,7 @@ public partial class AppDbContext
             int companyId = entry.Entity switch {
                 InvoiceItem x => x.Invoice?.CompanyId ?? await Invoices.Where(p=>p.Id==x.InvoiceId).Select(p=>p.CompanyId).SingleAsync(ct),
                 DeliveryItem x => x.DeliveryChallan?.CompanyId ?? await DeliveryChallans.Where(p=>p.Id==x.DeliveryChallanId).Select(p=>p.CompanyId).SingleAsync(ct),
+                PurchaseDebitNoteItem x => x.PurchaseDebitNote?.CompanyId ?? await PurchaseDebitNotes.Where(p=>p.Id==x.PurchaseDebitNoteId).Select(p=>p.CompanyId).SingleAsync(ct),
                 PurchaseItem x => x.PurchaseBill?.CompanyId ?? await PurchaseBills.Where(p=>p.Id==x.PurchaseBillId).Select(p=>p.CompanyId).SingleAsync(ct),
                 GoodsReceiptItem x => x.GoodsReceipt?.CompanyId ?? await GoodsReceipts.Where(p=>p.Id==x.GoodsReceiptId).Select(p=>p.CompanyId).SingleAsync(ct),
                 SalesOrderItem x => x.SalesOrder?.CompanyId ?? await SalesOrders.Where(p=>p.Id==x.SalesOrderId).Select(p=>p.CompanyId).SingleAsync(ct),

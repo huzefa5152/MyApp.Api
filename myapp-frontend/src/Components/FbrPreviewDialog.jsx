@@ -26,6 +26,7 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [payload, setPayload] = useState(null);
+  const [reviewRequired, setReviewRequired] = useState(false);
   const [origLineCount, setOrigLineCount] = useState(0);
   const [itemCount, setItemCount] = useState(0);
   const [url, setUrl] = useState("");
@@ -48,6 +49,7 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
         const json = data.preview?.json;
         const parsed = json ? JSON.parse(json) : null;
         setPayload(parsed);
+        setReviewRequired(!!data.preview?.reviewRequired);
         setOrigLineCount(data.preview?.originalLineCount ?? 0);
         setItemCount(data.preview?.itemCount ?? 0);
         setUrl(data.preview?.url ?? "");
@@ -132,6 +134,11 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
               {/* Summary banner: how the bill grouped, where it would go.
                   The Alert body column has minWidth:0, so the long
                   unbreakable FBR URL wraps instead of widening the modal. */}
+              {reviewRequired && (
+                <Alert tone="warn" icon={MdWarning}>
+                  Draft preview · Complete the tax filing adjustment / review before validating or submitting to FBR. Missing classification fields are shown as —.
+                </Alert>
+              )}
               <Alert tone="info" icon={MdInfo}>
                 <div style={{ fontWeight: 700, marginBottom: 4 }}>
                   {origLineCount} bill {origLineCount === 1 ? "line" : "lines"} → {itemCount} FBR{" "}

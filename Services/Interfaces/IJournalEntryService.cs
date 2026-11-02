@@ -27,6 +27,9 @@ namespace MyApp.Api.Services.Interfaces
         /// returned DTO, never against the id in the URL.</summary>
         Task<JournalEntryDto?> GetByIdAsync(int id);
 
+        /// <summary>Printable journal voucher data for a single entry.</summary>
+        Task<PrintJournalEntryDto?> GetPrintDataAsync(int id);
+
         /// <summary>Create a manual journal. Validates that GL posting is on,
         /// the period is open, and the entry is a legal balanced entry; the
         /// balance and account-ownership rules live in

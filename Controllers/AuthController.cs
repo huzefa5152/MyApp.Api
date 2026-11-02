@@ -1,3 +1,4 @@
+using MyApp.Api.Helpers;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -37,6 +38,16 @@ namespace MyApp.Api.Controllers
         // effect on the very next attempt.
         private const int MaxFailedLoginAttempts = 10;
         private static readonly TimeSpan LockoutDuration = TimeSpan.FromHours(2);
+        // Short, so a stream of bad guesses slows an attack on the seed admin
+        // (about 40 guesses an hour) without locking the installation out for long.
+        private static readonly TimeSpan SeedAdminLockoutDuration = TimeSpan.FromMinutes(15);
+
+        /// <summary>"ad***(5)": enough to spot a typo in the log, never the whole string.</summary>
+        private static string MaskUsername(string? username)
+        {
+            var u = username ?? "";
+            return u.Length <= 2 ? $"***({u.Length})" : $"{u[..2]}***({u.Length})";
+        }
 
         private UnauthorizedObjectResult LoginFailure() =>
             Unauthorized(new
@@ -103,8 +114,9 @@ namespace MyApp.Api.Controllers
                 // response timing doesn't distinguish "user does not exist"
                 // from "wrong password". The result is discarded.
                 _ = BCrypt.Net.BCrypt.Verify(dto.Password ?? string.Empty, _dummyBcryptHash);
-                _logger.LogWarning("Failed login attempt for username={Username} from {Ip}",
-                    dto.Username, HttpContext.Connection.RemoteIpAddress);
+                // Masked: people type their password into the username box.
+                _logger.LogWarning("Failed login attempt for unknown username={Username} from {Ip}",
+                    MaskUsername(dto.Username), HttpContext.Connection.RemoteIpAddress);
                 return LoginFailure();
             }
 
@@ -113,15 +125,12 @@ namespace MyApp.Api.Controllers
             // Locked account — reject before verifying the password. The
             // check reads LockoutUntil straight off the row, so an expired
             // lock (or a manual SQL unlock) is honoured immediately.
+            // The seed admin reaches every company, so it is not exempt from
+            // lockout; it is locked for a SHORT spell (SeedAdminLockoutDuration)
+            // so that nobody can keep the installation's administrator out.
             var isSeedAdmin = user.Id == _seedAdminUserId;
-            if (isSeedAdmin && (user.FailedLoginAttempts != 0 || user.LockoutUntil.HasValue))
-            {
-                user.FailedLoginAttempts = 0;
-                user.LockoutUntil = null;
-                user.LastFailedLogin = null;
-                await _context.SaveChangesAsync();
-            }
-            if (!isSeedAdmin && user.LockoutUntil.HasValue && user.LockoutUntil.Value > now)
+            var lockFor = isSeedAdmin ? SeedAdminLockoutDuration : LockoutDuration;
+            if (user.LockoutUntil.HasValue && user.LockoutUntil.Value > now)
             {
                 // Burn the same CPU as a real verify (M-12) so the locked
                 // path doesn't stand out by timing.
@@ -133,19 +142,16 @@ namespace MyApp.Api.Controllers
 
             if (!BCrypt.Net.BCrypt.Verify(dto.Password ?? string.Empty, user.PasswordHash))
             {
-                if (!isSeedAdmin)
-                {
-                    // Increment in SQL so concurrent failures cannot lose an attempt.
-                    await _context.Users.Where(u => u.Id == user.Id
-                        && (!u.LockoutUntil.HasValue || u.LockoutUntil <= now))
-                        .ExecuteUpdateAsync(set => set
-                            .SetProperty(u => u.FailedLoginAttempts, u => u.LockoutUntil.HasValue ? 1 : u.FailedLoginAttempts + 1)
-                            .SetProperty(u => u.LastFailedLogin, now)
-                            .SetProperty(u => u.LockoutUntil, u =>
-                                (u.LockoutUntil.HasValue ? 1 : u.FailedLoginAttempts + 1) >= MaxFailedLoginAttempts
-                                    ? (DateTime?)now.Add(LockoutDuration) : null));
-                    await _context.Entry(user).ReloadAsync();
-                }
+                // Increment in SQL so concurrent failures cannot lose an attempt.
+                await _context.Users.Where(u => u.Id == user.Id
+                    && (!u.LockoutUntil.HasValue || u.LockoutUntil <= now))
+                    .ExecuteUpdateAsync(set => set
+                        .SetProperty(u => u.FailedLoginAttempts, u => u.LockoutUntil.HasValue ? 1 : u.FailedLoginAttempts + 1)
+                        .SetProperty(u => u.LastFailedLogin, now)
+                        .SetProperty(u => u.LockoutUntil, u =>
+                            (u.LockoutUntil.HasValue ? 1 : u.FailedLoginAttempts + 1) >= MaxFailedLoginAttempts
+                                ? (DateTime?)now.Add(lockFor) : null));
+                await _context.Entry(user).ReloadAsync();
                 _logger.LogWarning("Failed login attempt for UserId={UserId} from {Ip}",
                     user.Id, HttpContext.Connection.RemoteIpAddress);
                 return LoginFailure();
@@ -154,7 +160,7 @@ namespace MyApp.Api.Controllers
             // Clear failures only while the verified credentials and lock state still match.
             // A concurrent password reset or newly activated lock cannot issue a fresh session.
             var cleared = await _context.Users.Where(u => u.Id == user.Id && u.SecurityStamp == user.SecurityStamp
-                && u.PasswordHash == user.PasswordHash && (isSeedAdmin || !u.LockoutUntil.HasValue || u.LockoutUntil <= now))
+                && u.PasswordHash == user.PasswordHash && (!u.LockoutUntil.HasValue || u.LockoutUntil <= now))
                 .ExecuteUpdateAsync(update => update.SetProperty(u => u.FailedLoginAttempts, 0)
                     .SetProperty(u => u.LockoutUntil, (DateTime?)null).SetProperty(u => u.LastFailedLogin, (DateTime?)null));
             if (cleared == 0) return LoginFailure();
@@ -292,6 +298,8 @@ namespace MyApp.Api.Controllers
                     update.SetProperty(u => u.PasswordHash, newHash).SetProperty(u => u.SecurityStamp, newStamp));
             if (changed == 0) return Unauthorized();
             _cache.Remove($"user-stamp:{user.Id}");
+            // New credentials end every AI agent connection made under the old ones.
+            await McpTokenRevocation.RevokeAllForUserAsync(_context, user.Id, user.Id);
 
             return Ok(new { message = "Password changed successfully" });
         }

@@ -47,7 +47,7 @@ public static class ImportBatchChecks
             var stock = new StockService(db, NullLogger<StockService>.Instance);
             counter.FailStockWrite = fail;
             var result = batch
-                ? await new FbrPurchaseImportCommitter(db,null!,stock,NullLogger<FbrPurchaseImportCommitter>.Instance).CommitOneInvoiceAsync(company.Id,null,invoice,counts)
+                ? await new FbrPurchaseImportCommitter(db,null!,stock,new PostingService(db,new GeneralLedgerService(db),NullLogger<PostingService>.Instance),NullLogger<FbrPurchaseImportCommitter>.Instance).CommitOneInvoiceAsync(company.Id,null,invoice,counts)
                 : await new AuditChecks.LegacyFbrPurchaseImportCommitter(db,null!,stock,NullLogger<AuditChecks.LegacyFbrPurchaseImportCommitter>.Instance).CommitOneInvoiceAsync(company.Id,null,invoice,counts);
             counter.FailStockWrite = false;
             if(fail) {

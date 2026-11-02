@@ -16,6 +16,7 @@ import AttachmentManager from "./AttachmentManager";
 import { formStyles, modalSizes } from "../theme";
 import useScrollToError from "../hooks/useScrollToError";
 import DocumentNotesEditor from "./DocumentNotesEditor";
+import { quoteTotals, lineAmounts, discountFields, discountText } from "../utils/quoteDiscount";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
 
 import { todayYmd } from "../utils/dateInput";
@@ -47,9 +48,13 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
   const [gstRate, setGstRate] = useState(quote?.gstRate ?? 18);
   const [notes, setNotes] = useState(quote?.notes || "");
   const [contactPerson, setContactPerson] = useState(quote?.contactPerson || "");
+  // Whole-quote discount: "5%" or "5000", taken off before GST. It stays on
+  // the quote; a bill made from it only shows a reminder.
+  const [quoteDiscount, setQuoteDiscount] = useState(discountText(quote?.discountValue, quote?.discountIsPercent));
+  const [quoteDiscountReason, setQuoteDiscountReason] = useState(quote?.discountReason || "");
   const [items, setItems] = useState(
     quote?.items?.length
-      ? quote.items.map((i) => ({ id: i.id, _imageKey: crypto.randomUUID(), imagePath: i.imagePath || null, itemTypeId: i.itemTypeId, description: i.description, quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice, rateHint: "" }))
+      ? quote.items.map((i) => ({ id: i.id, _imageKey: crypto.randomUUID(), imagePath: i.imagePath || null, itemTypeId: i.itemTypeId, description: i.description, quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice, rateHint: "", discountText: discountText(i.discountValue, i.discountIsPercent), discountReason: i.discountReason || "" }))
       : [blankItem()]
   );
   const [units, setUnits] = useState([]);
@@ -89,10 +94,8 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
     };
   };
 
-  const lineTotal = (it) => Math.round((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0) * 100) / 100;
-  const subtotal = items.reduce((s, it) => s + lineTotal(it), 0);
-  const gstAmount = Math.round(subtotal * (Number(gstRate) || 0)) / 100;
-  const grandTotal = subtotal + gstAmount;
+  const totals = quoteTotals(items.filter((i) => i.description.trim()), quoteDiscount, gstRate);
+  const money = (n) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -101,6 +104,9 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
     const valid = items.filter((i) => i.description.trim());
     if (!client) { setError("Please select a client."); return; }
     if (valid.length === 0) { setError("Add at least one item."); return; }
+    const badLine = valid.findIndex((i) => lineAmounts(i).error);
+    if (badLine >= 0) { setError(`Line ${items.indexOf(valid[badLine]) + 1}: the discount is not valid (${lineAmounts(valid[badLine]).error.toLowerCase()}).`); return; }
+    if (totals.error) { setError(`Quote discount: ${totals.error.toLowerCase()}.`); return; }
 
     setSaving(true);
     try {
@@ -114,6 +120,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
         gstRate: Number(gstRate) || 0,
         notes: notes.trim() || null,
         contactPerson: contactPerson || null,
+        ...discountFields(quoteDiscount, quoteDiscountReason),
         items: valid.map((i) => ({
           id: i.id || 0,
           itemTypeId: i.itemTypeId || null,
@@ -122,6 +129,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
           unit: i.unit,
           unitPrice: Number(i.unitPrice) || 0,
           imagePath: i.imagePath || null,
+          ...discountFields(i.discountText, i.discountReason),
         })),
       });
       // Upload any files staged before the record had an id (no-op in edit
@@ -156,32 +164,37 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
           <div data-admin-body="" className="admin-quote-body" style={formStyles.body}>
             <DocumentCopyPicker companyId={companyId} destination="Quote" allowDetails={!isEdit} disabled={false}
               onCopy={(source,lines,details) => {
-                setItems(prev => appendCopiedLines(details ? [] : prev, lines, blankItem));
+                setItems(prev => appendCopiedLines(details ? [] : prev, lines, blankItem, true));
+                if (details && source.discountValue) { setQuoteDiscount(discountText(source.discountValue, source.discountIsPercent)); setQuoteDiscountReason(source.discountReason || ""); }
                 if(details) { setClient({id:source.clientId,label:source.clientName});setNotes(source.notes||"");setGstRate(source.gstRate??18);setContactPerson(source.contactPerson||"");setEnquiryRef(source.customerEnquiryRef||"");setEnquiryDate(source.enquiryDate?.slice(0,10)||"");setValidForDays(source.validUntil && source.date ? String(Math.max(0, Math.round((new Date(source.validUntil)-new Date(source.date))/86400000))) : ""); }
               }} />
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
             {<div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="quote" variant={quote ? "edit" : "create"} currentNumber={quote?.quoteNumber} editRecordId={quote?.id} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>}
             <div data-admin-form-row="" className="k-form-grid" style={s.grid}>
               <Field label="Client">
-                <SearchableClientSelect
-                  clients={clients}
-                  value={client?.id || ""}
-                  onChange={(id, item) => setClient(item)}
-                  placeholder="— Select Client —"
-                />
-                {canCreateClient ? (
-                  <Button
-                    variant="secondary"
-                    icon={MdPersonAdd}
-                    style={s.inlineAddBtn}
-                    onClick={() => setShowAddClient(true)}
-                    title="Create a new client without leaving this form"
-                  >
-                    New Client
-                  </Button>
-                ) : (
-                  <PermissionLackedHint perm="clients.manage.create" what="add a new client" />
-                )}
+                <div style={s.pickerRow}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <SearchableClientSelect
+                      clients={clients}
+                      value={client?.id || ""}
+                      onChange={(id, item) => setClient(item)}
+                      placeholder="— Select Client —"
+                    />
+                  </div>
+                  {canCreateClient && (
+                    <Button
+                      variant="secondary"
+                      icon={MdPersonAdd}
+                      style={s.inlineAddBtn}
+                      onClick={() => setShowAddClient(true)}
+                      title="Create a new client without leaving this form"
+                      aria-label="New client"
+                    >
+                      New
+                    </Button>
+                  )}
+                </div>
+                {!canCreateClient && <PermissionLackedHint perm="clients.manage.create" what="add a new client" />}
               </Field>
               <Field label="Issue Date">
                 <input type="date" className="k-input" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -214,6 +227,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
             </div>
 
             <LineItemsEditor companyId={companyId}
+              entryModeKey="quote"
               showImage
               onUploadImage={async file => (await uploadQuoteLineImage(companyId, file)).data.url}
               onImageBusyChange={delta => setImageUploads(count => Math.max(0, count + delta))}
@@ -226,15 +240,24 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
               canCreateItemType={canCreateItemType}
               onAddItemType={() => setShowAddItemType(true)}
               showUnitPrice
+              showDiscount
               getRate={getRate}
               itemsLabel="Items"
               itemsHint="unit price is required per line and remembered for later billing"
             />
 
             <div style={s.totals}>
-              <div style={s.tRow}><span>Subtotal</span><span>Rs {subtotal.toLocaleString()}</span></div>
-              <div style={s.tRow}><span>GST @ {gstRate || 0}%</span><span>Rs {gstAmount.toLocaleString()}</span></div>
-              <div style={{ ...s.tRow, ...s.grand }}><span>Grand Total</span><span>Rs {grandTotal.toLocaleString()}</span></div>
+              <div style={s.tRow}><span>Subtotal</span><span style={s.tAmt}>Rs {money(totals.subtotal)}</span></div>
+              <div style={s.discRow}>
+                <label htmlFor="quote-discount" style={s.discLabel}>Discount <span style={s.opt}>(whole quote)</span></label>
+                <input id="quote-discount" className="k-input" style={{ ...s.discInput, ...(totals.error ? s.inputError : null) }} value={quoteDiscount} onChange={(e) => setQuoteDiscount(e.target.value)} placeholder="5% or 500" />
+                <span style={totals.error ? s.discErr : s.tAmt}>{totals.error || (totals.discount ? `− Rs ${money(totals.discount)}` : "—")}</span>
+              </div>
+              {String(quoteDiscount).trim() !== "" && (
+                <input aria-label="Quote discount reason" className="k-input" style={{ marginTop: "0.35rem" }} value={quoteDiscountReason} maxLength={200} onChange={(e) => setQuoteDiscountReason(e.target.value)} placeholder="Reason (optional), e.g. bulk order" />
+              )}
+              <div style={s.tRow}><span>GST @ {gstRate || 0}%{totals.discount ? ` on Rs ${money(totals.taxable)}` : ""}</span><span style={s.tAmt}>Rs {money(totals.gstAmount)}</span></div>
+              <div style={{ ...s.tRow, ...s.grand }}><span>Grand Total</span><span style={s.tAmt}>Rs {money(totals.grandTotal)}</span></div>
             </div>
 
             <DocumentNotesEditor value={notes} onChange={setNotes} label="Notes / Terms (optional)" />
@@ -283,9 +306,17 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
 
 const s = {
   grid: { gap: "var(--k-gap)", marginBottom: "1rem" },
-  inlineAddBtn: { marginTop: "0.4rem", alignSelf: "flex-start", color: "var(--k-teal)", borderColor: "var(--k-teal)" },
+  // New Client sits beside the picker rather than on a line of its own.
+  pickerRow: { display: "flex", gap: "0.5rem", alignItems: "stretch" },
+  inlineAddBtn: { flexShrink: 0, whiteSpace: "nowrap", color: "var(--k-teal)", borderColor: "var(--k-teal)" },
   opt: { color: "var(--k-muted)", fontWeight: 400 },
-  totals: { marginTop: "1rem", marginLeft: "auto", width: 280, maxWidth: "100%" },
-  tRow: { display: "flex", justifyContent: "space-between", padding: "0.25rem 0", fontSize: "var(--k-font)", color: "var(--k-muted)" },
+  totals: { marginTop: "1rem", marginLeft: "auto", width: "100%", maxWidth: 380, boxSizing: "border-box" },
+  tAmt: { whiteSpace: "nowrap", textAlign: "right" },
+  discRow: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.3rem 0", fontSize: "var(--k-font)", color: "var(--k-muted)" },
+  discLabel: { flex: "1 1 auto", minWidth: 0 },
+  discInput: { width: 110, flex: "0 0 110px", textAlign: "right" },
+  discErr: { whiteSpace: "nowrap", color: "var(--k-danger)", fontSize: "var(--k-font-sm)", fontWeight: 600 },
+  inputError: { borderColor: "var(--k-danger)", background: "var(--k-danger-bg)" },
+  tRow: { display: "flex", justifyContent: "space-between", gap: "0.75rem", padding: "0.25rem 0", fontSize: "var(--k-font)", color: "var(--k-muted)" },
   grand: { borderTop: "2px solid var(--k-blue)", marginTop: 4, paddingTop: 8, fontWeight: 800, fontSize: "calc(var(--k-font) + 0.1rem)", color: "var(--k-blue)" },
 };

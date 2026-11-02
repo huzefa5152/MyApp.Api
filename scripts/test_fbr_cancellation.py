@@ -128,7 +128,7 @@ def main() -> int:
     client_id = client["id"]
 
     # A fully classified item type so the challan lands Pending (billable).
-    _, types = http("GET", "/api/itemtypes", api, token=token)
+    _, types = http("GET", f"/api/itemtypes?companyId={cid}", api, token=token)
     classified = next((t for t in (types or [])
                        if t.get("hsCode") and t.get("uom") and t.get("saleType")), None)
 

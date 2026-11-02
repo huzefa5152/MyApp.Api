@@ -1,4 +1,6 @@
-import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
+import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { MdInventory2, MdAdd, MdBusiness, MdEdit, MdDelete, MdVisibility, MdPrint, MdPictureAsPdf } from "react-icons/md";
 import { getGoodsReceiptsByCompanyPaged, deleteGoodsReceipt, getGoodsReceiptPrintData } from "../api/goodsReceiptApi";
@@ -127,9 +129,12 @@ export default function GoodsReceiptsPage() {
         tone="teal"
         title="Goods Receipts"
         subtitle={selectedCompany ? `${totalCount} receipt${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}` : "Select a company"}
-        actions={companies.length > 0 && canCreate ? (
-          <Button variant="primary" icon={MdAdd} onClick={() => { setEditingId(null); setShowForm(true); }}>New Receipt</Button>
-        ) : null}
+        actions={<>
+          <DocumentLinesHeaderLink />
+          {companies.length > 0 && canCreate && (
+            <Button variant="primary" icon={MdAdd} onClick={() => { setEditingId(null); setShowForm(true); }}>New Receipt</Button>
+          )}
+        </>}
       />
 
       {loadingCompanies ? (
@@ -141,7 +146,7 @@ export default function GoodsReceiptsPage() {
           <CompanyPicker />
 
           {selectedCompany && (
-            <Toolbar>
+            <ListFilters><Toolbar>
               <SearchBox
                 value={search}
                 onChange={(text) => onFilterChange(setSearch)({ target: { value: text } })}
@@ -161,10 +166,10 @@ export default function GoodsReceiptsPage() {
               {isBigScreen && (
                 <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Goods receipts view mode" />
               )}
-            </Toolbar>
+            </Toolbar></ListFilters>
           )}
 
-          {loading ? (
+          <RecordsViewport label="Goods Receipts records">{loading ? (
             <Loading>Loading goods receipts…</Loading>
           ) : receipts.length === 0 ? (
             <EmptyState icon={MdInventory2}>No goods receipts yet.</EmptyState>
@@ -226,7 +231,7 @@ export default function GoodsReceiptsPage() {
                 />
               )}
             </>
-          )}
+          )}</RecordsViewport>
         </>
       )}
 

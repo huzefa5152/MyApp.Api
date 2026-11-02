@@ -1,4 +1,6 @@
-import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
+import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { MdShoppingCart, MdAdd, MdBusiness, MdEdit, MdDelete, MdVisibility, MdReceipt, MdClose, MdPrint, MdPictureAsPdf } from "react-icons/md";
 import { getPurchaseBillsByCompanyPaged, deletePurchaseBill, getPurchaseBillPrintData } from "../api/purchaseBillApi";
@@ -27,6 +29,7 @@ import { exportToPdf } from "../utils/exportUtils";
 import { DEFAULT_TEMPLATES } from "../utils/templateSampleData";
 import SearchableClientSelect from "../Components/SearchableClientSelect";
 import { PageHeader, CompanyPicker, Button, Toolbar, ToolbarSpacer, SearchBox, Card, Facts, EmptyState, Loading } from "../ui/Kit";
+import useQueryAction from "../hooks/useQueryAction";
 
 export default function PurchaseBillsPage() {
   const confirm = useConfirm();
@@ -51,6 +54,7 @@ export default function PurchaseBillsPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [search, setSearch] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
   const [supplierFilter, setSupplierFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -62,6 +66,11 @@ export default function PurchaseBillsPage() {
   const [awaitingBills, setAwaitingBills] = useState([]);
   const [loadingAwaiting, setLoadingAwaiting] = useState(false);
   const [prefillFromInvoiceId, setPrefillFromInvoiceId] = useState(null);
+  const [startLocal, setStartLocal] = useState(false);
+  // Dashboard quick action: ?new=local opens New Local Purchase.
+  useQueryAction("new", !!selectedCompany && canCreate, (v) => {
+    setEditingId(null); setPrefillFromInvoiceId(null); setStartLocal(v === "local"); setViewOnly(false); setShowForm(true);
+  });
   const [pickerSearch, setPickerSearch] = useState("");
   const [attachTarget, setAttachTarget] = useState(null);
   const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "PurchaseBill", bills.map((b) => b.id));
@@ -74,6 +83,9 @@ export default function PurchaseBillsPage() {
       if (pageSize) params.pageSize = pageSize;
       if (search) params.search = search;
       if (supplierFilter) params.supplierId = supplierFilter;
+      if (sourceFilter) params.purchaseCategory = sourceFilter === "challan" ? "LocalDirect" : "Inventory";
+      if (sourceFilter === "other") params.entrySource = "manual";
+      if (sourceFilter === "fbr") params.entrySource = "fbr-import";
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
       const { data } = await getPurchaseBillsByCompanyPaged(selectedCompany.id, params);
@@ -86,7 +98,7 @@ export default function PurchaseBillsPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCompany, page, pageSize, search, supplierFilter, dateFrom, dateTo]);
+  }, [selectedCompany, page, pageSize, search, supplierFilter, sourceFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     if (selectedCompany) {
@@ -98,11 +110,11 @@ export default function PurchaseBillsPage() {
     }
   }, [selectedCompany]);
 
-  useEffect(() => { if (selectedCompany) fetchBills(page); }, [page, pageSize, search, supplierFilter, dateFrom, dateTo]);
+  useEffect(() => { if (selectedCompany) fetchBills(page); }, [page, pageSize, search, supplierFilter, sourceFilter, dateFrom, dateTo]);
 
   const onFilterChange = (setter) => (e) => { setter(e.target.value); setPage(1); };
-  const hasFilters = search || supplierFilter || dateFrom || dateTo;
-  const resetFilters = () => { setSearch(""); setSupplierFilter(""); setDateFrom(""); setDateTo(""); setPage(1); };
+  const hasFilters = search || supplierFilter || sourceFilter || dateFrom || dateTo;
+  const resetFilters = () => { setSearch(""); setSupplierFilter(""); setSourceFilter(""); setDateFrom(""); setDateTo(""); setPage(1); };
 
   const handleDelete = async (b) => {
     const ok = await confirm({
@@ -170,14 +182,22 @@ export default function PurchaseBillsPage() {
         subtitle={selectedCompany
           ? `${totalCount} purchase bill${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
           : "Select a company"}
-        actions={companies.length > 0 && canCreate ? (
+        actions={(
           <>
-            <Button variant="secondary" icon={MdReceipt} onClick={openSalePicker}>Purchase Against Sale Bill</Button>
-            <Button variant="primary" icon={MdAdd} onClick={() => { setEditingId(null); setPrefillFromInvoiceId(null); setViewOnly(false); setShowForm(true); }}>
-              New Purchase Bill
-            </Button>
+            <DocumentLinesHeaderLink />
+            {companies.length > 0 && canCreate && (
+              <>
+                <Button variant="secondary" icon={MdReceipt} onClick={openSalePicker}>Purchase Against Sale Bill</Button>
+                <Button variant="primary" icon={MdAdd} onClick={() => { setEditingId(null); setPrefillFromInvoiceId(null); setStartLocal(true); setViewOnly(false); setShowForm(true); }}>
+                  New Local Purchase
+                </Button>
+                <Button variant="primary" icon={MdAdd} onClick={() => { setEditingId(null); setPrefillFromInvoiceId(null); setStartLocal(false); setViewOnly(false); setShowForm(true); }}>
+                  New Purchase Bill
+                </Button>
+              </>
+            )}
           </>
-        ) : null}
+        )}
       />
 
       {loadingCompanies ? (
@@ -189,7 +209,7 @@ export default function PurchaseBillsPage() {
           <CompanyPicker />
 
           {selectedCompany && (
-            <Toolbar>
+            <ListFilters><Toolbar>
               <SearchBox
                 value={search}
                 onChange={(text) => onFilterChange(setSearch)({ target: { value: text } })}
@@ -209,16 +229,22 @@ export default function PurchaseBillsPage() {
                 <span style={dateSep}>–</span>
                 <input type="date" className="k-input" style={dateInput} value={dateTo} onChange={onFilterChange(setDateTo)} title="To" aria-label="To date" />
               </div>
+              <select className="k-select" aria-label="Purchase source" value={sourceFilter} onChange={onFilterChange(setSourceFilter)}>
+                <option value="">All purchase sources</option>
+                <option value="challan">Local direct purchases</option>
+                <option value="other">Inventory purchases (manual)</option>
+                <option value="fbr">FBR imported purchases</option>
+              </select>
               {hasFilters && <Button variant="ghost" size="sm" onClick={resetFilters}>Clear</Button>}
               <ToolbarSpacer />
               {canPrint && <PrintTemplateSelect picker={tplPicker} />}
               {isBigScreen && (
                 <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Purchase bills view mode" />
               )}
-            </Toolbar>
+            </Toolbar></ListFilters>
           )}
 
-          {loading ? (
+          <RecordsViewport label="Purchase Bills records">{loading ? (
             <Loading>Loading purchase bills…</Loading>
           ) : bills.length === 0 ? (
             <EmptyState icon={MdShoppingCart}>
@@ -255,7 +281,7 @@ export default function PurchaseBillsPage() {
                   >
                     <Facts facts={[
                       ["Supplier", b.supplierName],
-                      b.sourceDeliveryChallanId && ["Source", "Delivery challan"],
+                      ["Source", b.source === "auto-cost" ? "From challan / bill costs" : b.purchaseCategory === "LocalDirect" ? "Local direct purchase" : b.source === "fbr-import" ? "FBR import" : "Inventory purchase"],
                       ["Date", new Date(b.date).toLocaleDateString()],
                       ["Grand Total", `Rs. ${b.grandTotal?.toLocaleString()}`],
                       ["Items", b.items?.length || 0],
@@ -269,7 +295,7 @@ export default function PurchaseBillsPage() {
                     )}
                     <div style={cardActions}>
                       <Button size="sm" icon={MdVisibility} onClick={() => { setEditingId(b.id); setViewOnly(true); setShowForm(true); }}>View</Button>
-                      {canUpdate && (
+                      {canUpdate && (!["local-direct", "auto-cost"].includes(b.source) || !(b.amountPaid > 0 || b.amountCredited > 0)) && (
                         <Button size="sm" icon={MdEdit} onClick={() => { setEditingId(b.id); setViewOnly(false); setShowForm(true); }}>Edit</Button>
                       )}
                       {canPrint && (
@@ -294,7 +320,7 @@ export default function PurchaseBillsPage() {
                           PDF
                         </Button>
                       )}
-                      {canDelete && (
+                      {canDelete && b.source !== "auto-cost" && (
                         <Button size="sm" variant="danger" icon={MdDelete} onClick={() => handleDelete(b)}>Delete</Button>
                       )}
                     </div>
@@ -313,7 +339,7 @@ export default function PurchaseBillsPage() {
                 />
               )}
             </>
-          )}
+          )}</RecordsViewport>
         </>
       )}
 
@@ -323,8 +349,9 @@ export default function PurchaseBillsPage() {
           billId={editingId}
           readOnly={viewOnly}
           prefillFromInvoiceId={prefillFromInvoiceId}
-          onClose={() => { setShowForm(false); setEditingId(null); setPrefillFromInvoiceId(null); setViewOnly(false); refreshAttachCounts(); }}
-          onSaved={() => { setShowForm(false); setEditingId(null); setPrefillFromInvoiceId(null); setViewOnly(false); fetchBills(page); }}
+          startLocal={startLocal && !editingId}
+          onClose={() => { setShowForm(false); setEditingId(null); setPrefillFromInvoiceId(null); setStartLocal(false); setViewOnly(false); refreshAttachCounts(); }}
+          onSaved={() => { setShowForm(false); setEditingId(null); setPrefillFromInvoiceId(null); setStartLocal(false); setViewOnly(false); fetchBills(page); }}
         />
       )}
 

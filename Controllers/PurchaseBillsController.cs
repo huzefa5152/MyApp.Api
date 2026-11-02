@@ -7,6 +7,7 @@ using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
 using MyApp.Api.Middleware;
+using MyApp.Api.Services.Implementations;
 using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Controllers
@@ -62,6 +63,65 @@ namespace MyApp.Api.Controllers
             }
         }
 
+        [HttpGet("company/{companyId:int}/local-purchase-sources")]
+        [HasAnyPermission("purchasebills.manage.create", "purchasebills.manage.update")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<List<LocalPurchaseSourceSummaryDto>>> GetLocalPurchaseSources(int companyId, string? search = null)
+            => Ok(await _service.GetLocalPurchaseSourcesAsync(companyId, search));
+
+        /// <summary>
+        /// The lines of one challan or sale bill still to purchase, from the same
+        /// computation the costing dialog uses. The document's STORED company must
+        /// be the route company; estimates show only to callers who see costing.
+        /// </summary>
+        [HttpGet("company/{companyId:int}/local-purchase-sources/{kind}/{id:int}")]
+        [HasAnyPermission("purchasebills.manage.create", "purchasebills.manage.update")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<LocalPurchaseSourceDto>> GetLocalPurchaseSource(int companyId, string kind, int id,
+            [FromServices] CommercialCostService costs)
+        {
+            var header = kind == "challan"
+                ? await _context.DeliveryChallans.AsNoTracking().Where(c => c.Id == id && c.CompanyId == companyId && !c.IsDemo && c.Status != "Cancelled")
+                    .Select(c => new { Date = c.DeliveryDate ?? DateTime.MinValue, Client = c.Client.Name }).FirstOrDefaultAsync()
+                : kind == "bill"
+                    ? await _context.Invoices.AsNoTracking().Where(b => b.Id == id && b.CompanyId == companyId && !b.IsDemo && !b.IsCancelled && b.NoteKind == 0)
+                        .Select(b => new { b.Date, Client = b.Client.Name }).FirstOrDefaultAsync()
+                    : null;
+            if (header == null) return NotFound();
+            CommercialCostDto? source;
+            try { source = await costs.ReadAsync(kind, id); }
+            catch (CommercialCostValidationException) { return NotFound(); }
+            if (source == null || source.CompanyId != companyId) return NotFound();
+            var showCost = await _permissions.HasPermissionAsync(CurrentUserId, "bills.costs.view");
+            return Ok(new LocalPurchaseSourceDto { Kind = kind, Id = id, Number = source.Number, Date = header.Date, ClientName = header.Client ?? "",
+                // A supplier bill entered here takes precedence over the automatic
+                // purchase booked from costs, so only locked quantity is unavailable.
+                Items = source.Items.Where(i => i.Quantity - i.LockedQuantity > 0).Select(i => new LocalPurchaseSourceLineDto {
+                    DeliveryItemId = i.DeliveryItemId, InvoiceItemId = i.DeliveryItemId.HasValue ? null : i.Id,
+                    SourceChallanNumber = i.SourceChallanNumber, Description = i.Description, Unit = i.Unit,
+                    Quantity = i.Quantity, PurchasedQuantity = i.LockedQuantity, RemainingQuantity = i.Quantity - i.LockedQuantity,
+                    EstimatedUnitCost = showCost ? i.ActualUnitCost : null, SupplierId = showCost ? i.SupplierId : null }).ToList() });
+        }
+
+        [HttpPost("stock-preview")]
+        [HasAnyPermission("purchasebills.manage.create", "purchasebills.manage.update")]
+        public async Task<ActionResult<PurchaseStockPreviewDto>> PreviewStock(PurchaseStockPreviewRequest request)
+        {
+            await _access.AssertAccessAsync(CurrentUserId, request.CompanyId);
+            if (request.BillId.HasValue)
+            {
+                var companyId = await _context.PurchaseBills.Where(b => b.Id == request.BillId.Value)
+                    .Select(b => (int?)b.CompanyId).FirstOrDefaultAsync();
+                if (companyId == null) return NotFound();
+                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
+                if (companyId != request.CompanyId) return BadRequest(new { error = "Purchase bill belongs to another company." });
+                if (!await _permissions.HasPermissionAsync(CurrentUserId, "purchasebills.manage.update")) return Forbid();
+            }
+            else if (!await _permissions.HasPermissionAsync(CurrentUserId, "purchasebills.manage.create")) return Forbid();
+            try { return Ok(await _service.PreviewStockAsync(request)); }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
         [HttpGet("count")]
         [HasPermission("purchasebills.list.view")]
         [AuthorizeCompany]
@@ -78,11 +138,13 @@ namespace MyApp.Api.Controllers
             [FromQuery] string? search = null,
             [FromQuery] int? supplierId = null,
             [FromQuery] DateTime? dateFrom = null,
-            [FromQuery] DateTime? dateTo = null)
+            [FromQuery] DateTime? dateTo = null,
+            [FromQuery] bool? fromChallan = null,
+            [FromQuery] string? purchaseCategory = null, [FromQuery] string? entrySource = null)
         {
             var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
             var clampedPage = PaginationHelper.ClampPage(page);
-            var result = await _service.GetPagedByCompanyAsync(companyId, clampedPage, size, search, supplierId, dateFrom, dateTo);
+            var result = await _service.GetPagedByCompanyAsync(companyId, clampedPage, size, search, supplierId, dateFrom, dateTo, fromChallan, purchaseCategory, entrySource);
             await ScrubPaymentIfDenied(result.Items);
             return Ok(result);
         }
@@ -132,35 +194,16 @@ namespace MyApp.Api.Controllers
             }
         }
 
-        /// <summary>
-        /// Raise one purchase bill per supplier from a challan's private
-        /// supplier / actual-cost lines. Authorized on the challan's STORED
-        /// company — the route carries only the challan id.
-        /// </summary>
-        [HttpPost("from-challan/{challanId}")]
-        [HasPermission("purchasebills.manage.create")]
-        public async Task<ActionResult<List<PurchaseBillDto>>> CreateFromChallan(int challanId)
-        {
-            var companyId = await _context.DeliveryChallans.AsNoTracking()
-                .Where(c => c.Id == challanId && !c.IsDemo)
-                .Select(c => (int?)c.CompanyId)
-                .FirstOrDefaultAsync();
-            if (companyId == null) return NotFound();
-            await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
-            try { return Ok(await _service.CreateFromChallanAsync(challanId)); }
-            catch (KeyNotFoundException ex) { return NotFound(new { error = ex.Message }); }
-            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
-        }
-
         [HttpPut("{id}")]
         [HasPermission("purchasebills.manage.update")]
         public async Task<ActionResult<PurchaseBillDto>> Update(int id, [FromBody] UpdatePurchaseBillDto dto)
         {
             // Authorize on the existing row's company — body fields can't
             // smuggle the bill into another tenant.
-            var existing = await _service.GetByIdAsync(id);
-            if (existing == null) return NotFound();
-            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            var companyId = await _context.PurchaseBills.Where(b => b.Id == id)
+                .Select(b => (int?)b.CompanyId).FirstOrDefaultAsync();
+            if (companyId == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
             try
             {
                 var updated = await _service.UpdateAsync(id, dto);

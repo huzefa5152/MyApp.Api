@@ -22,6 +22,7 @@ namespace MyApp.Api.Models.Accounting
         Payment = 3,           // receipt (money in) or payment (money out)
         AccountTransfer = 4,
         PurchaseDebitNote = 5, // supplier debit note
+        StockEntry = 7,
         // 6 ImportConsignment — reserved, see the type remarks.
     }
 

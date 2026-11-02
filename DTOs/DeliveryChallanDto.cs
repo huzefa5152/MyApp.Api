@@ -3,6 +3,10 @@ namespace MyApp.Api.DTOs
     public class DeliveryChallanDto
     {
         public string? Version { get; set; }
+        public string? BillEditVersion { get; set; }
+        public List<StockWarningDto>? StockWarnings { get; set; }
+        public int CostedLineCount { get; set; }
+        public int CostingLineCount { get; set; }
         public int Id { get; set; }
         public int ChallanNumber { get; set; }
         public int? CustomNumber { get; set; }
@@ -23,6 +27,9 @@ namespace MyApp.Api.DTOs
         public string? Notes { get; set; }
         public string Status { get; set; } = "Pending";
         public int? InvoiceId { get; set; }
+        /// <summary>Number of the bill this challan was billed on, so the
+        /// challan can say where it went. Null until it is billed.</summary>
+        public int? InvoiceNumber { get; set; }
         /// <summary>
         /// Set when this challan fulfils a Sales Order (raised via
         /// "Create Challan from Order"). Null for ad-hoc challans. Each line's
@@ -55,12 +62,18 @@ namespace MyApp.Api.DTOs
         /// the edit form.
         /// </summary>
         public int? DuplicatedFromId { get; set; }
+        /// <summary>The original row when this row holds lines left off a partial bill.</summary>
+        public int? SplitFromChallanId { get; set; }
+        /// <summary>True when some of this challan's lines are billed and others are not (on another row of the same number).</summary>
+        public bool IsPartiallyBilled { get; set; }
         /// <summary>
         /// Mirror of the parent's ChallanNumber for convenient display
         /// ("Duplicate of #1042") without the frontend having to re-fetch.
         /// </summary>
         public int? DuplicatedFromChallanNumber { get; set; }
         public bool HasAutoPurchaseBills { get; set; }
+        /// <summary>Set when the challan saved but its automatic supplier purchases could not be booked.</summary>
+        public string? PurchaseWarning { get; set; }
         public List<DeliveryItemDto> Items { get; set; } = new();
         public List<string> Warnings { get; set; } = new();
     }

@@ -1,5 +1,38 @@
 # Email workspace verification — 2026-10-08
 
+## Reply feature verification — 2026-10-12
+
+Branch: `codex/trader-gmail-replies`, derived from Trader. Backend phase:
+`cc5d9312`. No merge, push or deployment for this feature.
+
+- Backend targeted suites: **24 passed, 0 failed, 0 skipped**. These include
+  the real isolated-SQL reply workflow with rollback, existing enquiry/body
+  isolation tests, and fake HTTP Gmail transport tests.
+- UI: **17 passed**, covering existing inbox behavior, preview-before-send,
+  reply-only controls, server recovery of unconfirmed sends, automatic read
+  updates for authorized users, and no writes for read-only users.
+- Frontend production build: passed; existing print-editor duplicate-key and
+  bundle-size warnings remain. Backend build: zero errors; existing warnings.
+- Company-scoped controller scanner: **235 actions checked**, all guarded.
+- Production identifier and placeholder scanner: clean.
+- Three additive EF migrations applied only to the approved isolated local
+  Trader database. Test records roll back. No real Gmail write or send occurred.
+
+Isolation cases prove private thread targets are refused for delegates, company
+delegation is opt-in, revocation blocks prepared sends, another user/company
+cannot send an attempt, shared conversations omit private messages, and pending
+send recovery never exposes another user's attempt. Repeated sends on the same
+preview call the provider once; uncertain outcomes block new previews until
+the original outcome is checked.
+
+**Still pending:** responsive browser checks at 375/768/1280 because the browser
+connection cannot initialize; real Google re-consent, read/unread synchronization
+and a controlled reply/reply-all acceptance test. Automated synthetic tests do
+not establish these live outcomes. The maintainer must approve merging the
+completed feature; do not merge or delete its branch before that approval.
+
+The evidence below records the earlier quotation increment.
+
 Branch: `codex/trader-gmail-quotations`, based on `TraderFbrInvoicingSystem`.
 No commit, push, merge or deployment has been performed. Master is outside
 scope. The Customize port remains gated on Trader acceptance.

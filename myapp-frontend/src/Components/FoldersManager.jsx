@@ -1,3 +1,4 @@
+import RecordsViewport from "./RecordsViewport";
 import { useState, useEffect, useCallback } from "react";
 import {
   MdFolder, MdAdd, MdEdit, MdDelete, MdVisibility,
@@ -97,7 +98,7 @@ export default function FoldersManager() {
           </Toolbar>
         )}
 
-      {loading ? <Loading>Loading folders...</Loading>
+      <RecordsViewport label="Folder records">{loading ? <Loading>Loading folders...</Loading>
         : !selectedCompany ? null
         : (
           <>
@@ -155,7 +156,7 @@ export default function FoldersManager() {
               </div>
             )}
           </>
-        )}
+        )}</RecordsViewport>
 
       {showForm && selectedCompany && (
         <FolderFormModal companyId={selectedCompany.id} folder={editFolder}

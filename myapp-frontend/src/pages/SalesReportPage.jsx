@@ -1,10 +1,12 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback, useRef, Fragment } from "react";
-import { MdAssessment, MdRefresh, MdDownload, MdChevronRight, MdExpandMore, MdUnfoldMore, MdUnfoldLess, MdPerson, MdPictureAsPdf, MdFolderZip, MdClose } from "react-icons/md";
+import { MdAssessment, MdRefresh, MdDownload, MdChevronRight, MdExpandMore, MdUnfoldMore, MdUnfoldLess, MdPerson, MdPictureAsPdf, MdPrint, MdFolderZip, MdClose } from "react-icons/md";
 import { getSalesReport, getSalesReportExcel } from "../api/reportApi";
 import { getInvoicePrintTaxInvoiceBatch } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { formStyles, modalSizes } from "../theme";
-import { PageHeader, CompanyPicker, Button, IconButton, Card, Field, TableWrap, EmptyState, Loading, Alert } from "../ui/Kit";
+import { PageHeader, CompanyPicker, Button, IconButton, Card, Field, TableWrap, EmptyState, Loading, Alert, StatGrid, StatCard } from "../ui/Kit";
 import SearchableClientSelect from "../Components/SearchableClientSelect";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { usePrintTemplates } from "../hooks/usePrintTemplates";
@@ -15,7 +17,12 @@ import { saveAs } from "file-saver";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
+import { excelBrandParams } from "../utils/reportExcelBrand";
 import useIsNarrow from "../hooks/useIsNarrow";
+import ColumnPicker, { useHiddenColumns } from "../Components/reports/ColumnPicker";
+// The Columns chooser is styled by the report workspace sheet.
+import "../Components/reports/ReportWorkspace.css";
+import { fileSlug, pdfReport, printReport } from "../utils/reportPrintKit";
 
 // The server caps one batch print-data request at 100 ids, so longer periods
 // are fetched in successive chunks.
@@ -24,6 +31,21 @@ const PRINT_BATCH_SIZE = 100;
 // ZIP builds one rasterized PDF per invoice at ~1-2s each, so it's capped.
 // Merged print has no such limit — it never rasterizes.
 const ZIP_MAX_INVOICES = 150;
+
+// Invoice-level columns of the on-screen table, in order. `total` marks a
+// column with a grand total; the user can hide any of them.
+const SR_COLS = [
+  { key: "doc", label: "Doc. No" },
+  { key: "date", label: "Date" },
+  { key: "fbr", label: "FBR Inv. No." },
+  { key: "customer", label: "Customer" },
+  { key: "hs", label: "HS Code" },
+  { key: "items", label: "Items", format: "int", total: true },
+  { key: "qty", label: "Qty", format: "number", total: true },
+  { key: "amount", label: "Amount", format: "money", total: true },
+  { key: "tax", label: "Tax", format: "money", total: true },
+  { key: "total", label: "Total", format: "money", total: true },
+];
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -61,6 +83,8 @@ export default function SalesReportPage() {
   const canExport = has("reports.sales.export");
   const canPrintInvoice = has("reports.sales.printinvoice");
   const isNarrow = useIsNarrow();
+  const [hiddenCols, setHiddenCols] = useHiddenColumns("sales-report");
+  const [printBusy, setPrintBusy] = useState(null);
 
   // Period mode: "period" (month / year) or "custom" (date range).
   const [mode, setMode] = useState("period");
@@ -135,7 +159,8 @@ export default function SalesReportPage() {
     if (!selectedCompany || rangeInvalid) return;
     setExporting(true);
     try {
-      const { data } = await getSalesReportExcel(selectedCompany.id, buildParams());
+      // The workbook carries the company's letterhead and template colours.
+      const { data } = await getSalesReportExcel(selectedCompany.id, { ...buildParams(), ...(await excelBrandParams(selectedCompany)) });
       const url = URL.createObjectURL(new Blob([data], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       }));
@@ -290,6 +315,68 @@ export default function SalesReportPage() {
     return <EmptyState icon={MdAssessment}>You don't have permission to view reports.</EmptyState>;
   }
 
+  const visibleCols = SR_COLS.filter((c) => !hiddenCols.has(c.key));
+  const cols = visibleCols.length ? visibleCols : SR_COLS;
+  const buyerLabel = BUYER_TYPES.find((b) => b.value === (report?.buyerType || buyerType))?.label || buyerType;
+  const clientName = clientId ? clients.find((c) => String(c.id) === String(clientId))?.name : "";
+
+  // The report as printed: the same rows and totals the table shows, in the
+  // columns the user chose, on the company's own letterhead.
+  const envelope = () => ({
+    title: "Sales Report",
+    companyName: report.companyName,
+    periodLabel,
+    generatedAt: new Date().toISOString(),
+    filtersApplied: [buyerLabel, clientName && `Client: ${clientName}`].filter(Boolean),
+    sourceLabel: "FBR-submitted invoices · quantities as filed to FBR",
+    columns: cols.map((c) => ({ key: c.key, label: c.label, format: c.format || "text", totalled: !!c.total })),
+    rows: report.invoices.map((inv) => ({
+      doc: inv.documentNumber,
+      date: new Date(inv.documentDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
+      fbr: inv.fbrInvoiceNumber || "",
+      customer: inv.customer,
+      hs: [...new Set(inv.lines.map((l) => l.hsCode).filter(Boolean))].join(", "),
+      items: inv.lineCount, qty: inv.totalQuantity, amount: inv.totalAmount, tax: inv.totalTax, total: inv.totalGross,
+    })),
+    totals: { items: report.lineCount, qty: report.grandQuantity, amount: report.grandAmount, tax: report.grandTax, total: report.grandTotal },
+  });
+  const doPrint = async () => {
+    setPrintBusy("print");
+    try { await printReport(envelope(), selectedCompany); }
+    catch { notify("Could not prepare the report. Allow print pop-ups and try again.", "error"); }
+    finally { setPrintBusy(null); }
+  };
+  const doPdf = async () => {
+    setPrintBusy("pdf");
+    try { await pdfReport(envelope(), selectedCompany, fileSlug(`Sales-Report-${periodLabel}`)); }
+    catch { notify("Could not build the PDF.", "error"); }
+    finally { setPrintBusy(null); }
+  };
+
+  const cell = (inv, key, hsCodes) => {
+    switch (key) {
+      case "doc": return <td key={key} style={{ ...nowrap, fontWeight: 700, color: "var(--k-blue)" }}>{inv.documentNumber}</td>;
+      case "date": return <td key={key} style={nowrap}>{new Date(inv.documentDate).toLocaleDateString()}</td>;
+      case "fbr": return <td key={key} style={{ fontFamily: "monospace", fontSize: "0.75rem", wordBreak: "break-all", maxWidth: 150 }}>{inv.fbrInvoiceNumber}</td>;
+      case "customer": return <td key={key} style={{ maxWidth: 220 }}><div style={clamp2}>{inv.customer}</div></td>;
+      case "hs": return <td key={key} style={{ fontFamily: "monospace", fontSize: "0.75rem", maxWidth: 160 }}><div style={clamp2}>{hsCodes}</div></td>;
+      case "items": return <td key={key} className="k-num">{inv.lineCount}</td>;
+      case "qty": return <td key={key} className="k-num" style={nowrap}>{qty(inv.totalQuantity)}</td>;
+      case "amount": return <td key={key} className="k-num" style={nowrap}>{money(inv.totalAmount)}</td>;
+      case "tax": return <td key={key} className="k-num" style={nowrap}>{money(inv.totalTax)}</td>;
+      case "total": return <td key={key} className="k-num" style={{ ...nowrap, fontWeight: 700 }}>{money(inv.totalGross)}</td>;
+      default: return <td key={key} />;
+    }
+  };
+  const totalCell = (key, idx) => {
+    const v = { items: report.lineCount, qty: qty(report.grandQuantity), amount: money(report.grandAmount),
+      tax: money(report.grandTax), total: money(report.grandTotal) }[key];
+    if (v !== undefined) {
+      return <td key={key} className="k-num" style={{ ...totalBand, ...nowrap, fontWeight: 800, ...(key === "total" ? { color: "var(--k-blue)" } : null) }}>{v}</td>;
+    }
+    return <td key={key} style={{ ...totalBand, fontWeight: 800, color: "var(--k-blue)" }}>{idx === 0 ? "Total (all invoices)" : ""}</td>;
+  };
+
   return (
     <div>
       <PageHeader
@@ -297,12 +384,40 @@ export default function SalesReportPage() {
         tone="blue"
         title="Sales Report"
         subtitle={<>FBR-submitted invoices, grouped by document date. Quantities shown are what was <strong>filed to FBR</strong>.</>}
+        actions={<>
+          <Button icon={MdRefresh} onClick={fetchReport} disabled={loading || rangeInvalid} title="Reload the report">
+            {loading ? "Loading…" : "Refresh"}
+          </Button>
+          {report && <ColumnPicker columns={SR_COLS} hidden={hiddenCols} onChange={setHiddenCols} />}
+          {canExport && (
+            <Button variant="teal" icon={MdDownload} onClick={exportExcel} disabled={!report || loading || exporting || rangeInvalid}>
+              {exporting ? "Exporting…" : "Excel"}
+            </Button>
+          )}
+          <Button
+            icon={MdPrint}
+            onClick={doPrint}
+            disabled={!report || loading || !report.invoices.length || !!printBusy}
+            title="Print this report on the company letterhead"
+          >
+            Print
+          </Button>
+          <Button
+            variant="primary"
+            icon={MdPictureAsPdf}
+            onClick={doPdf}
+            disabled={!report || loading || !report.invoices.length || !!printBusy}
+            title="Save this report as a PDF on the company letterhead"
+          >
+            {printBusy === "pdf" ? "Building…" : "PDF"}
+          </Button>
+        </>}
       />
 
       <CompanyPicker />
 
       {/* Controls */}
-      <Card style={{ marginBottom: "var(--k-gap)" }}>
+      <ListFilters><Card style={{ marginBottom: "var(--k-gap)" }}>
         <div style={controlsRow}>
           <Field label="Period">
             <div role="group" aria-label="Period mode" style={segWrap}>
@@ -376,22 +491,11 @@ export default function SalesReportPage() {
           </Field>
 
           {canPrintInvoice && (
-            <Field label="Invoice template">
-              <PrintTemplateSelect picker={tplPicker} style={{ flex: 1, maxWidth: 260 }} />
-            </Field>
-          )}
-
-          <div style={{ display: "flex", gap: "0.5rem", marginLeft: "auto", flexWrap: "wrap" }}>
-            <Button variant="primary" icon={MdRefresh} onClick={fetchReport} disabled={loading || rangeInvalid}>
-              {loading ? "Loading…" : "Refresh"}
-            </Button>
-            {canExport && (
-              <Button variant="teal" icon={MdDownload} onClick={exportExcel} disabled={!report || loading || exporting || rangeInvalid}>
-                {exporting ? "Exporting…" : "Export Excel"}
-              </Button>
-            )}
-            {canPrintInvoice && (
-              <>
+            <>
+              <Field label="Invoice template">
+                <PrintTemplateSelect picker={tplPicker} style={{ flex: 1, maxWidth: 260 }} />
+              </Field>
+              <div style={{ display: "flex", gap: "0.5rem", marginLeft: "auto", flexWrap: "wrap" }}>
                 <Button
                   variant="secondary"
                   icon={MdPictureAsPdf}
@@ -410,15 +514,28 @@ export default function SalesReportPage() {
                 >
                   ZIP of PDFs
                 </Button>
-              </>
-            )}
-          </div>
+              </div>
+            </>
+          )}
         </div>
-      </Card>
+      </Card></ListFilters>
 
       {error && <Alert tone="error">{error}</Alert>}
 
+      {/* One totals band for the whole period. */}
+      {report && !loading && (
+        <StatGrid>
+          <StatCard label="Invoices" value={report.invoiceCount} />
+          <StatCard label="Lines" value={report.lineCount} />
+          <StatCard label="Quantity" value={qty(report.grandQuantity)} />
+          <StatCard label="Amount" value={money(report.grandAmount)} />
+          <StatCard label="Sales tax" value={money(report.grandTax)} />
+          <StatCard label="Total" value={money(report.grandTotal)} tone="teal" />
+        </StatGrid>
+      )}
+
       {/* Report body */}
+      <RecordsViewport label="Sales Report records" enabled={!isNarrow}>
       {report && !loading && (
         <Card
           flush
@@ -432,8 +549,9 @@ export default function SalesReportPage() {
           ) : null}
         >
           <div style={reportMeta}>
-            Sale Report · {periodLabel} · {BUYER_TYPES.find((b) => b.value === report.buyerType)?.label || report.buyerType}
-            {" · "}{report.invoiceCount} invoice(s), {report.lineCount} line(s)
+            Sales Report · {periodLabel} · {buyerLabel}{clientName ? ` · Client: ${clientName}` : ""}
+            {" · "}{report.invoiceCount} invoice{report.invoiceCount === 1 ? "" : "s"}
+            {report.invoices.length > 0 ? " · click a row to see its items" : ""}
           </div>
 
           {report.invoices.length === 0 ? (
@@ -495,24 +613,14 @@ export default function SalesReportPage() {
                   </div>
                 );
               })}
-              <div style={{ ...srCard, background: totalBg, borderColor: "var(--k-blue)" }}>
-                <div style={{ fontWeight: 800, color: "var(--k-blue)", marginBottom: 4 }}>TOTAL ({report.lineCount} lines)</div>
-                <div style={srMeta}>
-                  <div><span style={srLbl}>Qty</span><span style={{ ...srVal, fontWeight: 800 }}>{qty(report.grandQuantity)}</span></div>
-                  <div><span style={srLbl}>Amount</span><span style={{ ...srVal, fontWeight: 800 }}>{money(report.grandAmount)}</span></div>
-                  <div><span style={srLbl}>Tax</span><span style={{ ...srVal, fontWeight: 800 }}>{money(report.grandTax)}</span></div>
-                  <div><span style={srLbl}>Total</span><span style={{ ...srVal, fontWeight: 800, color: "var(--k-blue)" }}>{money(report.grandTotal)}</span></div>
-                </div>
-              </div>
             </div>
           ) : (
             <TableWrap data-admin-table-region="">
-              <table className="k-table" style={{ minWidth: 820 }}>
+              <table className="k-table" style={{ minWidth: 640 }}>
                 <thead>
                   <tr>
-                    {["", "Doc. No", "Date", "FBR Inv. No.", "Customer", "HS Code", "Items", "Qty", "Amount", "Tax", "Total"].map((h, i) => (
-                      <th key={i} className={i >= 6 ? "k-num" : undefined}>{h}</th>
-                    ))}
+                    <th style={{ width: 30 }} aria-label="Expand" />
+                    {cols.map((c) => <th key={c.key} className={c.total ? "k-num" : undefined}>{c.label}</th>)}
                     {canPrintInvoice && <th className="is-center">PDF</th>}
                   </tr>
                 </thead>
@@ -532,16 +640,7 @@ export default function SalesReportPage() {
                           <td style={{ width: 30, color: "var(--k-blue)" }}>
                             {open ? <MdExpandMore size={18} /> : <MdChevronRight size={18} />}
                           </td>
-                          <td style={{ fontWeight: 700, color: "var(--k-blue)" }}>{inv.documentNumber}</td>
-                          <td>{new Date(inv.documentDate).toLocaleDateString()}</td>
-                          <td style={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{inv.fbrInvoiceNumber}</td>
-                          <td style={{ maxWidth: 220 }}><div style={clamp2}>{inv.customer}</div></td>
-                          <td style={{ fontFamily: "monospace", fontSize: "0.75rem", maxWidth: 160 }}><div style={clamp2}>{hsCodes}</div></td>
-                          <td className="k-num">{inv.lineCount}</td>
-                          <td className="k-num" style={nowrap}>{qty(inv.totalQuantity)}</td>
-                          <td className="k-num" style={nowrap}>{money(inv.totalAmount)}</td>
-                          <td className="k-num" style={nowrap}>{money(inv.totalTax)}</td>
-                          <td className="k-num" style={{ ...nowrap, fontWeight: 700 }}>{money(inv.totalGross)}</td>
+                          {cols.map((c) => cell(inv, c.key, hsCodes))}
                           {canPrintInvoice && (
                             <td className="is-center">
                               <IconButton
@@ -560,9 +659,9 @@ export default function SalesReportPage() {
                         {/* Expanded line items */}
                         {open && (
                           <tr>
-                            <td colSpan={canPrintInvoice ? 12 : 11} style={{ padding: 0, background: "var(--k-surface-2)" }}>
+                            <td colSpan={cols.length + (canPrintInvoice ? 2 : 1)} style={{ padding: 0, background: "var(--k-surface-2)" }}>
                               <div style={{ overflowX: "auto", padding: "4px 8px 10px 38px" }}>
-                                <table className="k-table k-table--compact" style={{ minWidth: 720, background: "transparent" }}>
+                                <table className="k-table k-table--compact" style={{ minWidth: 640, background: "transparent" }}>
                                   <thead>
                                     <tr>
                                       {["Sr.", "HS Code", "Product", "Qty", "Unit", "Rate", "Amount", "Dis Amt", "Tax Amt", "Total"].map((h, i) => (
@@ -598,13 +697,9 @@ export default function SalesReportPage() {
                 <tfoot>
                   {/* Grand total across all invoices */}
                   <tr>
-                    <td style={{ ...totalCell, fontWeight: 800, color: "var(--k-blue)" }} colSpan={6}>TOTAL (all invoices)</td>
-                    <td className="k-num" style={{ ...totalCell, fontWeight: 800 }}>{report.lineCount}</td>
-                    <td className="k-num" style={{ ...totalCell, ...nowrap, fontWeight: 800 }}>{qty(report.grandQuantity)}</td>
-                    <td className="k-num" style={{ ...totalCell, ...nowrap, fontWeight: 800 }}>{money(report.grandAmount)}</td>
-                    <td className="k-num" style={{ ...totalCell, ...nowrap, fontWeight: 800 }}>{money(report.grandTax)}</td>
-                    <td className="k-num" style={{ ...totalCell, ...nowrap, fontWeight: 800, color: "var(--k-blue)" }}>{money(report.grandTotal)}</td>
-                    {canPrintInvoice && <td style={totalCell} />}
+                    <td style={totalBand} />
+                    {cols.map((c, i) => totalCell(c.key, i))}
+                    {canPrintInvoice && <td style={totalBand} />}
                   </tr>
                 </tfoot>
               </table>
@@ -614,6 +709,7 @@ export default function SalesReportPage() {
       )}
 
       {loading && <Loading>Loading report…</Loading>}
+      </RecordsViewport>
 
       {bulk && (
         <div data-admin-backdrop="" style={formStyles.backdrop} role="dialog" aria-modal="true" aria-label="Building Tax Invoice PDFs">
@@ -665,7 +761,7 @@ const nowrap = { whiteSpace: "nowrap" };
 const bandBg = "#f0f7ff";
 const totalBg = "#eef4ff";
 const pdfRed = "#b71c1c";
-const totalCell = { background: totalBg, borderTop: "2px solid var(--k-blue)" };
+const totalBand = { background: totalBg, borderTop: "2px solid var(--k-blue)" };
 
 // Filter row inside the controls card — wraps on narrow screens.
 const controlsRow = { display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "flex-end" };

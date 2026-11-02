@@ -1,16 +1,30 @@
-import { MdEmail, MdPhone, MdLocationOn, MdEdit, MdDelete, MdContentCopy } from "react-icons/md";
+import { MdEdit, MdDelete, MdContentCopy, MdReceiptLong, MdInventory2, MdPayments } from "react-icons/md";
+import { useNavigate } from "react-router-dom";
 import { deleteSupplier } from "../api/supplierApi";
 import { useConfirm } from "./ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
-import { Facts, Button } from "../ui/Kit";
+import PartyCard from "./party/PartyCard";
 
-export default function SupplierList({ suppliers, onEdit, onCopy, fetchSuppliers }) {
+export default function SupplierList({ suppliers, commonGroups, onEdit, onEditCommon, onCopy, fetchSuppliers, payables }) {
   const confirm = useConfirm();
   const { has } = usePermissions();
   const canUpdate = has("suppliers.manage.update");
   const canDelete = has("suppliers.manage.delete");
   const canCopy = has("suppliers.manage.copy");
+  // Statement opens the accounting report supplier-statement for this supplier, so it
+  // carries that report's permission — a role without it never sees a button
+  // that would land on a refusal. All periods: a statement answers "how did
+  // this balance come about", which is the whole history.
+  const canStatement = has("accounting.reports.view");
+  const navigate = useNavigate();
+  const openStatement = (s) =>
+    navigate(`/accounting/reports/catalog/supplier-statement?${new URLSearchParams({ period: "allPeriods", supplierId: String(s.id) })}`,
+      { state: { backTo: "/Suppliers", backLabel: "Suppliers" } });
+  // Pay opens the supplier's payables, where each unpaid purchase has its own
+  // Pay button; that screen needs both keys, so the shortcut does too.
+  const canPay = !!payables && has("purchasebills.payables.view") && has("accounting.payments.create");
+  const money = (n) => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const handleDelete = async (s) => {
     if (s.hasPurchaseBills) {
@@ -33,80 +47,45 @@ export default function SupplierList({ suppliers, onEdit, onCopy, fetchSuppliers
   };
 
   return (
-    <div className="k-grid-cards">
-      {suppliers.map((supplier) => (
-        <section key={supplier.id} className="k-card" style={styles.card}>
-          <div className="k-card__body" style={styles.body}>
-          <h3 style={styles.name}>{supplier.name}</h3>
-          {supplier.email && (
-            <p style={styles.line}>
-              <MdEmail style={{ color: "var(--k-blue)", flexShrink: 0 }} /> {supplier.email}
-            </p>
-          )}
-          {supplier.phone && (
-            <p style={styles.line}>
-              <MdPhone style={{ color: "var(--k-teal)", flexShrink: 0 }} /> {supplier.phone}
-            </p>
-          )}
-          {supplier.address && (
-            <p style={styles.line}>
-              <MdLocationOn style={{ color: "var(--k-muted)", flexShrink: 0 }} /> {supplier.address}
-            </p>
-          )}
-          {(supplier.ntn || supplier.strn || supplier.registrationType) && (
-            <div style={{ marginTop: "0.5rem" }}>
-              <Facts
-                facts={[
-                  supplier.ntn && ["NTN", supplier.ntn],
-                  supplier.strn && ["STRN", supplier.strn],
-                  supplier.registrationType && ["Type", supplier.registrationType],
-                ]}
-              />
-            </div>
-          )}
-          {supplier.hasPurchaseBills && (
-            <p style={styles.note}>has purchase bills</p>
-          )}
-          {(canUpdate || canDelete || canCopy) && <span style={styles.push} aria-hidden="true" />}
-          {(canUpdate || canDelete || canCopy) && (
-            <div style={styles.actions}>
-              {canUpdate && (
-                <Button variant="primary" size="sm" icon={MdEdit} onClick={() => onEdit(supplier)}>Edit</Button>
-              )}
-              {canCopy && onCopy && (
-                <Button size="sm" icon={MdContentCopy} onClick={() => onCopy(supplier)} title="Copy this supplier into another company">
-                  Copy
-                </Button>
-              )}
-              {canDelete && (
-                <Button
-                  variant="danger"
-                  size="sm"
-                  icon={MdDelete}
-                  style={supplier.hasPurchaseBills ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
-                  title={supplier.hasPurchaseBills ? "Has purchase bills — delete those first" : "Delete supplier"}
-                  onClick={() => handleDelete(supplier)}
-                >
-                  Delete
-                </Button>
-              )}
-            </div>
-          )}
-          </div>
-        </section>
-      ))}
+    <div className="pd-grid">
+      {suppliers.map((supplier, i) => {
+        // A supplier shared with other companies edits through the Common
+        // Supplier form, so the change reaches every company's copy.
+        const shared = supplier.supplierGroupId != null ? commonGroups?.get(supplier.supplierGroupId) : null;
+        return (
+        <PartyCard
+          key={supplier.id}
+          party={supplier}
+          shared={shared}
+          style={{ animationDelay: `${Math.min(i, 12) * 0.03}s` }}
+          footnote={<>
+            {payables && (payables.get(supplier.id) || 0) > 0 && (
+              <span className="pd-contact__row" style={{ color: "#b45309", fontSize: "0.8rem", fontWeight: 700 }}>
+                <MdPayments style={{ color: "#d97706" }} /><span>Payable Rs. {money(payables.get(supplier.id))}</span>
+              </span>
+            )}
+            {supplier.hasPurchaseBills && (
+              <span className="pd-contact__row" style={{ color: "#00695c", fontSize: "0.76rem", fontWeight: 600 }}>
+                <MdInventory2 style={{ color: "#00897b" }} /><span>Has purchase bills</span>
+              </span>
+            )}
+          </>}
+          actions={[
+            canUpdate && (shared && onEditCommon
+              ? { key: "edit", label: "Edit", icon: <MdEdit size={16} />, variant: "primary", onClick: () => onEditCommon(shared.groupId), title: "Edit for every company that has this supplier" }
+              : { key: "edit", label: "Edit", icon: <MdEdit size={16} />, variant: "primary", onClick: () => onEdit(supplier) }),
+            canPay && (payables.get(supplier.id) || 0) > 0 && { key: "pay", label: "Pay", icon: <MdPayments size={16} />, onClick: () => navigate(`/supplier-payables?supplierId=${supplier.id}`), title: "Open this supplier's unpaid purchases and pay them" },
+            canStatement && { key: "statement", label: "Statement", icon: <MdReceiptLong size={16} />, onClick: () => openStatement(supplier), title: "Open this supplier's statement" },
+            canCopy && onCopy && { key: "copy", label: "Copy", icon: <MdContentCopy size={16} />, iconOnly: true, onClick: () => onCopy(supplier), title: "Copy this supplier into another company" },
+            canDelete && {
+              key: "delete", label: "Delete", icon: <MdDelete size={17} />, iconOnly: true, variant: "danger",
+              onClick: () => handleDelete(supplier),
+              title: supplier.hasPurchaseBills ? "Has purchase bills — delete those first" : "Delete supplier",
+            },
+          ].filter(Boolean)}
+        />
+        );
+      })}
     </div>
   );
 }
-
-// Card-specific layout; colours and sizes come from the kit tokens.
-const styles = {
-  card: { margin: 0 },
-  // Column body so the action row sits at the bottom of every card in a grid row.
-  body: { display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box" },
-  name: { margin: "0 0 0.5rem", fontSize: "calc(var(--k-font) + 0.15rem)", fontWeight: 800, color: "var(--k-ink)", lineHeight: 1.3, overflowWrap: "anywhere" },
-  line: { display: "flex", alignItems: "center", gap: "0.4rem", margin: "0 0 0.2rem", fontSize: "var(--k-font)", color: "var(--k-muted)", lineHeight: 1.5, overflowWrap: "anywhere" },
-  note: { margin: "0.4rem 0 0", fontSize: "0.74rem", color: "#00695c" },
-  push: { flex: "1 0 0.9rem" },
-  actions: { display: "flex", flexWrap: "wrap", gap: "0.5rem", paddingTop: "0.75rem", borderTop: "1px solid var(--k-line)" },
-};

@@ -292,6 +292,26 @@ Instead of manually entering challan items one by one, you can import them direc
 1. **Upload a PDF** -- Upload the PO as a PDF file
 2. **Paste Text** -- Copy-paste the PO text from email, Word document, etc.
 
+### Tax filing rows (Trader)
+
+Open **Invoices → Adjust invoice**. The original bill groups appear as filing
+rows. Leave them separate to select a different HS classification for each, or
+tick the desired rows and choose **Combine selected**. Choose the classification
+from the company's item catalog; enter the filing quantity in its displayed unit
+and the exact **amount excluding tax**. The remaining amount must reach zero.
+
+**Separate source lines** turns a grouped row back into its original lines for
+individual classification. **View original bill lines** shows what the customer
+was billed. **Rebuild from current bill** replaces the draft with the current
+commercial groups and asks for confirmation first.
+
+Choose **Save filing rows & complete review** when every row is classified and
+the filing total matches the bill subtotal. Tax invoice printing and FBR use
+these saved rows. Original bill quantities, prices, stock and accounting remain
+unchanged. A changed bill requires another review; submitted or uncertain
+invoices cannot be adjusted. Partial return notes must use a quantity and rate
+that can be represented in the filed unit; full reversals retain the whole filing.
+
 ### How to Import a PO
 
 1. Go to **Challans** in the sidebar

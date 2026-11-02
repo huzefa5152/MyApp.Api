@@ -87,7 +87,7 @@ export default function ComboBox({
   // Keep the highlighted option in view while arrowing through a long list.
   useEffect(() => {
     if (hi < 0) return;
-    listRef.current?.querySelector(`[data-idx="${hi}"]`)?.scrollIntoView({ block: "nearest" });
+    listRef.current?.querySelector(`[data-idx="${hi}"]`)?.scrollIntoView?.({ block: "nearest" });
   }, [hi]);
 
   const close = (refocus) => { setOpen(false); if (refocus) triggerRef.current?.focus(); };

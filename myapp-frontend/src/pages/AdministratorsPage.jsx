@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -213,7 +214,7 @@ export default function AdministratorsPage() {
         />
       </Toolbar>
 
-      {loading ? (
+      <RecordsViewport label="Administrators records">{loading ? (
         <Loading>Loading administrators...</Loading>
       ) : filtered.length === 0 ? (
         <EmptyState icon={MdAdminPanelSettings}>
@@ -326,7 +327,7 @@ export default function AdministratorsPage() {
             );
           })}
         </div>
-      )}
+      )}</RecordsViewport>
 
       {/* ── Create administrator modal ── */}
       {showCreate && (

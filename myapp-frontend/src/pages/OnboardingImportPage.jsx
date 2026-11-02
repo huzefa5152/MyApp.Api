@@ -217,7 +217,7 @@ export default function OnboardingImportPage() {
                 style={{ ...st.choice, ...(on ? st.choiceOn : null), ...(can ? null : st.choiceOff) }}>
                 <input type="checkbox" checked={on} disabled={!can} onChange={() => toggleSheet(s.key)} style={st.checkbox} />
                 <span style={st.choiceText}>
-                  <strong>{s.title}</strong>
+                  <strong>{sheetByKey(s.key)?.title || s.title}</strong>
                   <span style={st.muted}>{can ? s.blurb : "Your role cannot create these records."}</span>
                 </span>
               </label>
@@ -241,12 +241,19 @@ export default function OnboardingImportPage() {
         <div style={st.sheetGrid}>
           {SHEETS.filter((s) => selected.includes(s.key)).map((s) => (
             <div key={s.key} style={st.sheetTile}>
-              <strong style={st.tileTitle}>{s.title}</strong>
+              <strong style={st.tileTitle}>{sheetByKey(s.key)?.title || s.title}</strong>
               <span style={st.muted}>{s.blurb}</span>
               <span style={st.requiredTag}>{s.required} required column{s.required === 1 ? "" : "s"}</span>
             </div>
           ))}
         </div>
+        {selected.includes("items") && (
+          <Notice>
+            <strong>Use the Items sheet for both catalog lists.</strong>{" "}
+            Leave HS Code and Sale Type blank for a bill category. Enter an HS Code and the appropriate Sale Type for an FBR classification.
+            Unit is the usual bill unit or default filing unit. Import one classification per tax mapping, then choose kg, pack or another FBR-supported unit and enter its quantity on each filing row. Quantity is not converted automatically.
+          </Notice>
+        )}
         <div style={st.actions}>
           <Button variant="primary" icon={MdFileDownload} onClick={onDownloadSample} disabled={busy === "sample" || !selected.length}>
             {busy === "sample" ? "Preparing…" : "Download sample workbook"}
@@ -311,7 +318,7 @@ export default function OnboardingImportPage() {
                 key: s.key,
                 label: (
                   <>
-                    {s.title}
+                    {sheetByKey(s.key)?.title || s.title}
                     {s.errors > 0 && <span style={st.tabErr}>{s.errors} to fix</span>}
                   </>
                 ),
@@ -378,7 +385,7 @@ export default function OnboardingImportPage() {
                 const meta = sheetByKey(s.key);
                 return (
                   <div key={s.key} style={st.sheetTile}>
-                    <strong style={st.tileTitle}>{s.title}</strong>
+                    <strong style={st.tileTitle}>{sheetByKey(s.key)?.title || s.title}</strong>
                     <span style={{ color: STATUS.import.color, fontWeight: 700 }}>{s.created} added</span>
                     <span style={st.muted}>{s.skipped} skipped{s.failed ? `, ${s.failed} could not be saved` : ""}</span>
                     {meta && has(meta.viewPermission) && (
@@ -415,7 +422,7 @@ function Page({ companyName, children }) {
         tone="brand"
         title="Import Data"
         subtitle={<>
-          Bring {companyName ? <strong>{companyName}</strong> : "a company"}'s customers, items, suppliers and opening stock
+          Bring {companyName ? <strong>{companyName}</strong> : "a company"}'s customers, bill categories, FBR classifications, suppliers and opening stock
           in from one Excel file. Only what FBR and your printed documents need is asked for.
         </>}
       />

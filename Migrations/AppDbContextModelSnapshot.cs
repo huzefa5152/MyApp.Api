@@ -142,6 +142,181 @@ namespace MyApp.Api.Migrations
                     b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
+            modelBuilder.Entity("MyApp.Api.Models.Accounting.AccountTransfer", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("FromAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ReconciledDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ToAccountId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FromAccountId");
+
+                    b.HasIndex("ToAccountId");
+
+                    b.HasIndex("CompanyId", "Number")
+                        .IsUnique();
+
+                    b.ToTable("AccountTransfers");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.Accounting.BankReconciliation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BankAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("ClearedBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("StatementBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("StatementDate")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("BankAccountId", "StatementDate")
+                        .IsUnique();
+
+                    b.ToTable("BankReconciliations");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.Accounting.BankStatementImport", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BankAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("ImportedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("RowCount")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankAccountId");
+
+                    b.HasIndex("CompanyId");
+
+                    b.ToTable("BankStatementImports");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.Accounting.BankStatementLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("BankAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ImportId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PaymentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankAccountId");
+
+                    b.HasIndex("ImportId");
+
+                    b.HasIndex("CompanyId", "BankAccountId", "Status");
+
+                    b.ToTable("BankStatementLines");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
             modelBuilder.Entity("MyApp.Api.Models.Accounting.JournalEntry", b =>
                 {
                     b.Property<int>("Id")
@@ -338,11 +513,21 @@ namespace MyApp.Api.Migrations
                     b.Property<int?>("AccountId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("AdjustmentAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("AdjustmentAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<decimal>("Amount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<int?>("InvoiceId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Kind")
                         .HasColumnType("int");
 
                     b.Property<int>("PaymentId")
@@ -351,7 +536,19 @@ namespace MyApp.Api.Migrations
                     b.Property<int?>("PurchaseBillId")
                         .HasColumnType("int");
 
+                    b.Property<decimal>("TaxAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("TaxRate")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("AdjustmentAccountId");
 
                     b.HasIndex("InvoiceId");
 
@@ -630,6 +827,9 @@ namespace MyApp.Api.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<bool>("AllowNonFbrBills")
+                        .HasColumnType("bit");
+
                     b.Property<string>("BrandName")
                         .HasColumnType("nvarchar(max)");
 
@@ -693,6 +893,9 @@ namespace MyApp.Api.Migrations
 
                     b.Property<string>("FbrEnvironment")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("FbrOmitProductDescription")
+                        .HasColumnType("bit");
 
                     b.Property<int?>("FbrProvinceCode")
                         .HasColumnType("int");
@@ -765,6 +968,9 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("int");
 
                     b.Property<bool>("StockGuardHardBlock")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("TaxInvoiceUseOriginalBillLines")
                         .HasColumnType("bit");
 
                     b.HasKey("Id");
@@ -939,6 +1145,9 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("Site")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("SplitFromChallanId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -956,6 +1165,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("InvoiceId");
 
                     b.HasIndex("SalesOrderId");
+
+                    b.HasIndex("SplitFromChallanId");
 
                     b.HasIndex("CompanyId", "ChallanNumber");
 
@@ -975,6 +1186,10 @@ namespace MyApp.Api.Migrations
                     b.Property<decimal?>("ActualUnitCost")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("ActualUnitCostOverride")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<int>("DeliveryChallanId")
                         .HasColumnType("int");
@@ -1062,6 +1277,52 @@ namespace MyApp.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("EmailEnquiries");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.EmailReplyAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ConnectionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("MessageId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ProtectedPreview")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ProviderMessageId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId", "UserId", "MessageId");
+
+                    b.ToTable("EmailReplyAttempts");
 
                     b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
@@ -1634,6 +1895,9 @@ namespace MyApp.Api.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<bool>("AllowCompanyReplies")
+                        .HasColumnType("bit");
+
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
 
@@ -1686,6 +1950,11 @@ namespace MyApp.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("GrantedScopes")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<string>("HistoryId")
                         .HasColumnType("nvarchar(max)");
@@ -1744,6 +2013,15 @@ namespace MyApp.Api.Migrations
                     b.Property<int>("ConnectionId")
                         .HasColumnType("int");
 
+                    b.Property<bool>("IsRemoved")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("IsUnread")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("LabelsSyncedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("ProtectedContent")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -1760,6 +2038,9 @@ namespace MyApp.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(320)
                         .HasColumnType("nvarchar(320)");
+
+                    b.Property<bool>("SenderUnverified")
+                        .HasColumnType("bit");
 
                     b.Property<string>("Subject")
                         .IsRequired()
@@ -1798,6 +2079,9 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("ProtectedVerifier")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("UpgradeConnectionId")
+                        .HasColumnType("int");
 
                     b.Property<bool>("Used")
                         .HasColumnType("bit");
@@ -2027,6 +2311,10 @@ namespace MyApp.Api.Migrations
                     b.Property<bool>("IsFbrExcluded")
                         .HasColumnType("bit");
 
+                    b.Property<string>("ManualChallanNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<bool?>("NoteAffectsStock")
                         .HasColumnType("bit");
 
@@ -2069,6 +2357,17 @@ namespace MyApp.Api.Migrations
                     b.Property<int?>("SupplementsInvoiceId")
                         .HasColumnType("int");
 
+                    b.Property<string>("TaxFilingRowsJson")
+                        .IsConcurrencyToken()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TaxTreatment")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)")
+                        .HasDefaultValue("FBR");
+
                     b.Property<decimal>("WithholdingTaxAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -2108,6 +2407,14 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal?>("ActualUnitCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("ActualUnitCostOverride")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<int?>("DeliveryItemId")
                         .HasColumnType("int");
@@ -2154,6 +2461,9 @@ namespace MyApp.Api.Migrations
 
                     b.Property<string>("SroScheduleNo")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("SupplierId")
+                        .HasColumnType("int");
 
                     b.Property<string>("UOM")
                         .IsRequired()
@@ -2504,8 +2814,11 @@ namespace MyApp.Api.Migrations
 
                     b.Property<string>("Scopes")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("SecurityStamp")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("TokenHash")
                         .IsRequired()
@@ -2596,8 +2909,8 @@ namespace MyApp.Api.Migrations
 
                     b.Property<string>("Scopes")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<DateTime?>("UsedAt")
                         .HasColumnType("datetime2");
@@ -2729,6 +3042,59 @@ namespace MyApp.Api.Migrations
                     b.HasKey("UserId");
 
                     b.ToTable("McpUserAccessPolicies");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.StarterTemplate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("HtmlContent")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TemplateType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TemplateType", "IsActive");
+
+                    b.ToTable("StarterTemplates");
 
                     b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
@@ -3762,11 +4128,11 @@ namespace MyApp.Api.Migrations
 
                     b.HasIndex("CompanyId", "ClientId");
 
+                    b.HasIndex("CompanyId", "IsActive");
+
                     b.HasIndex("CompanyId", "ClientId", "Name")
                         .IsUnique()
                         .HasFilter("[CompanyId] IS NOT NULL AND [ClientId] IS NOT NULL");
-
-                    b.HasIndex("CompanyId", "IsActive");
 
                     b.ToTable("POFormats");
 
@@ -3949,8 +4315,6 @@ namespace MyApp.Api.Migrations
 
             modelBuilder.Entity("MyApp.Api.Models.PoImportArchive", b =>
                 {
-                    b.Property<string>("DocumentKind").HasMaxLength(32).HasColumnType("nvarchar(32)");
-                    b.Property<int?>("DocumentId").HasColumnType("int");
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
@@ -3963,6 +4327,13 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("ContentSha256")
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
+
+                    b.Property<int?>("DocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DocumentKind")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("ErrorMessage")
                         .HasMaxLength(1000)
@@ -4081,6 +4452,47 @@ namespace MyApp.Api.Migrations
                     b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
+            modelBuilder.Entity("MyApp.Api.Models.PrivateCostChange", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ActorId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("AfterJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("BeforeJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Target")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("TargetId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId", "Target", "TargetId");
+
+                    b.ToTable("PrivateCostChanges");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
             modelBuilder.Entity("MyApp.Api.Models.PurchaseBill", b =>
                 {
                     b.Property<int>("Id")
@@ -4088,6 +4500,10 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("AmountCredited")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("AmountInWords")
                         .IsRequired()
@@ -4136,6 +4552,11 @@ namespace MyApp.Api.Migrations
                     b.Property<int>("PurchaseBillNumber")
                         .HasColumnType("int");
 
+                    b.Property<string>("PurchaseCategory")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
                     b.Property<string>("ReconciliationStatus")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -4148,6 +4569,9 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("nvarchar(20)");
 
                     b.Property<int?>("SourceDeliveryChallanId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SourceInvoiceId")
                         .HasColumnType("int");
 
                     b.Property<decimal>("Subtotal")
@@ -4185,10 +4609,126 @@ namespace MyApp.Api.Migrations
                         .IsUnique();
 
                     b.HasIndex("SourceDeliveryChallanId", "SupplierId")
-                        .IsUnique()
                         .HasFilter("[SourceDeliveryChallanId] IS NOT NULL");
 
                     b.ToTable("PurchaseBills");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.PurchaseDebitNote", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DebitNoteNumber")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("GSTAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("GSTRate")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<decimal>("GrandTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("PurchaseBillId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("SupplierId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SupplierRef")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PurchaseBillId");
+
+                    b.HasIndex("SupplierId");
+
+                    b.HasIndex("CompanyId", "DebitNoteNumber")
+                        .IsUnique();
+
+                    b.ToTable("PurchaseDebitNotes");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.PurchaseDebitNoteItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("AccountId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("HSCode")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("ItemTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ItemTypeName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("LineTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("PurchaseDebitNoteId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("UOM")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("ItemTypeId");
+
+                    b.HasIndex("PurchaseDebitNoteId");
+
+                    b.ToTable("PurchaseDebitNoteItems");
 
                     b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
@@ -4233,6 +4773,12 @@ namespace MyApp.Api.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<int?>("LocalDeliveryItemId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("LocalInvoiceItemId")
+                        .HasColumnType("int");
+
                     b.Property<int>("PurchaseBillId")
                         .HasColumnType("int");
 
@@ -4269,6 +4815,12 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("GoodsReceiptItemId");
 
                     b.HasIndex("ItemTypeId");
+
+                    b.HasIndex("LocalDeliveryItemId")
+                        .HasFilter("[LocalDeliveryItemId] IS NOT NULL");
+
+                    b.HasIndex("LocalInvoiceItemId")
+                        .HasFilter("[LocalInvoiceItemId] IS NOT NULL");
 
                     b.HasIndex("PurchaseBillId");
 
@@ -4450,8 +5002,8 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal?>("UnitPrice")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(28, 12)
+                        .HasColumnType("decimal(28,12)");
 
                     b.HasKey("Id");
 
@@ -4496,6 +5048,21 @@ namespace MyApp.Api.Migrations
 
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime2");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("DiscountIsPercent")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("DiscountReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<decimal>("DiscountValue")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<DateTime?>("EnquiryDate")
                         .HasColumnType("datetime2");
@@ -4557,6 +5124,21 @@ namespace MyApp.Api.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("DiscountIsPercent")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("DiscountReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<decimal>("DiscountValue")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
                     b.Property<string>("ImagePath")
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
@@ -4580,8 +5162,8 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal>("UnitPrice")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(28, 12)
+                        .HasColumnType("decimal(28,12)");
 
                     b.HasKey("Id");
 
@@ -4590,6 +5172,64 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("SalesQuoteId");
 
                     b.ToTable("SalesQuoteItems");
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.StockEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsCancelled")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("ItemTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal>("QuantityDelta")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("UnitCost")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("decimal(19,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemTypeId");
+
+                    b.HasIndex("CompanyId", "Date");
+
+                    b.HasIndex("CompanyId", "RequestId")
+                        .IsUnique();
+
+                    b.ToTable("StockEntries");
 
                     b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
@@ -5028,6 +5668,90 @@ namespace MyApp.Api.Migrations
                     b.Navigation("ParentGroup");
                 });
 
+            modelBuilder.Entity("MyApp.Api.Models.Accounting.AccountTransfer", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MyApp.Api.Models.Accounting.Account", "FromAccount")
+                        .WithMany()
+                        .HasForeignKey("FromAccountId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("MyApp.Api.Models.Accounting.Account", "ToAccount")
+                        .WithMany()
+                        .HasForeignKey("ToAccountId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+
+                    b.Navigation("FromAccount");
+
+                    b.Navigation("ToAccount");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.Accounting.BankReconciliation", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.Accounting.Account", "BankAccount")
+                        .WithMany()
+                        .HasForeignKey("BankAccountId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("MyApp.Api.Models.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("BankAccount");
+
+                    b.Navigation("Company");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.Accounting.BankStatementImport", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.Accounting.Account", "BankAccount")
+                        .WithMany()
+                        .HasForeignKey("BankAccountId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("MyApp.Api.Models.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("BankAccount");
+
+                    b.Navigation("Company");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.Accounting.BankStatementLine", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.Accounting.Account", "BankAccount")
+                        .WithMany()
+                        .HasForeignKey("BankAccountId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("MyApp.Api.Models.Accounting.BankStatementImport", "Import")
+                        .WithMany("Lines")
+                        .HasForeignKey("ImportId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("BankAccount");
+
+                    b.Navigation("Import");
+                });
+
             modelBuilder.Entity("MyApp.Api.Models.Accounting.JournalEntry", b =>
                 {
                     b.HasOne("MyApp.Api.Models.Company", "Company")
@@ -5071,6 +5795,16 @@ namespace MyApp.Api.Migrations
 
             modelBuilder.Entity("MyApp.Api.Models.Accounting.PaymentAllocation", b =>
                 {
+                    b.HasOne("MyApp.Api.Models.Accounting.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("MyApp.Api.Models.Accounting.Account", "AdjustmentAccount")
+                        .WithMany()
+                        .HasForeignKey("AdjustmentAccountId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("MyApp.Api.Models.Invoice", "Invoice")
                         .WithMany()
                         .HasForeignKey("InvoiceId")
@@ -5086,6 +5820,10 @@ namespace MyApp.Api.Migrations
                         .WithMany()
                         .HasForeignKey("PurchaseBillId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Account");
+
+                    b.Navigation("AdjustmentAccount");
 
                     b.Navigation("Invoice");
 
@@ -5557,6 +6295,55 @@ namespace MyApp.Api.Migrations
                     b.Navigation("Supplier");
                 });
 
+            modelBuilder.Entity("MyApp.Api.Models.PurchaseDebitNote", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.Company", "Company")
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("MyApp.Api.Models.PurchaseBill", null)
+                        .WithMany()
+                        .HasForeignKey("PurchaseBillId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("MyApp.Api.Models.Supplier", "Supplier")
+                        .WithMany()
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+
+                    b.Navigation("Supplier");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.PurchaseDebitNoteItem", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.Accounting.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("MyApp.Api.Models.ItemType", "ItemType")
+                        .WithMany()
+                        .HasForeignKey("ItemTypeId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("MyApp.Api.Models.PurchaseDebitNote", "PurchaseDebitNote")
+                        .WithMany("Items")
+                        .HasForeignKey("PurchaseDebitNoteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Account");
+
+                    b.Navigation("ItemType");
+
+                    b.Navigation("PurchaseDebitNote");
+                });
+
             modelBuilder.Entity("MyApp.Api.Models.PurchaseItem", b =>
                 {
                     b.HasOne("MyApp.Api.Models.GoodsReceiptItem", "GoodsReceiptItem")
@@ -5568,6 +6355,16 @@ namespace MyApp.Api.Migrations
                         .WithMany()
                         .HasForeignKey("ItemTypeId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MyApp.Api.Models.DeliveryItem", null)
+                        .WithMany()
+                        .HasForeignKey("LocalDeliveryItemId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("MyApp.Api.Models.InvoiceItem", null)
+                        .WithMany()
+                        .HasForeignKey("LocalInvoiceItemId")
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("MyApp.Api.Models.PurchaseBill", "PurchaseBill")
                         .WithMany("Items")
@@ -5708,6 +6505,23 @@ namespace MyApp.Api.Migrations
                     b.Navigation("SalesQuote");
                 });
 
+            modelBuilder.Entity("MyApp.Api.Models.StockEntry", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MyApp.Api.Models.ItemType", "ItemType")
+                        .WithMany()
+                        .HasForeignKey("ItemTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ItemType");
+                });
+
             modelBuilder.Entity("MyApp.Api.Models.StockMovement", b =>
                 {
                     b.HasOne("MyApp.Api.Models.Company", "Company")
@@ -5818,6 +6632,11 @@ namespace MyApp.Api.Migrations
                     b.Navigation("Company");
                 });
 
+            modelBuilder.Entity("MyApp.Api.Models.Accounting.BankStatementImport", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
             modelBuilder.Entity("MyApp.Api.Models.Accounting.JournalEntry", b =>
                 {
                     b.Navigation("Lines");
@@ -5895,6 +6714,11 @@ namespace MyApp.Api.Migrations
                 {
                     b.Navigation("GoodsReceipts");
 
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.PurchaseDebitNote", b =>
+                {
                     b.Navigation("Items");
                 });
 

@@ -116,6 +116,61 @@ export function recalcLine({ quantity, unitPrice, lineTotal }, edited) {
 }
 
 /**
+ * Which figure the operator types on a line: the unit price (the line total is
+ * worked out) or the line total (the unit price is worked out). The worked-out
+ * field is read-only, so the two can never fight.
+ */
+export const ENTRY_MODE = { price: "price", total: "total" };
+
+/**
+ * Apply one keystroke under an entry mode. `field` is "quantity", "unitPrice"
+ * or "lineTotal"; everything in and out is a string, as in recalcLine.
+ *
+ *   price mode: quantity / unit price are typed, the line total follows.
+ *   total mode: quantity / line total are typed, the unit price follows — and a
+ *               quantity change keeps the total, re-dividing the rate.
+ *
+ * A field the mode makes read-only is never written from the keyboard: an
+ * edit to it is ignored rather than silently switching modes.
+ */
+export function applyLineEntry({ quantity, unitPrice, lineTotal }, field, value, mode) {
+  const row = { quantity: quantity ?? "", unitPrice: unitPrice ?? "", lineTotal: lineTotal ?? "" };
+  if (mode === ENTRY_MODE.total) {
+    if (field === "unitPrice") return row;
+    const next = { ...row, [field]: value ?? "" };
+    const t = parseFloat(next.lineTotal);
+    const q = parseFloat(next.quantity);
+    if (String(next.lineTotal).trim() === "" || !Number.isFinite(t)) return { ...next, unitPrice: "" };
+    const p = unitPriceFrom(t, q);
+    return { ...next, unitPrice: p == null ? "" : String(p) };
+  }
+  if (field === "lineTotal") return row;
+  const next = { ...row, [field]: value ?? "" };
+  const q = parseFloat(next.quantity);
+  const p = parseFloat(next.unitPrice);
+  if (!(q > 0) || !Number.isFinite(p)) return { ...next, lineTotal: "" };
+  return { ...next, lineTotal: String(lineTotalFrom(q, p)) };
+}
+
+/**
+ * The figures a line shows when the operator flips the mode: the newly typed
+ * field starts from what the line comes to now, so nothing on screen moves.
+ * Going back to price mode trims the rate to the fewest decimals that still
+ * reproduce the total, so the box the operator now types into reads cleanly.
+ */
+export function lineForMode({ quantity, unitPrice, lineTotal }, mode) {
+  const q = parseFloat(quantity);
+  const p = parseFloat(unitPrice);
+  const total = String(lineTotal ?? "").trim() !== "" && Number.isFinite(parseFloat(lineTotal))
+    ? parseFloat(lineTotal)
+    : (q > 0 && Number.isFinite(p) ? lineTotalFrom(q, p) : null);
+  if (mode === ENTRY_MODE.total)
+    return { quantity: quantity ?? "", unitPrice: unitPrice ?? "", lineTotal: total == null ? "" : String(total) };
+  const shown = Number.isFinite(p) ? displayUnitPrice(p, q, total) : (unitPrice ?? "");
+  return { quantity: quantity ?? "", unitPrice: String(shown), lineTotal: total == null ? "" : String(total) };
+}
+
+/**
  * How a derived rate should READ on screen. A 12-decimal rate is correct and
  * unreadable, so it is shown trimmed — but never rounded to the point where it
  * stops reproducing the total, because a rate that visibly disagrees with the

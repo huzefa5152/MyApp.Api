@@ -1,4 +1,6 @@
-import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
+import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { richTextToPlain } from "../utils/richText";
 import { useNavigate } from "react-router-dom";
@@ -187,18 +189,18 @@ export default function SalesOrderPage() {
         tone="teal"
         title="Sales Orders"
         subtitle={selectedCompany ? `${totalCount} order${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}` : "Select a company to view orders"}
-        actions={companies.length > 0 && (canCreate || canImportPo) ? (
-          <>
-            {canCreate && <Button variant="primary" icon={MdAdd} onClick={() => selectedCompany && (setEditOrder(null), setShowForm(true))}>New Order</Button>}
-            {canImportPo && <Button variant="secondary" icon={MdUploadFile} onClick={() => selectedCompany && setShowImport(true)}>Import Customer PO</Button>}
-          </>
-        ) : null}
+        actions={<>
+          <DocumentLinesHeaderLink />
+          {companies.length > 0 && canCreate && <Button variant="primary" icon={MdAdd} onClick={() => selectedCompany && (setEditOrder(null), setShowForm(true))}>New Order</Button>}
+          {companies.length > 0 && canImportPo && <Button variant="secondary" icon={MdUploadFile} onClick={() => selectedCompany && setShowImport(true)}>Import Customer PO</Button>}
+        </>}
       />
 
       {loadingCompanies ? <Loading>Loading companies...</Loading> : companies.length > 0 ? (
         <>
           <CompanyPicker />
           {selectedCompany && (
+            <ListFilters>
             <Toolbar>
               <SearchBox placeholder="Search Order#, Client, PO..." value={search} onChange={(text) => { setSearch(text); setPage(1); }} />
               <select className="k-select" aria-label="Status" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
@@ -208,11 +210,12 @@ export default function SalesOrderPage() {
               <ToolbarSpacer />
               <PrintTemplateSelect picker={tplPicker} />
             </Toolbar>
+            </ListFilters>
           )}
         </>
       ) : <EmptyState icon={MdAssignment}>No companies available. Add a company first.</EmptyState>}
 
-      {loading ? <Loading>Loading orders...</Loading> : orders.length === 0 && selectedCompany ? (
+      <RecordsViewport label="Sales Order records">{loading ? <Loading>Loading orders...</Loading> : orders.length === 0 && selectedCompany ? (
         <EmptyState icon={MdAssignment}>No sales orders found.</EmptyState>
       ) : (
         <>
@@ -291,7 +294,7 @@ export default function SalesOrderPage() {
             />
           )}
         </>
-      )}
+      )}</RecordsViewport>
 
       {attachTarget && selectedCompany && (
         <AttachmentQuickModal
@@ -375,6 +378,6 @@ const st = {
   invPill: { fontSize: "0.7rem", fontWeight: 700, padding: "0.1rem 0.5rem", borderRadius: 20 },
   challanCountBtn: { display: "inline-flex", alignItems: "center", gap: "0.2rem", fontSize: "0.75rem", color: "var(--k-blue)", background: "none", border: "none", padding: 0, minHeight: 0, cursor: "pointer", fontWeight: 600, textDecoration: "underline", boxShadow: "none" },
   actions: { display: "flex", gap: "0.4rem", marginTop: "0.75rem", flexWrap: "wrap", alignItems: "center" },
-  actBtn: { borderColor: "var(--k-line)", background: "var(--k-surface)", color: "var(--k-blue)" },
+  actBtn: { padding: 0, boxShadow: "none", borderColor: "var(--k-line)", background: "var(--k-surface)", color: "var(--k-blue)" },
   statusSelect: { width: "auto", minHeight: "calc(var(--k-btn-h) - 8px)", fontSize: "var(--k-font-sm)", color: "var(--k-muted)" },
 };

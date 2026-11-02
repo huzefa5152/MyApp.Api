@@ -1,14 +1,36 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback } from "react";
-import { MdFactCheck, MdRefresh, MdDownload, MdPerson, MdEventRepeat, MdClose } from "react-icons/md";
+import { MdFactCheck, MdRefresh, MdDownload, MdPerson, MdEventRepeat, MdClose, MdUpload } from "react-icons/md";
 import { getTaxSheet, getTaxSheetExcel, transferTaxSheet } from "../api/reportApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { formStyles } from "../theme";
-import { PageHeader, CompanyPicker, Button, Card, Field, TableWrap, EmptyState, Loading, Alert } from "../ui/Kit";
+import { PageHeader, CompanyPicker, Button, Card, Field, TableWrap, EmptyState, Loading, Alert, StatGrid, StatCard } from "../ui/Kit";
 import SearchableClientSelect from "../Components/SearchableClientSelect";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
+import { excelBrandParams } from "../utils/reportExcelBrand";
 import useIsNarrow from "../hooks/useIsNarrow";
+import ColumnPicker, { useHiddenColumns } from "../Components/reports/ColumnPicker";
+import { PrintPdfButtons } from "../Components/reports/ReportChrome";
+import TaxSheetImportDialog from "../Components/TaxSheetImportDialog";
+import { fileSlug, pdfReport, printReport } from "../utils/reportPrintKit";
+
+// Columns of the on-screen sheet, in the consultant's order. `total` marks a
+// column with a grand total; the user can hide any of them.
+const TS_COLS = [
+  { key: "ntn", label: "NTN Number" },
+  { key: "party", label: "Party Name" },
+  { key: "doc", label: "Inv Number" },
+  { key: "date", label: "Inv Date" },
+  { key: "qty", label: "Item Total QTY" },
+  { key: "desc", label: "Bill Item", lineOnly: true },
+  { key: "hs", label: "HS Code" },
+  { key: "excl", label: "Excluding Amount", format: "money", total: true },
+  { key: "tax", label: "Sales Tax", format: "money", total: true },
+  { key: "total", label: "Total", format: "money", total: true },
+];
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -33,7 +55,11 @@ export default function TaxSheetPage() {
   const canView = has("reports.taxsheet.view");
   const canExport = has("reports.taxsheet.export");
   const canTransfer = has("reports.taxsheet.transfer");
+  const canImport = has("reports.taxsheet.import")
+    && (has("invoices.manage.update.itemtype") || has("invoices.manage.update.itemtype.qty"));
   const isNarrow = useIsNarrow();
+  const [hiddenCols, setHiddenCols] = useHiddenColumns("tax-sheet");
+  const [printBusy, setPrintBusy] = useState(null);
 
   const [mode, setMode] = useState("period"); // "period" | "custom"
   const [year, setYear] = useState(NOW.getFullYear());
@@ -52,6 +78,8 @@ export default function TaxSheetPage() {
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferDate, setTransferDate] = useState("");
   const [transferring, setTransferring] = useState(false);
+
+  const [importOpen, setImportOpen] = useState(false);
 
   // Load the company's clients for the filter; reset the filter on switch.
   useEffect(() => {
@@ -105,7 +133,8 @@ export default function TaxSheetPage() {
     if (!selectedCompany || rangeInvalid) return;
     setExporting(true);
     try {
-      const { data } = await getTaxSheetExcel(selectedCompany.id, buildParams());
+      // The workbook carries the company's letterhead and template colours.
+      const { data } = await getTaxSheetExcel(selectedCompany.id, { ...buildParams(), ...(await excelBrandParams(selectedCompany)) });
       const url = URL.createObjectURL(new Blob([data], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       }));
@@ -158,12 +187,98 @@ export default function TaxSheetPage() {
     return <EmptyState icon={MdFactCheck}>You don't have permission to view reports.</EmptyState>;
   }
 
+  const visibleCols = TS_COLS.filter((c) => !hiddenCols.has(c.key) && (!c.lineOnly || report?.originalLines));
+  const cols = visibleCols.length ? visibleCols : TS_COLS;
+  const clientName = clientId ? clients.find((c) => String(c.id) === String(clientId))?.name : "";
+
+  // The tax sheet as printed: the rows on screen, in the chosen columns, on
+  // the company's own letterhead.
+  const envelope = () => ({
+    title: "Tax Sheet",
+    companyName: report.companyName,
+    periodLabel,
+    generatedAt: new Date().toISOString(),
+    filtersApplied: [clientName && `Client: ${clientName}`].filter(Boolean),
+    sourceLabel: "Invoice lines whose item type still has no HS code",
+    columns: cols.map((c) => ({ key: c.key, label: c.label, format: c.format || "text", totalled: !!c.total })),
+    rows: report.rows.map((row) => ({
+      ntn: row.ntn, party: row.partyName, doc: row.documentNumber,
+      date: new Date(row.documentDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
+      qty: row.quantityLabel, desc: row.description, hs: row.itemTypeName,
+      excl: row.excludingAmount, tax: row.salesTax, total: row.total,
+    })),
+    totals: { excl: report.grandExcluding, tax: report.grandTax, total: report.grandTotal },
+  });
+  const doPrint = async () => {
+    setPrintBusy("print");
+    try { await printReport(envelope(), selectedCompany); }
+    catch { notify("Could not prepare the report. Allow print pop-ups and try again.", "error"); }
+    finally { setPrintBusy(null); }
+  };
+  const doPdf = async () => {
+    setPrintBusy("pdf");
+    try { await pdfReport(envelope(), selectedCompany, fileSlug(`Tax-Sheet-${periodLabel}`)); }
+    catch { notify("Could not build the PDF.", "error"); }
+    finally { setPrintBusy(null); }
+  };
+
+  const cell = (row, key) => {
+    switch (key) {
+      case "ntn": return <td key={key} style={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{row.ntn}</td>;
+      case "party": return <td key={key} style={{ maxWidth: 220 }}><div style={clamp2}>{row.partyName}</div></td>;
+      case "doc": return <td key={key} style={{ ...nowrap, fontWeight: 600, color: "var(--k-blue)" }}>{row.documentNumber}</td>;
+      case "date": return <td key={key} style={nowrap}>{new Date(row.documentDate).toLocaleDateString()}</td>;
+      case "qty": return <td key={key} style={nowrap}>{row.quantityLabel}</td>;
+      case "desc": return (
+        <td key={key} style={{ maxWidth: 260 }}><div style={clamp2}>{row.description}</div>
+          {row.currentHsCode && <div style={{ fontSize: "0.72rem", color: "var(--k-muted)" }}>Filed HS: {row.currentHsCode}</div>}
+        </td>
+      );
+      case "hs": return (
+        <td key={key}>
+          <span style={{ ...pill, fontSize: "0.78rem", display: "inline-block", lineHeight: 1.3 }}>
+            {row.itemTypeName}
+          </span>
+        </td>
+      );
+      case "excl": return <td key={key} className="k-num" style={nowrap}>{money(row.excludingAmount)}</td>;
+      case "tax": return <td key={key} className="k-num" style={nowrap}>{money(row.salesTax)}</td>;
+      case "total": return <td key={key} className="k-num" style={{ ...nowrap, fontWeight: 600 }}>{money(row.total)}</td>;
+      default: return <td key={key} />;
+    }
+  };
+  const totalCell = (key, idx) => {
+    const v = { excl: report.grandExcluding, tax: report.grandTax, total: report.grandTotal }[key];
+    if (v !== undefined) return <td key={key} className="k-num" style={{ ...totalBand, ...nowrap, fontWeight: 800, color: key === "total" ? "var(--k-blue)" : undefined }}>{money(v)}</td>;
+    return <td key={key} style={{ ...totalBand, fontWeight: 800, color: "var(--k-blue)" }}>{idx === 0 ? "TOTAL" : ""}</td>;
+  };
+
   return (
     <div>
       <PageHeader
         icon={MdFactCheck}
         tone="blue"
         title="Tax Sheet"
+        actions={(
+          <>
+            <Button variant="primary" icon={MdRefresh} onClick={fetchReport} disabled={loading || rangeInvalid}>
+              {loading ? "Loading…" : "Refresh"}
+            </Button>
+            {report && <ColumnPicker columns={TS_COLS} hidden={hiddenCols} onChange={setHiddenCols} />}
+            {canExport && (
+              <Button variant="teal" icon={MdDownload} onClick={exportExcel} disabled={!report || loading || exporting || rangeInvalid}>
+                {exporting ? "Exporting…" : "Excel"}
+              </Button>
+            )}
+            {canImport && (
+              <Button icon={MdUpload} onClick={() => setImportOpen(true)} disabled={!selectedCompany}
+                title="Upload the Excel sheet with Real Hscode filled in to adjust many invoices at once">
+                Import adjusted sheet
+              </Button>
+            )}
+            <PrintPdfButtons onPrint={doPrint} onPdf={doPdf} busy={printBusy} disabled={!report || loading || !report.rows.length} />
+          </>
+        )}
         subtitle={(
           <>
             Invoice lines whose item type still has <strong>no HS code</strong> — send to the tax consultant to classify.
@@ -175,6 +290,7 @@ export default function TaxSheetPage() {
       <CompanyPicker />
 
       {/* Controls */}
+      <ListFilters>
       <Card style={{ marginBottom: "var(--k-gap)" }}>
         <div style={controlsRow}>
           <Field label={<><MdPerson size={15} aria-hidden="true" style={{ verticalAlign: "-3px" }} /> Client</>}>
@@ -230,16 +346,8 @@ export default function TaxSheetPage() {
             </>
           )}
 
-          <div style={{ display: "flex", gap: "0.5rem", marginLeft: "auto", flexWrap: "wrap" }}>
-            <Button variant="primary" icon={MdRefresh} onClick={fetchReport} disabled={loading || rangeInvalid}>
-              {loading ? "Loading…" : "Refresh"}
-            </Button>
-            {canExport && (
-              <Button variant="teal" icon={MdDownload} onClick={exportExcel} disabled={!report || loading || exporting || rangeInvalid}>
-                {exporting ? "Exporting…" : "Export Excel"}
-              </Button>
-            )}
-            {canTransfer && (
+          {canTransfer && (
+            <div style={{ display: "flex", gap: "0.5rem", marginLeft: "auto", flexWrap: "wrap" }}>
               <Button
                 variant="secondary"
                 icon={MdEventRepeat}
@@ -250,14 +358,27 @@ export default function TaxSheetPage() {
               >
                 Transfer → next month
               </Button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </Card>
+      </ListFilters>
 
       {error && <Alert tone="error">{error}</Alert>}
 
       {report && !loading && (
+        <StatGrid>
+          <StatCard label="Invoices" value={report.invoiceCount} />
+          <StatCard label="Lines pending HS code" value={report.rowCount} />
+          <StatCard label="Excluding amount" value={money(report.grandExcluding)} />
+          <StatCard label="Sales tax" value={money(report.grandTax)} />
+          <StatCard label="Total" value={money(report.grandTotal)} tone="teal" />
+        </StatGrid>
+      )}
+
+      <RecordsViewport label="Tax Sheet records" enabled={!isNarrow}>{loading ? (
+        <Loading>Loading tax sheet…</Loading>
+      ) : report && (
         <Card flush style={{ overflow: "hidden" }} title={report.companyName}>
           <div style={reportMeta}>
             Tax Sheet · {periodLabel} · {report.invoiceCount} invoice(s), {report.rowCount} line(s) pending HS code
@@ -265,7 +386,7 @@ export default function TaxSheetPage() {
 
           {report.rows.length === 0 ? (
             <EmptyState boxed={false}>
-              No invoices pending HS classification for {periodLabel}. 🎉
+              No invoices pending HS classification for {periodLabel}.
             </EmptyState>
           ) : isNarrow ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", padding: "0.6rem" }}>
@@ -288,59 +409,26 @@ export default function TaxSheetPage() {
                   </div>
                 </div>
               ))}
-              <div style={{ ...tsCard, background: totalBg, borderColor: "var(--k-blue)" }}>
-                <div style={{ fontWeight: 800, color: "var(--k-blue)", marginBottom: 4 }}>TOTAL</div>
-                <div style={tsCardMeta}>
-                  <div><span style={tsLbl}>Excl. Amount</span><span style={{ ...tsVal, fontWeight: 800 }}>{money(report.grandExcluding)}</span></div>
-                  <div><span style={tsLbl}>Sales Tax</span><span style={{ ...tsVal, fontWeight: 800 }}>{money(report.grandTax)}</span></div>
-                  <div><span style={tsLbl}>Total</span><span style={{ ...tsVal, fontWeight: 800, color: "var(--k-blue)" }}>{money(report.grandTotal)}</span></div>
-                </div>
-              </div>
             </div>
           ) : (
             <TableWrap data-admin-table-region="">
-              <table className="k-table" style={{ minWidth: 860 }}>
+              <table className="k-table" style={{ minWidth: 640 }}>
                 <thead>
-                  <tr>
-                    {["NTN Number", "Party Name", "Inv Number", "Inv Date", "Item Total QTY", "HS Code", "Excluding Amount", "Sales Tax", "Total"].map((h, i) => (
-                      <th key={i} className={i >= 6 ? "k-num" : undefined}>{h}</th>
-                    ))}
-                  </tr>
+                  <tr>{cols.map((c) => <th key={c.key} className={c.total ? "k-num" : undefined}>{c.label}</th>)}</tr>
                 </thead>
                 <tbody>
-                  {report.rows.map((row, idx) => (
-                    <tr key={idx}>
-                      <td style={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{row.ntn}</td>
-                      <td style={{ maxWidth: 220 }}><div style={clamp2}>{row.partyName}</div></td>
-                      <td style={{ fontWeight: 600, color: "var(--k-blue)" }}>{row.documentNumber}</td>
-                      <td>{new Date(row.documentDate).toLocaleDateString()}</td>
-                      <td>{row.quantityLabel}</td>
-                      <td>
-                        <span style={{ ...pill, fontSize: "0.78rem" }}>
-                          {row.itemTypeName}
-                        </span>
-                      </td>
-                      <td className="k-num" style={nowrap}>{money(row.excludingAmount)}</td>
-                      <td className="k-num" style={nowrap}>{money(row.salesTax)}</td>
-                      <td className="k-num" style={{ ...nowrap, fontWeight: 600 }}>{money(row.total)}</td>
-                    </tr>
-                  ))}
+                  {report.rows.map((row, idx) => <tr key={idx}>{cols.map((c) => cell(row, c.key))}</tr>)}
                 </tbody>
                 <tfoot>
-                  <tr>
-                    <td style={{ ...totalCell, fontWeight: 800, color: "var(--k-blue)" }} colSpan={6}>TOTAL</td>
-                    <td className="k-num" style={{ ...totalCell, ...nowrap, fontWeight: 800 }}>{money(report.grandExcluding)}</td>
-                    <td className="k-num" style={{ ...totalCell, ...nowrap, fontWeight: 800 }}>{money(report.grandTax)}</td>
-                    <td className="k-num" style={{ ...totalCell, ...nowrap, fontWeight: 800, color: "var(--k-blue)" }}>{money(report.grandTotal)}</td>
-                  </tr>
+                  <tr>{cols.map((c, i) => totalCell(c.key, i))}</tr>
                 </tfoot>
               </table>
             </TableWrap>
           )}
         </Card>
-      )}
+      )}</RecordsViewport>
 
-      {loading && <Loading>Loading tax sheet…</Loading>}
+      {importOpen && <TaxSheetImportDialog companyId={selectedCompany.id} onClose={() => setImportOpen(false)} onApplied={fetchReport} />}
 
       {transferOpen && (
         <div data-admin-backdrop="" style={formStyles.backdrop} onClick={() => !transferring && setTransferOpen(false)}>
@@ -392,7 +480,7 @@ export default function TaxSheetPage() {
 const totalBg = "#eef4ff";
 const transferOrange = "#e65100";
 const pill = { background: "#fff4e5", color: "#a15c00", padding: "2px 8px", borderRadius: 6, fontWeight: 600 };
-const totalCell = { background: totalBg, borderTop: "2px solid var(--k-blue)" };
+const totalBand = { background: totalBg, borderTop: "2px solid var(--k-blue)" };
 const clamp2 = { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" };
 const nowrap = { whiteSpace: "nowrap" };
 

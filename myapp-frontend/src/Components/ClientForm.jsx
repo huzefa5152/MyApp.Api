@@ -6,10 +6,12 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import { formStyles } from "../theme";
 import { Button } from "../ui/Kit";
+import { MdStorefront, MdVerifiedUser, MdContacts, MdApartment } from "react-icons/md";
+import { PartyFormHeader, FormSection } from "./party/PartyFormKit";
 
 const {
-  backdrop, modal, header, title, closeButton,
-  body, error: errorStyle, formGroup, label, input,
+  backdrop, modal,
+  body, formGroup, label, input,
   footer, button, cancel, submit,
 } = formStyles;
 
@@ -102,17 +104,22 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
   // province, and an NTN/CNIC for a REGISTERED buyer. STRN is never sent
   // to FBR, and an unregistered buyer's CNIC is optional. So:
   //   • Registered    — NTN (7 digits) required. STRN optional.
-  //   • FTN           — Federal Tax Number lives in the NTN column; required.
-  //   • Unregistered  — no NTN; CNIC optional (13 digits when given).
+  //   • FTN           — Federal Tax Number lives in the NTN column; optional.
+  //   • Unregistered  — NTN optional; CNIC optional (13 digits when given).
   //   • CNIC          — same as Unregistered for the form's purposes.
+  // An NTN typed for a non-Registered buyer is kept and prints through the
+  // NTN merge fields like any other.
   // Blank — pick the type first.
   const regType = formData.registrationType;
-  const showNtn  = regType === "Registered" || regType === "FTN";
+  const showNtn  = !!regType;
+  const ntnRequired = regType === "Registered";
   const showStrn = regType === "Registered"; // shown, but optional
   // CNIC shows for every type once one is picked; optional throughout —
   // the server files under the NTN when there is one, else the CNIC.
   const showCnic = !!regType;
-  const ntnLabel = regType === "FTN" ? "FTN *" : "NTN *";
+  const ntnLabel = ntnRequired
+    ? "NTN *"
+    : <>{regType === "FTN" ? "NTN / FTN" : "NTN"} <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional)</span></>;
 
   // "Check with FBR": FBR's Get_Reg_Type answer for the typed NTN/CNIC.
   // A buyer recorded as Registered whom FBR holds as Unregistered is
@@ -145,10 +152,8 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
     if (!formData.registrationType) newErrors.registrationType = "Registration Type is required";
     if (!formData.fbrProvinceCode && formData.fbrProvinceCode !== 0) newErrors.fbrProvinceCode = "Province is required";
 
-    // NTN/STRN: required only for Registered and (NTN only) FTN. The
-    // form-level fields are still in state — if the operator switched
-    // type they get blanked on switch, so this stays in sync.
-    if (showNtn && !formData.ntn.trim()) newErrors.ntn = regType === "FTN" ? "FTN is required" : "NTN is required";
+    // NTN: required only for Registered; optional for every other type.
+    if (ntnRequired && !formData.ntn.trim()) newErrors.ntn = "NTN is required";
     // STRN is deliberately NOT required: the FBR buyer block carries
     // NTN/CNIC, name, province, address and registration type — no STRN —
     // and demanding one here kept real buyers out of FBR. A CNIC is
@@ -174,7 +179,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
     // Registered keeps the new (empty) state until the operator types.
     if (name === "registrationType") {
       const next = { ...formData, registrationType: value };
-      const willShowNtn  = value === "Registered" || value === "FTN";
+      const willShowNtn  = !!value;
       const willShowStrn = value === "Registered";
       if (!willShowNtn)  next.ntn  = "";
       if (!willShowStrn) next.strn = "";
@@ -243,13 +248,15 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
 
   return (
     <div data-admin-backdrop="" style={backdrop}>
-      <div data-admin-dialog="" style={modal}>
-        <div data-admin-header="" style={header}>
-          <h5 style={title}>{client ? "Edit Client" : "New Client"}</h5>
-          <button data-admin-close="" style={closeButton} onClick={onClose}>&times;</button>
-        </div>
-        <form onSubmit={handleSubmit} noValidate>
-          <div data-admin-body="" style={body}>
+      <div data-admin-dialog="" style={{ ...modal, maxWidth: 720 }}>
+        <PartyFormHeader
+          title={client ? "Edit Client" : "New Client"}
+          subtitle={client ? client.name : "Who you sell to: shown on bills and filed with FBR"}
+          name={formData.name}
+          onClose={onClose}
+        />
+        <form onSubmit={handleSubmit} noValidate style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+          <div data-admin-body="" className="pf-body" style={{ ...body, background: "#f5f8fc" }}>
             {/* Multi-company picker — CREATE mode only, when the parent
                 has supplied the companies list and the operator has
                 more than one to pick from. Default-checked is the
@@ -257,14 +264,12 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
                 stay one click. Picking 2+ auto-collapses the new
                 rows into a Common Client group via EnsureGroup. */}
             {showCompanyPicker && (
-              <div style={pickerStyles.box}>
-                <div style={pickerStyles.headerRow}>
-                  <span style={pickerStyles.title}>Create under which companies?</span>
-                  <span style={pickerStyles.hint}>
-                    Pick one to add this client to a single tenant, or 2+ to share it as a Common Client.
-                  </span>
-                </div>
-                <div style={pickerStyles.chips}>
+              <FormSection
+                icon={<MdApartment size={18} />}
+                title="Create under which companies?"
+                hint="Pick one to add this client to a single company, or 2+ to share it as a Common Client."
+              >
+                <div style={{ ...pickerStyles.chips, marginBottom: "0.8rem" }}>
                   {companies.map((c) => {
                     const id = Number(c.id);
                     const checked = selectedCompanyIds.includes(id);
@@ -286,9 +291,10 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
                   })}
                 </div>
                 {errorMsg("companies")}
-              </div>
+              </FormSection>
             )}
 
+            <FormSection icon={<MdStorefront size={18} />} title="Business details" hint="As it should print on documents">
             <div data-admin-field="" style={formGroup}>
               <label style={label}>Name *</label>
               <input type="text" name="name" value={formData.name} onChange={handleChange} style={{ ...input, ...fieldError("name") }} />
@@ -310,13 +316,13 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
                 <input type="text" name="phone" value={formData.phone} onChange={handleChange} style={input} />
               </div>
             </div>
+            </FormSection>
 
             {/* FBR identity — pick Registration Type first; the relevant
-                identity fields render below conditionally. Hides NTN/STRN
-                for Unregistered/CNIC entities and shows CNIC instead, per
-                Pakistan FBR convention.  */}
-            <div style={{ marginTop: "0.5rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #0d47a130", backgroundColor: "#e3f2fd" }}>
-              <p style={{ margin: "0 0 0.5rem", fontWeight: 700, fontSize: "0.85rem", color: "#0d47a1" }}>FBR Details</p>
+                identity fields render below conditionally. NTN shows for
+                every type (required only for Registered); STRN only for
+                Registered; CNIC for every type, optional. */}
+            <FormSection tone="fbr" icon={<MdVerifiedUser size={18} />} title="FBR identity" hint="Checked by FBR on every invoice">
               <div className="form-grid-2col">
                 <div data-admin-field="" style={formGroup}>
                   <label style={label}>Registration Type *</label>
@@ -374,7 +380,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
                         value={formData.ntn}
                         onChange={handleChange}
                         style={{ ...input, ...fieldError("ntn") }}
-                        placeholder={regType === "FTN" ? "Federal Tax Number" : "7-digit NTN"}
+                        placeholder={regType === "FTN" ? "7-digit NTN or Federal Tax Number" : "7-digit NTN"}
                       />
                       {errorMsg("ntn")}
                     </div>
@@ -414,8 +420,10 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
                   </span>
                 </div>
               )}
-            </div>
+              {!regType && <div style={{ height: "0.8rem" }} />}
+            </FormSection>
 
+            <FormSection icon={<MdContacts size={18} />} title="Sites & contacts" hint="Offered as choices on challans and quotes">
             <div data-admin-field="" style={formGroup}>
               <label style={label}>Sites</label>
               <input type="text" name="site" value={formData.site} onChange={handleChange} style={input} placeholder="e.g. Site-A ; Site-B ; Site-C" />
@@ -427,6 +435,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
               <input type="text" name="contactPerson" value={formData.contactPerson} onChange={handleChange} style={input} placeholder="e.g. Ali ; Bilal ; Sara" />
               <span style={{ fontSize: "0.75rem", color: "#5f6d7e", marginTop: "0.25rem", display: "block" }}>Separate multiple contacts with semicolons (;). These appear as a dropdown when creating a Sales Quote.</span>
             </div>
+            </FormSection>
 
           </div>
 
@@ -440,33 +449,9 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
   );
 }
 
-// Multi-company picker styles. Kept inline (not in theme.js) because
-// they're specific to this one form — chip-style toggles with a
-// slightly different visual weight than the rest of the inputs.
+// Multi-company picker chips — same pill shape as the directory's filter
+// chips, so the form and the list read as one product.
 const pickerStyles = {
-  box: {
-    background: "#f0f7ff",
-    border: "1px solid #b7d4f0",
-    borderRadius: 10,
-    padding: "0.7rem 0.85rem",
-    marginBottom: "0.9rem",
-  },
-  headerRow: {
-    display: "flex",
-    alignItems: "baseline",
-    gap: "0.5rem",
-    flexWrap: "wrap",
-    marginBottom: "0.5rem",
-  },
-  title: {
-    fontWeight: 700,
-    fontSize: "0.88rem",
-    color: "#0d47a1",
-  },
-  hint: {
-    fontSize: "0.74rem",
-    color: "#5f6d7e",
-  },
   chips: {
     display: "flex",
     flexWrap: "wrap",
@@ -476,7 +461,8 @@ const pickerStyles = {
     fontFamily: "inherit",
     fontSize: "0.82rem",
     fontWeight: 600,
-    padding: "0.35rem 0.85rem",
+    minHeight: 36,
+    padding: "0 0.9rem",
     borderRadius: 999,
     cursor: "pointer",
     transition: "background 0.15s, color 0.15s, border-color 0.15s",
@@ -484,13 +470,13 @@ const pickerStyles = {
     margin: 0,
   },
   chipOn: {
-    background: "#0d47a1",
+    background: "linear-gradient(135deg, #0d47a1, #00897b)",
     color: "#fff",
-    border: "1px solid #0d47a1",
+    border: "1px solid transparent",
   },
   chipOff: {
-    background: "#fff",
+    background: "#f5f8fc",
     color: "#0d47a1",
-    border: "1px solid #b7d4f0",
+    border: "1px solid #d8e3f1",
   },
 };

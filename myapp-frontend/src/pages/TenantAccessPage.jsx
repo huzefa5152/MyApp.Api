@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useEffect, useMemo, useState } from "react";
 import {
   MdAdminPanelSettings,
@@ -144,7 +145,7 @@ export default function TenantAccessPage() {
         </span>
       </Toolbar>
 
-      {loading ? (
+      <RecordsViewport label="Tenant Access records">{loading ? (
         <Loading>Loading…</Loading>
       ) : filtered.length === 0 ? (
         <EmptyState icon={MdPerson}>No users match that search.</EmptyState>
@@ -244,7 +245,7 @@ export default function TenantAccessPage() {
             })}
           </div>
         </>
-      )}
+      )}</RecordsViewport>
 
       {editUser && (
         <EditModal
@@ -341,7 +342,7 @@ function EditModal({ user, selected, onToggle, onSubmit, onClose, saving, canAss
 }
 
 const pageStyles = {
-  shell: { maxWidth: 1200, margin: "0 auto" },
+  shell: { padding: 0, maxWidth: 1200, margin: "0 auto" },
   count: { color: "var(--k-muted)", fontSize: "var(--k-font-sm)" },
   userCell: { display: "flex", alignItems: "center", gap: "0.75rem" },
   avatar: { width: 32, height: 32, flex: "none", borderRadius: "50%", background: colors.blueLight, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 600, fontSize: "0.9rem" },

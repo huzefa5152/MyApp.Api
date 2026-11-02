@@ -1,8 +1,9 @@
+import RecordsViewport from "../RecordsViewport";
 import { useMemo, useState, useEffect } from "react";
 import { MdClose, MdVisibility, MdCheckCircle } from "react-icons/md";
 import { formStyles } from "../../theme";
 import { Button, IconButton, SearchBox, EmptyState } from "../../ui/Kit";
-import { STARTER_TEMPLATES } from "../../utils/starterTemplates";
+import useStarterTemplates from "../../hooks/useStarterTemplates";
 import { TEMPLATE_TYPES, TEMPLATE_TYPE_LABEL, buildTemplatePreviewHtml } from "../../utils/templateSampleData";
 import { useCompany } from "../../contexts/CompanyContext";
 import A4PreviewFrame from "./A4PreviewFrame";
@@ -90,9 +91,10 @@ export default function StarterGallery({
   const setSort = sortProp !== undefined ? (onSortChange || (() => {})) : setSortLocal;
   const [previewStarter, setPreviewStarter] = useState(null);
   const busy = busyStarterId != null;
+  const starters = useStarterTemplates();
 
   const list = useMemo(() => {
-    let items = STARTER_TEMPLATES.filter((t) => {
+    let items = starters.filter((t) => {
       if (lockType && t.type !== lockType) return false;
       if (typeFilter && t.type !== typeFilter) return false;
       if (search) {
@@ -104,7 +106,7 @@ export default function StarterGallery({
     });
     if (sort === "name") items = [...items].sort((a, b) => a.name.localeCompare(b.name));
     return items;
-  }, [lockType, typeFilter, search, sort]);
+  }, [starters, lockType, typeFilter, search, sort]);
 
   // Progressive render: mounting all ~135 preview iframes at once swamps the
   // browser (they paint blank/late — the "designs only show after search"
@@ -148,7 +150,7 @@ export default function StarterGallery({
           </select>
         </div>
 
-        <div style={s.grid}>
+        <RecordsViewport enabled={embedded} label="Starter template records"><div style={s.grid}>
           {list.length === 0 && (
             <div style={{ gridColumn: "1 / -1" }}>
               <EmptyState boxed={false}>No starter templates match your search.</EmptyState>
@@ -165,6 +167,7 @@ export default function StarterGallery({
               <div style={s.cardBody}>
                 <div style={s.cardName} title={t.name}>{t.name}</div>
                 {!lockType && <span style={s.typeBadge}>{TEMPLATE_TYPE_LABEL[t.type] || t.type}</span>}
+                {t.source === "shared" && <span style={s.sharedTag} title="Added for every company by the system administrator">Added by administrator</span>}
                 <div style={s.cardDesc} title={t.description}>{t.description}</div>
               </div>
               <button type="button" style={{ ...s.useBtn, ...(busy ? s.useBtnBusy : {}) }} disabled={busy} onClick={() => onSelect(t)}>
@@ -174,7 +177,7 @@ export default function StarterGallery({
               </button>
             </div>
           ))}
-        </div>
+        </div></RecordsViewport>
     </>
   );
 
@@ -246,6 +249,7 @@ const s = {
   cardBody: { padding: "0.6rem 0.75rem", flex: 1, minWidth: 0 },
   cardName: { fontSize: "var(--k-font)", fontWeight: 700, color: "var(--k-ink)", marginBottom: "0.25rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   typeBadge: { display: "inline-block", marginLeft: 6, fontSize: "0.64rem", fontWeight: 700, color: "#3949ab", background: "#e8eaf6", padding: "1px 7px", borderRadius: 5, verticalAlign: "middle" },
+  sharedTag: { display: "inline-block", marginLeft: "0.35rem", padding: "0.1rem 0.45rem", borderRadius: 999, fontSize: "0.68rem", fontWeight: 700, background: "#e8f5e9", color: "#1b5e20", verticalAlign: "middle" },
   cardDesc: { marginTop: "0.35rem", fontSize: "0.76rem", color: "var(--k-muted)", lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
   useBtn: {
     display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35rem",

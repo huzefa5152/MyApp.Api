@@ -43,6 +43,16 @@ export const defaultQuoteTemplate = `<!DOCTYPE html><html><head><title>Quotation
   .cname { color:#0d47a1; }
   .doc .t { color:#00897b; }
   th { background:#0d47a1 !important; }
+  /* One A4 page tall, so the signature sits at the foot of the page: 1120px is
+     the PDF export's A4 canvas, 270mm what the 12mm print margins leave. The
+     export lifts print rules to screen, hence the separate screen height. */
+  body { display:flex; flex-direction:column; }
+  .sig { margin-top:auto; padding-top:46px; }
+  @media print { body { min-height:270mm; } }
+  @media screen { body { min-height:1120px; } }
+td.qpic{text-align:center;vertical-align:top;}
+.qimgbox{width:96px;height:96px;margin:0 auto;display:flex;align-items:flex-start;justify-content:center;overflow:hidden;}
+.qimgbox img{max-width:100%;max-height:100%;object-fit:contain;display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 </style></head><body>
   <div class="hdr">
     <div class="brand">
@@ -82,7 +92,7 @@ export const defaultQuoteTemplate = `<!DOCTYPE html><html><head><title>Quotation
 
   <table>
     <thead><tr>
-      <th class="c" style="width:36px">#</th>
+      <th class="c" style="width:36px">#</th>{{#if hasLineImages}}<th class="c" style="width:104px">Image</th>{{/if}}
       <th>Description</th>
       <th class="c" style="width:70px">Qty</th>
       <th class="c" style="width:60px">Unit</th>
@@ -92,8 +102,8 @@ export const defaultQuoteTemplate = `<!DOCTYPE html><html><head><title>Quotation
     <tbody>
     {{#each items}}
       <tr>
-        <td class="c">{{this.sNo}}</td>
-        <td>{{{richText this.description}}}</td>
+        <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
+        <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="r">{{fmt this.unitPrice}}</td>
@@ -105,6 +115,7 @@ export const defaultQuoteTemplate = `<!DOCTYPE html><html><head><title>Quotation
 
   <div class="totals">
     <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+    {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
     <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
     <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
   </div>

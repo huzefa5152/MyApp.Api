@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
@@ -18,10 +19,8 @@ namespace MyApp.Api.Services.Tax
         private readonly AppDbContext _db;
         private readonly ILogger<TaxMappingEngine>? _logger;
 
-        // Cache keys are scoped per company because the FBR token is
-        // per-company and PRAL bills the call. TTL is process lifetime —
-        // a redeploy invalidates everything, which matches our weekly
-        // deploy cadence.
+        // HS code -> units, process lifetime. The stored copy in FbrLookups
+        // (see GetValidUomsForHsCodeAsync) is what survives a restart.
         private static readonly ConcurrentDictionary<string, List<FbrUOMDto>> _hsUomCache = new();
         private static readonly ConcurrentDictionary<string, List<FbrSaleTypeRateDto>> _saleTypeRateCache = new();
 
@@ -54,13 +53,31 @@ namespace MyApp.Api.Services.Tax
 
         // ─── HS_UOM ────────────────────────────────────────────────
 
+        // FBR's HS_UOM answer belongs to the HS code, not to a company, so it is kept
+        // once for the whole installation in FbrLookups (Category "HsUom", Code
+        // "<hs>|<uomId>", Label = unit name, SortOrder = FBR's order) beside the stored
+        // HS list. Order of lookup: memory, stored table, then PRAL with the asking
+        // company's own token; a good PRAL answer is stored, so each code is slow once.
+        public const string HsUomCategory = "HsUom";
+        public const string SaleTypeRateCategory = "SaleTypeRate";
+
         public async Task<List<FbrUOMDto>> GetValidUomsForHsCodeAsync(int companyId, string hsCode)
         {
             if (string.IsNullOrWhiteSpace(hsCode)) return new();
 
             var trimmed = hsCode.Trim();
-            var key = $"{companyId}:{trimmed}";
-            if (_hsUomCache.TryGetValue(key, out var cached)) return cached;
+            if (_hsUomCache.TryGetValue(trimmed, out var cached)) return cached;
+
+            var (stored, noUnitsCheckedOn) = await LoadStoredUomsAsync(trimmed);
+            if (stored.Count > 0)
+            {
+                _hsUomCache.TryAdd(trimmed, stored);
+                return stored;
+            }
+            // FBR has no unit for some codes (mostly 98xx services). Without this marker every pick of
+            // one asked PRAL three times (1-2 s); now it is asked again only once the marker is a week old.
+            if (noUnitsCheckedOn is { } checkedOn && DateTime.UtcNow.Date - checkedOn < NoUnitsRecheckAfter)
+                return new();
 
             // Retry-on-empty: PRAL occasionally returns an empty array on the
             // first call for a real HS code (operator-reported, see comment
@@ -69,22 +86,109 @@ namespace MyApp.Api.Services.Tax
             // exception through Polly's HttpClient pipeline and never reaches
             // here, so this loop won't paper over real network failures.
             List<FbrUOMDto>? fresh = null;
+            var fbrAnsweredEveryTime = true;
             for (var attempt = 0; attempt < HsUomMaxAttempts; attempt++)
             {
                 if (HsUomBackoffMs[attempt] > 0)
                     await Task.Delay(HsUomBackoffMs[attempt]);
                 fresh = await _fbr.GetHSCodeUOMAsync(companyId, trimmed, DefaultAnnexureId);
+                if (fresh == null) fbrAnsweredEveryTime = false;
                 if (fresh != null && fresh.Count > 0)
                 {
                     if (attempt > 0)
                         _logger?.LogWarning(
                             "PRAL HS_UOM returned empty on attempt 1 for HS {HsCode} (company {CompanyId}); recovered on attempt {Attempt}.",
                             trimmed, companyId, attempt + 1);
-                    _hsUomCache.TryAdd(key, fresh);
+                    _hsUomCache.TryAdd(trimmed, fresh);
+                    await StoreUomsAsync(trimmed, fresh);
+                    if (noUnitsCheckedOn != null) await ClearNoUnitsMarkerAsync(trimmed);
                     return fresh;
                 }
             }
-            return fresh ?? new();
+            // Only a real empty answer earns the marker: a failed request (no token, HTTP error) says
+            // nothing about the code and must not hide its units for a week.
+            if (fbrAnsweredEveryTime) await MarkNoUnitsAsync(trimmed);
+            return new();
+        }
+
+        // Code "<hs>|none", Label = the UTC day FBR last answered with no unit. Its suffix is not a
+        // number, so it never reads as a unit.
+        private static readonly TimeSpan NoUnitsRecheckAfter = TimeSpan.FromDays(7);
+        private static string NoUnitsCode(string hsCode) => hsCode + "|none";
+
+        private async Task<(List<FbrUOMDto> Units, DateTime? NoUnitsCheckedOn)> LoadStoredUomsAsync(string hsCode)
+        {
+            var prefix = hsCode + "|";
+            var rows = await _db.FbrLookups.AsNoTracking()
+                .Where(l => l.Category == HsUomCategory && l.IsActive && l.Code.StartsWith(prefix))
+                .OrderBy(l => l.SortOrder).ToListAsync();
+            var list = new List<FbrUOMDto>();
+            DateTime? noUnits = null;
+            foreach (var r in rows)
+                if (int.TryParse(r.Code[prefix.Length..], out var id))
+                    list.Add(new FbrUOMDto { UOM_ID = id, Description = r.Label });
+                else if (r.Code == NoUnitsCode(hsCode) && DateTime.TryParseExact(r.Label, "yyyy-MM-dd",
+                             System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d))
+                    noUnits = d;
+            return (list, noUnits);
+        }
+
+        private async Task MarkNoUnitsAsync(string hsCode)
+        {
+            try
+            {
+                var code = NoUnitsCode(hsCode);
+                var today = DateTime.UtcNow.Date.ToString("yyyy-MM-dd");
+                await _db.Database.ExecuteSqlInterpolatedAsync($@"
+UPDATE FbrLookups SET Label = {today} WHERE Category = {HsUomCategory} AND Code = {code};
+INSERT INTO FbrLookups (Category, Code, Label, SortOrder, IsActive)
+SELECT {HsUomCategory}, {code}, {today}, 0, 1
+WHERE NOT EXISTS (SELECT 1 FROM FbrLookups WHERE Category = {HsUomCategory} AND Code = {code})");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Could not mark HS {HsCode} as having no FBR unit", hsCode);
+            }
+        }
+
+        private async Task ClearNoUnitsMarkerAsync(string hsCode)
+        {
+            try
+            {
+                var code = NoUnitsCode(hsCode);
+                await _db.Database.ExecuteSqlInterpolatedAsync(
+                    $"DELETE FROM FbrLookups WHERE Category = {HsUomCategory} AND Code = {code}");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Could not clear the no-unit mark for HS {HsCode}", hsCode);
+            }
+        }
+
+        // Plain INSERT ... WHERE NOT EXISTS, never SaveChanges: the caller may be
+        // mid-edit with tracked changes that must not be flushed from here, and two
+        // requests storing the same code at once must not duplicate it.
+        private async Task StoreUomsAsync(string hsCode, List<FbrUOMDto> uoms)
+        {
+            try
+            {
+                var order = 0;
+                foreach (var u in uoms)
+                {
+                    var code = $"{hsCode}|{u.UOM_ID}";
+                    var label = (u.Description ?? "").Trim();
+                    var sort = order++;
+                    await _db.Database.ExecuteSqlInterpolatedAsync($@"
+INSERT INTO FbrLookups (Category, Code, Label, SortOrder, IsActive)
+SELECT {HsUomCategory}, {code}, {label}, {sort}, 1
+WHERE NOT EXISTS (SELECT 1 FROM FbrLookups WHERE Category = {HsUomCategory} AND Code = {code})");
+                }
+            }
+            catch (Exception ex)
+            {
+                // Storing is an optimisation; the live answer is still returned.
+                _logger?.LogWarning(ex, "Could not store FBR units for HS {HsCode}", hsCode);
+            }
         }
 
         public async Task<FbrUOMDto?> SuggestDefaultUomAsync(int companyId, string hsCode)
@@ -100,14 +204,51 @@ namespace MyApp.Api.Services.Tax
         {
             var province = provinceCode ?? 0;
             var dateStr = date.ToString("yyyy-MM-dd");
-            var key = $"{companyId}:{DefaultTransactionTypeId}:{province}:{dateStr}";
+            // FBR's rates depend on transaction type, province and date, not on the company, like HS units.
+            var key = $"{DefaultTransactionTypeId}|{province}|{dateStr}";
             if (_saleTypeRateCache.TryGetValue(key, out var cached)) return cached;
 
+            // The host recycles the app after a few idle minutes, emptying the static cache; without a
+            // stored copy every first lookup after that waited 2-5 s on FBR (Adjust Invoice, every row).
+            var stored = await _db.FbrLookups.AsNoTracking()
+                .Where(l => l.Category == SaleTypeRateCategory && l.Code == key)
+                .Select(l => l.Label).FirstOrDefaultAsync();
+            if (stored != null && JsonSerializer.Deserialize<List<FbrSaleTypeRateDto>>(stored) is { Count: > 0 } kept)
+            {
+                _saleTypeRateCache.TryAdd(key, kept);
+                return kept;
+            }
+
+            // FBR's SaleTypeToRate needs dd-MMM-yyyy: an ISO date gets an HTTP error, which the FBR client
+            // retried three times (2-14 s) and then returned no rates, so nothing was ever cached or stored.
+            var fbrDate = date.ToString("dd-MMM-yyyy", System.Globalization.CultureInfo.InvariantCulture);
             var fresh = await _fbr.GetSaleTypeRatesAsync(
-                companyId, dateStr, DefaultTransactionTypeId, province);
+                companyId, fbrDate, DefaultTransactionTypeId, province);
             if (fresh != null && fresh.Count > 0)
+            {
                 _saleTypeRateCache.TryAdd(key, fresh);
+                await StoreSaleTypeRatesAsync(key, fresh);
+            }
             return fresh ?? new();
+        }
+
+        // ponytail: one row per transaction type, province and day, never pruned (a few hundred bytes a
+        // day); delete old SaleTypeRate rows if that ever matters. Same INSERT ... WHERE NOT EXISTS as units.
+        private async Task StoreSaleTypeRatesAsync(string key, List<FbrSaleTypeRateDto> rates)
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(rates);
+                await _db.Database.ExecuteSqlInterpolatedAsync($@"
+INSERT INTO FbrLookups (Category, Code, Label, SortOrder, IsActive)
+SELECT {SaleTypeRateCategory}, {key}, {json}, 0, 1
+WHERE NOT EXISTS (SELECT 1 FROM FbrLookups WHERE Category = {SaleTypeRateCategory} AND Code = {key})");
+            }
+            catch (Exception ex)
+            {
+                // Storing is an optimisation; the live answer is still returned.
+                _logger?.LogWarning(ex, "Could not store FBR sale type rates for {Key}", key);
+            }
         }
 
         // ─── Resolve ───────────────────────────────────────────────
@@ -357,7 +498,8 @@ namespace MyApp.Api.Services.Tax
                 // token; an empty list then means FBR genuinely has no UOM
                 // restriction for this code (common for many codes), NOT a
                 // failure. Without a token the lookup never ran.
-                UomLookupRan: !string.IsNullOrEmpty(company?.FbrToken)
+                UomLookupRan: uoms.Count > 0 || !string.IsNullOrEmpty(company?.FbrToken),
+                SaleTypes: TaxScenarios.All.Select(s => s.SaleType).Distinct().ToList()
             );
         }
     }

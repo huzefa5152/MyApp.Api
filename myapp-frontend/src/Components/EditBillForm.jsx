@@ -1,3 +1,5 @@
+import BillTaxTreatmentField from "./BillTaxTreatmentField";
+import ManualChallanNumberField from "./ManualChallanNumberField";
 import { withTaxUom, taxGroupKey } from "../utils/taxInvoiceGrouping";
 import FreightChargesField from "./FreightChargesField";
 import BillChallansEditor from "./BillChallansEditor";
@@ -33,6 +35,7 @@ import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
 import BillNumberField from "./BillNumberField";
 import DocumentNotesEditor from "./DocumentNotesEditor";
+import TaxFilingRowsEditor from "./TaxFilingRowsEditor";
 
 const colors = {
   blue: "#0d47a1",
@@ -61,7 +64,12 @@ const colors = {
  * Description and UOM use LookupAutocomplete with /api/lookup/items and /api/lookup/units,
  * matching the delivery challan form — picks existing values, creates new ones if needed.
  */
-export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSaved, readOnly = false, billsMode = false, forceItemTypeAndQty = false }) {
+export default function EditBillForm(props) {
+  return props.forceItemTypeAndQty && !props.billsMode
+    ? <TaxFilingRowsEditor {...props} /> : <CommercialBillEditor {...props} />;
+}
+
+function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, readOnly = false, billsMode = false, forceItemTypeAndQty = false }) {
   const confirm = useConfirm();
   // billsMode: true when this form is mounted from the Bills tab. Hides
   // the Item Type column + picker and the bulk-apply toolbar (item-type
@@ -172,6 +180,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
   // (decimal allowed for KG/Liter/etc., integer-only for Pcs/SET/etc.).
   const [units, setUnits] = useState([]);
   const [gstRate, setGstRate] = useState(18);
+  const [taxTreatment, setTaxTreatment] = useState("FBR");
   // Optional document taxes, both NONE until added. Only editable in the full
   // bill edit — the Invoices-tab narrow edit must not change what was charged.
   const [furtherTaxRate, setFurtherTaxRate] = useState(null);
@@ -184,6 +193,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
   const [billNumber, setBillNumber] = useState("");
   const [billNumberOk, setBillNumberOk] = useState(true);
   const [paymentTerms, setPaymentTerms] = useState("");
+  const [manualChallanNumber, setManualChallanNumber] = useState("");
   const [notes, setNotes] = useState("");
   const [freightCharges, setFreightCharges] = useState(0);
   const [paymentMode, setPaymentMode] = useState("");
@@ -237,7 +247,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
           getAllUnits(data.companyId),
         ]);
         setInvoice(data);
-        setGroupedView(forceItemTypeAndQty || !!data.groupTaxInvoiceByItemType);
+        // A company that prints its original bill lines never groups: the adjust screen opens on separate lines.
+        setGroupedView(!data.taxInvoiceUseOriginalBillLines && (forceItemTypeAndQty || !!data.groupTaxInvoiceByItemType));
         setAnyOverlay((data.items || []).some((it) => it.adjustment));
         // Bill-mode source-of-truth: every InvoiceItem field as the
         // bill carries it. Used to seed both `items[]` (when no
@@ -310,6 +321,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
         setUnits(unitsRes.data || []);
         setClientId(data.clientId ? String(data.clientId) : "");
         setGstRate(data.gstRate ?? 18);
+        setTaxTreatment(data.taxTreatment || "FBR");
         setFurtherTaxRate(data.furtherTaxRate ?? null);
         setWithholdingTaxRate(data.withholdingTaxRate ?? null);
         setWithholdingTaxAmount(
@@ -325,6 +337,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
         setBillNumber(data.invoiceNumber != null ? String(data.invoiceNumber) : "");
         const pt = data.paymentTerms ?? "";
         setPaymentTerms(pt);
+        setManualChallanNumber(data.manualChallanNumber || "");
         setNotes(data.notes || "");
         setFreightCharges(data.freightCharges ?? 0);
         setPaymentMode(data.paymentMode ?? "");
@@ -1213,7 +1226,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
 
   // The TOGGLE is offered only when switching actually changes something —
   // with one line per Item Type the two views list the same rows.
-  const showGroupToggle = !billsMode && items.length > 0;
+  // Company policy "Print original bill lines on tax invoices": always separate lines, so there is nothing to choose.
+  const originalLinesOnly = !!invoice?.taxInvoiceUseOriginalBillLines;
+  const showGroupToggle = !billsMode && items.length > 0 && !originalLinesOnly;
   // ...but the grouped row is where the adjustment controls live (Qty & Unit
   // Price vs Exact Line Total), so it renders on the Invoices tab regardless.
   // Gating it on `showGroupToggle` meant a SINGLE-LINE bill fell through to the
@@ -1221,7 +1236,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
   // an exact total was unreachable on exactly the bills that most need it. A
   // live bill printed 220,000.20 against a 220,000.00 total with no way to
   // correct it (2026-09-18).
-  const renderGrouped = !billsMode && groupedView;
+  const renderGrouped = !billsMode && groupedView && !originalLinesOnly;
 
   // Derived: what's the common Item Type across rows? Used to drive
   // the bulk picker's `value` so the dropdown actually reflects what's
@@ -1515,12 +1530,14 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
         await updateInvoice(invoiceId, {
           date: billDate || null,
           gstRate: parseFloat(gstRate),
+          taxTreatment,
           // null, not 0 — only null clears the tax.
           furtherTaxRate: furtherTaxRate === null || furtherTaxRate === "" ? null : parseFloat(furtherTaxRate),
           withholdingTaxRate: withholdingTaxRate === null || withholdingTaxRate === "" ? null : parseFloat(withholdingTaxRate),
           withholdingTaxAmount: withholdingTaxAmount === null || withholdingTaxAmount === "" ? null : parseFloat(withholdingTaxAmount),
           groupTaxInvoiceByItemType: invoice.groupTaxInvoiceByItemType,
           paymentTerms: ptToSave,
+          manualChallanNumber: isChallanLinked ? undefined : manualChallanNumber.trim(),
           notes: notes.trim() || null,
           ...(billsMode ? { freightCharges: Number(freightCharges || 0) } : {}),
           documentType: documentType || null,
@@ -1735,7 +1752,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                 )}
 
                 {/* Bill-level fields */}
-                <div data-admin-form-row="" style={styles.row}>
+                <BillTaxTreatmentField enabled={!!invoice?.allowNonFbrBills} value={taxTreatment} rate={gstRate} onRateChange={setGstRate} disabled={readOnly || !canFullEdit} onChange={value => { setTaxTreatment(value); setGstRate(value === "SRB" ? 15 : value === "NoTax" ? 0 : 18); setFurtherTaxRate(null); }} />
+<div data-admin-form-row="" style={styles.row}>
                   <div style={{ flex: 1, minWidth: 180 }}>
                     <BillNumberField
                       companyId={invoice?.companyId}
@@ -1795,7 +1813,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                       readOnly={lockNonItemType}
                     />
                   </div>
-                  <div style={{ flex: 1, minWidth: 120 }}>
+                  <div style={{ display: taxTreatment !== "FBR" ? "none" : undefined, flex: 1, minWidth: 120 }}>
                     <label style={styles.label}>GST Rate (%)</label>
                     <input
                       type="number"
@@ -1850,7 +1868,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                   </div>
                 </div>
 
-                {!billsMode && <div style={{ fontSize: "0.82rem", color: "#526174", marginBottom: 12 }}>
+                {!billsMode && originalLinesOnly && <div style={{ fontSize: "0.82rem", color: "#526174", marginBottom: 12 }}>
+                  The tax invoice prints your original bill lines, one row per line. Item types and codes you set here are what is filed.
+                </div>}
+                {!billsMode && !originalLinesOnly && <div style={{ fontSize: "0.82rem", color: "#526174", marginBottom: 12 }}>
                   Consultant groups use the item type’s tax unit. Bill and challan units stay unchanged.
                   {invoice.groupTaxInvoiceByItemType
                     ? " Tax invoice printing uses grouped, adjusted items."
@@ -2467,7 +2488,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                         different numbers, and entering a GST-inclusive figure
                         into a before-GST field would tax it a second time. */}
                     <div style={{ ...styles.totalsRow, fontSize: "0.74rem", color: colors.textSecondary }}>
-                      <span>with GST ({gstRate}%) this bill comes to:</span>
+                      <span>with {taxTreatment === "SRB" ? "SRB sales tax" : taxTreatment === "NoTax" ? "Tax" : "GST"} ({gstRate}%) this bill comes to:</span>
                       <span>Rs. {(currentSubtotal + Math.round(currentSubtotal * (Number(gstRate) || 0)) / 100).toLocaleString("en-PK", { maximumFractionDigits: 2 })}</span>
                     </div>
                     <div style={{ ...styles.totalsRow, borderTop: `1px dashed ${colors.cardBorder}`, paddingTop: "0.4rem", marginTop: "0.4rem" }}>
@@ -2490,6 +2511,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                   </div>
                 )}
 
+                {billsMode && !isChallanLinked && <ManualChallanNumberField value={manualChallanNumber} onChange={setManualChallanNumber} readOnly={lockNonItemType || !invoice?.isEditable} />}
                 {billsMode && <FreightChargesField value={freightCharges} onChange={setFreightCharges} disabled={lockNonItemType || !invoice?.isEditable} />}
 
                 {/* Totals */}
@@ -2499,7 +2521,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                     <strong>Rs. {subtotal.toLocaleString()}</strong>
                   </div>
                   <div style={styles.totalsRow}>
-                    <span>GST ({gstRate}%):</span>
+                    <span>{taxTreatment === "SRB" ? "SRB sales tax" : taxTreatment === "NoTax" ? "Tax" : "GST"} ({gstRate}%):</span>
                     <strong>Rs. {gstAmount.toLocaleString()}</strong>
                   </div>
                   {billsMode && Number(freightCharges) > 0 && (
@@ -2551,7 +2573,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                     subtotal={subtotal}
                     freightCharges={Number(freightCharges || 0)}
                     gstAmount={gstAmount}
-                    furtherTaxRate={furtherTaxRate}
+                    furtherTaxRate={taxTreatment === "FBR" ? furtherTaxRate : undefined}
                     onFurtherTaxRateChange={setFurtherTaxRate}
                     withholdingTaxRate={withholdingTaxRate}
                     withholdingTaxAmount={withholdingTaxAmount}

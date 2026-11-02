@@ -17,7 +17,9 @@ namespace MyApp.Api.Repositories.Implementations
         private IQueryable<Payment> WithIncludes() =>
             _context.Payments
                 .Include(p => p.Allocations).ThenInclude(a => a.Invoice)
-                .Include(p => p.Allocations).ThenInclude(a => a.PurchaseBill);
+                .Include(p => p.Allocations).ThenInclude(a => a.PurchaseBill)
+                .Include(p => p.Allocations).ThenInclude(a => a.Account)
+                .Include(p => p.Allocations).ThenInclude(a => a.AdjustmentAccount);
 
         public async Task<(List<Payment> Items, int TotalCount)> GetPagedByCompanyAsync(
             int companyId, PaymentDirection direction, int page, int pageSize,
@@ -39,7 +41,6 @@ namespace MyApp.Api.Repositories.Implementations
                 query = query.Where(p =>
                     p.Number.ToString().Contains(term) ||
                     (p.Description != null && p.Description.ToLower().Contains(term)) ||
-                    (p.ContactName != null && p.ContactName.ToLower().Contains(term)) ||
                     (p.ChequeNumber != null && p.ChequeNumber.ToLower().Contains(term)) ||
                     (p.BankAccountName != null && p.BankAccountName.ToLower().Contains(term)));
             }

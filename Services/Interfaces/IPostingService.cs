@@ -32,12 +32,15 @@ namespace MyApp.Api.Services.Interfaces
 
         /// <summary>Purchase bill: Dr Inventory (or COGS when the company does
         /// not track stock), Dr Input tax, Cr A/P, Cr WHT payable.</summary>
+        Task PostStockEntryAsync(StockEntry entry);
         Task PostPurchaseBillAsync(PurchaseBill bill);
 
         /// <summary>Receipt: Dr bank/cash, Cr A/R per settled invoice. Payment:
         /// the mirror image. Money not allocated to a document lands on the
         /// PARTY's own control account, which is where an advance belongs.</summary>
         Task PostPaymentAsync(Payment payment);
+        Task PostTransferAsync(AccountTransfer transfer);
+        Task PostPurchaseDebitNoteAsync(PurchaseDebitNote note);
 
         /// <summary>Removes a document's entry. Called from the delete paths.
         /// Safe when there is none.</summary>
@@ -63,5 +66,7 @@ namespace MyApp.Api.Services.Interfaces
         public int PostedInvoices { get; set; }
         public int PostedPurchaseBills { get; set; }
         public int PostedPayments { get; set; }
+        public int PostedTransfers { get; set; }
+        public int PostedPurchaseDebitNotes { get; set; }
     }
 }

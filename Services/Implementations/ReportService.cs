@@ -14,7 +14,7 @@ namespace MyApp.Api.Services.Implementations
     /// Read-only reporting queries. Every method is company-scoped; the
     /// controller asserts tenant access before calling in.
     /// </summary>
-    public class ReportService : IReportService
+    public partial class ReportService : IReportService
     {
         private readonly AppDbContext _context;
         private readonly decimal _adjustmentTolerancePkr;
@@ -142,7 +142,12 @@ namespace MyApp.Api.Services.Implementations
                 };
 
                 int sr = 0;
-                foreach (var item in inv.Items.OrderBy(x => x.Id))
+                var filingCurrent = inv.TaxFilingRowsJson != null && !TaxFilingProjection.IsStale(inv);
+                var reportItems = filingCurrent ? TaxFilingProjection.Lines(inv) : inv.Items.OrderBy(x => x.Id).ToList();
+                var filingTaxes = filingCurrent ? FurtherTaxCalculator.Allocate(inv.GSTAmount, reportItems.Select(i =>
+                    string.Equals(i.SaleType, "3rd Schedule Goods", StringComparison.OrdinalIgnoreCase)
+                        ? i.FixedNotifiedValueOrRetailPrice ?? 0m : i.LineTotal).ToArray()) : null;
+                foreach (var item in reportItems)
                 {
                     // Dual-book overlay: show what was FILED to FBR.
                     var a = item.Adjustment;
@@ -158,6 +163,7 @@ namespace MyApp.Api.Services.Implementations
                                     : item.ItemTypeName);
 
                     var tax = ComputeLineTax(saleType, amount, item.FixedNotifiedValueOrRetailPrice, inv.GSTRate);
+                    if (filingTaxes != null) tax = filingTaxes[sr];
 
                     invDto.Lines.Add(new SalesReportLineDto
                     {
@@ -200,7 +206,8 @@ namespace MyApp.Api.Services.Implementations
         // line items grouped beneath as a collapsible outline (+/-), and a
         // merged grand-total row across all invoices. #,##0.00 money columns.
         public async Task<byte[]> GetSalesReportExcelAsync(int companyId, int? year, int? month, string buyerType,
-            DateTime? dateFrom = null, DateTime? dateTo = null, int? clientId = null)
+            DateTime? dateFrom = null, DateTime? dateTo = null, int? clientId = null,
+            ReportExcelLetterhead? letterhead = null)
         {
             var report = await GetSalesReportAsync(companyId, year, month, buyerType, dateFrom, dateTo, clientId);
 
@@ -242,19 +249,25 @@ namespace MyApp.Api.Services.Implementations
 
             int r = 1;
 
-            // Title banner (merged across all columns, grey fill).
-            ws.Cell(r, 1).Value = report.CompanyName;
-            var titleRange = ws.Range(r, 1, r, COLS).Merge();
-            titleRange.Style.Font.FontSize = 22;
-            titleRange.Style.Fill.BackgroundColor = grey;
-            titleRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            ws.Row(r).Height = 32;
-            r++;
+            // Title banner: the company's own letterhead when the caller sent it,
+            // otherwise the grey merged banner (merged across all columns).
+            if (letterhead != null) r = letterhead.Write(ws, COLS, r) - 1;
+            else
+            {
+                ws.Cell(r, 1).Value = report.CompanyName;
+                var titleRange = ws.Range(r, 1, r, COLS).Merge();
+                titleRange.Style.Font.FontSize = 22;
+                titleRange.Style.Fill.BackgroundColor = grey;
+                titleRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                ws.Row(r).Height = 32;
+                r++;
+            }
 
             ws.Cell(r, 1).Value = "Sale Report";
             var subTitle = ws.Range(r, 1, r, COLS).Merge();
             subTitle.Style.Font.FontSize = 16;
-            subTitle.Style.Fill.BackgroundColor = grey;
+            subTitle.Style.Fill.BackgroundColor = letterhead?.HeaderFill ?? grey;
+            if (letterhead != null) subTitle.Style.Font.FontColor = letterhead.HeaderText;
             subTitle.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
             ws.Row(r).Height = 24;
             r++;
@@ -275,6 +288,7 @@ namespace MyApp.Api.Services.Implementations
                 hc.Style.Fill.BackgroundColor = grey;
                 hc.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
                 if (moneyCols.Contains(c)) hc.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                letterhead?.StyleHeaderCell(hc);
             }
             var headerRow = r;
             r++;
@@ -364,8 +378,12 @@ namespace MyApp.Api.Services.Implementations
         }
 
         // ── Tax Sheet — invoice lines still missing a valid HS code ──────
-        public async Task<TaxSheetReportDto> GetTaxSheetAsync(int companyId, int? year, int? month,
+        public Task<TaxSheetReportDto> GetTaxSheetAsync(int companyId, int? year, int? month,
             DateTime? dateFrom = null, DateTime? dateTo = null, int? clientId = null)
+            => BuildTaxSheetAsync(companyId, year, month, dateFrom, dateTo, clientId, false);
+
+        private async Task<TaxSheetReportDto> BuildTaxSheetAsync(int companyId, int? year, int? month,
+            DateTime? dateFrom, DateTime? dateTo, int? clientId, bool originalLines)
         {
             var company = await _context.Companies.AsNoTracking()
                 .FirstOrDefaultAsync(c => c.Id == companyId);
@@ -405,7 +423,7 @@ namespace MyApp.Api.Services.Implementations
                          && i.FbrSubmittedAt == null
                          // Operator marked this bill "skip / exclude from FBR" — it
                          // will never be filed, so it isn't pending classification.
-                         && !i.IsFbrExcluded
+                         && !i.IsFbrExcluded && i.TaxTreatment == "FBR"
                          && (clientId == null || i.ClientId == clientId.Value))
                 .OrderBy(i => i.Date).ThenBy(i => i.InvoiceNumber)
                 .ToListAsync();
@@ -421,6 +439,13 @@ namespace MyApp.Api.Services.Implementations
                 PeriodLabel = periodLabel,
             };
 
+            // A company that prints original bill lines on tax invoices works line
+            // by line: the screen lists every original line of an invoice that
+            // still has pending work, not one row per item-type group.
+            var useOriginal = company?.TaxInvoiceUseOriginalBillLines == true;
+            var perLine = originalLines || useOriginal;
+            report.OriginalLines = perLine;
+
             foreach (var inv in invoices)
             {
                 // The bill was edited AFTER the consultant reconciled the FBR
@@ -434,19 +459,31 @@ namespace MyApp.Api.Services.Implementations
                 // (physical line, dual-book overlay, or item type) OR the whole
                 // invoice's overlay is out of date.
                 var order = new List<string>();
-                var groups = new Dictionary<string, (decimal qty, decimal amount, decimal tax, string uom)>();
-                foreach (var item in inv.Items)
+                var groups = new Dictionary<string, (decimal qty, decimal amount, decimal tax, string uom, string category, string description, int lineId)>();
+                var plan = perLine && !outOfDate ? TaxFilingProjection.Plan(inv) : null;
+                var pendingSources = plan?.Rows.Where(r => string.IsNullOrWhiteSpace(r.HSCode))
+                    .SelectMany(r => r.SourceLineIds).ToHashSet();
+                var lines = perLine ? inv.Items
+                    : inv.TaxFilingRowsJson == null || outOfDate ? inv.Items : TaxFilingProjection.Lines(inv);
+                bool IsPending(InvoiceItem item) => pendingSources != null
+                    ? pendingSources.Contains(item.Id)
+                    : outOfDate || string.IsNullOrWhiteSpace(EffectiveHs(item));
+                var anyPending = lines.Any(IsPending);
+                var filedHs = useOriginal ? TaxFilingProjection.HsCodeByLine(inv) : new Dictionary<int, string?>();
+                foreach (var item in lines)
                 {
-                    if (!outOfDate && !string.IsNullOrWhiteSpace(EffectiveHs(item)))
+                    if (!(useOriginal && anyPending) && !IsPending(item))
                         continue; // classified + current — not our concern
                     var name = !string.IsNullOrWhiteSpace(item.ItemTypeName) ? item.ItemTypeName
                              : (!string.IsNullOrWhiteSpace(item.ItemType?.Name) ? item.ItemType!.Name : item.Description);
                     if (string.IsNullOrWhiteSpace(name)) name = "(unnamed)";
                     var tax = ComputeLineTax(item.SaleType, item.LineTotal, item.FixedNotifiedValueOrRetailPrice, inv.GSTRate);
-                    if (!groups.ContainsKey(name)) { groups[name] = (0m, 0m, 0m, item.UOM ?? ""); order.Add(name); }
-                    var g = groups[name];
-                    groups[name] = (g.qty + item.Quantity, g.amount + item.LineTotal, g.tax + tax,
-                        string.IsNullOrWhiteSpace(g.uom) ? (item.UOM ?? "") : g.uom);
+                    // The screen keeps category groups; Excel needs each original bill description.
+                    var key = perLine ? item.Id.ToString() : name;
+                    if (!groups.ContainsKey(key)) { groups[key] = (0m, 0m, 0m, item.UOM ?? "", name, item.Description, perLine ? item.Id : 0); order.Add(key); }
+                    var g = groups[key];
+                    groups[key] = (g.qty + item.Quantity, g.amount + item.LineTotal, g.tax + tax,
+                        string.IsNullOrWhiteSpace(g.uom) ? (item.UOM ?? "") : g.uom, g.category, g.description, g.lineId);
                 }
                 if (groups.Count == 0) continue; // invoice fully classified + current — skip
 
@@ -465,7 +502,10 @@ namespace MyApp.Api.Services.Implementations
                         DocumentDate = inv.Date.Date,
                         Quantity = g.qty,
                         QuantityLabel = FormatQty(g.qty, g.uom),
-                        ItemTypeName = name,
+                        ItemTypeName = g.category,
+                        Description = g.description,
+                        LineId = g.lineId,
+                        CurrentHsCode = g.lineId != 0 && filedHs.TryGetValue(g.lineId, out var hs) ? hs ?? "" : "",
                         ExcludingAmount = Round2(g.amount),
                         SalesTax = g.tax,
                         Total = Round2(g.amount) + g.tax,
@@ -482,33 +522,45 @@ namespace MyApp.Api.Services.Implementations
         }
 
         public async Task<byte[]> GetTaxSheetExcelAsync(int companyId, int? year, int? month,
-            DateTime? dateFrom = null, DateTime? dateTo = null, int? clientId = null)
+            DateTime? dateFrom = null, DateTime? dateTo = null, int? clientId = null,
+            ReportExcelLetterhead? letterhead = null)
         {
-            var report = await GetTaxSheetAsync(companyId, year, month, dateFrom, dateTo, clientId);
+            var report = await BuildTaxSheetAsync(companyId, year, month, dateFrom, dateTo, clientId, true);
 
-            const int COLS = 9;
+            // 11 original columns, then the consultant's two blanks and the
+            // hidden ids that let the upload find the exact bill line again.
+            const int COLS = 14;
+            const int ID_COL = 15, LINE_COL = 16;
             const string MONEY = "#,##0.00";
             var grey = XLColor.FromHtml("#EBEBEB");
             var headers = new[] { "NTN Number", "Party Name", "Inv Number", "Inv Date",
-                "Item Total QTY", "HS Code", "Excluding Amount", "Sales Tax", "Total" };
-            var moneyCols = new[] { 7, 8, 9 };
+                "Item Total QTY", "Category for Hscode", "Description", "Excluding Amount", "Sales Tax", "Total",
+                "Real Hscode", "FBR Unit (only if the HS code has several)", "Filing Qty (blank = bill qty)", "Real Item Description" };
+            var moneyCols = new[] { 8, 9, 10 };
 
             using var wb = new XLWorkbook();
             var ws = wb.Worksheets.Add("Tax Sheet");
             ws.Column(1).Width = 14; ws.Column(2).Width = 28; ws.Column(3).Width = 12;
             ws.Column(4).Width = 13; ws.Column(5).Width = 15; ws.Column(6).Width = 20;
-            ws.Column(7).Width = 16; ws.Column(8).Width = 13; ws.Column(9).Width = 15;
+            ws.Column(7).Width = 40; ws.Column(8).Width = 16; ws.Column(9).Width = 13;
+            ws.Column(10).Width = 15;
+            ws.Column(11).Width = 16; ws.Column(12).Width = 26; ws.Column(13).Width = 18; ws.Column(14).Width = 34;
 
             int r = 1;
-            ws.Cell(r, 1).Value = report.CompanyName;
-            var title = ws.Range(r, 1, r, COLS).Merge();
-            title.Style.Font.FontSize = 20; title.Style.Fill.BackgroundColor = grey;
-            title.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            ws.Row(r).Height = 28; r++;
+            if (letterhead != null) r = letterhead.Write(ws, COLS, r) - 1;
+            else
+            {
+                ws.Cell(r, 1).Value = report.CompanyName;
+                var title = ws.Range(r, 1, r, COLS).Merge();
+                title.Style.Font.FontSize = 20; title.Style.Fill.BackgroundColor = grey;
+                title.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                ws.Row(r).Height = 28; r++;
+            }
 
             ws.Cell(r, 1).Value = "Tax Sheet — items pending HS code";
             var sub = ws.Range(r, 1, r, COLS).Merge();
-            sub.Style.Font.FontSize = 14; sub.Style.Fill.BackgroundColor = grey;
+            sub.Style.Font.FontSize = 14; sub.Style.Fill.BackgroundColor = letterhead?.HeaderFill ?? grey;
+            if (letterhead != null) sub.Style.Font.FontColor = letterhead.HeaderText;
             sub.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center; r++;
 
             ws.Cell(r, 1).Value = $"{report.PeriodLabel}  ·  {report.InvoiceCount} invoice(s), {report.RowCount} line(s)";
@@ -524,31 +576,44 @@ namespace MyApp.Api.Services.Implementations
                 hc.Style.Fill.BackgroundColor = grey;
                 hc.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
                 if (moneyCols.Contains(c)) hc.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                letterhead?.StyleHeaderCell(hc);
             }
+            ws.Cell(r, ID_COL).Value = "Invoice Id"; ws.Cell(r, LINE_COL).Value = "Line Id";
+            ws.Column(ID_COL).Hide(); ws.Column(LINE_COL).Hide();
             var headerRow = r; r++;
 
             foreach (var row in report.Rows)
             {
-                ws.Cell(r, 1).Value = row.Ntn;
-                ws.Cell(r, 2).Value = row.PartyName;
-                ws.Cell(r, 3).Value = row.DocumentNumber;
+                ws.Cell(r, ID_COL).Value = row.InvoiceId;
+                if (row.LineId != 0) ws.Cell(r, LINE_COL).Value = row.LineId;
+                ws.Cell(r, 11).Style.NumberFormat.Format = "@";   // Real Hscode
+                ws.Cell(r, 12).Style.NumberFormat.Format = "@";   // FBR Unit
+                ws.Cell(r, 13).Style.NumberFormat.Format = "General"; // Filing Qty
+                ws.Cell(r, 14).Style.NumberFormat.Format = "@";   // Real Item Description
+                // The four entry columns are tinted so they read as "type here".
+                for (int c = 11; c <= 14; c++) ws.Cell(r, c).Style.Fill.BackgroundColor = XLColor.FromHtml("#FFF8E1");
+                ws.Cell(r, 1).Value = SpreadsheetFormulaGuard.Neutralise(row.Ntn);
+                ws.Cell(r, 2).Value = SpreadsheetFormulaGuard.Neutralise(row.PartyName);
+                ws.Cell(r, 3).Value = SpreadsheetFormulaGuard.Neutralise(row.DocumentNumber);
                 ws.Cell(r, 4).Value = row.DocumentDate; ws.Cell(r, 4).Style.DateFormat.Format = "dd-MM-yyyy";
-                ws.Cell(r, 5).Value = row.QuantityLabel;
-                ws.Cell(r, 6).Value = row.ItemTypeName;
-                ws.Cell(r, 7).Value = row.ExcludingAmount;
-                ws.Cell(r, 8).Value = row.SalesTax;
-                ws.Cell(r, 9).Value = row.Total;
+                ws.Cell(r, 5).Value = SpreadsheetFormulaGuard.Neutralise(row.QuantityLabel);
+                ws.Cell(r, 6).Value = SpreadsheetFormulaGuard.Neutralise(row.ItemTypeName);
+                ws.Cell(r, 7).Value = SpreadsheetFormulaGuard.Neutralise(row.Description);
+                ws.Cell(r, 7).Style.Alignment.WrapText = true;
+                ws.Cell(r, 8).Value = row.ExcludingAmount;
+                ws.Cell(r, 9).Value = row.SalesTax;
+                ws.Cell(r, 10).Value = row.Total;
                 foreach (var c in moneyCols) ws.Cell(r, c).Style.NumberFormat.Format = MONEY;
                 r++;
             }
 
             ws.Cell(r, 1).Value = "TOTAL:";
-            var totalLabel = ws.Range(r, 1, r, 6).Merge();
+            var totalLabel = ws.Range(r, 1, r, 7).Merge();
             totalLabel.Style.Font.Bold = true;
             totalLabel.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
-            ws.Cell(r, 7).Value = report.GrandExcluding;
-            ws.Cell(r, 8).Value = report.GrandTax;
-            ws.Cell(r, 9).Value = report.GrandTotal;
+            ws.Cell(r, 8).Value = report.GrandExcluding;
+            ws.Cell(r, 9).Value = report.GrandTax;
+            ws.Cell(r, 10).Value = report.GrandTotal;
             foreach (var c in moneyCols) ws.Cell(r, c).Style.NumberFormat.Format = MONEY;
             var totalRow = ws.Range(r, 1, r, COLS);
             totalRow.Style.Font.Bold = true;
@@ -588,7 +653,7 @@ namespace MyApp.Api.Services.Implementations
                          && !i.IsCancelled
                          && !i.IsDemo
                          && i.FbrSubmittedAt == null
-                         && !i.IsFbrExcluded
+                         && !i.IsFbrExcluded && i.TaxTreatment == "FBR"
                          && (clientId == null || i.ClientId == clientId.Value))
                 .ToListAsync();
 
@@ -600,7 +665,7 @@ namespace MyApp.Api.Services.Implementations
             {
                 // Only invoices that still carry an un-classified line are "remaining".
                 var hasUnclassified = IsAdjustmentOutOfDate(inv)
-                    || inv.Items.Any(item => string.IsNullOrWhiteSpace(EffectiveHs(item)));
+                    || TaxFilingProjection.Lines(inv).Any(item => string.IsNullOrWhiteSpace(EffectiveHs(item)));
                 if (!hasUnclassified) continue;
 
                 // A submitted / cancelled invoice can't be re-dated (already filed
@@ -813,7 +878,8 @@ namespace MyApp.Api.Services.Implementations
         // ── Styled Excel — mirrors the operator's manual outstanding sheet:
         // company-name banner, bold centered header, per-invoice rows, grand total.
         public async Task<byte[]> GetOutstandingLedgerExcelAsync(int companyId, int? clientId, string status,
-            int? year, int? month, DateTime? dateFrom, DateTime? dateTo)
+            int? year, int? month, DateTime? dateFrom, DateTime? dateTo,
+            ReportExcelLetterhead? letterhead = null)
         {
             var report = await GetOutstandingLedgerAsync(companyId, clientId, status, year, month, dateFrom, dateTo);
 
@@ -830,17 +896,22 @@ namespace MyApp.Api.Services.Implementations
             for (int c = 1; c <= COLS; c++) ws.Column(c).Width = widths[c - 1];
 
             int r = 1;
-            ws.Cell(r, 1).Value = report.CompanyName;
-            var title = ws.Range(r, 1, r, COLS).Merge();
-            title.Style.Font.FontSize = 22; title.Style.Font.Bold = true;
-            title.Style.Fill.BackgroundColor = grey;
-            title.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            ws.Row(r).Height = 30; r++;
+            if (letterhead != null) r = letterhead.Write(ws, COLS, r) - 1;
+            else
+            {
+                ws.Cell(r, 1).Value = report.CompanyName;
+                var title = ws.Range(r, 1, r, COLS).Merge();
+                title.Style.Font.FontSize = 22; title.Style.Font.Bold = true;
+                title.Style.Fill.BackgroundColor = grey;
+                title.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                ws.Row(r).Height = 30; r++;
+            }
 
             var statusLabel = report.StatusFilter switch { "paid" => "Paid", "all" => "All invoices", _ => "Outstanding (Unpaid)" };
             ws.Cell(r, 1).Value = $"Outstanding Ledger — {(string.IsNullOrWhiteSpace(report.ClientName) ? "All Clients" : report.ClientName)}";
             var sub = ws.Range(r, 1, r, COLS).Merge();
-            sub.Style.Font.FontSize = 14; sub.Style.Font.Bold = true; sub.Style.Fill.BackgroundColor = grey;
+            sub.Style.Font.FontSize = 14; sub.Style.Font.Bold = true; sub.Style.Fill.BackgroundColor = letterhead?.HeaderFill ?? grey;
+            if (letterhead != null) sub.Style.Font.FontColor = letterhead.HeaderText;
             sub.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center; r++;
 
             ws.Cell(r, 1).Value = $"{report.PeriodLabel}  ·  {statusLabel}  ·  {report.InvoiceCount} invoice(s)";
@@ -858,6 +929,7 @@ namespace MyApp.Api.Services.Implementations
                 hc.Style.Alignment.WrapText = true;
                 hc.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
                 hc.Style.Border.TopBorder = XLBorderStyleValues.Thin;
+                letterhead?.StyleHeaderCell(hc);
             }
             var headerRow = r; r++;
 
@@ -934,6 +1006,7 @@ namespace MyApp.Api.Services.Implementations
         // line carries an overlay. Mirrors FbrService's out-of-date gate.
         private bool IsAdjustmentOutOfDate(Invoice inv)
         {
+            if (inv.TaxFilingRowsJson != null) return TaxFilingProjection.IsStale(inv);
             if (inv.Items == null || !inv.Items.Any(ii => ii.Adjustment != null)) return false;
             var billSubtotal = inv.Items.Sum(ii => ii.LineTotal);
             var fbrSubtotal = inv.Items.Sum(ii =>

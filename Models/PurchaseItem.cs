@@ -10,6 +10,8 @@ namespace MyApp.Api.Models
     {
         public int Id { get; set; }
         public int PurchaseBillId { get; set; }
+        public int? LocalDeliveryItemId { get; set; }
+        public int? LocalInvoiceItemId { get; set; }
         public int? GoodsReceiptItemId { get; set; }
 
         /// <summary>

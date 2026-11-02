@@ -64,7 +64,8 @@ export default function SearchableSelect({
       loading={loading}
       style={style}
       emptyText={(items || []).length === 0 ? "No options." : `No match for "${query}".`}
-      ariaLabel={ariaLabel || placeholder}
+      // Name the trigger by what it shows, so a chosen value is announced (not the placeholder).
+      ariaLabel={ariaLabel || (selected ? String(selected[labelKey] ?? "") : placeholder)}
     />
   );
 }

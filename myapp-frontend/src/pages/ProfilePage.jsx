@@ -13,7 +13,10 @@ import {
   MdShield,
   MdDelete,
   MdCloudUpload,
-  MdSmartToy, MdPalette } from "react-icons/md";
+  MdSmartToy, MdPalette,
+  MdManageAccounts,
+  MdAdminPanelSettings,
+} from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { updateProfile, changePassword, uploadAvatar, removeAvatar } from "../api/authApi";
 import { getAvatarUrl } from "../utils/avatarUrl";
@@ -80,9 +83,9 @@ export default function ProfilePage() {
     setSearchParams(next);
   };
   const tabs = [["profile", "Profile", MdAccountCircle], ["appearance", "Appearance", MdPalette],
-    ...(canAdministerMcp ? [["mcp-catalog", "Manage MCP Access", MdShield]] : []),
     ["mcp-connections", "MCP Connections", MdSmartToy],
-    ...(canAdministerMcp ? [["mcp-admin", "MCP Administration", MdShield]] : [])];
+    ...(canAdministerMcp ? [["mcp-catalog", "Manage MCP Access", MdManageAccounts],
+      ["mcp-admin", "MCP Administration", MdAdminPanelSettings]] : [])];
   const fileRef = useRef(null);
 
   // Edit profile state
@@ -306,12 +309,13 @@ export default function ProfilePage() {
   const hasServerAvatar = !!user?.avatarPath && !previewUrl;
 
   return (
-    <div style={{ maxWidth: 800, margin: "0 auto" }}>
+    // MCP tabs hold tables and catalogs, so they get the full content width.
+    <div style={{ maxWidth: tab === "profile" || tab === "appearance" ? 800 : 1200, margin: "0 auto", minWidth: 0 }}>
       <PageHeader
         icon={MdAccountCircle}
         tone="brand"
         title="My Profile"
-        subtitle="Manage your account settings"
+        subtitle={canAdministerMcp ? "Manage your account, AI connections and MCP access" : "Manage your account settings and AI connections"}
       />
 
       <Tabs

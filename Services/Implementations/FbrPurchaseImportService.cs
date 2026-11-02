@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Services.Interfaces;
 
@@ -14,6 +16,7 @@ namespace MyApp.Api.Services.Implementations
 
     public class FbrPurchaseImportService : IFbrPurchaseImportService
     {
+        private readonly AppDbContext _context;
         private readonly IFbrPurchaseLedgerParser _parser;
         private readonly IFbrPurchaseImportFilter _filter;
         private readonly IFbrPurchaseImportMatcher _matcher;
@@ -21,12 +24,14 @@ namespace MyApp.Api.Services.Implementations
         private readonly ILogger<FbrPurchaseImportService> _logger;
 
         public FbrPurchaseImportService(
+            AppDbContext context,
             IFbrPurchaseLedgerParser parser,
             IFbrPurchaseImportFilter filter,
             IFbrPurchaseImportMatcher matcher,
             IFbrPurchaseImportCommitter committer,
             ILogger<FbrPurchaseImportService> logger)
         {
+            _context = context;
             _parser = parser;
             _filter = filter;
             _matcher = matcher;
@@ -69,6 +74,20 @@ namespace MyApp.Api.Services.Implementations
 
                 if (!hasImportable)
                 {
+                    if (inv.MatchedPurchaseBillId.HasValue && inv.MatchedSupplierId.HasValue &&
+                        inv.Lines.All(l => l.Decision == ImportDecision.AlreadyExists))
+                    {
+                        var existing = await _context.PurchaseBills.SingleOrDefaultAsync(p => p.Id == inv.MatchedPurchaseBillId.Value &&
+                            p.CompanyId == companyId && p.SupplierId == inv.MatchedSupplierId.Value);
+                        if (existing != null)
+                        {
+                            var matched = Math.Abs(existing.GrandTotal - inv.TotalGrossValue) < 0.01m &&
+                                Math.Abs(existing.Subtotal - inv.TotalValueExclTax) < 0.01m;
+                            existing.ReconciliationStatus = matched ? "Matched" : "Disputed";
+                            if (matched && string.IsNullOrWhiteSpace(existing.SupplierIRN)) existing.SupplierIRN = inv.FbrInvoiceRefNo;
+                            await _context.SaveChangesAsync();
+                        }
+                    }
                     response.Counts.InvoicesSkipped++;
                     response.Invoices.Add(new FbrImportCommitInvoiceResult
                     {

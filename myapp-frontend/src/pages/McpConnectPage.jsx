@@ -59,6 +59,13 @@ export default function McpConnectPage() {
         title={<span style={{ overflowWrap: "anywhere", minWidth: 0 }}>Connect “{info.clientName}”</span>}
         subtitle={<span style={{ overflowWrap: "anywhere" }}>wants to connect to your Trader ERP account. It will return to <strong>{info.redirectHost}</strong>.</span>}
       />
+      {info.knownClient === false && (
+        <div role="alert" style={{ marginBottom: "0.8rem" }}>
+          <Alert tone="warn" icon={MdInfo}>
+            <strong>Unrecognised application.</strong> Anyone can register an app under any name. Approve only if you set up an app that returns to <strong>{info.redirectHost}</strong> yourself; if you followed a link someone sent you, deny.
+          </Alert>
+        </div>
+      )}
 
       {!info.enabled ? <Alert tone="warn" icon={MdInfo}>
         Purchase this premium feature. Contact your administrator to purchase MCP access. The primary administrator must enable your account before you can connect ChatGPT, Claude or another compatible agent.</Alert>

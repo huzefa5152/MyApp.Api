@@ -1,4 +1,7 @@
+import CostingStatus from "./CostingStatus";
+import { canEditBilledDelivery } from "../utils/billedChallanEdit";
 import { isBillableChallan } from "../utils/challanBilling";
+import CardActions from "./CardActions";
 import { useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning, MdRequestQuote, MdLocationOn, MdContentCopy, MdLink, MdAssignment } from "react-icons/md";
@@ -48,7 +51,7 @@ function WarningTooltip({ warnings }) {
   );
 }
 
-export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, onLinkOrder, exportingId, duplicatingId, printDisabled = false, printDisabledReason = "", attachCounts = {}, onAttach }) {
+export default function ChallanList({ challans, onCancel, onDelete, onPrint, onCosts, onLocalPurchase, onEditItems, onEditDelivery, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, onLinkOrder, exportingId, duplicatingId, printDisabled = false, printDisabledReason = "", attachCounts = {}, onAttach }) {
   const { has } = usePermissions();
   const permUpdate = has("challans.manage.update");
   const permDelete = has("challans.manage.delete");
@@ -67,7 +70,13 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
     <>
       <div className="card-grid">
         {challans.map((c) => {
-          const sc = statusColors[c.status] || statusColors.Pending;
+          // Billed row of a challan whose other lines are still pending: its
+          // status reads "Partially billed", not "Billed".
+          // The row with the unbilled rest reads "Pending · rest of #N".
+          const partlyBilled = c.isPartiallyBilled && c.status === "Invoiced";
+          const restOf = c.isPartiallyBilled && c.status !== "Invoiced";
+          const sc = partlyBilled || restOf ? { bg: "#fff8e1", color: "#b26a00", border: "#b26a0030" }
+            : statusColors[c.status] || statusColors.Pending;
           // Backend now sends `isEditable` — use it so billed-but-not-FBR-submitted challans can also be edited
           const isEditable = c.isEditable ?? (c.status === "Pending" || c.status === "Imported" || c.status === "No PO" || c.status === "Setup Required");
           // Separate flag: delete/cancel is only allowed when NOT billed
@@ -80,7 +89,8 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
           //     number — deleting one doesn't create a numbering gap).
           //     2026-05-08: this carve-out matches the new server-side rule
           //     in DeliveryChallanService.DeleteAsync.
-          const canDelete = canCancel && (isDuplicate || c.isLatest === true);
+          // A row split off a partial bill shares its number like a duplicate.
+          const canDelete = canCancel && (isDuplicate || c.splitFromChallanId != null || c.isLatest === true);
           const hasWarnings = c.warnings && c.warnings.length > 0;
           // Generate Bill shortcut — only for billable statuses
           // (Pending / Imported), matching the backend's CreateAsync guard.
@@ -126,11 +136,18 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                         </span>
                       )}
                       <span style={{ ...styles.statusBadge, backgroundColor: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>
-                        {c.status === "Invoiced" ? "Billed" : c.status}
+                        {partlyBilled ? "Partially billed" : restOf ? `${c.status} · rest of #${c.challanNumber}` : c.status === "Invoiced" ? "Billed" : c.status}
                       </span>
+                      {/* Which bill it went onto. */}
+                      {c.invoiceNumber != null && (
+                        <span style={{ fontSize: "0.72rem", color: "#5f6d7e", whiteSpace: "nowrap" }}>
+                          Bill #{c.invoiceNumber}
+                        </span>
+                      )}
                     </div>
                   </div>
 
+                  {onCosts && <div style={{ margin: "8px 0" }}><CostingStatus document={c} onOpen={() => onCosts(c)} /></div>}
                   {isDuplicate && c.duplicatedFromChallanNumber && (
                     <p style={{
                       ...styles.text,
@@ -188,12 +205,13 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                   </p>
                 </div>
 
-                <div style={styles.buttonGroup}>
-                  <Button size="sm" icon={MdVisibility} style={styles.viewBtn} onClick={() => setSelectedChallan(c)}>
+                <CardActions style={styles.buttonGroup}>
+                  <Button data-primary size="sm" icon={MdVisibility} style={styles.viewBtn} onClick={() => setSelectedChallan(c)}>
                     View
                   </Button>
                   {permPrint && (
                     <Button
+                      data-primary
                       size="sm"
                       icon={MdPrint}
                       style={styles.printBtn}
@@ -225,15 +243,23 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       {exportingId === c.id + "-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Excel
                     </Button>
                   )}
-                  {permUpdate && isEditable && (
+                  {onLocalPurchase && c.status !== "Cancelled" && (
+                    <Button size="sm" onClick={() => onLocalPurchase(c)}>Local purchase</Button>
+                  )}
+                  {permUpdate && isEditable && !c.invoiceId && (
                     <Button
                       size="sm"
                       icon={MdEdit}
                       style={styles.editBtn}
                       onClick={() => onEditItems?.(c)}
-                      title={c.status === "Invoiced" ? "Edit items (bill will auto-sync)" : "Edit items"}
+                      title={c.invoiceId || c.status === "Invoiced" ? "Edit supplier & cost" : "Edit items"}
                     >
-                      Edit
+                      {c.invoiceId || c.status === "Invoiced" ? "Supplier & cost" : "Edit"}
+                    </Button>
+                  )}
+                  {onEditDelivery && canEditBilledDelivery(c, has) && (
+                    <Button size="sm" icon={MdEdit} style={styles.editBtn} onClick={() => onEditDelivery(c)}>
+                      Edit delivery & update bill
                     </Button>
                   )}
                   {canDuplicate && onDuplicate && (
@@ -253,6 +279,7 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                   )}
                   {canGenerateBill && (
                     <Button
+                      data-primary
                       size="sm"
                       icon={MdRequestQuote}
                       style={styles.generateBillBtn}
@@ -291,7 +318,7 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       Delete
                     </Button>
                   )}
-                </div>
+                </CardActions>
               </div>
             </Card>
           );

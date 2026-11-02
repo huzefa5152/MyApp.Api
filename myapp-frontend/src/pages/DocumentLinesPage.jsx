@@ -1,12 +1,19 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { challanPrivateColumns, defaultColumnsForType, lineColumns, lineSources, linesToTsv, saveLinesExcel } from "../utils/documentLines";
 import { loadDocumentLines } from "../api/documentLinesApi";
-import { MdTableRows } from "react-icons/md";
+import { MdContentCopy, MdDownload, MdPictureAsPdf, MdPrint, MdTableRows } from "react-icons/md";
 import { PageHeader, CompanyPicker, Button, Card, Field, SearchBox, TableWrap, EmptyState, Loading, Alert } from "../ui/Kit";
+import ColumnPicker from "../Components/reports/ColumnPicker";
+import "../Components/reports/ReportWorkspace.css";
+import { fileSlug, pdfReport, printReport } from "../utils/reportPrintKit";
+import { excelBrandParams } from "../utils/reportExcelBrand";
 import "./DocumentLinesPage.css";
+import useIsNarrow from "../hooks/useIsNarrow";
 
 const ymd = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const today = new Date();
@@ -41,6 +48,8 @@ export default function DocumentLinesPage() {
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [printing, setPrinting] = useState("");
+  const narrow = useIsNarrow(760);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -84,16 +93,63 @@ export default function DocumentLinesPage() {
   };
   const download = async () => {
     setExporting(true); setError("");
-    try { await saveLinesExcel(shown, columns, `${lineSources[type].label}-${period === "document" ? documentId : `${range.from}-to-${range.to}`}`); }
+    try { await saveLinesExcel(shown, columns, `${lineSources[type].label}-${period === "document" ? documentId : `${range.from}-to-${range.to}`}`, await excelBrandParams(selectedCompany)); }
     catch { setError("Could not create the Excel file."); }
     finally { setExporting(false); }
   };
 
   if (!allowed.length) return <EmptyState icon={MdTableRows}>You do not have access to document lines.</EmptyState>;
+
+  const hiddenSet = new Set(availableColumns.map(([key]) => key).filter((key) => !columns.includes(key)));
+  const typeLabel = lineSources[type]?.label || "Document lines";
+  const rangeLabel = period === "document" ? "This document" : `${range.from} to ${range.to}`;
+  // Print / PDF: every matching line (not only the first 200 on screen), in the
+  // chosen columns, on the company letterhead.
+  const envelope = () => ({
+    title: `Document Lines — ${typeLabel}`,
+    companyName: selectedCompany?.brandName || selectedCompany?.name,
+    periodLabel: rangeLabel,
+    generatedAt: new Date().toISOString(),
+    filtersApplied: [search && `Search: "${search}"`, status && `Status: ${status}`, itemSearch && `Item: "${itemSearch}"`].filter(Boolean),
+    sourceLabel: `${shown.length} line${shown.length === 1 ? "" : "s"}`,
+    columns: visibleColumns.map(([key, label]) => ({ key, label, format: "text" })),
+    rows: shown,
+  });
+  const print = async () => {
+    setPrinting("print"); setError("");
+    try { await printReport(envelope(), selectedCompany); }
+    catch { setError("Could not prepare the print. Allow print pop-ups and try again."); }
+    finally { setPrinting(""); }
+  };
+  const pdf = async () => {
+    setPrinting("pdf"); setError("");
+    try { await pdfReport(envelope(), selectedCompany, fileSlug(`${typeLabel}-${rangeLabel}`)); }
+    catch { setError("Could not create the PDF."); }
+    finally { setPrinting(""); }
+  };
+
   return <div>
-    <PageHeader icon={MdTableRows} tone="brand" title="Document Lines" subtitle="Filter line items, then copy or export to Excel." />
+    <PageHeader
+      icon={MdTableRows}
+      tone="brand"
+      title="Document Lines"
+      subtitle={`${typeLabel} · ${rangeLabel} — filter line items, then copy, print or export.`}
+      actions={<>
+        <ColumnPicker
+          columns={availableColumns.map(([key, label]) => ({ key, label }))}
+          hidden={hiddenSet}
+          onChange={(nextHidden) => setColumns(lineColumns.map(([id]) => id).filter((id) => availableColumns.some(([key]) => key === id) && !nextHidden.has(id)))}
+          onReset={() => setColumns(defaultColumnsForType(type))}
+          note="Copy, Excel, Print and PDF use the columns ticked here."
+        />
+        <Button icon={MdContentCopy} disabled={!shown.length || busy || exporting} onClick={copy}>Copy for Excel</Button>
+        <Button icon={MdDownload} disabled={!shown.length || busy || exporting} onClick={download}>{exporting ? "Exporting…" : "Excel"}</Button>
+        <Button icon={MdPrint} disabled={!shown.length || busy || !!printing} onClick={print} title="Print this report on the company letterhead">Print</Button>
+        <Button variant="primary" icon={MdPictureAsPdf} disabled={!shown.length || busy || !!printing} onClick={pdf} title="Save this report as a PDF on the company letterhead">{printing === "pdf" ? "Building…" : "PDF"}</Button>
+      </>}
+    />
     <CompanyPicker />
-    <Card style={{ marginBottom: "var(--k-gap)" }}>
+    <ListFilters><Card style={{ marginBottom: "var(--k-gap)" }}>
       <div style={filterGrid}>
         <Field label="Document type"><select className="k-select" aria-label="Document type" value={type} onChange={(e) => { setStatus(""); setParams({ type: e.target.value }); }}>
           {allowed.map(([key, source]) => <option key={key} value={key}>{source.label}</option>)}
@@ -109,15 +165,7 @@ export default function DocumentLinesPage() {
           <option value="">All statuses</option>{["Pending", "Imported", "Invoiced", "No PO", "Cancelled"].map((x) => <option key={x} value={x}>{x}</option>)}
         </select></Field>}
       </div>
-    </Card>
-    <details className="document-lines-columns" style={columnsBox}><summary>Columns <span>{visibleColumns.length} selected</span></summary>
-      <div className="document-lines-column-grid" style={{ borderTopColor: "var(--k-line)" }}>
-        {availableColumns.map(([key, label]) => <label key={key}>
-          <input type="checkbox" checked={columns.includes(key)} onChange={() => setColumns((current) => current.includes(key) ? current.length > 1 ? current.filter((x) => x !== key) : current : lineColumns.map(([id]) => id).filter((id) => current.includes(id) || id === key))} />{label}
-        </label>)}
-      </div>
-      <Button size="sm" onClick={() => setColumns(defaultColumnsForType(type))}>Reset columns</Button>
-    </details>
+    </Card></ListFilters>
     {error && <Alert tone="error">{error}</Alert>}
     {message && <Alert tone="success">{message}</Alert>}
     <Card
@@ -125,29 +173,33 @@ export default function DocumentLinesPage() {
       aria-busy={busy}
       style={{ overflow: "hidden" }}
       title={<span role="status">{busy ? "Loading lines…" : loaded ? `${shown.length} line${shown.length === 1 ? "" : "s"}` : "Line items"}</span>}
-      actions={<>
-        <SearchBox label="Find an item" value={itemSearch} onChange={setItemSearch} placeholder="Find description or item type…" disabled={!loaded} />
-        <Button disabled={!shown.length || busy || exporting} onClick={copy}>Copy for Excel</Button>
-        <Button disabled={!shown.length || busy || exporting} onClick={download}>{exporting ? "Exporting…" : "Download Excel"}</Button>
-      </>}
+      actions={<SearchBox label="Find an item" value={itemSearch} onChange={setItemSearch} placeholder="Find description or item type…" disabled={!loaded} />}
     >
-    {!loaded ? (busy ? <Loading>Loading matching line items…</Loading> : <EmptyState boxed={false}>{error ? "Update the filters to try again." : "Select a company to view its lines."}</EmptyState>)
+    <RecordsViewport label="Document line records" enabled={!narrow}>{!loaded ? (busy ? <Loading>Loading matching line items…</Loading> : <EmptyState boxed={false}>{error ? "Update the filters to try again." : "Select a company to view its lines."}</EmptyState>)
       : !shown.length ? <EmptyState boxed={false}>No lines match these filters. Try another period or search.</EmptyState> : <>
-      <TableWrap data-admin-table-region="" style={{ overflow: "auto", maxHeight: "65vh" }}>
+      {narrow ? <div className="rw-cards" style={{ padding: "var(--k-td-pad-x)" }}>
+        {shown.slice(0, 200).map((row, index) => {
+          const [lead, ...rest] = visibleColumns;
+          return <div key={`${row.documentId}-${row.line}-${index}`} className="rw-card">
+            <div className="rw-card__lead">{row[lead[0]] || "—"}</div>
+            <div className="rw-card__meta" style={{ marginTop: 6 }}>
+              {rest.filter(([key]) => row[key] !== "" && row[key] != null).map(([key, label]) => <div key={key} style={{ minWidth: 0 }}><span>{label}</span><b>{row[key]}</b></div>)}
+            </div>
+          </div>;
+        })}
+      </div> : <TableWrap data-admin-table-region="">
         <table className="k-table" style={{ minWidth: 650 }}>
           <thead><tr>{visibleColumns.map(([key, label]) => <th key={key}>{label}</th>)}</tr></thead>
           <tbody>{shown.slice(0, 200).map((row, index) => <tr key={`${row.documentId}-${row.line}-${index}`}>
-            {visibleColumns.map(([key]) => <td key={key} style={{ maxWidth: 300, overflowWrap: "anywhere" }}>{row[key]}</td>)}
+            {visibleColumns.map(([key]) => <td key={key} style={/date/i.test(key) ? { whiteSpace: "nowrap" } : { maxWidth: 300, overflowWrap: "anywhere" }}>{row[key]}</td>)}
           </tr>)}</tbody>
         </table>
-      </TableWrap>
-      {shown.length > 200 && <p style={{ margin: 0, padding: "0.6rem var(--k-td-pad-x)", color: "var(--k-muted)", fontSize: "var(--k-font-sm)", borderTop: "1px solid var(--k-line)" }}>Showing the first 200 lines here. Copy and Excel include all {shown.length} matching lines.</p>}
-    </>}
+      </TableWrap>}
+      {shown.length > 200 && <p style={{ margin: 0, padding: "0.6rem var(--k-td-pad-x)", color: "var(--k-muted)", fontSize: "var(--k-font-sm)", borderTop: "1px solid var(--k-line)" }}>Showing the first 200 lines here. Copy, Excel, Print and PDF include all {shown.length} matching lines.</p>}
+    </>}</RecordsViewport>
     </Card>
   </div>;
 }
 
 // Filter grid — auto-fit, one column on phones.
 const filterGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(160px, 100%), 1fr))", gap: "0.75rem", alignItems: "end" };
-// Column chooser (native <details>) — surface follows the kit tokens.
-const columnsBox = { margin: "0 0 var(--k-gap)", borderColor: "var(--k-line)", borderRadius: "var(--k-radius)", background: "var(--k-surface)", color: "var(--k-ink)", fontSize: "var(--k-font)" };

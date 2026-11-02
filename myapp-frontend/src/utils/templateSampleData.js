@@ -23,6 +23,14 @@ import { purchaseBillStarters } from "./starters/purchaseBill";
 import { goodsReceiptStarters } from "./starters/goodsReceipt";
 import { receiptStarters } from "./starters/receipt";
 import { paymentStarters } from "./starters/payment";
+import { defaultTransferTemplate, defaultJournalEntryTemplate } from "./accountingDocTemplates";
+
+// Placeholder line photos for the Sales Quote preview — inline SVG data URIs
+// so the starter gallery / editor preview shows the Image column without
+// depending on any uploaded file. Deliberately different aspect ratios: they
+// prove a template letterboxes photos instead of stretching rows.
+const SAMPLE_LINE_PHOTO = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMjAiIGhlaWdodD0iMjQwIiB2aWV3Qm94PSIwIDAgMzIwIDI0MCI+PHJlY3Qgd2lkdGg9IjMyMCIgaGVpZ2h0PSIyNDAiIHJ4PSI2IiBmaWxsPSJyZ2IoMzgsODYsMTQ1KSIvPjxjaXJjbGUgY3g9IjEwMiIgY3k9Ijg2IiByPSIyNiIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwuNzUpIi8+PHBhdGggZD0iTTM4IDE5NiBMMTM0IDExMCBMMTk4IDE2MyBMMjQzIDEzMiBMMjg4IDE5NiBaIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LC44NSkiLz48dGV4dCB4PSI1MCUiIHk9IjIyOCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjMxIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LC45NSkiPlNBTVBMRSBQSE9UTzwvdGV4dD48L3N2Zz4=";
+const SAMPLE_LINE_PHOTO_TALL = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgMjAwIDMwMCI+PHJlY3Qgd2lkdGg9IjIwMCIgaGVpZ2h0PSIzMDAiIHJ4PSI2IiBmaWxsPSJyZ2IoMTUwLDcyLDQyKSIvPjxjaXJjbGUgY3g9IjY0IiBjeT0iMTA4IiByPSIyMiIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwuNzUpIi8+PHBhdGggZD0iTTI0IDI0NSBMODQgMTM4IEwxMjQgMjA0IEwxNTIgMTY1IEwxODAgMjQ1IFoiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsLjg1KSIvPjx0ZXh0IHg9IjUwJSIgeT0iMjg1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMjYiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsLjk1KSI+VEFMTCBQSE9UTzwvdGV4dD48L3N2Zz4=";
 
 export const TEMPLATE_TYPES = [
   { value: "Challan", label: "Delivery Challan" },
@@ -36,6 +44,8 @@ export const TEMPLATE_TYPES = [
   { value: "GoodsReceipt", label: "Goods Receipt" },
   { value: "Receipt", label: "Receipt Voucher" },
   { value: "Payment", label: "Payment Voucher" },
+  { value: "Transfer", label: "Fund Transfer" },
+  { value: "JournalEntry", label: "Journal Voucher" },
   { value: "WithholdingTaxReceipt", label: "Withholding Tax Receipt" },
 ];
 
@@ -100,6 +110,29 @@ export const SAMPLE_DATA = {
       { sNo: 2, documentLabel: "Bill #305", date: new Date().toISOString(), amount: 85000 },
     ],
   },
+  Transfer: {
+    ...SAMPLE_BRANDING,
+    reference: "TRF-7",
+    date: new Date().toISOString(),
+    fromAccountName: "Cash in hand",
+    toAccountName: "Bank current account",
+    description: "Cash deposited to bank",
+    amount: 500000,
+    amountInWords: "Five Hundred Thousand Rupees Only",
+  },
+  JournalEntry: {
+    ...SAMPLE_BRANDING,
+    reference: "JE-14",
+    entryNo: 14,
+    date: new Date().toISOString(),
+    narration: "Depreciation charged for the month",
+    totalDebit: 45000,
+    totalCredit: 45000,
+    lines: [
+      { sNo: 1, accountCode: "5200", accountName: "Depreciation expense", description: "Monthly depreciation", debit: 45000, credit: 0 },
+      { sNo: 2, accountCode: "1500", accountName: "Accumulated depreciation", description: "", debit: 0, credit: 45000 },
+    ],
+  },
   Challan: {
     companyBrandName: "SAMPLE COMPANY",
     companyLogoPath: "",
@@ -130,6 +163,7 @@ export const SAMPLE_DATA = {
     invoiceNumber: 501,
     date: new Date().toISOString(),
     challanNumbers: [1001, 1002],
+    manualChallanNumber: "",
     challanDates: [new Date().toISOString()],
     poNumber: "PO-2025-001",
     poDate: new Date().toISOString(),
@@ -170,6 +204,7 @@ export const SAMPLE_DATA = {
     invoiceNumber: 501,
     date: new Date().toISOString(),
     challanNumbers: [1001, 1002],
+    manualChallanNumber: "",
     poNumber: "PO-2025-001",
     subtotal: 150000,
     gstRate: 18,
@@ -208,15 +243,24 @@ export const SAMPLE_DATA = {
     clientAddress: "Client Address, City",
     clientNTN: "9876543-2",
     clientSTRN: "9876543210987",
-    subtotal: 150000,
+    // Line 2 carries a line discount and the quote a whole-quote discount, so
+    // Preview shows where both print.
+    subtotal: 143000,
+    discountAmount: 3000,
+    discountValue: 3000,
+    discountIsPercent: false,
+    discountPercentLabel: "",
+    discountReason: "Bulk order",
+    amountAfterDiscount: 140000,
     gstRate: 18,
-    gstAmount: 27000,
-    grandTotal: 177000,
-    amountInWords: "One Hundred Seventy Seven Thousand Rupees Only",
+    gstAmount: 25200,
+    grandTotal: 165200,
+    amountInWords: "One Hundred Sixty Five Thousand Two Hundred Rupees Only",
     notes: "Prices valid for 15 days. Delivery within 2 weeks of confirmed order.",
+    hasLineImages: true,
     items: [
-      { sNo: 1, description: "Sample Item One", quantity: 10, uom: "Pcs", unitPrice: 8000, lineTotal: 80000 },
-      { sNo: 2, description: "Sample Item Two", quantity: 5, uom: "Pcs", unitPrice: 14000, lineTotal: 70000 },
+      { sNo: 1, description: "Sample Item One", quantity: 10, uom: "Pcs", unitPrice: 8000, lineTotal: 80000, grossAmount: 80000, discountAmount: 0, discountNote: null, imagePath: SAMPLE_LINE_PHOTO },
+      { sNo: 2, description: "Sample Item Two", quantity: 5, uom: "Pcs", unitPrice: 14000, lineTotal: 63000, grossAmount: 70000, discountAmount: 7000, discountReason: "Old item taken in exchange", discountNote: "Less 10% (Rs 7,000): Old item taken in exchange", imagePath: SAMPLE_LINE_PHOTO_TALL },
     ],
   },
   SalesOrder: {
@@ -395,6 +439,10 @@ export const DEFAULT_TEMPLATES = {
   GoodsReceipt: goodsReceiptStarters[0]?.html || "",
   Receipt: receiptStarters[0]?.html || "",
   Payment: paymentStarters[0]?.html || "",
+  // The same built-in layouts the Transfers / Journal Entries screens print
+  // with when the company has no saved template.
+  Transfer: defaultTransferTemplate,
+  JournalEntry: defaultJournalEntryTemplate,
   WithholdingTaxReceipt: withholdingTaxStarters[0]?.html || "",
 };
 

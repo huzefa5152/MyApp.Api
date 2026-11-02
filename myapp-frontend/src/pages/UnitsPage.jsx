@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useMemo } from "react";
 import { MdStraighten, MdCheck, MdInfo } from "react-icons/md";
 import { getAllUnits, updateUnit } from "../api/unitsApi";
@@ -134,7 +135,7 @@ export default function UnitsPage() {
       </Toolbar>
 
       {/* Grid */}
-      {loading ? (
+      <RecordsViewport label="Units records">{loading ? (
         <Loading>Loading units…</Loading>
       ) : filtered.length === 0 ? (
         <EmptyState icon={MdStraighten}>
@@ -202,7 +203,7 @@ export default function UnitsPage() {
             </tbody>
           </table>
         </TableWrap>
-      )}
+      )}</RecordsViewport>
     </div>
   );
 }

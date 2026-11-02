@@ -87,6 +87,8 @@ public class UserSessionsController(AppDbContext db, IConfiguration configuratio
         if (count == 0) return NotFound();
         await db.UserSessions.Where(s => s.UserId == userId && !s.IsRevoked)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsRevoked, true).SetProperty(x => x.RevokedAt, DateTime.UtcNow));
+        // "Signed out everywhere" includes AI agent connections.
+        await McpTokenRevocation.RevokeAllForUserAsync(db, userId, CurrentUserId);
         await transaction.CommitAsync();
         logger.LogInformation("Seed administrator {AdminId} revoked all sessions for user {UserId}", CurrentUserId, userId);
         return Ok(new { message = "All sessions for this user signed out." });

@@ -976,3 +976,41 @@ MonsterASP.NET (IIS + .NET 9)
 | Database | SQL Server (same or remote) |
 | Static Files | Served by ASP.NET from `wwwroot/` |
 | FTP | `<prod-ftp-host>` — real value in the deploy workflow / GitHub secrets |
+
+## Independent tax filing rows (Trader)
+
+`Invoice.TaxFilingRowsJson` stores a versioned consultant projection separately
+from commercial invoice items. Each filing row references original line IDs;
+every original line appears exactly once. Consultants can combine groups or
+separate their source lines, pick company-private HS classifications, and enter
+filing quantity and exact amount excluding tax. The filing subtotal must equal
+the commercial subtotal to the paisa. Catalog metadata is resolved by the server;
+incompatible rate, sale type, SRO and retail bases cannot be merged.
+
+`GET /api/invoices/{id}/tax-filing` requires `invoices.list.view`;
+`PUT` accepts `invoices.manage.update.itemtype` for classification with fixed
+numerical allocations, or `invoices.manage.update.itemtype.qty` for quantity and
+amount edits. Classification-only staff can regroup compatible source lines
+without changing their numerical allocations. Both assert access to the
+invoice's stored company. Saves lock the invoice header, require a current edit
+version, reject submitted/cancelled/uncertain documents, and record an audit.
+The JSON column is a concurrency token so another commercial writer cannot
+silently overwrite a saved filing plan. Saving changes no commercial item,
+stock movement or journal entry.
+
+`TaxFilingProjection` supplies the filing lines to readiness, printing, FBR
+payloads, sales reports and tax-claim calculations. Explicit rows retain the
+consultant's chosen boundaries even when two rows share an HS code. A canonical
+fingerprint of commercial content detects subsequent edits, including changes
+that retain the subtotal. Stale plans require review before tax printing or FBR
+validation/submission. Tax pennies are allocated from the document's recorded
+taxes. Legacy invoices retain their existing overlays until a plan is saved.
+
+Return notes retain the original filing classifications and rates separately
+from stock-return items. Full reversals copy the filing exactly. A partial
+refund must map to a representable quantity at the filed rate and unit;
+incompatible partial refunds are refused before any note is written.
+
+Local proof: `scripts/test_tax_filing_rows.py`, `scripts/test_tax_filing_rows.mjs`
+and `scripts/test_tax_filing_ui.py`, plus the basic-flow, tenant-isolation,
+exact-line-total, HS-print and stock-reflow regression suites.

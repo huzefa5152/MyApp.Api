@@ -1,7 +1,9 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   MdMenuBook, MdAdd, MdEdit, MdDelete, MdBusiness, MdLock,
-  MdChevronLeft, MdChevronRight, MdClose,
+  MdChevronLeft, MdChevronRight, MdClose, MdPrint, MdPictureAsPdf,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -14,7 +16,13 @@ import useScrollToError from "../hooks/useScrollToError";
 import usePageSize from "../hooks/usePageSize";
 import AccountSelect from "../Components/AccountSelect";
 import { getAccountsFlat } from "../api/accountApi";
-import { getGlStatus } from "../api/accountingApi";
+import { getGlStatus, getJournalEntryPrintData } from "../api/accountingApi";
+import { usePrintTemplates } from "../hooks/usePrintTemplates";
+import PrintTemplateSelect from "../Components/PrintTemplateSelect";
+import { defaultJournalEntryTemplate } from "../utils/accountingDocTemplates";
+import { mergeTemplate } from "../utils/templateEngine";
+import { writeAndPrint } from "../utils/printDocument";
+import { exportToPdf } from "../utils/exportUtils";
 import {
   getPagedJournalEntries, createJournalEntry, updateJournalEntry, deleteJournalEntry,
 } from "../api/journalEntryApi";
@@ -51,6 +59,9 @@ export default function JournalEntriesPage() {
   const canCreate = has("accounting.journal.create");
   const canUpdate = has("accounting.journal.update");
   const canDelete = has("accounting.journal.delete");
+  const canPrint = has("accounting.journal.print");
+  const tplPicker = usePrintTemplates("JournalEntry");
+  const [exportingId, setExportingId] = useState(null);
 
   const [rows, setRows] = useState([]);
   const [page, setPage] = useState(1);
@@ -117,6 +128,27 @@ export default function JournalEntriesPage() {
     }
   };
 
+  const resolveTemplate = () => tplPicker.resolveTemplate()?.htmlContent || defaultJournalEntryTemplate;
+  const handlePrint = async (entry) => {
+    const win = window.open("", "_blank");
+    if (!win) { notify("Popup blocked. Please allow popups for this site.", "warning"); return; }
+    win.document.write("<p>Loading journal voucher…</p>");
+    try {
+      const { data } = await getJournalEntryPrintData(entry.id);
+      writeAndPrint(win, mergeTemplate(resolveTemplate(), data));
+    } catch { win.close(); notify("Failed to load print data.", "error"); }
+  };
+
+  const handleExportPdf = async (entry) => {
+    if (exportingId) return;
+    setExportingId(entry.id);
+    try {
+      const { data } = await getJournalEntryPrintData(entry.id);
+      await exportToPdf(mergeTemplate(resolveTemplate(), data), `Journal ${data.reference || entry.id}`);
+    } catch { notify("Failed to export PDF.", "error"); }
+    finally { setExportingId(null); }
+  };
+
   if (!canView) {
     return (
       <EmptyState icon={MdMenuBook}>
@@ -169,6 +201,10 @@ export default function JournalEntriesPage() {
       </TableWrap>
 
       <div style={st.cardActions}>
+        {canPrint && <>
+          <Button size="sm" icon={MdPrint} onClick={() => handlePrint(e)} title="Print journal voucher">Print</Button>
+          <Button size="sm" icon={MdPictureAsPdf} onClick={() => handleExportPdf(e)} disabled={!!exportingId} title="Download journal PDF">{exportingId === e.id ? "Preparing…" : "PDF"}</Button>
+        </>}
         {e.isManual ? (
           <>
             {canUpdate && (
@@ -226,7 +262,10 @@ export default function JournalEntriesPage() {
         tone="blue"
         title="Journal Entries"
         subtitle={glChips || undefined}
-        actions={canCreate && companyId && (
+        actions={((canPrint && tplPicker.canChoose) || (canCreate && companyId)) ? (
+          <>
+            {canPrint && tplPicker.canChoose && <PrintTemplateSelect picker={tplPicker} />}
+            {canCreate && companyId && (
           <Button
             variant="primary"
             icon={MdAdd}
@@ -237,12 +276,14 @@ export default function JournalEntriesPage() {
             New Entry
           </Button>
         )}
+          </>
+        ) : null}
       />
 
       {companies.length > 0 && (
         <>
           <CompanyPicker />
-          <Toolbar>
+          <ListFilters><Toolbar>
             <form
               onSubmit={(e) => { e.preventDefault(); setPage(1); fetchRows(1); }}
               style={{ display: "flex", gap: "0.4rem", flex: "1 1 220px", minWidth: 0, maxWidth: 520 }}
@@ -264,11 +305,11 @@ export default function JournalEntriesPage() {
               />
               Manual only
             </label>
-          </Toolbar>
+          </Toolbar></ListFilters>
         </>
       )}
 
-      {!companyId ? (
+      <RecordsViewport label="Journal Entries records">{!companyId ? (
         <EmptyState icon={MdBusiness}>Select a company to view its journal entries.</EmptyState>
       ) : loading ? (
         <Loading>Loading…</Loading>
@@ -280,7 +321,7 @@ export default function JournalEntriesPage() {
         <div style={st.list}>
           {rows.map((e) => <EntryCard key={e.id} e={e} />)}
         </div>
-      )}
+      )}</RecordsViewport>
 
       {totalPages > 1 && (
         <div style={st.pager}>

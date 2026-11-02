@@ -34,6 +34,7 @@ namespace MyApp.Api.Controllers
 
         [HttpPost]
         [HasPermission("fbr.config.update")]
+        [SeedAdminOnly]
         public async Task<IActionResult> Create([FromBody] FbrLookup lookup)
         {
             var created = await _service.CreateAsync(lookup);
@@ -42,6 +43,7 @@ namespace MyApp.Api.Controllers
 
         [HttpPut("{id}")]
         [HasPermission("fbr.config.update")]
+        [SeedAdminOnly]
         public async Task<IActionResult> Update(int id, [FromBody] FbrLookup lookup)
         {
             var updated = await _service.UpdateAsync(id, lookup);
@@ -51,6 +53,7 @@ namespace MyApp.Api.Controllers
 
         [HttpDelete("{id}")]
         [HasPermission("fbr.config.update")]
+        [SeedAdminOnly]
         public async Task<IActionResult> Delete(int id)
         {
             var deleted = await _service.DeleteAsync(id);

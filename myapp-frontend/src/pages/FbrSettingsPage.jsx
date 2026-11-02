@@ -5,7 +5,7 @@ import { formStyles, modalSizes } from "../theme";
 import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
-import { PageHeader, Button, IconButton, Toolbar, SearchBox, Card, EmptyState } from "../ui/Kit";
+import { PageHeader, Button, IconButton, Toolbar, SearchBox, Card, EmptyState, Alert } from "../ui/Kit";
 
 const CATEGORIES = [
   "Province",
@@ -29,8 +29,11 @@ const categoryLabels = {
 
 export default function FbrSettingsPage() {
   const confirm = useConfirm();
-  const { has } = usePermissions();
+  const { has, isSeedAdmin } = usePermissions();
   const canManage = has("fbr.config.update");
+  // The lookup codes are shared by every company, so only the system
+  // administrator may change them; everyone else with the permission reads them.
+  const canEdit = isSeedAdmin;
   const [lookups, setLookups] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState(null);
@@ -132,9 +135,14 @@ export default function FbrSettingsPage() {
         tone="brand"
         title="FBR Settings"
         subtitle={`${lookups.length} lookup value${lookups.length !== 1 ? "s" : ""} configured`}
-        actions={<Button variant="primary" icon={MdAdd} onClick={() => openAdd()}>New Value</Button>}
+        actions={canEdit && <Button variant="primary" icon={MdAdd} onClick={() => openAdd()}>New Value</Button>}
       />
 
+      {!canEdit && (
+        <Alert tone="info">
+          These lookup values are shared by every company on this installation, so only the system administrator can change them.
+        </Alert>
+      )}
       <Toolbar>
         <SearchBox value={search} onChange={setSearch} placeholder="Search..." />
         <select className="k-select" aria-label="Category" value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
@@ -152,7 +160,7 @@ export default function FbrSettingsPage() {
           <Card
             key={cat}
             title={categoryLabels[cat] || cat}
-            actions={<Button size="sm" icon={MdAdd} onClick={() => openAdd(cat)}>Add</Button>}
+            actions={canEdit && <Button size="sm" icon={MdAdd} onClick={() => openAdd(cat)}>Add</Button>}
           >
             {items.length === 0 ? (
               <p style={styles.emptyCat}>No values in this category.</p>
@@ -169,10 +177,10 @@ export default function FbrSettingsPage() {
                         )}
                       </div>
                     </div>
-                    <div style={{ display: "flex", gap: "0.25rem" }}>
+                    {canEdit && <div style={{ display: "flex", gap: "0.25rem" }}>
                       <IconButton label="Edit" icon={MdEdit} size={16} onClick={() => openEdit(item)} />
                       <IconButton label="Delete" icon={MdDelete} size={16} danger onClick={() => handleDelete(item)} />
-                    </div>
+                    </div>}
                   </div>
                 ))}
               </div>

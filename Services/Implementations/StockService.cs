@@ -1,3 +1,4 @@
+using MyApp.Api.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
@@ -45,7 +46,7 @@ namespace MyApp.Api.Services.Implementations
             return (await _context.ItemTypes
                 .Where(it => ids.Contains(it.Id)
                           && it.HSCode != null
-                          && it.HSCode != "")
+                          && it.HSCode.Trim() != "")
                 .Select(it => it.Id)
                 .ToListAsync())
                 .ToHashSet();
@@ -262,7 +263,7 @@ namespace MyApp.Api.Services.Implementations
             // classified item types with quantity, per the tracked-item gate).
             // Cancelled bills are handled the same way defensively —
             // CancelAsync purges too, but this keeps the invariant local.
-            if (invoice.IsFbrExcluded || invoice.IsCancelled)
+            if (invoice.IsFbrExcluded || invoice.IsCancelled || BillTaxTreatment.IsOutsideFbr(invoice.TaxTreatment))
             {
                 var purge = await _context.StockMovements
                     .Where(m => m.CompanyId  == invoice.CompanyId

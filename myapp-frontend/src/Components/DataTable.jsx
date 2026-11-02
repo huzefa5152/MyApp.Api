@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { Fragment, useState, useMemo, useRef, useEffect } from "react";
 import { MdArrowUpward, MdArrowDownward, MdViewColumn, MdSearch } from "react-icons/md";
 import { useUiPreference } from "../hooks/useUiPreference";
 import "../ui/kit.css";
@@ -28,6 +28,8 @@ import "../ui/shared-components.css";
  *   storageKey?: string               // when provided, column visibility persists in localStorage
  *   emptyMessage?: string
  *   dense?:      boolean              // tighter row padding for very dense lists
+ *   pageScroll?: boolean              // let the page scroll instead of a capped table region
+ *   renderExpandedRow?: (row) => ReactNode // optional inline detail row; null when closed
  */
 export default function DataTable({
   columns,
@@ -40,6 +42,8 @@ export default function DataTable({
   storageKey,
   emptyMessage = "No records to display.",
   dense = false,
+  pageScroll = false,
+  renderExpandedRow,
 }) {
   const [sort, setSort] = useState({ key: null, dir: "asc" });
   const [quickFilter, setQuickFilter] = useState("");
@@ -128,7 +132,7 @@ export default function DataTable({
   // Theme look (header height, row height, padding, colours) comes from the kit's
   // .k-table rules via --k-* tokens; `dense` maps to the kit's compact row variant.
   return (
-    <div className="sc-dt">
+    <div className="sc-dt" data-grid-shell="" style={pageScroll ? { overflow: "visible" } : undefined}>
       {(quickSearchPlaceholder || true) && (
         <div className="sc-dt__toolbar">
           {quickSearchPlaceholder && (
@@ -185,7 +189,7 @@ export default function DataTable({
         </div>
       )}
 
-      <div className="sc-dt__scroll">
+      <div className="sc-dt__scroll" data-admin-table-region="" style={pageScroll ? { maxHeight: "none", overflow: "visible" } : { maxHeight: "70vh" }}>
         <table className={dense ? "k-table k-table--compact" : "k-table"}>
           <thead>
             <tr>
@@ -233,9 +237,10 @@ export default function DataTable({
               </tr>
             ) : filteredRows.map((row, i) => {
               const k = rowKey ? rowKey(row) : (row.id ?? i);
+              const expanded = renderExpandedRow?.(row);
               return (
+                <Fragment key={k}>
                 <tr
-                  key={k}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
                   style={{ cursor: onRowClick ? "pointer" : "default" }}
                 >
@@ -262,6 +267,8 @@ export default function DataTable({
                     </td>
                   )}
                 </tr>
+                {expanded != null && <tr><td colSpan={visibleColumns.length + (actions ? 1 : 0)} style={{ padding: 0 }}>{expanded}</td></tr>}
+                </Fragment>
               );
             })}
           </tbody>

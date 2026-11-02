@@ -1,3 +1,4 @@
+import { useAuth } from "../contexts/AuthContext";
 import { useState, useEffect } from "react";
 import { createCompany, updateCompany, uploadCompanyLogo, getCompanyById } from "../api/companyApi";
 import { seedDefaultTemplates } from "../api/printTemplateApi";
@@ -37,9 +38,13 @@ const TABS = [
 ];
 
 export default function CompanyForm({ company, onClose, onSaved }) {
+    const { user: settingUser } = useAuth();
     const [form, setForm] = useState({
         name: "",
         brandName: "",
+        allowNonFbrBills: false,
+        taxInvoiceUseOriginalBillLines: false,
+        fbrOmitProductDescription: false,
         defaultGroupTaxInvoiceByItemType: false,
         defaultWithholdingTaxRate: null,
         fullAddress: "",
@@ -129,6 +134,9 @@ export default function CompanyForm({ company, onClose, onSaved }) {
             setForm({
                 name: freshCompany.name || "",
                 brandName: freshCompany.brandName || "",
+                allowNonFbrBills: !!freshCompany.allowNonFbrBills,
+                taxInvoiceUseOriginalBillLines: !!freshCompany.taxInvoiceUseOriginalBillLines,
+                fbrOmitProductDescription: !!freshCompany.fbrOmitProductDescription,
                 defaultGroupTaxInvoiceByItemType: !!freshCompany.defaultGroupTaxInvoiceByItemType,
                 defaultWithholdingTaxRate: freshCompany.defaultWithholdingTaxRate ?? null,
                 fullAddress: freshCompany.fullAddress || "",
@@ -365,7 +373,12 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                 <label style={label}>Brand Name (for print header)</label>
                                 <input type="text" name="brandName" value={form.brandName} onChange={handleChange} style={input} placeholder="Name as it should print on documents" />
                             </div>
-                            <TaxInvoiceGrouping value={form.defaultGroupTaxInvoiceByItemType} onChange={(value) => setForm((prev) => ({ ...prev, defaultGroupTaxInvoiceByItemType: value }))} companyDefault />
+                            {settingUser?.isSeedAdmin && <label style={{ display: "block", marginBottom: 16 }}><input type="checkbox" checked={!!form.allowNonFbrBills} onChange={e => setForm(prev => ({ ...prev, allowNonFbrBills: e.target.checked }))} /> Allow SRB / non-FBR bills<small style={{ display: "block" }}>Off by default. Enables SRB / non-FBR billing.</small></label>}
+                            {settingUser?.isSeedAdmin && <div style={{ marginBottom: 16 }}>
+                                <label style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 44 }}><input type="checkbox" checked={!!form.taxInvoiceUseOriginalBillLines} onChange={e => setForm(prev => ({ ...prev, taxInvoiceUseOriginalBillLines: e.target.checked }))} /> Print original bill lines on tax invoices</label>
+                                <label style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 44 }}><input type="checkbox" checked={!!form.fbrOmitProductDescription} onChange={e => setForm(prev => ({ ...prev, fbrOmitProductDescription: e.target.checked }))} /> Send blank FBR product descriptions</label>
+                            </div>}
+                            {!form.taxInvoiceUseOriginalBillLines && <TaxInvoiceGrouping value={form.defaultGroupTaxInvoiceByItemType} onChange={(value) => setForm((prev) => ({ ...prev, defaultGroupTaxInvoiceByItemType: value }))} companyDefault />}
                             <div data-admin-field="" style={formGroup}>
                                 <label style={label}>Default withholding tax rate (%)</label>
                                 <input type="number" min="0" max="100" step="0.01" value={form.defaultWithholdingTaxRate ?? ""}

@@ -130,6 +130,22 @@ namespace MyApp.Api.DTOs
         public List<AttachableChallanLineDto> Lines { get; set; } = new();
     }
 
+    /// <summary>
+    /// An open Sales Order a given challan can be linked to: same company and
+    /// customer. MatchingLines counts the challan's lines that already
+    /// correspond to an ordered line, so the likeliest order is first.
+    /// </summary>
+    public class AttachableOrderDto
+    {
+        public int Id { get; set; }
+        public int SalesOrderNumber { get; set; }
+        public DateTime OrderDate { get; set; }
+        public string? CustomerPoNumber { get; set; }
+        public int MatchingLines { get; set; }
+        public int ChallanLines { get; set; }
+        public decimal RemainingQuantity { get; set; }
+    }
+
     public class AttachableChallanLineDto
     {
         public int DeliveryItemId { get; set; }
@@ -214,6 +230,11 @@ namespace MyApp.Api.DTOs
         public int? SalesQuoteId { get; set; }
         /// <summary>GST rate of the source quote, when one is linked.</summary>
         public decimal? GstRate { get; set; }
+        /// <summary>
+        /// Set when the source quote had a whole-quote discount. That discount
+        /// stays on the quote, so the bill form shows this as a reminder.
+        /// </summary>
+        public string? QuoteDiscountReminder { get; set; }
         public List<SalesOrderInvoicePrefillLineDto> Lines { get; set; } = new();
     }
 
@@ -226,5 +247,7 @@ namespace MyApp.Api.DTOs
         public decimal UnitPrice { get; set; }
         /// <summary>"Quote" / "LastBilled" / null — where UnitPrice came from.</summary>
         public string? PriceSource { get; set; }
+        /// <summary>The quote line's discount ("Less 10% (Rs 4,100): …") already in UnitPrice.</summary>
+        public string? QuoteDiscountNote { get; set; }
     }
 }

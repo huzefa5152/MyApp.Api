@@ -16,6 +16,8 @@ namespace MyApp.Api.Models
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
         public int SupplierId { get; set; }
+        public int? SourceInvoiceId { get; set; }
+        public string PurchaseCategory { get; set; } = "Inventory";
         /// <summary>Source challan for an operator-approved automatic purchase bill.</summary>
         public int? SourceDeliveryChallanId { get; set; }
 
@@ -49,6 +51,7 @@ namespace MyApp.Api.Models
         // time from (GrandTotal, AmountPaid, DueDate) — see
         // PaymentStatusCalculator. DueDate is optional (net terms).
         public decimal AmountPaid { get; set; }
+        public decimal AmountCredited { get; set; }
         public DateTime? DueDate { get; set; }
 
         // ── Withholding income tax (s.153) ──

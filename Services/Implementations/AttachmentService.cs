@@ -77,6 +77,7 @@ namespace MyApp.Api.Services.Implementations
                     AttachmentEntityTypes.SalesOrder => await _context.SalesOrders.AnyAsync(x => x.Id == id && x.CompanyId == companyId),
                     AttachmentEntityTypes.DeliveryChallan => await _context.DeliveryChallans.AnyAsync(x => x.Id == id && x.CompanyId == companyId),
                     AttachmentEntityTypes.Invoice => await _context.Invoices.AnyAsync(x => x.Id == id && x.CompanyId == companyId),
+                    AttachmentEntityTypes.AccountTransfer => await _context.AccountTransfers.AnyAsync(x => x.Id == id && x.CompanyId == companyId),
                     AttachmentEntityTypes.PurchaseBill => await _context.PurchaseBills.AnyAsync(x => x.Id == id && x.CompanyId == companyId),
                     AttachmentEntityTypes.GoodsReceipt => await _context.GoodsReceipts.AnyAsync(x => x.Id == id && x.CompanyId == companyId),
                     AttachmentEntityTypes.WithholdingTaxReceipt => await _context.WithholdingTaxReceipts.AnyAsync(x => x.Id == id && x.CompanyId == companyId),

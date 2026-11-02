@@ -87,6 +87,15 @@ check("a deeper wildcard child still resolves",
 check("the wildcard parent itself resolves",
   permissionForPath("/companies") === "companies.manage.view",
   String(permissionForPath("/companies")));
+check("a parameterised route resolves for a real address",
+  permissionForPath("/accounting/reports/catalog/supplier-statement") === "accounting.reports.view",
+  String(permissionForPath("/accounting/reports/catalog/supplier-statement")));
+check("a parameter matches one segment, not two",
+  permissionForPath("/accounting/reports/catalog/a/b") === undefined,
+  String(permissionForPath("/accounting/reports/catalog/a/b")));
+check("the old overview address redirects under the dashboard key",
+  permissionForPath("/accounting/overview") === "accounting.dashboard.view",
+  String(permissionForPath("/accounting/overview")));
 check("a route open to every signed-in user resolves to null",
   permissionForPath("/profile") === null, String(permissionForPath("/profile")));
 check("an unmapped path is undecided, so the guard refuses",
@@ -101,7 +110,7 @@ console.log("\n=== the screens that carry the edition boundary are gated ===");
 for (const [route, key] of [
   ["/chart-of-accounts", "accounting.coa.view"],
   ["/journal-entries", "accounting.journal.view"],
-  ["/accounting/overview", "accounting.reports.view"],
+  ["/accounting/dashboard", "accounting.dashboard.view"],
   ["/accounting/reports", "accounting.reports.view"],
   ["/customer-portals", "customerportals.manage.view"],
 ]) {

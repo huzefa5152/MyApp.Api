@@ -17,6 +17,7 @@ import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import SearchableClientSelect from "./SearchableClientSelect";
 import SearchableSelect from "./SearchableSelect";
 import { Button, IconButton, TableWrap } from "../ui/Kit";
+import CopyLineButton from "./CopyLineButton";
 
 export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSaved }) {
   const isEdit = !!receiptId;
@@ -215,7 +216,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                             style={{ padding: "0.4rem 0.55rem", fontSize: "0.82rem" }}
                           />
                         </div>
-                        <button type="button" title="Copy line" style={{minHeight:44,minWidth:44,border:"1px solid #d0d7e2",borderRadius:8}} onClick={() => setItems(prev => [...prev,copyLine(it,() => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""}))])}>Copy</button>
+                        <CopyLineButton onClick={() => setItems(prev => [...prev,copyLine(it,() => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""}))])} />
                           {items.length > 1 && (
                           <IconButton label="Remove line" icon={MdDelete} danger onClick={() => setItems(items.filter((_, i) => i !== idx))} />
                         )}
@@ -246,7 +247,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                     <th>Description *</th>
                     <th className="k-num" style={{ width: 80 }}>Qty *</th>
                     <th style={{ width: 100 }}>UOM</th>
-                    <th style={{ width: 36 }}></th>
+                    <th style={{ width: 76 }}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -270,8 +271,8 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                       <td style={td}><input type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} /></td>
                       <td style={td}><input type="number" min={1} style={{ ...cellInput, textAlign: "right" }} value={it.quantity} onChange={e => updateItem(idx, "quantity", e.target.value)} /></td>
                       <td style={td}><input type="text" style={cellInput} value={it.unit} onChange={e => updateItem(idx, "unit", e.target.value)} /></td>
-                      <td style={td}>
-                        <button type="button" title="Copy line" style={{minHeight:44,minWidth:44,border:"1px solid #d0d7e2",borderRadius:8}} onClick={() => setItems(prev => [...prev,copyLine(it,() => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""}))])}>Copy</button>
+                      <td style={{ ...td, whiteSpace: "nowrap" }}>
+                        <CopyLineButton style={{ marginRight: 6 }} onClick={() => setItems(prev => [...prev,copyLine(it,() => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""}))])} />
                           {items.length > 1 && (
                           <IconButton label="Remove line" icon={MdDelete} size={16} danger onClick={() => setItems(items.filter((_, i) => i !== idx))} />
                         )}

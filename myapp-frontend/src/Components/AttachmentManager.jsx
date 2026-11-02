@@ -402,7 +402,7 @@ const st = {
   srcChipDirect: { background: `${colors.teal}14`, color: colors.teal },
   list: { marginTop: "0.7rem", display: "flex", flexDirection: "column", gap: 8 },
   row: { display: "flex", alignItems: "center", gap: 10, padding: "0.5rem 0.6rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, background: colors.inputBg },
-  icoBox: { display: "grid", placeItems: "center", width: 34, height: 34, flexShrink: 0 },
+  icoBox: { display: "grid", placeItems: "center", width: 34, height: 34, padding: 0, flexShrink: 0 },
   rowMain: { flex: 1, minWidth: 0 },
   rowName: { fontSize: "var(--k-font)", fontWeight: 600, color: colors.textPrimary, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", wordBreak: "break-all" },
   pendBadge: { marginLeft: 8, fontSize: "0.66rem", fontWeight: 700, color: "#fd7e14", background: "#fff3cd", padding: "0.05rem 0.4rem", borderRadius: 6 },

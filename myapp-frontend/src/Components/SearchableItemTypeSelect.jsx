@@ -15,7 +15,7 @@ import "../ui/shared-components.css";
  *   onChange   — (newId, pickedItemType) ⇒ void
  *   placeholder, style — passthroughs
  */
-export default function SearchableItemTypeSelect({ items, value, onChange, placeholder, style }) {
+export default function SearchableItemTypeSelect({ items, value, onChange, placeholder, style, groupByHsCode = false }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlightIdx, setHighlightIdx] = useState(-1);
@@ -47,6 +47,7 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
     const hasHs = (it) => !!(it.hsCode && it.hsCode.trim());
     const inStock = (it) => (it.availableQty || 0) > 0;
     arr.sort((a, b) => {
+      if (groupByHsCode && hasHs(a) !== hasHs(b)) return hasHs(a) ? -1 : 1;
       if (inStock(a) !== inStock(b)) return inStock(a) ? -1 : 1;
       if (inStock(a) && inStock(b)) {
         const av = a.availableQty || 0;
@@ -59,7 +60,7 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
       return (a.name || "").localeCompare(b.name || "");
     });
     return arr;
-  }, [items]);
+  }, [items, groupByHsCode]);
 
   const filteredItems = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -216,13 +217,20 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
               </div>
             )}
 
-            {stocked.length > 0 && (
+            {groupByHsCode && [true, false].map(withHs => {
+              const group = filteredItems.filter(it => hasHs(it) === withHs);
+              return group.length > 0 && <div key={String(withHs)}>
+                <div className="k-combo__group sc-combo-sticky">{withHs ? "With HS code · inventory items" : "Without HS code · no stock movement"}</div>
+                {group.map(it => renderItem(it, filteredItems.indexOf(it), highlightIdx, setHighlightIdx, handlePick, value, withHs))}
+              </div>;
+            })}
+            {!groupByHsCode && stocked.length > 0 && (
               <>
                 <div className="k-combo__group sc-combo-sticky">📦 IN STOCK</div>
                 {stocked.map((it, i) => renderItem(it, i, highlightIdx, setHighlightIdx, handlePick, value))}
               </>
             )}
-            {quick.length > 0 && (
+            {!groupByHsCode && quick.length > 0 && (
               <>
                 <div className="k-combo__group sc-combo-sticky">⚡ QUICK (no HS code)</div>
                 {quick.map((it, i) => {
@@ -231,7 +239,7 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
                 })}
               </>
             )}
-            {favorites.length > 0 && (
+            {!groupByHsCode && favorites.length > 0 && (
               <>
                 <div className="k-combo__group sc-combo-sticky">★ FAVORITES</div>
                 {favorites.map((it, i) => {
@@ -240,7 +248,7 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
                 })}
               </>
             )}
-            {others.length > 0 && (
+            {!groupByHsCode && others.length > 0 && (
               <>
                 {(stocked.length > 0 || quick.length > 0 || favorites.length > 0) && <div className="k-combo__group sc-combo-sticky">OTHER</div>}
                 {others.map((it, i) => {
@@ -257,7 +265,7 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
   );
 }
 
-function renderItem(it, idx, highlightIdx, setHighlightIdx, handlePick, currentValue) {
+function renderItem(it, idx, highlightIdx, setHighlightIdx, handlePick, currentValue, showStock = true) {
   const highlighted = idx === highlightIdx;
   const current = currentValue !== "" && currentValue != null && String(it.id) === String(currentValue);
   return (
@@ -277,7 +285,7 @@ function renderItem(it, idx, highlightIdx, setHighlightIdx, handlePick, currentV
         <div className="sc-opt-meta">
           {it.hsCode && <span className="sc-chip sc-chip--hs">{it.hsCode}</span>}
           {it.uom && <span> {it.uom}</span>}
-          {typeof it.availableQty === "number" && (
+          {showStock && typeof it.availableQty === "number" && (
             <span className={`sc-chip ${(it.availableQty || 0) > 0 ? "sc-chip--ok" : "sc-chip--empty"}`} style={{ marginLeft: 4 }}>
               {(it.availableQty || 0) > 0 ? `${Number(it.availableQty).toLocaleString("en-PK")} in stock` : "out of stock"}
             </span>

@@ -1,3 +1,4 @@
+import RecordsViewport from "./RecordsViewport";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   MdDevices, MdRefresh, MdPeople, MdLogin, MdBolt, MdLogout, MdLaptop, MdPhoneAndroid, MdChevronLeft, MdChevronRight,
@@ -13,9 +14,10 @@ import { Button, IconButton, Toolbar, SearchBox, StatGrid, StatCard, TableWrap, 
 // end a session. The API is seed-admin only; this panel renders nothing for
 // anyone else. A session is a browser login, not a physical device.
 
-// The ERP sidebar takes ~240px of the viewport, so the table needs a wider
-// breakpoint than the page-level 760px: below it, cards.
-const NARROW = 980;
+// Measured on the panel itself, not the window: the sidebar's width varies,
+// and the table needs this much room to fit with no sideways scroll.
+const TABLE_MIN = 1000;
+const PHONE = 760;
 const STATUS_TONE = {
   "Recently active": { bg: "#eafbef", fg: "#1b6e34", dot: "#28a745" },
   "Signed in": { bg: "#e7f0fb", fg: "#0d47a1", dot: "#1565c0" },
@@ -38,19 +40,29 @@ function relative(value) {
   if (s < 7 * 86400) return `${Math.floor(s / 86400)} d ago`;
   return d.toLocaleDateString();
 }
+function until(value) {
+  const d = asDate(value);
+  if (!d) return "Unknown";
+  const s = Math.round((d.getTime() - Date.now()) / 1000);
+  if (s <= 0) return d.toLocaleDateString();
+  if (s < 3600) return `in ${Math.max(1, Math.floor(s / 60))} min`;
+  if (s < 86400) return `in ${Math.floor(s / 3600)} h`;
+  return `in ${Math.floor(s / 86400)} d`;
+}
 function device(agent = "") {
   const browser = /Edg\//.test(agent) ? "Edge" : /Firefox\//.test(agent) ? "Firefox" : /Chrome\//.test(agent) ? "Chrome" : /Safari\//.test(agent) ? "Safari" : "Other browser";
   const os = /Android/.test(agent) ? "Android" : /iPhone|iPad/.test(agent) ? "iOS" : /Windows/.test(agent) ? "Windows" : /Macintosh/.test(agent) ? "macOS" : /Linux/.test(agent) ? "Linux" : "Unknown system";
   return { browser, os, mobile: /Android|iPhone|iPad|Mobile/.test(agent) };
 }
-function useNarrow() {
-  const [narrow, setNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < NARROW);
+function useWidth(ref) {
+  const [width, setWidth] = useState(0);
   useEffect(() => {
-    const on = () => setNarrow(window.innerWidth < NARROW);
-    window.addEventListener("resize", on);
-    return () => window.removeEventListener("resize", on);
-  }, []);
-  return narrow;
+    if (!ref.current) return;
+    const ro = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, [ref]);
+  return width;
 }
 
 function StatusBadge({ status }) {
@@ -75,7 +87,10 @@ function DeviceCell({ session }) {
 export default function UserSessionsPanel() {
   const { user } = useAuth();
   const confirm = useConfirm();
-  const narrow = useNarrow();
+  const wrapRef = useRef(null);
+  const width = useWidth(wrapRef);
+  const narrow = width < TABLE_MIN;
+  const phone = typeof window !== "undefined" && window.innerWidth < PHONE;
   const requestId = useRef(0);
   const [data, setData] = useState(null);
   const [status, setStatus] = useState("signed-in");
@@ -149,18 +164,12 @@ export default function UserSessionsPanel() {
 
   const actions = session => live(session) && <div style={s.actions}>
     <Button size="sm" variant="danger" icon={MdLogout} disabled={busy} title="Sign out this device" onClick={() => revoke(session, false)}>Sign out</Button>
-    <Button size="sm" disabled={busy} title="Sign out every device this user is signed in on" onClick={() => revoke(session, true)}>Sign out all</Button>
+    <Button size="sm" disabled={busy} title="Sign out every device this user is signed in on" aria-label={`Sign out all devices for @${session.username}`} onClick={() => revoke(session, true)}>All devices</Button>
   </div>;
 
-  return <section style={s.wrap} aria-label="User sessions and devices">
+  return <section ref={wrapRef} style={s.wrap} aria-label="User sessions and devices">
     <div style={s.head}>
-      <div style={s.headLeft}>
-        <span className="k-header__icon k-tone-brand" aria-hidden="true"><MdDevices /></span>
-        <div style={{ minWidth: 0 }}>
-          <h3 style={s.title}>Sessions &amp; devices</h3>
-          <p style={s.sub}>Who is signed in, from which browser, and when they were last active. Visible to the primary admin only.</p>
-        </div>
-      </div>
+      <p style={s.sub}>Who is signed in, from which browser, and when they were last active. Visible to the primary admin only.</p>
       <div style={s.headRight}>
         <span style={s.muted}>{data ? `Updated ${relative(data.observedAt)} · refreshes every 30 s` : "Loading…"}</span>
         <IconButton label="Refresh sessions" icon={MdRefresh} onClick={load} />
@@ -182,7 +191,8 @@ export default function UserSessionsPanel() {
 
     {error && <Alert tone="error">{error} <button type="button" style={s.link} onClick={load}>Try again</button></Alert>}
     {!data && !error && <Loading>Loading sessions…</Loading>}
-    {data && data.items.length === 0 && <EmptyState icon={MdDevices}>No sessions match these filters.</EmptyState>}
+    {/* On a phone the header and KPIs fill the screen, so the page scrolls instead of a nested box. */}
+    <RecordsViewport label="Session records" enabled={!phone}>{data && data.items.length === 0 && <EmptyState icon={MdDevices}>No sessions match these filters.</EmptyState>}
 
     {data && data.items.length > 0 && (narrow
       ? <div style={s.cards}>{data.items.map(session => <article key={session.id} className="k-card" style={s.card}>
@@ -204,7 +214,7 @@ export default function UserSessionsPanel() {
           {actions(session)}
         </article>)}</div>
       : <TableWrap data-admin-table-region=""><table className="k-table">
-          <thead><tr>{["User", "Device", "Status", "Signed in", "Last activity", "Session ends", ""].map(h => <th key={h}>{h}</th>)}</tr></thead>
+          <thead><tr>{["User", "Device", "Status", "Activity", "Session ends", ""].map(h => <th key={h} style={{ whiteSpace: "nowrap" }}>{h}</th>)}</tr></thead>
           <tbody>{data.items.map(session => <tr key={session.id}>
             <td>
               <div style={s.strong}>{session.fullName || session.username}</div>
@@ -212,12 +222,14 @@ export default function UserSessionsPanel() {
             </td>
             <td><DeviceCell session={session} /></td>
             <td><StatusBadge status={session.status} /></td>
-            <td style={{ whiteSpace: "nowrap" }} title={absolute(session.createdAt)}>{relative(session.createdAt)}</td>
-            <td style={{ whiteSpace: "nowrap" }} title={absolute(session.lastSeenAt)}>{relative(session.lastSeenAt)}</td>
-            <td title={session.revokedAt ? `Revoked ${absolute(session.revokedAt)}` : undefined}>{absolute(session.expiresAt)}</td>
+            <td style={{ whiteSpace: "nowrap" }}>
+              <div title={`Last activity ${absolute(session.lastSeenAt)}`}>{relative(session.lastSeenAt)}</div>
+              <div style={s.muted} title={absolute(session.createdAt)}>signed in {relative(session.createdAt)}</div>
+            </td>
+            <td style={{ whiteSpace: "nowrap" }} title={session.revokedAt ? `Revoked ${absolute(session.revokedAt)}` : absolute(session.expiresAt)}>{session.revokedAt ? `Revoked ${relative(session.revokedAt)}` : until(session.expiresAt)}</td>
             <td className="k-actions">{actions(session)}</td>
           </tr>)}</tbody>
-        </table></TableWrap>)}
+        </table></TableWrap>)}</RecordsViewport>
 
     {data && data.total > 0 && <div style={s.pager}>
       <span style={s.muted}>{from}–{to} of {data.total}</span>
@@ -231,10 +243,8 @@ export default function UserSessionsPanel() {
 
 const s = {
   wrap: { minWidth: 0 },
-  head: { display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.8rem", marginBottom: "var(--k-header-mb)" },
-  headLeft: { display: "flex", alignItems: "center", gap: "0.9rem", minWidth: 0, flex: "1 1 320px" },
-  title: { margin: 0, fontSize: "calc(var(--k-title) - 0.3rem)", fontWeight: 700, color: "var(--k-ink)" },
-  sub: { margin: "0.15rem 0 0", fontSize: "var(--k-sub)", color: "var(--k-muted)", lineHeight: 1.45 },
+  head: { display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.6rem 0.8rem", marginBottom: "0.8rem" },
+  sub: { margin: 0, flex: "1 1 320px", minWidth: 0, fontSize: "var(--k-sub)", color: "var(--k-muted)", lineHeight: 1.45 },
   headRight: { display: "flex", alignItems: "center", gap: "0.6rem" },
   searchForm: { display: "flex", flex: "1 1 240px", minWidth: 0 },
   pills: { display: "flex", flexWrap: "wrap", gap: "0.4rem" },
@@ -245,13 +255,13 @@ const s = {
   muted: { fontSize: "var(--k-font-sm)", color: "var(--k-muted)" },
   deviceCell: { display: "flex", alignItems: "center", gap: "0.6rem", minWidth: 0 },
   deviceIcon: { fontSize: "1.5rem", color: "var(--k-muted)", flexShrink: 0 },
-  actions: { display: "flex", flexWrap: "wrap", gap: "0.5rem", justifyContent: "flex-end", whiteSpace: "nowrap" },
+  actions: { display: "flex", flexWrap: "nowrap", gap: "0.4rem", justifyContent: "flex-end", whiteSpace: "nowrap" },
   cards: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))", gap: "0.8rem" },
   card: { marginTop: 0, padding: "var(--k-card-pad)", display: "grid", gap: "0.7rem", minWidth: 0 },
   cardTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.6rem" },
   metaGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(130px, 100%), 1fr))", gap: "0.5rem 1rem" },
   metaLabel: cardStyles.metaLabel,
   metaValue: cardStyles.metaValue,
-  pager: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.8rem", marginTop: "1rem" },
+  pager: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.8rem", marginTop: "0.6rem" },
   link: { background: "none", border: "none", padding: 0, margin: 0, boxShadow: "none", color: colors.blue, fontWeight: 700, textDecoration: "underline", cursor: "pointer", minHeight: 0, fontSize: "inherit" },
 };

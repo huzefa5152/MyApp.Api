@@ -230,7 +230,7 @@ const s = {
   option: { display: "flex", alignItems: "flex-start", gap: "0.7rem", padding: "0.7rem 0.8rem", borderRadius: "var(--k-radius)", border: "1px solid var(--k-line-strong)", background: "var(--k-surface)", cursor: "pointer", minHeight: 44, outline: "none" },
   optionActive: { borderColor: "var(--k-blue)", background: "#f3f7ff", boxShadow: "0 0 0 2px rgba(13,71,161,0.12)" },
   optionDisabled: { opacity: 0.55, cursor: "not-allowed" },
-  optionIcon: { display: "grid", placeItems: "center", width: 36, height: 36, borderRadius: "calc(var(--k-radius) - 1px)", background: "var(--k-surface-3)", color: "var(--k-muted)", flexShrink: 0 },
+  optionIcon: { display: "grid", placeItems: "center", width: 36, height: 36, padding: 0, borderRadius: "calc(var(--k-radius) - 1px)", background: "var(--k-surface-3)", color: "var(--k-muted)", flexShrink: 0 },
   optionIconActive: { background: "var(--k-blue)", color: "#fff" },
   optionTitle: { fontSize: "var(--k-font)", fontWeight: 700, color: "var(--k-ink)" },
   optionHint: { fontSize: "var(--k-font-sm)", color: "var(--k-muted)", marginTop: 2, lineHeight: 1.35 },

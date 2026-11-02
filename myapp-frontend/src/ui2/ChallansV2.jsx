@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  MdAdd, MdUploadFile, MdSearch, MdClose, MdVisibility, MdPrint, MdPictureAsPdf, MdGridOn, MdEdit, MdContentCopy, MdRequestQuote, MdLink,
+  MdAttachMoney, MdShoppingCart, MdAdd, MdUploadFile, MdSearch, MdClose, MdVisibility, MdPrint, MdPictureAsPdf, MdGridOn, MdEdit, MdContentCopy, MdRequestQuote, MdLink,
   MdCancel, MdDelete, MdWarning, MdDescription, MdBusiness, MdViewModule, MdViewList, MdErrorOutline, MdRefresh, MdFilterList, MdReceipt, MdPerson, MdCalendarToday, MdEventNote, MdLocationOn, MdAssignmentTurnedIn, MdListAlt,
 } from "react-icons/md";
 import { statusTones, toneForStatus } from "../Components/StatusBadge";
@@ -11,6 +11,7 @@ import AttachmentBadge from "../Components/AttachmentBadge";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import SearchableSelect from "../Components/SearchableSelect";
 import { evalRowFlags } from "../Components/ChallanTable";
+import { canEditBilledDelivery } from "../utils/billedChallanEdit";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
 import { Btn, EmptyState, IconBtn, RowMenu, StatusPill, TableSkeleton } from "./primitives";
@@ -21,6 +22,7 @@ import "./ui2.css";
 const STATUSES = [
   ["Pending", "Pending"], ["Imported", "Imported"], ["No PO", "No PO"], ["Setup Required", "Setup required"], ["Invoiced", "Billed"], ["Cancelled", "Cancelled"],
 ];
+const COSTING = { "not-costed": "Not costed", partial: "Partially costed", full: "Fully costed" };
 const CARD_BTN = ["view", "bill", "print", "pdf", "xlsx"]; // labelled buttons on a card; everything else lives in the ⋯ menu
 const CARD_LABEL = { view: "View", bill: "Bill", print: "Print", pdf: "PDF", xlsx: "Excel" };
 const statusLabel = (s) => (s === "Invoiced" ? "Billed" : s);
@@ -37,7 +39,7 @@ export default function ChallansV2(p) {
   const [viewing, setViewing] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   // Filters that live in the panel (search has its own box); drives the badge on the button.
-  const panelCount = [p.statusFilter, p.clientFilter, p.salesOrderFilter, p.dateFrom, p.dateTo].filter(Boolean).length;
+  const panelCount = [p.costingStatus, p.statusFilter, p.clientFilter, p.salesOrderFilter, p.dateFrom, p.dateTo].filter(Boolean).length;
   const perms = {
     permUpdate: has("challans.manage.update"),
     permDelete: has("challans.manage.delete"),
@@ -57,7 +59,11 @@ export default function ChallansV2(p) {
       list.push({ key: "pdf", label: "Export PDF", icon: MdPictureAsPdf, disabled: p.printDisabled || !!p.exportingId, loading: p.exportingId === c.id + "-pdf", title: p.printDisabled ? p.printDisabledReason : "Export PDF", onClick: () => p.onExportPdf(c) });
       if (p.onExportExcel) list.push({ key: "xlsx", label: "Export Excel", icon: MdGridOn, disabled: !!p.exportingId, loading: p.exportingId === c.id + "-excel", onClick: () => p.onExportExcel(c) });
     }
-    if (perms.permUpdate && f.isEditable) list.push({ key: "edit", label: "Edit items", icon: MdEdit, onClick: () => p.onEditItems(c) });
+    // Same gates as the classic list: once a challan is on a bill its lines are edited through the bill.
+    if (perms.permUpdate && f.isEditable && !c.invoiceId) list.push({ key: "edit", label: c.status === "Invoiced" ? "Supplier & cost" : "Edit items", icon: MdEdit, onClick: () => p.onEditItems(c) });
+    if (p.onEditDelivery && canEditBilledDelivery(c, has)) list.push({ key: "editDelivery", label: "Edit delivery & update bill", icon: MdEdit, onClick: () => p.onEditDelivery(c) });
+    if (p.onCosts) list.push({ key: "costs", label: "Costs & suppliers", icon: MdAttachMoney, onClick: () => p.onCosts(c) });
+    if (p.onLocalPurchase && c.status !== "Cancelled") list.push({ key: "localPurchase", label: "Local purchase", icon: MdShoppingCart, onClick: () => p.onLocalPurchase(c) });
     if (f.canDuplicate && p.onDuplicate) list.push({ key: "dup", label: "Duplicate", icon: MdContentCopy, disabled: !!p.duplicatingId, loading: p.duplicatingId === c.id, onClick: () => p.onDuplicate(c) });
     if (canLink) list.push({ key: "link", label: "Link to sales order", icon: MdLink, onClick: () => p.onLinkOrder(c) });
     if (perms.permUpdate && f.canCancel) list.push({ key: "cancel", label: "Cancel challan", icon: MdCancel, danger: true, separatorBefore: true, onClick: () => p.onCancel(c) });
@@ -98,6 +104,7 @@ export default function ChallansV2(p) {
   const soLabel = (id) => p.orderOptions.find((o) => String(o.id) === String(id))?.label || `Sales order ${id}`;
   const chips = [
     p.search && { key: "search", label: `Search: ${p.search}`, clear: () => p.setSearch("") },
+    p.costingStatus && { key: "costing", label: `Costing: ${COSTING[p.costingStatus] || p.costingStatus}`, clear: () => p.setCostingStatus("") },
     p.statusFilter && { key: "status", label: `Status: ${statusLabel(p.statusFilter)}`, clear: () => p.setStatusFilter("") },
     p.clientFilter && { key: "client", label: `Client: ${clientName(p.clientFilter)}`, clear: () => p.handleClientFilter({ target: { value: "" } }) },
     p.salesOrderFilter && { key: "so", label: soLabel(p.salesOrderFilter), clear: () => p.handleSalesOrderFilter("") },
@@ -154,6 +161,15 @@ export default function ChallansV2(p) {
 
           {company && filtersOpen && (
             <div id="u2-fpanel" className="u2-fpanel" role="group" aria-label="Filters" onKeyDown={(e) => { if (e.key === "Escape") setFiltersOpen(false); }}>
+              {p.canViewCosts && (
+                <label className="u2-field">
+                  <span className="u2-field__label">Costing</span>
+                  <select className="u2-select" value={p.costingStatus} onChange={p.handleFilterChange(p.setCostingStatus)}>
+                    <option value="">All costing statuses</option>
+                    {Object.entries(COSTING).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                </label>
+              )}
               <label className="u2-field">
                 <span className="u2-field__label">Status</span>
                 <select className="u2-select" value={p.statusFilter} onChange={p.handleFilterChange(p.setStatusFilter)}>

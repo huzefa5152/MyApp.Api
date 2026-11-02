@@ -4,12 +4,15 @@ namespace MyApp.Api.Services.Interfaces
 {
     public interface IDeliveryChallanService
     {
+        Task<BilledChallanEditContextDto?> GetBilledEditContextAsync(int challanId);
+        Task<DeliveryChallanDto?> UpdateBilledItemsAsync(int challanId, BilledChallanEditDto dto);
+        Task<DeliveryChallanDto?> UpdatePrivateCostsAsync(int challanId, ChallanPrivateCostsDto dto);
         Task<List<DeliveryChallanDto>> GetDeliveryChallansByCompanyAsync(int companyId);
         Task<PagedResult<DeliveryChallanDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? salesOrderId = null);
+            int? salesOrderId = null, string? costingStatus = null);
         Task<DeliveryChallanDto?> GetByIdAsync(int id);
         Task<DeliveryChallanDto> CreateDeliveryChallanAsync(int companyId, DeliveryChallanDto dto);
         Task<DeliveryChallanDto?> UpdateItemsAsync(int challanId, List<DeliveryItemDto> items);

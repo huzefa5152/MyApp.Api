@@ -115,6 +115,8 @@ namespace MyApp.Api.DTOs
     {
         public string HS_CODE { get; set; } = "";
         public string Description { get; set; } = "";
+        // One-line item name for pickers; Description stays FBR's full text.
+        public string ShortName => MyApp.Api.Helpers.HsShortName.From(Description);
     }
 
     public class FbrUOMDto
@@ -200,6 +202,7 @@ namespace MyApp.Api.DTOs
 
     public class FbrPayloadPreview
     {
+        public bool ReviewRequired { get; set; }
         /// <summary>The exact request JSON that would be POSTed to FBR.</summary>
         public string Json { get; set; } = "";
         /// <summary>Endpoint URL we would have POSTed to (sandbox vs prod).</summary>

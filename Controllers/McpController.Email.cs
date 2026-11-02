@@ -91,15 +91,17 @@ public partial class McpController
                 var limit = Math.Clamp(IntArg(args, "limit") ?? 20, 1, 25);
                 var previewDraft = e is { Decision: "Kept", SalesQuoteId: null }
                     ? await Email.PreviewQuotationDraftAsync(CurrentUserId, companyId, messageId, e.Revision, ct) : null;
+                // Customer and prices are quotation work: only for quotation preparers.
+                var canSeeQuoteWork = await _permissions.HasPermissionAsync(CurrentUserId, "email.enquiries.manage");
                 return new { companyId, messageId, m.Subject, m.Sender, m.ReceivedAt,
                     decision = e?.Decision ?? "Unreviewed", revision = e?.Revision, e?.SalesQuoteId, e?.SalesQuoteNumber,
                     text = Trunc(text, 12000), textTruncated = text.Length > 12000,
                     attachments = content.Attachments.Take(20).Select(a => new { a.FileName, a.MimeType, a.Size }),
-                    attachmentCount = content.Attachments.Count, previewDraft?.ClientId, previewDraft?.Date, previewDraft?.GSTRate,
+                    attachmentCount = content.Attachments.Count, ClientId = canSeeQuoteWork ? previewDraft?.ClientId : null, previewDraft?.Date, previewDraft?.GSTRate,
                     previewDraft?.RequiresBrand, previewDraft?.RequiresSpecifications, warnings = previewDraft?.Warnings.Take(20).ToArray(),
                     totalItems = previewDraft?.Items.Count ?? 0, offset,
                     items = previewDraft?.Items.Skip(offset).Take(limit).Select((i, n) => new { itemNumber = offset + n + 1,
-                        i.Description, i.Quantity, i.Unit, i.UnitPrice, i.Brand }),
+                        i.Description, i.Quantity, i.Unit, UnitPrice = canSeeQuoteWork ? i.UnitPrice : null, i.Brand }),
                     untrustedContent = true };
             }
             var agent = await RequireWriterAsync(name == "prepare_email_decision" ? McpScopes.Email : McpScopes.Quotes);

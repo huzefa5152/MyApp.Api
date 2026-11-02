@@ -53,7 +53,8 @@ Expressions below come from this branch's `MERGE_FIELDS`. Fields beginning with 
 | `{{companySTRN}}` | Company STRN |
 | `{{invoiceNumber}}` | Invoice/Bill Number |
 | `{{fmtDate date}}` | Invoice Date |
-| `{{join challanNumbers}}` | Challan Numbers |
+| `{{join challanNumbers}}` | Linked challan numbers, or the standalone bill manual reference |
+| `{{manualChallanNumber}}` | Manual delivery challan reference (standalone bills only) |
 | `{{joinDates challanDates}}` | Challan Dates |
 | `{{poNumber}}` | PO Number |
 | `{{fmtDate poDate}}` | PO Date |
@@ -92,7 +93,8 @@ Expressions below come from this branch's `MERGE_FIELDS`. Fields beginning with 
 | `{{buyerSTRN}}` | Buyer STRN |
 | `{{invoiceNumber}}` | Invoice Number |
 | `{{fmtDate date}}` | Invoice Date |
-| `{{join challanNumbers}}` | Challan Numbers |
+| `{{join challanNumbers}}` | Linked challan numbers, or the standalone bill manual reference |
+| `{{manualChallanNumber}}` | Manual delivery challan reference (standalone bills only) |
 | `{{poNumber}}` | PO Number |
 | `{{gstRate}}` | GST Rate % |
 | `{{fmtDec subtotal}}` | Subtotal |
@@ -144,6 +146,53 @@ Expressions below come from this branch's `MERGE_FIELDS`. Fields beginning with 
 | `{{fmtDate this.date}}` | Document Date (in loop) |
 | `{{fmt this.amount}}` | Settled Amount (in loop) |
 
+### Transfer
+
+Added 2026-10-29 (`PrintTransferDto`, `AccountTransfersController` GET `{id}/print`).
+
+| Expression | Catalog description |
+| --- | --- |
+| `{{companyBrandName}}` | Company Brand Name |
+| `{{companyLogoPath}}` | Company Logo URL |
+| `{{{nl2br companyAddress}}}` | Company Address (with line breaks) |
+| `{{{nl2br companyPhone}}}` | Company Phone (with line breaks) |
+| `{{companyNTN}}` | Company NTN |
+| `{{companySTRN}}` | Company STRN |
+| `{{reference}}` | Voucher Reference (TRF-#) |
+| `{{fmtDate date}}` | Transfer Date |
+| `{{fromAccountName}}` | From Account |
+| `{{toAccountName}}` | To Account |
+| `{{{richText description}}}` | Description / Remarks (formatted) |
+| `{{fmt amount}}` | Amount |
+| `{{amountInWords}}` | Amount In Words |
+
+### JournalEntry
+
+Added 2026-10-29 (`PrintJournalEntryDto`, `PrintJournalLineDto`).
+
+| Expression | Catalog description |
+| --- | --- |
+| `{{companyBrandName}}` | Company Brand Name |
+| `{{companyLogoPath}}` | Company Logo URL |
+| `{{{nl2br companyAddress}}}` | Company Address (with line breaks) |
+| `{{{nl2br companyPhone}}}` | Company Phone (with line breaks) |
+| `{{companyNTN}}` | Company NTN |
+| `{{companySTRN}}` | Company STRN |
+| `{{reference}}` | Voucher Reference (JE-#) |
+| `{{entryNo}}` | Entry Number |
+| `{{fmtDate date}}` | Entry Date |
+| `{{{richText narration}}}` | Narration (formatted) |
+| `{{fmt totalDebit}}` | Total Debit |
+| `{{fmt totalCredit}}` | Total Credit |
+| `{{#each lines}}` | Loop: Lines Start |
+| `{{/each}}` | Loop: End |
+| `{{inc @index}}` | Line Serial No. (in loop) |
+| `{{this.accountCode}}` | Account Code (in loop) |
+| `{{this.accountName}}` | Account Name (in loop) |
+| `{{{richText this.description}}}` | Line Description (in loop) |
+| `{{fmt this.debit}}` | Line Debit (in loop) |
+| `{{fmt this.credit}}` | Line Credit (in loop) |
+
 ## DTO property inventory
 
 These are C# property names from `DTOs/PrintDtos.cs`, retained exactly to avoid guessing serializer casing. Use the catalog/actual JSON for merge-token spelling. Collection item DTOs define row fields; nullable properties can be blank. Other document DTOs may live in separate files.
@@ -188,12 +237,12 @@ These are C# property names from `DTOs/PrintDtos.cs`, retained exactly to avoid 
 
 ### PrintQuoteDto
 
-`CompanyBrandName` (string), `CompanyLogoPath` (string?), `CompanyAddress` (string?), `CompanyPhone` (string?), `CompanyNTN` (string?), `CompanySTRN` (string?), `QuoteNumber` (int), `Date` (DateTime), `ValidUntil` (DateTime?), `CustomerEnquiryRef` (string?), `EnquiryDate` (DateTime?), `ContactPerson` (string?), `ClientName` (string), `ClientAddress` (string?), `ClientNTN` (string?), `ClientSTRN` (string?), `Subtotal` (decimal), `GSTRate` (decimal), `GSTAmount` (decimal), `GrandTotal` (decimal), `AmountInWords` (string), `Notes` (string?), `Items` (List<PrintQuoteItemDto>)
+`CompanyBrandName` (string), `CompanyLogoPath` (string?), `CompanyAddress` (string?), `CompanyPhone` (string?), `CompanyNTN` (string?), `CompanySTRN` (string?), `QuoteNumber` (int), `Date` (DateTime), `ValidUntil` (DateTime?), `CustomerEnquiryRef` (string?), `EnquiryDate` (DateTime?), `ContactPerson` (string?), `ClientName` (string), `ClientAddress` (string?), `ClientNTN` (string?), `ClientSTRN` (string?), `Subtotal` (decimal, net of line discounts), `DiscountAmount` (decimal, whole-quote discount), `DiscountValue` (decimal), `DiscountIsPercent` (bool), `DiscountPercentLabel` (string, "10%" or ""), `DiscountReason` (string?), `AmountAfterDiscount` (decimal), `GSTRate` (decimal), `GSTAmount` (decimal, on AmountAfterDiscount), `GrandTotal` (decimal), `AmountInWords` (string), `Notes` (string?), `HasLineImages` (bool, true when any line has a photo; wrap the Image column in `{{#if hasLineImages}}` and its cell in `{{#if @root.hasLineImages}}`), `Items` (List<PrintQuoteItemDto>)
 
 
 ### PrintQuoteItemDto
 
-`SNo` (int), `ItemTypeName` (string), `Description` (string), `Quantity` (decimal), `Uom` (string), `UnitPrice` (decimal), `LineTotal` (decimal)
+`SNo` (int), `ItemTypeName` (string), `Description` (string), `Quantity` (decimal), `Uom` (string), `UnitPrice` (decimal), `LineTotal` (decimal, net of the line discount), `GrossAmount` (decimal), `DiscountAmount` (decimal), `DiscountReason` (string?), `DiscountNote` (string?, e.g. "Less 10% (Rs 4,100): reason")
 
 
 ### PrintOrderDto

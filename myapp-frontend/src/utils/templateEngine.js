@@ -1,6 +1,7 @@
 import Handlebars from "handlebars";
 import { withBillFbrSection } from "./billFbrSection.js";
 import { materializeStamp } from "./stampSlot.js";
+import { stripActiveContent, withPrintCsp } from "./printSafety.js";
 
 // Register custom helpers
 Handlebars.registerHelper("fmtDate", (d) => {
@@ -187,14 +188,17 @@ export function mergeTemplate(htmlTemplate, data) {
   const compiled = Handlebars.compile(src);
   // Inject stamps unless the caller already supplied its own.
   const merged = { ...(data || {}), stamps: (data && data.stamps) || _activeStamps };
-  const html = compiled(merged);
+  // Template HTML is operator-edited and the result is printed in a window
+  // sharing this app's origin, so it is made inert here, on the one path every
+  // print, PDF, bulk and portal render takes (utils/printSafety.js).
+  const html = stripActiveContent(compiled(merged));
   if (typeof window !== "undefined" && window.location?.origin) {
     const base = `<base href="${window.location.origin}/">`;
-    return /<head[^>]*>/i.test(html)
+    return withPrintCsp(/<head[^>]*>/i.test(html)
       ? html.replace(/<head[^>]*>/i, (m) => m + base)
-      : base + html;
+      : base + html);
   }
-  return html;
+  return withPrintCsp(html);
 }
 
 /**
@@ -252,7 +256,8 @@ export const MERGE_FIELDS = {
     { field: "{{companySTRN}}", label: "Company STRN" },
     { field: "{{invoiceNumber}}", label: "Invoice/Bill Number" },
     { field: "{{fmtDate date}}", label: "Invoice Date" },
-    { field: "{{join challanNumbers}}", label: "Challan Numbers" },
+    { field: "{{join challanNumbers}}", label: "Challan Numbers (linked or manual reference)" },
+    { field: "{{manualChallanNumber}}", label: "Manual Challan Number (standalone bill)" },
     { field: "{{joinDates challanDates}}", label: "Challan Dates" },
     { field: "{{poNumber}}", label: "PO Number" },
     { field: "{{site}}", label: "Challan Site(s)" },
@@ -306,7 +311,8 @@ export const MERGE_FIELDS = {
     { field: "{{buyerSTRN}}", label: "Buyer STRN" },
     { field: "{{invoiceNumber}}", label: "Invoice Number" },
     { field: "{{fmtDate date}}", label: "Invoice Date" },
-    { field: "{{join challanNumbers}}", label: "Challan Numbers" },
+    { field: "{{join challanNumbers}}", label: "Challan Numbers (linked or manual reference)" },
+    { field: "{{manualChallanNumber}}", label: "Manual Challan Number (standalone bill)" },
     { field: "{{poNumber}}", label: "PO Number" },
     { field: "{{site}}", label: "Challan Site(s)" },
     { field: "{{gstRate}}", label: "GST Rate %" },
@@ -364,5 +370,44 @@ export const MERGE_FIELDS = {
     { field: "{{this.documentLabel}}", label: "Settled Document (in loop)" },
     { field: "{{fmtDate this.date}}", label: "Document Date (in loop)" },
     { field: "{{fmt this.amount}}", label: "Settled Amount (in loop)" },
+  ],
+  // PrintTransferDto (AccountTransfersController GET {id}/print).
+  Transfer: [
+    { field: "{{companyBrandName}}", label: "Company Brand Name" },
+    { field: "{{companyLogoPath}}", label: "Company Logo URL" },
+    { field: "{{{nl2br companyAddress}}}", label: "Company Address (with line breaks)" },
+    { field: "{{{nl2br companyPhone}}}", label: "Company Phone (with line breaks)" },
+    { field: "{{companyNTN}}", label: "Company NTN" },
+    { field: "{{companySTRN}}", label: "Company STRN" },
+    { field: "{{reference}}", label: "Voucher Reference (TRF-#)" },
+    { field: "{{fmtDate date}}", label: "Transfer Date" },
+    { field: "{{fromAccountName}}", label: "From Account" },
+    { field: "{{toAccountName}}", label: "To Account" },
+    { field: "{{{richText description}}}", label: "Description / Remarks (formatted)" },
+    { field: "{{fmt amount}}", label: "Amount" },
+    { field: "{{amountInWords}}", label: "Amount In Words" },
+  ],
+  // PrintJournalEntryDto (journal entry print data).
+  JournalEntry: [
+    { field: "{{companyBrandName}}", label: "Company Brand Name" },
+    { field: "{{companyLogoPath}}", label: "Company Logo URL" },
+    { field: "{{{nl2br companyAddress}}}", label: "Company Address (with line breaks)" },
+    { field: "{{{nl2br companyPhone}}}", label: "Company Phone (with line breaks)" },
+    { field: "{{companyNTN}}", label: "Company NTN" },
+    { field: "{{companySTRN}}", label: "Company STRN" },
+    { field: "{{reference}}", label: "Voucher Reference (JE-#)" },
+    { field: "{{entryNo}}", label: "Entry Number" },
+    { field: "{{fmtDate date}}", label: "Entry Date" },
+    { field: "{{{richText narration}}}", label: "Narration (formatted)" },
+    { field: "{{fmt totalDebit}}", label: "Total Debit" },
+    { field: "{{fmt totalCredit}}", label: "Total Credit" },
+    { field: "{{#each lines}}", label: "Loop: Lines Start" },
+    { field: "{{/each}}", label: "Loop: End" },
+    { field: "{{inc @index}}", label: "Line Serial No. (in loop)" },
+    { field: "{{this.accountCode}}", label: "Account Code (in loop)" },
+    { field: "{{this.accountName}}", label: "Account Name (in loop)" },
+    { field: "{{{richText this.description}}}", label: "Line Description (in loop)" },
+    { field: "{{fmt this.debit}}", label: "Line Debit (in loop)" },
+    { field: "{{fmt this.credit}}", label: "Line Credit (in loop)" },
   ],
 };

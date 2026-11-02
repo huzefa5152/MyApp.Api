@@ -8,10 +8,13 @@ public partial class AppDbContext
     public DbSet<GmailMessage> GmailMessages => Set<GmailMessage>();
     public DbSet<EmailEnquiry> EmailEnquiries => Set<EmailEnquiry>();
     public DbSet<GmailOAuthRequest> GmailOAuthRequests => Set<GmailOAuthRequest>();
+    public DbSet<EmailReplyAttempt> EmailReplyAttempts => Set<EmailReplyAttempt>();
     public DbSet<EmailWorkspaceEvent> EmailWorkspaceEvents => Set<EmailWorkspaceEvent>();
 
     private static void ConfigureEmailWorkspace(ModelBuilder b)
     {
+        b.Entity<EmailReplyAttempt>().HasKey(x => x.Id);
+        b.Entity<EmailReplyAttempt>().HasIndex(x => new { x.CompanyId, x.UserId, x.MessageId });
         b.Entity<GmailConnection>().HasIndex(x => new { x.OwnerUserId, x.GoogleSubject }).IsUnique();
         b.Entity<GmailConnection>().HasIndex(x => new { x.Status, x.NextSyncAt });
         b.Entity<GmailCompanyLink>().HasIndex(x => new { x.ConnectionId, x.CompanyId }).IsUnique();

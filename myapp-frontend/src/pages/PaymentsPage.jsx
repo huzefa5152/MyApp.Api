@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback } from "react";
 import {
   MdAdd, MdDelete, MdReceiptLong, MdPayments,
@@ -29,6 +30,7 @@ import RichText from "../Components/RichText";
 import {
   PageHeader, CompanyPicker, Button, Toolbar, ToolbarSpacer, SearchBox, EmptyState, Loading,
 } from "../ui/Kit";
+import useQueryAction from "../hooks/useQueryAction";
 
 const fmtMoney = (n) =>
   Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -106,7 +108,10 @@ export default function PaymentsPage({ mode = "receipts" }) {
   }, [companyId, dir, page, pageSize, search]);
 
   // Reset to page 1 on company / mode switch.
-  useEffect(() => { setPage(1); setSearch(""); }, [companyId, dir]);
+  useEffect(() => { setPage(1); setSearch(""); setShowForm(false); setEditing(null); setViewing(null); }, [companyId, dir]);
+  // Dashboard quick action: ?new=1 opens Record Receipt / Record Payment. After
+  // the reset above, which would otherwise close the form it just opened.
+  useQueryAction("new", !!companyId && canCreate, () => setShowForm(true));
   useEffect(() => { fetchRows(page); }, [fetchRows, page]);
 
   const handleDelete = async (p) => {
@@ -153,7 +158,7 @@ export default function PaymentsPage({ mode = "receipts" }) {
   }
 
   // Sum of what's shown on this page — a quick "money on screen" cue.
-  const pageTotal = rows.reduce((s, r) => s + Number(r.amount || 0), 0);
+  const pageTotal = rows.reduce((s, r) => s + (!r.isCancelled && r.chequeStatus !== "Bounced" ? Number(r.amount || 0) : 0), 0);
 
   return (
     <div>
@@ -193,7 +198,7 @@ export default function PaymentsPage({ mode = "receipts" }) {
             )}
           </Toolbar>
 
-          {loading ? (
+          <RecordsViewport label="Payments records">{loading ? (
             <Loading>Loading…</Loading>
           ) : rows.length === 0 ? (
             <EmptyState icon={Icon}>No {title.toLowerCase()} yet.</EmptyState>
@@ -208,7 +213,7 @@ export default function PaymentsPage({ mode = "receipts" }) {
                   canDelete={canDelete}
                   canEdit={canCreate}
                   canPrint={canPrint}
-                  tplPicker={tplPicker}
+                  tplPicker={{ ...tplPicker, noTemplate: !defaultTpl && tplPicker.noTemplate }}
                   exportingId={exportingId}
                   attachCount={attachCounts[p.id]}
                   onDelete={() => handleDelete(p)}
@@ -220,7 +225,7 @@ export default function PaymentsPage({ mode = "receipts" }) {
                 />
               ))}
             </div>
-          )}
+          )}</RecordsViewport>
 
           {totalCount > PAGE_SIZE_OPTIONS[0] && (
             <Pagination
@@ -346,7 +351,7 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, 
                   size={18}
                   style={{ transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none", color: accent }}
                 />
-                {count} {docNoun}{count !== 1 ? "s" : ""} settled
+                {count} allocation{count !== 1 ? "s" : ""}
               </span>
               {!open && <span style={st.allocToggleHint}>view details</span>}
             </button>

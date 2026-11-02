@@ -20,6 +20,9 @@ namespace MyApp.Api.Helpers
             // .kpi.* perms gate which sections of the page render. A user
             // with dashboard.view but no kpi.* perms sees only the welcome
             // banner — no money numbers leak.
+            new("bills.costs.view", "Bills", "Costs", "View", "View private actual costs and commercial profit"),
+            new("bills.costs.update", "Bills", "Costs", "Update", "Correct private costs including filed bills"),
+            new("purchasebills.payables.view", "PurchaseBills", "Payables", "View", "View supplier payables and supplier ledger"),
             new("dashboard.view",                "Dashboard", "Page",          "View", "Access the Dashboard page"),
             new("dashboard.kpi.sales.view",      "Dashboard", "Sales KPI",     "View", "See sales KPIs (Total Sales, top clients, recent invoices, sales trend)"),
             new("dashboard.kpi.purchases.view",  "Dashboard", "Purchase KPI",  "View", "See purchase KPIs (Total Purchases, top suppliers, recent purchase bills, purchase trend)"),
@@ -136,7 +139,7 @@ namespace MyApp.Api.Helpers
             // All / Submit All. Carved out of bills.manage.update so an
             // operator can be trusted to flip the toggle without being trusted
             // to edit prices, dates, or items on the bill itself.
-            new("invoices.fbr.exclude",    "Invoices", "FBR",    "Exclude/Include", "Mark a bill as excluded from FBR bulk Validate/Submit, or re-include it"),
+            new("invoices.fbr.exclude",    "Invoices", "FBR",    "Exclude/Include", "Keep a bill out of FBR (no validate or submit, single or bulk), or include it again"),
             // Admin recovery for a bill locked after a timed-out / crashed submit
             // ("Uncertain" / "Submitting"). Lets a trusted user clear the FBR state
             // for resubmission, or record an IRN they confirmed at FBR — the ONLY
@@ -286,6 +289,11 @@ namespace MyApp.Api.Helpers
             // work out the balance sheet — splitting them would suggest a
             // privacy boundary that does not exist.
             new("accounting.reports.view",    "Accounting", "Reports", "View",   "View the accounting reports: statements, party ledgers, aging, cash book, expenses, tax control and the dashboard"),
+            // The Dashboards → Accounting screen. Its own key so a role can be
+            // given the one-screen summary without the whole reporting suite;
+            // granted once at start-up to every role that already held
+            // accounting.reports.view (Program.cs, PERM_COPY_ACCOUNTING_DASHBOARD_V1).
+            new("accounting.dashboard.view",  "Accounting", "Dashboard", "View",   "View the accounting summary dashboard"),
 
             // ── Customer Portal ─────────────────────────────────────────────
             // Issuing a portal publishes a client's invoices to anyone holding
@@ -320,6 +328,19 @@ namespace MyApp.Api.Helpers
             // exactly the decision an operator needs to see. The keys are
             // unchanged: EditionCatalog splits on key PREFIX, so the module name
             // is free to say what the editor should show.
+            new("accounting.journal.print",   "Accounting", "Journal Entries", "Print",  "Print or download a journal voucher"),
+            new("accounting.transfers.view",   "Accounting", "Account Transfers", "View",   "View inter-account (bank/cash) transfers"),
+            new("accounting.transfers.create", "Accounting", "Account Transfers", "Create", "Record and edit inter-account transfers"),
+            new("accounting.transfers.delete", "Accounting", "Account Transfers", "Delete", "Delete inter-account transfers"),
+            new("accounting.transfers.print",  "Accounting", "Account Transfers", "Print",  "Print or download a transfer advice"),
+            new("accounting.reconciliation.view",   "Accounting", "Bank Reconciliation", "View",   "View bank/cash account balances and reconciliation status"),
+            new("accounting.reconciliation.manage", "Accounting", "Bank Reconciliation", "Manage", "Mark transactions cleared and reconcile a bank statement"),
+            new("accounting.reports.export",  "Accounting", "Reports", "Export", "Download an accounting report as Excel"),
+            new("purchasedebitnotes.list.view",     "PurchaseDebitNotes", "List",   "View",   "View the purchase (supplier) debit-notes list and a single note"),
+            new("purchasedebitnotes.print.view",    "PurchaseDebitNotes", "Print",  "View",   "Print / export a purchase debit note"),
+            new("purchasedebitnotes.manage.create", "PurchaseDebitNotes", "Manage", "Create", "Create a purchase debit note"),
+            new("purchasedebitnotes.manage.update", "PurchaseDebitNotes", "Manage", "Update", "Edit a purchase debit note"),
+            new("purchasedebitnotes.manage.delete", "PurchaseDebitNotes", "Manage", "Delete", "Delete a purchase debit note"),
             new("accounting.receipts.view",   "Receipts & Payments", "Receipts", "View",   "View receipts (money in) and an invoice's settled payments"),
             new("accounting.receipts.create", "Receipts & Payments", "Receipts", "Create", "Record a receipt against one or more sales invoices"),
             new("accounting.receipts.delete", "Receipts & Payments", "Receipts", "Delete", "Delete a receipt"),
@@ -366,9 +387,12 @@ namespace MyApp.Api.Helpers
             new("reports.sales.view",       "Reports", "Sales", "View",   "View the Sales report (FBR-submitted invoices grouped by date, monthly/yearly)"),
             new("reports.sales.export",     "Reports", "Sales", "Export", "Export the Sales report to CSV/Excel"),
             new("reports.sales.printinvoice","Reports", "Sales", "Print Invoice", "Download Tax Invoice PDFs from the Sales report (single row, or every invoice in the period)"),
+            new("reports.invoicedetail.view", "Reports", "Invoice Sales Detail", "View", "View original bill lines and their saved tax and FBR status"),
+            new("reports.invoicedetail.export", "Reports", "Invoice Sales Detail", "Export", "Export Invoice Sales Detail to Excel"),
             new("reports.taxsheet.view",    "Reports", "Tax Sheet", "View",   "View the Tax Sheet (invoice lines still missing a valid HS code, for the tax consultant)"),
             new("reports.taxsheet.export",  "Reports", "Tax Sheet", "Export", "Export the Tax Sheet to Excel"),
             new("reports.taxsheet.transfer","Reports", "Tax Sheet", "Transfer", "Move the still-unclassified invoices of a period to a new date (defer to next month); changes invoice dates"),
+            new("reports.taxsheet.import",  "Reports", "Tax Sheet", "Import", "Upload a filled-in Tax Sheet to set HS codes and filing quantities on many invoices at once (also needs invoice classification permission)"),
             new("reports.outstanding.view",   "Reports", "Outstanding Ledger", "View",   "View the Outstanding Ledger (per-client receivables: amount, paid, balance, payment status + settling receipts)"),
             new("reports.outstanding.export", "Reports", "Outstanding Ledger", "Export", "Export the Outstanding Ledger to Excel / PDF"),
 
@@ -414,6 +438,8 @@ namespace MyApp.Api.Helpers
             new("email.inbox.view", "EmailWorkspace", "Inbox", "View", "Read the company email workspace"),
             new("email.inbox.manage", "EmailWorkspace", "Inbox", "Manage", "Keep, ignore and restore enquiries"),
             new("email.enquiries.manage", "EmailWorkspace", "Enquiries", "Manage", "Review email enquiries and prepare quotations"),
+            new("email.replies.send", "EmailWorkspace", "Replies", "Send", "Reply to visible enquiries using an owned or explicitly delegated Gmail mailbox"),
+            new("email.read.manage", "EmailWorkspace", "Inbox", "Gmail read status", "Change visible email read/unread status in an owned or explicitly delegated Gmail mailbox"),
             new("email.connections.manage", "EmailWorkspace", "Connections", "Manage", "Connect your Gmail accounts and configure company sender rules"),
             new("fbr.reference.read",         "FBR", "Reference", "Read",
                 "Read FBR reference catalogs (HS codes, UOMs, provinces, sale types)"),

@@ -66,10 +66,13 @@ export default function ByCounterpartyCard({
     <Card className="dash-card" title={cardTitle} style={{ "--acc": accent, marginTop: 0, overflow: "hidden" }}>
       <Subtitle text={subtitle} />
 
-      {/* auto-fit collapses to one column on phones; padding comes from the Card body. */}
-      <div style={{
+      {/* The donut needs a fixed ~200px; the legend takes the rest. An even
+          auto-fit split left the names ~40px between the percent and the
+          amount, so "SOORTY ENTERPRISES" read as "S O...". Phones stack the
+          two via .dash-cp-grid in DashboardPage.css. Padding comes from the Card body. */}
+      <div className="dash-cp-grid" style={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
+        gridTemplateColumns: "minmax(170px, 210px) minmax(0, 1fr)",
         gap: "var(--k-gap)",
         alignItems: "center",
       }}>
@@ -163,26 +166,28 @@ export default function ByCounterpartyCard({
                   <span style={{ color: "var(--k-muted)", fontSize: "0.75rem", marginRight: "0.4rem" }}>#{idx + 1}</span>
                   {it.name || "(unknown)"}
                 </span>
-                <span className="dash-cp-row__pct" style={{
-                  fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
-                  fontVariantNumeric: "tabular-nums",
-                  fontSize: "0.76rem",
-                  color: "var(--k-muted)",
-                  flexShrink: 0,
-                  width: 48,
-                  textAlign: "right",
-                }}>
-                  {pct.toFixed(1)}%
-                </span>
-                <span className="dash-cp-row__value" style={{
-                  fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
-                  fontVariantNumeric: "tabular-nums",
-                  fontSize: "var(--k-td-font)",
-                  fontWeight: 600,
-                  color: "var(--k-ink)",
-                  flexShrink: 0,
-                }}>
-                  {formatPkr(it.value)}
+                {/* Amount over percent in one right-hand column: side by side
+                    they took ~160px and left the client name ~60px. */}
+                <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0, lineHeight: 1.2 }}>
+                  <span className="dash-cp-row__value" style={{
+                    fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
+                    fontVariantNumeric: "tabular-nums",
+                    fontSize: "var(--k-td-font)",
+                    fontWeight: 600,
+                    color: "var(--k-ink)",
+                    whiteSpace: "nowrap",
+                  }}>
+                    {formatPkr(it.value)}
+                  </span>
+                  <span className="dash-cp-row__pct" style={{
+                    fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
+                    fontVariantNumeric: "tabular-nums",
+                    fontSize: "0.72rem",
+                    color: "var(--k-muted)",
+                    textAlign: "right",
+                  }}>
+                    {pct.toFixed(1)}%
+                  </span>
                 </span>
               </button>
             );

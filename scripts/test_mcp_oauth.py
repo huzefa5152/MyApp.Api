@@ -259,6 +259,17 @@ def exchange(code, verifier, client=CID, redirect=REDIRECT):
                                               "client_id": client, "redirect_uri": redirect})
 
 
+# Every scope ticked once ran past the 200-character Scopes column and failed approve with a 500.
+v_all, c_all = pkce()
+s, d, _ = raw("POST", "/api/oauth/authorize", admin, {"clientId": CID, "redirectUri": REDIRECT, "state": "st-all", "codeChallenge": c_all,
+              "codeChallengeMethod": "S256", "companyIds": [], "allCompanies": True, "scopes": info_admin["scopes"]})
+check("approving with every offered scope succeeds", s == 200, f"{s} {d} ({len(','.join(info_admin['scopes']))} chars)")
+if s == 200:
+    code_all = urllib.parse.parse_qs(urllib.parse.urlparse(d["redirectUrl"]).query)["code"][0]
+    s, d, _ = exchange(code_all, v_all)
+    check("…and its token carries every scope, FBR exclusion included",
+          s == 200 and set(d["scope"].split(",")) == set(info_admin["scopes"]) and "fbrexclusion.write" in d["scope"], f"{s} {d}")
+
 ver, code, state, url = get_code([A["id"]])
 check("approval returns to the registered address with the code and the state", url.startswith(REDIRECT + "?") and state == "st-xyz", url)
 s, d, _ = raw("POST", "/api/oauth/deny", user, {"clientId": CID, "redirectUri": REDIRECT, "state": "st-d", "codeChallenge": chal, "codeChallengeMethod": "S256", "companyIds": []})

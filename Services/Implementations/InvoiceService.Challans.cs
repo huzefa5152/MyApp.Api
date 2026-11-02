@@ -60,10 +60,14 @@ public partial class InvoiceService
         }
         var available = await query.Include(c => c.SalesOrder).Include(c => c.Items).OrderByDescending(c => c.DeliveryDate)
             .ThenByDescending(c => c.Id).Take(101).ToListAsync();
+        var deliveryIds = linked.Select(c => c.Id).Concat(available.Select(c => c.Id)).ToList();
+        var purchasedIds = await _context.PurchaseBills.Where(p => p.SourceDeliveryChallanId != null && deliveryIds.Contains(p.SourceDeliveryChallanId.Value))
+            .Select(p => p.SourceDeliveryChallanId!.Value).Distinct().ToListAsync();
         BillChallanOptionDto Map(DeliveryChallan c) => new()
         {
-            Id = c.Id, ChallanNumber = c.ChallanNumber, PoNumber = c.PoNumber,
+            Id = c.Id, ChallanNumber = c.ChallanNumber, PoNumber = c.PoNumber, HasAutoPurchaseBills = purchasedIds.Contains(c.Id),
             SalesOrderId = c.SalesOrderId, SalesOrderNumber = c.SalesOrder?.SalesOrderNumber,
+            SplitFromChallanId = c.SplitFromChallanId,
             DeliveryDate = c.DeliveryDate, Version = ChallanVersion(c),
             Items = c.Items.OrderBy(i => i.Id).Select(i => new BillChallanItemDto
             { Id = i.Id, Description = i.Description, Quantity = i.Quantity, Unit = i.Unit }).ToList()
@@ -146,7 +150,27 @@ public partial class InvoiceService
             throw new InvalidOperationException("A selected challan is unavailable, already billed, or belongs to a different company or customer. Refresh the selection.");
         if (added.Any(c => !dto.AddedChallanVersions.TryGetValue(c.Id, out var version) || version != ChallanVersion(c)))
             throw new InvalidOperationException("A selected challan changed. Reload it and review its items and rates again.");
-        var newItems = added.SelectMany(c => c.Items).ToList();
+        dto.LeaveOutDeliveryItemIds ??= new();
+        var leaveOutIds = dto.LeaveOutDeliveryItemIds.ToHashSet();
+        if (leaveOutIds.Count != dto.LeaveOutDeliveryItemIds.Count || leaveOutIds.Count > 2000)
+            throw new InvalidOperationException("Leave each line out only once.");
+        var keptChallans = invoice.DeliveryChallans.Where(c => selectedIds.Contains(c.Id)).ToList();
+        foreach (var kept in keptChallans) await _context.Entry(kept).Collection(c => c.Items).LoadAsync();
+        var selectedLineIds = keptChallans.Concat(added).SelectMany(c => c.Items).Select(i => i.Id).ToHashSet();
+        if (!leaveOutIds.IsSubsetOf(selectedLineIds))
+            throw new InvalidOperationException("A line to leave out is not on a selected challan. Refresh the selection.");
+        var leaveOut = keptChallans.Concat(added)
+            .Select(c => (Challan: c, Ids: c.Items.Where(i => leaveOutIds.Contains(i.Id)).Select(i => i.Id).ToList()))
+            .Where(x => x.Ids.Count > 0).ToList();
+        // A challan attached to the bill for reference has no line on it: nothing
+        // of it is billed, so nothing of it can be "left out".
+        var onBill = invoice.Items.Where(i => i.DeliveryItemId.HasValue).Select(i => i.DeliveryItemId!.Value).ToHashSet();
+        if (keptChallans.SelectMany(c => c.Items).Any(i => leaveOutIds.Contains(i.Id) && !onBill.Contains(i.Id)))
+            throw new InvalidOperationException("Only lines on this bill can be left out. A challan attached for reference has no billed lines.");
+        var emptied = leaveOut.FirstOrDefault(x => x.Ids.Count == x.Challan.Items.Count);
+        if (emptied.Challan != null)
+            throw new InvalidOperationException($"Every line of challan #{emptied.Challan.ChallanNumber} is left out. Remove the whole challan instead.");
+        var newItems = added.SelectMany(c => c.Items).Where(i => !leaveOutIds.Contains(i.Id)).ToList();
         if (newItems.Any(i => i.ItemTypeId.HasValue && (i.ItemType == null || i.ItemType.CompanyId != invoice.CompanyId || i.ItemType.IsDeleted)))
             throw new InvalidOperationException("An added challan uses an unavailable item type. Correct the challan first.");
         await ValidateUpdateItemDecimalQuantitiesAsync(newItems.Select(i => new UpdateInvoiceItemDto
@@ -166,12 +190,15 @@ public partial class InvoiceService
         if (removalAction != null && await _context.PurchaseBills.AnyAsync(p => p.SourceDeliveryChallanId != null && removedIds.Contains(p.SourceDeliveryChallanId.Value)))
             throw new InvalidOperationException("This challan has linked purchase bills. Resolve those purchases before cancelling or deleting its delivery.");
         var removedLines = invoice.Items.Where(i => i.DeliveryItemId.HasValue
-            && removedDeliveryIds.Contains(i.DeliveryItemId.Value)).ToList();
+            && (removedDeliveryIds.Contains(i.DeliveryItemId.Value) || leaveOutIds.Contains(i.DeliveryItemId.Value))).ToList();
         if (invoice.Items.Count - removedLines.Count + newItems.Count == 0)
             throw new InvalidOperationException("A bill must keep at least one item. Replace its last challan, or void the bill instead.");
-        if (addedIds.Count == 0 && removedIds.Count == 0)
+        if (addedIds.Count == 0 && removedIds.Count == 0 && leaveOut.Count == 0)
             return ToDto(invoice);
 
+        var previousFilingSource = TaxFilingProjection.SourceVersion(invoice);
+        var hadConsultantWork = TaxFilingProjection.HasConsultantWork(invoice);
+        if (removedLines.Any(i => i.Adjustment != null)) TaxFilingProjection.PreserveLegacyFiling(invoice);
         foreach (var line in removedLines)
         {
             if (line.Adjustment != null) _context.InvoiceItemAdjustments.Remove(line.Adjustment);
@@ -188,11 +215,14 @@ public partial class InvoiceService
             if (removalAction == "delete")
             {
                 var latest = await _context.DeliveryChallans.Where(c => c.CompanyId == invoice.CompanyId).MaxAsync(c => c.ChallanNumber);
-                if (challan.DuplicatedFromId == null && challan.ChallanNumber != latest)
+                if (challan.DuplicatedFromId == null && challan.SplitFromChallanId == null && challan.ChallanNumber != latest)
                     throw new InvalidOperationException("Only the latest challan or a duplicate can be deleted. Cancel this challan instead.");
                 _context.DeliveryChallans.Remove(challan);
             }
         }
+        var splitIds = new List<int>();
+        foreach (var (challan, ids) in leaveOut) splitIds.Add(await SplitOffAsync(challan, ids));
+
         if (dto.AttachAddedChallansToOrder && added.Any(c => c.SalesOrderId == null))
         {
             var orderIds = originalOrderIds;
@@ -236,11 +266,15 @@ public partial class InvoiceService
                 });
             }
         }
-        invoice.FbrReviewRequiredAt = DateTime.UtcNow;
         RecalculateBillTotals(invoice);
+        TaxFilingProjection.RecordCommercialChange(invoice, previousFilingSource, hadConsultantWork);
         invoice.FbrStatus = null;
         invoice.FbrErrorMessage = null;
         await _context.SaveChangesAsync();
+        await MergeBilledSplitsAsync(invoice.Id);
+        await MergeUnbilledSplitsAsync(removedIds.Concat(splitIds));
+        foreach (var challanId in keptChallans.Concat(added).Select(c => c.Id).Concat(splitIds).Distinct())
+            await _purchases.SyncChallanAsync(challanId);
         await _stock.SyncInvoiceStockMovementsAsync(invoice);
         await _posting.PostInvoiceAsync(invoice);
         var warnings = await EnforceStockGuardAfterSyncAsync(invoice);
@@ -250,8 +284,8 @@ public partial class InvoiceService
             Timestamp = DateTime.UtcNow, Level = "Information", UserName = actorUserName,
             HttpMethod = "PUT", RequestPath = $"/api/invoices/{id}/challans", StatusCode = 200,
             ExceptionType = "BILL_CHALLANS_CHANGED", CompanyId = invoice.CompanyId,
-            Message = $"Bill #{invoice.InvoiceNumber}: added challan ids [{string.Join(",", addedIds)}], removed [{string.Join(",", removedIds)}].",
-            RequestBody = JsonSerializer.Serialize(new { dto.ChallanIds, dto.UnitPrices, removalAction, dto.AttachAddedChallansToOrder }), OccurrenceCount = 1
+            Message = $"Bill #{invoice.InvoiceNumber}: added challan ids [{string.Join(",", addedIds)}], removed [{string.Join(",", removedIds)}], left out lines [{string.Join(",", leaveOutIds)}].",
+            RequestBody = JsonSerializer.Serialize(new { dto.ChallanIds, dto.UnitPrices, dto.LeaveOutDeliveryItemIds, removalAction, dto.AttachAddedChallansToOrder }), OccurrenceCount = 1
         };
         await transaction.CommitAsync();
         await transaction.DisposeAsync();
@@ -260,10 +294,12 @@ public partial class InvoiceService
         result.StockWarnings = warnings;
         return result;
     }
-    public async Task AssertCommercialBillMutationAsync(int id)
+    public async Task AssertCommercialBillMutationAsync(int id, string? expectedVersion = null)
     {
         var bill = await _invoiceRepo.GetByIdAsync(id) ?? throw new InvalidOperationException("Linked bill not found.");
         await AssertBillSnapshotCurrentAsync(bill);
+        if (expectedVersion != null && expectedVersion != BillChallanVersion(bill))
+            throw new InvalidOperationException("The linked bill changed after you opened this editor. Reload before saving.");
         if (await _context.Invoices.AnyAsync(i => i.OriginalInvoiceId == id && !i.IsCancelled))
             throw new InvalidOperationException("Resolve the bill's active credit or debit note before changing its delivery.");
         var locked = await _context.Companies.Where(c => c.Id == bill.CompanyId).Select(c => c.GlLockDate).SingleAsync();
@@ -271,13 +307,13 @@ public partial class InvoiceService
             throw new InvalidOperationException("The linked bill is in a locked accounting period.");
     }
 
-    public async Task ReconcileChallanBillAsync(int id)
+    public async Task ReconcileChallanBillAsync(int id, string previousFilingSource, bool hadConsultantWork)
     {
         var bill = await _invoiceRepo.GetByIdAsync(id) ?? throw new InvalidOperationException("Linked bill not found.");
         if (bill.Items.Count == 0)
             throw new InvalidOperationException("This would leave an empty bill. Replace its challan, or cancel the bill explicitly first.");
         RecalculateBillTotals(bill);
-        bill.FbrReviewRequiredAt = DateTime.UtcNow;
+        TaxFilingProjection.RecordCommercialChange(bill, previousFilingSource, hadConsultantWork);
         bill.FbrStatus = null; bill.FbrErrorMessage = null;
         await _context.SaveChangesAsync();
         await _stock.SyncInvoiceStockMovementsAsync(bill);

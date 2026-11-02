@@ -6,12 +6,12 @@ export const getFbrProvinces = (companyId) =>
 export const getFbrDocTypes = (companyId) =>
   httpClient.get(`/fbr/doctypes/${companyId}`);
 
-export const getFbrHSCodes = (companyId, search, saleType) =>
+export const getFbrHSCodes = (companyId, search, saleType, options = {}) =>
   httpClient.get(`/fbr/hscodes/${companyId}`, {
     // saleType filters to HS codes whose FBR-prefix heuristic maps to that
     // sale type — used by the inline New-Item-Type form when the parent
     // bill has a scenario-locked sale type. Omit to get the full catalog.
-    params: { search, saleType },
+    params: { search, saleType, ...options },
   });
 
 // Get allowed UOMs for a specific HS code (FBR V1.12 §5.9).

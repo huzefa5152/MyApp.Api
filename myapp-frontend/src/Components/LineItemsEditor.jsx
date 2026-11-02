@@ -1,10 +1,15 @@
 import { copyLine } from "../utils/documentCopy";
-import { useState, useEffect, useRef } from "react";
-import { MdAdd, MdDelete, MdContentPaste, MdRepeat } from "react-icons/md";
+import { useState, useEffect, useLayoutEffect, useRef, Fragment } from "react";
+import { MdAdd, MdDelete, MdContentPaste, MdRepeat, MdLocalOffer, MdClose } from "react-icons/md";
+import { lineAmounts } from "../utils/quoteDiscount";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import QuantityInput from "./QuantityInput";
 import LineItemImageCell from "./LineItemImageCell";
+import CopyLineButton from "./CopyLineButton";
+import LineEntryModeSwitch, { CalculatedField } from "./LineEntryModeSwitch";
+import useLineEntryMode from "../hooks/useLineEntryMode";
+import { ENTRY_MODE, applyLineEntry, displayUnitPrice, lineForMode, unitPriceFrom } from "../utils/lineAmount";
 
 /**
  * Shared line-item entry for the sales module (Quote / Order / Challan).
@@ -33,6 +38,15 @@ import LineItemImageCell from "./LineItemImageCell";
  *   - showItemType + itemTypes  → the Item Type picker + bulk-apply bar (Quote/Order)
  *   - showUnitPrice             → the Unit Price + Amount columns (Quote/Bill)
  *   - getRate                   → last-billed-rate auto-fill on the price (Quote/Bill)
+ *   - showDiscount              → a per-line discount (10% or a rupee amount) +
+ *                                 reason, opened from the row's tag button (Quote)
+ *   - entryModeKey              → the "I'll enter Unit price / Line total" switch,
+ *                                 remembered per screen. In Line total mode the
+ *                                 typed figure lives on the row as `_lineTotal`
+ *                                 (the amount BEFORE any line discount) and the
+ *                                 unit price is derived at 12 decimals; the
+ *                                 parent's save maps fields explicitly, so the
+ *                                 helper field never reaches the server.
  */
 export default function LineItemsEditor({
   companyId,
@@ -47,6 +61,7 @@ export default function LineItemsEditor({
   canCreateItemType = false,
   onAddItemType,
   showUnitPrice = false,
+  showDiscount = false,
   currency = "Rs",
   getRate,
   showImage = false,
@@ -65,8 +80,12 @@ export default function LineItemsEditor({
   enablePaste = true,
   enableRepeatLast = true,
   narrowBreakpoint = 760,
+  entryModeKey,
 }) {
   const showBulk = (bulkApply ?? showItemType) && showItemType;
+  const [entryMode, setEntryModePref] = useLineEntryMode(entryModeKey || "_unused");
+  const showEntrySwitch = showUnitPrice && !!entryModeKey;
+  const byTotal = showEntrySwitch && entryMode === ENTRY_MODE.total;
   const [isNarrow, setIsNarrow] = useState(
     () => typeof window !== "undefined" && window.innerWidth < narrowBreakpoint
   );
@@ -87,6 +106,32 @@ export default function LineItemsEditor({
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, [narrowBreakpoint]);
+
+  // The table also gives way to cards whenever it does not fit the space it
+  // is given — a dialog on a laptop, or with the sidebar open, is narrower than
+  // the window, and a sideways-scrolling item table is hard to use. The width
+  // the table needed is remembered, so it comes back once there is room.
+  const panelRef = useRef(null);
+  const tableWrapRef = useRef(null);
+  const [panelWidth, setPanelWidth] = useState(null);
+  const [tableNeeds, setTableNeeds] = useState(0);
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([entry]) => setPanelWidth(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  useLayoutEffect(() => {
+    const wrap = tableWrapRef.current;
+    if (wrap && wrap.scrollWidth > wrap.clientWidth + 1 && wrap.scrollWidth !== tableNeeds) setTableNeeds(wrap.scrollWidth);
+  });
+  // Below the sum of its columns (less a little slack the pickers can give up)
+  // the browser would crush qty / unit / price until their values are cut, so
+  // the table keeps this minimum and overflows instead, which flips to cards.
+  const tableMin = 28 + (showImage ? 64 : 0) + (showItemType ? (showDiscount ? 170 : 180) : 0) + 220 + 92 + 120
+    + (showUnitPrice ? 250 : 0) + (showDiscount && showUnitPrice ? 112 : 76) - 40;
+  const narrow = isNarrow || (panelWidth != null && tableNeeds > 0 && panelWidth < tableNeeds);
 
   // After a row is added/inserted we stash the index to focus; this runs post-
   // render (once the new description input exists) and focuses it exactly once.
@@ -125,8 +170,87 @@ export default function LineItemsEditor({
   };
   const clearAllItemTypes = () => onItemsChange(items.map((it) => ({ ...it, itemTypeId: null })));
 
-  const lineTotal = (it) =>
-    Math.round((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0) * 100) / 100;
+  // Net of the line's discount when it has one (Quote); plain qty x price otherwise.
+  const lineTotal = (it) => lineAmounts(it).net;
+
+  // Line total mode: what the operator typed for the line (before discount),
+  // else what qty x price comes to now — so a saved line opens on its figure.
+  const typedTotal = (it) => {
+    if (it._lineTotal != null) return String(it._lineTotal);
+    const g = lineAmounts(it).gross;
+    return it.unitPrice === "" || it.unitPrice == null ? "" : String(g);
+  };
+  const shownRate = (it) => {
+    if (it.unitPrice === "" || it.unitPrice == null) return "";
+    const t = typedTotal(it);
+    return displayUnitPrice(it.unitPrice, Number(it.quantity), t === "" ? null : Number(t));
+  };
+  // A keystroke in Line total mode: the quantity or the total moves, and the
+  // rate is re-divided so qty x rate lands back on the typed total.
+  const setByTotal = (idx, field, value) => {
+    const it = items[idx];
+    const r = applyLineEntry(
+      { quantity: String(it.quantity ?? ""), unitPrice: String(it.unitPrice ?? ""), lineTotal: typedTotal(it) },
+      field, String(value ?? ""), ENTRY_MODE.total,
+    );
+    setItem(idx, { quantity: field === "quantity" ? value : it.quantity, unitPrice: r.unitPrice, _lineTotal: r.lineTotal });
+  };
+  const setQuantity = (idx, v) => (byTotal ? setByTotal(idx, "quantity", v) : setItem(idx, { quantity: v }));
+  // Flipping the mode keeps every line's figures: Line total starts from what
+  // the line comes to now; Unit price trims the derived rate to the fewest
+  // decimals that still reproduce the total.
+  const setEntryMode = (next) => {
+    onItemsChange(items.map((it) => {
+      const cur = { quantity: String(it.quantity ?? ""), unitPrice: String(it.unitPrice ?? ""), lineTotal: typedTotal(it) };
+      if (next === ENTRY_MODE.total) return { ...it, _lineTotal: lineForMode(cur, next).lineTotal };
+      const { _lineTotal, ...rest } = it;
+      return it.unitPrice === "" || it.unitPrice == null ? rest : { ...rest, unitPrice: lineForMode(cur, next).unitPrice };
+    }));
+    setEntryModePref(next);
+  };
+  const fmtMoney = (n) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  const discountOpen = (it) => showDiscount && showUnitPrice && (it._discountOpen || !!String(it.discountText || "").trim());
+  const openDiscount = (idx) => setItem(idx, { _discountOpen: true });
+  const clearDiscount = (idx) => setItem(idx, { discountText: "", discountReason: "", _discountOpen: false });
+
+  // The discount strip under a line: one box for "10%" or "500", the reason,
+  // and what it takes off. A wrapping flex row, so nothing is cut at any width.
+  const discountStrip = (item, idx, locked) => {
+    const { discount, error } = lineAmounts(item);
+    return (
+      <div style={s.discStrip}>
+        <span style={s.discTag}><MdLocalOffer size={14} /> Discount</span>
+        <div style={s.discValueWrap}>
+          <input
+            aria-label={`Discount for line ${idx + 1}`}
+            style={{ ...s.cellInput, textAlign: "right", ...(error ? s.inputError : null) }}
+            value={item.discountText || ""}
+            placeholder="10% or 500"
+            disabled={locked}
+            onChange={(e) => setItem(idx, { discountText: e.target.value })}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitAndAdvance(idx); } }}
+            autoFocus={!item.discountText}
+          />
+        </div>
+        <div style={s.discReasonWrap}>
+          <input
+            aria-label={`Discount reason for line ${idx + 1}`}
+            style={s.cellInput}
+            value={item.discountReason || ""}
+            maxLength={200}
+            placeholder="Reason (optional), e.g. old item taken in exchange"
+            disabled={locked}
+            onChange={(e) => setItem(idx, { discountReason: e.target.value })}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitAndAdvance(idx); } }}
+          />
+        </div>
+        <span style={error ? s.discError : s.discAmount}>{error || (discount ? `− ${currency} ${fmtMoney(discount)}` : "")}</span>
+        {!locked && (
+          <button type="button" style={s.discRemove} onClick={() => clearDiscount(idx)} title="Remove this discount" aria-label={`Remove discount from line ${idx + 1}`}><MdClose size={16} /></button>
+        )}
+      </div>
+    );
+  };
 
   // Auto-fill price from the item's last billed rate. Only fills when the
   // row's price is still 0 so it never clobbers a typed price; always sets the
@@ -139,9 +263,9 @@ export default function LineItemsEditor({
         onItemsChange(
           itemsRef.current.map((it, i) => {
             if (i !== idx) return it;
-            return !it.unitPrice || Number(it.unitPrice) === 0
-              ? { ...it, unitPrice: res.lastUnitPrice, rateHint: res.hint || "" }
-              : { ...it, rateHint: res.hint || "" };
+            if (it.unitPrice && Number(it.unitPrice) !== 0) return { ...it, rateHint: res.hint || "" };
+            const filled = { ...it, unitPrice: res.lastUnitPrice, rateHint: res.hint || "" };
+            return byTotal && !it._lineTotal ? { ...filled, _lineTotal: String(lineAmounts(filled).gross) } : filled;
           })
         );
       }
@@ -174,7 +298,7 @@ export default function LineItemsEditor({
   };
 
   const duplicateItem = idx => {
-    const next = [...items]; next.splice(idx+1,0,copyLine(items[idx],makeBlankItem));
+    const next = [...items]; next.splice(idx+1,0,copyLine(items[idx],makeBlankItem,true));
     onItemsChange(next); requestFocus(idx+1);
   };
   const removeItem = (idx) => onItemsChange(items.filter((_, i) => i !== idx));
@@ -209,6 +333,7 @@ export default function LineItemsEditor({
       unit: last.unit || "",
     };
     if (showUnitPrice) seed.unitPrice = last.unitPrice || 0;
+    if (byTotal) seed._lineTotal = typedTotal(last);
     if (showImage) seed.imagePath = last.imagePath || null;
     if (last.rateHint) seed.rateHint = last.rateHint;
     addItem(seed);
@@ -254,7 +379,13 @@ export default function LineItemsEditor({
         row.description = parts.slice(0, tail.keep).join(" ").trim() || line;
         if (tail.qty != null) row.quantity = tail.qty;
         if (tail.unit) row.unit = tail.unit;
-        if (showUnitPrice && tail.price != null) row.unitPrice = tail.price;
+        if (showUnitPrice && tail.price != null) {
+          if (byTotal) {
+            row._lineTotal = String(tail.price);
+            const rate = unitPriceFrom(tail.price, tail.qty ?? row.quantity);
+            row.unitPrice = rate == null ? "" : rate;
+          } else row.unitPrice = tail.price;
+        }
       } else {
         row.description = parts.join(" ").trim() || line;
       }
@@ -271,6 +402,44 @@ export default function LineItemsEditor({
   const nonHsPlaceholderAll = bulkApplyMode === "all" ? "— pick to apply to all —" : "— pick to fill empty rows —";
   const rowLocked = (it) => (isRowLocked ? isRowLocked(it) : false);
 
+  const totalInput = (item, idx) => (
+    <input
+      type="number"
+      inputMode="decimal"
+      min="0"
+      step="any"
+      aria-label={`Line total for line ${idx + 1}`}
+      style={{ ...s.cellInput, textAlign: "right" }}
+      value={typedTotal(item)}
+      onChange={(e) => setByTotal(idx, "lineTotal", e.target.value)}
+      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitAndAdvance(idx); } }}
+    />
+  );
+  const priceCell = (item, idx) => (byTotal
+    ? <CalculatedField label="Unit price" value={shownRate(item)} />
+    : priceInput(item, idx));
+  // Price mode: the line comes to qty x price (less its discount), worked out.
+  // Total mode: the typed total, with what it comes to after discount beneath.
+  const amountField = (item, idx) => {
+    const { gross, discount } = lineAmounts(item);
+    if (byTotal) {
+      return (
+        <>
+          {totalInput(item, idx)}
+          {discount > 0 && <div style={s.afterDisc}>After discount {fmtMoney(gross - discount)}</div>}
+        </>
+      );
+    }
+    return (
+      <CalculatedField
+        label="Line total"
+        value={discount > 0
+          ? <><span>{fmtMoney(gross - discount)}</span> <span style={s.grossStruck}>{fmtMoney(gross)}</span></>
+          : fmtMoney(gross)}
+      />
+    );
+  };
+
   const priceInput = (item, idx, styleExtra) => (
     <input
       type="number"
@@ -285,13 +454,20 @@ export default function LineItemsEditor({
   );
 
   return (
-    <div className="admin-items-panel">
+    <div className="admin-items-panel" ref={panelRef}>
       <div style={s.itemsHeaderBar}>
         <label style={{ ...s.label, margin: 0 }}>
           {itemsLabel}
           {itemsHint && <span style={s.hintText}> — {itemsHint}</span>}
         </label>
-        <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "center" }}>
+          {showEntrySwitch && (
+            <LineEntryModeSwitch
+              mode={entryMode}
+              onChange={setEntryMode}
+              totalLabel={showDiscount ? "Line total (before discount)" : "Line total"}
+            />
+          )}
           {enableRepeatLast && (
             <button type="button" style={{ ...s.toolBtn, opacity: canRepeat ? 1 : 0.5, cursor: canRepeat ? "pointer" : "not-allowed" }} onClick={repeatLast} disabled={!canRepeat} title={canRepeat ? "Duplicate the last line (item type, description, qty, unit, price)" : "Fill the current line's description first"}>
               <MdRepeat size={14} /> Repeat last
@@ -314,14 +490,14 @@ export default function LineItemsEditor({
         <div style={s.pastePanel}>
           <div style={s.pasteHintRow}>
             Paste one item per line, columns in order —{" "}
-            {showUnitPrice ? "description, qty, unit, unit price" : "description, qty, unit"} (tab or comma
+            {showUnitPrice ? `description, qty, unit, ${byTotal ? "line total" : "unit price"}` : "description, qty, unit"} (tab or comma
             separated; trailing columns optional).
           </div>
           <textarea
             style={s.pasteArea}
             value={pasteText}
             onChange={(e) => setPasteText(e.target.value)}
-            placeholder={showUnitPrice ? "Steel rod 12mm, 10, Pcs, 850\nCement bag, 5, Bag" : "Steel rod 12mm, 10, Pcs\nCement bag, 5, Bag"}
+            placeholder={showUnitPrice ? (byTotal ? "Steel rod 12mm, 10, Pcs, 8500\nSugar, 0.5, Kg, 450" : "Steel rod 12mm, 10, Pcs, 850\nCement bag, 5, Bag") : "Steel rod 12mm, 10, Pcs\nCement bag, 5, Bag"}
             rows={4}
             autoFocus
           />
@@ -354,7 +530,7 @@ export default function LineItemsEditor({
         </div>
       )}
 
-      {isNarrow ? (
+      {narrow ? (
         <div style={s.mcards}>
           {items.map((item, idx) => {
             const locked = rowLocked(item);
@@ -364,17 +540,18 @@ export default function LineItemsEditor({
                 <div style={s.mcardHead}>
                   <span style={s.mnum}>{idx + 1}</span>
                   {showImage && imageCell(item, idx, locked)}
-                  {showItemType && (
-                    <div style={{ flex: 1 }}>
-                      <SearchableItemTypeSelect items={itemTypes} value={item.itemTypeId || ""} onChange={(newId) => pickItemType(idx, newId)} placeholder={itemTypePlaceholder} style={{ minHeight: "var(--sc-cell-h, 0px)", padding: "var(--sc-cell-pad, 0.4rem 0.55rem)", fontSize: "var(--sc-cell-font, 0.82rem)" }} />
-                    </div>
-                  )}
-                  {!showItemType && <div style={{ flex: 1 }} />}
-                  {!locked && !items[idx].salesOrderItemId && <button type="button" style={{...s.del,color:colors.teal,minWidth:44,minHeight:44}} onClick={() => duplicateItem(idx)} title="Copy line">Copy</button>}
+                  <div style={{ flex: 1 }} />
+                  {!locked && !items[idx].salesOrderItemId && <CopyLineButton onClick={() => duplicateItem(idx)} />}
                   {items.length > 1 && !locked && (
                     <button type="button" style={s.del} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={16} /></button>
                   )}
                 </div>
+                {/* Own row: beside the photo and the two buttons it had ~80px on a phone. */}
+                {showItemType && (
+                  <div style={{ marginBottom: "0.5rem" }}>
+                    <SearchableItemTypeSelect items={itemTypes} value={item.itemTypeId || ""} onChange={(newId) => pickItemType(idx, newId)} placeholder={itemTypePlaceholder} style={{ minHeight: "var(--sc-cell-h, 0px)", padding: "var(--sc-cell-pad, 0.4rem 0.55rem)", fontSize: "var(--sc-cell-font, 0.82rem)" }} />
+                  </div>
+                )}
                 <LookupAutocomplete companyId={companyId}
                   label="Item description"
                   endpoint="/lookup/items"
@@ -390,7 +567,7 @@ export default function LineItemsEditor({
                 <div style={showUnitPrice ? s.m3col : s.m2col}>
                   <div>
                     <label style={s.mlabel}>Qty</label>
-                    <QuantityInput value={item.quantity} onChange={(v) => setItem(idx, { quantity: v })} unit={item.unit} units={units} min={getRowMin ? getRowMin(item) : undefined} style={{ ...s.cellInput, textAlign: "right" }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitAndAdvance(idx); } }} />
+                    <QuantityInput value={item.quantity} onChange={(v) => setQuantity(idx, v)} unit={item.unit} units={units} min={getRowMin ? getRowMin(item) : undefined} style={{ ...s.cellInput, textAlign: "right" }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitAndAdvance(idx); } }} />
                   </div>
                   <div>
                     <label style={s.mlabel}>Unit</label>
@@ -399,39 +576,56 @@ export default function LineItemsEditor({
                   {showUnitPrice && (
                     <div>
                       <label style={s.mlabel}>Unit Price</label>
-                      {priceInput(item, idx)}
+                      {priceCell(item, idx)}
                     </div>
                   )}
                 </div>
-                {showUnitPrice && (
-                  <div style={s.mamt}><span>Amount</span><b>{currency} {lineTotal(item).toLocaleString()}</b></div>
+                {showUnitPrice && byTotal && (
+                  <div style={{ ...s.mamt, alignItems: "flex-start" }}>
+                    <span style={{ paddingTop: "0.55rem" }}>{showDiscount ? "Line total (before discount)" : "Line total"}</span>
+                    <span style={{ flex: "0 1 55%", minWidth: 0 }}>{amountField(item, idx)}</span>
+                  </div>
                 )}
+                {showUnitPrice && !byTotal && (
+                  <div style={s.mamt}>
+                    <span>Amount</span>
+                    <span style={{ textAlign: "right" }}>
+                      <b style={{ whiteSpace: "nowrap" }}>{currency} {fmtMoney(lineTotal(item))}</b>
+                      {lineAmounts(item).discount > 0 && <span style={{ ...s.grossStruck, display: "block" }}>{currency} {fmtMoney(lineAmounts(item).gross)}</span>}
+                    </span>
+                  </div>
+                )}
+                {discountOpen(item) ? discountStrip(item, idx, locked) : (showDiscount && showUnitPrice && !locked && (
+                  <button type="button" style={s.discAddBtn} onClick={() => openDiscount(idx)}><MdLocalOffer size={14} /> Add discount</button>
+                ))}
               </div>
             );
           })}
         </div>
       ) : (
-        <div style={s.tableWrap}>
-          <table style={s.table} className="sc-lie-table">
+        <div ref={tableWrapRef} style={s.tableWrap}>
+          <table style={{ ...s.table, minWidth: tableMin }} className="sc-lie-table">
             <thead>
               <tr>
                 <th style={{ ...s.th, width: 28, textAlign: "center" }}>#</th>
                 {showImage && <th style={{ ...s.th, width: 64 }}>Photo</th>}
-                {showItemType && <th style={{ ...s.th, width: 180 }}>Item Type</th>}
-                <th style={{ ...s.th, minWidth: 260 }}>Description</th>
+                {showItemType && <th style={{ ...s.th, width: showDiscount ? 170 : 180 }}>Item Type</th>}
+                <th style={{ ...s.th, minWidth: 220 }}>Description</th>
                 <th style={{ ...s.th, width: 92, textAlign: "right" }}>Qty</th>
                 <th style={{ ...s.th, width: 120 }}>Unit</th>
                 {showUnitPrice && <th style={{ ...s.th, width: 120, textAlign: "right" }}>Unit Price</th>}
-                {showUnitPrice && <th style={{ ...s.th, width: 110, textAlign: "right" }}>Amount</th>}
-                <th style={{ ...s.th, width: 40 }}></th>
+                {showUnitPrice && <th style={{ ...s.th, width: 130, textAlign: "right" }}>{byTotal ? "Line total" : "Amount"}</th>}
+                <th style={{ ...s.th, width: showDiscount && showUnitPrice ? 112 : 76 }}><span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>Actions</span></th>
               </tr>
             </thead>
             <tbody>
               {items.map((item, idx) => {
                 const locked = rowLocked(item);
                 const hint = rowLockHint ? rowLockHint(item) : null;
+                const colCount = 5 + (showImage ? 1 : 0) + (showItemType ? 1 : 0) + (showUnitPrice ? 2 : 0);
                 return (
-                  <tr key={item._imageKey ?? idx}>
+                  <Fragment key={item._imageKey ?? idx}>
+                  <tr>
                     <td style={{ ...s.td, textAlign: "center", color: colors.textSecondary, fontWeight: 700 }}>{idx + 1}</td>
                     {showImage && <td style={s.td}>{imageCell(item, idx, locked)}</td>}
                     {showItemType && (
@@ -454,22 +648,34 @@ export default function LineItemsEditor({
                       {hint && <div style={s.lockHint}>{hint}</div>}
                     </td>
                     <td style={s.td}>
-                      <QuantityInput value={item.quantity} onChange={(v) => setItem(idx, { quantity: v })} unit={item.unit} units={units} min={getRowMin ? getRowMin(item) : undefined} style={{ ...s.cellInput, textAlign: "right" }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitAndAdvance(idx); } }} />
+                      <QuantityInput value={item.quantity} onChange={(v) => setQuantity(idx, v)} unit={item.unit} units={units} min={getRowMin ? getRowMin(item) : undefined} style={{ ...s.cellInput, textAlign: "right" }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitAndAdvance(idx); } }} />
                     </td>
                     <td style={s.td}>
                       <LookupAutocomplete companyId={companyId} label="Unit" endpoint="/lookup/units" value={item.unit} onChange={(v) => setItem(idx, { unit: v })} inputStyle={s.cellInput} onEnterKey={() => commitAndAdvance(idx)} />
                     </td>
-                    {showUnitPrice && <td style={s.td}>{priceInput(item, idx)}</td>}
+                    {showUnitPrice && <td style={s.td}>{priceCell(item, idx)}</td>}
                     {showUnitPrice && (
-                      <td style={{ ...s.td, textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>{lineTotal(item).toLocaleString()}</td>
+                      <td style={{ ...s.td, textAlign: "right", fontWeight: 700 }}>{amountField(item, idx)}</td>
                     )}
                     <td style={{ ...s.td, textAlign: "center" }}>
-                      {!locked && !items[idx].salesOrderItemId && <button type="button" style={{...s.del,color:colors.teal,minWidth:44,minHeight:44}} onClick={() => duplicateItem(idx)} title="Copy line">Copy</button>}
+                      <div style={s.rowActions}>
+                      {showDiscount && showUnitPrice && !locked && (
+                        <button type="button" style={{ ...s.discToggle, ...(discountOpen(item) ? s.discToggleOn : null) }} onClick={() => (discountOpen(item) ? clearDiscount(idx) : openDiscount(idx))} title={discountOpen(item) ? "Remove this line's discount" : "Give a discount on this line"} aria-label={discountOpen(item) ? `Remove discount from line ${idx + 1}` : `Add discount to line ${idx + 1}`} aria-pressed={discountOpen(item)}><MdLocalOffer size={16} /></button>
+                      )}
+                      {!locked && !items[idx].salesOrderItemId && <CopyLineButton onClick={() => duplicateItem(idx)} />}
                   {items.length > 1 && !locked && (
                         <button type="button" style={s.del} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={16} /></button>
                       )}
+                      </div>
                     </td>
                   </tr>
+                  {discountOpen(item) && (
+                    <tr>
+                      <td style={s.td} />
+                      <td colSpan={colCount - 1} style={{ ...s.td, paddingTop: 0 }}>{discountStrip(item, idx, locked)}</td>
+                    </tr>
+                  )}
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -521,10 +727,25 @@ const s = {
   cellInput: { width: "100%", minHeight: "var(--sc-cell-h, 0px)", padding: "var(--sc-cell-pad, 0.5rem 0.55rem)", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "var(--sc-cell-font, 0.88rem)", backgroundColor: colors.inputBg, color: colors.ink, outline: "none", boxSizing: "border-box" },
   hint: { fontSize: "0.7rem", color: colors.teal, marginTop: 2, fontWeight: 600 },
   lockHint: { fontSize: "0.7rem", color: colors.textSecondary, marginTop: 2, fontStyle: "italic" },
+  rowActions: { display: "flex", gap: 6, justifyContent: "center", alignItems: "center" },
   del: { display: "grid", placeItems: "center", padding: "0.4rem", borderRadius: 8, border: "1px solid rgba(220, 53, 69, 0.15)", backgroundColor: colors.dangerLight, color: colors.danger, cursor: "pointer", margin: "0 auto" },
   addRow: { display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "0.6rem", flexWrap: "wrap" },
   addBtn: { minHeight: touchH, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "var(--sc-small-btn-pad, 0.4rem 0.9rem)", borderRadius: 8, border: "none", backgroundColor: "rgba(0, 137, 123, 0.08)", color: colors.teal, fontSize: "var(--sc-cell-font, 0.82rem)", fontWeight: 600, cursor: "pointer" },
   enterHint: { fontSize: "0.72rem", color: colors.textSecondary },
+  // Line discount (Quote).
+  discStrip: { display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.5rem", padding: "0.5rem 0.6rem", borderRadius: 8, background: "#f3faf9", border: "1px dashed rgba(0, 137, 123, 0.33)" },
+  discTag: { display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.74rem", fontWeight: 700, color: colors.teal, textTransform: "uppercase", letterSpacing: "0.03em", whiteSpace: "nowrap" },
+  discValueWrap: { flex: "0 1 130px", minWidth: 110 },
+  discReasonWrap: { flex: "1 1 220px", minWidth: 0 },
+  discAmount: { fontSize: "0.85rem", fontWeight: 700, color: colors.teal, whiteSpace: "nowrap", marginLeft: "auto" },
+  discError: { fontSize: "0.78rem", fontWeight: 600, color: colors.danger, whiteSpace: "nowrap", marginLeft: "auto" },
+  discRemove: { display: "grid", placeItems: "center", padding: 0, boxShadow: "none", width: 32, height: 32, borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.textSecondary, cursor: "pointer", flexShrink: 0 },
+  discToggle: { display: "grid", placeItems: "center", padding: 0, boxShadow: "none", width: 32, height: 32, borderRadius: 8, border: "1px solid rgba(0, 137, 123, 0.25)", background: "#fff", color: colors.teal, cursor: "pointer" },
+  discToggleOn: { background: colors.teal, color: "#fff", borderColor: colors.teal },
+  discAddBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.35rem", marginTop: "0.5rem", padding: "0.4rem 0.8rem", borderRadius: 8, border: "1px dashed rgba(0, 137, 123, 0.5)", background: "#fff", color: colors.teal, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" },
+  afterDisc: { fontSize: "0.7rem", fontWeight: 600, color: colors.teal, marginTop: 3, textAlign: "right" },
+  grossStruck: { fontSize: "0.72rem", fontWeight: 500, color: colors.textSecondary, textDecoration: "line-through" },
+  inputError: { borderColor: colors.danger, background: colors.dangerLight },
   kbd: { fontFamily: "monospace", fontSize: "0.7rem", padding: "0.05rem 0.35rem", borderRadius: 4, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.ink },
   // Mobile stacked-card line items (below narrowBreakpoint).
   mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },

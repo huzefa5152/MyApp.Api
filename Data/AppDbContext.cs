@@ -84,6 +84,7 @@ namespace MyApp.Api.Data
 
         public DbSet<Company> Companies { get; set; }
         public DbSet<DeliveryChallan> DeliveryChallans { get; set; }
+        public DbSet<PrivateCostChange> PrivateCostChanges { get; set; }
         public DbSet<DeliveryItem> DeliveryItems { get; set; }
 
         public DbSet<Client> Clients { get; set; } // ✅ add this
@@ -102,6 +103,7 @@ namespace MyApp.Api.Data
         public DbSet<PrintTemplate> PrintTemplates { get; set; }
         public DbSet<CompanyStamp> CompanyStamps { get; set; }
         public DbSet<MergeField> MergeFields { get; set; }
+        public DbSet<StarterTemplate> StarterTemplates { get; set; }
         public DbSet<AuditLog> AuditLogs { get; set; }
         // Audit H-3 (2026-05-08): dedicated FBR communication log so the
         // FBR sync trail is queryable without sifting through general
@@ -139,6 +141,7 @@ namespace MyApp.Api.Data
         public DbSet<SalesQuoteItem> SalesQuoteItems { get; set; }
         public DbSet<SalesOrder> SalesOrders { get; set; }
         public DbSet<SalesOrderItem> SalesOrderItems { get; set; }
+        public DbSet<StockEntry> StockEntries { get; set; }
         public DbSet<StockMovement> StockMovements { get; set; }
         public DbSet<OpeningStockBalance> OpeningStockBalances { get; set; }
 
@@ -176,7 +179,21 @@ namespace MyApp.Api.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<StockEntry>(e =>
+            {
+                e.HasIndex(x => new { x.CompanyId, x.RequestId }).IsUnique();
+                e.HasIndex(x => new { x.CompanyId, x.Date });
+                e.Property(x => x.QuantityDelta).HasPrecision(18, 4);
+                e.Property(x => x.UnitCost).HasPrecision(19, 4);
+                e.Property(x => x.Kind).HasMaxLength(20);
+                e.Property(x => x.Reason).HasMaxLength(500);
+                e.HasOne(x => x.ItemType).WithMany().HasForeignKey(x => x.ItemTypeId).OnDelete(DeleteBehavior.Restrict);
+                e.HasOne<Company>().WithMany().HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<Invoice>().Property(i => i.TaxTreatment).HasMaxLength(16).HasDefaultValue("FBR");
             ConfigureEmailWorkspace(modelBuilder);
+            ConfigureAccountingExpansion(modelBuilder);
             modelBuilder.Entity<DeliveryChallan>().Property(dc => dc.CreatedAt)
                 .HasDefaultValueSql("SYSUTCDATETIME()");
 
@@ -201,7 +218,7 @@ namespace MyApp.Api.Data
                 e.Property(t => t.TokenHash).HasMaxLength(64);
                 e.Property(t => t.Hint).HasMaxLength(16);
                 e.Property(t => t.CompanyIds).HasMaxLength(400);
-                e.Property(t => t.Scopes).HasMaxLength(200);
+                e.Property(t => t.Scopes).HasMaxLength(500);
                 e.Property(t => t.OAuthClientId).HasMaxLength(64);
                 e.Property(t => t.RefreshHash).HasMaxLength(64);
                 e.HasIndex(t => t.RefreshHash);
@@ -236,7 +253,7 @@ namespace MyApp.Api.Data
                 e.Property(c => c.RedirectUri).HasMaxLength(500);
                 e.Property(c => c.CodeChallenge).HasMaxLength(128);
                 e.Property(c => c.CompanyIds).HasMaxLength(400);
-                e.Property(c => c.Scopes).HasMaxLength(200);
+                e.Property(c => c.Scopes).HasMaxLength(500);
                 e.HasIndex(c => c.CodeHash).IsUnique();
                 e.HasIndex(c => c.ExpiresAt);
             });
@@ -478,6 +495,8 @@ namespace MyApp.Api.Data
                 .WithMany()
                 .HasForeignKey(dc => dc.DuplicatedFromId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<DeliveryChallan>().HasIndex(dc => dc.SplitFromChallanId);
 
             // Performance indexes on frequently-queried foreign keys
             modelBuilder.Entity<Invoice>()
@@ -726,6 +745,15 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<MergeField>()
                 .HasIndex(mf => new { mf.TemplateType, mf.FieldExpression })
                 .IsUnique();
+
+            // Shared starter designs: installation-wide (no CompanyId), read per type by the gallery.
+            modelBuilder.Entity<StarterTemplate>(e =>
+            {
+                e.Property(s => s.TemplateType).HasMaxLength(40);
+                e.Property(s => s.Name).HasMaxLength(200);
+                e.Property(s => s.Description).HasMaxLength(500);
+                e.HasIndex(s => new { s.TemplateType, s.IsActive });
+            });
 
             // POFormat: fingerprint hash is the primary routing key — indexed
             // for O(1) lookup. Not unique because different companies can
@@ -1157,11 +1185,10 @@ namespace MyApp.Api.Data
                 .IsUnique();
             modelBuilder.Entity<PurchaseBill>()
                 .HasIndex(pb => pb.SupplierId);
-            // One automatic purchase bill per (source challan, supplier) — makes a
-            // repeated confirmation after a lost response safe.
+            // Local purchase bills may be split by supplier or created later
+            // for remaining quantities, so source challan/supplier is not unique.
             modelBuilder.Entity<PurchaseBill>()
                 .HasIndex(pb => new { pb.SourceDeliveryChallanId, pb.SupplierId })
-                .IsUnique()
                 .HasFilter("[SourceDeliveryChallanId] IS NOT NULL");
             modelBuilder.Entity<PurchaseBill>()
                 .HasIndex(pb => pb.SupplierIRN);
@@ -1200,6 +1227,16 @@ namespace MyApp.Api.Data
             // PurchaseItems and InvoiceItems. Composite PK; both sides
             // cascade so cleanup is automatic when either parent is
             // removed.
+            modelBuilder.Entity<PurchaseItem>().HasOne<DeliveryItem>().WithMany().HasForeignKey(i => i.LocalDeliveryItemId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PurchaseItem>().HasOne<InvoiceItem>().WithMany().HasForeignKey(i => i.LocalInvoiceItemId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PurchaseBill>().Property(p => p.AmountCredited).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseDebitNote>().HasOne<PurchaseBill>().WithMany().HasForeignKey(n => n.PurchaseBillId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<InvoiceItem>().Property(i => i.ActualUnitCost).HasPrecision(18, 4);
+            modelBuilder.Entity<InvoiceItem>().Property(i => i.ActualUnitCostOverride).HasPrecision(18, 4);
+            modelBuilder.Entity<PurchaseBill>().Property(i => i.PurchaseCategory).HasMaxLength(24);
+            modelBuilder.Entity<PurchaseItem>().HasIndex(i => i.LocalDeliveryItemId).HasFilter("[LocalDeliveryItemId] IS NOT NULL");
+            modelBuilder.Entity<PurchaseItem>().HasIndex(i => i.LocalInvoiceItemId).HasFilter("[LocalInvoiceItemId] IS NOT NULL");
+            modelBuilder.Entity<PrivateCostChange>().HasIndex(i => new { i.CompanyId, i.Target, i.TargetId });
             modelBuilder.Entity<PurchaseItemSourceLine>()
                 .HasKey(x => new { x.PurchaseItemId, x.InvoiceItemId });
             modelBuilder.Entity<PurchaseItemSourceLine>()
@@ -1384,11 +1421,19 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<SalesQuote>().Property(q => q.GSTAmount).HasPrecision(18, 2);
             modelBuilder.Entity<SalesQuote>().Property(q => q.GrandTotal).HasPrecision(18, 2);
             modelBuilder.Entity<SalesQuoteItem>().Property(i => i.Quantity).HasPrecision(18, 4);
-            modelBuilder.Entity<SalesQuoteItem>().Property(i => i.UnitPrice).HasPrecision(18, 2);
+            // A rate derived from a typed line total needs the decimals to land back on it
+            // (1000 over 3 units), the same widening InvoiceItem.UnitPrice had.
+            modelBuilder.Entity<SalesQuoteItem>().Property(i => i.UnitPrice).HasPrecision(28, 12);
             modelBuilder.Entity<SalesQuoteItem>().Property(i => i.LineTotal).HasPrecision(18, 2);
             modelBuilder.Entity<SalesQuoteItem>().Property(i => i.ImagePath).HasMaxLength(QuoteLineImages.MaxUrlLength);
+            modelBuilder.Entity<SalesQuote>().Property(q => q.DiscountValue).HasPrecision(18, 4);
+            modelBuilder.Entity<SalesQuote>().Property(q => q.DiscountAmount).HasPrecision(18, 2);
+            modelBuilder.Entity<SalesQuote>().Property(q => q.DiscountReason).HasMaxLength(QuoteDiscount.MaxReasonLength);
+            modelBuilder.Entity<SalesQuoteItem>().Property(i => i.DiscountValue).HasPrecision(18, 4);
+            modelBuilder.Entity<SalesQuoteItem>().Property(i => i.DiscountAmount).HasPrecision(18, 2);
+            modelBuilder.Entity<SalesQuoteItem>().Property(i => i.DiscountReason).HasMaxLength(QuoteDiscount.MaxReasonLength);
             modelBuilder.Entity<SalesOrderItem>().Property(i => i.Quantity).HasPrecision(18, 4);
-            modelBuilder.Entity<SalesOrderItem>().Property(i => i.UnitPrice).HasPrecision(18, 2);
+            modelBuilder.Entity<SalesOrderItem>().Property(i => i.UnitPrice).HasPrecision(28, 12);
 
             // Unique numbering per company (concurrent-create race guard — the
             // loser retries on the unique violation). Client index for filters.
@@ -1404,6 +1449,7 @@ namespace MyApp.Api.Data
             // actual unit cost, used only to raise purchase bills on request.
             // Same precision as PurchaseItem.UnitPrice, the column it feeds.
             modelBuilder.Entity<DeliveryItem>().Property(di => di.ActualUnitCost).HasPrecision(18, 2);
+            modelBuilder.Entity<DeliveryItem>().Property(di => di.ActualUnitCostOverride).HasPrecision(18, 4);
             modelBuilder.Entity<DeliveryItem>()
                 .HasOne(di => di.Supplier).WithMany()
                 .HasForeignKey(di => di.SupplierId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);

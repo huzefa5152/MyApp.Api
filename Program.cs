@@ -142,8 +142,25 @@ if (builder.Environment.IsDevelopment())
 
 // Add services to the container
 builder.Services.AddControllers(); // 👈 Needed for controllers
+// Opening a connection to the production SQL server takes about a second. The pool closes idle
+// connections after a few quiet minutes, so the first page load after a lull (eight parallel
+// calls) waited on fresh connections: 0.5-1.4 s per call, once 19.8 s, against ~0.2 s warm.
+// A minimum pool keeps that many open. Leaves a Min Pool Size set in configuration alone.
+static string? WithWarmPool(string? connectionString)
+{
+    if (string.IsNullOrWhiteSpace(connectionString)) return connectionString;
+    try
+    {
+        var csb = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString);
+        if (!connectionString.Contains("Min Pool Size", StringComparison.OrdinalIgnoreCase)
+            && !connectionString.Contains("MinPoolSize", StringComparison.OrdinalIgnoreCase))
+            csb.MinPoolSize = 8;
+        return csb.ConnectionString;
+    }
+    catch (ArgumentException) { return connectionString; }
+}
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"))
+    options.UseSqlServer(WithWarmPool(builder.Configuration.GetConnectionString("DefaultConnection")))
            .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
 
 // Register Swagger generator
@@ -245,24 +262,30 @@ builder.Services.AddAuthentication(options =>
             }
 
             var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
-            var currentStamp = await db.Users.AsNoTracking()
-                .Where(u => u.Id == userId).Select(u => u.SecurityStamp).FirstOrDefaultAsync();
-            if (currentStamp == null || !string.Equals(currentStamp, stamp, StringComparison.Ordinal))
+            var explicitSessionId = principal.FindFirstValue("sid");
+            var jti = principal.FindFirstValue(JwtRegisteredClaimNames.Jti);
+            var sessionId = explicitSessionId ?? "legacy:" + jti;
+            // Stamp and session in one round trip: this runs before every API call. The checks
+            // below keep their order (revoked stamp, then missing identity, then the session).
+            var auth = await db.Users.AsNoTracking().Where(u => u.Id == userId)
+                .Select(u => new
+                {
+                    u.SecurityStamp,
+                    Session = db.UserSessions.Where(s => s.Id == sessionId)
+                        .Select(s => new { s.UserId, s.SecurityStamp, s.IsRevoked, s.ExpiresAt, s.LastSeenAt }).FirstOrDefault(),
+                }).FirstOrDefaultAsync();
+            if (auth?.SecurityStamp == null || !string.Equals(auth.SecurityStamp, stamp, StringComparison.Ordinal))
             {
                 context.Fail("Token has been revoked");
                 return;
             }
-            var explicitSessionId = principal.FindFirstValue("sid");
-            var jti = principal.FindFirstValue(JwtRegisteredClaimNames.Jti);
             if (explicitSessionId == null && string.IsNullOrWhiteSpace(jti))
             {
                 context.Fail("Missing session identity");
                 return;
             }
-            var sessionId = explicitSessionId ?? "legacy:" + jti;
             var now = DateTime.UtcNow;
-            var session = await db.UserSessions.AsNoTracking().Where(s => s.Id == sessionId)
-                .Select(s => new { s.UserId, s.SecurityStamp, s.IsRevoked, s.ExpiresAt, s.LastSeenAt }).FirstOrDefaultAsync();
+            var session = auth.Session;
             if (session == null && explicitSessionId != null || session != null &&
                 (session.UserId != userId || session.SecurityStamp != stamp || session.IsRevoked || session.ExpiresAt <= now))
             {
@@ -398,6 +421,7 @@ builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
 builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
 builder.Services.AddScoped<IItemTypeRepository, ItemTypeRepository>();
 builder.Services.AddScoped<IPrintTemplateRepository, PrintTemplateRepository>();
+builder.Services.AddScoped<IStarterTemplateService, StarterTemplateService>();
 builder.Services.AddScoped<ICompanyStampRepository, CompanyStampRepository>();
 builder.Services.AddScoped<IMergeFieldRepository, MergeFieldRepository>();
 builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
@@ -426,6 +450,9 @@ builder.Services.AddScoped<ISupplierService, SupplierService>();
 // tenants. Existing per-company SupplierService flows keep working
 // unchanged; this is purely additive.
 builder.Services.AddScoped<ISupplierGroupService, SupplierGroupService>();
+builder.Services.AddScoped<CommercialCostService>();
+builder.Services.AddScoped<LocalPurchaseSyncService>();
+builder.Services.AddScoped<SupplierPayablesService>();
 builder.Services.AddScoped<IPurchaseBillService, PurchaseBillService>();
 builder.Services.AddScoped<IGoodsReceiptService, GoodsReceiptService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
@@ -441,6 +468,10 @@ builder.Services.AddHostedService<MyApp.Api.Services.HostedServices.GmailSyncSer
 builder.Services.AddScoped<ISalesOrderService, SalesOrderService>();
 // Receipts (money in) + Payments (money out) — AR/AP subledger.
 builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IAccountTransferService, AccountTransferService>();
+builder.Services.AddScoped<IPurchaseDebitNoteService, PurchaseDebitNoteService>();
+builder.Services.AddScoped<IBankReconciliationService, BankReconciliationService>();
+builder.Services.AddScoped<IBankStatementService, BankStatementService>();
 // Chart of Accounts: the account tree plus the sector preset that makes a new
 // company's chart usable without hand-building it.
 builder.Services.AddScoped<IAccountService, AccountService>();
@@ -455,6 +486,7 @@ builder.Services.AddScoped<IPostingService, PostingService>();
 // The accounting reports. They read the ledger and reuse its primitives —
 // nothing here recomputes a balance of its own.
 builder.Services.AddScoped<IAccountingReportService, AccountingReportService>();
+builder.Services.AddScoped<IAccountingCatalogService, AccountingCatalogService>();
 // Customer Portal: management for internal users, plus the only anonymous
 // surface in the app. See PublicCustomerPortalController for why.
 builder.Services.AddScoped<ICustomerPortalService, CustomerPortalService>();
@@ -471,8 +503,10 @@ builder.Services.AddScoped<IFbrLookupService, FbrLookupService>();
 // All write operations are no-ops when Company.InventoryTrackingEnabled
 // is false, so existing tenants keep working unchanged.
 builder.Services.AddScoped<IStockService, StockService>();
+builder.Services.AddScoped<StockEntryService>();
 // Reporting module (read-only, company-scoped reports for the Reports navbar).
 builder.Services.AddScoped<IReportService, ReportService>();
+builder.Services.AddScoped<MyApp.Api.Services.Implementations.TaxSheetImportService>();
 // Tax mapping engine: single source of truth for HS_UOM, SaleTypeToRate
 // and scenario rules. Used by ItemType save (auto-pick UOM) and FBR
 // pre-validate (combination check before submitting).
@@ -858,6 +892,7 @@ using (var scope = app.Services.CreateScope())
     await MyApp.Api.Data.ChallanSerialNoMergeFieldSeeder.SeedAsync(db);
     await MyApp.Api.Data.WithholdingReceiptMergeFieldSeeder.SeedAsync(db);
     await MyApp.Api.Data.FreightMergeFieldSeeder.SeedAsync(db);
+    await MyApp.Api.Data.BillTaxMergeFieldSeeder.SeedAsync(db);
     await MyApp.Api.Data.DocumentNotesMergeFieldSeeder.SeedAsync(db);        // {{{richText notes}}} on every document type
 
     // ── GL back-post ────────────────────────────────────────────────────
@@ -1008,14 +1043,22 @@ using (var scope = app.Services.CreateScope())
                'Duplicate a delivery challan (clone with the same number for a different PO)'
         WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'challans.manage.duplicate');
 
-        DECLARE @createId INT = (SELECT Id FROM Permissions WHERE [Key] = 'challans.manage.create');
-        DECLARE @dupId    INT = (SELECT Id FROM Permissions WHERE [Key] = 'challans.manage.duplicate');
-        IF @createId IS NOT NULL AND @dupId IS NOT NULL
+        -- Run once (marker), not on every boot: re-copying each start silently
+        -- gave back a duplicate permission an administrator had removed.
+        IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'PERM_COPY_CHALLAN_DUPLICATE_V1')
         BEGIN
-            INSERT INTO RolePermissions (RoleId, PermissionId)
-            SELECT rp.RoleId, @dupId FROM RolePermissions rp
-            WHERE rp.PermissionId = @createId
-              AND NOT EXISTS (SELECT 1 FROM RolePermissions x WHERE x.RoleId = rp.RoleId AND x.PermissionId = @dupId);
+            DECLARE @createId INT = (SELECT Id FROM Permissions WHERE [Key] = 'challans.manage.create');
+            DECLARE @dupId    INT = (SELECT Id FROM Permissions WHERE [Key] = 'challans.manage.duplicate');
+            IF @createId IS NOT NULL AND @dupId IS NOT NULL
+            BEGIN
+                INSERT INTO RolePermissions (RoleId, PermissionId)
+                SELECT rp.RoleId, @dupId FROM RolePermissions rp
+                WHERE rp.PermissionId = @createId
+                  AND NOT EXISTS (SELECT 1 FROM RolePermissions x WHERE x.RoleId = rp.RoleId AND x.PermissionId = @dupId);
+            END
+            INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp])
+            VALUES ('Info', 'PERM_COPY_CHALLAN_DUPLICATE_V1', 'Permission grant copy applied once; an administrator''s later removal is kept.',
+                    'STARTUP', '/migrations/perm-copy-challan-duplicate', 200, SYSUTCDATETIME());
         END
     ");
 
@@ -1170,7 +1213,12 @@ using (var scope = app.Services.CreateScope())
                'Print or download a Bill (Bill print, Bill PDF, Bill XLS)'
         WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'bills.print.view');
 
-        -- Step 2: copy invoices.manage.* grants to bills.manage.*
+        -- Step 2: copy invoices.manage.* grants to bills.manage.*. Once only
+        -- (marker): invoices.list.view and invoices.print.view are still in the
+        -- catalog, so re-copying on every boot gave back bills.list.view /
+        -- bills.print.view to a role an administrator had removed them from.
+        IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'PERM_COPY_INVOICES_TO_BILLS_V1')
+        BEGIN
         DECLARE @oldKey NVARCHAR(200), @newKey NVARCHAR(200);
         DECLARE pairs CURSOR LOCAL FOR
             SELECT 'invoices.manage.create',                  'bills.manage.create' UNION ALL
@@ -1199,6 +1247,10 @@ using (var scope = app.Services.CreateScope())
         END
         CLOSE pairs;
         DEALLOCATE pairs;
+            INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp])
+            VALUES ('Info', 'PERM_COPY_INVOICES_TO_BILLS_V1', 'Permission grant copy applied once; an administrator''s later removal is kept.',
+                    'STARTUP', '/migrations/perm-copy-invoices-to-bills', 200, SYSUTCDATETIME());
+        END
     ");
 
     // ── One-time backfill: heal bills orphaned by the legacy UpdateChallanAsync bug ──
@@ -1931,6 +1983,33 @@ using (var scope = app.Services.CreateScope())
     // with no saved memberships stays private to the seed admin until assigned;
     // startup must never recreate grants an operator deliberately removed.
 
+    // ── One-time perm copy: accounting.reports.view → accounting.dashboard.view ──
+    // The accounting dashboard (Dashboards → Accounting) used to be the
+    // "Overview" screen under accounting.reports.view. It now has its own key;
+    // every role that could open the old screen keeps the new one. RbacSeeder
+    // has just inserted the permission row from the catalog. Run once (marker),
+    // so an administrator who later removes the key from a role is not
+    // overruled on the next boot.
+    db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'PERM_COPY_ACCOUNTING_DASHBOARD_V1')
+        BEGIN
+            DECLARE @reportsId   INT = (SELECT Id FROM Permissions WHERE [Key] = 'accounting.reports.view');
+            DECLARE @dashboardId INT = (SELECT Id FROM Permissions WHERE [Key] = 'accounting.dashboard.view');
+            IF @reportsId IS NOT NULL AND @dashboardId IS NOT NULL
+            BEGIN
+                INSERT INTO RolePermissions (RoleId, PermissionId)
+                SELECT rp.RoleId, @dashboardId FROM RolePermissions rp
+                WHERE rp.PermissionId = @reportsId
+                  AND NOT EXISTS (SELECT 1 FROM RolePermissions x WHERE x.RoleId = rp.RoleId AND x.PermissionId = @dashboardId);
+                -- Marked only once the copy could run: a boot that somehow
+                -- lacks the row must not mark the copy done without doing it.
+                INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp])
+                VALUES ('Info', 'PERM_COPY_ACCOUNTING_DASHBOARD_V1', 'Permission grant copy applied once; an administrator''s later removal is kept.',
+                        'STARTUP', '/migrations/perm-copy-accounting-dashboard', 200, SYSUTCDATETIME());
+            END
+        END
+    ");
+
     // ── One-time perm grant: tenantaccess.manage.* → Administrator role ──
     // The new keys are inserted by RbacSeeder (it walks PermissionCatalog),
     // but RolePermissions is empty for them by default. Grant them to the
@@ -2045,6 +2124,22 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();
 }
+
+// Security headers on every response. Chosen so that nothing the app does can
+// break: no page may frame this one (clickjacking), plugins and <base>
+// hijacking are off, and browsers do not sniff a download into HTML. A
+// script-src policy is deliberately NOT set for the app itself — Handlebars
+// compiles print templates with new Function — the print documents carry their
+// own script-blocking CSP instead (myapp-frontend/src/utils/printSafety.js).
+app.Use(async (ctx, next) =>
+{
+    var headers = ctx.Response.Headers;
+    headers["X-Content-Type-Options"] = "nosniff";
+    headers["X-Frame-Options"] = "DENY";
+    headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    headers["Content-Security-Policy"] = "frame-ancestors 'none'; object-src 'none'; base-uri 'self'";
+    await next();
+});
 
 // after app = builder.Build()
 app.UseCors("AllowFrontend");

@@ -274,24 +274,53 @@ namespace MyApp.Api.Services.Implementations
                 member.FbrProvinceCode = dto.FbrProvinceCode;
             }
 
-            // Re-key the group if the operator just corrected NTN / Name.
+            // Re-key the group if the operator just corrected NTN / Name. The
+            // group row is shared with any other tenant whose supplier is the same
+            // legal entity, so its identity is only rewritten when every member is
+            // the caller's; otherwise the caller's suppliers move to a group of
+            // their own (as ClientGroupService does), leaving the other tenant's
+            // grouping and name untouched.
             var (newKey, newNtn, newName) = ComputeGroupKey(dto.Name, dto.NTN);
+            var hasForeignMembers = await _db.Suppliers.AnyAsync(s =>
+                s.SupplierGroupId == groupId && !allowed.Contains(s.CompanyId));
             if (newKey != group.GroupKey)
             {
                 var collision = await _db.SupplierGroups
                     .FirstOrDefaultAsync(g => g.GroupKey == newKey && g.Id != group.Id);
                 if (collision != null)
                 {
-                    throw new InvalidOperationException(
-                        $"Another common supplier already uses NTN/name '{dto.NTN ?? dto.Name}'. " +
-                        "Merge them via the configuration page first.");
+                    // Named only when the other common supplier is visible to the
+                    // caller; another tenant's is not confirmed.
+                    var collisionVisible = await _db.Suppliers.AnyAsync(s =>
+                        s.SupplierGroupId == collision.Id && allowed.Contains(s.CompanyId));
+                    throw new InvalidOperationException(collisionVisible
+                        ? $"Another common supplier already uses NTN/name '{dto.NTN ?? dto.Name}'. Merge them via the configuration page first."
+                        : "This NTN/name cannot be applied to this common supplier. Check the value, or ask the system administrator.");
                 }
-                group.GroupKey = newKey;
+                if (hasForeignMembers)
+                {
+                    group = new SupplierGroup
+                    {
+                        GroupKey = newKey,
+                        CreatedAt = DateTime.UtcNow,
+                    };
+                    _db.SupplierGroups.Add(group);
+                    foreach (var member in members)
+                        member.SupplierGroup = group;
+                    hasForeignMembers = false;
+                }
+                else
+                {
+                    group.GroupKey = newKey;
+                }
             }
-            group.NormalizedNtn = newNtn;
-            group.NormalizedName = newName;
-            group.DisplayName = (dto.Name ?? "").Trim();
-            group.UpdatedAt = DateTime.UtcNow;
+            if (!hasForeignMembers)
+            {
+                group.NormalizedNtn = newNtn;
+                group.NormalizedName = newName;
+                group.DisplayName = (dto.Name ?? "").Trim();
+                group.UpdatedAt = DateTime.UtcNow;
+            }
 
             await _db.SaveChangesAsync();
 

@@ -35,7 +35,11 @@ tbody tr:nth-child(even) td{background:#f5f5f5 !important;}
 .sig{display:flex;justify-content:space-between;margin-top:40px;}
 .sig .b{text-align:center;}.sig .line{width:180px;border-top:1.5px solid #1a1a1a;margin:0 auto;}.sig .l{font-size:10.5px;margin-top:3px;}
 @media print{@page{size:A4;margin:11mm;}}
-.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }
+td.qpic{text-align:center;vertical-align:top;}
+.qimgbox{width:96px;height:96px;margin:0 auto;display:flex;align-items:flex-start;justify-content:center;overflow:hidden;}
+.qimgbox img{max-width:100%;max-height:100%;object-fit:contain;display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+</style></head><body>
 <div class="outer"><div class="inner">
   <div class="hdr">
     <div class="brand">
@@ -71,7 +75,7 @@ tbody tr:nth-child(even) td{background:#f5f5f5 !important;}
   </div>
   <table>
     <thead><tr>
-      <th class="c" style="width:38px">#</th>
+      <th class="c" style="width:38px">#</th>{{#if hasLineImages}}<th class="c" style="width:104px">Image</th>{{/if}}
       <th>Description</th>
       <th class="c" style="width:55px">Type</th>
       <th class="c" style="width:60px">Qty</th>
@@ -82,8 +86,8 @@ tbody tr:nth-child(even) td{background:#f5f5f5 !important;}
     <tbody>
     {{#each items}}
       <tr>
-        <td class="c">{{this.sNo}}</td>
-        <td>{{{richText this.description}}}</td>
+        <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
+        <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
         <td class="c">{{this.itemTypeName}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
@@ -91,11 +95,12 @@ tbody tr:nth-child(even) td{background:#f5f5f5 !important;}
         <td class="r">Rs {{fmt this.lineTotal}}</td>
       </tr>
     {{/each}}
-    {{emptyRows (math 12 "-" items.length) 7}}
+    {{#unless hasLineImages}}{{emptyRows (math 12 "-" items.length) 7}}{{/unless}}
     </tbody>
   </table>
   <div class="totals">
     <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+    {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
     <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
     <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
   </div>
@@ -142,7 +147,11 @@ td{border-bottom:1px solid #f0f0f0;padding:7px 8px;font-size:12px;color:#222;}
 .sig{display:flex;justify-content:flex-end;margin-top:50px;}
 .sig .b{text-align:center;}.sig .line{width:180px;border-top:1px solid #ccc;}.sig .l{font-size:10.5px;color:#888;margin-top:3px;}
 @media print{@page{size:A4;margin:12mm;}}
-.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }
+td.qpic{text-align:center;vertical-align:top;}
+.qimgbox{width:96px;height:96px;margin:0 auto;display:flex;align-items:flex-start;justify-content:center;overflow:hidden;}
+.qimgbox img{max-width:100%;max-height:100%;object-fit:contain;display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+</style></head><body>
   <div class="hdr">
     <div>
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:52px">{{/if}}
@@ -177,7 +186,7 @@ td{border-bottom:1px solid #f0f0f0;padding:7px 8px;font-size:12px;color:#222;}
   </div>
   <table>
     <thead><tr>
-      <th class="c" style="width:34px">#</th>
+      <th class="c" style="width:34px">#</th>{{#if hasLineImages}}<th class="c" style="width:104px">Image</th>{{/if}}
       <th>Description</th>
       <th class="c" style="width:60px">Qty</th>
       <th class="c" style="width:55px">Unit</th>
@@ -187,8 +196,8 @@ td{border-bottom:1px solid #f0f0f0;padding:7px 8px;font-size:12px;color:#222;}
     <tbody>
     {{#each items}}
       <tr>
-        <td class="c">{{this.sNo}}</td>
-        <td>{{{richText this.description}}}</td>
+        <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
+        <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -199,6 +208,7 @@ td{border-bottom:1px solid #f0f0f0;padding:7px 8px;font-size:12px;color:#222;}
   </table>
   <div class="totals">
     <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+    {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
     <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
     <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
   </div>
@@ -242,7 +252,11 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
 .sig{display:flex;justify-content:space-between;margin-top:40px;padding:0 4px;}
 .sig .b{text-align:center;}.sig .line{width:170px;border-top:1.5px solid #0d2855;margin:0 auto;}.sig .l{font-size:10.5px;margin-top:3px;color:#555;}
 @media print{@page{size:A4;margin:0 0 10mm 0;}}
-.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }
+td.qpic{text-align:center;vertical-align:top;}
+.qimgbox{width:96px;height:96px;margin:0 auto;display:flex;align-items:flex-start;justify-content:center;overflow:hidden;}
+.qimgbox img{max-width:100%;max-height:100%;object-fit:contain;display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+</style></head><body>
   <div class="header-band">
     <div style="display:flex;align-items:center;gap:14px;">
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:60px">{{/if}}
@@ -275,7 +289,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
     </div>
     <table>
       <thead><tr>
-        <th class="c" style="width:36px">#</th>
+        <th class="c" style="width:36px">#</th>{{#if hasLineImages}}<th class="c" style="width:104px">Image</th>{{/if}}
         <th>Description</th>
         <th class="c" style="width:65px">Qty</th>
         <th class="c" style="width:55px">Unit</th>
@@ -285,19 +299,20 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
       <tbody>
       {{#each items}}
         <tr>
-          <td class="c">{{this.sNo}}</td>
-          <td>{{{richText this.description}}}</td>
+          <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
+          <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="r">Rs {{fmt this.unitPrice}}</td>
           <td class="r">Rs {{fmt this.lineTotal}}</td>
         </tr>
       {{/each}}
-      {{emptyRows (math 10 "-" items.length) 6}}
+      {{#unless hasLineImages}}{{emptyRows (math 10 "-" items.length) 6}}{{/unless}}
       </tbody>
     </table>
     <div class="totals">
       <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+      {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
       <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
       <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
     </div>
@@ -347,7 +362,11 @@ tbody tr:nth-child(even) td{background:#f8fbff !important;}
 .sig{display:flex;justify-content:flex-end;margin-top:40px;padding:0 4px;}
 .sig .b{text-align:center;}.sig .line{width:180px;border-top:2px solid #0d47a1;}.sig .l{font-size:10.5px;color:#555;margin-top:3px;}
 @media print{@page{size:A4;margin:0 0 10mm 0;}}
-.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }
+td.qpic{text-align:center;vertical-align:top;}
+.qimgbox{width:96px;height:96px;margin:0 auto;display:flex;align-items:flex-start;justify-content:center;overflow:hidden;}
+.qimgbox img{max-width:100%;max-height:100%;object-fit:contain;display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+</style></head><body>
   <div class="banner">
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:60px">{{/if}}
     <div>
@@ -377,7 +396,7 @@ tbody tr:nth-child(even) td{background:#f8fbff !important;}
     </div>
     <table>
       <thead><tr>
-        <th class="c" style="width:36px">#</th>
+        <th class="c" style="width:36px">#</th>{{#if hasLineImages}}<th class="c" style="width:104px">Image</th>{{/if}}
         <th>Description</th>
         <th class="c" style="width:65px">Qty</th>
         <th class="c" style="width:55px">Unit</th>
@@ -387,8 +406,8 @@ tbody tr:nth-child(even) td{background:#f8fbff !important;}
       <tbody>
       {{#each items}}
         <tr>
-          <td class="c">{{this.sNo}}</td>
-          <td>{{{richText this.description}}}</td>
+          <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
+          <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -399,6 +418,7 @@ tbody tr:nth-child(even) td{background:#f8fbff !important;}
     </table>
     <div class="totals">
       <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+      {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
       <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
       <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
     </div>
@@ -442,7 +462,11 @@ td{border-bottom:1px dotted #999;padding:6px 8px;font-size:11.5px;}
 .sig{display:flex;justify-content:space-between;margin-top:40px;}
 .sig .b{text-align:center;}.sig .line{width:160px;border-top:1px solid #000;margin:0 auto;}.sig .l{font-size:10px;margin-top:3px;}
 @media print{@page{size:A4;margin:10mm;}}
-.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }
+td.qpic{text-align:center;vertical-align:top;}
+.qimgbox{width:96px;height:96px;margin:0 auto;display:flex;align-items:flex-start;justify-content:center;overflow:hidden;}
+.qimgbox img{max-width:100%;max-height:100%;object-fit:contain;display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+</style></head><body>
   <div class="hdr">
     <div>
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:54px">{{/if}}
@@ -477,7 +501,7 @@ td{border-bottom:1px dotted #999;padding:6px 8px;font-size:11.5px;}
   </div>
   <table>
     <thead><tr>
-      <th class="c" style="width:36px">#</th>
+      <th class="c" style="width:36px">#</th>{{#if hasLineImages}}<th class="c" style="width:104px">Image</th>{{/if}}
       <th>Description</th>
       <th class="c" style="width:65px">Qty</th>
       <th class="c" style="width:55px">Unit</th>
@@ -487,19 +511,20 @@ td{border-bottom:1px dotted #999;padding:6px 8px;font-size:11.5px;}
     <tbody>
     {{#each items}}
       <tr>
-        <td class="c">{{this.sNo}}</td>
-        <td>{{{richText this.description}}}</td>
+        <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
+        <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="r">Rs {{fmt this.unitPrice}}</td>
         <td class="r">Rs {{fmt this.lineTotal}}</td>
       </tr>
     {{/each}}
-    {{emptyRows (math 12 "-" items.length) 6}}
+    {{#unless hasLineImages}}{{emptyRows (math 12 "-" items.length) 6}}{{/unless}}
     </tbody>
   </table>
   <div class="totals">
     <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+    {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
     <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
     <div class="row grand"><span>GRAND TOTAL</span><span>Rs {{fmt grandTotal}}</span></div>
   </div>
@@ -549,7 +574,11 @@ tbody tr:nth-child(even) td{background:#faf7f0 !important;}
 .sig{display:flex;justify-content:flex-end;margin-top:44px;padding:0 4px;}
 .sig .b{text-align:center;}.sig .line{width:180px;border-top:1.5px solid #f5c518;}.sig .l{font-size:10.5px;color:#666;margin-top:3px;}
 @media print{@page{size:A4;margin:0 0 10mm 0;}}
-.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }
+td.qpic{text-align:center;vertical-align:top;}
+.qimgbox{width:96px;height:96px;margin:0 auto;display:flex;align-items:flex-start;justify-content:center;overflow:hidden;}
+.qimgbox img{max-width:100%;max-height:100%;object-fit:contain;display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+</style></head><body>
   <div class="hdr">
     <div style="display:flex;align-items:center;gap:14px;">
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:60px">{{/if}}
@@ -584,7 +613,7 @@ tbody tr:nth-child(even) td{background:#faf7f0 !important;}
     </div>
     <table>
       <thead><tr>
-        <th class="c" style="width:36px">#</th>
+        <th class="c" style="width:36px">#</th>{{#if hasLineImages}}<th class="c" style="width:104px">Image</th>{{/if}}
         <th>Description</th>
         <th class="c" style="width:65px">Qty</th>
         <th class="c" style="width:55px">Unit</th>
@@ -594,8 +623,8 @@ tbody tr:nth-child(even) td{background:#faf7f0 !important;}
       <tbody>
       {{#each items}}
         <tr>
-          <td class="c">{{this.sNo}}</td>
-          <td>{{{richText this.description}}}</td>
+          <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
+          <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -606,6 +635,7 @@ tbody tr:nth-child(even) td{background:#faf7f0 !important;}
     </table>
     <div class="totals">
       <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+      {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
       <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
       <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
     </div>
@@ -649,7 +679,11 @@ tbody tr:nth-child(even) td{background:#f5f8fc !important;}
 .sig{display:flex;justify-content:flex-end;margin-top:30px;}
 .sig .b{text-align:center;}.sig .line{width:160px;border-top:1.5px solid #0d47a1;}.sig .l{font-size:9.5px;color:#555;margin-top:2px;}
 @media print{@page{size:A4;margin:10mm;}}
-.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }
+td.qpic{text-align:center;vertical-align:top;}
+.qimgbox{width:96px;height:96px;margin:0 auto;display:flex;align-items:flex-start;justify-content:center;overflow:hidden;}
+.qimgbox img{max-width:100%;max-height:100%;object-fit:contain;display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+</style></head><body>
   <div class="hdr">
     <div class="brand">
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:44px">{{/if}}
@@ -679,7 +713,7 @@ tbody tr:nth-child(even) td{background:#f5f8fc !important;}
   </div>
   <table>
     <thead><tr>
-      <th class="c" style="width:28px">#</th>
+      <th class="c" style="width:28px">#</th>{{#if hasLineImages}}<th class="c" style="width:104px">Image</th>{{/if}}
       <th>Description</th>
       <th class="c" style="width:55px">Qty</th>
       <th class="c" style="width:48px">Unit</th>
@@ -689,19 +723,20 @@ tbody tr:nth-child(even) td{background:#f5f8fc !important;}
     <tbody>
     {{#each items}}
       <tr>
-        <td class="c">{{this.sNo}}</td>
-        <td>{{{richText this.description}}}</td>
+        <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
+        <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="r">Rs {{fmt this.unitPrice}}</td>
         <td class="r">Rs {{fmt this.lineTotal}}</td>
       </tr>
     {{/each}}
-    {{emptyRows (math 18 "-" items.length) 6}}
+    {{#unless hasLineImages}}{{emptyRows (math 18 "-" items.length) 6}}{{/unless}}
     </tbody>
   </table>
   <div class="totals">
     <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+    {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
     <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
     <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
   </div>
@@ -748,7 +783,11 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
 .sig{display:flex;justify-content:flex-end;margin-top:36px;}
 .sig .b{text-align:center;}.sig .line{width:170px;border-top:1.5px solid #0d2855;}.sig .l{font-size:10px;color:#555;margin-top:3px;}
 @media print{@page{size:A4;margin:0;}.layout{min-height:0;}}
-.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }
+td.qpic{text-align:center;vertical-align:top;}
+.qimgbox{width:96px;height:96px;margin:0 auto;display:flex;align-items:flex-start;justify-content:center;overflow:hidden;}
+.qimgbox img{max-width:100%;max-height:100%;object-fit:contain;display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+</style></head><body>
   <div class="layout">
     <div class="sidebar">
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="width:80px">{{/if}}
@@ -791,7 +830,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
       </div>
       <table>
         <thead><tr>
-          <th class="c" style="width:32px">#</th>
+          <th class="c" style="width:32px">#</th>{{#if hasLineImages}}<th class="c" style="width:104px">Image</th>{{/if}}
           <th>Description</th>
           <th class="c" style="width:60px">Qty</th>
           <th class="c" style="width:52px">Unit</th>
@@ -801,8 +840,8 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
         <tbody>
         {{#each items}}
           <tr>
-            <td class="c">{{this.sNo}}</td>
-            <td>{{{richText this.description}}}</td>
+            <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
+            <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
             <td class="c">{{this.quantity}}</td>
             <td class="c">{{this.uom}}</td>
             <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -813,6 +852,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
       </table>
       <div class="totals">
         <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+        {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
         <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
         <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
       </div>
@@ -864,7 +904,11 @@ table.items td:last-child{border-right:none;}
 .sig-row{display:flex;justify-content:space-between;margin-top:36px;}
 .sig-row .b{text-align:center;}.sig-row .line{width:160px;border-top:1px solid #555;margin:0 auto;}.sig-row .l{font-size:10px;margin-top:3px;}
 @media print{@page{size:A4;margin:10mm;}}
-.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }
+td.qpic{text-align:center;vertical-align:top;}
+.qimgbox{width:96px;height:96px;margin:0 auto;display:flex;align-items:flex-start;justify-content:center;overflow:hidden;}
+.qimgbox img{max-width:100%;max-height:100%;object-fit:contain;display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+</style></head><body>
   <div class="wrapper">
     <div class="hdr">
       <div>
@@ -900,7 +944,7 @@ table.items td:last-child{border-right:none;}
     </div>
     <table class="items">
       <thead><tr>
-        <th class="c" style="width:36px">#</th>
+        <th class="c" style="width:36px">#</th>{{#if hasLineImages}}<th class="c" style="width:104px">Image</th>{{/if}}
         <th>Description</th>
         <th class="c" style="width:65px">Qty</th>
         <th class="c" style="width:55px">Unit</th>
@@ -910,20 +954,21 @@ table.items td:last-child{border-right:none;}
       <tbody>
       {{#each items}}
         <tr>
-          <td class="c">{{this.sNo}}</td>
-          <td>{{{richText this.description}}}</td>
+          <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
+          <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="r">Rs {{fmt this.unitPrice}}</td>
           <td class="r">Rs {{fmt this.lineTotal}}</td>
         </tr>
       {{/each}}
-      {{emptyRows (math 10 "-" items.length) 6}}
+      {{#unless hasLineImages}}{{emptyRows (math 10 "-" items.length) 6}}{{/unless}}
       </tbody>
     </table>
     <div class="footer-section">
       <table class="totals-table"><tbody>
         <tr><td>Subtotal</td><td>Rs {{fmt subtotal}}</td></tr>
+        {{#if discountAmount}}<tr><td>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</td><td style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</td></tr>{{/if}}
         <tr><td>GST @ {{gstRate}}%</td><td>Rs {{fmt gstAmount}}</td></tr>
         <tr><td>Grand Total</td><td>Rs {{fmt grandTotal}}</td></tr>
       </tbody></table>
@@ -945,7 +990,7 @@ table.items td:last-child{border-right:none;}
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quotation #{{quoteNumber}}</title><style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
 body{font-family:"Segoe UI",Arial,sans-serif;font-size:12px;color:#1a2332;padding:6px;}
-.bismillah{text-align:center;font-size:22px;font-family:"Traditional Arabic","Arial Unicode MS",serif;color:#1a5c2a;margin-bottom:6px;letter-spacing:2px;line-height:1.6;}
+.bismillah {text-align:center;font-size:22px;color:#1a5c2a;margin-bottom:6px;line-height:1.6; font-family: "Amiri", "Noto Naskh Arabic", "Scheherazade New", "Traditional Arabic", "Arabic Typesetting", "Simplified Arabic", "Geeza Pro", "Segoe UI", Tahoma, serif; direction: rtl; letter-spacing: 0; line-height: 1.6; }
 .hdr{display:flex;justify-content:space-between;align-items:flex-start;border-top:2px solid #1a5c2a;border-bottom:2px solid #1a5c2a;padding:10px 0;margin-bottom:12px;}
 .brand img{height:58px;margin-bottom:4px;}
 .cname{font-size:20px;font-weight:700;text-transform:uppercase;color:#1a5c2a;}
@@ -973,8 +1018,12 @@ tbody tr:nth-child(even) td{background:#f1f8f2 !important;}
 .sig{display:flex;justify-content:space-between;margin-top:36px;}
 .sig .b{text-align:center;}.sig .line{width:160px;border-top:1.5px solid #1a5c2a;margin:0 auto;}.sig .l{font-size:10.5px;color:#555;margin-top:3px;}
 @media print{@page{size:A4;margin:11mm;}}
-.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
-  <div class="bismillah">Ø¨ÙØ³Ù’Ù…Ù Ø§Ù„Ù„ÛÙ Ø§Ù„Ø±ÙŽÙ‘Ø­Ù’Ù…Ù°Ù†Ù Ø§Ù„Ø±ÙŽÙ‘Ø­ÙÙŠÙ’Ù…</div>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }
+td.qpic{text-align:center;vertical-align:top;}
+.qimgbox{width:96px;height:96px;margin:0 auto;display:flex;align-items:flex-start;justify-content:center;overflow:hidden;}
+.qimgbox img{max-width:100%;max-height:100%;object-fit:contain;display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+</style></head><body>
+  <div class="bismillah" lang="ar" dir="rtl">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
   <div class="hdr">
     <div>
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:58px">{{/if}}
@@ -1009,7 +1058,7 @@ tbody tr:nth-child(even) td{background:#f1f8f2 !important;}
   </div>
   <table>
     <thead><tr>
-      <th class="c" style="width:36px">#</th>
+      <th class="c" style="width:36px">#</th>{{#if hasLineImages}}<th class="c" style="width:104px">Image</th>{{/if}}
       <th>Description</th>
       <th class="c" style="width:65px">Qty</th>
       <th class="c" style="width:55px">Unit</th>
@@ -1019,19 +1068,20 @@ tbody tr:nth-child(even) td{background:#f1f8f2 !important;}
     <tbody>
     {{#each items}}
       <tr>
-        <td class="c">{{this.sNo}}</td>
-        <td>{{{richText this.description}}}</td>
+        <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
+        <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="r">Rs {{fmt this.unitPrice}}</td>
         <td class="r">Rs {{fmt this.lineTotal}}</td>
       </tr>
     {{/each}}
-    {{emptyRows (math 10 "-" items.length) 6}}
+    {{#unless hasLineImages}}{{emptyRows (math 10 "-" items.length) 6}}{{/unless}}
     </tbody>
   </table>
   <div class="totals">
     <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+    {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
     <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
     <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
   </div>
@@ -1084,7 +1134,11 @@ tbody tr:nth-child(even) td{background:#f1f8f2 !important;}
 .sig .b{text-align:center;}.sig .line{width:180px;border-top:2px solid #1b5e20;}.sig .l{font-size:10.5px;color:#555;margin-top:3px;}
 .bottom-strip{height:6px;background:linear-gradient(90deg,#1b5e20,#f9a825,#1b5e20) !important;margin-top:14px;}
 @media print{@page{size:A4;margin:0 0 0 0;}}
-.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }
+td.qpic{text-align:center;vertical-align:top;}
+.qimgbox{width:96px;height:96px;margin:0 auto;display:flex;align-items:flex-start;justify-content:center;overflow:hidden;}
+.qimgbox img{max-width:100%;max-height:100%;object-fit:contain;display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+</style></head><body>
   <div class="top-strip"></div>
   <div class="hdr">
     <div>
@@ -1115,7 +1169,7 @@ tbody tr:nth-child(even) td{background:#f1f8f2 !important;}
     </div>
     <table>
       <thead><tr>
-        <th class="c" style="width:36px">#</th>
+        <th class="c" style="width:36px">#</th>{{#if hasLineImages}}<th class="c" style="width:104px">Image</th>{{/if}}
         <th>Description</th>
         <th class="c" style="width:65px">Qty</th>
         <th class="c" style="width:55px">Unit</th>
@@ -1125,8 +1179,8 @@ tbody tr:nth-child(even) td{background:#f1f8f2 !important;}
       <tbody>
       {{#each items}}
         <tr>
-          <td class="c">{{this.sNo}}</td>
-          <td>{{{richText this.description}}}</td>
+          <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
+          <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -1137,6 +1191,7 @@ tbody tr:nth-child(even) td{background:#f1f8f2 !important;}
     </table>
     <div class="totals">
       <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+      {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
       <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
       <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
     </div>
@@ -1183,7 +1238,11 @@ tbody tr:nth-child(even) td{background:#f5f7f8 !important;}
 .sig{display:flex;justify-content:space-between;margin-top:40px;}
 .sig .b{text-align:center;}.sig .line{width:160px;border-top:1.5px solid #37474f;margin:0 auto;}.sig .l{font-size:10.5px;color:#546e7a;margin-top:3px;}
 @media print{@page{size:A4;margin:0 0 10mm 0;}}
-.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }
+td.qpic{text-align:center;vertical-align:top;}
+.qimgbox{width:96px;height:96px;margin:0 auto;display:flex;align-items:flex-start;justify-content:center;overflow:hidden;}
+.qimgbox img{max-width:100%;max-height:100%;object-fit:contain;display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+</style></head><body>
   <div class="hdr">
     <div style="display:flex;align-items:center;gap:14px;">
       {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:60px">{{/if}}
@@ -1217,7 +1276,7 @@ tbody tr:nth-child(even) td{background:#f5f7f8 !important;}
     </div>
     <table>
       <thead><tr>
-        <th class="c" style="width:36px">#</th>
+        <th class="c" style="width:36px">#</th>{{#if hasLineImages}}<th class="c" style="width:104px">Image</th>{{/if}}
         <th>Description</th>
         <th class="c" style="width:65px">Qty</th>
         <th class="c" style="width:55px">Unit</th>
@@ -1227,8 +1286,8 @@ tbody tr:nth-child(even) td{background:#f5f7f8 !important;}
       <tbody>
       {{#each items}}
         <tr>
-          <td class="c">{{this.sNo}}</td>
-          <td>{{{richText this.description}}}</td>
+          <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
+          <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -1239,6 +1298,7 @@ tbody tr:nth-child(even) td{background:#f5f7f8 !important;}
     </table>
     <div class="totals">
       <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+      {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
       <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
       <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
     </div>
@@ -1287,7 +1347,11 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
 .sig{display:flex;justify-content:space-between;margin-top:44px;}
 .sig .b{text-align:center;}.sig .line{width:160px;border-top:1.5px solid #0d47a1;margin:0 auto;}.sig .l{font-size:10.5px;color:#555;margin-top:3px;}
 @media print{@page{size:A4;margin:11mm;}}
-.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }
+td.qpic{text-align:center;vertical-align:top;}
+.qimgbox{width:96px;height:96px;margin:0 auto;display:flex;align-items:flex-start;justify-content:center;overflow:hidden;}
+.qimgbox img{max-width:100%;max-height:100%;object-fit:contain;display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+</style></head><body>
   <div class="letterhead">
     {{#if companyLogoPath}}<img src="{{companyLogoPath}}" style="height:64px"><br>{{/if}}
     <div class="lh-name">{{companyBrandName}}</div>
@@ -1316,7 +1380,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
   </div>
   <table>
     <thead><tr>
-      <th class="c" style="width:36px">#</th>
+      <th class="c" style="width:36px">#</th>{{#if hasLineImages}}<th class="c" style="width:104px">Image</th>{{/if}}
       <th>Description</th>
       <th class="c" style="width:65px">Qty</th>
       <th class="c" style="width:55px">Unit</th>
@@ -1326,8 +1390,8 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
     <tbody>
     {{#each items}}
       <tr>
-        <td class="c">{{this.sNo}}</td>
-        <td>{{{richText this.description}}}</td>
+        <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
+        <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
         <td class="c">{{this.quantity}}</td>
         <td class="c">{{this.uom}}</td>
         <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -1338,6 +1402,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
   </table>
   <div class="totals">
     <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+    {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
     <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
     <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
   </div>
@@ -1385,7 +1450,11 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
 .sig{display:flex;justify-content:space-between;margin-top:44px;}
 .sig .b{text-align:center;}.sig .line{width:160px;border-top:1.5px solid #0d47a1;margin:0 auto;}.sig .l{font-size:10.5px;color:#555;margin-top:3px;}
 @media print{@page{size:A4;margin:11mm;}}
-.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }
+td.qpic{text-align:center;vertical-align:top;}
+.qimgbox{width:96px;height:96px;margin:0 auto;display:flex;align-items:flex-start;justify-content:center;overflow:hidden;}
+.qimgbox img{max-width:100%;max-height:100%;object-fit:contain;display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+</style></head><body>
   <div class="watermark">QUOTATION</div>
   <div class="content">
     <div class="hdr">
@@ -1416,7 +1485,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
     </div>
     <table>
       <thead><tr>
-        <th class="c" style="width:36px">#</th>
+        <th class="c" style="width:36px">#</th>{{#if hasLineImages}}<th class="c" style="width:104px">Image</th>{{/if}}
         <th>Description</th>
         <th class="c" style="width:65px">Qty</th>
         <th class="c" style="width:55px">Unit</th>
@@ -1426,8 +1495,8 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
       <tbody>
       {{#each items}}
         <tr>
-          <td class="c">{{this.sNo}}</td>
-          <td>{{{richText this.description}}}</td>
+          <td class="c">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
+          <td>{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
           <td class="c">{{this.quantity}}</td>
           <td class="c">{{this.uom}}</td>
           <td class="r">Rs {{fmt this.unitPrice}}</td>
@@ -1438,6 +1507,7 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
     </table>
     <div class="totals">
       <div class="row"><span>Subtotal</span><span>Rs {{fmt subtotal}}</span></div>
+      {{#if discountAmount}}<div class="row"><span>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</span><span style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</span></div>{{/if}}
       <div class="row"><span>GST @ {{gstRate}}%</span><span>Rs {{fmt gstAmount}}</span></div>
       <div class="row grand"><span>Grand Total</span><span>Rs {{fmt grandTotal}}</span></div>
     </div>
@@ -1496,7 +1566,11 @@ table.items tbody tr:nth-child(even) td{background:#f8f8f8 !important;}
 .sig-cell .sig-line{width:140px;border-top:1px solid #000;margin:20px auto 0;}
 .sig-cell .sig-label{font-size:10px;margin-top:3px;}
 @media print{@page{size:A4;margin:10mm;}}
-.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
+.stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }
+td.qpic{text-align:center;vertical-align:top;}
+.qimgbox{width:96px;height:96px;margin:0 auto;display:flex;align-items:flex-start;justify-content:center;overflow:hidden;}
+.qimgbox img{max-width:100%;max-height:100%;object-fit:contain;display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+</style></head><body>
   <div class="outer">
     <div class="title-row">
       <div class="main-title">QUOTATION / SALES QUOTE</div>
@@ -1535,7 +1609,7 @@ table.items tbody tr:nth-child(even) td{background:#f8f8f8 !important;}
     {{/if}}
     <table class="items">
       <thead><tr>
-        <th class="c" style="width:32px">S#</th>
+        <th class="c" style="width:32px">S#</th>{{#if hasLineImages}}<th class="c" style="width:104px">Image</th>{{/if}}
         <th>Description of Goods</th>
         <th class="c" style="width:60px">Qty</th>
         <th class="c" style="width:50px">UOM</th>
@@ -1545,15 +1619,15 @@ table.items tbody tr:nth-child(even) td{background:#f8f8f8 !important;}
       <tbody>
       {{#each items}}
         <tr>
-          <td class="c cell">{{this.sNo}}</td>
-          <td class="cell">{{{richText this.description}}}</td>
+          <td class="c cell">{{this.sNo}}</td>{{#if @root.hasLineImages}}<td class="c qpic">{{#if this.imagePath}}<div class="qimgbox"><img src="{{this.imagePath}}" alt="" /></div>{{/if}}</td>{{/if}}
+          <td class="cell">{{{richText this.description}}}{{#if this.discountNote}}<div style="margin-top:2px;font-size:85%;opacity:.8">{{this.discountNote}}</div>{{/if}}</td>
           <td class="c cell">{{this.quantity}}</td>
           <td class="c cell">{{this.uom}}</td>
           <td class="r cell">Rs {{fmt this.unitPrice}}</td>
           <td class="r cell">Rs {{fmt this.lineTotal}}</td>
         </tr>
       {{/each}}
-      {{emptyRows (math 10 "-" items.length) 6}}
+      {{#unless hasLineImages}}{{emptyRows (math 10 "-" items.length) 6}}{{/unless}}
       </tbody>
     </table>
     <div class="totals-section">
@@ -1563,6 +1637,7 @@ table.items tbody tr:nth-child(even) td{background:#f8f8f8 !important;}
       <div class="totals-right">
         <table><tbody>
           <tr><td>Subtotal</td><td>Rs {{fmt subtotal}}</td></tr>
+          {{#if discountAmount}}<tr><td>Discount{{#if discountPercentLabel}} ({{discountPercentLabel}}){{/if}}{{#if discountReason}} &ndash; {{discountReason}}{{/if}}</td><td style="white-space:nowrap">&minus; Rs {{fmt discountAmount}}</td></tr>{{/if}}
           <tr><td>GST @ {{gstRate}}%</td><td>Rs {{fmt gstAmount}}</td></tr>
           <tr><td>Grand Total</td><td>Rs {{fmt grandTotal}}</td></tr>
         </tbody></table>

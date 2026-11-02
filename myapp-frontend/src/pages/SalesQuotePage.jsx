@@ -1,4 +1,6 @@
-import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
+import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { MdRequestQuote, MdAdd, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdSwapHoriz, MdVisibility, MdUploadFile, MdGridOn } from "react-icons/md";
 import { saveAs } from "file-saver";
@@ -177,18 +179,20 @@ export default function SalesQuotePage() {
         tone="brand"
         title="Sales Quotes"
         subtitle={selectedCompany ? `${totalCount} quote${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}` : "Select a company to view quotes"}
-        actions={companies.length > 0 && (canCreate || canImportPo) ? (
+        actions={(
           <>
-            {canCreate && <Button variant="primary" icon={MdAdd} onClick={() => selectedCompany && (setEditQuote(null), setShowForm(true))}>New Quote</Button>}
-            {canImportPo && <Button variant="teal" icon={MdUploadFile} onClick={() => selectedCompany && setShowImport(true)}>Import Enquiry / Demand</Button>}
+            <DocumentLinesHeaderLink />
+            {companies.length > 0 && canCreate && <Button variant="primary" icon={MdAdd} onClick={() => selectedCompany && (setEditQuote(null), setShowForm(true))}>New Quote</Button>}
+            {companies.length > 0 && canImportPo && <Button variant="teal" icon={MdUploadFile} onClick={() => selectedCompany && setShowImport(true)}>Import Enquiry / Demand</Button>}
           </>
-        ) : null}
+        )}
       />
 
       {loadingCompanies ? <Loading>Loading companies...</Loading> : companies.length > 0 ? (
         <>
           <CompanyPicker />
           {selectedCompany && (
+            <ListFilters>
             <Toolbar>
               <SearchBox placeholder="Search Quote#, Client, Enquiry..." value={search} onChange={(text) => { setSearch(text); setPage(1); }} />
               <select className="k-select" aria-label="Status" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
@@ -205,11 +209,12 @@ export default function SalesQuotePage() {
               <ToolbarSpacer />
               <PrintTemplateSelect picker={tplPicker} />
             </Toolbar>
+            </ListFilters>
           )}
         </>
       ) : <EmptyState icon={MdRequestQuote}>No companies available. Add a company first.</EmptyState>}
 
-      {loading ? <Loading>Loading quotes...</Loading> : quotes.length === 0 && selectedCompany ? (
+      <RecordsViewport label="Sales Quote records">{loading ? <Loading>Loading quotes...</Loading> : quotes.length === 0 && selectedCompany ? (
         <EmptyState icon={MdRequestQuote}>No sales quotes found.</EmptyState>
       ) : (
         <>
@@ -221,7 +226,7 @@ export default function SalesQuotePage() {
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <AttachmentBadge count={attachCounts[q.id]} onClick={() => setAttachTarget(q)} />
                     <span style={{ ...st.badge, background: `${STATUS_COLORS[q.status] || "#5f6d7e"}18`, color: STATUS_COLORS[q.status] || "#5f6d7e" }}>{q.status}</span>
-                    {Number(q.subtotal) === 0 && <span style={{ ...st.badge, color: "#9a5700", background: "#fff3e0" }}>Needs pricing</span>}
+                    {Number(q.subtotal) === 0 && !(q.items || []).some((i) => Number(i.discountAmount) > 0) && <span style={{ ...st.badge, color: "#9a5700", background: "#fff3e0" }}>Needs pricing</span>}
                   </div>
                 </div>
                 <div style={st.client}>{q.clientName}</div>
@@ -229,7 +234,7 @@ export default function SalesQuotePage() {
                 {q.customerEnquiryRef && <div style={st.meta}>Enquiry: {q.customerEnquiryRef}</div>}
                 {q.validUntil && <div style={st.meta}>Valid until: {fmtDate(q.validUntil)}</div>}
                 <div style={st.total}>Rs {Number(q.grandTotal).toLocaleString()}</div>
-                <div style={st.subMeta}>Subtotal Rs {Number(q.subtotal).toLocaleString()} · GST {q.gstRate}% (Rs {Number(q.gstAmount).toLocaleString()})</div>
+                <div style={st.subMeta}>Subtotal Rs {Number(q.subtotal).toLocaleString()}{Number(q.discountAmount) > 0 ? ` · Discount Rs ${Number(q.discountAmount).toLocaleString()}` : ""} · GST {q.gstRate}% (Rs {Number(q.gstAmount).toLocaleString()})</div>
                 {q.convertedToSalesOrderNumber && <div style={st.converted}>→ Sales Order #{q.convertedToSalesOrderNumber}</div>}
                 <div style={st.actions}>
                   <IconButton style={st.actBtn} icon={MdVisibility} size={16} label="View" onClick={() => setViewQuote(q)} />
@@ -254,7 +259,7 @@ export default function SalesQuotePage() {
             />
           )}
         </>
-      )}
+      )}</RecordsViewport>
 
       {showForm && selectedCompany && (
         <SalesQuoteForm companyId={selectedCompany.id} quote={editQuote} onClose={() => { setShowForm(false); setEditQuote(null); refreshAttachCounts(); }} onSaved={handleSave} />

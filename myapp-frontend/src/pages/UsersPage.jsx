@@ -1,6 +1,7 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import UserSessionsPanel from "../Components/UserSessionsPanel";
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   MdPeople,
   MdAdd,
@@ -329,7 +330,7 @@ export default function UsersPage() {
 
       {/* Users List */}
       <div>
-        {loading ? (
+        <RecordsViewport label="Users records" enabled={!(isSeedAdmin && tab !== "users")}>{loading ? (
           <Loading>Loading users...</Loading>
         ) : filtered.length === 0 ? (
           <EmptyState icon={MdPeople}>
@@ -396,7 +397,7 @@ export default function UsersPage() {
               </div>
             ))}
           </div>
-        )}
+        )}</RecordsViewport>
       </div>
 
       {/* Summary */}
@@ -457,19 +458,26 @@ export default function UsersPage() {
                 />
               </div>
 
-              {/* Password */}
+              {/* Password. Your own is changed from My Profile, which asks for the
+                  current one; the server refuses it here. */}
               <div style={formStyles.formGroup}>
                 <label style={styles.label}>
                   <MdLock style={styles.labelIcon} />
                   {editUser ? "New Password (leave blank to keep)" : "Password"}
                 </label>
-                <input
-                  style={formStyles.input}
-                  type="password"
-                  placeholder={editUser ? "Leave blank to keep current" : "Min. 6 characters"}
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                />
+                {editUser && editUser.id === currentUser?.id ? (
+                  <p style={{ margin: 0, fontSize: "var(--k-font-sm)", color: "var(--k-muted)" }}>
+                    Change your own password from <Link to="/profile">My Profile</Link>, where your current password is asked for.
+                  </p>
+                ) : (
+                  <input
+                    style={formStyles.input}
+                    type="password"
+                    placeholder={editUser ? "Leave blank to keep current" : "Min. 6 characters"}
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  />
+                )}
               </div>
 
               {/* Role */}

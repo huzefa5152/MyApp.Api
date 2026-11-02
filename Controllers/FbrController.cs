@@ -20,12 +20,14 @@ namespace MyApp.Api.Controllers
         private readonly IFbrService _fbrService;
         private readonly AppDbContext _db;
         private readonly ICompanyAccessGuard _access;
+        private readonly ITaxMappingEngine _taxEngine;
 
-        public FbrController(IFbrService fbrService, AppDbContext db, ICompanyAccessGuard access)
+        public FbrController(IFbrService fbrService, AppDbContext db, ICompanyAccessGuard access, ITaxMappingEngine taxEngine)
         {
             _fbrService = fbrService;
             _db = db;
             _access = access;
+            _taxEngine = taxEngine;
         }
 
         private int CurrentUserId =>
@@ -192,9 +194,109 @@ namespace MyApp.Api.Controllers
 
         [HttpGet("hscodes/{companyId}")]
         [AuthorizeCompany]
-        [HasPermission("fbr.reference.read")]
-        public async Task<IActionResult> GetHSCodes(int companyId, [FromQuery] string? search, [FromQuery] string? saleType)
-            => Ok(await _fbrService.GetHSCodesAsync(companyId, search, saleType));
+        [HasAnyPermission("fbr.reference.read", "itemtypes.manage.view", "itemtypes.manage.create",
+            "itemtypes.manage.update", "invoices.manage.update.itemtype", "invoices.manage.update.itemtype.qty")]
+        public async Task<IActionResult> GetHSCodes(int companyId, [FromQuery] string? search, [FromQuery] string? saleType,
+            [FromQuery] bool excludeSaved = false, [FromQuery] string? includeHsCode = null)
+            => Ok(await _fbrService.GetHSCodesAsync(companyId, search, saleType, excludeSaved, includeHsCode));
+
+        /// <summary>
+        /// Refreshes the offline HS code list from FBR, using this company's
+        /// token. Seed admin only: the stored list is shared by every company.
+        /// </summary>
+        [HttpPost("hscodes/sync/{companyId}")]
+        [HasPermission("fbr.config.update")]
+        [SeedAdminOnly]
+        public async Task<IActionResult> SyncHSCodes(int companyId)
+        {
+            await _access.AssertAccessAsync(CurrentUserId, companyId);
+            var stored = await _fbrService.SyncHsCodeCatalogAsync(companyId);
+            if (stored == 0)
+                return BadRequest(new { message = "FBR returned no HS codes. Check this company's FBR token." });
+            return Ok(new { stored });
+        }
+
+        /// <summary>
+        /// One-off fill of the stored FBR unit list (FbrLookups "HsUom") from every HS
+        /// code already in use anywhere: item types, invoice lines and consultant
+        /// adjustments. Each code is stored once for the whole installation. Each lookup
+        /// uses the token of a company that actually uses the code. Works in batches so
+        /// the request stays short; call again with the returned nextOffset until done.
+        /// With <paramref name="catalogCompanyId"/>, every code on the stored FBR HS list is
+        /// covered too, looked up with that company's token, so picking any code is instant.
+        /// Seed admin only, like the HS list sync.
+        /// </summary>
+        [HttpPost("hscodes/uom/seed")]
+        [HasPermission("fbr.config.update")]
+        [SeedAdminOnly]
+        public async Task<IActionResult> SeedHsUnits([FromQuery] int offset = 0, [FromQuery] int batch = 100,
+            [FromQuery] int? catalogCompanyId = null)
+        {
+            batch = Math.Clamp(batch, 1, 300);
+            offset = Math.Max(0, offset);
+
+            var pairs = new List<(string Hs, int CompanyId)>();
+            pairs.AddRange((await _db.ItemTypes.AsNoTracking()
+                .Where(i => !i.IsDeleted && i.HSCode != null && i.HSCode != "")
+                .Select(i => new { i.HSCode, i.CompanyId }).Distinct().ToListAsync())
+                .Where(x => x.CompanyId != null).Select(x => (x.HSCode!.Trim(), x.CompanyId!.Value)));
+            pairs.AddRange((await _db.InvoiceItems.AsNoTracking()
+                .Where(i => i.HSCode != null && i.HSCode != "")
+                .Select(i => new { i.HSCode, CompanyId = (int?)i.Invoice.CompanyId }).Distinct().ToListAsync())
+                .Where(x => x.CompanyId != null).Select(x => (x.HSCode!.Trim(), x.CompanyId!.Value)));
+            pairs.AddRange((await _db.InvoiceItemAdjustments.AsNoTracking()
+                .Where(a => a.AdjustedHSCode != null && a.AdjustedHSCode != "")
+                .Select(a => new { a.AdjustedHSCode, CompanyId = (int?)a.InvoiceItem.Invoice.CompanyId }).Distinct().ToListAsync())
+                .Where(x => x.CompanyId != null).Select(x => (x.AdjustedHSCode!.Trim(), x.CompanyId!.Value)));
+
+            var withToken = (await _db.Companies.AsNoTracking()
+                .Where(c => c.FbrToken != null && c.FbrToken != "").Select(c => c.Id).ToListAsync()).ToHashSet();
+            if (catalogCompanyId is int catalogCompany)
+            {
+                await _access.AssertAccessAsync(CurrentUserId, catalogCompany);
+                if (!withToken.Contains(catalogCompany))
+                    return BadRequest(new { message = "That company has no FBR token." });
+                pairs.AddRange((await _db.FbrLookups.AsNoTracking()
+                    .Where(l => l.Category == "HsCode" && l.IsActive).Select(l => l.Code).ToListAsync())
+                    .Select(c => (c.Trim(), catalogCompany)));
+            }
+            // A "<hs>|none" row marks a code FBR has no unit for: it stays in todo (the paging below
+            // relies on that) and its lookup answers from the mark without asking PRAL.
+            var stored = (await _db.FbrLookups.AsNoTracking()
+                .Where(l => l.Category == TaxMappingEngine.HsUomCategory && !l.Code.EndsWith("|none"))
+                .Select(l => l.Code).ToListAsync())
+                .Select(c => c[..c.IndexOf('|')]).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // One row per HS code, whichever token-holding company uses it first.
+            var todo = pairs.Where(p => withToken.Contains(p.CompanyId))
+                .GroupBy(p => p.Hs, StringComparer.OrdinalIgnoreCase)
+                .Where(g => !stored.Contains(g.Key))
+                .OrderBy(g => g.Key, StringComparer.Ordinal)
+                .Select(g => (Hs: g.Key, CompanyId: g.Min(x => x.CompanyId))).ToList();
+            var noToken = pairs.Select(p => p.Hs).Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count(h => !stored.Contains(h) && !todo.Any(t => string.Equals(t.Hs, h, StringComparison.OrdinalIgnoreCase)));
+
+            // todo holds only codes not stored yet, so a stored code drops out of the next call's list.
+            // offset therefore counts just the codes FBR gave no units for in earlier calls (they stay
+            // at the front, in order); stepping it by the batch size would skip codes never looked up.
+            var done = 0; var empty = new List<string>();
+            var slice = todo.Skip(offset).Take(batch).ToList();
+            foreach (var (hs, companyId) in slice)
+            {
+                var units = await _taxEngine.GetValidUomsForHsCodeAsync(companyId, hs);
+                if (units.Count > 0) done++; else empty.Add(hs);
+                await Task.Delay(100); // be gentle with PRAL
+            }
+            var remaining = Math.Max(0, todo.Count - offset - slice.Count);
+            return Ok(new
+            {
+                storedNow = done,
+                noUnitsFromFbr = empty,
+                codesWithoutAnyToken = noToken,
+                stillToDo = remaining,
+                nextOffset = remaining > 0 ? offset + empty.Count : (int?)null,
+            });
+        }
 
         [HttpGet("uom/{companyId}")]
         [AuthorizeCompany]
@@ -252,7 +354,7 @@ namespace MyApp.Api.Controllers
             int companyId,
             [FromQuery] string hsCode,
             [FromQuery] int annexureId)
-            => Ok(await _fbrService.GetHSCodeUOMAsync(companyId, hsCode, annexureId));
+            => Ok(await _fbrService.GetHSCodeUOMAsync(companyId, hsCode, annexureId) ?? new());
 
         // ── STATL / Registration ────────────────────────────────
 

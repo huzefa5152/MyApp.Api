@@ -1,3 +1,5 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import RichText from "../Components/RichText";
 import { MdHistory, MdBusiness, MdInsights, MdVisibility } from "react-icons/md";
@@ -157,6 +159,7 @@ export default function ItemRateHistoryPage() {
 
           {/* Filters */}
           {selectedCompany && (
+            <ListFilters>
             <Toolbar>
               <SearchBox
                 placeholder="Search by item description..."
@@ -209,6 +212,7 @@ export default function ItemRateHistoryPage() {
                 </Button>
               )}
             </Toolbar>
+            </ListFilters>
           )}
 
           {/* Summary band — avg / min / max across the FULL filtered set */}
@@ -222,7 +226,7 @@ export default function ItemRateHistoryPage() {
           )}
 
           {/* Grid */}
-          {loading ? (
+          <RecordsViewport label="Item Rate History records">{loading ? (
             <Loading>Loading rate history…</Loading>
           ) : selectedCompany && rows.length === 0 ? (
             <EmptyState icon={MdHistory}>
@@ -351,7 +355,7 @@ export default function ItemRateHistoryPage() {
             </>
           ) : (
             <EmptyState>Select a company to begin.</EmptyState>
-          )}
+          )}</RecordsViewport>
         </>
       ) : (
         <EmptyState icon={MdBusiness}>No companies available.</EmptyState>

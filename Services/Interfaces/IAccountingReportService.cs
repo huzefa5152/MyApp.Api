@@ -39,5 +39,11 @@ namespace MyApp.Api.Services.Interfaces
         Task<ExpenseReportDto> GetExpenseReportAsync(int companyId, DateTime? from, DateTime? to);
         Task<TaxControlDto> GetTaxControlAsync(int companyId, DateTime? from, DateTime? to);
         Task<AccountingDashboardDto> GetDashboardAsync(int companyId, DateTime? from, DateTime? to);
+
+        /// <summary>The accounting dashboard: the overview's figures plus the
+        /// cash accounts behind the cash total, the aging buckets, the period's
+        /// receipts and payments, uncleared cheques and the latest money
+        /// documents. Defaults to the current month to date.</summary>
+        Task<AccountingSummaryDto> GetSummaryAsync(int companyId, DateTime? from, DateTime? to);
     }
 }

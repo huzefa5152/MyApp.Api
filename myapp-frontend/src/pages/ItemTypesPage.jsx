@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import RecordsViewport from "../Components/RecordsViewport";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { MdCategory, MdAdd, MdEdit, MdDelete, MdStar, MdStarBorder, MdInfo } from "react-icons/md";
 import { getItemTypes, updateItemType, deleteItemType } from "../api/itemTypeApi";
 import { notify } from "../utils/notify";
@@ -69,22 +70,35 @@ export default function ItemTypesPage() {
   const [editItem, setEditItem] = useState(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [catalogKind, setCatalogKind] = useState("bill");
+  const isFbr = catalogKind === "classification";
 
+  const currentCompany = useRef(selectedCompany?.id);
+  currentCompany.current = selectedCompany?.id;
   const fetchAll = async () => {
+    const companyId = selectedCompany?.id;
     setLoading(true);
     try {
-      const { data } = await getItemTypes(selectedCompany?.id);
-      setItemTypes(data);
+      const { data } = await getItemTypes(companyId);
+      if (currentCompany.current === companyId) setItemTypes(data);
     } catch {
       notify("Failed to load item types.", "error");
     } finally {
-      setLoading(false);
+      if (currentCompany.current === companyId) setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (selectedCompany?.id) fetchAll();
-    else setItemTypes([]);
+    let active = true;
+    setItemTypes([]); setShowForm(false); setEditItem(null);
+    if (!selectedCompany?.id) { setLoading(false); return; }
+    setLoading(true);
+    getItemTypes(selectedCompany.id).then(({ data }) => {
+      if (active) setItemTypes(data);
+    }).catch(() => {
+      if (active) notify("Failed to load item types.", "error");
+    }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, [selectedCompany?.id]);
 
   const openAdd = () => {
@@ -100,7 +114,7 @@ export default function ItemTypesPage() {
 
   const toggleFavorite = async (it) => {
     try {
-      await updateItemType(it.id, { ...it, isFavorite: !it.isFavorite });
+      await updateItemType(it.id, { ...it, isFavorite: !it.isFavorite }, selectedCompany?.id);
       fetchAll();
     } catch {
       notify("Failed to update favorite.", "error");
@@ -125,14 +139,15 @@ export default function ItemTypesPage() {
 
   const filtered = useMemo(() => {
     const term = search.toLowerCase().trim();
-    if (!term) return itemTypes;
-    return itemTypes.filter((it) =>
+    const relevant = itemTypes.filter(it => !!it.hsCode?.trim() === isFbr);
+    if (!term) return relevant;
+    return relevant.filter((it) =>
       it.name.toLowerCase().includes(term) ||
       (it.hsCode || "").toLowerCase().includes(term) ||
       (it.uom || "").toLowerCase().includes(term) ||
       (it.fbrDescription || "").toLowerCase().includes(term)
     );
-  }, [itemTypes, search]);
+  }, [itemTypes, search, isFbr]);
 
   const favoritesCount = itemTypes.filter((it) => it.isFavorite).length;
   const withFbrCount = itemTypes.filter((it) => it.hsCode).length;
@@ -152,7 +167,9 @@ export default function ItemTypesPage() {
           <>
             <ImportFromExcelButton sheet="items" />
             {canCreate && (
-              <Button variant="primary" icon={MdAdd} onClick={openAdd} disabled={!selectedCompany}>New Item</Button>
+              <Button variant="primary" icon={MdAdd} onClick={openAdd} disabled={!selectedCompany}>
+                {isFbr ? "Add FBR classification" : "Add bill category"}
+              </Button>
             )}
           </>
         )}
@@ -160,23 +177,32 @@ export default function ItemTypesPage() {
 
       <CompanyPicker label="Catalog company" />
 
+      <div role="group" aria-label="Catalog purpose" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+        {[{ key: "bill", label: "Bill categories", count: itemTypes.length - withFbrCount },
+          { key: "classification", label: "FBR classifications", count: withFbrCount }].map(tab =>
+          <Button key={tab.key} variant={catalogKind === tab.key ? "primary" : "secondary"} aria-pressed={catalogKind === tab.key}
+            onClick={() => { setCatalogKind(tab.key); setSearch(""); }}>
+            {tab.label} ({tab.count})
+          </Button>)}
+      </div>
       <Alert tone="info" icon={MdInfo}>
-        These items belong to <b>{selectedCompany?.name}</b>. Configure their HS Code, UOM, and Sale Type for FBR invoicing.
+        <b>{selectedCompany?.name}</b>{" | "}{isFbr
+          ? "Used when preparing FBR invoices. Save one classification per tax mapping; choose kg, pack or another supported unit on each filing row."
+          : "Used on commercial bills and challans. These categories have no HS code; select FBR classifications separately when preparing invoices."}
       </Alert>
 
-      {itemTypes.length > 5 && (
+      {itemTypes.length > 0 && (
         <Toolbar>
-          <SearchBox value={search} onChange={setSearch} placeholder="Search by name, HS code, UOM…" />
+          <SearchBox value={search} onChange={setSearch} label="Search catalog"
+            placeholder={isFbr ? "Search classification, HS code, unit…" : "Search bill category, unit…"} />
         </Toolbar>
       )}
 
-      {loading ? (
+      <RecordsViewport label="Item Types records">{loading ? (
         <Loading>Loading…</Loading>
       ) : filtered.length === 0 ? (
         <EmptyState icon={MdCategory}>
-          {itemTypes.length === 0
-            ? 'No items yet. Click "New Item" to add one from the FBR catalog.'
-            : "No matching items."}
+          {search ? "No matching entries." : isFbr ? "No FBR classifications yet. Add a classification to prepare invoices." : "No bill categories yet. Add a category for commercial bill entry."}
         </EmptyState>
       ) : (
         <>
@@ -189,10 +215,10 @@ export default function ItemTypesPage() {
                   <tr>
                     <th style={{ width: 44 }} aria-label="Favorite"></th>
                     <th>Name</th>
-                    <th>HS Code</th>
-                    <th>UOM</th>
-                    <th>Sale Type</th>
-                    <th className="k-num">On hand</th>
+                    <th>{isFbr ? "HS code" : "Used for"}</th>
+                    <th>{isFbr ? "Default filing unit" : "Usual unit"}</th>
+                    {isFbr && <th>Sale Type</th>}
+                    {isFbr && <th className="k-num">On hand</th>}
                     <th className="is-center">Used</th>
                     <th className="k-actions" aria-label="Actions"></th>
                   </tr>
@@ -212,6 +238,7 @@ export default function ItemTypesPage() {
                       </td>
                       <td style={{ minWidth: 200 }}>
                         <div style={styles.itemName} title={it.name}>{it.name}</div>
+                        {isFbr && <div style={{ fontSize: "0.75rem", color: colors.blue }}>{it.isHsCodePartial ? "Needs complete sales HS code" : "FBR invoice classification"}</div>}
                         {it.fbrDescription && (
                           <div style={styles.itemDesc} title={it.fbrDescription}>
                             {it.fbrDescription}
@@ -219,13 +246,13 @@ export default function ItemTypesPage() {
                         )}
                       </td>
                       <td style={{ fontFamily: "monospace", color: it.hsCode ? colors.blue : colors.textSecondary }}>
-                        {it.hsCode || "—"}
+                        {isFbr ? it.hsCode : "Bills / challans"}
                       </td>
                       <td>{it.uom || "—"}</td>
-                      <td className="k-muted" style={{ fontSize: "var(--k-font-sm)" }}>{it.saleType || "—"}</td>
-                      <td className="k-num" style={{ fontWeight: 600, fontFamily: "monospace", color: qtyColor(it) }}>
+                      {isFbr && <td className="k-muted" style={{ fontSize: "var(--k-font-sm)" }}>{it.saleType || "—"}</td>}
+                      {isFbr && <td className="k-num" style={{ fontWeight: 600, fontFamily: "monospace", color: qtyColor(it) }}>
                         {it.availableQty == null ? "—" : formatQty(it.availableQty)}
-                      </td>
+                      </td>}
                       <td className="is-center k-muted">
                         {it.usageCount > 0 ? `${it.usageCount}×` : "—"}
                       </td>
@@ -260,6 +287,7 @@ export default function ItemTypesPage() {
                     </IconButton>
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <h3 style={styles.cardName} title={it.name}>{it.name}</h3>
+                      {isFbr && <div style={{ fontSize: "0.75rem", color: colors.blue }}>{it.isHsCodePartial ? "Needs complete sales HS code" : "FBR invoice classification"}</div>}
                       {it.fbrDescription && (
                         <div style={{ ...styles.itemDesc, marginTop: "0.15rem" }}>{it.fbrDescription}</div>
                       )}
@@ -268,10 +296,10 @@ export default function ItemTypesPage() {
 
                   <Facts
                     facts={[
-                      ["HS Code", <span style={{ fontFamily: "monospace", color: it.hsCode ? colors.blue : colors.textSecondary }}>{it.hsCode || "—"}</span>],
-                      ["UOM", it.uom || "—"],
-                      ["Sale Type", it.saleType || "—"],
-                      ["On hand", (
+                      [isFbr ? "HS Code" : "Used for", <span style={{ fontFamily: "monospace", color: it.hsCode ? colors.blue : colors.textSecondary }}>{isFbr ? it.hsCode : "Bills / challans"}</span>],
+                      [isFbr ? "Default filing unit" : "Usual unit", it.uom || "—"],
+                      isFbr && ["Sale Type", it.saleType || "—"],
+                      isFbr && ["On hand", (
                         <span style={{ fontFamily: "monospace", fontWeight: 600, color: qtyColor(it) }}>
                           {it.availableQty == null ? "—" : formatQty(it.availableQty)}
                         </span>
@@ -295,17 +323,15 @@ export default function ItemTypesPage() {
             ))}
           </div>
         </>
-      )}
+      )}</RecordsViewport>
 
       {showForm && (
         <ItemTypeForm
           editItem={editItem}
+          purpose={editItem ? (editItem.hsCode ? "classification" : "bill") : catalogKind}
           companyId={selectedCompany?.id}
           showFavoriteToggle
           showRichHints
-          existingHsCodes={itemTypes
-            .filter((t) => t.hsCode && t.id !== editItem?.id)
-            .map((t) => t.hsCode)}
           onClose={() => setShowForm(false)}
           onSaved={(saved) => {
             // Edit responses carry the propagation summary so the

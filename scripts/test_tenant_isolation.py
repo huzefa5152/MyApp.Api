@@ -281,6 +281,11 @@ endpoints_to_test = [
     ("GET",  "/api/payments/payments/company/{cid}/paged"),
     ("GET",  "/api/payments/company/{cid}/by-invoice/1"),
     ("GET",  "/api/payments/company/{cid}/by-bill/1"),
+    # Dashboards → Accounting. One read carries another company's cash
+    # balances, aging, recent receipts / payments and ledger health, so it is
+    # [AuthorizeCompany]-gated and must 403 before any figure is computed.
+    ("GET",  "/api/accounting/summary/company/{cid}"),
+    ("GET",  "/api/accounting/summary/company/{cid}?from=2026-01-01&to=2026-12-31"),
     # Document folders + unified attachments — [AuthorizeCompany]-gated
     # companyId routes; a forbidden company 403s before the action runs.
     ("GET",  "/api/folders/company/{cid}"),
@@ -295,6 +300,16 @@ endpoints_to_test = [
     # runs before authorization, so looping them over every company tests the
     # limiter instead of the tenant guard.
     ("GET",  "/api/onboarding-import/company/{cid}/sample"),
+    # Accounting → Reports → Management profit reports (2026-10-10). Each one
+    # sums another company's revenue, cost of goods sold and per-customer
+    # margin, so each must 403 before any ledger line is read — the screen
+    # route and the Excel export alike.
+    ("GET",  "/api/accounting/catalog/company/{cid}/gross-profit?period=thisYear"),
+    ("GET",  "/api/accounting/catalog/company/{cid}/monthly-profit?period=thisYear"),
+    ("GET",  "/api/accounting/catalog/company/{cid}/customer-profitability?period=thisYear"),
+    ("GET",  "/api/accounting/catalog/company/{cid}/export/gross-profit?period=thisYear"),
+    ("GET",  "/api/accounting/catalog/company/{cid}/export/monthly-profit?period=thisYear"),
+    ("GET",  "/api/accounting/catalog/company/{cid}/export/customer-profitability?period=thisYear"),
 ]
 for username, forbidden in forbidden_for.items():
     if not forbidden:
@@ -338,6 +353,14 @@ for username, allowed in allowed_for.items():
         status, _ = request("GET", path, token=tok)
         check(suite, f"[{username}] GET {path}", status == 200,
               f"expected 200, got {status}")
+        # The profit reports answer for a company the caller holds — the
+        # positive half, so a guard that refused everything would fail here.
+        for report in ("gross-profit", "monthly-profit", "customer-profitability"):
+            path = f"/api/accounting/catalog/company/{cid}/{report}?period=thisYear"
+            status, body = request("GET", path, token=tok)
+            check(suite, f"[{username}] GET {path}", status == 200
+                  and isinstance(body, dict) and body.get("title"),
+                  f"expected 200 with a report, got {status}")
         path = f"/api/printtemplates/company/{cid}/accounting-report-invoice-layout"
         status, layout = request("GET", path, token=tok)
         check(suite, f"[{username}] invoice layout belongs to report company", status == 200
@@ -448,6 +471,23 @@ check("Cross-tenant ClientId guard",
       "alice -> POST /api/deliverychallans/company/{alpha} (clientId=beta-owned)",
       status == 400, f"expected 400, got {status}")
 
+status, cost_challan = request("POST", f"/api/deliverychallans/company/{beta['id']}",
+    token=admin, body={"clientId": beta_client["id"], "deliveryDate": "2026-05-16",
+        "items": [{"description": "Sample cost line", "quantity": 1, "unit": "Pcs"}]})
+assert status in (200, 201), f"seed cost challan: {status}"
+cost_path = f"/api/deliverychallans/{cost_challan['id']}/private-costs"
+cost_payload = {"version": cost_challan["version"], "items": [
+    {"id": cost_challan["items"][0]["id"], "supplierId": None, "actualUnitCost": 12}]}
+status, _ = request("PATCH", cost_path, token=tokens["alice"], body=cost_payload)
+status_check("Private challan costs", "unassigned company write refused", status, 403)
+status, saved_costs = request("PATCH", cost_path, token=admin, body=cost_payload)
+check("Private challan costs", "assigned company write succeeds", status == 200 and
+      saved_costs["items"][0]["actualUnitCost"] == 12)
+status, _ = request("GET", f"/api/deliverychallans/{cost_challan['id']}", token=tokens["alice"])
+status_check("Private challan costs", "unassigned company read refused", status, 403)
+status, _ = request("DELETE", f"/api/deliverychallans/{cost_challan['id']}", token=admin)
+assert status in (200, 204), f"cleanup cost challan: {status}"
+
 # Standalone bill path already had this check; we re-verify it still
 # fires from the same forgery vector for completeness.
 forged_bill = {
@@ -480,6 +520,14 @@ beta_bill_payload = {
 }
 status, beta_bill = request("POST", "/api/invoices/standalone", token=admin, body=beta_bill_payload)
 assert status in (200, 201), f"seed beta bill: {status} {beta_bill}"
+
+# The independent filing editor asserts the invoice's stored company on both paths.
+status, filing = request("GET", f"/api/invoices/{beta_bill['id']}/tax-filing", token=tokens["bob"])
+status_check("Tax filing isolation", "assigned consultant can read its invoice", status, 200)
+status, _ = request("GET", f"/api/invoices/{beta_bill['id']}/tax-filing", token=tokens["alice"])
+status_check("Tax filing isolation", "foreign consultant cannot read invoice filing", status, 403)
+status, _ = request("PUT", f"/api/invoices/{beta_bill['id']}/tax-filing", token=tokens["alice"], body={"version": filing["version"], "rows": []})
+status_check("Tax filing isolation", "foreign consultant cannot write invoice filing", status, 403)
 
 # alice (Alpha only) is blocked on Beta's invoice on both single endpoints.
 status, _ = request("POST", f"/api/invoices/{beta_bill['id']}/handover", token=tokens["alice"], body={})

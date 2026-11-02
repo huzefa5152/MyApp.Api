@@ -1,3 +1,5 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   MdAssessment, MdBusiness, MdDownload, MdWarning, MdCheckCircle, MdRefresh,
@@ -56,6 +58,7 @@ export default function AccountingReportsPage() {
   const { companies, selectedCompany } = useCompany();
   const { has } = usePermissions();
   const canView = has("accounting.reports.view");
+  const canExport = has("accounting.reports.export");
 
   const [tab, setTab] = useState("balance-sheet");
   const [from, setFrom] = useState(isoYearStart());
@@ -349,13 +352,14 @@ export default function AccountingReportsPage() {
         actions={(
           <>
             <Button icon={MdRefresh} onClick={load} disabled={!companyId}>Refresh</Button>
-            <Button variant="primary" icon={MdDownload} onClick={exportCsv} disabled={!ready}>Export CSV</Button>
-            <Button icon={MdPrint} onClick={() => exportReport("print")} disabled={!ready || !!printBusy}>{printBusy === "print" ? "Preparing…" : "Print"}</Button>
-            <Button icon={MdPictureAsPdf} onClick={() => exportReport("pdf")} disabled={!ready || !!printBusy}>{printBusy === "pdf" ? "Building…" : "PDF"}</Button>
+            {canExport && <Button variant="primary" icon={MdDownload} onClick={exportCsv} disabled={!ready}>Export CSV</Button>}
+            {canExport && <Button icon={MdPrint} onClick={() => exportReport("print")} disabled={!ready || !!printBusy}>{printBusy === "print" ? "Preparing…" : "Print"}</Button>}
+            {canExport && <Button icon={MdPictureAsPdf} onClick={() => exportReport("pdf")} disabled={!ready || !!printBusy}>{printBusy === "pdf" ? "Building…" : "PDF"}</Button>}
           </>
         )}
       />
 
+      <ListFilters>
       {companies.length > 0 && <CompanyPicker />}
 
       <Toolbar style={{ alignItems: "flex-end" }}>
@@ -372,6 +376,7 @@ export default function AccountingReportsPage() {
           </Field>
         </div>
       </Toolbar>
+      </ListFilters>
 
       <Tabs
         label="Reports"
@@ -382,9 +387,11 @@ export default function AccountingReportsPage() {
       />
 
       {printError && <Alert tone="error">{printError}</Alert>}
-      <div role="tabpanel" id={`acct-report-panel-${tab}`} aria-labelledby={`acct-report-${tab}`}>
-        {body()}
-      </div>
+      <RecordsViewport label="Accounting report records">
+        <div role="tabpanel" id={`acct-report-panel-${tab}`} aria-labelledby={`acct-report-${tab}`}>
+          {body()}
+        </div>
+      </RecordsViewport>
     </div>
   );
 }

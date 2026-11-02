@@ -1,3 +1,6 @@
+import ChallanPrivateCosts, { useChallanSuppliers } from "./ChallanPrivateCosts";
+import BillTaxTreatmentField from "./BillTaxTreatmentField";
+import ManualChallanNumberField from "./ManualChallanNumberField";
 import DocumentCopyPicker from "./DocumentCopyPicker";
 import { copyLine } from "../utils/documentCopy";
 import { defaultFurtherTaxRate } from "../utils/furtherTax";
@@ -12,7 +15,9 @@ import { getClientsByCompany } from "../api/clientApi";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { formStyles, modalSizes } from "../theme";
-import { recalcLine, lineTotalFrom } from "../utils/lineAmount";
+import { ENTRY_MODE, applyLineEntry, displayUnitPrice, lineForMode, lineTotalFrom } from "../utils/lineAmount";
+import LineEntryModeSwitch, { CalculatedField } from "./LineEntryModeSwitch";
+import useLineEntryMode from "../hooks/useLineEntryMode";
 import { todayYmd } from "../utils/dateInput";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
@@ -25,6 +30,7 @@ import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
 import TaxInvoiceGrouping from "./TaxInvoiceGrouping";
 import DocumentNotesEditor from "./DocumentNotesEditor";
+import CopyLineButton from "./CopyLineButton";
 
 // Bill-without-challan flow ("Standalone Bill"). Per FBR DI-API V1.12:
 //   • §9 (Scenarios) — locks Sale Type per SN.
@@ -119,13 +125,8 @@ const blankRow = () => ({
 });
 
 export default function StandaloneInvoiceForm({ companyId, company, onClose, onSaved, billsMode = false }) {
-  // billsMode: true when this form is mounted from the Bills tab. Hides
-  // every FBR-classification control: Item Type column + picker, "+ New
-  // Item Type" button, bulk-apply, FBR scenario picker, HS Code column.
-  // Description becomes a LookupAutocomplete (challan-style) bound to
-  // /lookup/items, so operators can pick from previously-entered values
-  // or type free-text. Item-Type classification happens on the Invoices
-  // tab — the bill saves with itemTypeId=null in Bills mode.
+  // Commercial bills may leave product families unclassified for the consultant.
+  // Selected item types suggest filing groups without changing commercial lines.
   const { has } = usePermissions();
   const canCreateClient   = has("clients.manage.create");
   const canCreateItemType = has("itemtypes.manage.create");
@@ -138,6 +139,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [selectedClientId, setSelectedClientId] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(todayYmd());
   const [gstRate, setGstRate] = useState(18);
+  const [taxTreatment, setTaxTreatment] = useState("FBR");
+  const outsideFbr = taxTreatment !== "FBR";
+  const changeTaxTreatment = value => { setTaxTreatment(value); setGstRate(value === "SRB" ? 15 : value === "NoTax" ? 0 : chosenScenario?.defaultRate ?? 18); setFurtherTaxRate(null); };
   const [paymentTerms, setPaymentTerms] = useState("");
   const [notes, setNotes] = useState("");
   const [furtherTaxRate, setFurtherTaxRate] = useState(null);
@@ -184,6 +188,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const canUseOrders = has("salesorders.list.view");
   const [billableOrders, setBillableOrders] = useState([]);
   const [salesOrderId, setSalesOrderId] = useState("");
+  const [manualChallanNumber, setManualChallanNumber] = useState("");
   const [poNumber, setPoNumber] = useState("");
   const [poDate, setPoDate] = useState("");
 
@@ -196,11 +201,18 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 
   // Prefill the whole bill from the picked order (client + GST + priced lines
   // + PO). Clearing it leaves the current edits alone.
+  // What the source quote's discounts did to the prefilled prices. Line
+  // discounts are already in the unit prices; a whole-quote discount is not,
+  // so it is shown as a reminder for the operator to act on.
+  const [quoteDiscountInfo, setQuoteDiscountInfo] = useState(null);
   const selectOrder = async (id) => {
     setSalesOrderId(id || "");
+    setQuoteDiscountInfo(null);
     if (!id) return;
     try {
       const { data } = await getSalesOrderInvoicePrefill(id);
+      const lineNotes = (data.lines || []).filter((l) => l.quoteDiscountNote).map((l) => ({ description: l.description, note: l.quoteDiscountNote }));
+      if (data.quoteDiscountReminder || lineNotes.length) setQuoteDiscountInfo({ whole: data.quoteDiscountReminder, lines: lineNotes });
       setSelectedClientId(String(data.clientId));
       if (data.gstRate != null) setGstRate(data.gstRate);
       setPoNumber(data.customerPoNumber || "");
@@ -294,33 +306,33 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 
   const buyerRegistrationType = clients.find((c) => String(c.id) === String(selectedClientId))?.registrationType;
   useEffect(() => {
-    setFurtherTaxRate(defaultFurtherTaxRate(scenarioCode, buyerRegistrationType));
-  }, [scenarioCode, selectedClientId, buyerRegistrationType]);
+    setFurtherTaxRate(outsideFbr ? null : defaultFurtherTaxRate(scenarioCode, buyerRegistrationType));
+  }, [scenarioCode, selectedClientId, buyerRegistrationType, outsideFbr]);
 
   const chosenScenario = useMemo(
-    () => enrichedScenarios.find((s) => s.code === scenarioCode) || null,
-    [enrichedScenarios, scenarioCode],
+    () => outsideFbr ? { code: taxTreatment, defaultRate: taxTreatment === "SRB" ? 15 : 0, saleType: "", meta: { buyerKind: "either", hint: "Outside FBR" } } : enrichedScenarios.find((s) => s.code === scenarioCode) || null,
+    [enrichedScenarios, scenarioCode, taxTreatment, outsideFbr],
   );
 
   // GST rate auto-syncs to scenario's canonical rate when one is picked.
   // The input itself is locked when a scenario is active — operators
   // override only by switching scenario.
   useEffect(() => {
-    if (chosenScenario && chosenScenario.defaultRate != null) {
+    if (!outsideFbr && chosenScenario && chosenScenario.defaultRate != null) {
       setGstRate(chosenScenario.defaultRate);
     }
-  }, [chosenScenario]);
+  }, [chosenScenario, outsideFbr]);
 
   // Buyer pool filter.
   const filteredClients = useMemo(() => {
-    if (!chosenScenario) return clients;
+    if (outsideFbr || !chosenScenario) return clients;
     const k = chosenScenario.meta.buyerKind;
     if (k === "b2b-registered")
       return clients.filter((c) => (c.registrationType || "").toLowerCase() === "registered");
     if (k === "b2b-unregistered" || k === "walk-in")
       return clients.filter((c) => (c.registrationType || "").toLowerCase() !== "registered");
     return clients;
-  }, [clients, chosenScenario]);
+  }, [clients, chosenScenario, outsideFbr]);
 
   // Auto-pick a sensible default buyer on scenario change.
   useEffect(() => {
@@ -334,7 +346,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         setSelectedClientId("");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chosenScenario]);
+  }, [chosenScenario, outsideFbr]);
 
   // Auto-default Payment Mode based on the buyer's registration status.
   // Company-level config (FBR Settings) provides the default per bucket;
@@ -360,24 +372,40 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     company?.fbrDefaultPaymentModeUnregistered,
   ]);
 
+  const costSuppliers = useChallanSuppliers(companyId);
   // Per-row helpers
   const updateRow = (localId, patch) =>
     setRows((prev) => prev.map((r) => (r.localId === localId ? { ...r, ...patch } : r)));
 
-  // Quantity / unit price / line total move together, and the box just typed
-  // is never rewritten under the operator — see utils/lineAmount. Typing a
-  // line total derives the rate at the 12 decimals UnitPrice stores, so the
-  // server's own `LineTotal = Quantity x UnitPrice` lands back on the figure
-  // that was typed instead of a few paisa away from it.
+  // The operator chooses what they type on each line — the unit price or the
+  // line total — and the other is worked out and shown read-only (see
+  // utils/lineAmount). A typed line total derives the rate at the 12 decimals
+  // UnitPrice stores, so the server's own `LineTotal = Quantity x UnitPrice`
+  // lands back on the figure that was typed instead of a few paisa away.
+  const [entryMode, setEntryModePref] = useLineEntryMode("bill");
+  const byTotal = entryMode === ENTRY_MODE.total;
   const setRowAmount = (localId, field, value) =>
     setRows((prev) => prev.map((r) => {
       if (r.localId !== localId) return r;
-      const next = recalcLine(
-        { quantity: r.quantity, unitPrice: r.unitPrice, lineTotal: r.lineTotal, [field]: value },
-        field,
+      const next = applyLineEntry(
+        { quantity: r.quantity, unitPrice: r.unitPrice, lineTotal: r.lineTotal }, field, value, entryMode,
       );
       return { ...r, ...next };
     }));
+  // Flipping the mode keeps every line's figures as they stand.
+  const setEntryMode = (next) => {
+    setRows((prev) => prev.map((r) => ({
+      ...r,
+      ...lineForMode({ quantity: r.quantity, unitPrice: r.unitPrice, lineTotal: r.lineTotal }, next),
+    })));
+    setEntryModePref(next);
+  };
+  const shownRate = (r) => (r.unitPrice === "" || r.unitPrice == null
+    ? ""
+    : displayUnitPrice(r.unitPrice, parseFloat(r.quantity), r.lineTotal === "" ? null : Number(r.lineTotal)));
+  const shownTotal = (r) => (r.lineTotal === "" || r.lineTotal == null || !Number.isFinite(Number(r.lineTotal))
+    ? ""
+    : Number(r.lineTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
   const addRow = () => setRows((prev) => [...prev, blankRow()]);
   const removeRow = (localId) =>
     setRows((prev) => (prev.length === 1 ? prev : prev.filter((r) => r.localId !== localId)));
@@ -488,9 +516,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 
   const rowErrors = (r) => {
     const errs = [];
-    // Item Type is required on every bill (both tabs) so the invoice can
-    // always group its lines by Item Type — the same shape sent to FBR.
-    if (!r.itemTypeId) errs.push("itemType");
+    if (!billsMode && !r.itemTypeId) errs.push("itemType");
     // Bills mode still carries a free-text description column alongside it.
     if (billsMode && !r.description?.trim()) errs.push("description");
     const q = parseFloat(r.quantity);
@@ -531,6 +557,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         companyId,
         clientId: parseInt(selectedClientId),
         gstRate: parseFloat(gstRate),
+        taxTreatment,
         // null = Auto (server allocates the next number in sequence).
         invoiceNumber: billNumberPayload(billNumberMode, billNumber),
         groupTaxInvoiceByItemType,
@@ -540,14 +567,17 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         freightCharges: billsMode ? Number(freightCharges || 0) : 0,
         paymentTerms: paymentTerms || null,
         notes: notes.trim() || null,
-        scenarioId: scenarioCode || null,
+        scenarioId: outsideFbr ? null : scenarioCode || null,
         documentType: documentType || null,
         paymentMode: paymentMode || null,
         // A standalone bill has no challan to carry the PO — store it here when
         // the operator sets one (bill mode only).
+        manualChallanNumber: billsMode ? manualChallanNumber.trim() || null : null,
         poNumber: billsMode ? (poNumber.trim() || null) : null,
         poDate: billsMode && poDate ? new Date(poDate).toISOString() : null,
         items: rows.map((r) => ({
+          actualUnitCost: r.actualUnitCost === "" || r.actualUnitCost == null ? null : Number(r.actualUnitCost),
+          supplierId: r.supplierId ? Number(r.supplierId) : null,
           itemTypeId: r.itemTypeId ? parseInt(r.itemTypeId) : null,
           // Description in Invoices mode is the item type's name (locked).
           // In Bills mode the operator types it directly into r.description
@@ -616,21 +646,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
           <h5 style={formStyles.title}>Create Bill (No Challan)</h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
-        <form onSubmit={handleSubmit}>
-          <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
-            {billsMode && <DocumentCopyPicker companyId={companyId} destination="Bill" disabled={!!salesOrderId}
-              onCopy={(source,lines,details) => {
-                const mapped = lines.map(line => ({ ...copyLine(line,blankRow),
-                  itemTypeId: line.itemTypeId ? String(line.itemTypeId) : "",
-                  uom: line.uom || line.unit || "", quantity: String(line.quantity), unitPrice: String(line.unitPrice || 0),
-                  lineTotal: String(lineTotalFrom(line.quantity,line.unitPrice || 0)) }));
-                setRows(prev => [...(details || prev.length===1 && !prev[0].description ? [] : prev), ...mapped]);
-                if(details) {
-                  setSelectedClientId(String(source.clientId));setPoNumber(source.poNumber || "");setPoDate(source.poDate?.slice(0,10)||"");
-                  setGstRate(source.gstRate??18);setFreightCharges(source.freightCharges||0);setPaymentTerms(source.paymentTerms||"");setNotes(source.notes||"");
-                  setFurtherTaxRate(source.furtherTaxRate??null);setWithholdingTaxRate(source.withholdingTaxRate??null);setWithholdingTaxAmount(null);
-                }
-              }} />}
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0, overflow: "hidden" }}>
+          <div data-admin-body="" style={{ ...formStyles.body, overflowY: "auto" }}>
+            <BillTaxTreatmentField enabled={!!company?.allowNonFbrBills} value={taxTreatment} onChange={changeTaxTreatment} rate={gstRate} onRateChange={setGstRate} disabled={saving} />
             {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
             {loading ? (
@@ -664,6 +682,39 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       <label style={styles.label}>PO Date</label>
                       <input type="date" value={poDate} onChange={(e) => setPoDate(e.target.value)} style={{ ...styles.input, backgroundColor: "var(--ui-input-bg, #fff)" }} />
                     </div>
+                    <div style={{ flex: "1 1 220px", minWidth: 0 }}><ManualChallanNumberField value={manualChallanNumber} onChange={setManualChallanNumber} /></div>
+                    {/* Copy joins the order / PO row instead of a row of its own;
+                        opened, its panel takes the full width of the row. */}
+                    <div className="doc-header-row__copy">
+                      <DocumentCopyPicker companyId={companyId} destination="Bill" disabled={!!salesOrderId}
+                      onCopy={(source,lines,details) => {
+                        const mapped = lines.map(line => ({ ...copyLine(line,blankRow),
+                          itemTypeId: line.itemTypeId ? String(line.itemTypeId) : "",
+                          uom: line.uom || line.unit || "", quantity: String(line.quantity), unitPrice: String(line.unitPrice || 0),
+                          lineTotal: String(lineTotalFrom(line.quantity,line.unitPrice || 0)) }));
+                        setRows(prev => [...(details || prev.length===1 && !prev[0].description ? [] : prev), ...mapped]);
+                        if(details) {
+                          setSelectedClientId(String(source.clientId));setPoNumber(source.poNumber || "");setPoDate(source.poDate?.slice(0,10)||"");
+                          setTaxTreatment(company?.allowNonFbrBills ? source.taxTreatment || "FBR" : "FBR");
+                          setGstRate(company?.allowNonFbrBills || !source.taxTreatment || source.taxTreatment === "FBR" ? source.gstRate??18 : chosenScenario?.defaultRate ?? 18);setFreightCharges(source.freightCharges||0);setPaymentTerms(source.paymentTerms||"");setNotes(source.notes||"");
+                          setFurtherTaxRate(source.furtherTaxRate??null);setWithholdingTaxRate(source.withholdingTaxRate??null);setWithholdingTaxAmount(null);
+                        }
+                      }} />
+                    </div>
+                  </div>
+                )}
+                {billsMode && quoteDiscountInfo && (
+                  <div role="note" style={{ marginBottom: "1rem", padding: "0.7rem 0.85rem", borderRadius: 10, border: "1px solid #f0c36d", background: "#fff8e6", color: "#5c4400", fontSize: "0.85rem", lineHeight: 1.45 }}>
+                    <div style={{ fontWeight: 700, marginBottom: "0.25rem" }}>Discounts on the source quote</div>
+                    {quoteDiscountInfo.lines.length > 0 && (
+                      <div>
+                        Already in the prices below:
+                        <ul style={{ margin: "0.2rem 0 0", paddingLeft: "1.2rem" }}>
+                          {quoteDiscountInfo.lines.map((l, i) => <li key={i} style={{ overflowWrap: "anywhere" }}><b>{l.description}</b>: {l.note}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    {quoteDiscountInfo.whole && <div style={{ marginTop: quoteDiscountInfo.lines.length ? "0.4rem" : 0, overflowWrap: "anywhere" }}>{quoteDiscountInfo.whole}</div>}
                   </div>
                 )}
                 {/* ── Step 1: Pick FBR scenario ───────────────
@@ -671,7 +722,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                     of the auto-defaulted scenario and can expand to change
                     it. Auto-collapses again when a card is picked so the
                     flow keeps moving down to Buyer / Bill Details. */}
-                <div style={{ marginBottom: "1rem" }}>
+                <div style={{ marginBottom: "1rem", display: outsideFbr ? "none" : undefined }}>
                   <button
                     type="button"
                     onClick={() => setScenarioPickerOpen((v) => !v)}
@@ -754,7 +805,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                           })}
                         </div>
                       )}
-                      {chosenScenario && (
+                      {!outsideFbr && chosenScenario && (
                         <div style={styles.scenarioHint}>
                           <MdInfo size={14} color={colors.blue} /> {chosenScenario.meta.hint}
                         </div>
@@ -876,7 +927,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                           <span>·</span>
                           <span>{invoiceDate || "—"}</span>
                           <span>·</span>
-                          <span>{gstRate}% GST</span>
+                          <span>{gstRate}% {outsideFbr ? "SRB / non-FBR tax" : "GST"}</span>
                           <span>·</span>
                           <span>{documentType === 4 ? "Sale Invoice" : documentType === 9 ? "Debit Note" : documentType === 10 ? "Credit Note" : "—"}</span>
                           {paymentMode && <><span>·</span><span>{paymentMode}</span></>}
@@ -907,9 +958,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               <label style={styles.label}>Bill Date</label>
                               <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
                             </div>
-                            <div style={{ flex: 1, minWidth: 100 }}>
+                            <div style={{ display: outsideFbr ? "none" : undefined, flex: 1, minWidth: 100 }}>
                               <label style={{ ...styles.label, whiteSpace: "nowrap" }}>
-                                GST Rate (%) <span style={styles.lockedTag} title={`Locked by ${chosenScenario.code}`}><MdLock size={10} /> locked</span>
+                                {outsideFbr ? "Tax rate (%)" : "GST Rate (%)"} <span style={styles.lockedTag} title={`Locked by ${chosenScenario.code}`}><MdLock size={10} /> locked</span>
                               </label>
                               <input
                                 type="number"
@@ -923,7 +974,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               <label style={styles.label}>Payment Terms</label>
                               <input type="text" style={styles.input} value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="Optional" />
                             </div>
-                            <div style={{ flex: 1, minWidth: 140 }}>
+                            <div style={{ display: outsideFbr ? "none" : undefined, flex: 1, minWidth: 140 }}>
                               <label style={styles.label}>Document Type <span style={styles.optionalTag}>FBR</span></label>
                               <input
                                 type="text"
@@ -933,7 +984,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                 title="This screen creates Sale Invoices only. Credit / Debit Notes will get their own dedicated screens."
                               />
                             </div>
-                            <div style={{ flex: 1, minWidth: 140 }}>
+                            <div style={{ display: outsideFbr ? "none" : undefined, flex: 1, minWidth: 140 }}>
                               <label style={styles.label}>Payment Mode <span style={styles.optionalTag}>FBR</span></label>
                               <select style={styles.input} value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)}>
                                 <option value="">— optional —</option>
@@ -949,7 +1000,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       )}
                     </div>
 
-                    <div style={styles.lockedSaleType}>
+                    <div style={{ ...styles.lockedSaleType, display: outsideFbr ? "none" : undefined }}>
                       <MdLock size={14} color={colors.teal} />
                       <span><b>Sale Type locked:</b> {chosenScenario.saleType}</span>
                       <span style={styles.lockedSaleTypeHint}>(every line uses this — required by {chosenScenario.code})</span>
@@ -960,6 +1011,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       <div style={styles.itemsHeaderBar}>
                         <label style={{ ...styles.label, margin: 0 }}>Items ({rows.length})</label>
                         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                          <LineEntryModeSwitch mode={entryMode} onChange={setEntryMode} />
                           {/* 2026-05-13: previously hidden when billsMode
                               was true. Operators asked for the New Item
                               Type shortcut on every bill-creation flow
@@ -992,7 +1044,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                           and wants to start over. Only shown once there
                           are 2+ rows since both actions have no value at
                           row count = 1. Shown in both tabs now that Item
-                          Type is required on every bill. */}
+                          Type is optional on a commercial bill. */}
                       {rows.length > 1 && (
                         <div style={styles.bulkApplyBar}>
                           <span style={{ fontSize: "0.82rem", color: colors.textPrimary, fontWeight: 500 }}>
@@ -1043,14 +1095,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       items={filteredItemTypes}
                                       value={r.itemTypeId}
                                       onChange={(id, picked) => handleItemTypePick(r.localId, picked || null)}
-                                      placeholder="Pick item… *"
-                                      style={{ ...styles.input, padding: "0.45rem 0.55rem", fontSize: "0.85rem", ...(r.itemTypeId ? {} : { borderColor: colors.warn }) }}
+                                      placeholder={billsMode ? "Item type (optional)…" : "Pick item… *"}
+                                      style={{ ...styles.input, padding: "0.45rem 0.55rem", fontSize: "0.85rem" }}
                                     />
-                                    {!r.itemTypeId && (
-                                      <div style={{ marginTop: 2, fontSize: "0.62rem", color: colors.warn, fontWeight: 700 }}>Required</div>
-                                    )}
+
                                   </div>
-                                  <button type="button" style={{...styles.removeRowBtn,minWidth:44,minHeight:44}} title="Copy line" onClick={() => setRows(prev => [...prev,{...r,localId:crypto.randomUUID()}])}>Copy</button>
+                                  <CopyLineButton onClick={() => setRows(prev => [...prev,{...r,localId:crypto.randomUUID()}])} />
                                   <button
                                     type="button"
                                     style={{ ...styles.removeRowBtn, minWidth: 44, minHeight: 44, flexShrink: 0 }}
@@ -1092,7 +1142,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                   </div>
                                   <div>
                                     <label style={styles.mlabel}>Unit Price *</label>
-                                    <input type="number" min={0} step={0.01} style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right" }} value={r.unitPrice} onChange={(e) => setRowAmount(r.localId, "unitPrice", e.target.value)} placeholder="0.00" />
+                                    {byTotal
+                                      ? <CalculatedField label="Unit price" value={shownRate(r)} />
+                                      : <input type="number" min={0} step="any" style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right" }} value={r.unitPrice} onChange={(e) => setRowAmount(r.localId, "unitPrice", e.target.value)} placeholder="0.00" />}
                                   </div>
                                 </div>
                                 {!billsMode && (
@@ -1127,14 +1179,19 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                 )}
                                 <div style={styles.mamt}>
                                   <span style={styles.mlabel}>Line Total</span>
-                                  <input
-                                    type="number" min={0} step={0.01}
-                                    style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right", fontWeight: 700, maxWidth: 150 }}
-                                    value={r.lineTotal}
-                                    onChange={(e) => setRowAmount(r.localId, "lineTotal", e.target.value)}
-                                    placeholder={(q * p) > 0 ? lineTotalFrom(q, p).toFixed(2) : "0.00"}
-                                    title="Type the amount this line must come to — the unit price is derived from it and the quantity."
-                                  />
+                                  {byTotal ? (
+                                    <input
+                                      type="number" min={0} step="any"
+                                      aria-label="Line total"
+                                      style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right", fontWeight: 700, maxWidth: 150 }}
+                                      value={r.lineTotal}
+                                      onChange={(e) => setRowAmount(r.localId, "lineTotal", e.target.value)}
+                                      placeholder="0.00"
+                                      title="Type the amount this line must come to — the unit price is worked out from it and the quantity."
+                                    />
+                                  ) : (
+                                    <CalculatedField label="Line total" value={shownTotal(r)} style={{ maxWidth: 150, fontWeight: 700 }} />
+                                  )}
                                 </div>
                               </div>
                             );
@@ -1145,8 +1202,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                         <table style={styles.unifiedTable}>
                           <thead>
                             <tr style={styles.unifiedThead}>
-                              {/* Item Type required on every bill (both tabs). */}
-                              <th style={{ ...styles.unifiedTh, width: showMRP || showSRO ? "22%" : "26%" }}>Item Type *</th>
+                              {/* Item Type is optional for commercial bills. */}
+                              <th style={{ ...styles.unifiedTh, width: showMRP || showSRO ? "22%" : "26%" }}>Item Type {billsMode ? "(optional)" : "*"}</th>
                               <th style={{ ...styles.unifiedTh, width: showMRP || showSRO ? "16%" : "20%" }}>Description{billsMode ? " *" : ""}</th>
                               <th style={{ ...styles.unifiedTh, width: "7%" }}>Qty *</th>
                               <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
@@ -1162,7 +1219,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               {showMRP && <th style={{ ...styles.unifiedTh, width: "9%", backgroundColor: "#fff8e1" }}>MRP × Qty</th>}
                               {showSRO && <th style={{ ...styles.unifiedTh, width: "10%", backgroundColor: "#fce4ec" }}>SRO Schedule *</th>}
                               {showSRO && <th style={{ ...styles.unifiedTh, width: "8%", backgroundColor: "#fce4ec" }}>SRO Item No *</th>}
-                              <th style={{ ...styles.unifiedTh, width: "4%" }}></th>
+                              <th style={{ ...styles.unifiedTh, width: 84 }}></th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1176,12 +1233,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       items={filteredItemTypes}
                                       value={r.itemTypeId}
                                       onChange={(id, picked) => handleItemTypePick(r.localId, picked || null)}
-                                      placeholder="Pick item… *"
-                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", ...(r.itemTypeId ? {} : { borderColor: colors.warn }) }}
+                                      placeholder={billsMode ? "Item type (optional)…" : "Pick item… *"}
+                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
                                     />
-                                    {!r.itemTypeId && (
-                                      <div style={{ marginTop: 2, fontSize: "0.62rem", color: colors.warn, fontWeight: 700 }}>Required</div>
-                                    )}
+
                                   </td>
                                   {/* Description: in Invoices mode it stays locked to the
                                       picked item type's name (text display). In Bills mode
@@ -1247,24 +1302,33 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                     )}
                                   </td>
                                   <td style={styles.unifiedTd}>
-                                    <input
-                                      type="number" min={0} step={0.01}
-                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
-                                      value={r.unitPrice}
-                                      onChange={(e) => setRowAmount(r.localId, "unitPrice", e.target.value)}
-                                      placeholder="0.00"
-                                      title="Type this and the line total follows; type the line total and this is derived."
-                                    />
+                                    {byTotal ? (
+                                      <CalculatedField label="Unit price" value={shownRate(r)} style={{ fontSize: "0.8rem", minHeight: 32, padding: "0.3rem 0.5rem" }} />
+                                    ) : (
+                                      <input
+                                        type="number" min={0} step="any"
+                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+                                        value={r.unitPrice}
+                                        onChange={(e) => setRowAmount(r.localId, "unitPrice", e.target.value)}
+                                        placeholder="0.00"
+                                        title="Type the unit price; the line total is worked out."
+                                      />
+                                    )}
                                   </td>
                                   <td style={styles.unifiedTd}>
-                                    <input
-                                      type="number" min={0} step={0.01}
-                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", textAlign: "right", fontWeight: 600 }}
-                                      value={r.lineTotal}
-                                      onChange={(e) => setRowAmount(r.localId, "lineTotal", e.target.value)}
-                                      placeholder={(q * p) > 0 ? lineTotalFrom(q, p).toFixed(2) : "0.00"}
-                                      title="Type the amount this line must come to — the unit price is derived from it and the quantity."
-                                    />
+                                    {byTotal ? (
+                                      <input
+                                        type="number" min={0} step="any"
+                                        aria-label="Line total"
+                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", textAlign: "right", fontWeight: 600 }}
+                                        value={r.lineTotal}
+                                        onChange={(e) => setRowAmount(r.localId, "lineTotal", e.target.value)}
+                                        placeholder="0.00"
+                                        title="Type the amount this line must come to — the unit price is worked out from it and the quantity."
+                                      />
+                                    ) : (
+                                      <CalculatedField label="Line total" value={shownTotal(r)} style={{ fontSize: "0.8rem", minHeight: 32, padding: "0.3rem 0.5rem", fontWeight: 600 }} />
+                                    )}
                                   </td>
                                   {!billsMode && (
                                     <td
@@ -1326,8 +1390,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       />
                                     </td>
                                   )}
-                                  <td style={{ ...styles.unifiedTd, textAlign: "center" }}>
-                                    <button type="button" style={{...styles.removeRowBtn,minWidth:44,minHeight:44}} title="Copy line" onClick={() => setRows(prev => [...prev,{...r,localId:crypto.randomUUID()}])}>Copy</button>
+                                  <td style={{ ...styles.unifiedTd, textAlign: "center", whiteSpace: "nowrap" }}>
+                                    <CopyLineButton style={{ marginRight: 6 }} onClick={() => setRows(prev => [...prev,{...r,localId:crypto.randomUUID()}])} />
                                     <button
                                       type="button"
                                       style={styles.removeRowBtn}
@@ -1355,7 +1419,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       {/* Totals */}
                       <div style={styles.totalsBox}>
                         <div style={styles.totalRow}><span>Subtotal:</span><span>Rs. {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-                        <div style={styles.totalRow}><span>GST ({gstRate}%):</span><span>Rs. {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+                        <div style={styles.totalRow}><span>{taxTreatment === "SRB" ? "SRB sales tax" : taxTreatment === "NoTax" ? "Tax" : "GST"} ({gstRate}%):</span><span>Rs. {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
                         {billsMode && Number(freightCharges) > 0 && (
                           <div style={styles.totalRow}><span>Freight / cartage:</span><span>Rs. {Number(freightCharges).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
                         )}
@@ -1370,12 +1434,16 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
               </>
             )}
 
+            <details><summary>Supplier and actual costs (optional)</summary>
+              <ChallanPrivateCosts companyId={companyId} suppliers={costSuppliers} items={rows.map(r => ({ ...r, unit: r.uom }))} onItemsChange={setRows} />
+            </details>
             {billsMode && <FreightChargesField value={freightCharges} onChange={setFreightCharges} />}
             <DocumentTaxFields freightCharges={billsMode ? Number(freightCharges || 0) : 0} subtotal={subtotal} gstAmount={gstAmount}
-              furtherTaxRate={furtherTaxRate} onFurtherTaxRateChange={setFurtherTaxRate}
+              furtherTaxRate={taxTreatment === "FBR" ? furtherTaxRate : undefined} onFurtherTaxRateChange={setFurtherTaxRate}
               withholdingTaxRate={withholdingTaxRate} withholdingTaxAmount={withholdingTaxAmount}
               onWithholdingChange={({ rate, amount }) => { setWithholdingTaxRate(rate); setWithholdingTaxAmount(amount); }} />
-            <TaxInvoiceGrouping value={groupTaxInvoiceByItemType} onChange={setGroupTaxInvoiceByItemType} />
+            <p style={{ color: colors.textSecondary, fontSize: "0.85rem", lineHeight: 1.5 }}>Item Type is optional on bills. Selected types suggest filing groups; unclassified lines stay separate. The tax consultant can combine or separate them in Adjust invoice.</p>
+            {!company?.taxInvoiceUseOriginalBillLines && <TaxInvoiceGrouping value={groupTaxInvoiceByItemType} onChange={setGroupTaxInvoiceByItemType} />}
             <DocumentNotesEditor value={notes} onChange={setNotes} />
             <div style={{ marginTop: "1rem" }}>
               <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="Invoice" entityId={null} mode="edit" />

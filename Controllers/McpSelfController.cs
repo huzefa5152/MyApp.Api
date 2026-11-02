@@ -100,8 +100,10 @@ public class McpSelfController(
             return BadRequest(new { message = $"You already have {MaxActiveTokens} active tokens. Revoke one first." });
 
         var secret = McpAgentAuthHandler.NewSecret();
+        var stamp = await db.Users.Where(u => u.Id == uid).Select(u => u.SecurityStamp).FirstOrDefaultAsync();
         var token = new McpAgentToken
         {
+            SecurityStamp = stamp,
             UserId = uid, Name = name, TokenHash = McpAgentAuthHandler.Hash(secret),
             Hint = secret.Substring(0, McpAgentToken.Prefix.Length + 4),
             CompanyIds = companyValue!, Scopes = string.Join(',', scopes), AllowWrites = scopes.Any(McpScopes.IsWrite),
@@ -133,7 +135,10 @@ public class McpSelfController(
     {
         if (outcome is not (null or "" or "ok" or "denied" or "error")) return BadRequest(new { message = "Invalid outcome." });
         var uid = CurrentUserId;
-        var q = db.McpActivities.AsNoTracking().Where(a => a.UserId == uid);
+        // A row carries its company's names, totals and document numbers, so a company the user
+        // no longer reaches drops out of their history on the next request.
+        var reachable = (await access.GetAccessibleCompanyIdsAsync(uid)).ToList();
+        var q = db.McpActivities.AsNoTracking().Where(a => a.UserId == uid && (a.CompanyId == null || reachable.Contains(a.CompanyId.Value)));
         if (!string.IsNullOrEmpty(outcome)) q = q.Where(a => a.Outcome == outcome);
         page = PaginationHelper.ClampPage(page);
         pageSize = PaginationHelper.Clamp(pageSize, 25);

@@ -13,15 +13,21 @@ const SalesQuotePage = lazy(() => import("./pages/SalesQuotePage"));
 const EmailWorkspacePage = lazy(() => import("./pages/EmailWorkspacePage"));
 const SalesOrderPage = lazy(() => import("./pages/SalesOrderPage"));
 const WithholdingTaxReceiptsPage = lazy(() => import("./pages/WithholdingTaxReceiptsPage"));
+const BankCashAccountsPage = lazy(() => import("./pages/BankCashAccountsPage"));
+const TransfersPage = lazy(() => import("./pages/TransfersPage"));
+const PurchaseDebitNotesPage = lazy(() => import("./pages/PurchaseDebitNotesPage"));
 const PaymentsPage = lazy(() => import("./pages/PaymentsPage"));
 const ChartOfAccountsPage = lazy(() => import("./pages/ChartOfAccountsPage"));
 const JournalEntriesPage = lazy(() => import("./pages/JournalEntriesPage"));
 const AccountingDashboardPage = lazy(() => import("./pages/AccountingDashboardPage"));
+const UserGuidePage = lazy(() => import("./pages/UserGuidePage"));
 const AccountingReportsPage = lazy(() => import("./pages/AccountingReportsPage"));
+const AccountingCatalogPage = lazy(() => import("./pages/AccountingCatalogPage"));
 const CustomerPortalsPage = lazy(() => import("./pages/CustomerPortalsPage"));
 const NavigationMenuPage = lazy(() => import("./pages/NavigationMenuPage"));
 const CreditDebitNotePage = lazy(() => import("./pages/CreditDebitNotePage"));
 const ItemRateHistoryPage = lazy(() => import("./pages/ItemRateHistoryPage"));
+const SupplierPayablesPage = lazy(() => import("./pages/SupplierPayablesPage"));
 const PurchaseBillsPage = lazy(() => import("./pages/PurchaseBillsPage"));
 const GoodsReceiptsPage = lazy(() => import("./pages/GoodsReceiptsPage"));
 const StockDashboardPage = lazy(() => import("./pages/StockDashboardPage"));
@@ -29,6 +35,7 @@ const FbrPurchaseImportPage = lazy(() => import("./pages/FbrPurchaseImportPage")
 const OnboardingImportPage = lazy(() => import("./pages/OnboardingImportPage"));
 const SalesReportPage = lazy(() => import("./pages/SalesReportPage"));
 const DocumentLinesPage = lazy(() => import("./pages/DocumentLinesPage"));
+const InvoiceSalesDetailPage = lazy(() => import("./pages/InvoiceSalesDetailPage"));
 const TaxSheetPage = lazy(() => import("./pages/TaxSheetPage"));
 const OutstandingLedgerPage = lazy(() => import("./pages/OutstandingLedgerPage"));
 const ClientsPage = lazy(() => import("./pages/ClientsPage"));
@@ -108,12 +115,21 @@ export default function App() {
             {/* Receipts (money in) / Payments (money out) — one component,
                 mounted twice with distinct keys so filter/search state doesn't
                 leak when switching between the two. */}
+            <Route path="/bank-cash-accounts" element={<BankCashAccountsPage />} />
+            <Route path="/transfers" element={<TransfersPage />} />
+            <Route path="/purchase-debit-notes" element={<PurchaseDebitNotesPage />} />
             <Route path="/receipts" element={<PaymentsPage key="receipts" mode="receipts" />} />
             <Route path="/payments" element={<PaymentsPage key="payments" mode="payments" />} />
             <Route path="/chart-of-accounts" element={<ChartOfAccountsPage />} />
             <Route path="/journal-entries" element={<JournalEntriesPage />} />
-            <Route path="/accounting/overview" element={<AccountingDashboardPage />} />
+            <Route path="/accounting/dashboard" element={<AccountingDashboardPage />} />
+            {/* The old Accounting → Overview address, kept so bookmarks land on
+                its replacement, Dashboards → Accounting. */}
+            <Route path="/accounting/overview" element={<Navigate to="/accounting/dashboard" replace />} />
+            <Route path="/help/accounting" element={<UserGuidePage />} />
             <Route path="/accounting/reports" element={<AccountingReportsPage />} />
+            <Route path="/accounting/reports/catalog" element={<AccountingCatalogPage />} />
+            <Route path="/accounting/reports/catalog/:reportId" element={<AccountingCatalogPage />} />
             <Route path="/customer-portals" element={<CustomerPortalsPage />} />
             {/* Bills tab — pre-FBR data entry. No item-type column, no FBR
                 bulk actions, but shows a per-row "Submitted to FBR" badge so
@@ -134,6 +150,7 @@ export default function App() {
             <Route path="/debit-notes" element={<InvoicePage key="debitnotes" mode="debitnotes" />} />
             <Route path="/credit-debit-notes" element={<CreditDebitNotePage />} />
             <Route path="/item-rate-history" element={<ItemRateHistoryPage />} />
+            <Route path="/supplier-payables" element={<SupplierPayablesPage />} />
             <Route path="/purchase-bills" element={<PurchaseBillsPage />} />
             <Route path="/goods-receipts" element={<GoodsReceiptsPage />} />
             <Route path="/stock" element={<StockDashboardPage />} />
@@ -142,6 +159,7 @@ export default function App() {
             {/* Reports */}
             <Route path="/reports/sales" element={<SalesReportPage />} />
             <Route path="/reports/document-lines" element={<DocumentLinesPage />} />
+            <Route path="/reports/invoice-sales-detail" element={<InvoiceSalesDetailPage />} />
             <Route path="/reports/tax-sheet" element={<TaxSheetPage />} />
             <Route path="/reports/outstanding" element={<OutstandingLedgerPage />} />
             <Route path="/profile" element={<ProfilePage />} />

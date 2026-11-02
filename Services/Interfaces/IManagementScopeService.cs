@@ -24,6 +24,9 @@ namespace MyApp.Api.Services.Interfaces
         /// <summary>True when the id is the configured seed admin.</summary>
         bool IsSeedAdmin(int userId);
 
+        /// <summary>Id → CreatedByUserId for every user, loaded once per request.</summary>
+        Task<Dictionary<int, int?>> GetParentMapAsync();
+
         /// <summary>
         /// Ids of every user the caller may administer. Seed admin: every
         /// user (itself included). Anyone else: its descendants via the

@@ -1,5 +1,6 @@
 // src/api/httpClient.js
 import axios from "axios";
+import { installServiceContinuity } from "../utils/serviceContinuity";
 import { sameSession } from "../utils/sessionIdentity";
 import { notify } from "../utils/notify";
 
@@ -23,6 +24,11 @@ const httpClient = axios.create({
   headers: { "Content-Type": "application/json" },
   withCredentials: false,
 });
+
+// Before any other interceptor: a service pause or dropped connection is waited
+// out and safe requests are replayed, so open pages simply carry on.
+// /auth/me answers 401 without a login: any non-5xx reply means the API is up.
+installServiceContinuity(httpClient, { probePath: `${getApiBase()}/auth/me` });
 
 // Renew valid device sessions before expiry; never retry document writes.
 let renewal = null;

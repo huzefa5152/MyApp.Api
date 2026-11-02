@@ -37,7 +37,9 @@ var good = Rules(OnboardingSheets.Customers, ("name", "Acme"), ("registrationTyp
 Check("valid Registered customer has no issues", good.Count == 0, string.Join("; ", good.Select(i => i.Message)));
 Check("empty name is required", HasError(Rules(OnboardingSheets.Customers, ("registrationType", "Unregistered"), ("province", "Sindh"), ("address", "x")), "Name", "required"));
 Check("Registered without NTN errors", HasError(Rules(OnboardingSheets.Customers, ("name", "A"), ("registrationType", "Registered"), ("province", "Sindh"), ("address", "x")), "NTN", "required for a Registered customer"));
-Check("FTN without NTN errors", HasError(Rules(OnboardingSheets.Customers, ("name", "A"), ("registrationType", "FTN"), ("province", "Sindh"), ("address", "x")), "NTN", "required"));
+Check("FTN customer without NTN is fine", !Rules(OnboardingSheets.Customers, ("name", "A"), ("registrationType", "FTN"), ("province", "Sindh"), ("address", "x")).Any(i => i.IsError));
+Check("FTN supplier without NTN errors", HasError(Rules(OnboardingSheets.Suppliers, ("name", "A"), ("registrationType", "FTN")), "NTN", "required for a FTN supplier"));
+Check("Unregistered customer keeps an optional NTN", !Rules(OnboardingSheets.Customers, ("name", "A"), ("registrationType", "Unregistered"), ("ntn", "1234567"), ("province", "Sindh"), ("address", "x")).Any(i => i.IsError));
 Check("Unregistered without NTN is fine", !Rules(OnboardingSheets.Customers, ("name", "A"), ("registrationType", "Unregistered"), ("province", "Sindh"), ("address", "x")).Any(i => i.IsError));
 Check("6-digit NTN errors", HasError(Rules(OnboardingSheets.Customers, ("name", "A"), ("registrationType", "Registered"), ("ntn", "123456"), ("province", "Sindh")), "NTN", "7 digits"));
 Check("13-digit NTN says it is a CNIC", HasError(Rules(OnboardingSheets.Customers, ("name", "A"), ("registrationType", "Registered"), ("ntn", "4210112345671"), ("province", "Sindh")), "NTN", "CNIC column"));

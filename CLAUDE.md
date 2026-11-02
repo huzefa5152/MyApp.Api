@@ -1,36 +1,110 @@
 # MyApp.Api — Claude Code session standards
 
 You are working on **MyApp.Api**, an FBR Digital Invoicing ERP for Pakistani
-wholesalers. Production live at `hakimitraders.runasp.net` (MonsterASP).
-Two real tenants today (Hakimi Traders, Roshan Traders); the codebase is
-being evolved into a multi-tenant SaaS.
+wholesalers. Three production lines run live on MonsterASP (see
+Environments below); the codebase is being evolved into a multi-tenant SaaS.
 
 **This file is the single source of truth that every Claude session must
 follow.** It is auto-loaded into every conversation — read it once and
 treat the rules as non-negotiable unless the user explicitly overrides
 them in their message.
 
+---
+
+## INVARIANT — tenant and assigned-company isolation is never violated
+
+**Non-negotiable, permanent, and above every other rule in this file.** It
+binds the `TraderFbrInvoicingSystem` branch and every branch derived from it,
+and every Claude session, bug fix, refactor, migration, integration and new
+feature on them. No user instruction to "just make it work" overrides it; if a
+request conflicts with it, say so, explain the conflict, and propose a
+compliant implementation. **Never implement an access bypass.**
+
+**The rule.** An authenticated user may access only the companies assigned to
+them (`UserCompanies`) and the data belonging to those companies, and only
+within the permissions their roles grant. Company assignment is not a
+permission grant, and a permission is not a company grant: both must hold.
+
+**What it requires, everywhere:**
+
+- **Server-side authorization on every read and every write**: APIs, MCP tools
+  and resources, background jobs, reports, exports, search, dashboards,
+  pickers, attachments, print/bulk downloads and the Email Workspace. Hiding a
+  link, a button or a row in the UI is never the control.
+- **Identity and scope come from trusted authentication and server-side
+  assignments only.** A company id, tenant id, user id, header (including
+  `X-Company-Id`), query parameter, request body field or MCP argument is a
+  REQUEST, never proof of access: assert it (`ICompanyAccessGuard.AssertAccessAsync`)
+  or intersect it with `GetAccessibleCompanyIdsAsync`.
+- **Validate company access AND record ownership.** A record reached by id —
+  guessed, nested under another resource, inside a bulk request, or through a
+  direct URL — is loaded and its STORED `CompanyId` asserted, and every linked
+  record must belong to the same company. A body's `CompanyId` can be forged.
+- **Isolation covers everything that carries tenant data**: email accounts,
+  messages, attachments and credentials; caches; files on disk; notifications;
+  queued and asynchronous work. Each stays bound to its owning tenant, company
+  and user permissions, and a job runs with the scope of whoever caused it —
+  never with the installation's.
+- **Fail closed.** When scope is missing, invalid, ambiguous or unauthorized,
+  deny. Never fall back to "all companies", the first company, or unfiltered
+  data. The one non-ambiguous case: a caller assigned exactly ONE company may
+  have it implied (the private-catalog contract); with two or more, a request
+  that names none is refused.
+- **Isolation survives time**: session changes, company switching, assignment
+  revocation (a revoked company is unreachable on the next request), caching
+  and asynchronous processing. Re-check at the point of use, not only when the
+  work was queued.
+- **Never bypass authorization** to fix a bug, simplify an implementation,
+  improve performance or make a test pass. A test that only passes without the
+  guard is reporting the bug.
+
+**Exceptions exist only where verified in code and written down here.**
+Never infer unrestricted access from a role NAME. As verified on 2026-10-10:
+
+| Who | What the code actually grants | Where |
+|---|---|---|
+| **Seed admin** — the single user whose id equals `AppSettings:SeedAdminUserId` (default `1`); an id comparison, not a role | Every company, and every permission key. The two MCP keys (`mcp.access.use` / `mcp.write.use`) are not short-circuited: they follow the account's MCP access policy, which can switch them off. Only this account may pick **All companies** on an MCP token. Unscoped audit log (passes `null`). Installation-wide tables (`[SeedAdminOnly]`), including the shared starter templates (HTTP `[SeedAdminOnly]` + `StarterTemplateService`; MCP `prepare_starter_template` is seed-admin-only at prepare and at commit). | `CompanyAccessGuard.HasAccessAsync` / `GetAccessibleCompanyIdsAsync`, `PermissionService.HasPermissionAsync` / `GetUserPermissionsAsync`, `docs/MCP_AGENT_ACCESS.md` |
+| **Administrator / Tenant Administrator roles** | **No isolation exception at all.** They reach only their assigned companies and can grant only keys they hold (`RolesController.GrantableKeysAsync`). | see "Tenant administrators" below |
+| **Customer portal** (anonymous) | Not an authenticated user: scope is the resolved portal token, and every query filters on both its CompanyId and ClientId. Never synthesise a user id to reuse a guard. | `PublicCustomerPortalController`, `[ResolvePortal]` |
+
+Adding, widening or relying on an exception means changing this table in the
+same commit, with the code reference, and the maintainer's agreement first.
+
+**Before changing code**, name the authorization boundaries the change
+touches (which companies, which records, which callers, which paths — HTTP,
+MCP, jobs, exports). **Before calling work complete**, verify both permitted
+access AND attempted cross-company / cross-tenant access — reads and writes,
+on every affected API and MCP path — and add or update a meaningful regression
+case (`scripts/test_tenant_isolation.py`, `scripts/test_tenant_leak_sweep.py`,
+`scripts/test_admin_scope_isolation.py`, `scripts/test_mcp_isolation.py`, and
+`python scripts/verify_tenant_scope.py` for new company-scoped actions).
+
+**Writing this rule down is not an audit.** It does not mean the application
+has been reviewed or is free of leaks; treat every existing path as unverified
+until a test proves it.
+
 ## Environments — READ `docs/ENVIRONMENTS.md` BEFORE TOUCHING ANYTHING
 
-There are **four separate production installations** on MonsterASP, not one
-product with four stages. Each has its own live database, its own deploy
-workflow and its own long-lived branch. A fifth branch carries audit work.
+There are **three live production installations** on MonsterASP, not one
+product with three stages. Each has its own live database, its own deploy
+workflow and its own long-lived branch. `master` was the first installation
+and is **retired**: it gets no work, no ports and no pushes.
 
 | Branch | Role | Local database |
 |---|---|---|
-| `master` | Production #1 (`deploy.yml`) | `MyApp_Master_Local` |
+| `master` | **Retired** — history only; never commit, port to or push it (a push would still fire `deploy.yml`) | `MyApp_Master_Local` |
 | `customize-solution-for-other` | Production #2 (`deploy-other.yml`) | `MyApp_Customize_Local` |
 | `feat/importer-ledger-receipts` | Production #3 (`deploy-importer.yml`) | `MyApp_Importer_Local` |
 | `TraderFbrInvoicingSystem` | Production #4 (`deploy-trader.yml`) | `MyApp_Trader_Local` |
-| `fix/audit-2026-08-02` | Audit / security, ahead of `master` — not an environment | `MyApp_Master_Local` |
 
-**These five are the only valid branches.** A short-lived working branch is
+**These are the only valid branches.** A short-lived working branch is
 fine; delete it when the work lands. Never delete a branch with unique commits.
 
 **Never merge one production line into another.** They have deliberately
 diverged (site shape, dozens of migrations). A change asked for on one branch
 stays there unless the maintainer asks for a port. Security fixes usually
-should reach all four — but each port is a deliberate, reviewed act.
+should reach all three live lines — but each port is a deliberate, reviewed
+act. Nothing is ported to `master`.
 
 **The branch picks the database by itself.** `Helpers/LocalDevDatabase.cs`
 reads `.git/HEAD` at startup and looks the branch up in `local.databases.json`.
@@ -88,7 +162,7 @@ cd myapp-frontend && npm run build
 **Operator rules (do NOT violate without explicit say-so):**
 - Never auto-restart the backend
 - Never auto-commit
-- Never auto-push (master or any branch)
+- Never auto-push (any branch)
 - Frontend rebuild (`npm run build` + copy dist→wwwroot) IS fine to run automatically after frontend source edits
 
 ---
@@ -194,7 +268,7 @@ workbook: sample → upload → preview → commit → fix list.
 - The upload routes share the `"import"` rate limit (10/min/user), which runs
   BEFORE authorization — so a loop over many companies tests the limiter, not
   the tenant guard. The tenant suite checks each upload route once.
-- Suites: `cd scripts/onboarding_harness && dotnet run -c Release` (97 checks,
+- Suites: `cd scripts/onboarding_harness && dotnet run -c Release` (99 checks,
   offline — rules, reader, sample and fix-list round trips),
   `python scripts/test_onboarding_import.py` (70 checks, live),
   `node scripts/test_onboarding_import.mjs` (23 checks, the screen's decisions).
@@ -228,7 +302,9 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 - FBR token write: gated by `companies.manage.fbrtoken` (NOT `companies.manage.update`).
 - `IsTenantIsolated` flip: gated by `tenantaccess.manage.update`.
 - Role string assignment of "Admin": **seed admin only** (`_seedAdminUserId`).
-- Server-side `/auth/logout` rotates `SecurityStamp` → previous JWTs reject on next request.
+- Server-side `/auth/logout` revokes THIS device's session row, so that session's JWTs reject on the next request. It does not rotate `SecurityStamp`; a password change, an admin reset and the seed admin's "sign out everywhere" do, and each of those also revokes the user's MCP agent tokens (`Helpers/McpTokenRevocation`). Tokens minted since 2026-10-09 carry the stamp and are refused on mismatch (`McpAgentAuthHandler`).
+- Print templates are operator HTML printed in a same-origin window: `Helpers/TemplateHtmlSafety` strips script on save and `utils/printSafety.js` adds a script-blocking CSP on render. Do not add a print path that bypasses `mergeTemplate`.
+- Installation-wide tables (FBR lookup codes, merge fields, shared starter templates) are written by the seed admin only (`[SeedAdminOnly]`): a permission key alone reaches tenant Administrators. Shared starters (`StarterTemplates`, no CompanyId) are read by anyone holding `printtemplates.manage.view` or `printtemplates.starter.apply`, so `StarterTemplateRules` refuses active content and anything shaped like one tenant's data (NTN/CNIC/STRN, phone, e-mail, a logo-sized inline image).
 
 ### 10. FBR integration specifics
 
@@ -253,16 +329,20 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 
 > ### 🔴 HARD PRE-PUSH GATE — inventory flow (non-negotiable)
 > **Claude runs every push and deploy for this repo — the operator does not.**
-> So this gate lives here, not in CI. **Before ANY `git push` that reaches
-> `master`** (a direct push, or a merge/PR that lands on it), you MUST:
+> So this gate lives here, not in CI. **Before ANY `git push` that reaches a
+> production branch** — `customize-solution-for-other`, `feat/importer-ledger-receipts` or
+> `TraderFbrInvoicingSystem` (a direct push, or a merge/PR that lands on
+> one) — you MUST:
 > 1. have a backend running against a schema-current DB, and
 > 2. run `python scripts/test_stock_itemtype_reflow.py` and see **`all checks
->    passed`** (currently **183/183**).
+>    passed`** (currently **250/250**).
 >
-> If it is **red**, or you **cannot run it**, **DO NOT PUSH.** A broken inventory
-> in/out flow must never reach master — ever. Run it even when the change looks
+> If it is **red**, or you **cannot run it**, **DO NOT PUSH.** Every push to a
+> production branch deploys a live customer's site, so a broken inventory in/out
+> flow must never reach one — ever. Run it even when the change looks
 > unrelated to stock (stock reflow is reachable from invoice, bill, challan, and
 > the FBR dual-book overlay paths). No exceptions, no "it's a tiny change."
+> `master` is retired and is never pushed, so it has no gate.
 
 | Check | Command | Must show |
 |---|---|---|
@@ -271,25 +351,35 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
-| Line arithmetic — qty / unit price / line total derive each other (offline) | `node scripts/test_line_amount.mjs` | `23 passed, 0 failed` |
+| Line arithmetic — qty / unit price / line total derive each other (offline) | `node scripts/test_line_amount.mjs` | `35 passed, 0 failed` |
 | Grouped quantity spread — no bill line left at zero, fractions only where the unit allows (offline) | `node scripts/test_group_quantity_split.mjs` | `27 passed, 0 failed` |
+| Filing unit — the unit the consultant picks (KG or Packs on HS 3004.9099) is the unit View FBR files; a catalog name + id that disagree file the named unit (bill 3985) | `python scripts/test_filing_unit_choice.py --base <url> --db <MyApp_Trader_Test_ db>` | `20/20 filing unit checks passed` |
 | Invoice exact line total — the consultant's adjustment re-sums to the bill | `python scripts/test_invoice_exact_line_total.py` | `73/73 checks` |
 | Every screen is behind a permission (offline) | `node scripts/test_route_permissions.mjs` | `147 passed, 0 failed` |
 | Product editions + the no-escalation rule, proven end to end | `python scripts/test_edition_roles.py` | `80/80 checks` |
 | Hosted MCP (`POST /mcp`) company / tenant / permission isolation, MCP Access opt-in | `python scripts/test_mcp_isolation.py --base <url>` | `90/90 checks passed` (needs 3 companies with invoices locally; see `docs/MCP_AGENT_ACCESS.md`) |
 | MCP agent tokens + the append-only activity log (needs `sqlcmd` for expiry) | `python scripts/test_mcp_agent_tokens.py --base <url>` | `56/56 checks passed` |
 | MCP self-service tab (a user manages only their own tokens and activity) | `python scripts/test_mcp_self_service.py --base <url>` | `33/33 checks passed` |
-| MCP sign-in connect: OAuth + PKCE + client registration, refresh rotation, replay (needs `sqlcmd`) | `python scripts/test_mcp_oauth.py --base <url>` | `67/67 checks passed` |
+| MCP sign-in connect: OAuth + PKCE + client registration, refresh rotation, replay (needs `sqlcmd`) | `python scripts/test_mcp_oauth.py --base <url>` | `71/71 checks passed` |
 | MCP write tools: prepare / approve / commit for clients and quotations, gates re-checked at commit, idempotency (needs `sqlcmd`) | `python scripts/test_mcp_writes.py --base <url>` | `91/91 checks passed` |
 | MCP primary admin across all tenants, with tenant users still confined (needs `sqlcmd`-free; creates one throwaway company) | `python scripts/test_mcp_seed_admin.py --base <url>` | `52/52 checks passed` |
 | MCP report tools: figures equal the screens' own reports, bounded output, per-tool permission, no payment details | `python scripts/test_mcp_reports.py --base <url>` | `79/79 checks passed` |
+| MCP print data and render bundle: screen print data, template choice, signed/unsigned, own images only, cross-company refusal, rides on the print-data grant (needs `sqlcmd`; render cases need a challan in both companies) | `python scripts/test_mcp_print_reads.py --base <url> --company-a <id> --company-b <id>` | `all checks passed` (77 with companies 3/4 locally) |
 | MCP challans and bills: find, prepare, commit, bill a challan in full, rounding, hourly ceiling, never submitted to FBR (needs `sqlcmd`; locally marks its own challan Pending) | `python scripts/test_mcp_documents.py --base <url>` | `94/94 checks passed` |
+| MCP suppliers, catalog items, a bill's FBR classification and FBR validation: prepare / commit, cross-company ids, duplicate-item guard, consultant quantity right at commit | `python scripts/test_mcp_masters_taxfiling.py --base <url> --sql-db <local db>` | `57/57 masters and tax filing checks passed` |
+| MCP FBR exclusion: one bill and bulk by date range, FBR validate/submit refused on an excluded bill, submitted bills skipped at prepare and commit, cross-company ids, include again (needs `sqlcmd`) | `python scripts/test_mcp_fbr_exclusion.py --base <url> --sql-db <local db>` | `all FBR exclusion checks passed` |
+| MCP tenant sweep: every listed tool vs a company and records the caller was never given, leak scan of every read, plan theft, revocation (incl. activity history) | `python scripts/test_mcp_tenant_sweep.py --base <url> --sql-db <local db>` | `all checks passed` |
 | Every company-scoped action asserts the companyId it was handed (offline) | `python scripts/verify_tenant_scope.py` | `every company-scoped action is guarded` |
+| Bill print merges the same item across challans of one PO (print data only; lines stay per challan) | `python scripts/test_bill_print_merge.py --base <url>` | `8/8 bill print merge checks passed` |
 | HS code on both prints + FBR-ready without a quantity adjustment | `python scripts/test_hscode_on_prints.py` | `21/21 checks` |
 | A company saves with a name only, FBR details added later | `python scripts/test_company_create_minimal.py` | `8/8 checks` |
 | Cross-tenant leak sweep — both editions against a company they were never given | `python scripts/test_tenant_leak_sweep.py` | `105/105 checks` |
 | Every permission module lands in a navbar section (offline) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
-| Onboarding import — sample, preview, commit, re-upload adds nothing, fix list, permissions | `python scripts/test_onboarding_import.py`; `cd scripts/onboarding_harness && dotnet run -c Release`; `node scripts/test_onboarding_import.mjs` | `70/70 checks passed`; `97 checks, 0 failed`; `23/23 checks passed` |
+| Quote discounts: per line and whole quote before GST, refusals, print fields, net price on the bill prefill, whole-quote reminder, cross-company refusal | `python scripts/test_quote_discount.py --base <url>` | `33/33 quote discount checks passed` |
+| Quote discount arithmetic + copying a discounted line (offline) | `node scripts/test_quote_discount.mjs` | `25 passed, 0 failed` |
+| Partial bills: leave challan lines out on create and in Manage challans, merge-back, release paths, billed-challan sync, supplier purchases, FBR lock, tenant | `python scripts/test_partial_billing.py --base <url> --database <local *_Test db>` | `38/38 partial billing checks passed` |
+| PO format from a scanned PDF / photo: OCR fingerprint, save, match on import, company guard | `python scripts/test_po_format_from_scan.py --base <url>` | `10/10 PO format from scan checks passed` |
+| Onboarding import — sample, preview, commit, re-upload adds nothing, fix list, permissions | `python scripts/test_onboarding_import.py`; `cd scripts/onboarding_harness && dotnet run -c Release`; `node scripts/test_onboarding_import.mjs` | `70/70 checks passed`; `99 checks, 0 failed`; `23/23 checks passed` |
 | Accounting — chart of accounts | `python scripts/test_accounting_chart.py` | `103/103 checks` |
 | Accounting — general ledger core | `python scripts/test_accounting_gl.py` | `93/93 checks` |
 | Accounting — further tax + withholding on documents | `python scripts/test_document_taxes.py` (add `--db "<conn>"` for the credit-note suite) | `67/67 checks` (62 without `--db`) |
@@ -301,10 +391,16 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Bill / invoice numbering — Auto vs a hand-typed number, both create paths + renumbering on edit | `python scripts/test_custom_bill_number.py` (add `--db "<conn>"` for the FBR-filed lock suite) | `47/47 checks passed` (5 skipped without `--db`) |
 | Admin scope isolation (seed / Administrator trees, Tenant Access, IDOR) | `python scripts/test_admin_scope_isolation.py` | `all checks passed` (currently `115/115`) |
 | FBR cancellation + reversal releases challans | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `26/26 checks passed` |
-| Stock item-type reflow **(hard pre-push gate — see box above)** | `python scripts/test_stock_itemtype_reflow.py` | `all checks passed` (currently `183/183`) |
+| Valued stock entries (isolated local SQL only) | `py -3.14 scripts/test_stock_entry_workflow.py --base http://localhost:5191 --database <isolated-local-test-db>` | `41 stock-entry workflow checks passed` |
+| Commercial costs + local purchases: one pool for challan / bill / form / dialog, races, edits, sale-side floor, IDOR | `python scripts/test_trader_commercial_costs.py --base <url> --db "<conn>"` | `124/124 commercial cost checks passed` |
+| Costs book supplier purchases automatically: create/edit/move/clear, lock once paid or credited, entered bills win, closed period, cancel/delete, tenant | `python scripts/test_cost_purchase_sync.py --base <url> --db "<conn>"` | `49/49 cost purchase sync checks passed` |
+| One customer / supplier per name per company: simultaneous saves, case and outer spaces, rename | `python scripts/test_party_name_guard.py --base <url>` | `8/8 party name guard checks passed` |
+| FBR purchase import creates one supplier per seller, even with many invoices from a new seller in one file | `python scripts/test_fbr_import_supplier_reuse.py --base <url>` | `10/10 FBR import supplier reuse checks passed` |
+| Stock item-type reflow **(hard pre-push gate — see box above)** | `python scripts/test_stock_itemtype_reflow.py` | `all checks passed` (currently `250/250`) |
 | PDF export pagination | `python scripts/test_pdf_pagination.py` | `all checks passed` (230 cases) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
+| Shared starter templates: seed-admin-only writes over HTTP and MCP, every rule refuses and saves nothing, hide/show/delete, apply like a code starter, audit with no company | `python scripts/test_shared_starters.py --base <url>` | `57/57 shared starter checks passed` |
 | No production identifiers in tracked files | `python scripts/verify_no_production_identifiers.py` | `no production identifiers in tracked files` |
 
 **PO parser / import changes — MANDATORY.** Any change to
@@ -410,7 +506,7 @@ original author is honest provenance for a transplanted commit.
 
 ### Everything else
 
-- Branch from `origin/master`: `fix/...` or `feat/...`
+- Branch from the production line you are changing (`origin/<line>`): `fix/...` or `feat/...`
 - Imperative commit subjects ("Fix dashboard duplicates", not "Fixed" / "This fixes")
 - Commit-per-phase for large changes
 - **Never** include `Co-Authored-By: Claude …` or any AI-attribution footer — global rule from user memory
@@ -425,11 +521,11 @@ original author is honest provenance for a transplanted commit.
 
 ## Production deploy notes
 
-- Live host: **MonsterASP** at `hakimitraders.runasp.net`
+- Live hosts: **MonsterASP**, one site per production line (`docs/ENVIRONMENTS.md`)
 - `appsettings.Production.json` provides `Jwt:Key` + `ConnectionStrings` — never committed (gitignored)
 - DataProtection keys persist to `data/keys/` — if MonsterASP wipes that on redeploy, previously-encrypted `Company.FbrToken` values become unreadable (Unprotect returns null → operator re-enters token). Verify persistence after first deploy.
 - `ForwardedHeaders:KnownProxies` should be populated with MonsterASP's proxy IPs once known (audit C-12) so the rate-limit partition key uses the real client IP.
-- Two real tenants currently: **Hakimi Traders** (CompanyId=1) and **Roshan Traders** (CompanyId=2). Do not modify their existing data without explicit say-so.
+- Every line has real tenants. Do not modify any tenant's existing data without explicit say-so.
 
 ---
 
@@ -652,6 +748,45 @@ SQL back-post; from that point the posting engine keeps them right on its own.
 
 ---
 
+### Supplier and cost ARE the local purchase (2026-10-18, 2026-10-19)
+
+Trader has no "create purchases" step. Saving a challan, a standalone bill or
+the costing dialog books every line that has BOTH a supplier and an actual cost
+as an automatic purchase bill (`Source = "auto-cost"`): one per (source
+document, supplier), dated like the document, GST 0. `LocalPurchaseSyncService`
+is the only writer; every path that changes a line's cost, supplier or quantity
+calls it inside its own transaction (challan create/edit/cost edit/billed edit/
+line delete/cancel/delete, sales-order challans and PO import via the challan
+service, standalone bill create/edit/void/delete, the costing dialog, MCP).
+
+- **Open vs fixed.** An automatic bill follows the costs only while it has no
+  payment, allocation or supplier credit (`LocalPurchaseSyncService.OpenAuto`).
+  Paid/credited automatic bills and supplier bills entered on the Purchase Bill
+  form are FIXED: never changed by a sync. The open bill covers only what fixed
+  bills leave, and a line may not shrink below them, be removed, or have its
+  challan cancelled/deleted while they exist.
+- **An entered supplier bill wins.** Manual links are checked against fixed
+  purchases only (`LocalPurchaseAllocations.ValidateAsync`, `fixedOnly`); the
+  open automatic bill then shrinks around it, and grows back if it is deleted.
+- **The key is the CHALLAN line whenever one exists.** A link sent against a
+  challan-backed bill line is normalised to that challan line, so the bill and
+  challan views draw on one quantity.
+- **Header paperwork is the user's, lines are the costs'.** Editing an automatic
+  bill changes reference, IRN, GST, withholding, notes and terms only; its
+  lines, date and supplier come from the source. It cannot be deleted directly.
+- **Closed periods.** Posting goes through the ledger writer, so a sync that
+  touches a locked period is refused. Challan create checks the period BEFORE
+  the repository commits (it commits internally); a later sync failure comes
+  back as `PurchaseWarning` on the saved challan, never as an error that invites
+  a second save and a duplicate challan.
+- **Actual cost = booked purchases + estimate for anything not booked.**
+- `20261019100000_MarkCostDrivenPurchasesAutomatic` turned purchases made by the
+  old preview into automatic ones (single-source bills only). Costed lines
+  saved before this release book on their document's next save; there is no
+  backfill.
+- Suites: `scripts/test_cost_purchase_sync.py` (49) and
+  `scripts/test_trader_commercial_costs.py` (124), both with `--db`.
+
 ### Pickers are not screens (2026-09-21)
 
 A dropdown on a form is not the screen that manages the thing it lists.
@@ -685,14 +820,18 @@ All four trusted something the caller said. None of them looked wrong in review.
 - **`ItemTypes` create/update** took a companyId that chooses **whose FBR token**
   calls PRAL, unchecked — one tenant's bearer spending another's quota.
 
-**Known and accepted: three catalogs are install-wide.** `ItemType`,
-`ItemDescription` and `Unit` carry no `CompanyId`, so one tenant's saved item
-descriptions and units appear in another tenant's autocomplete. This is the
-schema as designed — item types are deliberately common across a user's tenants,
-and `ItemTypesController.GetAll` aggregates on-hand across the caller's whole
-accessible set for exactly that reason. It was reviewed on 2026-09-21 and left
-alone. Scoping them per company means a migration, a rule for who owns the
-existing rows, and a change to every picker; do not "fix" it in passing.
+**The three catalogs are company-private (superseded 2026-10-10).** This
+paragraph used to record `ItemType`, `ItemDescription` and `Unit` as
+install-wide and "known and accepted" — one tenant's item descriptions and units
+in another tenant's autocomplete. That contradicts the isolation invariant at the
+top of this file, and it is no longer true:
+`20260921121717_PrivateCompanyCatalogs` gave all three a `CompanyId`, copied
+each legacy row into the companies whose documents prove they used it, and
+hides the original `CompanyId = NULL` rows from every HTTP catalog query,
+platform administrators included (`docs/PRIVATE_CATALOG_MIGRATION.md`,
+`scripts/test_private_catalogs.py`). A catalog request selects ONE company
+(`companyId` or `X-Company-Id`), and that id is asserted like any other. Never
+reintroduce an install-wide catalog or a NULL-company row that a tenant can see.
 
 Two scripts now stand watch, and they are complementary:
 `verify_tenant_scope.py` reads every controller action that names a companyId
@@ -918,6 +1057,8 @@ use the `create-ui-theme` skill to add a theme.
 
 - ❌ Naming a production database / SQL host / FTP host in any tracked file (prose, code comment, migration comment, docstring). The repo is PUBLIC and the database name is also the SQL username — use a placeholder; `scripts/verify_no_production_identifiers.py` fails on it.
 - ❌ Trusting `dto.CompanyId` from request body without `_access.AssertAccessAsync`
+- ❌ Treating a company id, tenant id, user id, header or MCP argument as proof of access, or falling back to "all companies" when scope is missing (see the INVARIANT at the top)
+- ❌ Inferring unrestricted access from a role NAME ("Administrator") — only the seed admin's configured id carries an exception, and only the ones listed in the INVARIANT table
 - ❌ Grouping dashboard aggregates by `ClientId+Name` (causes duplicate rows on Common Clients)
 - ❌ Returning `ex.Message` to the client (leaks internals — log + return a generic message)
 - ❌ A single SQL batch that adds a column AND references it (fails at parse time)

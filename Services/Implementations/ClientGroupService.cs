@@ -371,9 +371,15 @@ namespace MyApp.Api.Services.Implementations
                     .FirstOrDefaultAsync(g => g.GroupKey == newKey && g.Id != group.Id);
                 if (collision != null)
                 {
-                    throw new InvalidOperationException(
-                        $"Another common client already uses NTN/name '{dto.NTN ?? dto.Name}'. " +
-                        "Merge them via the configuration page first.");
+                    // Name the clash only when the other common client is one the
+                    // caller can see. A group whose members are all in other
+                    // tenants is that tenant's data: the edit is refused in words
+                    // that do not confirm what they hold.
+                    var collisionVisible = await _db.Clients.AnyAsync(c =>
+                        c.ClientGroupId == collision.Id && allowed.Contains(c.CompanyId));
+                    throw new InvalidOperationException(collisionVisible
+                        ? $"Another common client already uses NTN/name '{dto.NTN ?? dto.Name}'. Merge them via the configuration page first."
+                        : "This NTN/name cannot be applied to this common client. Check the value, or ask the system administrator.");
                 }
                 var hasForeignMembers = await _db.Clients.AnyAsync(c =>
                     c.ClientGroupId == groupId && !allowed.Contains(c.CompanyId));

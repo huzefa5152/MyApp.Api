@@ -1167,7 +1167,7 @@ table.items th.left { text-align: left; }
 body { font-family: Calibri, Arial, sans-serif; padding: 8mm 10mm; color: #000; display: flex; flex-direction: column; min-height: 100vh; }
 .main { flex: 1; }
 .footer { margin-top: auto; }
-.bismillah { text-align: center; font-size: 20pt; color: #1a5c2a; margin-bottom: 6px; font-family: "Traditional Arabic", "Arial Unicode MS", serif; direction: rtl; letter-spacing: 1px; }
+.bismillah { text-align: center; font-size: 20pt; color: #1a5c2a; margin-bottom: 6px; font-family: "Amiri", "Noto Naskh Arabic", "Scheherazade New", "Traditional Arabic", "Arabic Typesetting", "Simplified Arabic", "Geeza Pro", "Segoe UI", Tahoma, serif; direction: rtl; letter-spacing: 0; line-height: 1.6; }
 .outer { border: 2px solid #1a5c2a; }
 .title-band { background: #1a5c2a !important; text-align: center; padding: 5px 10px; }
 .title-band h1 { font-size: 15pt; font-weight: 900; letter-spacing: 3px; text-transform: uppercase; color: #fff !important; }
@@ -1212,7 +1212,7 @@ tbody tr:nth-child(even) td { background: #eef7ee !important; }
 .sig .label { font-size: 9pt; font-weight: 700; text-transform: uppercase; color: #1a5c2a; }
 .stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }</style></head><body>
 <div class="main">
-<div class="bismillah">&#1576;&#1616;&#1587;&#1618;&#1605;&#1616; &#1575;&#1604;&#1604;&#1617;&#1614;&#1607;&#1616; &#1575;&#1604;&#1585;&#1617;&#1614;&#1581;&#1618;&#1605;&#1614;&#1648;&#1606;&#1616; &#1575;&#1604;&#1585;&#1617;&#1614;&#1581;&#1616;&#1610;&#1605;&#1616;</div>
+<div class="bismillah" lang="ar" dir="rtl">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
 <div class="outer">
   <div class="title-band"><h1>Debit Note</h1></div>
   <div class="sup-row">

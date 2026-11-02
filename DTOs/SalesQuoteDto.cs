@@ -24,6 +24,11 @@ namespace MyApp.Api.DTOs
         public string? ContactPerson { get; set; }
 
         public decimal Subtotal { get; set; }
+        public decimal DiscountValue { get; set; }
+        public bool DiscountIsPercent { get; set; }
+        /// <summary>Computed server-side; ignored on input.</summary>
+        public decimal DiscountAmount { get; set; }
+        public string? DiscountReason { get; set; }
         public decimal GSTRate { get; set; }
         public decimal GSTAmount { get; set; }
         public decimal GrandTotal { get; set; }
@@ -54,6 +59,11 @@ namespace MyApp.Api.DTOs
         public decimal UnitPrice { get; set; }
         public decimal LineTotal { get; set; }
         public string? ImagePath { get; set; }
+        public decimal DiscountValue { get; set; }
+        public bool DiscountIsPercent { get; set; }
+        /// <summary>Computed server-side; ignored on input.</summary>
+        public decimal DiscountAmount { get; set; }
+        public string? DiscountReason { get; set; }
     }
 
     /// <summary>

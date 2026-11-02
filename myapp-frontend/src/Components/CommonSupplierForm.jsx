@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MdClose, MdInfo, MdBusiness, MdCheckCircle, MdDelete, MdAdd } from "react-icons/md";
+import { MdClose, MdInfo, MdBusiness, MdCheckCircle, MdDelete, MdAdd, MdStorefront, MdVerifiedUser, MdPlace } from "react-icons/md";
 import { getCommonSupplierById, updateCommonSupplier, deleteCommonSupplier, copySupplierToCompanies } from "../api/supplierApi";
 import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -10,6 +10,7 @@ import CopyToCompaniesDialog from "./CopyToCompaniesDialog";
 import { notify } from "../utils/notify";
 import useScrollToError from "../hooks/useScrollToError";
 import { Alert, Button, Loading } from "../ui/Kit";
+import { FormSection } from "./party/PartyFormKit";
 
 /**
  * Mirror of <see cref="CommonClientForm"/> for the purchase side.
@@ -202,7 +203,12 @@ export default function CommonSupplierForm({ groupId, onClose, onSaved, onChange
         onClick={(e) => e.stopPropagation()}
       >
         <div data-admin-header="" style={formStyles.header}>
-          <h5 style={formStyles.title}>Edit Common Supplier</h5>
+          <div style={{ minWidth: 0 }}>
+            <h5 style={formStyles.title}>Edit Common Supplier</h5>
+            <div style={{ fontSize: "var(--k-font-sm)", opacity: 0.85, marginTop: 2, overflowWrap: "anywhere" }}>
+              {detail ? `Shared by ${detail.members?.length || 0} companies · changes apply to every one` : "Loading…"}
+            </div>
+          </div>
           <button data-admin-close=""
             type="button"
             style={formStyles.closeButton}
@@ -215,7 +221,7 @@ export default function CommonSupplierForm({ groupId, onClose, onSaved, onChange
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: "contents" }}>
-          <div data-admin-body="" style={formStyles.body}>
+          <div data-admin-body="" className="pf-body" style={formStyles.body}>
             {loading ? (
               <Loading>Loading…</Loading>
             ) : (
@@ -236,6 +242,7 @@ export default function CommonSupplierForm({ groupId, onClose, onSaved, onChange
                   </Alert>
                 )}
 
+                <FormSection icon={<MdStorefront size={18} />} title="Business details" hint="As it should print on documents">
                 <div data-admin-field="" style={formStyles.formGroup}>
                   <label style={formStyles.label}>Name *</label>
                   <input
@@ -246,7 +253,23 @@ export default function CommonSupplierForm({ groupId, onClose, onSaved, onChange
                     required
                   />
                 </div>
+                <div className="form-grid-2col">
+                  <div data-admin-field="" style={formStyles.formGroup}>
+                    <label style={formStyles.label}>Phone</label>
+                    <input name="phone" value={form.phone} onChange={handleChange} style={formStyles.input} />
+                  </div>
+                  <div data-admin-field="" style={formStyles.formGroup}>
+                    <label style={formStyles.label}>Email</label>
+                    <input name="email" type="email" value={form.email} onChange={handleChange} style={formStyles.input} />
+                  </div>
+                </div>
+                <div data-admin-field="" style={formStyles.formGroup}>
+                  <label style={formStyles.label}>Address</label>
+                  <input name="address" value={form.address} onChange={handleChange} style={formStyles.input} />
+                </div>
+                </FormSection>
 
+                <FormSection tone="fbr" icon={<MdVerifiedUser size={18} />} title="FBR identity" hint="Checked by FBR on every invoice">
                 {/* Registration type drives the identity fields below.
                     Switching type clears the now-irrelevant fields so a
                     stale NTN doesn't propagate to every member company. */}
@@ -264,6 +287,25 @@ export default function CommonSupplierForm({ groupId, onClose, onSaved, onChange
                       <option value="Unregistered">Unregistered</option>
                       <option value="FTN">FTN</option>
                       <option value="CNIC">CNIC</option>
+                    </select>
+                  </div>
+                  <div data-admin-field="" style={formStyles.formGroup}>
+                    <label style={formStyles.label}>Province</label>
+                    <select
+                      name="fbrProvinceCode"
+                      value={form.fbrProvinceCode ?? ""}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          fbrProvinceCode: e.target.value === "" ? null : Number(e.target.value),
+                        }))
+                      }
+                      style={formStyles.input}
+                    >
+                      <option value="">— Select province —</option>
+                      {provinces.map((p) => (
+                        <option key={p.id} value={p.code}>{p.label}</option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -313,42 +355,9 @@ export default function CommonSupplierForm({ groupId, onClose, onSaved, onChange
                     </span>
                   </div>
                 )}
+                </FormSection>
 
-                <div className="form-grid-3col">
-                  <div data-admin-field="" style={formStyles.formGroup}>
-                    <label style={formStyles.label}>FBR Province</label>
-                    <select
-                      name="fbrProvinceCode"
-                      value={form.fbrProvinceCode ?? ""}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...f,
-                          fbrProvinceCode: e.target.value === "" ? null : Number(e.target.value),
-                        }))
-                      }
-                      style={formStyles.input}
-                    >
-                      <option value="">— Select province —</option>
-                      {provinces.map((p) => (
-                        <option key={p.id} value={p.code}>{p.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div data-admin-field="" style={formStyles.formGroup}>
-                    <label style={formStyles.label}>Phone</label>
-                    <input name="phone" value={form.phone} onChange={handleChange} style={formStyles.input} />
-                  </div>
-                  <div data-admin-field="" style={formStyles.formGroup}>
-                    <label style={formStyles.label}>Email</label>
-                    <input name="email" type="email" value={form.email} onChange={handleChange} style={formStyles.input} />
-                  </div>
-                </div>
-
-                <div data-admin-field="" style={formStyles.formGroup}>
-                  <label style={formStyles.label}>Address</label>
-                  <input name="address" value={form.address} onChange={handleChange} style={formStyles.input} />
-                </div>
-
+                <FormSection icon={<MdPlace size={18} />} title="Sites" hint="Offered as choices on delivery challans">
                 <div data-admin-field="" style={formStyles.formGroup}>
                   <label style={formStyles.label}>Sites</label>
                   <input
@@ -364,13 +373,14 @@ export default function CommonSupplierForm({ groupId, onClose, onSaved, onChange
                     tenants, so editing once propagates the same sites everywhere.
                   </span>
                 </div>
+                </FormSection>
 
                 {detail?.members?.length > 0 && (
-                  <div style={s.membersBlock}>
-                    <div style={s.membersHeader}>
-                      <MdBusiness size={16} color="var(--k-blue)" />
-                      <span style={{ fontWeight: 700 }}>Per-company members</span>
-                      {canCopy && (() => {
+                  <FormSection
+                    icon={<MdBusiness size={18} />}
+                    title={`Companies (${detail.members.length})`}
+                    hint="Each company keeps its own copy of this supplier"
+                    aside={canCopy && (() => {
                         const memberCompanyIds = new Set((detail.members || []).map((m) => m.companyId));
                         const remainingCount = companies.filter((c) => !memberCompanyIds.has(c.id)).length;
                         if (remainingCount === 0) return null;
@@ -387,21 +397,21 @@ export default function CommonSupplierForm({ groupId, onClose, onSaved, onChange
                           </Button>
                         );
                       })()}
-                    </div>
-                    <div style={s.membersTable}>
+                  >
+                    <div className="pf-members">
                       {detail.members.map((m) => (
-                        <div key={m.supplierId} style={s.memberRow}>
-                          <div style={s.memberCompany}>
-                            <MdCheckCircle size={14} color="#28a745" style={{ flexShrink: 0 }} /> <span style={s.clamp2}>{m.companyName}</span>
+                        <div key={m.supplierId} className="pf-member">
+                          <div className="pf-member__company">
+                            <MdCheckCircle size={14} color="#28a745" /> <span style={s.clamp2}>{m.companyName}</span>
                           </div>
-                          <div style={s.memberSite}>{m.site || <em style={{ color: "var(--k-faint)" }}>(no sites)</em>}</div>
-                          <div style={s.memberFlag}>
+                          <div className="pf-member__site">{m.site || <em style={{ color: "var(--k-faint)" }}>(no sites)</em>}</div>
+                          <div className="pf-member__flag">
                             {m.hasPurchaseBills ? "Has bills" : <span style={{ color: "var(--k-faint)" }}>—</span>}
                           </div>
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </FormSection>
                 )}
               </>
             )}
@@ -484,41 +494,6 @@ export default function CommonSupplierForm({ groupId, onClose, onSaved, onChange
 const clamp2 = { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere" };
 const s = {
   clamp2,
-  membersBlock: {
-    marginTop: "1rem",
-    background: "var(--k-surface-2)",
-    border: "1px solid var(--k-line)",
-    borderRadius: "var(--k-radius)",
-    padding: "0.65rem 0.85rem",
-  },
-  membersHeader: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.4rem",
-    fontSize: "var(--k-font)",
-    color: "var(--k-ink)",
-    marginBottom: "0.5rem",
-    flexWrap: "wrap",
-  },
-  membersTable: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "0.3rem",
-  },
-  memberRow: {
-    display: "grid",
-    gridTemplateColumns: "1fr 2fr auto",
-    gap: "0.5rem",
-    fontSize: "var(--k-font-sm)",
-    padding: "0.35rem 0.4rem",
-    borderRadius: 6,
-    background: "var(--k-surface)",
-    border: "1px solid var(--k-row-line)",
-  },
-  // Company names / sites are operator-entered: two-line clamp, never nowrap + ellipsis.
-  memberCompany: { display: "inline-flex", alignItems: "center", gap: "0.25rem", fontWeight: 600, color: "var(--k-ink)", minWidth: 0 },
-  memberSite: { color: "var(--k-muted)", minWidth: 0, ...clamp2 },
-  memberFlag: { color: "var(--k-muted)", fontSize: "0.78rem" },
   fieldHelp: {
     fontSize: "0.75rem",
     color: "var(--k-muted)",

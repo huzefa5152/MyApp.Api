@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { MdFactCheck, MdAdd, MdBusiness, MdEdit, MdDelete, MdPrint, MdVisibility, MdPictureAsPdf } from "react-icons/md";
 import {
@@ -7,6 +8,9 @@ import {
 } from "../api/withholdingTaxApi";
 import WithholdingTaxReceiptForm from "../Components/WithholdingTaxReceiptForm";
 import AttachmentManager from "../Components/AttachmentManager";
+import AttachmentBadge from "../Components/AttachmentBadge";
+import AttachmentQuickModal from "../Components/AttachmentQuickModal";
+import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { useCompany } from "../contexts/CompanyContext";
@@ -126,6 +130,8 @@ export default function WithholdingTaxReceiptsPage() {
     }
   };
 
+  const [attachTarget, setAttachTarget] = useState(null);
+  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "WithholdingTaxReceipt", receipts.map((r) => r.id));
   const filtered = useMemo(() => {
     return receipts.filter((r) => {
       if (!search.trim()) return true;
@@ -194,7 +200,7 @@ export default function WithholdingTaxReceiptsPage() {
         <EmptyState icon={MdBusiness}>No companies available.</EmptyState>
       )}
 
-      {loading ? (
+      <RecordsViewport label="Withholding Tax Receipts records">{loading ? (
         <Loading>Loading receipts…</Loading>
       ) : selectedCompany && filtered.length === 0 ? (
         <EmptyState icon={MdFactCheck}>
@@ -206,6 +212,7 @@ export default function WithholdingTaxReceiptsPage() {
             <div key={r.id} className="k-card" style={styles.card}>
               <div style={cardStyles.cardHeader}>
                 <span style={styles.cardNum}>#{r.receiptNumber}</span>
+                <AttachmentBadge count={attachCounts[r.id]} onClick={() => setAttachTarget(r)} />
                 <span style={styles.cardDate}>{fmtDate(r.date)}</span>
               </div>
               <div style={cardStyles.cardLead}>
@@ -247,7 +254,7 @@ export default function WithholdingTaxReceiptsPage() {
             <tbody>
               {filtered.map((r) => (
                 <tr key={r.id}>
-                  <td className="k-num k-muted">{r.receiptNumber}</td>
+                  <td className="k-num k-muted">{r.receiptNumber}{" "}<AttachmentBadge count={attachCounts[r.id]} onClick={() => setAttachTarget(r)} /></td>
                   <td style={{ whiteSpace: "nowrap" }}>{fmtDate(r.date)}</td>
                   <td style={{ fontWeight: 600 }}>
                     {r.clientName}
@@ -271,7 +278,7 @@ export default function WithholdingTaxReceiptsPage() {
             </tfoot>
           </table>
         </TableWrap>
-      ) : null}
+      ) : null}</RecordsViewport>
 
       {showForm && selectedCompany && (
         <WithholdingTaxReceiptForm
@@ -282,6 +289,15 @@ export default function WithholdingTaxReceiptsPage() {
         />
       )}
 
+      {attachTarget && selectedCompany && (
+        <AttachmentQuickModal
+          companyId={selectedCompany.id}
+          entityType="WithholdingTaxReceipt"
+          entityId={attachTarget.id}
+          title={`Receipt #${attachTarget.receiptNumber} — Attachments`}
+          onClose={() => { setAttachTarget(null); refreshAttachCounts(); }}
+        />
+      )}
       {viewReceipt && (
         <div data-admin-backdrop="" style={formStyles.backdrop} onClick={() => setViewReceipt(null)}>
           <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px` }} onClick={(e) => e.stopPropagation()}>

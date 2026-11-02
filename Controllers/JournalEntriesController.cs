@@ -66,6 +66,17 @@ namespace MyApp.Api.Controllers
             return Ok(dto);
         }
 
+        [HttpGet("{id}/print")]
+        [HasPermission("accounting.journal.print")]
+        public async Task<ActionResult<PrintJournalEntryDto>> GetPrintData(int id)
+        {
+            var entry = await _service.GetByIdAsync(id);
+            if (entry == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, entry.CompanyId);
+            var dto = await _service.GetPrintDataAsync(id);
+            return dto == null ? NotFound() : Ok(dto);
+        }
+
         [HttpPost("company/{companyId}")]
         [HasPermission("accounting.journal.create")]
         [AuthorizeCompany]

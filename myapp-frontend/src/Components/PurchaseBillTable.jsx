@@ -25,7 +25,7 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
       render: (b) => (
         <>
           {b.supplierName || "—"}
-          {b.sourceDeliveryChallanId && <span style={{ marginLeft: 6, padding: "1px 6px", borderRadius: 6, fontSize: "0.7rem", fontWeight: 600, background: "#e0f2f1", color: "#00695c" }}>From delivery challan</span>}
+          {b.isNonStockSupplierPurchase && <span style={{ marginLeft: 6, padding: "1px 6px", borderRadius: 6, fontSize: "0.7rem", fontWeight: 600, background: "#e0f2f1", color: "#00695c" }}>{b.source === "auto-cost" ? "From costs" : "Local direct purchase"}</span>}
         </>
       ),
     },
@@ -83,7 +83,7 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
   const renderActions = (b) => (
     <>
       <IconButton label="View" icon={MdVisibility} size={16} onClick={() => onView?.(b)} />
-      {perms.canUpdate && (
+      {perms.canUpdate && (!["local-direct", "auto-cost"].includes(b.source) || !(b.amountPaid > 0 || b.amountCredited > 0)) && (
         <IconButton label="Edit" icon={MdEdit} size={16} onClick={() => onEdit?.(b)} />
       )}
       {onPrint && (
@@ -106,7 +106,7 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
           title={printDisabled ? printDisabledReason : "Download PDF"}
         />
       )}
-      {perms.canDelete && (
+      {perms.canDelete && b.source !== "auto-cost" && (
         <IconButton label="Delete" icon={MdDelete} size={16} danger onClick={() => onDelete?.(b)} />
       )}
     </>

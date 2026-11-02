@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback } from "react";
 import {
   MdPublic, MdAdd, MdContentCopy, MdCheck, MdDelete, MdWarning,
@@ -145,7 +146,7 @@ export default function CustomerPortalsPage() {
         </span>
       </Alert>
 
-      {loading ? (
+      <RecordsViewport label="Customer Portals records">{loading ? (
         <Loading>Loading…</Loading>
       ) : rows.length === 0 ? (
         <EmptyState icon={MdPublic}>
@@ -220,7 +221,7 @@ export default function CustomerPortalsPage() {
             </article>
           ))}
         </div>
-      )}
+      )}</RecordsViewport>
 
       {showForm && (
         <PortalForm

@@ -138,6 +138,7 @@ def main() -> int:
 
     co_a = co_b = None
     role_view = role_manage = None
+    copied_roles = []
     user_none = user_view = user_manage = None
 
     def company_payload(name: str, isolated: bool = False) -> dict:
@@ -189,6 +190,12 @@ def main() -> int:
             if not check("0", f"{username} created", s in (200, 201), f"{s} {err_text(u)}"):
                 return None
             if role:
+                sc, copies = http("POST", f"/api/roles/{role['id']}/copy", base, token=seed,
+                                  body={"tenantAdminUserIds": [u['id']]})
+                if not check("0", f"{username} tenant role copied", sc == 200 and isinstance(copies, list) and len(copies) == 1, str(sc)):
+                    return None
+                role = copies[0]
+                copied_roles.append(role)
                 s2, d2 = http("PUT", f"/api/users/{u['id']}/roles", base, token=seed,
                               body={"roleIds": [role["id"]]})
                 check("0", f"{username} got its role", s2 == 200, f"{s2} {err_text(d2)}")
@@ -513,7 +520,7 @@ def main() -> int:
         for u in (user_none, user_view, user_manage):
             if u:
                 http("DELETE", f"/api/users/{u['id']}", base, token=seed)
-        for r in (role_view, role_manage):
+        for r in (*copied_roles, role_view, role_manage):
             if r:
                 http("DELETE", f"/api/roles/{r['id']}", base, token=seed)
         for c in (co_a, co_b):

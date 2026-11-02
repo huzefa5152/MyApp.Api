@@ -60,6 +60,10 @@ export const getSalesOrderChallans = (id) =>
 export const getAttachableChallans = (id) =>
   httpClient.get(`/salesorders/${id}/attachable-challans`);
 
+// Open orders a challan can be linked to (its customer), likeliest first.
+export const getAttachableOrders = (challanId) =>
+  httpClient.get(`/salesorders/attachable-for-challan/${challanId}`);
+
 // Attach an existing challan to this order.
 // payload = { challanId, lineMappings: [{ deliveryItemId, salesOrderItemId|null }] }
 export const attachChallanToOrder = (id, payload) =>

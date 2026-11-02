@@ -879,7 +879,7 @@ function toInputDate(v) {
 /*  Styles                                                             */
 /* ------------------------------------------------------------------ */
 const styles = {
-  wrap: { maxWidth: "1100px", margin: "0 auto" },
+  wrap: { padding: 0, maxWidth: "1100px", margin: "0 auto" },
   stepper: {
     display: "flex", alignItems: "center", gap: "0.4rem", margin: "0 0 var(--k-gap)",
     padding: "0.7rem 1rem", background: "var(--k-surface)", border: "1px solid var(--k-line)",

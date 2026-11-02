@@ -33,7 +33,7 @@ namespace MyApp.Api.Services.Implementations
         public bool IsSeedAdmin(int userId) => userId > 0 && userId == _seedAdminUserId;
 
         /// <summary>Id → CreatedByUserId for every user, cached.</summary>
-        private async Task<Dictionary<int, int?>> GetParentMapAsync()
+        public async Task<Dictionary<int, int?>> GetParentMapAsync()
         {
             if (_requestParentMap != null) return _requestParentMap;
 

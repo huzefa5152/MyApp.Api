@@ -1,3 +1,5 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 // src/pages/FbrMonitorPage.jsx
 //
 // FBR communication monitor — backs audit H-3 / M-6 (2026-05-08).
@@ -138,17 +140,17 @@ export default function FbrMonitorPage() {
         onRefresh={() => setPage((p) => p)}
       />
 
-      <Summary summary={summary} windowHours={windowHours} />
+      <ListFilters label="Summary"><Summary summary={summary} windowHours={windowHours} /></ListFilters>
 
-      <FilterBar
+      <ListFilters label="Filters"><FilterBar
         statusFilter={statusFilter}
         onStatus={(s) => { setStatusFilter(s); setPage(1); }}
         actionFilter={actionFilter}
         onAction={(a) => { setActionFilter(a); setPage(1); }}
         count={filteredCount}
-      />
+      /></ListFilters>
 
-      <RowsList
+      <RecordsViewport label="FBR log records"><RowsList
         rows={rows}
         loading={loading}
         onClickRow={async (r) => {
@@ -161,7 +163,7 @@ export default function FbrMonitorPage() {
             notify("Could not load row detail.", "error");
           }
         }}
-      />
+      /></RecordsViewport>
 
       {total > PAGE_SIZE_OPTIONS[0] && (
         <Pagination
@@ -183,7 +185,7 @@ export default function FbrMonitorPage() {
 // ── Layout ─────────────────────────────────────────────────────────
 
 function Shell({ children }) {
-  return <div className="fbr-mon-page" style={{ maxWidth: 1480, margin: "0 auto" }}>{children}</div>;
+  return <div className="fbr-mon-page" style={{ width: "100%", maxWidth: 1480, margin: "0 auto" }}>{children}</div>;
 }
 
 function Header({ company, companies, onCompanyChange, windowHours, onWindowChange, onRefresh }) {
@@ -278,7 +280,7 @@ function RowsList({ rows, loading, onClickRow }) {
   return (
     <section className="k-card" style={S.list}>
       <div className="fbr-mon-list-header" style={S.listHeader}>
-        <span style={{ width: 150 }}>Timestamp</span>
+        <span style={{ width: 180, flexShrink: 0 }}>Timestamp</span>
         <span style={{ width: 110 }}>Status</span>
         <span style={{ width: 90 }}>Action</span>
         <span style={{ width: 90 }}>Bill</span>
@@ -291,7 +293,7 @@ function RowsList({ rows, loading, onClickRow }) {
         const Icon = cfg.icon;
         return (
           <button type="button" key={r.id} onClick={() => onClickRow(r)} className="fbr-mon-row" style={S.row}>
-            <span className="fbr-mon-row__ts" style={{ width: 150, fontSize: "0.78rem", color: "var(--k-muted)", fontFamily: "ui-monospace, monospace" }}>{fmtDate(r.timestamp)}</span>
+            <span className="fbr-mon-row__ts" style={{ width: 180, flexShrink: 0, whiteSpace: "nowrap", fontSize: "0.78rem", color: "var(--k-muted)", fontFamily: "ui-monospace, monospace" }}>{fmtDate(r.timestamp)}</span>
             <span className="fbr-mon-row__status" style={{ width: 110 }}>
               <span style={{ ...S.pill, color: cfg.color, backgroundColor: cfg.bg, border: `1px solid ${cfg.border}` }}>
                 <Icon size={12} /> {cfg.label}
@@ -347,7 +349,7 @@ function Drawer({ row, onClose }) {
           </div>
           <div style={{ marginTop: "1rem" }}>
             <strong style={{ fontSize: "var(--k-font)", color: "var(--k-ink)" }}>Response body</strong>
-            <pre className="fbr-mon-pre" style={S.pre}>{row.responseBodyMasked || "(empty)"}</pre>
+            <pre className="fbr-mon-pre" style={S.pre}>{row.responseBodyMasked?.replace(/\r\n?/g, "\n").replace(/\n\s*\n/g, "\n") || "(empty)"}</pre>
           </div>
         </div>
       </div>

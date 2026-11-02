@@ -1,3 +1,5 @@
+import ListFilters from "../Components/ListFilters";
+import RecordsViewport from "../Components/RecordsViewport";
 // src/pages/FbrPurchaseImportPage.jsx
 //
 // FBR Annexure-A xls upload + per-row import preview.
@@ -257,7 +259,7 @@ export default function FbrPurchaseImportPage() {
   }, [result]);
 
   return (
-    <div className="fbr-imp-page" style={{ padding: "1.5rem 2rem", maxWidth: 1400, margin: "0 auto" }}>
+    <div className="fbr-imp-page" style={{ maxWidth: 1400, margin: "0 auto" }}>
       <PageHeader
         icon={MdCloudUpload}
         tone="brand"
@@ -274,7 +276,7 @@ export default function FbrPurchaseImportPage() {
       {companies.length > 0 && <CompanyPicker />}
 
       {/* ── Upload card ─────────────────────────────────────────────── */}
-      <Card style={styles.card}>
+      <ListFilters><Card style={styles.card}>
         <div className="fbr-imp-upload-row" style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "1rem" }}>
           <Field label="Sheet format" className="fbr-imp-upload-row__field">
             <select
@@ -339,13 +341,13 @@ export default function FbrPurchaseImportPage() {
             {" "}Both layouts upload here; the sample is fictional (safe for demos) and re-uploadable.
           </span>
         </div>
-      </Card>
+      </Card></ListFilters>
 
       {/* ── Commit result panel ─────────────────────────────────────────
            Shown after Commit completes. Replaces the preview view and
            summarises what landed in the DB. The operator can clear and
            start over (Run Preview again) once they've reviewed it. */}
-      {commitResult && (
+      <RecordsViewport label="Imported purchase preview records">{commitResult && (
         <Card style={{ ...styles.card, borderLeft: "4px solid #2e7d32" }}>
           <div className="fbr-imp-result-head" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.5rem" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
@@ -669,7 +671,7 @@ export default function FbrPurchaseImportPage() {
             )}
           </Card>
         );
-      })}
+      })}</RecordsViewport>
     </div>
   );
 }

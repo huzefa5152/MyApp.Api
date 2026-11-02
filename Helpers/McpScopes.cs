@@ -17,21 +17,36 @@ public static class McpScopes
     public const string Challans = "challans.write";
     public const string Bills = "bills.write";
     public const string TemplatesRead = "templates.read";
+    public const string TemplatesWrite = "templates.write";
     public const string DocumentsRead = "documents.read";
+    public const string Suppliers = "suppliers.write";
+    public const string ItemTypes = "itemtypes.write";
+    public const string TaxFiling = "taxfiling.write";
+    /// <summary>Not a write of business data, but it calls PRAL with the company's token, so it is granted explicitly.</summary>
+    public const string FbrValidate = "fbr.validate";
+    /// <summary>Keeps bills out of FBR (or brings them back); it also moves their stock and re-posts them.</summary>
+    public const string FbrExclusion = "fbrexclusion.write";
 
     /// <summary>Write scopes that have tools behind them today. Others are refused, not pre-granted.</summary>
-    public static readonly string[] Write = { Clients, Quotes, Challans, Bills, Email };
-    public static readonly string[] Implemented = { Read, TemplatesRead, DocumentsRead, Clients, Quotes, Challans, Bills, Email };
+    public static readonly string[] Write = { Clients, Quotes, Challans, Bills, Email, TemplatesWrite, Suppliers, ItemTypes, TaxFiling, FbrExclusion };
+    public static readonly string[] Implemented = { Read, TemplatesRead, DocumentsRead, FbrValidate, Clients, Quotes, Challans, Bills, Email, TemplatesWrite, Suppliers, ItemTypes, TaxFiling, FbrExclusion };
 
     // Permissions the owner must hold: ALL of "All", and at least one of "Any" (when listed).
     private static readonly Dictionary<string, (string[] All, string[] Any)> Needs = new()
     {
+        [TemplatesWrite] = (new[] { "printtemplates.manage.view", "printtemplates.manage.update" }, Array.Empty<string>()),
         [Clients] = (new[] { "clients.manage.create", "clients.manage.update" }, Array.Empty<string>()),
         [Quotes] = (new[] { "salesquotes.manage.create" }, Array.Empty<string>()),
         [Email] = (new[] { "email.workspace.use", "email.inbox.view", "email.inbox.manage" }, Array.Empty<string>()),
         [Challans] = (new[] { "challans.manage.create", "challans.list.view" }, Array.Empty<string>()),
         // A bill is made from challans or on its own; the two are separately grantable screens.
         [Bills] = (new[] { "challans.list.view" }, new[] { "bills.manage.create", "bills.manage.create.standalone" }),
+        [Suppliers] = (new[] { "suppliers.manage.create", "suppliers.manage.update" }, Array.Empty<string>()),
+        [ItemTypes] = (new[] { "itemtypes.manage.view" }, new[] { "itemtypes.manage.create", "itemtypes.manage.update" }),
+        // The consultant's classification; the quantity variant is the wider of the two rights.
+        [TaxFiling] = (new[] { "invoices.list.view" }, new[] { "invoices.manage.update.itemtype", "invoices.manage.update.itemtype.qty" }),
+        // The Bills screen's own toggle key, plus a list right to see which bills it covers.
+        [FbrExclusion] = (new[] { "invoices.fbr.exclude" }, new[] { "bills.list.view", "invoices.list.view" }),
     };
 
     /// <summary>
@@ -62,6 +77,7 @@ public static class McpScopes
         foreach (var key in new[] { "challans.print.view", "bills.print.view", "invoices.print.view", "salesquotes.print.view",
             "salesorders.print.view", "purchasebills.print.view", "goodsreceipts.print.view", "accounting.receipts.print", "accounting.payments.print", "withholdingtax.print.view" })
             if (await permissions.HasPermissionAsync(userId, key)) { scopes.Add(DocumentsRead); break; }
+        if (await permissions.HasPermissionAsync(userId, "invoices.fbr.validate")) scopes.Add(FbrValidate);
         if (!await permissions.HasPermissionAsync(userId, "mcp.access.use")) return new();
         if (!await permissions.HasPermissionAsync(userId, "mcp.write.use"))
             return await FilterCatalogAsync(permissions, userId, scopes);

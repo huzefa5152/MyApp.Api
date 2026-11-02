@@ -24,6 +24,7 @@ namespace MyApp.Api.Repositories.Implementations
                 .AsSplitQuery()
                 .Include(i => i.Company)
                 .Include(i => i.Client)
+                .Include(i => i.Items).ThenInclude(ii => ii.DeliveryItem)
                 .Include(i => i.Items)
                 .Include(i => i.DeliveryChallans).ThenInclude(c => c.SalesOrder)
                 .Include(i => i.OriginalInvoice)
@@ -40,7 +41,7 @@ namespace MyApp.Api.Repositories.Implementations
             int companyId, int page, int pageSize,
             string? search = null, int? clientId = null,
             DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? noteType = null, string? fbrFilter = null, string? handoverFilter = null)
+            int? noteType = null, string? fbrFilter = null, string? handoverFilter = null, string? costingStatus = null)
         {
             // Three disjoint document groups, each with its own numbering
             // sequence: sale bills (noteType null, default), Debit Notes
@@ -49,6 +50,7 @@ namespace MyApp.Api.Repositories.Implementations
                 .AsSplitQuery()
                 .Include(i => i.Company)
                 .Include(i => i.Client)
+                .Include(i => i.Items).ThenInclude(ii => ii.DeliveryItem)
                 .Include(i => i.Items)
                     // Dual-book overlay pulled on the list too, so the DTO's
                     // FbrReady / FbrMissing badge reflects the EFFECTIVE line
@@ -128,21 +130,22 @@ namespace MyApp.Api.Repositories.Implementations
                         query = query.Where(i =>
                             i.FbrStatus != "Submitted" && !i.IsCancelled && !i.IsFbrExcluded &&
                             i.FbrReviewRequiredAt == null && i.Items.Any() &&
-                            !i.Items.Any(it =>
-                                (it.Adjustment.AdjustedHSCode ?? it.HSCode) == null || (it.Adjustment.AdjustedHSCode ?? it.HSCode) == "" ||
-                                (it.Adjustment.AdjustedSaleType ?? it.SaleType) == null || (it.Adjustment.AdjustedSaleType ?? it.SaleType) == "" ||
-                                ((it.Adjustment.AdjustedFbrUOMId ?? it.FbrUOMId) == null && ((it.Adjustment.AdjustedUOM ?? it.UOM) == null || (it.Adjustment.AdjustedUOM ?? it.UOM) == "")) ||
-                                (it.Adjustment.AdjustedUnitPrice ?? it.UnitPrice) <= 0));
-                        break;
-                    case "notadjusted":
-                        query = query.Where(i =>
-                            i.FbrStatus != "Submitted" && !i.IsCancelled && !i.IsFbrExcluded &&
-                            (i.FbrReviewRequiredAt != null || !i.Items.Any() ||
-                             i.Items.Any(it =>
+                            (i.IsDemo || i.NoteKind != 0 || i.FbrReviewedAt != null || i.TaxFilingRowsJson != null || i.Items.Any(it => it.Adjustment != null)) &&
+                            (i.TaxFilingRowsJson != null || !i.Items.Any(it =>
                                 (it.Adjustment.AdjustedHSCode ?? it.HSCode) == null || (it.Adjustment.AdjustedHSCode ?? it.HSCode) == "" ||
                                 (it.Adjustment.AdjustedSaleType ?? it.SaleType) == null || (it.Adjustment.AdjustedSaleType ?? it.SaleType) == "" ||
                                 ((it.Adjustment.AdjustedFbrUOMId ?? it.FbrUOMId) == null && ((it.Adjustment.AdjustedUOM ?? it.UOM) == null || (it.Adjustment.AdjustedUOM ?? it.UOM) == "")) ||
                                 (it.Adjustment.AdjustedUnitPrice ?? it.UnitPrice) <= 0)));
+                        break;
+                    case "notadjusted":
+                        query = query.Where(i =>
+                            i.FbrStatus != "Submitted" && !i.IsCancelled && !i.IsFbrExcluded &&
+                            (i.FbrReviewRequiredAt != null || (!i.IsDemo && i.NoteKind == 0 && i.FbrReviewedAt == null && i.TaxFilingRowsJson == null && !i.Items.Any(it => it.Adjustment != null)) || !i.Items.Any() ||
+                             (i.TaxFilingRowsJson == null && i.Items.Any(it =>
+                                (it.Adjustment.AdjustedHSCode ?? it.HSCode) == null || (it.Adjustment.AdjustedHSCode ?? it.HSCode) == "" ||
+                                (it.Adjustment.AdjustedSaleType ?? it.SaleType) == null || (it.Adjustment.AdjustedSaleType ?? it.SaleType) == "" ||
+                                ((it.Adjustment.AdjustedFbrUOMId ?? it.FbrUOMId) == null && ((it.Adjustment.AdjustedUOM ?? it.UOM) == null || (it.Adjustment.AdjustedUOM ?? it.UOM) == "")) ||
+                                (it.Adjustment.AdjustedUnitPrice ?? it.UnitPrice) <= 0))));
                         break;
                     case "excluded":
                         query = query.Where(i => i.IsFbrExcluded);
@@ -169,6 +172,10 @@ namespace MyApp.Api.Repositories.Implementations
                         break;
                 }
             }
+
+            if (costingStatus == "not-costed") query = query.Where(i => !i.Items.Any(line => (line.DeliveryItemId.HasValue ? line.DeliveryItem!.ActualUnitCost : line.ActualUnitCost).HasValue));
+            else if (costingStatus == "partial") query = query.Where(i => i.Items.Any(line => (line.DeliveryItemId.HasValue ? line.DeliveryItem!.ActualUnitCost : line.ActualUnitCost).HasValue) && i.Items.Any(line => !(line.DeliveryItemId.HasValue ? line.DeliveryItem!.ActualUnitCost : line.ActualUnitCost).HasValue));
+            else if (costingStatus == "full") query = query.Where(i => i.Items.Any() && !i.Items.Any(line => !(line.DeliveryItemId.HasValue ? line.DeliveryItem!.ActualUnitCost : line.ActualUnitCost).HasValue));
 
             var totalCount = await query.CountAsync();
             var items = await query

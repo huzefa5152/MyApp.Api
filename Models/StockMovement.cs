@@ -13,6 +13,8 @@ namespace MyApp.Api.Models
         Invoice        = 2,
         Adjustment     = 3,
         GoodsReceipt   = 4,
+        PurchaseDebitNote = 5,
+        StockEntry = 6,
     }
 
     public enum StockMovementDirection

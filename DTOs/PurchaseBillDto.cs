@@ -2,6 +2,7 @@ namespace MyApp.Api.DTOs
 {
     public class PurchaseBillDto
     {
+        public string? SupplierLockedReason { get; set; }
         // ── Withholding income tax (s.153) ──
         // We withhold it and remit it to FBR, so it reduces what the supplier is
         // owed without moving the grand total. Defaults to none.
@@ -18,6 +19,12 @@ namespace MyApp.Api.DTOs
         public string CompanyName { get; set; } = "";
         public int SupplierId { get; set; }
         public int? SourceDeliveryChallanId { get; set; }
+        /// <summary>The challans and sale bills this purchase buys for (read only; filled on a single-bill read).</summary>
+        public List<PurchaseSourceDocumentDto> SourceDocuments { get; set; } = new();
+        public string PurchaseCategory { get; set; } = "Inventory";
+        public string Source { get; set; } = "manual";
+        public int? SourceInvoiceId { get; set; }
+        public bool IsNonStockSupplierPurchase { get; set; }
         public string SupplierName { get; set; } = "";
         public string? SupplierBillNumber { get; set; }
         public string? SupplierIRN { get; set; }
@@ -80,6 +87,8 @@ namespace MyApp.Api.DTOs
         /// grouped set of sale lines.
         /// </summary>
         public List<int> SourceInvoiceItemIds { get; set; } = new();
+        public int? LocalDeliveryItemId { get; set; }
+        public int? LocalInvoiceItemId { get; set; }
     }
 
     /// <summary>
@@ -87,6 +96,7 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class CreatePurchaseBillDto
     {
+        public string PurchaseCategory { get; set; } = "Inventory";
         public int? CustomNumber { get; set; }
         // ── Withholding income tax (s.153) — optional, defaults to none ──
         /// <summary>Rate %. Null with an amount means fixed-amount mode; null
@@ -132,6 +142,9 @@ namespace MyApp.Api.DTOs
         /// one save.
         /// </summary>
         public List<int> SourceInvoiceItemIds { get; set; } = new();
+        /// <summary>Optional local-direct allocation. Quantity is the quantity purchased from this source line.</summary>
+        public int? LocalDeliveryItemId { get; set; }
+        public int? LocalInvoiceItemId { get; set; }
     }
 
     /// <summary>
@@ -139,6 +152,7 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class UpdatePurchaseBillDto
     {
+        public int? SupplierId { get; set; }
         public int? CustomNumber { get; set; }
         // ── Withholding income tax (s.153) — optional, defaults to none ──
         /// <summary>Rate %. Null with an amount means fixed-amount mode; null
@@ -173,6 +187,9 @@ namespace MyApp.Api.DTOs
         public decimal? FixedNotifiedValueOrRetailPrice { get; set; }
         /// <summary>Preserves the source-line links if this row originated from a sale-bill grouping.</summary>
         public List<int> SourceInvoiceItemIds { get; set; } = new();
+        /// <summary>Local-direct link for a NEW row; an existing row keeps the link it was saved with.</summary>
+        public int? LocalDeliveryItemId { get; set; }
+        public int? LocalInvoiceItemId { get; set; }
     }
 
     /// <summary>
@@ -244,5 +261,57 @@ namespace MyApp.Api.DTOs
 
         /// <summary>Avg unit price across the group — purely a sanity reference.</summary>
         public decimal AvgSaleUnitPrice { get; set; }
+    }
+}
+
+/// <summary>A challan or sale bill that still has quantity to purchase locally.</summary>
+public class LocalPurchaseSourceSummaryDto
+{
+    public string Kind { get; set; } = "";
+    public int Id { get; set; }
+    public int Number { get; set; }
+    public DateTime Date { get; set; }
+    public string ClientName { get; set; } = "";
+    public int RemainingLines { get; set; }
+    public decimal RemainingQuantity { get; set; }
+}
+
+public class LocalPurchaseSourceDto
+{
+    public string Kind { get; set; } = "";
+    public int Id { get; set; }
+    public int Number { get; set; }
+    public DateTime Date { get; set; }
+    public string ClientName { get; set; } = "";
+    public List<LocalPurchaseSourceLineDto> Items { get; set; } = new();
+}
+
+/// <summary>
+/// One line still to purchase. Exactly one of DeliveryItemId / InvoiceItemId is
+/// set: a bill line that came from a challan is offered as that challan line.
+/// </summary>
+public class LocalPurchaseSourceLineDto
+{
+    public int? DeliveryItemId { get; set; }
+    public int? InvoiceItemId { get; set; }
+    public int? SourceChallanNumber { get; set; }
+    public string Description { get; set; } = "";
+    public string Unit { get; set; } = "";
+    public decimal Quantity { get; set; }
+    public decimal PurchasedQuantity { get; set; }
+    public decimal RemainingQuantity { get; set; }
+    /// <summary>Private costing; null unless the caller holds bills.costs.view.</summary>
+    public decimal? EstimatedUnitCost { get; set; }
+    public int? SupplierId { get; set; }
+}
+
+namespace MyApp.Api.DTOs
+{
+    /// <summary>A challan ("challan") or sale bill ("bill") a purchase buys for.</summary>
+    public class PurchaseSourceDocumentDto
+    {
+        public string Kind { get; set; } = "";
+        public int Id { get; set; }
+        public int Number { get; set; }
     }
 }

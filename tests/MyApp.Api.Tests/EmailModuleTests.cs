@@ -44,4 +44,37 @@ public class EmailModuleTests
         }
 
     }
+
+    [Fact, Trait("Category", "LocalSql")]
+    public async Task ReseedingRemovesOptionalEmailPermissionsFromAdministratorAndPreservesExplicitGrants()
+    {
+        var connection = Environment.GetEnvironmentVariable("EMAIL_TEST_CONNECTION")
+            ?? throw new InvalidOperationException("Set EMAIL_TEST_CONNECTION to an approved disposable local database.");
+        DevelopmentSqlGuard.AssertLocal(connection, Environment.MachineName, false);
+        var scratch = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connection);
+        Assert.StartsWith("MyApp_EmailWorkspace_Test_", scratch.InitialCatalog);
+        scratch.InitialCatalog += "_Reseed";
+        await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseSqlServer(scratch.ConnectionString).Options);
+        await db.Database.EnsureCreatedAsync();
+        if (!await db.Users.AnyAsync())
+        {
+            db.Users.Add(new MyApp.Api.Models.User { Username = "module-reseed-admin", FullName = "Sample Administrator" });
+            await db.SaveChangesAsync();
+        }
+        await RbacSeeder.SeedAsync(db, 1);
+        var admin = await db.Roles.SingleAsync(r => r.Name == RbacSeeder.AdministratorRoleName);
+        var permissions = await db.Permissions.Where(p => p.Key == "email.read.manage" || p.Key == "email.replies.send").ToListAsync();
+        Assert.Equal(2, permissions.Count);
+        var explicitRole = new MyApp.Api.Models.Role { Name = "Explicit email test " + Guid.NewGuid().ToString("N") };
+        db.Roles.Add(explicitRole); await db.SaveChangesAsync();
+        db.RolePermissions.AddRange(permissions.Select(p => new MyApp.Api.Models.RolePermission { RoleId = admin.Id, PermissionId = p.Id }));
+        db.RolePermissions.AddRange(permissions.Select(p => new MyApp.Api.Models.RolePermission { RoleId = explicitRole.Id, PermissionId = p.Id }));
+        await db.SaveChangesAsync();
+        await RbacSeeder.SeedAsync(db, 1);
+        Assert.False(await db.RolePermissions.AnyAsync(p => p.RoleId == admin.Id && p.Permission!.Key.StartsWith("email.")));
+        Assert.Equal(2, await db.RolePermissions.CountAsync(p => p.RoleId == explicitRole.Id));
+        await RbacSeeder.SeedAsync(db, 1);
+        Assert.False(await db.RolePermissions.AnyAsync(p => p.RoleId == admin.Id && p.Permission!.Key.StartsWith("email.")));
+        Assert.Equal(2, await db.RolePermissions.CountAsync(p => p.RoleId == explicitRole.Id));
+    }
 }

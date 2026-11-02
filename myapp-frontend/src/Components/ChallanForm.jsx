@@ -2,6 +2,7 @@ import { todayYmd } from "../utils/dateInput";
 import DocumentCopyPicker from "./DocumentCopyPicker";
 import { appendCopiedLines } from "../utils/documentCopy";
 import { useState, useRef, useEffect } from "react";
+import { notify } from "../utils/notify";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableSelect from "./SearchableSelect";
 import LineItemsEditor from "./LineItemsEditor";
@@ -19,8 +20,6 @@ import useScrollToError from "../hooks/useScrollToError";
 import DocumentNotesEditor from "./DocumentNotesEditor";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import ChallanPrivateCosts, { useChallanSuppliers } from "./ChallanPrivateCosts";
-import { createPurchaseBillsFromChallan } from "../api/purchaseBillApi";
-import { useConfirm } from "./ConfirmDialog";
 import SearchableClientSelect from "./SearchableClientSelect";
 import { Button, Field } from "../ui/Kit";
 
@@ -58,28 +57,6 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   const [numberValid, setNumberValid] = useState(true);
   const attachmentRef = useRef(null);
   const suppliers = useChallanSuppliers(companyId);
-  const confirm = useConfirm();
-  // Set when the challan saved but its purchase bills failed — the form then
-  // offers a retry instead of saving the challan a second time.
-  const [savedChallanId, setSavedChallanId] = useState(null);
-  const [purchaseError, setPurchaseError] = useState("");
-
-  // Every line carries a supplier + actual cost → offer the purchase bills
-  // (one per supplier). Returns false when the form must stay open.
-  const offerPurchaseBills = async (saved, lines) => {
-    if (!saved?.id || !has("purchasebills.manage.create") || !lines.length ||
-      !lines.every((line) => line.supplierId && line.actualUnitCost !== null && line.actualUnitCost !== undefined && line.actualUnitCost !== "")) return true;
-    const supplierCount = new Set(lines.map((line) => Number(line.supplierId))).size;
-    const yes = await confirm({ title: "Create purchase bills?", message: `Every line has a supplier and actual cost. Create ${supplierCount} unpaid purchase bill${supplierCount === 1 ? "" : "s"} now, one per supplier?`, variant: "info", confirmText: "Create purchase bills", cancelText: "Not now" });
-    if (!yes) return true;
-    try { await createPurchaseBillsFromChallan(saved.id); return true; }
-    catch (err) {
-      setSavedChallanId(saved.id);
-      setPurchaseError(err.response?.data?.error || "The challan was saved, but purchase bills could not be created.");
-      setSaving(false);
-      return false;
-    }
-  };
 
   useEffect(() => {
     getAllUnits(companyId).then(({ data }) => setUnits(data)).catch(() => setUnits([]));
@@ -147,7 +124,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (saving || savedChallanId || !numberValid) return;
+    if (saving || !numberValid) return;
     setError("");
 
     const validItems = items.filter((item) => item.description.trim());
@@ -198,7 +175,8 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
       // the challan is already saved.
       const savedId = saved?.id;
       if (savedId) { try { await attachmentRef.current?.flush(savedId); } catch { /* attachments best-effort */ } }
-      if (await offerPurchaseBills(saved, payloadItems)) onClose();
+      if (saved?.purchaseWarning) notify(saved.purchaseWarning, "warning");
+      onClose();
     } catch (err) {
       // Server-supplied user-friendly message wins; otherwise show a
       // friendly stable string. Bare err.message from axios is
@@ -212,7 +190,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
     }
   };
 
-  const isDisabled = items.some((i) => !i.description.trim()) || !client || saving || !!savedChallanId || !numberValid;
+  const isDisabled = items.some((i) => !i.description.trim()) || !client || saving || !numberValid;
 
   // Backdrop click is intentionally a no-op — the user can lose minutes
   // of typed data with one stray click otherwise. Use the X in the
@@ -227,20 +205,19 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
 
         <form onSubmit={handleSubmit}>
           <div data-admin-body="" style={formStyles.body}>
-            <DocumentCopyPicker companyId={companyId} destination="Challan" allowDetails={true} disabled={!!salesOrderId}
-              onCopy={(source,lines,details) => {
-                setItems(prev => appendCopiedLines(details ? [] : prev, lines, () => ({description:"",quantity:1,unit:""})));
-                if(details) { setClient(clients.find(c=>c.id===source.clientId) || {id:source.clientId,label:source.clientName});setSite(source.site||"");setNotes(source.notes||"");setPoNumber(source.poNumber||"");setPoDate(source.poDate?.slice(0,10)||"");setIndentNo(source.indentNo||"");setSalesOrderId("");setDeliveryDate(todayYmd()); }
-              }} />
-            {error && <div ref={errRef} style={formStyleformStyles.erroror}>{error}</div>}
-            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="challan" clientId={client?.id} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
+            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
-            {/* Optional: fulfil a Sales Order. Picking one autofills the client,
-                PO, site and the order's undelivered lines below, and links the
-                challan to the order (fulfilment tracking + auto-close). */}
-            {canUseOrders && (
-              <div style={{ marginBottom: "1rem" }}>
-                <Field label={<>From Sales Order <span style={styles.opt}>(optional — autofills the challan)</span></>}>
+            {/* One header row: number, the order it fulfils, and the copy
+                shortcut. Stacked, each took a full line of a wide dialog. The
+                copy panel takes the full row once it is opened. */}
+            <div className="doc-header-row">
+              <div className="doc-header-row__number"><BillNumberField companyId={companyId} documentType="challan" clientId={client?.id} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
+              {/* Optional: fulfil a Sales Order. Picking one autofills the client,
+                  PO, site and the order's undelivered lines below, and links the
+                  challan to the order (fulfilment tracking + auto-close). */}
+              {canUseOrders && (
+                <div className="doc-header-row__grow">
+                  <Field label={<>From Sales Order <span style={styles.opt}>(optional — autofills the challan)</span></>}>
                   <SearchableSelect
                     items={openOrders.map((o) => ({ id: o.id, label: `SO #${o.salesOrderNumber} — ${o.clientName}${o.customerPoNumber ? ` · PO ${o.customerPoNumber}` : ""}` }))}
                     value={salesOrderId}
@@ -248,9 +225,17 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                     labelKey="label"
                     placeholder={openOrders.length ? "— not from an order —" : "No open sales orders for this company"}
                   />
-                </Field>
+                  </Field>
+                </div>
+              )}
+              <div className="doc-header-row__copy">
+                <DocumentCopyPicker companyId={companyId} destination="Challan" allowDetails={true} disabled={!!salesOrderId}
+                  onCopy={(source,lines,details) => {
+                    setItems(prev => appendCopiedLines(details ? [] : prev, lines, () => ({description:"",quantity:1,unit:""})));
+                    if(details) { setClient(clients.find(c=>c.id===source.clientId) || {id:source.clientId,label:source.clientName});setSite(source.site||"");setNotes(source.notes||"");setPoNumber(source.poNumber||"");setPoDate(source.poDate?.slice(0,10)||"");setIndentNo(source.indentNo||"");setSalesOrderId("");setDeliveryDate(todayYmd()); }
+                  }} />
               </div>
-            )}
+            </div>
 
             {/* Header row: Client / Site / Delivery Date — same layout as
                 Edit Challan so operators see identical shape on both flows.
@@ -258,25 +243,31 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                 otherwise so one-offs still work. */}
             <div data-admin-form-row="" className="k-form-grid" style={styles.grid}>
               <Field label="Client">
-                <SearchableClientSelect
-                  clients={clients}
-                  value={client?.id || ""}
-                  onChange={(id, item) => { setClient(item); setSite(""); }}
-                  placeholder="— Select Client —"
-                />
-                {canCreateClient ? (
-                  <Button
-                    variant="secondary"
-                    icon={MdPersonAdd}
-                    style={styles.inlineAddBtn}
-                    onClick={() => setShowAddClient(true)}
-                    title="Create a new client without leaving this form"
-                  >
-                    New Client
-                  </Button>
-                ) : (
-                  <PermissionLackedHint perm="clients.manage.create" what="add a new client" />
-                )}
+                {/* New Client sits beside the picker rather than on a line of
+                    its own under it. */}
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "stretch" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <SearchableClientSelect
+                      clients={clients}
+                      value={client?.id || ""}
+                      onChange={(id, item) => { setClient(item); setSite(""); }}
+                      placeholder="— Select Client —"
+                    />
+                  </div>
+                  {canCreateClient && (
+                    <Button
+                      variant="secondary"
+                      icon={MdPersonAdd}
+                      style={{ ...styles.inlineAddBtn, marginTop: 0, alignSelf: "stretch", flexShrink: 0 }}
+                      onClick={() => setShowAddClient(true)}
+                      title="Create a new client without leaving this form"
+                      aria-label="New client"
+                    >
+                      New
+                    </Button>
+                  )}
+                </div>
+                {!canCreateClient && <PermissionLackedHint perm="clients.manage.create" what="add a new client" />}
               </Field>
               <Field label="Site / Department">
                 {(() => {
@@ -342,13 +333,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
               <ChallanPrivateCosts companyId={companyId} items={items} onItemsChange={setItems} suppliers={suppliers} />
             </div>
 
-            {savedChallanId && <div role="alert" style={{ marginTop: 12, padding: 12, borderRadius: 8, background: "#fff3e0", color: "#92400e" }}>
-              Challan saved. {purchaseError}
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                <Button variant="primary" disabled={saving} onClick={async () => { setSaving(true); try { await createPurchaseBillsFromChallan(savedChallanId); onClose(); } catch (err) { setPurchaseError(err.response?.data?.error || "Could not create purchase bills."); } finally { setSaving(false); } }}>Retry purchase bills</Button>
-                <Button variant="secondary" onClick={onClose}>Close without purchase bills</Button>
-              </div>
-            </div>}
+
 
             <DocumentNotesEditor value={notes} onChange={setNotes} />
 

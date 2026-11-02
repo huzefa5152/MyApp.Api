@@ -43,6 +43,12 @@ namespace MyApp.Api.Models
         // for natively-created and imported challans.
         public int? DuplicatedFromId { get; set; }
 
+        // Set on the row that holds the lines LEFT OFF a bill when only part of
+        // a challan was billed: the original row's id. Same ChallanNumber; the
+        // lines moved here, they were not copied. Unbilled rows of one challan
+        // are merged back into one (InvoiceService.PartialBilling).
+        public int? SplitFromChallanId { get; set; }
+
         // Optional link to the Sales Order this challan fulfils. Null for
         // ad-hoc challans not raised against an order. Each line's
         // DeliveryItem.SalesOrderItemId ties back to the ordered line so

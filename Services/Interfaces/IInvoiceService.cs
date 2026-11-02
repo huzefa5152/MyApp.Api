@@ -4,6 +4,8 @@ namespace MyApp.Api.Services.Interfaces
 {
     public interface IInvoiceService
     {
+        Task<TaxFilingEditorDto?> GetTaxFilingAsync(int id);
+        Task<TaxFilingEditorDto?> SaveTaxFilingAsync(int id, SaveTaxFilingDto dto, int actorId, string actorName, bool allowNumericalChanges);
         Task<bool> SetTaxInvoiceGroupingAsync(int id, bool grouped);
         Task<List<InvoiceDto>> GetByCompanyAsync(int companyId);
         /// <summary>
@@ -16,7 +18,7 @@ namespace MyApp.Api.Services.Interfaces
             int companyId, int page, int pageSize,
             string? search = null, int? clientId = null,
             DateTime? dateFrom = null, DateTime? dateTo = null,
-            int? noteType = null, string? fbrFilter = null, string? handoverFilter = null);
+            int? noteType = null, string? fbrFilter = null, string? handoverFilter = null, string? costingStatus = null);
         Task<InvoiceDto?> GetByIdAsync(int id);
         Task<InvoiceDto> CreateAsync(CreateInvoiceDto dto);
         /// <summary>
@@ -37,8 +39,8 @@ namespace MyApp.Api.Services.Interfaces
         /// </summary>
         Task<NextInvoiceNumberDto> GetNextInvoiceNumberAsync(int companyId, int? check);
         Task<InvoiceDto?> UpdateAsync(int id, UpdateInvoiceDto dto);
-        Task AssertCommercialBillMutationAsync(int id);
-        Task ReconcileChallanBillAsync(int id);
+        Task AssertCommercialBillMutationAsync(int id, string? expectedVersion = null);
+        Task ReconcileChallanBillAsync(int id, string previousFilingSource, bool hadConsultantWork);
         Task RemoveBilledChallanAsync(int challanId, bool delete);
         Task<BillChallanOptionsDto?> GetBillChallanOptionsAsync(int id, string? search);
         Task<InvoiceDto?> UpdateBillChallansAsync(int id, UpdateBillChallansDto dto, string? actorUserName = null);

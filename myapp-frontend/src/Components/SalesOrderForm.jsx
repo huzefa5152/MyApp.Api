@@ -187,25 +187,30 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
             </Field>
             <div data-admin-form-row="" className="k-form-grid" style={s.grid}>
               <Field label="Client">
-                <SearchableClientSelect
-                  clients={clients}
-                  value={client?.id || ""}
-                  onChange={(id, item) => { setClient(item); setSite(""); setSalesQuoteId(""); }}
-                  placeholder="— Select Client —"
-                />
-                {canCreateClient ? (
-                  <Button
-                    variant="secondary"
-                    icon={MdPersonAdd}
-                    style={s.inlineAddBtn}
-                    onClick={() => setShowAddClient(true)}
-                    title="Create a new client without leaving this form"
-                  >
-                    New Client
-                  </Button>
-                ) : (
-                  <PermissionLackedHint perm="clients.manage.create" what="add a new client" />
-                )}
+                {/* New Client sits beside the picker rather than on a line of its own. */}
+                <div style={s.pickerRow}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <SearchableClientSelect
+                      clients={clients}
+                      value={client?.id || ""}
+                      onChange={(id, item) => { setClient(item); setSite(""); setSalesQuoteId(""); }}
+                      placeholder="— Select Client —"
+                    />
+                  </div>
+                  {canCreateClient && (
+                    <Button
+                      variant="secondary"
+                      icon={MdPersonAdd}
+                      style={s.inlineAddBtn}
+                      onClick={() => setShowAddClient(true)}
+                      title="Create a new client without leaving this form"
+                      aria-label="New client"
+                    >
+                      New
+                    </Button>
+                  )}
+                </div>
+                {!canCreateClient && <PermissionLackedHint perm="clients.manage.create" what="add a new client" />}
               </Field>
               <Field label={<>Site / Department <span style={s.opt}>(optional)</span></>}>
                 {(() => {
@@ -242,6 +247,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
             </div>
 
             <LineItemsEditor companyId={companyId}
+              entryModeKey="sales-order"
               items={items}
               onItemsChange={setItems}
               makeBlankItem={blankItem}
@@ -307,6 +313,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
 
 const s = {
   grid: { gap: "var(--k-gap)", margin: "1rem 0" },
-  inlineAddBtn: { marginTop: "0.4rem", alignSelf: "flex-start", color: "var(--k-teal)", borderColor: "var(--k-teal)" },
+  pickerRow: { display: "flex", gap: "0.5rem", alignItems: "stretch" },
+  inlineAddBtn: { flexShrink: 0, whiteSpace: "nowrap", color: "var(--k-teal)", borderColor: "var(--k-teal)" },
   opt: { color: "var(--k-muted)", fontWeight: 400 },
 };

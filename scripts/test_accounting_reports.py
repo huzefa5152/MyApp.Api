@@ -15,7 +15,10 @@ DIFFERENT WAY:
   • the profit & loss net against the balance sheet's current-year earnings;
   • the dashboard against each of the reports it summarises; and
   • the tax control report against the documents themselves — the one place the
-    ledger is deliberately checked against something outside it.
+    ledger is deliberately checked against something outside it;
+  • Gross Profit, Monthly Profit and Customer Profitability against the P&L
+    (whole range and month by month) and against the journal entry each sale,
+    credit note and withdrawn bill posted.
 
 The fixture is a small but complete set of books: sales with and without each
 tax, a purchase, a receipt, and a manual journal, so every report has something
@@ -89,6 +92,402 @@ def walk(nodes):
         for a in n.get("accounts") or []:
             yield a
         yield from walk(n.get("children"))
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  Profit reports (2026-10-10) — Gross Profit, Monthly Profit, Customer
+#  Profitability. Every check measures a profit report against the Profit &
+#  Loss, against the journal entries of the documents behind it, or against
+#  the documents this suite raised — never against itself.
+# ═════════════════════════════════════════════════════════════════════════════
+
+COST_NOTE = "recorded only for stock-tracked items"
+UNATTRIBUTED = "Not attributed to a customer"
+# Real tariff codes, tried in order: the catalog validates an HS code, and a
+# fixture that invents one fails for a reason that has nothing to do with this
+# suite.
+HS_CANDIDATES = ["8538.1000", "8481.8090", "8536.5010", "8414.5110", "8413.7010",
+                 "8504.4090", "8544.4990", "3926.9099", "7318.1510", "8471.3020"]
+
+
+def catalog(base, token, company_id, name, **params):
+    """One accounting catalog report (/api/accounting/catalog/...)."""
+    qs = "&".join(f"{k}={v}" for k, v in params.items() if v is not None)
+    return http("GET", f"/api/accounting/catalog/company/{company_id}/{name}"
+                + (f"?{qs}" if qs else ""), base, token=token)
+
+
+def custom(d_from, d_to):
+    return {"period": "custom", "from": d_from, "to": d_to}
+
+
+def row_named(rows, name):
+    return next((r for r in rows or [] if r.get("customer") == name), None)
+
+
+def profit_ties_to_pl(suite, base, token, company_id, window, label):
+    """The three profit reports against the P&L for one window. Returns
+    (pl, gross, monthly, customers) for the caller's own checks."""
+    # Both statements with their comparative column, so the prior period is
+    # tied out line for line as well.
+    s, pl = catalog(base, token, company_id, "profit-loss", **window)
+    if not check(suite, f"{label}: the P&L loads", s == 200, f"{s} {err_text(pl)}"):
+        return None
+    s, gp = catalog(base, token, company_id, "gross-profit", **window)
+    check(suite, f"{label}: Gross Profit loads", s == 200, f"{s} {err_text(gp)}")
+    s, mp = catalog(base, token, company_id, "monthly-profit", **window)
+    check(suite, f"{label}: Monthly Profit loads", s == 200, f"{s} {err_text(mp)}")
+    s, cp = catalog(base, token, company_id, "customer-profitability", **window)
+    check(suite, f"{label}: Customer Profitability loads", s == 200, f"{s} {err_text(cp)}")
+    if not all(isinstance(x, dict) for x in (gp, mp, cp)):
+        return None
+
+    income, cost = D(pl["totalIncome"]), D(pl["totalCostOfSales"])
+    expenses, net = D(pl["totalExpenses"]), D(pl["netProfit"])
+
+    # Gross Profit is the top of the P&L.
+    check(suite, f"{label}: gross profit revenue is the P&L's income",
+          D(gp["totals"]["revenue"]) == income, f"{gp['totals']['revenue']} vs {income}")
+    check(suite, f"{label}: gross profit cost of sales is the P&L's",
+          D(gp["totals"]["costOfSales"]) == cost, f"{gp['totals']['costOfSales']} vs {cost}")
+    check(suite, f"{label}: gross profit is revenue less cost of sales",
+          D(gp["totals"]["grossProfit"]) == income - cost,
+          f"{gp['totals']['grossProfit']} vs {income - cost}")
+    if income:
+        expected_margin = (((income - cost) / income) * 100).quantize(Decimal("0.1"), rounding="ROUND_HALF_UP")
+        check(suite, f"{label}: the gross margin is gross profit over revenue",
+              D(gp["totals"].get("grossMarginPercent", "nan")) == expected_margin,
+              f"{gp['totals'].get('grossMarginPercent')} vs {expected_margin}")
+    # Line for line: every income / cost-of-sales account on the P&L appears on
+    # Gross Profit at the same figure, and nothing else does.
+    def lines(st):
+        return {l["accountId"]: (D(l["amount"]), None if l.get("comparative") is None else D(l["comparative"]))
+                for l in st["rows"] if l.get("kind") == "account" and l.get("accountId")}
+    pl_lines, gp_lines = lines(pl), lines(gp)
+    check(suite, f"{label}: every Gross Profit account line is the P&L's own line, both periods",
+          all(pl_lines.get(k) == v for k, v in gp_lines.items()),
+          f"gp={ {k: str(v) for k, v in gp_lines.items()} } pl={ {k: str(v) for k, v in pl_lines.items()} }")
+    check(suite, f"{label}: and the lines add up to revenue plus cost (both read positive)",
+          sum((v[0] for v in gp_lines.values()), Decimal(0)) == income + cost,
+          "income lines + cost lines do not match the section totals")
+    check(suite, f"{label}: the comparative period is the P&L's comparative",
+          gp.get("comparativeLabel") == pl.get("comparativeLabel"),
+          f"{gp.get('comparativeLabel')} vs {pl.get('comparativeLabel')}")
+
+    # Monthly Profit: totals are the P&L for the range ...
+    for key, want in (("revenue", income), ("costOfSales", cost),
+                      ("grossProfit", income - cost), ("otherExpenses", expenses),
+                      ("netProfit", net)):
+        check(suite, f"{label}: monthly {key} total is the P&L's",
+              D(mp["totals"].get(key, 0)) == want, f"{mp['totals'].get(key)} vs {want}")
+    # ... and each month is the P&L run for that month alone.
+    for row in mp["rows"]:
+        s, one = catalog(base, token, company_id, "profit-loss", comparative="false",
+                         **custom(row["from"][:10], row["to"][:10]))
+        ok = s == 200 and D(row["revenue"]) == D(one["totalIncome"]) \
+            and D(row["costOfSales"]) == D(one["totalCostOfSales"]) \
+            and D(row["otherExpenses"]) == D(one["totalExpenses"]) \
+            and D(row["netProfit"]) == D(one["netProfit"]) \
+            and D(row["grossProfit"]) == D(row["revenue"]) - D(row["costOfSales"])
+        check(suite, f"{label}: {row['label']} equals the P&L for that month", ok,
+              f"row={row} pl={ {k: one.get(k) for k in ('totalIncome', 'totalCostOfSales', 'totalExpenses', 'netProfit')} if isinstance(one, dict) else one}")
+
+    # Customer Profitability: customers + the unattributed row = the P&L.
+    rows = cp["rows"]
+    check(suite, f"{label}: customer revenue plus the unattributed row is the P&L's income",
+          sum((D(r["revenue"]) for r in rows), Decimal(0)) == income,
+          f"{sum((D(r['revenue']) for r in rows), Decimal(0))} vs {income}")
+    check(suite, f"{label}: customer cost plus the unattributed row is the P&L's cost of sales",
+          sum((D(r["costOfSales"]) for r in rows), Decimal(0)) == cost,
+          f"{sum((D(r['costOfSales']) for r in rows), Decimal(0))} vs {cost}")
+    check(suite, f"{label}: the report totals are the P&L's",
+          D(cp["totals"]["revenue"]) == income and D(cp["totals"]["costOfSales"]) == cost
+          and D(cp["totals"]["grossProfit"]) == income - cost, f"{cp['totals']}")
+    customers = [r for r in rows if not r.get("isUnattributed")]
+    gps = [D(r["grossProfit"]) for r in customers]
+    check(suite, f"{label}: customers are sorted by gross profit, largest first",
+          gps == sorted(gps, reverse=True), f"{gps}")
+    check(suite, f"{label}: the unattributed row, when present, is last and not drillable",
+          all(not r.get("drillKey") for r in rows if r.get("isUnattributed"))
+          and (not any(r.get("isUnattributed") for r in rows) or rows[-1].get("isUnattributed")),
+          "unattributed row misplaced or drillable")
+    check(suite, f"{label}: every customer row drills to its own client",
+          all(r.get("drillKey") == str(r.get("clientId")) for r in customers)
+          and cp.get("rowDrillFilter") == "clientId", "drill keys do not name the client")
+    return pl, gp, mp, cp
+
+
+def non_stock_profit_checks(base, token, company_id, d_from, d_to, purchase_net, client_id):
+    """The suite's main company does not track stock: purchases are charged to
+    cost of sales when bought, and no sale carries a cost."""
+    print("\n=== 10. Profit reports on a company that does not track stock ===")
+    got = profit_ties_to_pl("10", base, token, company_id, custom(d_from, d_to), "non-stock")
+    if not got:
+        return
+    pl, gp, mp, cp = got
+    customers = [r for r in cp["rows"] if not r.get("isUnattributed")]
+    check("10", "the customer is listed", any(r.get("clientId") == client_id for r in customers),
+          f"rows {cp['rows']}")
+    check("10", "no customer carries a cost — none was posted against a sale",
+          all(D(r["costOfSales"]) == 0 for r in customers), f"{customers}")
+    rest = row_named(cp["rows"], UNATTRIBUTED)
+    check("10", "the purchase sits on the unattributed row as cost of sales",
+          rest is not None and D(rest["costOfSales"]) == D(pl["totalCostOfSales"]) == purchase_net,
+          f"rest={rest} pl cost={pl['totalCostOfSales']} purchase={purchase_net}")
+    for name, rep in (("Gross Profit", gp), ("Monthly Profit", mp), ("Customer Profitability", cp)):
+        check("10", f"{name} says cost of goods sold is recorded only for stock-tracked items",
+              COST_NOTE in (rep.get("notice") or ""), f"notice: {rep.get('notice')}")
+
+
+def stock_profit_suite(base, token, day, stamp):
+    """A stock-tracked company with a purchase, sales to two customers, a
+    credit note, a bill withdrawn at FBR, manual journals in two months and a
+    demo bill — then every profit figure is tied to the P&L and to the journal
+    entries of the documents behind it."""
+    print("\n=== 11. Profit reports on a stock-tracked company ===")
+    S = "11"
+    today = day.strftime("%Y-%m-%dT00:00:00Z")
+    month_start = day.replace(day=1)
+    prev_month_start = (month_start - timedelta(days=1)).replace(day=1)
+    next_month = (month_start + timedelta(days=32)).replace(day=1)
+    month_end = next_month - timedelta(days=1)
+    window = custom(prev_month_start.isoformat(), month_end.isoformat())
+    this_month = custom(month_start.isoformat(), month_end.isoformat())
+
+    company_id = None
+    try:
+        s, company = http("POST", "/api/companies", base, token=token, body={
+            "name": f"[TEMP] Profit Suite {stamp}", "brandName": "[TEMP] Profit Suite",
+            "fullAddress": "Karachi", "ntn": "1234567", "cnic": "4220100000000",
+            "strn": "1234567890123", "fbrSellerRegistrationNo": "1234567",
+            "startingChallanNumber": 1, "startingInvoiceNumber": 1,
+            "startingDebitNoteNumber": 1, "startingCreditNoteNumber": 1,
+            "startingPurchaseBillNumber": 1, "startingGoodsReceiptNumber": 1,
+            "fbrProvinceCode": 8, "fbrBusinessActivity": "Wholesaler",
+            "fbrSector": "Wholesale / Retails", "fbrEnvironment": "sandbox",
+            "fbrToken": "placeholder-not-a-real-token",
+            "inventoryTrackingEnabled": True, "stockGuardHardBlock": False,
+        })
+        if not check(S, "stock-tracked company created", s in (200, 201), f"{s} {err_text(company)}"):
+            return
+        company_id = company["id"]
+        # The chart first: without it the sales would post to Suspense and there
+        # would be no Cost of goods sold to relieve into.
+        s, _ = http("POST", f"/api/accounts/company/{company_id}/seed-wholesale", base, token=token)
+        check(S, "chart seeded before any document", s == 200, f"got {s}")
+        s, flat = http("GET", f"/api/accounts/company/{company_id}/flat", base, token=token)
+        by_control = {a["controlType"]: a for a in flat if a["controlType"] != "None"}
+        by_name = {a["name"]: a for a in flat}
+        SALES, COGS = by_name["Sales"], by_name["Cost of goods sold"]
+        OTHER_INCOME, RENT = by_name["Other income"], by_name["Rent"]
+        # Bank and cash cannot take a manual journal, so the contra legs are a
+        # plain equity and a plain liability account.
+        DRAWINGS, LOANS = by_name["Owner drawings"], by_name["Loans payable"]
+
+        def party(path, name, **extra):
+            return http("POST", path, base, token=token, body={
+                "companyId": company_id, "name": name, "address": "Karachi", **extra})
+        _, c1 = party("/api/clients", f"[TEMP] Profit Buyer One {stamp}", ntn="4228937",
+                      strn="9876543210987", registrationType="Registered", fbrProvinceCode=8)
+        _, c2 = party("/api/clients", f"[TEMP] Profit Buyer Two {stamp}", ntn="4228938",
+                      strn="9876543210988", registrationType="Registered", fbrProvinceCode=8)
+        _, sup = party("/api/suppliers", f"[TEMP] Profit Supplier {stamp}")
+        if not check(S, "two customers and a supplier created",
+                     all(isinstance(x, dict) and "id" in x for x in (c1, c2, sup)), f"{c1} {c2} {sup}"):
+            return
+
+        items = []
+        for hs in HS_CANDIDATES:
+            if len(items) == 2:
+                break
+            s, it = http("POST", f"/api/itemtypes?companyId={company_id}", base, token=token, body={
+                "name": f"[TEMP] Profit Item {len(items) + 1} {stamp}", "hsCode": hs, "uom": "Pcs",
+                "saleType": "Goods at standard rate (default)", "isFavorite": True,
+                "companyId": company_id})
+            if s in (200, 201) and isinstance(it, dict) and it.get("id"):
+                items.append(it)
+        if not check(S, "two classified (HS) item types created — only those move stock",
+                     len(items) == 2, f"created {len(items)}"):
+            return
+        A, B = items
+
+        # Bought: 100 of A at 50 and 40 of B at 200 — weighted-average costs 50 / 200.
+        s, pb = http("POST", "/api/purchasebills", base, token=token, body={
+            "companyId": company_id, "supplierId": sup["id"], "date": today, "gstRate": 18,
+            "supplierBillNumber": f"PS-{stamp}",
+            "items": [{"itemTypeId": A["id"], "description": A["name"], "quantity": 100,
+                       "uom": "Pcs", "unitPrice": 50},
+                      {"itemTypeId": B["id"], "description": B["name"], "quantity": 40,
+                       "uom": "Pcs", "unitPrice": 200}]})
+        check(S, "the purchase is on file", s in (200, 201), f"{s} {err_text(pb)}")
+
+        def sell(client, lines):
+            return http("POST", "/api/invoices/standalone", base, token=token, body={
+                "date": today, "companyId": company_id, "clientId": client["id"], "gstRate": 18,
+                "items": [{"itemTypeId": it["id"], "description": it["name"], "quantity": q,
+                           "uom": "Pcs", "unitPrice": p} for it, q, p in lines]})
+
+        s, inv1 = sell(c1, [(A, 10, 120)])            # revenue 1,200, cost 500
+        check(S, "sale 1 to customer one", s in (200, 201), f"{s} {err_text(inv1)}")
+        s, inv2 = sell(c2, [(B, 5, 300)])             # revenue 1,500, cost 1,000
+        check(S, "sale to customer two", s in (200, 201), f"{s} {err_text(inv2)}")
+        s, inv3 = sell(c1, [(B, 4, 250), (A, 2, 90)])  # revenue 1,180, cost 900
+        check(S, "sale 2 to customer one", s in (200, 201), f"{s} {err_text(inv3)}")
+        s, inv4 = sell(c2, [(A, 3, 100)])             # withdrawn at FBR below
+        check(S, "a sale that will be withdrawn at FBR", s in (200, 201), f"{s} {err_text(inv4)}")
+        if not all(isinstance(x, dict) and "id" in x for x in (inv1, inv2, inv3, inv4)):
+            return
+
+        # A note and a withdrawal need a FILED bill. Record the filing through the
+        # application's own audited recovery route — it never contacts FBR.
+        def record_filed(inv):
+            return http("POST", f"/api/fbr/{inv['id']}/reset-submission", base, token=token, body={
+                "mode": "recordExisting", "irn": f"LOCALTEST{stamp}{inv['id']}",
+                "reason": "Accounting reports suite: local fixture, never sent to FBR"})
+        s1, _ = record_filed(inv1)
+        s4, _ = record_filed(inv4)
+        check(S, "two bills recorded as filed (locally, no FBR call)",
+              s1 == 200 and s4 == 200, f"{s1} {s4}")
+
+        # Customer one returns 3 of the 10 A: revenue -360, cost -150.
+        s, note = http("POST", "/api/invoices/notes", base, token=token, body={
+            "originalInvoiceId": inv1["id"], "documentType": 10, "reason": "Return of goods",
+            "affectsStock": True,
+            "lines": [{"invoiceItemId": inv1["items"][0]["id"], "quantity": 3}]})
+        if not check(S, "a partial credit note returns goods", s in (200, 201), f"{s} {err_text(note)}"):
+            return
+        s, _ = http("POST", f"/api/invoices/{inv4['id']}/fbr-cancelled", base, token=token,
+                    body={"reason": "Accounting reports suite"})
+        check(S, "a bill is recorded as withdrawn at FBR", s == 200, f"got {s}")
+
+        # Manual journals: other income LAST month, rent THIS month — two months
+        # with activity, and revenue no customer's document carries.
+        s, je1 = http("POST", f"/api/journal-entries/company/{company_id}", base, token=token, body={
+            "date": prev_month_start.strftime("%Y-%m-%dT00:00:00Z"), "narration": "[TEMP] other income",
+            "lines": [{"accountId": DRAWINGS["id"], "debit": 777, "credit": 0},
+                      {"accountId": OTHER_INCOME["id"], "debit": 0, "credit": 777}]})
+        check(S, "a manual journal to other income, last month", s == 200, f"{s} {err_text(je1)}")
+        s, je2 = http("POST", f"/api/journal-entries/company/{company_id}", base, token=token, body={
+            "date": today, "narration": "[TEMP] rent",
+            "lines": [{"accountId": RENT["id"], "debit": 2000, "credit": 0},
+                      {"accountId": LOANS["id"], "debit": 0, "credit": 2000}]})
+        check(S, "a manual journal to rent, this month", s == 200, f"{s} {err_text(je2)}")
+
+        # The journal entry each document owns, read straight from the ledger.
+        s, page = http("GET", f"/api/journal-entries/company/{company_id}/paged?pageSize=200",
+                       base, token=token)
+        entries = {(e["sourceDocType"], e["sourceDocId"]): e for e in (page or {}).get("items", [])}
+
+        def legs(doc_id):
+            e = entries.get(("Invoice", doc_id))
+            out = {}
+            for l in (e or {}).get("lines", []):
+                out[l["accountId"]] = out.get(l["accountId"], Decimal(0)) + D(l["debit"]) - D(l["credit"])
+            return out
+
+        def revenue_of(doc_id):
+            return -legs(doc_id).get(SALES["id"], Decimal(0))
+
+        def cogs_of(doc_id):
+            return legs(doc_id).get(COGS["id"], Decimal(0))
+
+        check(S, "each sale's own entry carries its cost (the inventory relief)",
+              cogs_of(inv1["id"]) == Decimal("500") and cogs_of(inv2["id"]) == Decimal("1000")
+              and cogs_of(inv3["id"]) == Decimal("900"),
+              f"{cogs_of(inv1['id'])} {cogs_of(inv2['id'])} {cogs_of(inv3['id'])}")
+        check(S, "and the credit note's entry hands cost back",
+              cogs_of(note["id"]) == Decimal("-150") and revenue_of(note["id"]) == Decimal("-360"),
+              f"cost {cogs_of(note['id'])} revenue {revenue_of(note['id'])}")
+
+        got = profit_ties_to_pl(S, base, token, company_id, window, "stock, two months")
+        if not got:
+            return
+        pl, gp, mp, cp = got
+        profit_ties_to_pl(S, base, token, company_id, this_month, "stock, this month")
+
+        # Independent of the P&L: the figures the documents themselves say.
+        sales_net = sum((D(i["subtotal"]) for i in (inv1, inv2, inv3, inv4)), Decimal(0)) - D(note["subtotal"])
+        check(S, "revenue is what the documents sold, net of the credit note, plus other income",
+              D(gp["totals"]["revenue"]) == sales_net + Decimal("777"),
+              f"{gp['totals']['revenue']} vs {sales_net} + 777")
+        check(S, "gross profit cost of sales is the COGS each document posted",
+              D(gp["totals"]["costOfSales"]) == sum((cogs_of(i) for i in
+                  (inv1["id"], inv2["id"], inv3["id"], inv4["id"], note["id"])), Decimal(0)),
+              f"{gp['totals']['costOfSales']}")
+        months = [r for r in mp["rows"] if D(r["revenue"]) or D(r["otherExpenses"])]
+        check(S, "two months carry activity — last month's other income, this month's trading",
+              len(mp["rows"]) == 2 and len(months) == 2
+              and D(mp["rows"][0]["revenue"]) == Decimal("777")
+              and D(mp["rows"][0]["costOfSales"]) == 0
+              and D(mp["rows"][1]["otherExpenses"]) == Decimal("2000"),
+              f"{mp['rows']}")
+
+        one = next((r for r in cp["rows"] if r.get("clientId") == c1["id"]), None)
+        two = next((r for r in cp["rows"] if r.get("clientId") == c2["id"]), None)
+        rest = row_named(cp["rows"], UNATTRIBUTED)
+        if check(S, "both customers are listed", one is not None and two is not None, f"{cp['rows']}"):
+            check(S, "customer one's revenue is their invoices less their credit note",
+                  D(one["revenue"]) == revenue_of(inv1["id"]) + revenue_of(inv3["id"]) + revenue_of(note["id"])
+                  == D(inv1["subtotal"]) + D(inv3["subtotal"]) - D(note["subtotal"]),
+                  f"{one['revenue']}")
+            check(S, "customer one's cost is their invoices' relief less the return",
+                  D(one["costOfSales"]) == cogs_of(inv1["id"]) + cogs_of(inv3["id"]) + cogs_of(note["id"])
+                  == Decimal("1250"), f"{one['costOfSales']}")
+            check(S, "the credit note lowered both — not just revenue",
+                  D(one["revenue"]) == Decimal("2020") and D(one["costOfSales"]) == Decimal("1250"),
+                  f"revenue {one['revenue']} cost {one['costOfSales']}")
+            check(S, "customer one counts two invoices and not the note",
+                  one["invoices"] == 2 and one["notes"] == 1, f"{one['invoices']} / {one['notes']}")
+            check(S, "customer two is only the bill still standing",
+                  D(two["revenue"]) == revenue_of(inv2["id"]) and D(two["costOfSales"]) == cogs_of(inv2["id"])
+                  and two["invoices"] == 1, f"{two}")
+            check(S, "margin is gross profit over revenue",
+                  D(one["marginPercent"]) == ((D(one["grossProfit"]) / D(one["revenue"])) * 100)
+                  .quantize(Decimal("0.1"), rounding="ROUND_HALF_UP"), f"{one}")
+        check(S, "the unattributed row is the other income and the bill withdrawn at FBR",
+              rest is not None
+              and D(rest["revenue"]) == Decimal("777") + revenue_of(inv4["id"])
+              and D(rest["costOfSales"]) == cogs_of(inv4["id"]),
+              f"{rest}")
+
+        # A demo bill is not a sale: seeding them must not move a single figure.
+        s, seeded = http("POST", f"/api/fbr/sandbox/{company_id}/seed", base, token=token)
+        s_list, demos = http("GET", f"/api/fbr/sandbox/{company_id}", base, token=token)
+        demo_count = len(demos) if isinstance(demos, list) else len((demos or {}).get("bills") or (demos or {}).get("items") or [])
+        if check(S, "demo bills seeded", s == 200 and demo_count > 0, f"{s} {err_text(seeded)} list={s_list}"):
+            s, cp2 = catalog(base, token, company_id, "customer-profitability", **window)
+            s_pl, pl2 = catalog(base, token, company_id, "profit-loss", comparative="false", **window)
+            check(S, "demo bills change neither customer profitability nor the P&L",
+                  s == 200 and s_pl == 200 and cp2["totals"] == cp["totals"]
+                  and [(r["customer"], r["revenue"], r["invoices"]) for r in cp2["rows"]]
+                  == [(r["customer"], r["revenue"], r["invoices"]) for r in cp["rows"]]
+                  and D(pl2["totalIncome"]) == D(pl["totalIncome"]),
+                  f"before {cp['totals']} after {cp2.get('totals') if isinstance(cp2, dict) else cp2}")
+
+        check(S, "a stock-tracked company's notice says what cost of goods sold covers",
+              COST_NOTE in (cp.get("notice") or "") and "stock it moves" in (gp.get("notice") or ""),
+              f"{cp.get('notice')} | {gp.get('notice')}")
+
+        # Excel: the three export, and each is a real workbook.
+        for rid in ("gross-profit", "monthly-profit", "customer-profitability"):
+            qs = "&".join(f"{k}={v}" for k, v in window.items())
+            req = urllib.request.Request(
+                f"{base.rstrip('/')}/api/accounting/catalog/company/{company_id}/export/{rid}?{qs}",
+                headers={"Authorization": f"Bearer {token}"})
+            try:
+                with urllib.request.urlopen(req, timeout=120) as r:
+                    body, st = r.read(), r.status
+            except urllib.error.HTTPError as e:
+                body, st = b"", e.code
+            check(S, f"{rid} exports to Excel", st == 200 and body[:2] == b"PK", f"got {st}")
+
+        # A company that does not exist is a 404, not an empty report.
+        s, _ = catalog(base, token, 99999999, "customer-profitability", **window)
+        check(S, "an unknown company is a plain 404", s == 404, f"got {s}")
+    finally:
+        if company_id:
+            s, _ = http("DELETE", f"/api/companies/{company_id}", base, token=token)
+            check("cleanup", "stock-tracked profit company deleted", s in (200, 204), f"got {s}")
 
 
 def main() -> int:
@@ -381,6 +780,10 @@ def main() -> int:
         status, bad = rpt("party-ledger", partyType="Nonsense", partyId=client["id"])
         check("9", "so is a party type that doesn't exist", status == 404, f"got {status}")
 
+        # ── 10. profit reports, no stock tracking ────────────────────────────
+        non_stock_profit_checks(base, token, company_id, d_from, d_to,
+                                D(pb["subtotal"]), client["id"])
+
     finally:
         print("\n=== Cleanup ===")
         if company_id:
@@ -389,6 +792,9 @@ def main() -> int:
         if type_id:
             status, _ = http("DELETE", f"/api/itemtypes/{type_id}", base, token=token)
             check("cleanup", "throwaway item type removed with company", status in (200, 204, 404), f"got {status}")
+
+    # ── 11. profit reports, stock tracked (its own company) ──────────────────
+    stock_profit_suite(base, token, day, stamp)
 
     print()
     print("=" * 78)

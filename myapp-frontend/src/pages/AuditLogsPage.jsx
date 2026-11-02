@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback } from "react";
 import { MdBugReport, MdWarning, MdInfo, MdClose, MdLock } from "react-icons/md";
 import { getAuditLogs, getAuditSummary } from "../api/auditLogApi";
@@ -141,7 +142,7 @@ export default function AuditLogsPage() {
       </Toolbar>
 
       {/* Table (desktop) */}
-      <Card flush>
+      <RecordsViewport label="Audit log records"><Card flush>
         <TableWrap data-admin-table-region="" className="audit-table-wrap">
           <table className="k-table">
             <thead>
@@ -260,7 +261,7 @@ export default function AuditLogsPage() {
             onPageSize={(n) => { setPageSize(n); setPage(1); }}
           />
         )}
-      </Card>
+      </Card></RecordsViewport>
 
       {/* Detail Modal */}
       {selectedLog && (

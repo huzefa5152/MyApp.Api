@@ -14,6 +14,7 @@ namespace MyApp.Api.DTOs
         public int? FbrUOMId { get; set; }
         public string? SaleType { get; set; }
         public string? FbrDescription { get; set; }
+        public bool IsHsCodePartial { get; set; }
 
         public bool IsFavorite { get; set; }
         public int UsageCount { get; set; }

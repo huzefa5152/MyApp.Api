@@ -1,13 +1,17 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useMemo } from "react";
-import { MdLocalShipping, MdAdd, MdBusiness } from "react-icons/md";
+import { MdLocalShipping, MdAdd, MdBusiness, MdSearchOff, MdPayments } from "react-icons/md";
+import { useNavigate } from "react-router-dom";
+import { supplierSummary } from "../api/commercialCostApi";
 import SupplierList from "../Components/SupplierList";
 import SupplierForm from "../Components/SupplierForm";
-import CommonSuppliersPanel from "../Components/CommonSuppliersPanel";
 import CommonSupplierForm from "../Components/CommonSupplierForm";
 import CopyToCompaniesDialog from "../Components/CopyToCompaniesDialog";
 import { getSuppliersByCompany, getCommonSuppliers, copySupplierToCompanies } from "../api/supplierApi";
 import { notify } from "../utils/notify";
-import { PageHeader, CompanyPicker, Button, Toolbar, SearchBox, EmptyState, Loading } from "../ui/Kit";
+import { PageHeader, Button, EmptyState, Loading } from "../ui/Kit";
+import PartyToolbar from "../Components/party/PartyToolbar";
+import { matchesSearch, countByType } from "../Components/party/partyUtils";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import ImportFromExcelButton from "../Components/onboarding/ImportFromExcelButton";
@@ -20,6 +24,7 @@ export default function SuppliersPage() {
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [loadingSuppliers, setLoadingSuppliers] = useState(false);
 
   // Common Supplier edit state — separate from per-company edit
@@ -30,26 +35,40 @@ export default function SuppliersPage() {
 
   // Copy-to-companies dialog source.
   const [copyingSupplier, setCopyingSupplier] = useState(null);
+  // What each supplier is still owed (Supplier Payables' own figure). Only for a
+  // role that can see payables; everyone else gets the screen as before.
+  const navigate = useNavigate();
+  const canSeePayables = has("purchasebills.payables.view");
+  const [payables, setPayables] = useState(null);
+  useEffect(() => {
+    setPayables(null);
+    if (!canSeePayables || !selectedCompany?.id) return;
+    let active = true;
+    supplierSummary(selectedCompany.id)
+      .then(({ data }) => { if (active) setPayables(new Map((data || []).map((r) => [r.supplierId, Number(r.netBalance) || 0]))); })
+      .catch(() => { if (active) setPayables(null); });
+    return () => { active = false; };
+  }, [canSeePayables, selectedCompany?.id, suppliers]);
+  const totalPayable = payables ? [...payables.values()].reduce((sum, v) => sum + Math.max(0, v), 0) : 0;
 
-  // Multi-company group ids that show in the Common Suppliers panel —
-  // used to filter them out of the per-company list below the dropdown
-  // (each supplier appears in exactly one place on the page).
-  const [commonGroupIds, setCommonGroupIds] = useState(() => new Set());
+  // Common Supplier groups this company shares with others, by group id.
+  // Every supplier is listed once; one whose group is here carries a
+  // "Common" tag and edits through the Common Supplier form.
+  const [commonGroups, setCommonGroups] = useState(() => new Map());
 
   useEffect(() => {
     if (!selectedCompany) {
-      setCommonGroupIds(new Set());
+      setCommonGroups(new Map());
       return;
     }
     let cancelled = false;
     (async () => {
       try {
         const { data } = await getCommonSuppliers(selectedCompany.id);
-        if (!cancelled) {
-          setCommonGroupIds(new Set((data || []).map((g) => g.groupId)));
-        }
+        if (!cancelled) setCommonGroups(new Map((data || []).map((g) => [g.groupId, g])));
       } catch {
-        if (!cancelled) setCommonGroupIds(new Set());
+        // Soft-fail: the list still works, just without Common tags.
+        if (!cancelled) setCommonGroups(new Map());
       }
     })();
     return () => { cancelled = true; };
@@ -69,6 +88,7 @@ export default function SuppliersPage() {
   };
 
   useEffect(() => {
+    setTypeFilter("all");
     if (selectedCompany) fetchSuppliers(selectedCompany.id);
     else setSuppliers([]);
   }, [selectedCompany]);
@@ -76,19 +96,14 @@ export default function SuppliersPage() {
   const handleEdit = (s) => { setSelectedSupplier(s); setShowModal(true); };
   const handleAdd = () => { setSelectedSupplier(null); setShowModal(true); };
 
-  // Hide suppliers that already appear in the Common Suppliers panel
-  // above — each supplier visible in exactly one place on the page.
-  const uncommonSuppliers = useMemo(() => {
-    if (commonGroupIds.size === 0) return suppliers;
-    return suppliers.filter((s) => !s.supplierGroupId || !commonGroupIds.has(s.supplierGroupId));
-  }, [suppliers, commonGroupIds]);
+  const isCommon = (s) => s.supplierGroupId != null && commonGroups.has(s.supplierGroupId);
+  const commonCount = useMemo(() => suppliers.filter(isCommon).length, [suppliers, commonGroups]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const filtered = uncommonSuppliers.filter((s) =>
-    s.name.toLowerCase().includes(search.toLowerCase()) ||
-    (s.ntn || "").toLowerCase().includes(search.toLowerCase()) ||
-    (s.email || "").toLowerCase().includes(search.toLowerCase()) ||
-    (s.phone || "").includes(search)
-  );
+  const searched = suppliers.filter((s) => matchesSearch(s, search));
+  const counts = { ...countByType(searched), common: searched.filter(isCommon).length };
+  const filtered = typeFilter === "all" ? searched
+    : typeFilter === "common" ? searched.filter(isCommon)
+    : searched.filter((s) => (s.registrationType || "None") === typeFilter);
 
   return (
     <div>
@@ -97,54 +112,66 @@ export default function SuppliersPage() {
         tone="teal"
         title="Suppliers"
         subtitle={selectedCompany
-          ? `${uncommonSuppliers.length} company-specific supplier${uncommonSuppliers.length !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
+          ? `${suppliers.length} supplier${suppliers.length !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}` +
+            (commonCount > 0 ? ` · ${commonCount} shared with other companies` : "")
           : "Select a company to view suppliers"}
         actions={(
           <>
+            {payables && (
+              <Button icon={MdPayments} onClick={() => navigate("/supplier-payables")}
+                title="Open Supplier Payables to see and pay what each supplier is owed">
+                <span>Total payable <strong>Rs. {totalPayable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+              </Button>
+            )}
             <ImportFromExcelButton sheet="suppliers" />
             {companies.length > 0 && canCreate && <Button variant="primary" icon={MdAdd} onClick={handleAdd}>New Supplier</Button>}
           </>
         )}
       />
 
-      {/* Common Suppliers panel — auto-hides for tenants with no
-          multi-company duplicates. Stable across the company dropdown. */}
-      {selectedCompany && (
-        <CommonSuppliersPanel
-          companyId={selectedCompany.id}
-          refreshKey={commonRefreshKey}
-          onEdit={(s) => setEditingGroupId(s.groupId)}
-        />
-      )}
-
       {loadingCompanies ? (
         <Loading>Loading companies…</Loading>
       ) : companies.length > 0 ? (
-        <CompanyPicker />
+        <PartyToolbar
+          companies={companies}
+          selectedCompany={selectedCompany}
+          onCompanyChange={setSelectedCompany}
+          search={search}
+          onSearch={setSearch}
+          searchPlaceholder="Search name, NTN, CNIC, phone, email, address"
+          typeFilter={typeFilter}
+          onTypeFilter={setTypeFilter}
+          counts={counts}
+        />
       ) : (
-        <EmptyState icon={MdBusiness}>No companies available. Add a company first.</EmptyState>
+        <EmptyState icon={MdBusiness} title="No companies yet">Add a company first, then its suppliers will appear here.</EmptyState>
       )}
 
-      {suppliers.length > 3 && (
-        <Toolbar>
-          <SearchBox value={search} onChange={setSearch} placeholder="Search suppliers (name / NTN / email / phone)..." />
-        </Toolbar>
-      )}
-
-      {loadingSuppliers ? (
+      <RecordsViewport label="Suppliers records">{loadingSuppliers ? (
         <Loading>Loading suppliers…</Loading>
       ) : filtered.length === 0 && selectedCompany ? (
-        <EmptyState icon={MdLocalShipping}>
-          {suppliers.length === 0 ? "No suppliers for this company yet." : "No suppliers match your search."}
+        <EmptyState
+          icon={suppliers.length === 0 ? MdLocalShipping : MdSearchOff}
+          title={suppliers.length === 0 ? "No suppliers yet" : "No matching suppliers"}
+          action={suppliers.length === 0 && canCreate
+            ? <Button variant="primary" icon={MdAdd} onClick={handleAdd}>New Supplier</Button>
+            : null}
+        >
+          {suppliers.length === 0
+            ? "Add your first supplier, or bring them in from an Excel file."
+            : "Try a different search or registration type."}
         </EmptyState>
       ) : (
         <SupplierList
           suppliers={filtered}
+          commonGroups={commonGroups}
           onEdit={handleEdit}
+          onEditCommon={(groupId) => setEditingGroupId(groupId)}
           onCopy={(s) => setCopyingSupplier(s)}
           fetchSuppliers={() => fetchSuppliers(selectedCompany?.id)}
+          payables={payables}
         />
-      )}
+      )}</RecordsViewport>
 
       {copyingSupplier && (
         <CopyToCompaniesDialog

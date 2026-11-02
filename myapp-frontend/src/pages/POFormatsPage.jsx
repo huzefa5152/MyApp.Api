@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { MdAdd, MdEdit, MdDelete, MdDescription, MdWarning } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -121,7 +122,7 @@ function CompanyPOFormats({ company }) {
         <Alert tone="error" icon={MdWarning}>{error}</Alert>
       )}
 
-      {loading ? (
+      <RecordsViewport label="POFormats records">{loading ? (
         <Loading>Loading…</Loading>
       ) : formats.length === 0 ? (
         <EmptyState
@@ -241,7 +242,7 @@ function CompanyPOFormats({ company }) {
         </>
       )}
 
-      {has("poformats.import.viewArchive") && <CustomerImportArchive companyId={company.id} />}
+      {has("poformats.import.viewArchive") && <CustomerImportArchive companyId={company.id} />}</RecordsViewport>
       {showForm && (
         <POFormatForm
           format={editing}
@@ -256,7 +257,7 @@ function CompanyPOFormats({ company }) {
 }
 
 const styles = {
-  page: { maxWidth: 1200, margin: "0 auto" },
+  page: { padding: 0, maxWidth: 1200, margin: "0 auto" },
   chip: { display: "inline-block", padding: "0.2rem 0.6rem", borderRadius: 12, fontSize: "0.78rem", fontWeight: 600, backgroundColor: colors.primaryLight, color: colors.primary },
   chipSuccess: { backgroundColor: colors.successLight, color: colors.success },
   chipMuted: { backgroundColor: "#f2f4f7", color: "var(--k-muted)" },

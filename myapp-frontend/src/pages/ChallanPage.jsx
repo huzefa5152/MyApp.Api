@@ -1,12 +1,19 @@
-import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
-import { useState, useEffect, useCallback } from "react";
+import ListFilters from "../Components/ListFilters";
+import { printWhenImagesReady } from "../utils/printDocument";
+import RecordsViewport from "../Components/RecordsViewport";
+import CommercialCostDialog from "../Components/CommercialCostDialog";
+import PurchaseBillForm from "../Components/PurchaseBillForm";
+import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { renderRichTextHtml } from "../utils/richText";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import useQueryAction from "../hooks/useQueryAction";
 import { MdDescription, MdAdd, MdBusiness, MdUploadFile } from "react-icons/md";
 import ChallanList from "../Components/ChallanList";
 import ChallanTable from "../Components/ChallanTable";
 import ChallanForm from "../Components/ChallanForm";
 import ChallanEditForm from "../Components/ChallanEditForm";
+import BilledChallanEditForm from "../Components/BilledChallanEditForm";
 import POImportForm from "../Components/POImportForm";
 import InvoiceForm from "../Components/InvoiceForm";
 import AttachChallanToOrderModal from "../Components/AttachChallanToOrderModal";
@@ -31,7 +38,7 @@ import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { mergeTemplate } from "../utils/templateEngine";
 import { defaultChallanTemplate } from "../utils/defaultTemplates";
-import { exportToPdf } from "../utils/exportUtils";
+import { exportToPdf, prepareLetterheadPrint } from "../utils/exportUtils";
 import { saveAs } from "file-saver";
 import { PageHeader, CompanyPicker, Button, Toolbar, ToolbarSpacer, SearchBox, EmptyState, Loading } from "../ui/Kit";
 import SearchableClientSelect from "../Components/SearchableClientSelect";
@@ -46,6 +53,8 @@ import useUi2 from "../ui2/useUi2";
 import ChallansV2 from "../ui2/ChallansV2";
 
 export default function ChallanPage() {
+  const navigate = useNavigate();
+  const [deliveryEdit, setDeliveryEdit] = useState(null);
   const confirm = useConfirm();
   const ui2 = useUi2(); // redesigned structure when the user's theme asks for it
   const { companies, selectedCompany, loading: loadingCompanies } = useCompany();
@@ -68,6 +77,7 @@ export default function ChallanPage() {
   const [editChallan, setEditChallan] = useState(null);
   const [loadingChallans, setLoadingChallans] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false); // presentation only: lets the redesigned view offer "Try again"
+  const listRequest = useRef(0);
   // Generate-Bill shortcut: holds the challanId to prefill into InvoiceForm
   // when the user clicks the per-card button.
   const [generateBillChallanId, setGenerateBillChallanId] = useState(null);
@@ -83,11 +93,13 @@ export default function ChallanPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [pageSize, setPageSize] = useState(10); // server-echoed size (drives page math)
   const [userPageSize, setUserPageSize] = usePageSize("challans"); // operator-chosen override
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  // A link may open the list on one challan (?search=4535, e.g. from a purchase bill).
+  const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get("search") || "");
+  const [statusFilter, setStatusFilter] = useState(() => new URLSearchParams(window.location.search).get("status") || "");
   const [clientFilter, setClientFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [costingStatus, setCostingStatus] = useState("");
   // Sales Order filter — driven by the searchable dropdown and by the
   // ?salesOrderId= query param (the "View Challans" shortcut from the SO page).
   const [searchParams, setSearchParams] = useSearchParams();
@@ -121,6 +133,7 @@ export default function ChallanPage() {
 
   const fetchChallans = useCallback(async (companyId, pg) => {
     if (!companyId) return;
+    const requestId = ++listRequest.current;
     setLoadingChallans(true);
     setLoadFailed(false);
     try {
@@ -131,21 +144,24 @@ export default function ChallanPage() {
       if (clientFilter) params.clientId = clientFilter;
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
+      if (costingStatus) params.costingStatus = costingStatus;
       if (salesOrderFilter) params.salesOrderId = salesOrderFilter;
       const { data } = await getPagedChallansByCompany(companyId, params);
+      if (requestId !== listRequest.current) return;
       setChallans(data.items);
       setTotalCount(data.totalCount);
       setTotalPages(data.totalPages);
       setPageSize(data.pageSize);
     } catch {
+      if (requestId !== listRequest.current) return;
       setChallans([]);
       setTotalCount(0);
       setTotalPages(0);
       setLoadFailed(true);
     } finally {
-      setLoadingChallans(false);
+      if (requestId === listRequest.current) setLoadingChallans(false);
     }
-  }, [page, userPageSize, search, statusFilter, clientFilter, dateFrom, dateTo, salesOrderFilter]);
+  }, [page, userPageSize, search, statusFilter, clientFilter, dateFrom, dateTo, costingStatus, salesOrderFilter]);
 
   useEffect(() => {
     if (selectedCompany) {
@@ -170,19 +186,22 @@ export default function ChallanPage() {
     }
   }, [selectedCompany]);
 
-  // Re-fetch when filters or page change
+  // Re-fetch when filters or page change. Not on mount: the company effect above
+  // already loads page 1, and running both fetched the list twice on every open.
+  const filtersMountedRef = useRef(false);
   useEffect(() => {
+    if (!filtersMountedRef.current) { filtersMountedRef.current = true; return; }
     if (selectedCompany) fetchChallans(selectedCompany.id, page);
-  }, [page, userPageSize, search, statusFilter, clientFilter, dateFrom, dateTo, salesOrderFilter]);
+  }, [page, userPageSize, search, statusFilter, clientFilter, dateFrom, dateTo, costingStatus, salesOrderFilter]);
 
   const resetFilters = () => {
     setSearch("");
     setStatusFilter("");
     setClientFilter("");
     setDateFrom("");
-    setDateTo("");
+    setDateTo(""); setCostingStatus("");
     setSalesOrderFilter("");
-    if (searchParams.get("salesOrderId")) setSearchParams({}, { replace: true });
+    if (searchParams.get("salesOrderId") || searchParams.get("search")) setSearchParams({}, { replace: true });
     setPage(1);
   };
 
@@ -202,6 +221,8 @@ export default function ChallanPage() {
   };
 
   const handleAddChallan = () => { if (selectedCompany) setShowModal(true); };
+  // Dashboard quick action: /challans?new=1 opens the create form.
+  useQueryAction("new", !!selectedCompany && canCreate, handleAddChallan);
 
   const handleSaveChallan = async (payload) => {
     if (!selectedCompany) return;
@@ -254,27 +275,7 @@ export default function ChallanPage() {
     }
   };
 
-  // Print only once every image in the popup has loaded — otherwise
-  // w.print() fires before the company logo / product images decode, so the
-  // first print comes out with them blank (they appear only on a 2nd/3rd
-  // attempt once cached) and on production the network-fetched logo misses
-  // consistently. `error` listeners + a 3s safety timeout prevent a broken or
-  // slow image from ever blocking the print dialog.
-  const printWindowWhenImagesReady = (w) => {
-    const imgs = Array.from(w.document.images || []);
-    const ready = Promise.all(imgs.map((img) => (
-      img.complete && img.naturalHeight !== 0
-        ? Promise.resolve()
-        : new Promise((resolve) => {
-            img.addEventListener("load", resolve, { once: true });
-            img.addEventListener("error", resolve, { once: true });
-          })
-    )));
-    const safety = new Promise((resolve) => setTimeout(resolve, 3000));
-    Promise.race([ready, safety]).then(() => {
-      try { w.focus(); w.print(); } catch { /* popup already closed */ }
-    });
-  };
+  const printWindowWhenImagesReady = printWhenImagesReady;
 
   const handlePrint = async (challan) => {
     if (tplPicker.noTemplate) { notify(tplPicker.noTemplateReason, "warning"); return; }
@@ -287,7 +288,7 @@ export default function ChallanPage() {
       const template = tplPicker.resolveTemplate(challan)?.htmlContent || defaultChallanTemplate;
       const html = mergeTemplate(template, data);
       w.document.open();
-      w.document.write(html);
+      w.document.write(await prepareLetterheadPrint(html));
       w.document.close();
       w.onafterprint = () => w.close();
       printWindowWhenImagesReady(w);
@@ -297,6 +298,10 @@ export default function ChallanPage() {
     }
   };
 
+  const [costTarget, setCostTarget] = useState(null);
+  const [localPurchaseTarget, setLocalPurchaseTarget] = useState(null);
+  const CostEditor = ({ challan, onSaved }) => <CommercialCostDialog kind="challan" id={challan.id} companyId={challan.companyId} onClose={onSaved} />;
+  const ChallanEditor = editChallan?.invoiceId || editChallan?.status === "Invoiced" ? CostEditor : ChallanEditForm;
   const handleEditItems = (challan) => setEditChallan(challan);
   const handleEditSaved = () => {
     setEditChallan(null);
@@ -380,7 +385,7 @@ export default function ChallanPage() {
     }
   };
 
-  const hasFilters = search || statusFilter || clientFilter || dateFrom || dateTo || salesOrderFilter;
+  const hasFilters = costingStatus || search || statusFilter || clientFilter || dateFrom || dateTo || salesOrderFilter;
 
   // SO dropdown respects the client filter: all clients → every SO; a client
   // selected → only that client's SOs.
@@ -417,6 +422,11 @@ export default function ChallanPage() {
     onDuplicate: handleDuplicate, canLinkOrder, onLinkOrder: (c) => setLinkChallan(c), exportingId, duplicatingId,
     printDisabled: tplPicker.noTemplate, printDisabledReason: tplPicker.noTemplateReason,
     attachCounts, onAttach: (c) => setAttachTarget(c),
+    // Trader actions/filters ChallansV2 can offer (same permission gates as the classic list).
+    costingStatus, setCostingStatus, canViewCosts: has("bills.costs.view"),
+    onCosts: has("bills.costs.view") ? (c) => setCostTarget(c) : null,
+    onLocalPurchase: has("purchasebills.manage.create") ? (c) => setLocalPurchaseTarget(c) : null,
+    onEditDelivery: setDeliveryEdit,
   };
 
   return (
@@ -430,10 +440,11 @@ export default function ChallanPage() {
         subtitle={selectedCompany
           ? `${totalCount} challan${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
           : "Select a company to view challans"}
-        actions={companies.length > 0 && (
+        actions={(
           <>
-            {canCreate && <Button variant="primary" icon={MdAdd} onClick={handleAddChallan}>New Challan</Button>}
-            {canCreate && has("poformats.import.create") && (
+            <DocumentLinesHeaderLink />
+            {companies.length > 0 && canCreate && <Button variant="primary" icon={MdAdd} onClick={handleAddChallan}>New Challan</Button>}
+            {companies.length > 0 && canCreate && has("poformats.import.create") && (
               <Button variant="teal" icon={MdUploadFile} onClick={() => selectedCompany && setShowImport(true)}>Import PO</Button>
             )}
           </>
@@ -448,8 +459,11 @@ export default function ChallanPage() {
 
           {/* Filters + view-mode toggle */}
           {selectedCompany && (
-            <Toolbar>
+            <ListFilters><Toolbar>
               <SearchBox value={search} onChange={(text) => handleFilterChange(setSearch)({ target: { value: text } })} placeholder="Search DC#, Client, PO..." />
+              {has("bills.costs.view") && <select aria-label="Costing status" className="k-select" value={costingStatus} onChange={handleFilterChange(setCostingStatus)}>
+                <option value="">All costing statuses</option><option value="not-costed">Not costed</option><option value="partial">Partially costed</option><option value="full">Fully costed</option>
+              </select>}
               <select className="k-select" aria-label="Status" value={statusFilter} onChange={handleFilterChange(setStatusFilter)}>
                 <option value="">All Status</option>
                 <option value="Pending">Pending</option>
@@ -486,14 +500,14 @@ export default function ChallanPage() {
               {isBigScreen && (
                 <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Delivery challan view mode" />
               )}
-            </Toolbar>
+            </Toolbar></ListFilters>
           )}
         </>
       ) : (
         <EmptyState icon={MdBusiness}>No companies available. Add a company first.</EmptyState>
       )}
 
-      {loadingChallans ? (
+      <RecordsViewport label="Challan records">{loadingChallans ? (
         <Loading>Loading challans…</Loading>
       ) : challans.length === 0 && selectedCompany ? (
         <EmptyState icon={MdDescription}>
@@ -507,7 +521,10 @@ export default function ChallanPage() {
               onCancel={handleCancel}
               onDelete={handleDelete}
               onPrint={handlePrint}
+              onCosts={has("bills.costs.view") ? c => setCostTarget(c) : null}
+              onLocalPurchase={has("purchasebills.manage.create") ? c => setLocalPurchaseTarget(c) : null}
               onEditItems={handleEditItems}
+              onEditDelivery={setDeliveryEdit}
               onExportPdf={handleExportPdf}
               onExportExcel={hasExcelTpl ? handleExportExcel : null}
               onGenerateBill={(c) => setGenerateBillChallanId(c.id)}
@@ -526,7 +543,10 @@ export default function ChallanPage() {
               onCancel={handleCancel}
               onDelete={handleDelete}
               onPrint={handlePrint}
+              onCosts={has("bills.costs.view") ? c => setCostTarget(c) : null}
+              onLocalPurchase={has("purchasebills.manage.create") ? c => setLocalPurchaseTarget(c) : null}
               onEditItems={handleEditItems}
+              onEditDelivery={setDeliveryEdit}
               onExportPdf={handleExportPdf}
               onExportExcel={hasExcelTpl ? handleExportExcel : null}
               onGenerateBill={(c) => setGenerateBillChallanId(c.id)}
@@ -552,7 +572,7 @@ export default function ChallanPage() {
             />
           )}
         </>
-      )}
+      )}</RecordsViewport>
 
       </>)}
 
@@ -572,8 +592,13 @@ export default function ChallanPage() {
         />
       )}
 
+      {deliveryEdit && <BilledChallanEditForm challan={deliveryEdit} onClose={() => setDeliveryEdit(null)}
+        onSaved={() => { setDeliveryEdit(null); fetchChallans(selectedCompany.id, page); }}
+        onOpenBill={has("bills.list.view") ? bill => { setDeliveryEdit(null); navigate(`/bills?search=${bill.invoiceNumber}`); } : undefined} />}
+      {localPurchaseTarget && <PurchaseBillForm companyId={localPurchaseTarget.companyId} localSource={{ kind: "challan", id: localPurchaseTarget.id }} onClose={() => setLocalPurchaseTarget(null)} onSaved={() => fetchChallans(selectedCompany.id, page)} />}
+      {costTarget && <CommercialCostDialog kind="challan" id={costTarget.id} companyId={costTarget.companyId} onClose={() => { setCostTarget(null); fetchChallans(selectedCompany.id, page); }} />}
       {editChallan && (
-        <ChallanEditForm
+        <ChallanEditor
           challan={editChallan}
           onClose={() => { setEditChallan(null); refreshAttachCounts(); }}
           onSaved={handleEditSaved}

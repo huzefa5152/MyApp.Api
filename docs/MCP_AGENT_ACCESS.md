@@ -22,6 +22,15 @@ print data requires `documents.read` plus that document's print permission. Exis
 do not acquire those scopes automatically. Use `get_mcp_capabilities` for the effective tool
 names and `get_action_status` after an uncertain action result.
 
+`get_document_render_bundle` returns everything needed to print one document as its Print
+button does: the company's template (`templateId`, else the default, else the oldest), the
+print data and the company's own logo, stamps and quote images inlined. `signed` true needs
+a template with a signature, false prints without one. It is read in chunks (`offset`,
+`length`, `sha256`). It rides on the `get_document_print_data` grant: on wherever that is,
+off when it is removed. `myapp-frontend/scripts/print-document.mjs` uses it to print N
+copies (PDF via Edge, printed by SumatraPDF); its token lives in the gitignored
+`scripts/.print-sites.local.json` or `MYAPP_MCP_TOKEN_<SITE>`.
+
 **Create records (opt-in, per token):**
 
 | Scope | Tools | Needs |
@@ -32,10 +41,48 @@ names and `get_action_status` after an uncertain action result.
 | `email.enquiries.write` | `prepare_email_decision` | Email Workspace, inbox view and inbox management |
 | `challans.write` | `prepare_challan` | `challans.manage.create`, `challans.list.view` |
 | `bills.write` | `prepare_bill` (from challans, or standalone) | `bills.manage.create` and/or `bills.manage.create.standalone`, `challans.list.view` |
+| `templates.write` | `prepare_print_template_update` | Both `printtemplates.manage.view` and `printtemplates.manage.update` |
+| `suppliers.write` | `prepare_supplier` (create or update) | `suppliers.manage.create` and `.update` |
+| `itemtypes.write` | `prepare_item_type` (create or update a catalog item) | `itemtypes.manage.view`, and `.create` and/or `.update` |
+| `taxfiling.write` | `prepare_bill_tax_filing` (a bill's FBR filing rows) | `invoices.list.view`, and `invoices.manage.update.itemtype` and/or `.itemtype.qty` |
+| `fbrexclusion.write` | `prepare_fbr_exclusion` (keep bills out of FBR, or include them again; by ids or a date range) | `invoices.fbr.exclude`, and `bills.list.view` or `invoices.list.view` |
+
+`fbr.validate` is a separate, non-write scope for `validate_bill_fbr` (needs
+`invoices.fbr.validate`). It asks PRAL to validate a bill with the company's own FBR token,
+returns FBR's verdict and item errors, and never submits. Like the screen's Validate button,
+it first refreshes the bill lines' HS code, unit and sale type from the catalog. It is capped
+at 30 validations per user per hour, because every call spends the company's PRAL quota.
+
+**Classifying a bill for FBR.** `get_bill_tax_filing` (needs `invoices.list.view`) returns
+the bill lines, the current filing rows and a `version`. `prepare_bill_tax_filing` takes that
+version and rows that cover every bill line exactly once, each naming an item from the
+company's own catalog with a complete HS code. Commit runs the Invoices screen's own save
+(`InvoiceService.SaveTaxFilingAsync`): the version is checked again under a lock, changing
+quantities or amounts needs `invoices.manage.update.itemtype.qty` at commit time, rows FBR
+would treat as duplicates are refused, and stock follows the effective item type. The
+commercial bill never changes, and a bill whose submission has started is refused.
 
 Writes are two steps. `prepare_*` validates and prices a plan and saves **nothing**;
 `commit_action(planId)` then runs it once, through the same service the web screen uses,
 only after a person approved it. `cancel_action` discards a plan.
+
+### Editing existing print designs
+
+Grant `templates.read` and `templates.write` explicitly on a new or renewed connection;
+existing credentials gain no new scope automatically. Use `list_print_templates` to select
+the company and document type, then `get_print_template` to read the saved HTML and revision.
+`prepare_print_template_update` takes `companyId`, `templateId`, `documentType`, `revision`,
+`htmlContent` and an optional `name` or `idempotencyKey`. All supported document types can be
+edited, within the caller's assigned companies and template permissions.
+
+Review the returned sanitized HTML before `commit_action`. The commit rechecks company,
+record ownership, permissions, tool grants and revision while locking the saved row. A
+concurrent template or assignment change refuses the plan. Saves preserve the default,
+stamp and Excel settings, switch to code mode, and clear stale visual-editor project data.
+The tool updates existing designs only; it does not create, delete or activate templates,
+upload assets, submit documents to FBR, or change financial data. Large designs exceeding
+the bounded plan size must be edited in the application. Re-read the saved template and
+verify print/PDF with the existing renderer after committing.
 
 ### Email enquiries from ChatGPT
 
@@ -99,7 +146,8 @@ single-use creation. Also run the existing MCP authentication/OAuth suites befor
 Synthetic local tests do not prove a live ChatGPT or Gmail connection.
 
 A bill takes the next number of the company's legal invoice sequence and may reduce stock, so
-a token may commit at most 10 bills and 30 challans per hour, and a challan is billed in full
+a token may commit at most 10 bills and 30 challans per hour (30 each for supplier changes,
+item changes and FBR classifications), and a challan is billed in full
 or not at all (every line priced). Bills are never dated in the future and are never submitted
 to FBR. FBR submission, voiding, deleting, creating credit/debit notes, and changing users,
 roles or company settings are not exposed as MCP writes. Authorized note print data can be
@@ -110,6 +158,13 @@ read through the separate document print tool.
 - **Acts as the user.** Every call re-applies the user's permissions and company access.
 - **Narrowed, never widened.** A token names its companies and scopes; the stricter of the
   user's access and the token's limits wins.
+- **One company per call, owned records only.** Every company tool pins the company it is
+  given against the user's assignments and the token's list, then checks the STORED company of
+  every record it is handed by id (and of every linked record: client, item, challan line, bill
+  line, template, plan). Another company's id answers exactly like a missing one. Unassigning
+  a company closes it on the next call, the user's own activity history included.
+  `scripts/test_mcp_tenant_sweep.py` tries every listed tool against a company and records the
+  caller was never given, so a new tool is covered without editing the test.
 - **Dedicated profile catalog.** Profile → MCP Catalog Access holds access and write
   grants plus grouped tool choices. Only the seed admin manages grants for all accounts. A user's own choices can only narrow
   assigned grants. Normal role dialogs contain business roles only. Existing opt-in role

@@ -54,8 +54,8 @@ VENDOR_ONLY_MODULES = {"RBAC", "Users", "AuditLogs", "Tenant Access"}
 # The keys the accounting module added. Receipts / payments / payment status are
 # deliberately NOT here - see the docstring.
 ACCOUNTING_PREFIXES = (
-    "accounting.coa.", "accounting.gl.", "accounting.journal.",
-    "accounting.reports.", "customerportals.",
+    "accounting.coa.", "accounting.dashboard.", "accounting.gl.", "accounting.journal.",
+    "accounting.reports.", "accounting.transfers.", "accounting.reconciliation.", "customerportals.",
 )
 
 PW = "Passw0rd!23"
@@ -169,8 +169,13 @@ def main() -> int:
         expect_complete = all_keys - vendor_keys - optional_keys
         email_role = by_name.get("Email Workspace")
         check("2", "Email Workspace is an explicit system role", bool(email_role) and email_role.get("isSystemRole") is True)
-        check("2", "optional email role carries exactly the email module keys", bool(optional_keys) and bool(email_role)
-              and set(email_role.get("permissionKeys") or []) == optional_keys)
+        separate_email_grants = {"email.replies.send", "email.read.manage"}
+        default_email_keys = optional_keys - separate_email_grants
+        got_email_keys = set(email_role.get("permissionKeys") or []) if email_role else set()
+        check("2", "optional email role carries exactly the default email module keys", bool(default_email_keys) and bool(email_role)
+              and got_email_keys == default_email_keys)
+        for key in separate_email_grants:
+            check("2", f"optional email role requires a separate grant for {key}", key not in got_email_keys)
         check("2", "optional email role includes its module gate", "email.workspace.use" in optional_keys)
 
         got_sales = set(sales.get("permissionKeys") or [])
@@ -198,7 +203,7 @@ def main() -> int:
             if key in all_keys:
                 check("3", f"Sales Edition has {key}", key in got_sales, "missing")
         for key in ("accounting.coa.view", "accounting.gl.view", "accounting.journal.view",
-                    "accounting.reports.view", "customerportals.manage.view"):
+                    "accounting.reports.view", "accounting.dashboard.view", "customerportals.manage.view"):
             if key in all_keys:
                 check("3", f"Sales Edition does NOT have {key}", key not in got_sales, "present")
 

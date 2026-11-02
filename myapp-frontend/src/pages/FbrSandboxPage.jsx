@@ -1,3 +1,4 @@
+import RecordsViewport from "../Components/RecordsViewport";
 import { useEffect, useState } from "react";
 import { MdScience, MdAdd, MdRefresh, MdSend, MdDelete, MdInfo, MdCheckCircle, MdError } from "react-icons/md";
 import {
@@ -241,7 +242,7 @@ export default function FbrSandboxPage() {
       )}
 
       {/* Bills table */}
-      {loading ? (
+      <RecordsViewport label="Sandbox bill records">{loading ? (
         <Loading>Loading…</Loading>
       ) : bills.length === 0 ? (
         <EmptyState title="No demo bills yet">
@@ -362,7 +363,7 @@ export default function FbrSandboxPage() {
             ))}
           </div>
         </>
-      )}
+      )}</RecordsViewport>
       </>
       )}
     </div>
@@ -370,7 +371,7 @@ export default function FbrSandboxPage() {
 }
 
 const styles = {
-  page: { maxWidth: 1400 },
+  page: { padding: 0, maxWidth: 1400 },
   companyPicker: { width: 240, maxWidth: "100%" },
   runningBadge: { padding: "0.25rem 0.6rem", backgroundColor: colors.warnBg, color: colors.warn, borderRadius: 4, fontSize: "0.75rem", fontWeight: 700 },
   successBadge: { padding: "0.15rem 0.5rem", backgroundColor: colors.successBg, color: colors.success, borderRadius: 4, fontSize: "0.72rem", fontWeight: 700 },

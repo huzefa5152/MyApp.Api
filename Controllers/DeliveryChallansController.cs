@@ -74,12 +74,15 @@ namespace MyApp.Api.Controllers
             [FromQuery] int? clientId = null,
             [FromQuery] DateTime? dateFrom = null,
             [FromQuery] DateTime? dateTo = null,
-            [FromQuery] int? salesOrderId = null)
+            [FromQuery] int? salesOrderId = null,
+            [FromQuery] string? costingStatus = null)
         {
+            if (costingStatus != null && costingStatus != "" && costingStatus != "not-costed" && costingStatus != "partial" && costingStatus != "full")
+                return BadRequest(new { error = "Choose a valid costing status." });
             var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
             var clampedPage = PaginationHelper.ClampPage(page);
             var result = await _service.GetPagedByCompanyAsync(
-                companyId, clampedPage, size, search, status, clientId, dateFrom, dateTo, salesOrderId);
+                companyId, clampedPage, size, search, status, clientId, dateFrom, dateTo, salesOrderId, costingStatus);
             return Ok(result);
         }
 
@@ -139,6 +142,56 @@ namespace MyApp.Api.Controllers
                 _logger.LogError(ex, "Create challan failed for company {CompanyId}", companyId);
                 return StatusCode(500, new { error = "Could not create the challan. Please try again or contact an administrator if the problem persists." });
             }
+        }
+
+        [HttpPatch("{id}/private-costs")]
+        [HasPermission("challans.manage.update")]
+        public async Task<ActionResult<DeliveryChallanDto>> UpdatePrivateCosts(int id, [FromBody] ChallanPrivateCostsDto dto)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            try
+            {
+                var updated = await _service.UpdatePrivateCostsAsync(id, dto);
+                return updated == null ? NotFound() : Ok(updated);
+            }
+            catch (InvalidOperationException)
+            {
+                return BadRequest(new { error = "Could not save supplier costs. Reload the challan, check suppliers and non-negative costs, and ensure no supplier purchase bills already exist." });
+            }
+        }
+
+        [HttpGet("{id}/bill-edit")]
+        [HasPermission("challans.manage.update")]
+        public async Task<ActionResult<BilledChallanEditContextDto>> GetBillEdit(int id)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            if (!await _permissions.HasPermissionAsync(CurrentUserId, "bills.manage.update")) return Forbid();
+            try
+            {
+                var result = await _service.GetBilledEditContextAsync(id);
+                return result == null ? NotFound() : Ok(result);
+            }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
+        [HttpPut("{id}/bill-edit")]
+        [HasPermission("challans.manage.update")]
+        public async Task<ActionResult<DeliveryChallanDto>> UpdateBillEdit(int id, [FromBody] BilledChallanEditDto dto)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            if (!await _permissions.HasPermissionAsync(CurrentUserId, "bills.manage.update")) return Forbid();
+            try
+            {
+                var result = await _service.UpdateBilledItemsAsync(id, dto);
+                return result == null ? NotFound() : Ok(result);
+            }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
         }
 
         [HttpPut("{id}/items")]
