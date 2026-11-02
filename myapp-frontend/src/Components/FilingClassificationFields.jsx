@@ -27,8 +27,9 @@ export default function FilingClassificationFields({ row, index, companyId, type
         setHints(data);
         const current = latest.current.row;
         const units = data.uoms || [];
-        const unit = units.find(u => u.uoM_ID === current.fbrUOMId)
-          || units.find(u => u.description?.toLowerCase() === current.uom?.toLowerCase())
+        // The unit name shown wins over a stored id that disagrees with it (FbrUnitMatch on the server).
+        const unit = units.find(u => u.description?.toLowerCase() === current.uom?.toLowerCase())
+          || units.find(u => u.uoM_ID === current.fbrUOMId)
           || (units.length === 1 ? units[0] : null);
         const next = { ...current,
           ...(unit ? { uom: unit.description, fbrUOMId: unit.uoM_ID, selectedFbrUOMId: unit.uoM_ID } : {}),

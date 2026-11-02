@@ -164,13 +164,25 @@ public partial class InvoiceService
                 && r.SourceLineIds.Order().SequenceEqual(row.SourceLineIds.Order()));
             row.HSCode = type.HSCode; row.SaleType = previous?.SaleType ?? type.SaleType;
             row.UOM = previous?.UOM ?? type.UOM ?? ""; row.FbrUOMId = previous?.FbrUOMId ?? type.FbrUOMId;
-            if (row.SelectedFbrUOMId.HasValue && row.SelectedFbrUOMId != row.FbrUOMId)
+            if (row.SelectedFbrUOMId.HasValue)
             {
                 var hints = await _taxEngine.GetHsCodeHintsAsync(bill.CompanyId, type.HSCode);
                 var selectedUnit = hints.Uoms.FirstOrDefault(u => u.UOM_ID == row.SelectedFbrUOMId);
                 if (selectedUnit == null)
                     throw new InvalidOperationException("Choose one of FBR's valid units for this HS code.");
                 row.UOM = selectedUnit.Description; row.FbrUOMId = selectedUnit.UOM_ID;
+            }
+            else if (row.FbrUOMId.HasValue)
+            {
+                // FBR files the unit the id names. A catalog pair that disagrees ("Packs" stored with KG's id)
+                // is resolved to the unit the consultant saw; one FBR does not list at all must be chosen again.
+                var valid = await _taxEngine.GetValidUomsForHsCodeAsync(bill.CompanyId, type.HSCode);
+                if (valid.Count > 0)
+                {
+                    var filed = FbrUnitMatch.Resolve(valid, row.UOM, row.FbrUOMId)
+                        ?? throw new InvalidOperationException("Choose one of FBR's valid units for this HS code.");
+                    row.FbrUOMId = filed.UOM_ID;
+                }
             }
             if (row.SelectedSaleType != null) row.SaleType = CanonicalFilingSaleType(row.SelectedSaleType);
             if (string.IsNullOrWhiteSpace(row.SaleType))

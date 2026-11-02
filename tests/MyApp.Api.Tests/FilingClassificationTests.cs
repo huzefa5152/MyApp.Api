@@ -226,8 +226,10 @@ public class FilingClassificationTests
             "GetHSCodesAsync" => Task.FromResult(new List<FbrHSCodeDto> { new() { HS_CODE = Code, Description = "Official furniture" } }),
             _ => throw new NotSupportedException(m.Name)
         });
-        var tax = Fake<ITaxMappingEngine>((_, _) => Task.FromResult(new HsCodeHints(
-            new() { new() { UOM_ID = 13, Description = "Numbers" }, new() { UOM_ID = 14, Description = "Feet" } }, null, new(), 18, SaleType, new())));
+        var units = new List<FbrUOMDto> { new() { UOM_ID = 13, Description = "Numbers" }, new() { UOM_ID = 14, Description = "Feet" } };
+        var tax = Fake<ITaxMappingEngine>((m, _) => m.Name == nameof(ITaxMappingEngine.GetValidUomsForHsCodeAsync)
+            ? Task.FromResult(units)
+            : Task.FromResult(new HsCodeHints(units, null, new(), 18, SaleType, new())));
         var itemService = new ItemTypeService(new ItemTypeRepository(db), db, tax, null!, fbr);
         var service = new InvoiceService(new InvoiceRepository(db), null!, null!, null!, db,
             new ConfigurationBuilder().Build(), audit, null!, tax, null!, NullLogger<InvoiceService>.Instance, itemService, fbr, null!);

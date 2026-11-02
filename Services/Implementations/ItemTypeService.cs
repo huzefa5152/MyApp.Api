@@ -445,12 +445,16 @@ namespace MyApp.Api.Services.Implementations
 
             try
             {
-                var suggested = await _taxEngine.SuggestDefaultUomAsync(
-                    enrichWithCompanyId.Value, dto.HSCode!);
-                if (suggested == null) return;
+                // Fill the blank half from the half that was chosen. FBR's default unit is only for when
+                // neither was: pairing a typed "Packs" with the default's id filed the bill as KG.
+                var units = await _taxEngine.GetValidUomsForHsCodeAsync(enrichWithCompanyId.Value, dto.HSCode!);
+                var unit = string.IsNullOrWhiteSpace(dto.UOM) && !dto.FbrUOMId.HasValue
+                    ? units.FirstOrDefault()
+                    : FbrUnitMatch.Resolve(units, dto.UOM, dto.FbrUOMId);
+                if (unit == null) return;
 
-                if (!dto.FbrUOMId.HasValue)       dto.FbrUOMId = suggested.UOM_ID;
-                if (string.IsNullOrWhiteSpace(dto.UOM)) dto.UOM = suggested.Description;
+                dto.FbrUOMId = unit.UOM_ID;
+                if (string.IsNullOrWhiteSpace(dto.UOM)) dto.UOM = unit.Description;
             }
             catch
             {
