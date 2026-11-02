@@ -74,7 +74,7 @@ namespace MyApp.Api.Controllers
             if (company == null) return NotFound(new { message = "Company not found." });
 
             var activities = TaxScenarios.SplitCsv(company.FbrBusinessActivity);
-            var sectors    = TaxScenarios.SplitCsv(company.FbrSector);
+            var sectors = TaxScenarios.SplitCsv(company.FbrSector);
 
             var matched = TaxScenarios.GetApplicable(activities, sectors);
             return Ok(new

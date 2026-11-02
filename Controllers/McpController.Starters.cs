@@ -33,8 +33,10 @@ public partial class McpController
             {
                 companyId = new { type = "integer", minimum = 1 },
                 action = new { type = "string", @enum = new[] { "create", "update", "activate", "deactivate", "delete" } },
-                starterId = id, revision = new { type = "string", minLength = 64, maxLength = 64 },
-                documentType = type, name = new { type = "string", minLength = 1, maxLength = 200 },
+                starterId = id,
+                revision = new { type = "string", minLength = 64, maxLength = 64 },
+                documentType = type,
+                name = new { type = "string", minLength = 1, maxLength = 200 },
                 description = new { type = "string", maxLength = 500 },
                 htmlContent = new { type = "string", minLength = 1, maxLength = StarterHtmlMax },
                 sortOrder = new { type = "integer", minimum = 0, maximum = 10000 },
@@ -46,9 +48,16 @@ public partial class McpController
 
     private static object StarterMetadata(StarterTemplate s) => new
     {
-        id = s.Id, documentType = s.TemplateType, name = s.Name, description = s.Description, isActive = s.IsActive,
-        sortOrder = s.SortOrder, htmlCharacters = s.HtmlContent.Length, updatedAt = s.UpdatedAt ?? s.CreatedAt,
-        revision = StarterTemplateService.Revision(s), source = "shared",
+        id = s.Id,
+        documentType = s.TemplateType,
+        name = s.Name,
+        description = s.Description,
+        isActive = s.IsActive,
+        sortOrder = s.SortOrder,
+        htmlCharacters = s.HtmlContent.Length,
+        updatedAt = s.UpdatedAt ?? s.CreatedAt,
+        revision = StarterTemplateService.Revision(s),
+        source = "shared",
     };
 
     private IStarterTemplateService Starters => HttpContext.RequestServices.GetRequiredService<IStarterTemplateService>();
@@ -72,9 +81,14 @@ public partial class McpController
             var length = Math.Clamp(NonNegativeArg(args, "length", 16000), 1, 16000);
             var text = row.HtmlContent;
             var count = Math.Min(length, Math.Max(0, text.Length - offset));
-            return new { starter = StarterMetadata(row), offset, totalCharacters = text.Length,
+            return new
+            {
+                starter = StarterMetadata(row),
+                offset,
+                totalCharacters = text.Length,
                 content = count == 0 ? "" : text.Substring(offset, count),
-                nextOffset = (long)offset + count < text.Length ? (int?)(offset + count) : null };
+                nextOffset = (long)offset + count < text.Length ? (int?)(offset + count) : null
+            };
         }
         throw new ToolError("Unknown tool.");
     }
@@ -168,26 +182,26 @@ public partial class McpController
             switch (plan.Kind)
             {
                 case "starter.create":
-                {
-                    var row = await Starters.CreateAsync(CurrentUserId, actor, Str("documentType"), Str("name"), OptStr("description"), Str("htmlContent"), Int("sortOrder"), Accept());
-                    return ($"StarterTemplate:{row.Id}", $"Added shared {row.TemplateType} starter #{row.Id} \"{row.Name}\"");
-                }
+                    {
+                        var row = await Starters.CreateAsync(CurrentUserId, actor, Str("documentType"), Str("name"), OptStr("description"), Str("htmlContent"), Int("sortOrder"), Accept());
+                        return ($"StarterTemplate:{row.Id}", $"Added shared {row.TemplateType} starter #{row.Id} \"{row.Name}\"");
+                    }
                 case "starter.update":
-                {
-                    var row = await Starters.UpdateAsync(CurrentUserId, actor, Int("starterId"), Str("revision"), Str("name"), OptStr("description"), Str("htmlContent"), Int("sortOrder"), Accept());
-                    return ($"StarterTemplate:{row.Id}", $"Changed shared {row.TemplateType} starter #{row.Id} \"{row.Name}\"");
-                }
+                    {
+                        var row = await Starters.UpdateAsync(CurrentUserId, actor, Int("starterId"), Str("revision"), Str("name"), OptStr("description"), Str("htmlContent"), Int("sortOrder"), Accept());
+                        return ($"StarterTemplate:{row.Id}", $"Changed shared {row.TemplateType} starter #{row.Id} \"{row.Name}\"");
+                    }
                 case "starter.activate":
                 case "starter.deactivate":
-                {
-                    var row = await Starters.SetActiveAsync(CurrentUserId, actor, Int("starterId"), Str("revision"), plan.Kind == "starter.activate");
-                    return ($"StarterTemplate:{row.Id}", $"{(row.IsActive ? "Showed" : "Hid")} shared starter #{row.Id} \"{row.Name}\"");
-                }
+                    {
+                        var row = await Starters.SetActiveAsync(CurrentUserId, actor, Int("starterId"), Str("revision"), plan.Kind == "starter.activate");
+                        return ($"StarterTemplate:{row.Id}", $"{(row.IsActive ? "Showed" : "Hid")} shared starter #{row.Id} \"{row.Name}\"");
+                    }
                 case "starter.delete":
-                {
-                    await Starters.DeleteAsync(CurrentUserId, actor, Int("starterId"), Str("revision"));
-                    return ($"StarterTemplate:{Int("starterId")}", $"Deleted shared starter #{Int("starterId")} \"{Str("name")}\"");
-                }
+                    {
+                        await Starters.DeleteAsync(CurrentUserId, actor, Int("starterId"), Str("revision"));
+                        return ($"StarterTemplate:{Int("starterId")}", $"Deleted shared starter #{Int("starterId")} \"{Str("name")}\"");
+                    }
                 default: throw new ToolError("Unknown plan type.");
             }
         }

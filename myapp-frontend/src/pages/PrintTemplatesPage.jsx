@@ -32,7 +32,6 @@ import { setTemplateStamp } from "../api/printTemplateApi";
 import { uploadStamp, updateStamp, deleteStamp, setDefaultStamp } from "../api/stampApi";
 import StampPicker from "../Components/templateEditor/StampPicker";
 import {
-  STAMP_STATE,
   detectStampState,
   injectSignatureBlock,
   convertPinnedToSlot,

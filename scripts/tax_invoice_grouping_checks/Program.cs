@@ -15,11 +15,18 @@ var omitted = new TaxInvoiceGroupingDto();
 var explicitIndividual = new TaxInvoiceGroupingDto { GroupTaxInvoiceByItemType = false };
 Check(!System.ComponentModel.DataAnnotations.Validator.TryValidateObject(omitted, new System.ComponentModel.DataAnnotations.ValidationContext(omitted), validation, true), "An omitted layout choice must be rejected.");
 Check(System.ComponentModel.DataAnnotations.Validator.TryValidateObject(explicitIndividual, new System.ComponentModel.DataAnnotations.ValidationContext(explicitIndividual), [], true), "Explicit individual is a valid choice.");
-var invoice = new Invoice {
-    Id = 1, CompanyId = 1, InvoiceNumber = 1, Date = new(2026, 1, 1),
+var invoice = new Invoice
+{
+    Id = 1,
+    CompanyId = 1,
+    InvoiceNumber = 1,
+    Date = new(2026, 1, 1),
     Company = new Company { Id = 1, Name = "Sample company" },
     Client = new Client { Id = 1, Name = "Sample buyer" },
-    GSTRate = 18m, Subtotal = 800m, GSTAmount = 144m, GrandTotal = 944m,
+    GSTRate = 18m,
+    Subtotal = 800m,
+    GSTAmount = 144m,
+    GrandTotal = 944m,
     Items = new List<InvoiceItem> {
         new() { Id = 1, ItemTypeId = 1, ItemTypeName = "Sample item", Description = "First line", UOM = "PCS", HSCode = "1111.0000", Quantity = 2m, UnitPrice = 100m, LineTotal = 200m },
         new() { Id = 2, ItemTypeId = 1, ItemTypeName = "Sample item", Description = "Second line", UOM = "PCS", HSCode = "1111.0000", Quantity = 3m, UnitPrice = 200m, LineTotal = 600m }
@@ -40,7 +47,8 @@ Check(grouped.Items.Sum(i => i.GSTAmount) == 144m && grouped.Items.Sum(i => i.To
 Check(grouped.Subtotal == individual.Subtotal && grouped.GSTAmount == individual.GSTAmount && grouped.GrandTotal == individual.GrandTotal, "Layout never changes header amounts.");
 var excel = ExcelTemplateEngine.TaxInvoiceToDict(grouped);
 Check(excel.ContainsKey("items") && excel.ContainsKey("billItems"), "Excel uses both common print loops.");
-using (var workbook = new XLWorkbook()) {
+using (var workbook = new XLWorkbook())
+{
     var sheet = workbook.AddWorksheet("Sales Tax Invoice");
     sheet.Cell("A1").Value = "{{#each items}}";
     sheet.Cell("A2").Value = "{{this.quantity}}";
@@ -90,7 +98,8 @@ invoice.Items.First().HSCode = "1111.0000";
 // A saved filing plan that combines both lines under one code: the original lines still print one row each, at their own quantity.
 var savedAdjustment = invoice.Items.First().Adjustment;
 invoice.Items.First().Adjustment = null;
-invoice.TaxFilingRowsJson = System.Text.Json.JsonSerializer.Serialize(new TaxFilingPlan {
+invoice.TaxFilingRowsJson = System.Text.Json.JsonSerializer.Serialize(new TaxFilingPlan
+{
     SourceVersion = TaxFilingProjection.SourceVersion(invoice),
     Rows = new List<TaxFilingRowDto> { new() { SourceLineIds = new List<int> { 1, 2 }, Description = "Combined", HSCode = "5555.0000", UOM = "KG", Quantity = 4m, ValueExclTax = 800m } }
 });
@@ -102,6 +111,14 @@ Check(billPrint.Items.Count == 2 && billPrint.Items.All(i => i.HSCode == "5555.0
 var perLine = TaxFilingProjection.InitialRows(invoice, perLine: true);
 Check(perLine.Count == 2 && perLine[0].Description == "First line" && perLine[1].SourceLineIds.SequenceEqual(new[] { 2 }), "A company that prints original lines starts the filing editor with one row per bill line.");
 Check(TaxFilingProjection.InitialRows(invoice).Count == 1, "Other companies still start from item-type groups.");
+// Roshan bill 1139: one item type billed in Set and in Pcs starts as ONE row, with no unit and no quantity to file.
+var firstUnit = invoice.Items.First().UOM;
+invoice.Items.First().UOM = "Set";
+var mixed = TaxFilingProjection.InitialRows(invoice, commercial: true);
+Check(mixed.Count == 1 && mixed[0].SourceLineIds.Count == 2 && mixed[0].UOM == "" && mixed[0].Quantity == 0m && mixed[0].ValueExclTax == invoice.Items.Sum(i => i.LineTotal),
+    "One item type billed in two units starts as one row, never summing the two units' quantities.");
+Check(TaxFilingProjection.InitialRows(invoice, commercial: true, splitUnits: true).Count == 2, "A legacy overlay conversion still keeps each unit on its own row.");
+invoice.Items.First().UOM = firstUnit;
 invoice.Company.TaxInvoiceUseOriginalBillLines = false;
 billPrint = (await service.GetPrintBillAsync(1))!;
 Check(billPrint.Items.All(i => i.HSCode == "1111.0000"), "A company that groups keeps its bill reading the line's own code, whatever the filing rows say.");
@@ -129,7 +146,8 @@ Check(grouped.Items.Sum(r => r.GSTAmount) == individual.Items.Sum(r => r.GSTAmou
     && individual.Items.Sum(r => r.GSTAmount) == invoice.GSTAmount, "Penny tax rounding preserves totals in either layout.");
 Console.WriteLine($"PASS: {checks} tax-invoice grouping checks.");
 
-public class InvoiceProxy : DispatchProxy {
+public class InvoiceProxy : DispatchProxy
+{
     public Invoice Invoice { get; set; } = null!;
     protected override object? Invoke(MethodInfo? method, object?[]? args) =>
         method?.Name == "GetByIdAsync" ? Task.FromResult<Invoice?>(Invoice) : throw new NotSupportedException(method?.Name);

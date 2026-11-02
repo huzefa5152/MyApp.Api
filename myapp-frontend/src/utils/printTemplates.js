@@ -51,7 +51,6 @@ export function buildBillPrintHtml(d) {
     itemRows += `<tr><td class="cell">&nbsp;</td><td class="cell">&nbsp;</td><td class="cell">&nbsp;</td><td class="cell">&nbsp;</td><td class="cell r">Rs &nbsp; -</td></tr>`;
   }
 
-  const dcNos = d.challanNumbers?.join(", ") || "";
   const dcDates =
     d.challanDates
       ?.map((dt) => fmtDate(dt))

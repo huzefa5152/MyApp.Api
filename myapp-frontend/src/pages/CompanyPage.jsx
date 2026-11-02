@@ -11,8 +11,6 @@ export default function CompanyPage() {
   const { companies, refreshCompanies } = useCompany();
   const { has } = usePermissions();
   const canCreate = has("companies.manage.create");
-  const canUpdate = has("companies.manage.update");
-  const canDelete = has("companies.manage.delete");
   const [editingCompany, setEditingCompany] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");

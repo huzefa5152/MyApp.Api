@@ -101,8 +101,16 @@ public class EmailAssistanceTests
         var mailbox = new GmailConnection { OwnerUserId = user.Id, GoogleSubject = "sample-subject", EmailAddress = "owner@example.com", ProtectedRefreshToken = service.Protect("sample-refresh") };
         db.Add(mailbox); await db.SaveChangesAsync();
         db.GmailCompanyLinks.Add(new() { CompanyId = company.Id, ConnectionId = mailbox.Id });
-        var message = new GmailMessage { ConnectionId = mailbox.Id, ProviderMessageId = "sample-message", ThreadId = "sample-thread", Sender = "buyer@example.com", Subject = "Quotation", ReceivedAt = DateTime.UtcNow,
-            ProtectedContent = service.Protect(new EmailContent("Please quote", "", [new("csv", "request.csv", "text/csv", 100), new("image", "scan.png", "image/png", 100)])) };
+        var message = new GmailMessage
+        {
+            ConnectionId = mailbox.Id,
+            ProviderMessageId = "sample-message",
+            ThreadId = "sample-thread",
+            Sender = "buyer@example.com",
+            Subject = "Quotation",
+            ReceivedAt = DateTime.UtcNow,
+            ProtectedContent = service.Protect(new EmailContent("Please quote", "", [new("csv", "request.csv", "text/csv", 100), new("image", "scan.png", "image/png", 100)]))
+        };
         db.Add(message); await db.SaveChangesAsync();
         var draft = new EmailDraftDto { ClientId = customer.Id, Reviewed = true, Items = [new() { Description = "Existing item", Quantity = 1, Unit = "Nos", UnitPrice = 10 }] };
         var enquiry = new EmailEnquiry { CompanyId = company.Id, MessageId = message.Id, DecidedByUserId = user.Id, ProtectedDraft = service.Protect(draft) };
@@ -124,11 +132,21 @@ public class EmailAssistanceTests
         await Assert.ThrowsAsync<EmailWorkspaceException>(() => service.PreviewAttachmentAsync(user.Id, company.Id, message.Id, new() { AttachmentId = "unknown", Revision = replaced.Revision }, default));
         await Assert.ThrowsAsync<EmailWorkspaceException>(() => service.PreviewAttachmentAsync(user.Id, company.Id, message.Id, new() { AttachmentId = "image", Revision = replaced.Revision, Pages = [[new() { Text = "x", Left = -1 }]] }, default));
         OcrWordDto Word(string text, int left, int top) => new() { Text = text, Left = left, Right = left + text.Length * 6, Top = top, Bottom = top + 10, Confidence = 99 };
-        var ocr = await service.PreviewAttachmentAsync(user.Id, company.Id, message.Id, new() { AttachmentId = "image", Revision = replaced.Revision,
-            Pages = [[Word("Description", 0, 0), Word("Unit", 200, 0), Word("Qty", 300, 0), Word("Washer", 0, 30), Word("Nos", 200, 30), Word("4", 300, 30)]] }, default);
+        var ocr = await service.PreviewAttachmentAsync(user.Id, company.Id, message.Id, new()
+        {
+            AttachmentId = "image",
+            Revision = replaced.Revision,
+            Pages = [[Word("Description", 0, 0), Word("Unit", 200, 0), Word("Qty", 300, 0), Word("Washer", 0, 30), Word("Nos", 200, 30), Word("4", 300, 30)]]
+        }, default);
         Assert.Equal("Washer", Assert.Single(ocr.Items).Description); Assert.Equal(4, ocr.Items[0].Quantity);
-        SalesQuote Quote(int owner, int client, int number, decimal price, string unit = "Nos") => new() { CompanyId = owner, ClientId = client, QuoteNumber = number, Date = DateTime.UtcNow,
-            Items = [new() { Description = "Steel bolt M12", Quantity = 1, Unit = unit, UnitPrice = price }] };
+        SalesQuote Quote(int owner, int client, int number, decimal price, string unit = "Nos") => new()
+        {
+            CompanyId = owner,
+            ClientId = client,
+            QuoteNumber = number,
+            Date = DateTime.UtcNow,
+            Items = [new() { Description = "Steel bolt M12", Quantity = 1, Unit = unit, UnitPrice = price }]
+        };
         var previous = Quote(company.Id, customer.Id, 1, 75);
         db.AddRange(previous, Quote(company.Id, otherCustomer.Id, 2, 999), Quote(other.Id, foreign.Id, 1, 888), Quote(company.Id, customer.Id, 3, 777, "Kg"));
         db.ItemDescriptions.AddRange(new() { CompanyId = company.Id, Name = "Steel bolt M12", UOM = "Nos" }, new() { CompanyId = other.Id, Name = "Foreign secret product", UOM = "Nos" });
@@ -148,8 +166,14 @@ public class EmailAssistanceTests
         await Assert.ThrowsAsync<EmailWorkspaceException>(() => service.AssistItemsAsync(user.Id, company.Id, message.Id, assistance, default)); assistance.ClientId = customer.Id;
         var pastMessage = new GmailMessage { ConnectionId = mailbox.Id, ProviderMessageId = "prior-message", Sender = "buyer@example.com", Subject = "Prior enquiry", ProtectedContent = service.Protect(new EmailContent("", "", [])) };
         db.Add(pastMessage); await db.SaveChangesAsync();
-        db.EmailEnquiries.Add(new() { CompanyId = company.Id, MessageId = pastMessage.Id, DecidedByUserId = user.Id, SalesQuoteId = previous.Id,
-            ProtectedDraft = service.Protect(new EmailDraftDto { ClientId = customer.Id, Reviewed = true, Items = [new() { SourceDescription = "Customer fastener code A", Description = "Steel bolt M12", Unit = "Nos" }] }) });
+        db.EmailEnquiries.Add(new()
+        {
+            CompanyId = company.Id,
+            MessageId = pastMessage.Id,
+            DecidedByUserId = user.Id,
+            SalesQuoteId = previous.Id,
+            ProtectedDraft = service.Protect(new EmailDraftDto { ClientId = customer.Id, Reviewed = true, Items = [new() { SourceDescription = "Customer fastener code A", Description = "Steel bolt M12", Unit = "Nos" }] })
+        });
         await db.SaveChangesAsync();
         assistance.Items = [new() { Description = "Customer fastener code A", Unit = "Nos" }];
         var remembered = Assert.Single((await service.AssistItemsAsync(user.Id, company.Id, message.Id, assistance, default))[0].Candidates);
@@ -168,14 +192,16 @@ public class EmailAssistanceTests
         public Task<bool> HasAccessAsync(int user, int company) => Task.FromResult(Allowed.Contains(company));
         public Task AssertAccessAsync(int user, int company) => Allowed.Contains(company) ? Task.CompletedTask : throw new UnauthorizedAccessException();
         public Task<HashSet<int>> GetAccessibleCompanyIdsAsync(int user) => Task.FromResult(Allowed);
-        public void InvalidateUser(int user) { } public void InvalidateAll() { }
+        public void InvalidateUser(int user) { }
+        public void InvalidateAll() { }
     }
     private sealed class Grants : IPermissionService
     {
         public HashSet<string> Denied = [];
         public Task<bool> HasPermissionAsync(int user, string key) => Task.FromResult(!Denied.Contains(key));
         public Task<IReadOnlyCollection<string>> GetUserPermissionsAsync(int user) => Task.FromResult<IReadOnlyCollection<string>>([]);
-        public void InvalidateUser(int user) { } public void InvalidateAll() { }
+        public void InvalidateUser(int user) { }
+        public void InvalidateAll() { }
         public bool IsSeedAdmin(int user) => false;
         public Task<bool> HasMcpToolAccessAsync(int user, string name) => Task.FromResult(false);
     }

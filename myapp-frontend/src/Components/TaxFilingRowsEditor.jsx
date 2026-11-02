@@ -15,6 +15,71 @@ import {
 import "./TaxFilingRowsEditor.css";
 import InvoiceDocumentView from "./InvoiceDocumentView";
 
+// FBR HS codes are four digits, a dot, four digits, and an optional two-digit tail.
+const HS_CODE_PATTERN = /^\d{4}\.\d{4}(\.\d{2})?$/;
+
+function SelectionBar({
+  count,
+  perLine,
+  bulk,
+  setBulk,
+  bulkReady,
+  saving,
+  companyId,
+  types,
+  canAdjustNumbers,
+  omitDescription,
+  onApply,
+  onCombine,
+  onClear,
+}) {
+  return (
+    <section className="tf-bulk tf-selection-bar" aria-label="Same HS code for several lines">
+      <h3>
+        {count} {perLine ? "line" : "row"}
+        {count === 1 ? "" : "s"} selected
+      </h3>
+      {perLine && (
+        <FilingClassificationFields
+          row={bulk}
+          label="Selected lines"
+          companyId={companyId}
+          types={types}
+          canAdjustNumbers={canAdjustNumbers}
+          omitDescription={omitDescription}
+          lineDescriptions={perLine}
+          onChange={setBulk}
+        />
+      )}
+      <div className="tf-selection-actions">
+        {perLine && (
+          <button
+            type="button"
+            className="tf-apply"
+            disabled={saving || !bulkReady}
+            onClick={onApply}
+          >
+            Apply to ticked lines ({count})
+          </button>
+        )}
+        {!perLine && (
+          <button
+            type="button"
+            className="tf-apply"
+            disabled={saving || count < 2}
+            onClick={onCombine}
+          >
+            Combine selected ({count})
+          </button>
+        )}
+        <button type="button" disabled={saving} onClick={onClear}>
+          Clear selection
+        </button>
+      </div>
+    </section>
+  );
+}
+
 export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readOnly = false }) {
   const { has } = usePermissions();
   const confirm = useConfirm();
@@ -135,29 +200,29 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
     setSelected([]);
   };
   const bulkReady =
-    /^\d{4}\.\d{4}(\.\d{2})?$/.test(bulk.hsCode || "") &&
+    HS_CODE_PATTERN.test(bulk.hsCode || "") &&
     !!bulk.uom &&
     !!bulk.saleType &&
     (!!bulk.itemTypeId || !!bulk.description?.trim());
   const applyBulk = () => {
     if (!selected.length || !bulkReady) return;
-    changeRows(
-      rows.map((r, i) =>
-        !selected.includes(i)
-          ? r
-          : {
-              ...r,
-              itemTypeId: bulk.itemTypeId,
-              hsCode: bulk.hsCode,
-              saleType: bulk.saleType,
-              selectedSaleType: bulk.selectedSaleType ?? null,
-              uom: bulk.uom,
-              fbrUOMId: bulk.fbrUOMId,
-              selectedFbrUOMId: bulk.selectedFbrUOMId ?? null,
-              description: bulk.description || r.description,
-            },
-      ),
+    const applied = rows.map((r, i) =>
+      !selected.includes(i)
+        ? r
+        : {
+            ...r,
+            itemTypeId: bulk.itemTypeId,
+            hsCode: bulk.hsCode,
+            saleType: bulk.saleType,
+            selectedSaleType: bulk.selectedSaleType ?? null,
+            uom: bulk.uom,
+            fbrUOMId: bulk.fbrUOMId,
+            selectedFbrUOMId: bulk.selectedFbrUOMId ?? null,
+            description: bulk.description || r.description,
+          },
     );
+    // Lines given one HS code become one FBR row (the printed invoice still shows each line).
+    changeRows(perLine && selected.length > 1 ? mergeFilingRows(applied, selected) : applied);
     setSelected([]);
   };
   const separate = (index) => {
@@ -212,25 +277,14 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
   };
   const total = rows.reduce((n, r) => n + amount(r.valueExclTax), 0);
   const difference = data ? amount(data.bill.subtotal) - total : 0;
-  // A company that prints its original bill lines files every line as its own row: it never combines, it only
-  // ticks several lines to give them one HS code. A row merged before that rule keeps "Separate source lines".
-  // Every other company keeps the grouped editor exactly as it was, selection controls included.
+  // A company that prints its original bill lines keeps each line on the printed invoice; the FBR rows are
+  // separate from that, so several lines may share one HS code and be combined into one row.
   const perLine = !!data?.bill?.taxInvoiceUseOriginalBillLines;
-  const canCombine = !perLine;
-  const canSelect = !perLine;
-  // An original-lines company gives each bill line its own HS code; the server refuses a repeat too.
-  // repeatedAt[i] is the earlier row already holding row i's code, or -1.
-  const repeatedAt = rows.map((r, i) => {
-    const code = (r.hsCode || "").trim();
-    const first = perLine && code ? rows.findIndex((o) => (o.hsCode || "").trim() === code) : i;
-    return first < i ? first : -1;
-  });
-  const hasRepeat = repeatedAt.some((i) => i >= 0);
   // For an original-lines company the FBR unit is filled in from FBR, not typed: hold Save until it has arrived for every coded row.
+  const unitWord = perLine ? "lines" : "rows";
   const unitPending =
     perLine &&
-    (busyRows.size > 0 ||
-      rows.some((r) => /^\d{4}\.\d{4}(\.\d{2})?$/.test(r.hsCode || "") && !r.uom));
+    (busyRows.size > 0 || rows.some((r) => HS_CODE_PATTERN.test(r.hsCode || "") && !r.uom));
   const reportBusy = (key) => (busy) =>
     setBusyRows((prev) =>
       prev.has(key) === busy
@@ -309,9 +363,8 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
               ) : perLine ? (
                 <p className="tf-grouping-help">
                   Each row is one of your original bill lines. Add its HS code and, when FBR needs
-                  different figures, its filing quantity and unit. Every line is filed and printed
-                  as its own row, with its own HS code: a code already used on one line cannot be
-                  used on another.
+                  different figures, its filing quantity and unit. The printed invoice keeps every
+                  line. FBR gets one row per HS code: lines that share a code are combined.
                 </p>
               ) : (
                 <p className="tf-grouping-help">
@@ -359,20 +412,19 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
               )}
               {editable && !canAdjustNumbers && (
                 <p>
-                  You can update HS classifications
-                  {canCombine && " and combine rows with the same unit"}. Quantity and amount
-                  changes require consultant quantity permission.
+                  You can update HS classifications and combine rows with the same unit. Quantity
+                  and amount changes require consultant quantity permission.
                 </p>
               )}
-              {editable && (canSelect || canAdjustNumbers) && (
+              {editable && (
                 <div className="tf-toolbar">
-                  {canSelect && (
+                  {rows.length > 1 && (
                     <button
                       type="button"
                       disabled={saving || selected.length === rows.length}
                       onClick={() => setSelected(rows.map((_, i) => i))}
                     >
-                      Select all {perLine ? "lines" : "rows"}
+                      Select all {unitWord}
                     </button>
                   )}
                   {canAdjustNumbers && (
@@ -380,11 +432,12 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
                       Rebuild from current bill
                     </button>
                   )}
-                  {canSelect && (
+                  {rows.length > 1 && (
                     <span>
-                      Tick {perLine ? "lines" : "rows"} to give them one HS code
-                      {canCombine && " or combine them"}. The actions stay pinned at the bottom
-                      while you scroll.
+                      {perLine
+                        ? "Tick lines to give them one HS code. Ticked lines with the same code become one FBR row."
+                        : "Tick rows to combine them into one FBR row."}{" "}
+                      The actions stay pinned at the bottom while you scroll.
                     </span>
                   )}
                 </div>
@@ -414,7 +467,7 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
                     >
                       <div className="tf-row-head">
                         <label className="tf-select">
-                          {editable && canSelect && (
+                          {editable && rows.length > 1 && (
                             <input
                               type="checkbox"
                               aria-label={`Select filing row ${index + 1}`}
@@ -494,12 +547,6 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
                               </small>
                             </>
                           )}
-                          {repeatedAt[index] >= 0 && (
-                            <p role="alert" className="tf-field-error">
-                              HS code {row.hsCode.trim()} is already in use on bill line{" "}
-                              {repeatedAt[index] + 1}. Each bill line needs its own HS code.
-                            </p>
-                          )}
                         </div>
                         <label>
                           Filing quantity
@@ -508,7 +555,7 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
                             type="number"
                             min="0.0001"
                             step="0.0001"
-                            value={row.quantity}
+                            value={Number(row.quantity) === 0 ? "" : row.quantity}
                             disabled={!editable || !canAdjustNumbers || saving}
                             onChange={(e) => change(index, "quantity", e.target.value)}
                           />
@@ -570,48 +617,22 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
                 })}
               </div>
               {/* Pinned to the bottom of the scrolling body: tick rows anywhere in a long bill, then classify them without scrolling back up. */}
-              {editable && canSelect && selected.length > 0 && (
-                <section
-                  className="tf-bulk tf-selection-bar"
-                  aria-label="Same HS code for several lines"
-                >
-                  <h3>
-                    {selected.length} {perLine ? "line" : "row"}
-                    {selected.length === 1 ? "" : "s"} selected
-                  </h3>
-                  <FilingClassificationFields
-                    row={bulk}
-                    label="Selected lines"
-                    companyId={data.bill.companyId}
-                    types={types}
-                    canAdjustNumbers={canAdjustNumbers}
-                    omitDescription={!!data.bill.fbrOmitProductDescription}
-                    lineDescriptions={perLine}
-                    onChange={setBulk}
-                  />
-                  <div className="tf-selection-actions">
-                    <button
-                      type="button"
-                      className="tf-apply"
-                      disabled={saving || !bulkReady}
-                      onClick={applyBulk}
-                    >
-                      Apply to ticked {perLine ? "lines" : "rows"} ({selected.length})
-                    </button>
-                    {canCombine && (
-                      <button
-                        type="button"
-                        disabled={saving || selected.length < 2}
-                        onClick={combine}
-                      >
-                        Combine selected ({selected.length})
-                      </button>
-                    )}
-                    <button type="button" disabled={saving} onClick={() => setSelected([])}>
-                      Clear selection
-                    </button>
-                  </div>
-                </section>
+              {editable && selected.length > 0 && (
+                <SelectionBar
+                  count={selected.length}
+                  perLine={perLine}
+                  bulk={bulk}
+                  setBulk={setBulk}
+                  bulkReady={bulkReady}
+                  saving={saving}
+                  companyId={data.bill.companyId}
+                  types={types}
+                  canAdjustNumbers={canAdjustNumbers}
+                  omitDescription={!!data.bill.fbrOmitProductDescription}
+                  onApply={applyBulk}
+                  onCombine={combine}
+                  onClear={() => setSelected([])}
+                />
               )}
               {!types.some((t) => t.hsCode && t.saleType) && editable && (
                 <p className="tf-warning">
@@ -650,7 +671,7 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
             <button
               type="submit"
               style={{ ...formStyles.button, ...formStyles.submit }}
-              disabled={saving || difference !== 0 || unitPending || hasRepeat}
+              disabled={saving || difference !== 0 || unitPending}
             >
               {saving
                 ? "Saving…"

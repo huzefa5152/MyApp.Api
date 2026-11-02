@@ -5,7 +5,6 @@ import {
   MdError,
   MdDelete,
   MdArrowBack,
-  MdDownload,
   MdLock,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";

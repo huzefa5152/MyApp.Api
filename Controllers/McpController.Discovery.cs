@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Helpers;
 
 namespace MyApp.Api.Controllers;
@@ -11,7 +10,9 @@ public partial class McpController
     {
         public object Descriptor() => new
         {
-            name = Name, description = Description, inputSchema = InputSchema,
+            name = Name,
+            description = Description,
+            inputSchema = InputSchema,
             annotations = new { readOnlyHint = !Writes, destructiveHint = false, idempotentHint = true, openWorldHint = false }
         };
     }
@@ -142,7 +143,10 @@ public partial class McpController
             companyIds = allowed,
             scopes = Agent?.Scopes.Split(',', StringSplitOptions.RemoveEmptyEntries) ?? new[] { "read" },
             writesEnabled = Agent is { AllowWrites: true } && await _permissions.HasPermissionAsync(CurrentUserId, "mcp.write.use"),
-            tools = names, money = "PKR", planLifetimeSeconds = 600, maxInlineBytes = MaxBodyBytes,
+            tools = names,
+            money = "PKR",
+            planLifetimeSeconds = 600,
+            maxInlineBytes = MaxBodyBytes,
             guidance = "Read only needed details. Every write targets one company and requires a reviewed plan."
         };
     }
@@ -168,8 +172,16 @@ public partial class McpController
         var status = plan.CommittedAt == null ? plan.ExpiresAt > DateTime.UtcNow ? "prepared" : "expired"
             : plan.ResultRef == "FAILED" ? "failedOrIncomplete"
             : !string.IsNullOrEmpty(plan.ResultRef) ? "succeeded" : "executingOrUnknown";
-        return new { planId = plan.PlanId, companyId = plan.CompanyId, kind = plan.Kind, status,
-            resultRef = plan.ResultRef, summary = plan.ResultSummary ?? plan.Summary,
-            retrySafe = false, expiresAt = plan.ExpiresAt };
+        return new
+        {
+            planId = plan.PlanId,
+            companyId = plan.CompanyId,
+            kind = plan.Kind,
+            status,
+            resultRef = plan.ResultRef,
+            summary = plan.ResultSummary ?? plan.Summary,
+            retrySafe = false,
+            expiresAt = plan.ExpiresAt
+        };
     }
 }

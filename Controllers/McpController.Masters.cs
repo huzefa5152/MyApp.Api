@@ -25,20 +25,30 @@ public partial class McpController
         tools.Add(new("prepare_supplier", "Prepare a new supplier, or an update when supplierId is given (only the fields you pass change). Nothing is saved: returns a plan to show the user. Call commit_action only after they approve.",
             ExpandedSchema(new
             {
-                companyId = company, supplierId = new { type = "integer", minimum = 1 },
-                name = new { type = "string", maxLength = 200 }, address = new { type = "string", maxLength = 500 }, phone = new { type = "string", maxLength = 50 },
-                email = new { type = "string", maxLength = 200 }, ntn = new { type = "string", maxLength = 50 }, strn = new { type = "string", maxLength = 50 },
-                cnic = new { type = "string", maxLength = 50 }, site = new { type = "string", maxLength = 200 },
-                registrationType = new { type = "string", @enum = new[] { "Registered", "Unregistered" } }, fbrProvinceCode = new { type = "integer", minimum = 1 },
+                companyId = company,
+                supplierId = new { type = "integer", minimum = 1 },
+                name = new { type = "string", maxLength = 200 },
+                address = new { type = "string", maxLength = 500 },
+                phone = new { type = "string", maxLength = 50 },
+                email = new { type = "string", maxLength = 200 },
+                ntn = new { type = "string", maxLength = 50 },
+                strn = new { type = "string", maxLength = 50 },
+                cnic = new { type = "string", maxLength = 50 },
+                site = new { type = "string", maxLength = 200 },
+                registrationType = new { type = "string", @enum = new[] { "Registered", "Unregistered" } },
+                fbrProvinceCode = new { type = "integer", minimum = 1 },
                 idempotencyKey = idem,
             }, "companyId"),
             new[] { "suppliers.manage.create", "suppliers.manage.update" }, McpScopes.Suppliers, Writes: true));
         tools.Add(new("prepare_item_type", "Prepare a new catalog item for one company, or an update when itemTypeId is given (only the fields you pass change). Find the HS code with search_fbr_hs_codes; a new item without a name takes that code's shortName. The item name is what FBR receives as the product description when a bill is filed with this item (blank when the company omits descriptions). An HS code is checked against FBR's catalog when committed; leave it out to save an unclassified draft item. Nothing is saved: returns a plan to show the user. Call commit_action only after they approve.",
             ExpandedSchema(new
             {
-                companyId = company, itemTypeId = new { type = "integer", minimum = 1 },
-                name = new { type = "string", maxLength = 200 }, hsCode = new { type = "string", maxLength = 20 },
-                uom = new { type = "string", maxLength = 50 }, saleType = new { type = "string", maxLength = 100 },
+                companyId = company,
+                itemTypeId = new { type = "integer", minimum = 1 },
+                name = new { type = "string", maxLength = 200 },
+                hsCode = new { type = "string", maxLength = 20 },
+                uom = new { type = "string", maxLength = 50 },
+                saleType = new { type = "string", maxLength = 100 },
                 idempotencyKey = idem,
             }, "companyId"),
             new[] { "itemtypes.manage.create", "itemtypes.manage.update" }, McpScopes.ItemTypes, Writes: true));
@@ -103,8 +113,18 @@ public partial class McpController
         var kind = supplierId.HasValue ? "supplier.update" : "supplier.create";
         var payload = new
         {
-            dto.Id, dto.CompanyId, dto.Name, dto.Address, dto.Phone, dto.Email, dto.NTN, dto.STRN, dto.CNIC, dto.Site,
-            dto.RegistrationType, dto.FbrProvinceCode,
+            dto.Id,
+            dto.CompanyId,
+            dto.Name,
+            dto.Address,
+            dto.Phone,
+            dto.Email,
+            dto.NTN,
+            dto.STRN,
+            dto.CNIC,
+            dto.Site,
+            dto.RegistrationType,
+            dto.FbrProvinceCode,
         };
         var summary = supplierId.HasValue
             ? $"Update supplier #{dto.Id} \"{dto.Name}\" in company {companyId}"
@@ -118,8 +138,16 @@ public partial class McpController
         return new SupplierDto
         {
             Id = p.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.Number ? id.GetInt32() : null,
-            CompanyId = p.GetProperty("companyId").GetInt32(), Name = S("name")!, Address = S("address"), Phone = S("phone"), Email = S("email"),
-            NTN = S("ntn"), STRN = S("strn"), CNIC = S("cnic"), Site = S("site"), RegistrationType = S("registrationType"),
+            CompanyId = p.GetProperty("companyId").GetInt32(),
+            Name = S("name")!,
+            Address = S("address"),
+            Phone = S("phone"),
+            Email = S("email"),
+            NTN = S("ntn"),
+            STRN = S("strn"),
+            CNIC = S("cnic"),
+            Site = S("site"),
+            RegistrationType = S("registrationType"),
             FbrProvinceCode = p.TryGetProperty("fbrProvinceCode", out var pc) && pc.ValueKind == JsonValueKind.Number ? pc.GetInt32() : null,
         };
     }
@@ -175,8 +203,15 @@ public partial class McpController
         var kind = itemTypeId.HasValue ? "itemtype.update" : "itemtype.create";
         var payload = new
         {
-            dto.Id, companyId, dto.Name, hsCode = dto.HSCode, uom = dto.UOM, fbrUomId = dto.FbrUOMId, dto.SaleType,
-            dto.FbrDescription, dto.IsFavorite,
+            dto.Id,
+            companyId,
+            dto.Name,
+            hsCode = dto.HSCode,
+            uom = dto.UOM,
+            fbrUomId = dto.FbrUOMId,
+            dto.SaleType,
+            dto.FbrDescription,
+            dto.IsFavorite,
             note = string.IsNullOrEmpty(dto.HSCode) ? "No HS code: saved as an unclassified draft item that moves no stock and cannot be filed with FBR." : "The HS code is checked against FBR's catalog when committed.",
         };
         var summary = itemTypeId.HasValue
@@ -191,9 +226,13 @@ public partial class McpController
         return new ItemTypeDto
         {
             Id = p.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.Number ? id.GetInt32() : 0,
-            CompanyId = p.GetProperty("companyId").GetInt32(), Name = S("name")!, HSCode = S("hsCode"), UOM = S("uom"),
+            CompanyId = p.GetProperty("companyId").GetInt32(),
+            Name = S("name")!,
+            HSCode = S("hsCode"),
+            UOM = S("uom"),
             FbrUOMId = p.TryGetProperty("fbrUomId", out var u) && u.ValueKind == JsonValueKind.Number ? u.GetInt32() : null,
-            SaleType = S("saleType"), FbrDescription = S("fbrDescription"),
+            SaleType = S("saleType"),
+            FbrDescription = S("fbrDescription"),
             IsFavorite = p.TryGetProperty("isFavorite", out var f) && f.ValueKind == JsonValueKind.True,
         };
     }

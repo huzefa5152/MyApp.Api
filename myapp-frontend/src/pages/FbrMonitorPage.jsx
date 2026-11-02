@@ -13,7 +13,7 @@ import RecordsViewport from "../Components/RecordsViewport";
 //   3. Paged list: timestamp, status pill, action, invoice link, http code,
 //      FBR error, duration, retry. Click a row → drawer with full request /
 //      response (already-masked NTN/CNIC).
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import {
   MdCloudDone,
   MdHourglassEmpty,

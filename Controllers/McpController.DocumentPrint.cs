@@ -55,11 +55,15 @@ public partial class McpController
     {
         var permission = type switch
         {
-            "Challan" => "challans.print.view", "Bill" => "bills.print.view",
+            "Challan" => "challans.print.view",
+            "Bill" => "bills.print.view",
             "TaxInvoice" or "CreditNote" or "DebitNote" => "invoices.print.view",
-            "SalesQuote" => "salesquotes.print.view", "SalesOrder" => "salesorders.print.view",
-            "PurchaseBill" => "purchasebills.print.view", "GoodsReceipt" => "goodsreceipts.print.view",
-            "Receipt" => "accounting.receipts.print", "Payment" => "accounting.payments.print",
+            "SalesQuote" => "salesquotes.print.view",
+            "SalesOrder" => "salesorders.print.view",
+            "PurchaseBill" => "purchasebills.print.view",
+            "GoodsReceipt" => "goodsreceipts.print.view",
+            "Receipt" => "accounting.receipts.print",
+            "Payment" => "accounting.payments.print",
             "WithholdingTaxReceipt" => "withholdingtax.print.view",
             _ => throw new ToolError("Unknown document type.")
         };
@@ -130,9 +134,18 @@ public partial class McpController
         var offset = NonNegativeArg(args, "offset");
         var limit = Size(args, "limit");
         var count = collection.GetArrayLength();
-        return new { companyId, documentType = type, documentId = id.Value, section, totalCount = count,
-            offset, limit, items = collection.EnumerateArray().Skip(offset).Take(limit).ToArray(),
-            nextOffset = (long)offset + limit < count ? (int?)(offset + limit) : null };
+        return new
+        {
+            companyId,
+            documentType = type,
+            documentId = id.Value,
+            section,
+            totalCount = count,
+            offset,
+            limit,
+            items = collection.EnumerateArray().Skip(offset).Take(limit).ToArray(),
+            nextOffset = (long)offset + limit < count ? (int?)(offset + limit) : null
+        };
     }
 
     private const int RenderChunkMax = 50000;
@@ -161,7 +174,8 @@ public partial class McpController
         var stamps = await _context.CompanyStamps.AsNoTracking().Where(s => s.CompanyId == companyId).ToListAsync();
         bool? signed = Has(args, "signed") ? args.GetProperty("signed").ValueKind switch
         {
-            JsonValueKind.True => true, JsonValueKind.False => false,
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
             _ => throw new ToolError("signed must be true or false.")
         } : null;
         bool CarriesSignature(PrintTemplate t) => StampSlot.Detect(t.HtmlContent) switch
@@ -204,7 +218,11 @@ public partial class McpController
                 || !System.IO.File.Exists(file) || new FileInfo(file).Length > RenderAssetMaxBytes) return path;
             var mime = Path.GetExtension(file).ToLowerInvariant() switch
             {
-                ".png" => "image/png", ".gif" => "image/gif", ".webp" => "image/webp", ".svg" => "image/svg+xml", _ => "image/jpeg"
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".webp" => "image/webp",
+                ".svg" => "image/svg+xml",
+                _ => "image/jpeg"
             };
             return $"data:{mime};base64,{Convert.ToBase64String(System.IO.File.ReadAllBytes(file))}";
         }
@@ -213,7 +231,9 @@ public partial class McpController
         using var data = JsonDocument.Parse(InlineAll(JsonSerializer.Serialize(dto, dto.GetType(), Json)));
         var bundle = JsonSerializer.Serialize(new
         {
-            companyId, documentType = type, documentId = id.Value,
+            companyId,
+            documentType = type,
+            documentId = id.Value,
             template = new { id = template.Id, name = template.Name, isDefault = template.IsDefault, stampState = state },
             signed = stamp != null || pinned.Count > 0,
             html = InlineAll(html),
@@ -226,9 +246,13 @@ public partial class McpController
         var count = Math.Min(length, Math.Max(0, bundle.Length - offset));
         return new
         {
-            companyId, documentType = type, documentId = id.Value, totalCharacters = bundle.Length,
+            companyId,
+            documentType = type,
+            documentId = id.Value,
+            totalCharacters = bundle.Length,
             sha256 = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(bundle))).ToLowerInvariant(),
-            offset, content = count == 0 ? "" : bundle.Substring(offset, count),
+            offset,
+            content = count == 0 ? "" : bundle.Substring(offset, count),
             nextOffset = (long)offset + count < bundle.Length ? (int?)(offset + count) : null
         };
     }

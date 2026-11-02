@@ -33,27 +33,27 @@ namespace MyApp.Api.Services.Tax
 
         // ── Constants for the official Activity × Sector tokens ─────
         public const string ActManufacturer = "Manufacturer";
-        public const string ActImporter     = "Importer";
-        public const string ActDistributor  = "Distributor";
-        public const string ActWholesaler   = "Wholesaler";
-        public const string ActExporter     = "Exporter";
-        public const string ActRetailer     = "Retailer";
-        public const string ActService      = "Service Provider";
-        public const string ActOther        = "Other";
+        public const string ActImporter = "Importer";
+        public const string ActDistributor = "Distributor";
+        public const string ActWholesaler = "Wholesaler";
+        public const string ActExporter = "Exporter";
+        public const string ActRetailer = "Retailer";
+        public const string ActService = "Service Provider";
+        public const string ActOther = "Other";
 
-        public const string SecAllOther     = "All Other Sectors";
-        public const string SecSteel        = "Steel";
-        public const string SecFmcg         = "FMCG";
-        public const string SecTextile      = "Textile";
-        public const string SecTelecom      = "Telecom";
-        public const string SecPetroleum    = "Petroleum";
-        public const string SecElectricity  = "Electricity Distribution";
-        public const string SecGas          = "Gas Distribution";
-        public const string SecServices     = "Services";
-        public const string SecAutomobile   = "Automobile";
-        public const string SecCng          = "CNG Stations";
-        public const string SecPharma       = "Pharmaceuticals";
-        public const string SecWholesale    = "Wholesale / Retails";
+        public const string SecAllOther = "All Other Sectors";
+        public const string SecSteel = "Steel";
+        public const string SecFmcg = "FMCG";
+        public const string SecTextile = "Textile";
+        public const string SecTelecom = "Telecom";
+        public const string SecPetroleum = "Petroleum";
+        public const string SecElectricity = "Electricity Distribution";
+        public const string SecGas = "Gas Distribution";
+        public const string SecServices = "Services";
+        public const string SecAutomobile = "Automobile";
+        public const string SecCng = "CNG Stations";
+        public const string SecPharma = "Pharmaceuticals";
+        public const string SecWholesale = "Wholesale / Retails";
 
         // ──────────────────────────────────────────────────────────
         // §9 — Scenarios for Sandbox Testing
@@ -204,124 +204,124 @@ namespace MyApp.Api.Services.Tax
         private static readonly Dictionary<(string Activity, string Sector), string[]> Matrix = new()
         {
             // Manufacturer
-            [(ActManufacturer, SecAllOther)]    = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024" },
-            [(ActManufacturer, SecSteel)]       = new[] { "SN003","SN004","SN011" },
-            [(ActManufacturer, SecFmcg)]        = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN008" },
-            [(ActManufacturer, SecTextile)]     = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN009" },
-            [(ActManufacturer, SecTelecom)]     = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN010" },
-            [(ActManufacturer, SecPetroleum)]   = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN012" },
-            [(ActManufacturer, SecElectricity)] = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN013" },
-            [(ActManufacturer, SecGas)]         = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN014" },
-            [(ActManufacturer, SecServices)]    = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN018","SN019" },
-            [(ActManufacturer, SecAutomobile)]  = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN020" },
-            [(ActManufacturer, SecCng)]         = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN023" },
-            [(ActManufacturer, SecPharma)]      = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024" },
-            [(ActManufacturer, SecWholesale)]   = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN026","SN027","SN028","SN008" },
+            [(ActManufacturer, SecAllOther)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024" },
+            [(ActManufacturer, SecSteel)] = new[] { "SN003", "SN004", "SN011" },
+            [(ActManufacturer, SecFmcg)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN008" },
+            [(ActManufacturer, SecTextile)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN009" },
+            [(ActManufacturer, SecTelecom)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN010" },
+            [(ActManufacturer, SecPetroleum)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN012" },
+            [(ActManufacturer, SecElectricity)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN013" },
+            [(ActManufacturer, SecGas)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN014" },
+            [(ActManufacturer, SecServices)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN018", "SN019" },
+            [(ActManufacturer, SecAutomobile)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN020" },
+            [(ActManufacturer, SecCng)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN023" },
+            [(ActManufacturer, SecPharma)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024" },
+            [(ActManufacturer, SecWholesale)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN026", "SN027", "SN028", "SN008" },
 
             // Importer
-            [(ActImporter, SecAllOther)]    = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024" },
-            [(ActImporter, SecSteel)]       = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN003","SN004","SN011" },
-            [(ActImporter, SecFmcg)]        = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN008" },
-            [(ActImporter, SecTextile)]     = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN009" },
-            [(ActImporter, SecTelecom)]     = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN010" },
-            [(ActImporter, SecPetroleum)]   = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN012" },
-            [(ActImporter, SecElectricity)] = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN013" },
-            [(ActImporter, SecGas)]         = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN014" },
-            [(ActImporter, SecServices)]    = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN018","SN019" },
-            [(ActImporter, SecAutomobile)]  = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN020" },
-            [(ActImporter, SecCng)]         = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN023" },
-            [(ActImporter, SecPharma)]      = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN025" },
-            [(ActImporter, SecWholesale)]   = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN026","SN027","SN028","SN008" },
+            [(ActImporter, SecAllOther)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024" },
+            [(ActImporter, SecSteel)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN003", "SN004", "SN011" },
+            [(ActImporter, SecFmcg)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN008" },
+            [(ActImporter, SecTextile)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN009" },
+            [(ActImporter, SecTelecom)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN010" },
+            [(ActImporter, SecPetroleum)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN012" },
+            [(ActImporter, SecElectricity)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN013" },
+            [(ActImporter, SecGas)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN014" },
+            [(ActImporter, SecServices)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN018", "SN019" },
+            [(ActImporter, SecAutomobile)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN020" },
+            [(ActImporter, SecCng)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN023" },
+            [(ActImporter, SecPharma)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN025" },
+            [(ActImporter, SecWholesale)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN026", "SN027", "SN028", "SN008" },
 
             // Distributor — note the spec lists SN008 twice in some rows; we de-dup at output time.
-            [(ActDistributor, SecAllOther)]    = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN026","SN027","SN028","SN008" },
-            [(ActDistributor, SecSteel)]       = new[] { "SN003","SN004","SN011","SN026","SN027","SN028","SN008" },
-            [(ActDistributor, SecFmcg)]        = new[] { "SN008","SN026","SN027","SN028" },
-            [(ActDistributor, SecTextile)]     = new[] { "SN009","SN026","SN027","SN028","SN008" },
-            [(ActDistributor, SecTelecom)]     = new[] { "SN010","SN026","SN027","SN028","SN008" },
-            [(ActDistributor, SecPetroleum)]   = new[] { "SN012","SN026","SN027","SN028","SN008" },
-            [(ActDistributor, SecElectricity)] = new[] { "SN013","SN026","SN027","SN028","SN008" },
-            [(ActDistributor, SecGas)]         = new[] { "SN014","SN026","SN027","SN028","SN008" },
-            [(ActDistributor, SecServices)]    = new[] { "SN018","SN019","SN026","SN027","SN028","SN008" },
-            [(ActDistributor, SecAutomobile)]  = new[] { "SN020","SN026","SN027","SN028","SN008" },
-            [(ActDistributor, SecCng)]         = new[] { "SN023","SN026","SN027","SN028","SN008" },
-            [(ActDistributor, SecPharma)]      = new[] { "SN025","SN026","SN027","SN028","SN008" },
-            [(ActDistributor, SecWholesale)]   = new[] { "SN001","SN002","SN026","SN027","SN028","SN008" },
+            [(ActDistributor, SecAllOther)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN026", "SN027", "SN028", "SN008" },
+            [(ActDistributor, SecSteel)] = new[] { "SN003", "SN004", "SN011", "SN026", "SN027", "SN028", "SN008" },
+            [(ActDistributor, SecFmcg)] = new[] { "SN008", "SN026", "SN027", "SN028" },
+            [(ActDistributor, SecTextile)] = new[] { "SN009", "SN026", "SN027", "SN028", "SN008" },
+            [(ActDistributor, SecTelecom)] = new[] { "SN010", "SN026", "SN027", "SN028", "SN008" },
+            [(ActDistributor, SecPetroleum)] = new[] { "SN012", "SN026", "SN027", "SN028", "SN008" },
+            [(ActDistributor, SecElectricity)] = new[] { "SN013", "SN026", "SN027", "SN028", "SN008" },
+            [(ActDistributor, SecGas)] = new[] { "SN014", "SN026", "SN027", "SN028", "SN008" },
+            [(ActDistributor, SecServices)] = new[] { "SN018", "SN019", "SN026", "SN027", "SN028", "SN008" },
+            [(ActDistributor, SecAutomobile)] = new[] { "SN020", "SN026", "SN027", "SN028", "SN008" },
+            [(ActDistributor, SecCng)] = new[] { "SN023", "SN026", "SN027", "SN028", "SN008" },
+            [(ActDistributor, SecPharma)] = new[] { "SN025", "SN026", "SN027", "SN028", "SN008" },
+            [(ActDistributor, SecWholesale)] = new[] { "SN001", "SN002", "SN026", "SN027", "SN028", "SN008" },
 
             // Wholesaler — spec rows 46–58
-            [(ActWholesaler, SecAllOther)]    = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN026","SN027","SN028","SN008" },
-            [(ActWholesaler, SecSteel)]       = new[] { "SN003","SN004","SN011","SN026","SN027","SN028","SN008" },
-            [(ActWholesaler, SecFmcg)]        = new[] { "SN008","SN026","SN027","SN028" },
-            [(ActWholesaler, SecTextile)]     = new[] { "SN009","SN026","SN027","SN028","SN008" },
-            [(ActWholesaler, SecTelecom)]     = new[] { "SN010","SN026","SN027","SN028","SN008" },
-            [(ActWholesaler, SecPetroleum)]   = new[] { "SN012","SN026","SN027","SN028","SN008" },
-            [(ActWholesaler, SecElectricity)] = new[] { "SN013","SN026","SN027","SN028","SN008" },
-            [(ActWholesaler, SecGas)]         = new[] { "SN014","SN026","SN027","SN028","SN008" },
-            [(ActWholesaler, SecServices)]    = new[] { "SN018","SN019","SN026","SN027","SN028","SN008" },
-            [(ActWholesaler, SecAutomobile)]  = new[] { "SN020","SN026","SN027","SN028","SN008" },
-            [(ActWholesaler, SecCng)]         = new[] { "SN023","SN026","SN027","SN028","SN008" },
-            [(ActWholesaler, SecPharma)]      = new[] { "SN025","SN026","SN027","SN028","SN008" },
-            [(ActWholesaler, SecWholesale)]   = new[] { "SN001","SN002","SN026","SN027","SN028","SN008" },
+            [(ActWholesaler, SecAllOther)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN026", "SN027", "SN028", "SN008" },
+            [(ActWholesaler, SecSteel)] = new[] { "SN003", "SN004", "SN011", "SN026", "SN027", "SN028", "SN008" },
+            [(ActWholesaler, SecFmcg)] = new[] { "SN008", "SN026", "SN027", "SN028" },
+            [(ActWholesaler, SecTextile)] = new[] { "SN009", "SN026", "SN027", "SN028", "SN008" },
+            [(ActWholesaler, SecTelecom)] = new[] { "SN010", "SN026", "SN027", "SN028", "SN008" },
+            [(ActWholesaler, SecPetroleum)] = new[] { "SN012", "SN026", "SN027", "SN028", "SN008" },
+            [(ActWholesaler, SecElectricity)] = new[] { "SN013", "SN026", "SN027", "SN028", "SN008" },
+            [(ActWholesaler, SecGas)] = new[] { "SN014", "SN026", "SN027", "SN028", "SN008" },
+            [(ActWholesaler, SecServices)] = new[] { "SN018", "SN019", "SN026", "SN027", "SN028", "SN008" },
+            [(ActWholesaler, SecAutomobile)] = new[] { "SN020", "SN026", "SN027", "SN028", "SN008" },
+            [(ActWholesaler, SecCng)] = new[] { "SN023", "SN026", "SN027", "SN028", "SN008" },
+            [(ActWholesaler, SecPharma)] = new[] { "SN025", "SN026", "SN027", "SN028", "SN008" },
+            [(ActWholesaler, SecWholesale)] = new[] { "SN001", "SN002", "SN026", "SN027", "SN028", "SN008" },
 
             // Exporter — spec rows 61–73 (mirrors Importer + sector-specific scenarios)
-            [(ActExporter, SecAllOther)]    = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024" },
-            [(ActExporter, SecSteel)]       = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN003","SN004","SN011" },
-            [(ActExporter, SecFmcg)]        = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN008" },
-            [(ActExporter, SecTextile)]     = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN009" },
-            [(ActExporter, SecTelecom)]     = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN010" },
-            [(ActExporter, SecPetroleum)]   = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN012" },
-            [(ActExporter, SecElectricity)] = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN013" },
-            [(ActExporter, SecGas)]         = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN014" },
-            [(ActExporter, SecServices)]    = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN018","SN019" },
-            [(ActExporter, SecAutomobile)]  = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN020" },
-            [(ActExporter, SecCng)]         = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN023" },
-            [(ActExporter, SecPharma)]      = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN025" },
-            [(ActExporter, SecWholesale)]   = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN026","SN027","SN028","SN008" },
+            [(ActExporter, SecAllOther)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024" },
+            [(ActExporter, SecSteel)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN003", "SN004", "SN011" },
+            [(ActExporter, SecFmcg)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN008" },
+            [(ActExporter, SecTextile)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN009" },
+            [(ActExporter, SecTelecom)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN010" },
+            [(ActExporter, SecPetroleum)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN012" },
+            [(ActExporter, SecElectricity)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN013" },
+            [(ActExporter, SecGas)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN014" },
+            [(ActExporter, SecServices)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN018", "SN019" },
+            [(ActExporter, SecAutomobile)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN020" },
+            [(ActExporter, SecCng)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN023" },
+            [(ActExporter, SecPharma)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN025" },
+            [(ActExporter, SecWholesale)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN026", "SN027", "SN028", "SN008" },
 
             // Retailer — spec rows 76–88
-            [(ActRetailer, SecAllOther)]    = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN026","SN027","SN028","SN008" },
-            [(ActRetailer, SecSteel)]       = new[] { "SN003","SN004","SN011" },
-            [(ActRetailer, SecFmcg)]        = new[] { "SN026","SN027","SN028","SN008" },
-            [(ActRetailer, SecTextile)]     = new[] { "SN009","SN026","SN027","SN028","SN008" },
-            [(ActRetailer, SecTelecom)]     = new[] { "SN010","SN026","SN027","SN028","SN008" },
-            [(ActRetailer, SecPetroleum)]   = new[] { "SN012","SN026","SN027","SN028","SN008" },
-            [(ActRetailer, SecElectricity)] = new[] { "SN013","SN026","SN027","SN028","SN008" },
-            [(ActRetailer, SecGas)]         = new[] { "SN014","SN026","SN027","SN028","SN008" },
-            [(ActRetailer, SecServices)]    = new[] { "SN018","SN019","SN026","SN027","SN028","SN008" },
-            [(ActRetailer, SecAutomobile)]  = new[] { "SN020","SN026","SN027","SN028","SN008" },
-            [(ActRetailer, SecCng)]         = new[] { "SN023","SN026","SN027","SN028","SN008" },
-            [(ActRetailer, SecPharma)]      = new[] { "SN025","SN026","SN027","SN028","SN008" },
-            [(ActRetailer, SecWholesale)]   = new[] { "SN026","SN027","SN028","SN008" },
+            [(ActRetailer, SecAllOther)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN026", "SN027", "SN028", "SN008" },
+            [(ActRetailer, SecSteel)] = new[] { "SN003", "SN004", "SN011" },
+            [(ActRetailer, SecFmcg)] = new[] { "SN026", "SN027", "SN028", "SN008" },
+            [(ActRetailer, SecTextile)] = new[] { "SN009", "SN026", "SN027", "SN028", "SN008" },
+            [(ActRetailer, SecTelecom)] = new[] { "SN010", "SN026", "SN027", "SN028", "SN008" },
+            [(ActRetailer, SecPetroleum)] = new[] { "SN012", "SN026", "SN027", "SN028", "SN008" },
+            [(ActRetailer, SecElectricity)] = new[] { "SN013", "SN026", "SN027", "SN028", "SN008" },
+            [(ActRetailer, SecGas)] = new[] { "SN014", "SN026", "SN027", "SN028", "SN008" },
+            [(ActRetailer, SecServices)] = new[] { "SN018", "SN019", "SN026", "SN027", "SN028", "SN008" },
+            [(ActRetailer, SecAutomobile)] = new[] { "SN020", "SN026", "SN027", "SN028", "SN008" },
+            [(ActRetailer, SecCng)] = new[] { "SN023", "SN026", "SN027", "SN028", "SN008" },
+            [(ActRetailer, SecPharma)] = new[] { "SN025", "SN026", "SN027", "SN028", "SN008" },
+            [(ActRetailer, SecWholesale)] = new[] { "SN026", "SN027", "SN028", "SN008" },
 
             // Service Provider — spec rows 91–103
-            [(ActService, SecAllOther)]    = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN018","SN019" },
-            [(ActService, SecSteel)]       = new[] { "SN003","SN004","SN011","SN018","SN019" },
-            [(ActService, SecFmcg)]        = new[] { "SN008","SN018","SN019" },
-            [(ActService, SecTextile)]     = new[] { "SN009","SN018","SN019" },
-            [(ActService, SecTelecom)]     = new[] { "SN010","SN018","SN019" },
-            [(ActService, SecPetroleum)]   = new[] { "SN012","SN018","SN019" },
-            [(ActService, SecElectricity)] = new[] { "SN013","SN018","SN019" },
-            [(ActService, SecGas)]         = new[] { "SN014","SN018","SN019" },
-            [(ActService, SecServices)]    = new[] { "SN018","SN019" },
-            [(ActService, SecAutomobile)]  = new[] { "SN020","SN018","SN019" },
-            [(ActService, SecCng)]         = new[] { "SN023","SN018","SN019" },
-            [(ActService, SecPharma)]      = new[] { "SN025","SN018","SN019" },
-            [(ActService, SecWholesale)]   = new[] { "SN026","SN027","SN028","SN008","SN018","SN019" },
+            [(ActService, SecAllOther)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN018", "SN019" },
+            [(ActService, SecSteel)] = new[] { "SN003", "SN004", "SN011", "SN018", "SN019" },
+            [(ActService, SecFmcg)] = new[] { "SN008", "SN018", "SN019" },
+            [(ActService, SecTextile)] = new[] { "SN009", "SN018", "SN019" },
+            [(ActService, SecTelecom)] = new[] { "SN010", "SN018", "SN019" },
+            [(ActService, SecPetroleum)] = new[] { "SN012", "SN018", "SN019" },
+            [(ActService, SecElectricity)] = new[] { "SN013", "SN018", "SN019" },
+            [(ActService, SecGas)] = new[] { "SN014", "SN018", "SN019" },
+            [(ActService, SecServices)] = new[] { "SN018", "SN019" },
+            [(ActService, SecAutomobile)] = new[] { "SN020", "SN018", "SN019" },
+            [(ActService, SecCng)] = new[] { "SN023", "SN018", "SN019" },
+            [(ActService, SecPharma)] = new[] { "SN025", "SN018", "SN019" },
+            [(ActService, SecWholesale)] = new[] { "SN026", "SN027", "SN028", "SN008", "SN018", "SN019" },
 
             // Other — spec rows 106–118 (mirrors Importer pattern)
-            [(ActOther, SecAllOther)]    = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024" },
-            [(ActOther, SecSteel)]       = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN003","SN004","SN011" },
-            [(ActOther, SecFmcg)]        = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN008" },
-            [(ActOther, SecTextile)]     = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN009" },
-            [(ActOther, SecTelecom)]     = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN010" },
-            [(ActOther, SecPetroleum)]   = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN012" },
-            [(ActOther, SecElectricity)] = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN013" },
-            [(ActOther, SecGas)]         = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN014" },
-            [(ActOther, SecServices)]    = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN018","SN019" },
-            [(ActOther, SecAutomobile)]  = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN020" },
-            [(ActOther, SecCng)]         = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN023" },
-            [(ActOther, SecPharma)]      = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN025" },
-            [(ActOther, SecWholesale)]   = new[] { "SN001","SN002","SN005","SN006","SN007","SN015","SN016","SN017","SN021","SN022","SN024","SN026","SN027","SN028","SN008" },
+            [(ActOther, SecAllOther)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024" },
+            [(ActOther, SecSteel)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN003", "SN004", "SN011" },
+            [(ActOther, SecFmcg)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN008" },
+            [(ActOther, SecTextile)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN009" },
+            [(ActOther, SecTelecom)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN010" },
+            [(ActOther, SecPetroleum)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN012" },
+            [(ActOther, SecElectricity)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN013" },
+            [(ActOther, SecGas)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN014" },
+            [(ActOther, SecServices)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN018", "SN019" },
+            [(ActOther, SecAutomobile)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN020" },
+            [(ActOther, SecCng)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN023" },
+            [(ActOther, SecPharma)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN025" },
+            [(ActOther, SecWholesale)] = new[] { "SN001", "SN002", "SN005", "SN006", "SN007", "SN015", "SN016", "SN017", "SN021", "SN022", "SN024", "SN026", "SN027", "SN028", "SN008" },
         };
 
         // ──────────────────────────────────────────────────────────
@@ -360,9 +360,9 @@ namespace MyApp.Api.Services.Tax
             // canonical order; we hit it via .OrderBy on All below.
             var union = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var a in actSet)
-            foreach (var s in secSet)
-                if (Matrix.TryGetValue(MatchKey(a, s), out var sns))
-                    foreach (var sn in sns) union.Add(sn);
+                foreach (var s in secSet)
+                    if (Matrix.TryGetValue(MatchKey(a, s), out var sns))
+                        foreach (var sn in sns) union.Add(sn);
 
             return All.Where(sc => union.Contains(sc.Code)).ToList();
         }

@@ -96,7 +96,13 @@ Local SQL Server instance: **`.\MSSQLSERVER02`** (SQL Server 2025, 17.0).
 That instance is not a preference — the production backups are taken on SQL
 Server 2025 (`SoftwareVersionMajor 17`, internal database version 998), so the
 2019 and 2022 instances on this machine **cannot restore them at all**. Data and
-log files live under `D:\SqlData\MyAppLocal\` (C: is nearly full).
+log files live in the instance's default folder on C:,
+`C:\Program Files\Microsoft SQL Server\MSSQL17.MSSQLSERVER02\MSSQL\DATA\`.
+Never put them on D:. It is a BitLocker data volume that unlocks late when the
+laptop wakes from hibernate, and SQL Server then fails every read of the files
+it had open (error 823, OS error 21 "The device is not ready") until the
+service is restarted. The local databases were moved off D: for that reason on
+2026-11-02.
 
 ### 2a. How the branch picks its database
 
@@ -162,8 +168,8 @@ RESTORE FILELISTONLY FROM DISK = N'C:\Users\Public\SqlRestoreStaging\<file>.bak'
 
 RESTORE DATABASE [MyApp_Master_Local]
 FROM DISK = N'C:\Users\Public\SqlRestoreStaging\<file>.bak'
-WITH MOVE N'<master-prod-db>'     TO N'D:\SqlData\MyAppLocal\MyApp_Master_Local.mdf',
-     MOVE N'<master-prod-db>_log' TO N'D:\SqlData\MyAppLocal\MyApp_Master_Local_log.ldf',
+WITH MOVE N'<master-prod-db>'     TO N'C:\Program Files\Microsoft SQL Server\MSSQL17.MSSQLSERVER02\MSSQL\DATA\MyApp_Master_Local.mdf',
+     MOVE N'<master-prod-db>_log' TO N'C:\Program Files\Microsoft SQL Server\MSSQL17.MSSQLSERVER02\MSSQL\DATA\MyApp_Master_Local_log.ldf',
      RECOVERY, STATS = 25;
 ```
 

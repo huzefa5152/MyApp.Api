@@ -56,7 +56,6 @@ import AttachmentQuickModal from "../Components/AttachmentQuickModal";
 import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import { useListViewMode } from "../hooks/useListViewMode";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
-import PageSizeSelect from "../Components/PageSizeSelect";
 import {
   getPagedInvoicesByCompany,
   getInvoicePrintBill,

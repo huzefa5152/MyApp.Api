@@ -7,7 +7,6 @@ import {
   MdSearch,
   MdBusiness,
   MdCalendarToday,
-  MdLabel,
   MdNotes,
   MdEdit,
   MdClose,

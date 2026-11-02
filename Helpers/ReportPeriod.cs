@@ -91,44 +91,44 @@ namespace MyApp.Api.Helpers
                     return Window(today, today);
 
                 case ReportDatePreset.ThisWeek:
-                {
-                    // ((current - start) + 7) % 7 gives days elapsed since Monday for
-                    // any DayOfWeek numbering, including Sunday == 0.
-                    var offset = ((int)today.DayOfWeek - (int)WeekStart + 7) % 7;
-                    var start = today.AddDays(-offset);
-                    return Window(start, start.AddDays(6));
-                }
+                    {
+                        // ((current - start) + 7) % 7 gives days elapsed since Monday for
+                        // any DayOfWeek numbering, including Sunday == 0.
+                        var offset = ((int)today.DayOfWeek - (int)WeekStart + 7) % 7;
+                        var start = today.AddDays(-offset);
+                        return Window(start, start.AddDays(6));
+                    }
 
                 case ReportDatePreset.ThisMonth:
-                {
-                    var start = new DateTime(today.Year, today.Month, 1);
-                    return Window(start, start.AddMonths(1).AddDays(-1));
-                }
+                    {
+                        var start = new DateTime(today.Year, today.Month, 1);
+                        return Window(start, start.AddMonths(1).AddDays(-1));
+                    }
 
                 case ReportDatePreset.LastMonth:
-                {
-                    var start = new DateTime(today.Year, today.Month, 1).AddMonths(-1);
-                    return Window(start, start.AddMonths(1).AddDays(-1));
-                }
+                    {
+                        var start = new DateTime(today.Year, today.Month, 1).AddMonths(-1);
+                        return Window(start, start.AddMonths(1).AddDays(-1));
+                    }
 
                 case ReportDatePreset.ThisQuarter:
-                {
-                    var startMonth = ((today.Month - 1) / 3) * 3 + 1;
-                    var start = new DateTime(today.Year, startMonth, 1);
-                    return Window(start, start.AddMonths(3).AddDays(-1));
-                }
+                    {
+                        var startMonth = ((today.Month - 1) / 3) * 3 + 1;
+                        var start = new DateTime(today.Year, startMonth, 1);
+                        return Window(start, start.AddMonths(3).AddDays(-1));
+                    }
 
                 case ReportDatePreset.ThisYear:
-                {
-                    var start = new DateTime(today.Year, 1, 1);
-                    return Window(start, start.AddYears(1).AddDays(-1));
-                }
+                    {
+                        var start = new DateTime(today.Year, 1, 1);
+                        return Window(start, start.AddYears(1).AddDays(-1));
+                    }
 
                 case ReportDatePreset.LastYear:
-                {
-                    var start = new DateTime(today.Year - 1, 1, 1);
-                    return Window(start, start.AddYears(1).AddDays(-1));
-                }
+                    {
+                        var start = new DateTime(today.Year - 1, 1, 1);
+                        return Window(start, start.AddYears(1).AddDays(-1));
+                    }
 
                 case ReportDatePreset.Custom:
                     // Validate() is the gate; if a caller skipped it, fall back to an

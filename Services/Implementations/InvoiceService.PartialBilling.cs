@@ -40,10 +40,18 @@ public partial class InvoiceService
 
         var split = new DeliveryChallan
         {
-            CompanyId = source.CompanyId, ChallanNumber = source.ChallanNumber, ClientId = source.ClientId,
-            PoNumber = source.PoNumber, PoDate = source.PoDate, IndentNo = source.IndentNo,
-            DeliveryDate = source.DeliveryDate, Site = source.Site, Notes = source.Notes,
-            IsImported = source.IsImported, IsDemo = source.IsDemo, SalesOrderId = source.SalesOrderId,
+            CompanyId = source.CompanyId,
+            ChallanNumber = source.ChallanNumber,
+            ClientId = source.ClientId,
+            PoNumber = source.PoNumber,
+            PoDate = source.PoDate,
+            IndentNo = source.IndentNo,
+            DeliveryDate = source.DeliveryDate,
+            Site = source.Site,
+            Notes = source.Notes,
+            IsImported = source.IsImported,
+            IsDemo = source.IsDemo,
+            SalesOrderId = source.SalesOrderId,
             SplitFromChallanId = source.SplitFromChallanId ?? source.Id,
         };
         split.Status = UnbilledStatus(split);

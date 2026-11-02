@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import React from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import AttachmentBadge from "./AttachmentBadge";

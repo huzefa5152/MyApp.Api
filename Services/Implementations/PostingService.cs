@@ -186,9 +186,9 @@ namespace MyApp.Api.Services.Implementations
             if (inventory == null) return;
 
             var moved = await _context.StockMovements.AsNoTracking()
-                .Where(m => m.CompanyId  == invoice.CompanyId
+                .Where(m => m.CompanyId == invoice.CompanyId
                          && m.SourceType == StockMovementSourceType.Invoice
-                         && m.SourceId   == invoice.Id)
+                         && m.SourceId == invoice.Id)
                 .GroupBy(m => new { m.ItemTypeId, m.Direction })
                 .Select(g => new { g.Key.ItemTypeId, g.Key.Direction, Qty = g.Sum(m => m.Quantity) })
                 .ToListAsync();

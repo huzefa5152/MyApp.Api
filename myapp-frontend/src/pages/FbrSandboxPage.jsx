@@ -109,7 +109,7 @@ export default function FbrSandboxPage() {
   };
 
   useEffect(() => {
-    if (canView) refresh(); /* eslint-disable-next-line */
+    if (canView) refresh();
   }, [companyId]);
 
   const handleSeed = async () => {

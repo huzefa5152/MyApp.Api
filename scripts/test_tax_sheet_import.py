@@ -159,15 +159,13 @@ try:
     for code in ("8204.1100", "8204.1200", "8204.2000"):
         call("POST", f"/api/itemtypes?companyId={on['id']}", {"companyId": on["id"], "name": f"Tool {code} {stamp}",
              "hsCode": code, "uom": "Numbers, pieces, units", "fbrUOMId": 69, "saleType": "Goods at Standard Rate (default)"})
-    # 2026-10-31: an original-lines company gives each bill line its own HS code. This sheet put both
-    # allen keys on 8204.1200, which used to combine them into one filing row; it is now refused.
+    # An original-lines company may put both allen keys on one HS code: they file as one filing row.
     s, pre2 = upload(f"/api/reports/company/{on['id']}/tax-sheet/import/preview", out.getvalue())
-    check(s == 200 and pre2["invoicesReady"] == 0 and pre2["issues"]
-          and "8204.1200 is already in use on the line" in pre2["issues"][0]["message"],
-          "preview: one HS code on two lines of an original-lines company is refused", f"{pre2}")
+    check(s == 200 and pre2["invoicesReady"] == 1 and not pre2["issues"],
+          "preview: one HS code on two lines of an original-lines company is combined", f"{pre2}")
     s, done = upload(f"/api/reports/company/{on['id']}/tax-sheet/import/commit", out.getvalue())
-    check(s == 200 and done["invoicesReady"] == 0 and not call("GET", f"/api/invoices/{b1['id']}/tax-filing")["hasSavedRows"],
-          "commit of that sheet saves nothing", f"{done}")
+    check(s == 200 and done["invoicesReady"] == 1 and call("GET", f"/api/invoices/{b1['id']}/tax-filing")["hasSavedRows"],
+          "commit of that sheet saves the combined filing row", f"{done}")
     for r in range(head + 1, w.max_row + 1):
         if w.cell(r, cols["Description"]).value == "Allen key 5mm":
             w.cell(r, hs_c).value = "8204.2000"

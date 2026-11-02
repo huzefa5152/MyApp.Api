@@ -46,19 +46,22 @@ public class FilingClassificationTests
         public TaxFilingRowDto Row = new() { HSCode = Code, Description = "Office furniture", UOM = "Numbers", FbrUOMId = 13, SaleType = "Forged sale type" };
         public async Task<ItemType> Resolve()
         {
-            var items = Fake<IItemTypeService>((m, args) => {
+            var items = Fake<IItemTypeService>((m, args) =>
+            {
                 Assert.Equal("CreateAsync", m.Name);
                 Created = (ItemTypeDto)args![0]!;
                 Assert.Equal(7, args[1]);
                 Created.Id = 100;
                 return Task.FromResult(Created);
             });
-            var fbr = Fake<IFbrService>((m, args) => {
+            var fbr = Fake<IFbrService>((m, args) =>
+            {
                 Assert.Equal("GetHSCodesAsync", m.Name);
                 Assert.Equal(7, args![0]);
                 return Task.FromResult(Known ? new List<FbrHSCodeDto> { new() { HS_CODE = Code, Description = "Official furniture" } } : new());
             });
-            var tax = Fake<ITaxMappingEngine>((m, args) => {
+            var tax = Fake<ITaxMappingEngine>((m, args) =>
+            {
                 Assert.Equal("GetHsCodeHintsAsync", m.Name);
                 Assert.Equal(7, args![0]);
                 return Task.FromResult(new HsCodeHints(Units, Units.FirstOrDefault(), new(), 18, SaleType, new()));
@@ -149,11 +152,16 @@ public class FilingClassificationTests
     public async Task CatalogExclusionIsCompanySpecificAndRunsBeforeTheBrowseLimit()
     {
         using var f = new Fixture();
-        var catalog = Enumerable.Range(1, 102).Select(i => new FbrHSCodeDto {
-            HS_CODE = $"9403.{i:0000}", Description = "Official reference"
+        var catalog = Enumerable.Range(1, 102).Select(i => new FbrHSCodeDto
+        {
+            HS_CODE = $"9403.{i:0000}",
+            Description = "Official reference"
         }).ToList();
-        f.Db.ItemTypes.AddRange(catalog.Take(100).Select(h => new ItemType {
-            CompanyId = 7, Name = h.HS_CODE, HSCode = h.HS_CODE
+        f.Db.ItemTypes.AddRange(catalog.Take(100).Select(h => new ItemType
+        {
+            CompanyId = 7,
+            Name = h.HS_CODE,
+            HSCode = h.HS_CODE
         }));
         f.Db.ItemTypes.Add(new ItemType { CompanyId = 8, Name = "Other company's item", HSCode = catalog[100].HS_CODE });
         await f.Db.SaveChangesAsync();
@@ -184,7 +192,8 @@ public class FilingClassificationTests
         var permissions = Fake<IPermissionService>((_, args) => Task.FromResult((string)args![1]! == permission));
         var access = Fake<ICompanyAccessGuard>((_, args) => Task.FromResult((int)args![1]! == 7));
         using var services = new ServiceCollection().AddSingleton(permissions).AddSingleton(access).BuildServiceProvider();
-        var http = new DefaultHttpContext {
+        var http = new DefaultHttpContext
+        {
             User = new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(ClaimTypes.NameIdentifier, "42") }, "test"))
         };
         var routes = new RouteData(); routes.Values["companyId"] = companyId;
@@ -212,16 +221,28 @@ public class FilingClassificationTests
         var client = new Client { Name = "[TEMP] Filing buyer", Company = company };
         db.AddRange(company, client); await db.SaveChangesAsync();
         http.HttpContext.Items["currentCompanyId"] = company.Id;
-        var invoice = new Invoice { CompanyId = company.Id, Company = company, ClientId = client.Id, Client = client,
-            InvoiceNumber = 1, Date = DateTime.UtcNow.Date, Subtotal = 100, GSTRate = 18, GSTAmount = 18, GrandTotal = 118,
+        var invoice = new Invoice
+        {
+            CompanyId = company.Id,
+            Company = company,
+            ClientId = client.Id,
+            Client = client,
+            InvoiceNumber = 1,
+            Date = DateTime.UtcNow.Date,
+            Subtotal = 100,
+            GSTRate = 18,
+            GSTAmount = 18,
+            GrandTotal = 118,
             Items = new List<InvoiceItem> {
                 new() { Description = "First commercial line", UOM = "Numbers", Quantity = 1, UnitPrice = 50, LineTotal = 50 },
                 new() { Description = "Second commercial line", UOM = "Numbers", Quantity = 1, UnitPrice = 50, LineTotal = 50 }
-            } };
+            }
+        };
         db.Add(invoice); await db.SaveChangesAsync();
         var ids = invoice.Items.Select(i => i.Id).ToArray();
         var audit = Fake<IAuditLogService>((_, _) => Task.CompletedTask);
-        var fbr = Fake<IFbrService>((m, _) => m.Name switch {
+        var fbr = Fake<IFbrService>((m, _) => m.Name switch
+        {
             "IsKnownHsCodeAsync" => Task.FromResult(true),
             "GetHSCodesAsync" => Task.FromResult(new List<FbrHSCodeDto> { new() { HS_CODE = Code, Description = "Official furniture" } }),
             _ => throw new NotSupportedException(m.Name)
@@ -233,9 +254,15 @@ public class FilingClassificationTests
         var itemService = new ItemTypeService(new ItemTypeRepository(db), db, tax, null!, fbr);
         var service = new InvoiceService(new InvoiceRepository(db), null!, null!, null!, db,
             new ConfigurationBuilder().Build(), audit, null!, tax, null!, NullLogger<InvoiceService>.Instance, itemService, fbr, null!);
-        TaxFilingRowDto Row(int[] sources, decimal value, string code = Code) => new() {
-            SourceLineIds = sources.ToList(), Description = "New company furniture", HSCode = code,
-            UOM = "Numbers", FbrUOMId = 13, Quantity = sources.Length, ValueExclTax = value
+        TaxFilingRowDto Row(int[] sources, decimal value, string code = Code) => new()
+        {
+            SourceLineIds = sources.ToList(),
+            Description = "New company furniture",
+            HSCode = code,
+            UOM = "Numbers",
+            FbrUOMId = 13,
+            Quantity = sources.Length,
+            ValueExclTax = value
         };
         try
         {

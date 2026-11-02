@@ -61,7 +61,7 @@ function guardedBlock(src) {
   return "";
 }
 const guarded = guardedBlock(appJsx);
-const routePaths = [...guarded.matchAll(/<Route path="([^"]+)"/g)].map((m) => m[1]);
+const routePaths = [...guarded.matchAll(/<Route\s+path="([^"]+)"/g)].map((m) => m[1]);
 
 console.log("\n=== every guarded route names a permission ===");
 check(

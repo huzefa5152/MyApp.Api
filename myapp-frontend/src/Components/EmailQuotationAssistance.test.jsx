@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import React, { useState } from "react";
+import { useState } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import EmailQuotationAssistance from "./EmailQuotationAssistance";

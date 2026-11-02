@@ -319,10 +319,9 @@ html:not([data-ui-layout="workspace"]) .inventory-page .stock-table td {
 .inventory-entry-columns,
 .inventory-entry-row {
   display: grid;
-  grid-template-columns: minmax(85px, 0.8fr) minmax(160px, 2fr) minmax(95px, 1fr) minmax(
-      100px,
-      1fr
-    ) minmax(90px, 0.9fr) minmax(90px, 0.9fr) 70px 85px;
+  grid-template-columns:
+    minmax(85px, 0.8fr) minmax(160px, 2fr) minmax(95px, 1fr) minmax(100px, 1fr)
+    minmax(90px, 0.9fr) minmax(90px, 0.9fr) 70px 85px;
   gap: 12px;
   align-items: center;
   padding: 14px 18px;
@@ -559,10 +558,9 @@ html:not([data-ui-layout="workspace"]) .inventory-page .stock-table td {
 }
 .inventory-entry-columns,
 .inventory-entry-row {
-  grid-template-columns: 80px minmax(130px, 2fr) minmax(80px, 1fr) minmax(90px, 1fr) minmax(
-      70px,
-      0.8fr
-    ) minmax(70px, 0.8fr) 65px 75px;
+  grid-template-columns:
+    80px minmax(130px, 2fr) minmax(80px, 1fr) minmax(90px, 1fr) minmax(70px, 0.8fr)
+    minmax(70px, 0.8fr) 65px 75px;
   gap: 10px;
 }
 @media (max-width: 1199px) {

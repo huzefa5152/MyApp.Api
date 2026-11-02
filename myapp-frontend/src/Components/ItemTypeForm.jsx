@@ -108,7 +108,7 @@ export default function ItemTypeForm({
   const [saleType, setSaleType] = useState(
     scenarioSaleType || editItem?.saleType || "Goods at standard rate (default)",
   );
-  const [fbrDescription, setFbrDescription] = useState(editItem?.fbrDescription || "");
+  const [fbrDescription] = useState(editItem?.fbrDescription || "");
   const [isFavorite, setIsFavorite] = useState(editItem?.isFavorite ?? true);
   const [error, setError] = useState("");
   const errRef = useScrollToError(error);

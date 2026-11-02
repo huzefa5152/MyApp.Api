@@ -1,4 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
 using MyApp.Api.Repositories.Implementations;
 using MyApp.Api.Repositories.Interfaces;
 using MyApp.Api.Services.Implementations;

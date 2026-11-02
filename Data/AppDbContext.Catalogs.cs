@@ -51,31 +51,42 @@ public partial class AppDbContext
         var links = new List<(int ItemId, int CompanyId)>();
         foreach (var entry in changed)
         {
-            int? itemId = entry.Entity switch {
-                InvoiceItem x => x.ItemTypeId, DeliveryItem x => x.ItemTypeId,
-                PurchaseDebitNoteItem x => x.ItemTypeId, PurchaseItem x => x.ItemTypeId, GoodsReceiptItem x => x.ItemTypeId,
-                SalesOrderItem x => x.ItemTypeId, SalesQuoteItem x => x.ItemTypeId,
-                StockMovement x => x.ItemTypeId, OpeningStockBalance x => x.ItemTypeId,
-                InvoiceItemAdjustment x => x.AdjustedItemTypeId, _ => null };
+            int? itemId = entry.Entity switch
+            {
+                InvoiceItem x => x.ItemTypeId,
+                DeliveryItem x => x.ItemTypeId,
+                PurchaseDebitNoteItem x => x.ItemTypeId,
+                PurchaseItem x => x.ItemTypeId,
+                GoodsReceiptItem x => x.ItemTypeId,
+                SalesOrderItem x => x.ItemTypeId,
+                SalesQuoteItem x => x.ItemTypeId,
+                StockMovement x => x.ItemTypeId,
+                OpeningStockBalance x => x.ItemTypeId,
+                InvoiceItemAdjustment x => x.AdjustedItemTypeId,
+                _ => null
+            };
             if (itemId == null) continue;
-            int companyId = entry.Entity switch {
-                InvoiceItem x => x.Invoice?.CompanyId ?? await Invoices.Where(p=>p.Id==x.InvoiceId).Select(p=>p.CompanyId).SingleAsync(ct),
-                DeliveryItem x => x.DeliveryChallan?.CompanyId ?? await DeliveryChallans.Where(p=>p.Id==x.DeliveryChallanId).Select(p=>p.CompanyId).SingleAsync(ct),
-                PurchaseDebitNoteItem x => x.PurchaseDebitNote?.CompanyId ?? await PurchaseDebitNotes.Where(p=>p.Id==x.PurchaseDebitNoteId).Select(p=>p.CompanyId).SingleAsync(ct),
-                PurchaseItem x => x.PurchaseBill?.CompanyId ?? await PurchaseBills.Where(p=>p.Id==x.PurchaseBillId).Select(p=>p.CompanyId).SingleAsync(ct),
-                GoodsReceiptItem x => x.GoodsReceipt?.CompanyId ?? await GoodsReceipts.Where(p=>p.Id==x.GoodsReceiptId).Select(p=>p.CompanyId).SingleAsync(ct),
-                SalesOrderItem x => x.SalesOrder?.CompanyId ?? await SalesOrders.Where(p=>p.Id==x.SalesOrderId).Select(p=>p.CompanyId).SingleAsync(ct),
-                SalesQuoteItem x => x.SalesQuote?.CompanyId ?? await SalesQuotes.Where(p=>p.Id==x.SalesQuoteId).Select(p=>p.CompanyId).SingleAsync(ct),
-                StockMovement x => x.CompanyId, OpeningStockBalance x => x.CompanyId,
-                InvoiceItemAdjustment x => await InvoiceItems.Where(p=>p.Id==x.InvoiceItemId).Select(p=>p.Invoice.CompanyId).SingleAsync(ct),
-                _ => throw new InvalidOperationException("Unknown catalog link.") };
+            int companyId = entry.Entity switch
+            {
+                InvoiceItem x => x.Invoice?.CompanyId ?? await Invoices.Where(p => p.Id == x.InvoiceId).Select(p => p.CompanyId).SingleAsync(ct),
+                DeliveryItem x => x.DeliveryChallan?.CompanyId ?? await DeliveryChallans.Where(p => p.Id == x.DeliveryChallanId).Select(p => p.CompanyId).SingleAsync(ct),
+                PurchaseDebitNoteItem x => x.PurchaseDebitNote?.CompanyId ?? await PurchaseDebitNotes.Where(p => p.Id == x.PurchaseDebitNoteId).Select(p => p.CompanyId).SingleAsync(ct),
+                PurchaseItem x => x.PurchaseBill?.CompanyId ?? await PurchaseBills.Where(p => p.Id == x.PurchaseBillId).Select(p => p.CompanyId).SingleAsync(ct),
+                GoodsReceiptItem x => x.GoodsReceipt?.CompanyId ?? await GoodsReceipts.Where(p => p.Id == x.GoodsReceiptId).Select(p => p.CompanyId).SingleAsync(ct),
+                SalesOrderItem x => x.SalesOrder?.CompanyId ?? await SalesOrders.Where(p => p.Id == x.SalesOrderId).Select(p => p.CompanyId).SingleAsync(ct),
+                SalesQuoteItem x => x.SalesQuote?.CompanyId ?? await SalesQuotes.Where(p => p.Id == x.SalesQuoteId).Select(p => p.CompanyId).SingleAsync(ct),
+                StockMovement x => x.CompanyId,
+                OpeningStockBalance x => x.CompanyId,
+                InvoiceItemAdjustment x => await InvoiceItems.Where(p => p.Id == x.InvoiceItemId).Select(p => p.Invoice.CompanyId).SingleAsync(ct),
+                _ => throw new InvalidOperationException("Unknown catalog link.")
+            };
             links.Add((itemId.Value, companyId));
         }
         if (links.Count == 0) return;
-        var ids = links.Select(x=>x.ItemId).Distinct().ToList();
-        var owners = await ItemTypes.IgnoreQueryFilters().Where(x=>ids.Contains(x.Id))
-            .Select(x=>new {x.Id,x.CompanyId}).ToDictionaryAsync(x=>x.Id,x=>x.CompanyId,ct);
-        if (links.Any(x=>!owners.TryGetValue(x.ItemId,out var owner) || owner != x.CompanyId))
+        var ids = links.Select(x => x.ItemId).Distinct().ToList();
+        var owners = await ItemTypes.IgnoreQueryFilters().Where(x => ids.Contains(x.Id))
+            .Select(x => new { x.Id, x.CompanyId }).ToDictionaryAsync(x => x.Id, x => x.CompanyId, ct);
+        if (links.Any(x => !owners.TryGetValue(x.ItemId, out var owner) || owner != x.CompanyId))
             throw new InvalidOperationException("An item type does not belong to this document's company.");
     }
 }

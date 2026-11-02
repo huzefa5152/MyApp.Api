@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 namespace MyApp.Api.DTOs;
+
 public record GmailStartDto(int CompanyId);
 public record GmailCompleteDto([Required, MaxLength(2048)] string Code, [Required, MaxLength(200)] string State);
 public record GmailLinkDto(int ConnectionId);

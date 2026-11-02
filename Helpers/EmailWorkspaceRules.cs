@@ -2,6 +2,7 @@ using System.Net.Mail;
 using System.Text.Json;
 using MyApp.Api.DTOs;
 namespace MyApp.Api.Helpers;
+
 public static class EmailWorkspaceRules
 {
     public static List<EmailSenderRule> Read(string json) => JsonSerializer.Deserialize<List<EmailSenderRule>>(json) ?? new();

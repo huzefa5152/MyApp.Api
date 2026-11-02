@@ -8,9 +8,15 @@ public static class TaxInvoiceGrouping
         ?? (useCatalog && !string.IsNullOrWhiteSpace(item.ItemType?.UOM) ? item.ItemType.UOM : item.UOM);
     public static int? FbrUomId(InvoiceItem item, bool useCatalog = true) => item.Adjustment?.AdjustedFbrUOMId
         ?? (useCatalog && !string.IsNullOrWhiteSpace(item.ItemType?.UOM) ? item.ItemType.FbrUOMId : item.FbrUOMId);
-    public static object Key(InvoiceItem item) => new {
-        item.ItemTypeId, item.ItemTypeName, item.HSCode, item.SaleType, item.RateId,
-        item.SroScheduleNo, item.SroItemSerialNo,
+    public static object Key(InvoiceItem item) => new
+    {
+        item.ItemTypeId,
+        item.ItemTypeName,
+        item.HSCode,
+        item.SaleType,
+        item.RateId,
+        item.SroScheduleNo,
+        item.SroItemSerialNo,
         Singleton = !item.ItemTypeId.HasValue || string.IsNullOrWhiteSpace(item.ItemTypeName) ? item.Id : 0
     };
 }

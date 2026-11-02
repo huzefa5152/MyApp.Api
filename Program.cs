@@ -5,7 +5,6 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.IdentityModel.Tokens;
@@ -37,662 +36,662 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
-var builder = WebApplication.CreateBuilder(args);
+    var builder = WebApplication.CreateBuilder(args);
 
-// Serilog as the host logger — config from appsettings.{Environment}.json
-// "Serilog" section. Falls back to sensible defaults if config is missing.
-// Async sinks aren't strictly necessary at this scale; sticking with
-// synchronous file sink to keep diagnostics linear (a 50 ms write is
-// fine in exchange for guaranteed line ordering on crash).
-builder.Host.UseSerilog((ctx, services, lc) => lc
-    .ReadFrom.Configuration(ctx.Configuration)
-    .ReadFrom.Services(services)
-    .Enrich.FromLogContext()
-    .Enrich.WithProperty("Application", "MyApp.Api")
-    // The Customer Portal token travels in the URL path, which request logging
-    // records verbatim on every request. This rewrites it to *** before the
-    // event reaches any sink — see Helpers/PortalTokenLogMasker.
-    .Enrich.With(new MyApp.Api.Helpers.PortalTokenLogMasker())
-    .Enrich.WithProperty("Environment", ctx.HostingEnvironment.EnvironmentName)
-    // Defaults if config doesn't override — durable rolling file in
-    // logs/ next to the binary, 30-day retention, 50 MB cap per file.
-    .WriteTo.Console(restrictedToMinimumLevel: LogEventLevel.Information)
-    .WriteTo.File(
-        path: Path.Combine(AppContext.BaseDirectory, "logs", "api-.log"),
-        rollingInterval: RollingInterval.Day,
-        retainedFileCountLimit: 30,
-        fileSizeLimitBytes: 50 * 1024 * 1024,
-        rollOnFileSizeLimit: true,
-        shared: true,
-        // Excluded the noisy framework loggers from the file sink — the
-        // Console sink keeps them at Warning so dev can still spot issues.
-        restrictedToMinimumLevel: LogEventLevel.Information));
+    // Serilog as the host logger — config from appsettings.{Environment}.json
+    // "Serilog" section. Falls back to sensible defaults if config is missing.
+    // Async sinks aren't strictly necessary at this scale; sticking with
+    // synchronous file sink to keep diagnostics linear (a 50 ms write is
+    // fine in exchange for guaranteed line ordering on crash).
+    builder.Host.UseSerilog((ctx, services, lc) => lc
+        .ReadFrom.Configuration(ctx.Configuration)
+        .ReadFrom.Services(services)
+        .Enrich.FromLogContext()
+        .Enrich.WithProperty("Application", "MyApp.Api")
+        // The Customer Portal token travels in the URL path, which request logging
+        // records verbatim on every request. This rewrites it to *** before the
+        // event reaches any sink — see Helpers/PortalTokenLogMasker.
+        .Enrich.With(new MyApp.Api.Helpers.PortalTokenLogMasker())
+        .Enrich.WithProperty("Environment", ctx.HostingEnvironment.EnvironmentName)
+        // Defaults if config doesn't override — durable rolling file in
+        // logs/ next to the binary, 30-day retention, 50 MB cap per file.
+        .WriteTo.Console(restrictedToMinimumLevel: LogEventLevel.Information)
+        .WriteTo.File(
+            path: Path.Combine(AppContext.BaseDirectory, "logs", "api-.log"),
+            rollingInterval: RollingInterval.Day,
+            retainedFileCountLimit: 30,
+            fileSizeLimitBytes: 50 * 1024 * 1024,
+            rollOnFileSizeLimit: true,
+            shared: true,
+            // Excluded the noisy framework loggers from the file sink — the
+            // Console sink keeps them at Warning so dev can still spot issues.
+            restrictedToMinimumLevel: LogEventLevel.Information));
 
-// ── Branch-aware LOCAL database selection (Development only) ──
-// Three production installations live on three long-lived branches, each with
-// its own database and its own restored local copy. Checking out a branch is
-// meant to be the whole switch — see Helpers/LocalDevDatabase.cs and
-// docs/ENVIRONMENTS.md. Inert outside Development and outside a git checkout,
-// so a published deploy never sees it.
-if (builder.Environment.IsDevelopment())
-{
-    // An explicit override always wins and is honoured by NOT installing the
-    // branch source at all — that is how the python test scripts aim a run at
-    // a scratch database. Checked up front rather than by ordering providers:
-    // WebApplicationBuilder's source list already holds several environment
-    // providers (DOTNET_-prefixed host config among them) BEFORE the
-    // appsettings files, so "insert before the first environment provider"
-    // silently lands ahead of appsettings.Development.json and loses to it.
-    var explicitOverride =
-        !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection"))
-        || args.Any(a => a.Contains("ConnectionStrings:DefaultConnection", StringComparison.OrdinalIgnoreCase));
-
-    var localDb = LocalDevDatabase.Resolve(builder.Environment.ContentRootPath);
-    if (explicitOverride)
+    // ── Branch-aware LOCAL database selection (Development only) ──
+    // Three production installations live on three long-lived branches, each with
+    // its own database and its own restored local copy. Checking out a branch is
+    // meant to be the whole switch — see Helpers/LocalDevDatabase.cs and
+    // docs/ENVIRONMENTS.md. Inert outside Development and outside a git checkout,
+    // so a published deploy never sees it.
+    if (builder.Environment.IsDevelopment())
     {
-        Log.Information(
-            "Branch-aware local database skipped — ConnectionStrings:DefaultConnection was set explicitly.");
-    }
-    else if (localDb.ConnectionString is not null)
-    {
-        // Appended LAST so it beats every appsettings*.json. A stale connection
-        // string left in the gitignored appsettings.Development.json surviving
-        // a branch switch is exactly the accident this exists to stop.
-        builder.Configuration.Sources.Add(
-            new Microsoft.Extensions.Configuration.Memory.MemoryConfigurationSource
-            {
-                InitialData = new Dictionary<string, string?>
-                {
-                    ["ConnectionStrings:DefaultConnection"] = localDb.ConnectionString
-                }
-            });
+        // An explicit override always wins and is honoured by NOT installing the
+        // branch source at all — that is how the python test scripts aim a run at
+        // a scratch database. Checked up front rather than by ordering providers:
+        // WebApplicationBuilder's source list already holds several environment
+        // providers (DOTNET_-prefixed host config among them) BEFORE the
+        // appsettings files, so "insert before the first environment provider"
+        // silently lands ahead of appsettings.Development.json and loses to it.
+        var explicitOverride =
+            !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection"))
+            || args.Any(a => a.Contains("ConnectionStrings:DefaultConnection", StringComparison.OrdinalIgnoreCase));
 
-        Log.Information(
-            "Local database selected from branch {Branch}: {Server} / {Database}",
-            localDb.Branch, localDb.Server, localDb.Database);
-    }
-    else
-    {
-        Log.Warning(
-            "Branch-aware local database NOT applied ({Reason}). Falling back to the connection " +
-            "string in appsettings — confirm it is the right one for this branch. See docs/ENVIRONMENTS.md.",
-            localDb.Reason);
-    }
-
-    // Fail closed if what we ended up with is not a local server at all.
-    var effectiveConnection = builder.Configuration.GetConnectionString("DefaultConnection");
-    DevelopmentSqlGuard.AssertLocal(
-        effectiveConnection,
-        Environment.MachineName,
-        builder.Configuration.GetValue<bool>(DevelopmentSqlGuard.AllowRemoteKey));
-
-    // Says what the app is ACTUALLY about to open, after every configuration
-    // provider has had its say — the line to check before trusting a local run.
-    try
-    {
-        var effective = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(effectiveConnection);
-        Log.Information("Effective database connection: {Server} / {Database}",
-            effective.DataSource, effective.InitialCatalog);
-    }
-    catch (ArgumentException)
-    {
-        // Unparseable — EF will report it far better than we could here.
-    }
-}
-
-// Add services to the container
-builder.Services.AddControllers(); // 👈 Needed for controllers
-// Opening a connection to the production SQL server takes about a second. The pool closes idle
-// connections after a few quiet minutes, so the first page load after a lull (eight parallel
-// calls) waited on fresh connections: 0.5-1.4 s per call, once 19.8 s, against ~0.2 s warm.
-// A minimum pool keeps that many open. Leaves a Min Pool Size set in configuration alone.
-static string? WithWarmPool(string? connectionString)
-{
-    if (string.IsNullOrWhiteSpace(connectionString)) return connectionString;
-    try
-    {
-        var csb = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString);
-        if (!connectionString.Contains("Min Pool Size", StringComparison.OrdinalIgnoreCase)
-            && !connectionString.Contains("MinPoolSize", StringComparison.OrdinalIgnoreCase))
-            csb.MinPoolSize = 8;
-        return csb.ConnectionString;
-    }
-    catch (ArgumentException) { return connectionString; }
-}
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(WithWarmPool(builder.Configuration.GetConnectionString("DefaultConnection")))
-           .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
-
-// Register Swagger generator
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-
-// JWT Authentication — key MUST come from a non-committed source:
-//   • env var Jwt__Key  (recommended for prod)
-//   • appsettings.{Development,Production,Local}.json  (gitignored)
-// We refuse to start with an empty / default key so a misconfigured
-// deploy fails loudly rather than running on a forgeable signing key.
-var jwtKey = builder.Configuration["Jwt:Key"];
-if (string.IsNullOrWhiteSpace(jwtKey) || jwtKey.Length < 32)
-{
-    throw new InvalidOperationException(
-        "Jwt:Key is missing or too short (minimum 32 chars). Set it via " +
-        "the Jwt__Key environment variable or appsettings.{Environment}.json. " +
-        "Never commit a real signing key to git.");
-}
-
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
-{
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = builder.Configuration["Jwt:Issuer"],
-        ValidAudience = builder.Configuration["Jwt:Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
-        // Audit H-10 (2026-05-13): default ClockSkew is 5 minutes,
-        // which silently extends every token's lifetime. Tight to 30s
-        // so a revoked / expired token can't keep authenticating.
-        ClockSkew = TimeSpan.FromSeconds(30),
-    };
-
-    // Authentication checks the persisted stamp on each request: deleting a
-    // user or revoking a session on another process must take effect immediately.
-    options.Events = new JwtBearerEvents
-    {
-        OnMessageReceived = context =>
+        var localDb = LocalDevDatabase.Resolve(builder.Environment.ContentRootPath);
+        if (explicitOverride)
         {
-            // "Bearer tmcp_..." is an MCP agent credential, not a JWT. Step aside:
-            // the McpAgent scheme (used only by /mcp) owns it, so on every other
-            // route an agent token simply fails to authenticate.
-            if (McpAgentAuthHandler.IsAgentHeader(context.Request.Headers.Authorization.ToString()))
-            {
-                context.NoResult();
-                return Task.CompletedTask;
-            }
-            // Read-only image requests cannot attach a Bearer header from <img>.
-            // This HttpOnly cookie is deliberately not accepted by any API route.
-            if (PrivateDataFilesMiddleware.IsImagePath(context.Request.Path)
-                && !context.Request.Headers.ContainsKey("Authorization"))
-                context.Token = context.Request.Cookies[PrivateDataFilesMiddleware.CookieName];
-            return Task.CompletedTask;
-        },
-        // An unauthenticated call to /mcp is answered the way the MCP authorization spec
-        // asks, so an AI client learns where to start the sign-in flow from the 401 itself.
-        OnChallenge = context =>
-        {
-            if (!context.Request.Path.StartsWithSegments("/mcp")) return Task.CompletedTask;
-            context.HandleResponse();
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            var error = context.AuthenticateFailure != null || McpAgentAuthHandler.IsAgentHeader(context.Request.Headers.Authorization.ToString())
-                ? ", error=\"invalid_token\"" : "";
-            context.Response.Headers.WWWAuthenticate =
-                $"Bearer realm=\"trader-mcp\", resource_metadata=\"{McpPublicUrl.ProtectedResourceMetadata(context.HttpContext)}\"{error}";
-            return Task.CompletedTask;
-        },
-        OnTokenValidated = async context =>
-        {
-            var principal = context.Principal;
-            if (principal == null)
-            {
-                context.Fail("Token has no principal");
-                return;
-            }
-
-            var sub = principal.FindFirstValue(JwtRegisteredClaimNames.Sub)
-                     ?? principal.FindFirstValue(ClaimTypes.NameIdentifier);
-            var stamp = principal.FindFirstValue("stamp");
-            if (string.IsNullOrEmpty(sub) || string.IsNullOrEmpty(stamp))
-            {
-                context.Fail("Missing authentication context");
-                return;
-            }
-
-            if (!int.TryParse(sub, out var userId) || userId <= 0)
-            {
-                context.Fail("Invalid subject claim");
-                return;
-            }
-
-            var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
-            var explicitSessionId = principal.FindFirstValue("sid");
-            var jti = principal.FindFirstValue(JwtRegisteredClaimNames.Jti);
-            var sessionId = explicitSessionId ?? "legacy:" + jti;
-            // Stamp and session in one round trip: this runs before every API call. The checks
-            // below keep their order (revoked stamp, then missing identity, then the session).
-            var auth = await db.Users.AsNoTracking().Where(u => u.Id == userId)
-                .Select(u => new
-                {
-                    u.SecurityStamp,
-                    Session = db.UserSessions.Where(s => s.Id == sessionId)
-                        .Select(s => new { s.UserId, s.SecurityStamp, s.IsRevoked, s.ExpiresAt, s.LastSeenAt }).FirstOrDefault(),
-                }).FirstOrDefaultAsync();
-            if (auth?.SecurityStamp == null || !string.Equals(auth.SecurityStamp, stamp, StringComparison.Ordinal))
-            {
-                context.Fail("Token has been revoked");
-                return;
-            }
-            if (explicitSessionId == null && string.IsNullOrWhiteSpace(jti))
-            {
-                context.Fail("Missing session identity");
-                return;
-            }
-            var now = DateTime.UtcNow;
-            var session = auth.Session;
-            if (session == null && explicitSessionId != null || session != null &&
-                (session.UserId != userId || session.SecurityStamp != stamp || session.IsRevoked || session.ExpiresAt <= now))
-            {
-                context.Fail("Session expired or revoked");
-                return;
-            }
-            // Older signed tokens remain valid until renewed, unless their token-specific session was revoked.
-            // At most one activity write per minute; no document identifiers or request paths are stored.
-            if (session != null && session.LastSeenAt < now.AddMinutes(-1))
-                await db.UserSessions.Where(s => s.Id == sessionId && s.UserId == userId && !s.IsRevoked && s.LastSeenAt < now.AddMinutes(-1))
-                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.LastSeenAt, now));
+            Log.Information(
+                "Branch-aware local database skipped — ConnectionStrings:DefaultConnection was set explicitly.");
         }
-    };
-})
-// Per-agent MCP credentials. Referenced only by [Authorize(AuthenticationSchemes = ...)] on /mcp.
-.AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, McpAgentAuthHandler>(McpAgentAuthHandler.Scheme, null);
+        else if (localDb.ConnectionString is not null)
+        {
+            // Appended LAST so it beats every appsettings*.json. A stale connection
+            // string left in the gitignored appsettings.Development.json surviving
+            // a branch switch is exactly the accident this exists to stop.
+            builder.Configuration.Sources.Add(
+                new Microsoft.Extensions.Configuration.Memory.MemoryConfigurationSource
+                {
+                    InitialData = new Dictionary<string, string?>
+                    {
+                        ["ConnectionStrings:DefaultConnection"] = localDb.ConnectionString
+                    }
+                });
 
-// Rate limiter — applied selectively to /api/auth/login + the
-// expensive endpoints flagged by audit H-6 (2026-05-13). Other
-// endpoints stay unrestricted to avoid breaking bulk operations the
-// operator runs (Validate All, Submit All, etc.).
-builder.Services.AddRateLimiter(options =>
-{
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            Log.Information(
+                "Local database selected from branch {Branch}: {Server} / {Database}",
+                localDb.Branch, localDb.Server, localDb.Database);
+        }
+        else
+        {
+            Log.Warning(
+                "Branch-aware local database NOT applied ({Reason}). Falling back to the connection " +
+                "string in appsettings — confirm it is the right one for this branch. See docs/ENVIRONMENTS.md.",
+                localDb.Reason);
+        }
 
-    // Helper: partition by user id when authenticated, else by IP.
-    // The login policy uses IP only (no user yet). Other policies
-    // partition by user id so a shared NAT doesn't starve everyone.
-    static string UserOrIp(HttpContext ctx) =>
-        ctx.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-        ?? ctx.User?.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
-        ?? ctx.Connection.RemoteIpAddress?.ToString()
-        ?? "unknown";
+        // Fail closed if what we ended up with is not a local server at all.
+        var effectiveConnection = builder.Configuration.GetConnectionString("DefaultConnection");
+        DevelopmentSqlGuard.AssertLocal(
+            effectiveConnection,
+            Environment.MachineName,
+            builder.Configuration.GetValue<bool>(DevelopmentSqlGuard.AllowRemoteKey));
 
-    options.AddPolicy("login", httpContext =>
+        // Says what the app is ACTUALLY about to open, after every configuration
+        // provider has had its say — the line to check before trusting a local run.
+        try
+        {
+            var effective = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(effectiveConnection);
+            Log.Information("Effective database connection: {Server} / {Database}",
+                effective.DataSource, effective.InitialCatalog);
+        }
+        catch (ArgumentException)
+        {
+            // Unparseable — EF will report it far better than we could here.
+        }
+    }
+
+    // Add services to the container
+    builder.Services.AddControllers(); // 👈 Needed for controllers
+                                       // Opening a connection to the production SQL server takes about a second. The pool closes idle
+                                       // connections after a few quiet minutes, so the first page load after a lull (eight parallel
+                                       // calls) waited on fresh connections: 0.5-1.4 s per call, once 19.8 s, against ~0.2 s warm.
+                                       // A minimum pool keeps that many open. Leaves a Min Pool Size set in configuration alone.
+    static string? WithWarmPool(string? connectionString)
     {
-        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+        if (string.IsNullOrWhiteSpace(connectionString)) return connectionString;
+        try
         {
-            // 10 attempts per IP per minute — generous enough for a typo
-            // recovery, tight enough to stop credential stuffing.
-            PermitLimit = 10,
-            Window = TimeSpan.FromMinutes(1),
-            QueueLimit = 0,
-            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-        });
-    });
+            var csb = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString);
+            if (!connectionString.Contains("Min Pool Size", StringComparison.OrdinalIgnoreCase)
+                && !connectionString.Contains("MinPoolSize", StringComparison.OrdinalIgnoreCase))
+                csb.MinPoolSize = 8;
+            return csb.ConnectionString;
+        }
+        catch (ArgumentException) { return connectionString; }
+    }
+    builder.Services.AddDbContext<AppDbContext>(options =>
+        options.UseSqlServer(WithWarmPool(builder.Configuration.GetConnectionString("DefaultConnection")))
+               .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
 
-    // Audit H-6: FBR submit / validate. Each call is one outbound PRAL
-    // round-trip — 30/min/user is generous for a busy operator running
-    // Validate All and tight enough to stop a buggy script burning
-    // through the company's daily quota.
-    options.AddPolicy("fbrSubmit", httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(UserOrIp(httpContext), _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 30,
-            Window = TimeSpan.FromMinutes(1),
-            QueueLimit = 0,
-        }));
+    // Register Swagger generator
+    builder.Services.AddEndpointsApiExplorer();
+    builder.Services.AddSwaggerGen();
 
-    // Hosted MCP endpoint. The limiter runs before authentication, so the user
-    // id is not known yet: partition on a hash of the bearer credential (never
-    // the raw token), falling back to the remote address for anonymous calls.
-    options.AddPolicy("mcp", httpContext =>
+    // JWT Authentication — key MUST come from a non-committed source:
+    //   • env var Jwt__Key  (recommended for prod)
+    //   • appsettings.{Development,Production,Local}.json  (gitignored)
+    // We refuse to start with an empty / default key so a misconfigured
+    // deploy fails loudly rather than running on a forgeable signing key.
+    var jwtKey = builder.Configuration["Jwt:Key"];
+    if (string.IsNullOrWhiteSpace(jwtKey) || jwtKey.Length < 32)
     {
-        var auth = httpContext.Request.Headers.Authorization.ToString();
-        var key = string.IsNullOrEmpty(auth)
-            ? "ip:" + (httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown")
-            : "tok:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(auth)));
-        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 120,
-            Window = TimeSpan.FromMinutes(1),
-            QueueLimit = 0,
-        });
-    });
+        throw new InvalidOperationException(
+            "Jwt:Key is missing or too short (minimum 32 chars). Set it via " +
+            "the Jwt__Key environment variable or appsettings.{Environment}.json. " +
+            "Never commit a real signing key to git.");
+    }
 
-    // OAuth sign-in connect: open dynamic registration plus the authorize and token
-    // endpoints. Anonymous by nature, so partitioned by remote address.
-    options.AddPolicy("oauth", httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            "oauth:" + (httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"), _ => new FixedWindowRateLimiterOptions
+    builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
         {
-            PermitLimit = 60,
-            Window = TimeSpan.FromMinutes(1),
-            QueueLimit = 0,
-        }));
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidAudience = builder.Configuration["Jwt:Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            // Audit H-10 (2026-05-13): default ClockSkew is 5 minutes,
+            // which silently extends every token's lifetime. Tight to 30s
+            // so a revoked / expired token can't keep authenticating.
+            ClockSkew = TimeSpan.FromSeconds(30),
+        };
 
-    // Audit H-6: file imports (FBR purchase xls, PO PDF parser,
-    // challan Excel). Each call can do 25 MB I/O + CPU. 10/min/user
-    // is generous for a one-off upload pass, tight enough to stop a
-    // confused or malicious script.
-    options.AddPolicy("import", httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(UserOrIp(httpContext), _ => new FixedWindowRateLimiterOptions
+        // Authentication checks the persisted stamp on each request: deleting a
+        // user or revoking a session on another process must take effect immediately.
+        options.Events = new JwtBearerEvents
         {
-            PermitLimit = 10,
-            Window = TimeSpan.FromMinutes(1),
-            QueueLimit = 0,
-        }));
-
-    // Public Customer Portal. Partitioned on the TOKEN, not the IP: behind the
-    // host's proxy the remote IP is not reliably the caller's
-    // (ForwardedHeaders:KnownProxies is still unset — audit C-12), so an
-    // IP-partitioned limit would either throttle every customer together or
-    // nobody. Nothing about secrecy rests on this — at 256 bits of entropy the
-    // token cannot be guessed — it is here to stop noise and accidental loops.
-    options.AddPolicy("portal", httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            httpContext.Request.RouteValues["token"]?.ToString() ?? "anonymous-portal",
-            _ => new FixedWindowRateLimiterOptions
+            OnMessageReceived = context =>
             {
-                PermitLimit = 120,
+                // "Bearer tmcp_..." is an MCP agent credential, not a JWT. Step aside:
+                // the McpAgent scheme (used only by /mcp) owns it, so on every other
+                // route an agent token simply fails to authenticate.
+                if (McpAgentAuthHandler.IsAgentHeader(context.Request.Headers.Authorization.ToString()))
+                {
+                    context.NoResult();
+                    return Task.CompletedTask;
+                }
+                // Read-only image requests cannot attach a Bearer header from <img>.
+                // This HttpOnly cookie is deliberately not accepted by any API route.
+                if (PrivateDataFilesMiddleware.IsImagePath(context.Request.Path)
+                    && !context.Request.Headers.ContainsKey("Authorization"))
+                    context.Token = context.Request.Cookies[PrivateDataFilesMiddleware.CookieName];
+                return Task.CompletedTask;
+            },
+            // An unauthenticated call to /mcp is answered the way the MCP authorization spec
+            // asks, so an AI client learns where to start the sign-in flow from the 401 itself.
+            OnChallenge = context =>
+            {
+                if (!context.Request.Path.StartsWithSegments("/mcp")) return Task.CompletedTask;
+                context.HandleResponse();
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                var error = context.AuthenticateFailure != null || McpAgentAuthHandler.IsAgentHeader(context.Request.Headers.Authorization.ToString())
+                    ? ", error=\"invalid_token\"" : "";
+                context.Response.Headers.WWWAuthenticate =
+                    $"Bearer realm=\"trader-mcp\", resource_metadata=\"{McpPublicUrl.ProtectedResourceMetadata(context.HttpContext)}\"{error}";
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = async context =>
+            {
+                var principal = context.Principal;
+                if (principal == null)
+                {
+                    context.Fail("Token has no principal");
+                    return;
+                }
+
+                var sub = principal.FindFirstValue(JwtRegisteredClaimNames.Sub)
+                         ?? principal.FindFirstValue(ClaimTypes.NameIdentifier);
+                var stamp = principal.FindFirstValue("stamp");
+                if (string.IsNullOrEmpty(sub) || string.IsNullOrEmpty(stamp))
+                {
+                    context.Fail("Missing authentication context");
+                    return;
+                }
+
+                if (!int.TryParse(sub, out var userId) || userId <= 0)
+                {
+                    context.Fail("Invalid subject claim");
+                    return;
+                }
+
+                var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+                var explicitSessionId = principal.FindFirstValue("sid");
+                var jti = principal.FindFirstValue(JwtRegisteredClaimNames.Jti);
+                var sessionId = explicitSessionId ?? "legacy:" + jti;
+                // Stamp and session in one round trip: this runs before every API call. The checks
+                // below keep their order (revoked stamp, then missing identity, then the session).
+                var auth = await db.Users.AsNoTracking().Where(u => u.Id == userId)
+                    .Select(u => new
+                    {
+                        u.SecurityStamp,
+                        Session = db.UserSessions.Where(s => s.Id == sessionId)
+                            .Select(s => new { s.UserId, s.SecurityStamp, s.IsRevoked, s.ExpiresAt, s.LastSeenAt }).FirstOrDefault(),
+                    }).FirstOrDefaultAsync();
+                if (auth?.SecurityStamp == null || !string.Equals(auth.SecurityStamp, stamp, StringComparison.Ordinal))
+                {
+                    context.Fail("Token has been revoked");
+                    return;
+                }
+                if (explicitSessionId == null && string.IsNullOrWhiteSpace(jti))
+                {
+                    context.Fail("Missing session identity");
+                    return;
+                }
+                var now = DateTime.UtcNow;
+                var session = auth.Session;
+                if (session == null && explicitSessionId != null || session != null &&
+                    (session.UserId != userId || session.SecurityStamp != stamp || session.IsRevoked || session.ExpiresAt <= now))
+                {
+                    context.Fail("Session expired or revoked");
+                    return;
+                }
+                // Older signed tokens remain valid until renewed, unless their token-specific session was revoked.
+                // At most one activity write per minute; no document identifiers or request paths are stored.
+                if (session != null && session.LastSeenAt < now.AddMinutes(-1))
+                    await db.UserSessions.Where(s => s.Id == sessionId && s.UserId == userId && !s.IsRevoked && s.LastSeenAt < now.AddMinutes(-1))
+                        .ExecuteUpdateAsync(s => s.SetProperty(x => x.LastSeenAt, now));
+            }
+        };
+    })
+    // Per-agent MCP credentials. Referenced only by [Authorize(AuthenticationSchemes = ...)] on /mcp.
+    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, McpAgentAuthHandler>(McpAgentAuthHandler.Scheme, null);
+
+    // Rate limiter — applied selectively to /api/auth/login + the
+    // expensive endpoints flagged by audit H-6 (2026-05-13). Other
+    // endpoints stay unrestricted to avoid breaking bulk operations the
+    // operator runs (Validate All, Submit All, etc.).
+    builder.Services.AddRateLimiter(options =>
+    {
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+        // Helper: partition by user id when authenticated, else by IP.
+        // The login policy uses IP only (no user yet). Other policies
+        // partition by user id so a shared NAT doesn't starve everyone.
+        static string UserOrIp(HttpContext ctx) =>
+            ctx.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            ?? ctx.User?.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+            ?? ctx.Connection.RemoteIpAddress?.ToString()
+            ?? "unknown";
+
+        options.AddPolicy("login", httpContext =>
+        {
+            var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+            {
+                // 10 attempts per IP per minute — generous enough for a typo
+                // recovery, tight enough to stop credential stuffing.
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            });
+        });
+
+        // Audit H-6: FBR submit / validate. Each call is one outbound PRAL
+        // round-trip — 30/min/user is generous for a busy operator running
+        // Validate All and tight enough to stop a buggy script burning
+        // through the company's daily quota.
+        options.AddPolicy("fbrSubmit", httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(UserOrIp(httpContext), _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0,
             }));
 
-    // Audit H-6: password change. BCrypt verify + hash = ~200 ms CPU
-    // each. 5/hour/user is plenty for legitimate change flows.
-    options.AddPolicy("passwordChange", httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(UserOrIp(httpContext), _ => new FixedWindowRateLimiterOptions
+        // Hosted MCP endpoint. The limiter runs before authentication, so the user
+        // id is not known yet: partition on a hash of the bearer credential (never
+        // the raw token), falling back to the remote address for anonymous calls.
+        options.AddPolicy("mcp", httpContext =>
         {
-            PermitLimit = 5,
-            Window = TimeSpan.FromHours(1),
-            QueueLimit = 0,
-        }));
-});
+            var auth = httpContext.Request.Headers.Authorization.ToString();
+            var key = string.IsNullOrEmpty(auth)
+                ? "ip:" + (httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown")
+                : "tok:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(auth)));
+            return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 120,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            });
+        });
 
-// Register Repositories
-builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
-builder.Services.AddScoped<IDeliveryChallanRepository, DeliveryChallanRepository>();
-builder.Services.AddScoped<IClientRepository, ClientRepository>();
-builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
-builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
-builder.Services.AddScoped<IItemTypeRepository, ItemTypeRepository>();
-builder.Services.AddScoped<IPrintTemplateRepository, PrintTemplateRepository>();
-builder.Services.AddScoped<IStarterTemplateService, StarterTemplateService>();
-builder.Services.AddScoped<ICompanyStampRepository, CompanyStampRepository>();
-builder.Services.AddScoped<IMergeFieldRepository, MergeFieldRepository>();
-builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
-builder.Services.AddScoped<ISalesQuoteRepository, SalesQuoteRepository>();
-builder.Services.AddScoped<ISalesOrderRepository, SalesOrderRepository>();
-builder.Services.AddScoped<IWithholdingTaxReceiptRepository, WithholdingTaxReceiptRepository>();
-builder.Services.AddScoped<IWithholdingTaxReceiptService, WithholdingTaxReceiptService>();
-builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
-builder.Services.AddScoped<IAccountRepository, AccountRepository>();
-builder.Services.AddScoped<IFolderRepository, FolderRepository>();
-builder.Services.AddScoped<IAttachmentRepository, AttachmentRepository>();
+        // OAuth sign-in connect: open dynamic registration plus the authorize and token
+        // endpoints. Anonymous by nature, so partitioned by remote address.
+        options.AddPolicy("oauth", httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                "oauth:" + (httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"), _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 60,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                }));
 
-// Register Services
-builder.Services.AddScoped<ICompanyService, CompanyService>();
-builder.Services.AddScoped<IDeliveryChallanService, DeliveryChallanService>();
-builder.Services.AddScoped<IClientService, ClientService>();
-// "Common Clients" grouping — the same legal entity (matched by NTN, then
-// fallback to normalised name) shared across multiple companies. Sits
-// alongside the per-company ClientService; existing per-company flows
-// keep working unchanged.
-builder.Services.AddScoped<IClientGroupService, ClientGroupService>();
-builder.Services.AddScoped<ISupplierService, SupplierService>();
-// "Common Suppliers" grouping — same shape as IClientGroupService for
-// the purchase side. Lets the same legal entity (matched by NTN, then
-// fallback to normalised name) act as a single supplier across multiple
-// tenants. Existing per-company SupplierService flows keep working
-// unchanged; this is purely additive.
-builder.Services.AddScoped<ISupplierGroupService, SupplierGroupService>();
-builder.Services.AddScoped<CommercialCostService>();
-builder.Services.AddScoped<LocalPurchaseSyncService>();
-builder.Services.AddScoped<SupplierPayablesService>();
-builder.Services.AddScoped<IPurchaseBillService, PurchaseBillService>();
-builder.Services.AddScoped<IGoodsReceiptService, GoodsReceiptService>();
-builder.Services.AddScoped<IInvoiceService, InvoiceService>();
-// Sales Quote (priced quotation) + Sales Order (quantity-only). SalesQuote
-// depends on ISalesOrderService (convert-to-order); SalesOrder depends on
-// IDeliveryChallanService (create-challan-from-order). No true DI cycle.
-builder.Services.AddScoped<ISalesQuoteService, SalesQuoteService>();
-builder.Services.AddScoped<EmailWorkspaceService>();
-builder.Services.AddHttpClient<IGmailProvider, GmailProvider>(client => client.Timeout = TimeSpan.FromSeconds(30))
-    .RemoveAllLoggers()
-    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
-builder.Services.AddHostedService<MyApp.Api.Services.HostedServices.GmailSyncService>();
-builder.Services.AddScoped<ISalesOrderService, SalesOrderService>();
-// Receipts (money in) + Payments (money out) — AR/AP subledger.
-builder.Services.AddScoped<IPaymentService, PaymentService>();
-builder.Services.AddScoped<IAccountTransferService, AccountTransferService>();
-builder.Services.AddScoped<IPurchaseDebitNoteService, PurchaseDebitNoteService>();
-builder.Services.AddScoped<IBankReconciliationService, BankReconciliationService>();
-builder.Services.AddScoped<IBankStatementService, BankStatementService>();
-// Chart of Accounts: the account tree plus the sector preset that makes a new
-// company's chart usable without hand-building it.
-builder.Services.AddScoped<IAccountService, AccountService>();
-builder.Services.AddScoped<ICoaPresetSeeder, CoaPresetSeeder>();
-// The general ledger: the one place an entry is written, plus the balance
-// primitives every screen and report reads instead of summing lines itself.
-builder.Services.AddScoped<IGeneralLedgerService, GeneralLedgerService>();
-builder.Services.AddScoped<IJournalEntryService, JournalEntryService>();
-// The posting engine decides a document's legs; the ledger service above is
-// what actually writes them, so the balance invariant has one home.
-builder.Services.AddScoped<IPostingService, PostingService>();
-// The accounting reports. They read the ledger and reuse its primitives —
-// nothing here recomputes a balance of its own.
-builder.Services.AddScoped<IAccountingReportService, AccountingReportService>();
-builder.Services.AddScoped<IAccountingCatalogService, AccountingCatalogService>();
-// Customer Portal: management for internal users, plus the only anonymous
-// surface in the app. See PublicCustomerPortalController for why.
-builder.Services.AddScoped<ICustomerPortalService, CustomerPortalService>();
-// Unified attachments + document folders. AttachmentStorage is stateless
-// (just resolves paths under data/attachments) so it registers as a singleton.
-builder.Services.AddScoped<IFolderService, FolderService>();
-builder.Services.AddScoped<IAttachmentService, AttachmentService>();
-builder.Services.AddSingleton<MyApp.Api.Helpers.AttachmentStorage>();
-builder.Services.AddScoped<IItemTypeService, ItemTypeService>();
-builder.Services.AddScoped<IAuditLogService, AuditLogService>();
-builder.Services.AddScoped<IFbrService, FbrService>();
-builder.Services.AddScoped<IFbrLookupService, FbrLookupService>();
-// Inventory accounting: stock movements + on-hand + availability check.
-// All write operations are no-ops when Company.InventoryTrackingEnabled
-// is false, so existing tenants keep working unchanged.
-builder.Services.AddScoped<IStockService, StockService>();
-builder.Services.AddScoped<StockEntryService>();
-// Reporting module (read-only, company-scoped reports for the Reports navbar).
-builder.Services.AddScoped<IReportService, ReportService>();
-builder.Services.AddScoped<MyApp.Api.Services.Implementations.TaxSheetImportService>();
-// Tax mapping engine: single source of truth for HS_UOM, SaleTypeToRate
-// and scenario rules. Used by ItemType save (auto-pick UOM) and FBR
-// pre-validate (combination check before submitting).
-builder.Services.AddScoped<ITaxMappingEngine, TaxMappingEngine>();
-// FBR Sandbox: backs the per-company FBR test-scenarios tab. Demo bills
-// live in their own 900000+ number range and never collide with real
-// company bill numbering (see Invoice.IsDemo / DeliveryChallan.IsDemo).
-builder.Services.AddScoped<IFbrSandboxService, FbrSandboxService>();
-builder.Services.AddSingleton<IPOParserService, POParserService>();
-builder.Services.AddSingleton<IPOFormatFingerprintService, POFormatFingerprintService>();
-builder.Services.AddScoped<IPOFormatRegistry, POFormatRegistry>();
-builder.Services.AddSingleton<IRuleBasedPOParser, RuleBasedPOParser>();
-builder.Services.AddScoped<IRegressionService, RegressionService>();
-// Parser-feedback module (records whether a PO import parsed correctly +
-// retains the original PDF for triage). Self-contained; see Helpers/
-// ParserFeedbackServiceCollectionExtensions.
-builder.Services.AddParserFeedback();
+        // Audit H-6: file imports (FBR purchase xls, PO PDF parser,
+        // challan Excel). Each call can do 25 MB I/O + CPU. 10/min/user
+        // is generous for a one-off upload pass, tight enough to stop a
+        // confused or malicious script.
+        options.AddPolicy("import", httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(UserOrIp(httpContext), _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
 
-// ── FBR Purchase Import (Annexure-A xls upload, Phase 1: preview) ──
-// Parser + filter are stateless / Scoped because they don't hold any
-// per-request data; the orchestrator depends on AppDbContext via the
-// matcher so it must be Scoped too. No singleton — keeps DB lifetime
-// management trivial.
-builder.Services.AddScoped<IFbrPurchaseLedgerParser, FbrPurchaseLedgerParser>();
-builder.Services.AddScoped<IFbrPurchaseImportFilter, FbrPurchaseImportFilter>();
-builder.Services.AddScoped<IFbrPurchaseImportMatcher, FbrPurchaseImportMatcher>();
-builder.Services.AddScoped<IFbrPurchaseImportCommitter, FbrPurchaseImportCommitter>();
-builder.Services.AddScoped<IFbrPurchaseImportService, FbrPurchaseImportService>();
-builder.Services.AddScoped<IOnboardingImportService, OnboardingImportService>();
+        // Public Customer Portal. Partitioned on the TOKEN, not the IP: behind the
+        // host's proxy the remote IP is not reliably the caller's
+        // (ForwardedHeaders:KnownProxies is still unset — audit C-12), so an
+        // IP-partitioned limit would either throttle every customer together or
+        // nobody. Nothing about secrecy rests on this — at 256 bits of entropy the
+        // token cannot be guessed — it is here to stop noise and accidental loops.
+        options.AddPolicy("portal", httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                httpContext.Request.RouteValues["token"]?.ToString() ?? "anonymous-portal",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 120,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                }));
 
-// Dashboard KPI aggregator. Scoped because it depends on AppDbContext
-// and IPermissionService — both Scoped — and the queries use the
-// per-request user identity for permission checks.
-builder.Services.AddScoped<IDashboardService, DashboardService>();
-
-// Tax-claim helper — drives the in-form HS-stock panel on the
-// Invoices-tab edit screen. Scoped (depends on AppDbContext).
-builder.Services.AddScoped<ITaxClaimService, TaxClaimService>();
-
-// Historical challan import (reverse Excel template → preview → commit).
-// Reverse mapper is a Singleton because it holds an in-memory cache keyed on
-// the template file path + lastWriteTime — rebuilds automatically when the
-// operator re-uploads a template, and shared safely across requests.
-builder.Services.AddSingleton<IExcelTemplateReverseMapper, ExcelTemplateReverseMapper>();
-builder.Services.AddScoped<IChallanExcelImporter, ChallanExcelImporter>();
-// Sensitive-data redactor — shared by GlobalExceptionMiddleware and
-// FbrService for consistent NTN/CNIC masking + credential redaction.
-// Singleton because the regexes are stateless and compiled once.
-builder.Services.AddSingleton<ISensitiveDataRedactor, SensitiveDataRedactor>();
-
-// FBR communication log — dedicated trail for audit H-3.
-builder.Services.AddScoped<IFbrCommunicationLogService, FbrCommunicationLogService>();
-
-// Audit H-8 (2026-05-13): daily purge job. Soft-clears bodies on rows
-// past Fbr:LogSoftPurgeDays (default 180), hard-deletes past
-// Fbr:LogRetentionDays (default 365).
-builder.Services.AddHostedService<MyApp.Api.Services.HostedServices.FbrCommunicationLogPurgeService>();
-
-// HttpContextAccessor — needed by FbrService etc. so they can pull the
-// current request's CorrelationId without taking HttpContext directly.
-builder.Services.AddHttpContextAccessor();
-
-// FBR HttpClient — see audit H-1 (no retry), H-2 (no timeout).
-//   • 30 s timeout per attempt (vs 100 s framework default that was
-//     blocking Kestrel threads under FBR brownouts)
-//   • Standard resilience handler: retry transient failures, circuit-
-//     break after sustained failures, plus per-attempt timeout. The
-//     default policy in Microsoft.Extensions.Http.Resilience handles
-//     5xx and HttpRequestException with exponential backoff.
-builder.Services.AddHttpClient("FBR", client =>
-{
-    client.Timeout = TimeSpan.FromSeconds(30);
-    client.DefaultRequestHeaders.Add("User-Agent", "MyApp.Api/1.0");
-})
-.AddStandardResilienceHandler(options =>
-{
-    // Total time across retries — must exceed per-attempt timeout × max
-    // attempts or the resilience pipeline trips its own guard.
-    options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(120);
-    options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(30);
-    options.Retry.MaxRetryAttempts = 3;
-    options.Retry.Delay = TimeSpan.FromSeconds(2);
-    options.Retry.BackoffType = DelayBackoffType.Exponential;
-    // Audit C-13 (2026-05-13): NEVER retry POST. PRAL's submit endpoint
-    // is not strictly idempotent — a retried POST after a connection
-    // timeout but a successful FBR-side commit issues a second IRN that
-    // PersistStatus would then overwrite the first with. Keep retries on
-    // GET / catalog lookups; submit/validate stay one-shot. Operator can
-    // manually retry through the UI if needed (after checking the
-    // monitor for a successful first IRN).
-    options.Retry.ShouldHandle = args =>
-    {
-        if (args.Outcome.Result?.RequestMessage?.Method == HttpMethod.Post)
-            return ValueTask.FromResult(false);
-        // Default predicate (transient errors): 5xx / HttpRequestException
-        // / timeouts on non-POST methods.
-        if (args.Outcome.Exception is HttpRequestException) return ValueTask.FromResult(true);
-        if (args.Outcome.Exception is TaskCanceledException) return ValueTask.FromResult(true);
-        var status = (int?)args.Outcome.Result?.StatusCode ?? 0;
-        return ValueTask.FromResult(status >= 500 && status < 600);
-    };
-    // Open circuit after 5 failures across a 30 s window; half-open
-    // after 15 s. Tuned to FBR sandbox behaviour (occasional 30-60 s
-    // outages during their nightly maintenance).
-    options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(60);
-    options.CircuitBreaker.MinimumThroughput = 5;
-    options.CircuitBreaker.FailureRatio = 0.5;
-    options.CircuitBreaker.BreakDuration = TimeSpan.FromSeconds(15);
-});
-
-// Audit C-1 (2026-05-13): ASP.NET Data Protection — keys persisted to
-// disk so the encrypted Company.FbrToken column survives restarts. On
-// MonsterASP the key ring lives under data/keys (must NOT be in
-// wwwroot — that would serve them). The application name is fixed so
-// staging keys don't accidentally decrypt prod payloads.
-var dataProtectionKeyDir = Path.Combine(AppContext.BaseDirectory, "data", "keys");
-Directory.CreateDirectory(dataProtectionKeyDir);
-builder.Services.AddDataProtection()
-    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeyDir))
-    .SetApplicationName("MyApp.Api");
-builder.Services.AddSingleton<MyApp.Api.Helpers.IFbrTokenProtector, MyApp.Api.Helpers.FbrTokenProtector>();
-
-// RBAC: permission service needs an in-process cache for the per-user
-// permission-set TTL.
-builder.Services.AddMemoryCache();
-builder.Services.AddScoped<IPermissionService, PermissionService>();
-builder.Services.AddScoped<McpUserAccessService>();
-
-// Tenant-scope guard — answers "may this user touch this company?"
-// in addition to RBAC's "may this user perform this action?". Reads
-// the UserCompany table when Company.IsTenantIsolated=true; passes
-// through otherwise (preserves Hakimi/Roshan behaviour).
-builder.Services.AddScoped<ICompanyAccessGuard, CompanyAccessGuard>();
-// Hierarchical admin scope (2026-09-11): who may administer which users
-// and delegate which companies. See IManagementScopeService.
-builder.Services.AddScoped<IManagementScopeService, ManagementScopeService>();
-
-// CORS — origins read from configuration (Cors:AllowedOrigins, comma-
-// separated). Empty / missing collapses to "no cross-origin allowed",
-// which is correct when the SPA is served from the same host as the
-// API (the standard MonsterASP / Render setup here). Never falls back
-// to AllowAnyOrigin; that combined with a stolen JWT was the gap.
-var corsOrigins = (builder.Configuration["Cors:AllowedOrigins"] ?? "")
-    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowFrontend", p =>
-    {
-        if (corsOrigins.Length > 0)
-        {
-            p.WithOrigins(corsOrigins)
-             .AllowAnyHeader()
-             .AllowAnyMethod();
-        }
-        else
-        {
-            // No origins configured → effectively "same-origin only".
-            // No-op policy; the SPA from wwwroot still works because
-            // it never crosses an origin.
-        }
+        // Audit H-6: password change. BCrypt verify + hash = ~200 ms CPU
+        // each. 5/hour/user is plenty for legitimate change flows.
+        options.AddPolicy("passwordChange", httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(UserOrIp(httpContext), _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromHours(1),
+                QueueLimit = 0,
+            }));
     });
-});
 
-// Use PORT env variable for Docker/Render deployment; IIS/MonsterASP manages its own port
-var port = Environment.GetEnvironmentVariable("PORT");
-if (port != null)
-{
-    builder.WebHost.ConfigureKestrel(options =>
+    // Register Repositories
+    builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
+    builder.Services.AddScoped<IDeliveryChallanRepository, DeliveryChallanRepository>();
+    builder.Services.AddScoped<IClientRepository, ClientRepository>();
+    builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
+    builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
+    builder.Services.AddScoped<IItemTypeRepository, ItemTypeRepository>();
+    builder.Services.AddScoped<IPrintTemplateRepository, PrintTemplateRepository>();
+    builder.Services.AddScoped<IStarterTemplateService, StarterTemplateService>();
+    builder.Services.AddScoped<ICompanyStampRepository, CompanyStampRepository>();
+    builder.Services.AddScoped<IMergeFieldRepository, MergeFieldRepository>();
+    builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+    builder.Services.AddScoped<ISalesQuoteRepository, SalesQuoteRepository>();
+    builder.Services.AddScoped<ISalesOrderRepository, SalesOrderRepository>();
+    builder.Services.AddScoped<IWithholdingTaxReceiptRepository, WithholdingTaxReceiptRepository>();
+    builder.Services.AddScoped<IWithholdingTaxReceiptService, WithholdingTaxReceiptService>();
+    builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
+    builder.Services.AddScoped<IAccountRepository, AccountRepository>();
+    builder.Services.AddScoped<IFolderRepository, FolderRepository>();
+    builder.Services.AddScoped<IAttachmentRepository, AttachmentRepository>();
+
+    // Register Services
+    builder.Services.AddScoped<ICompanyService, CompanyService>();
+    builder.Services.AddScoped<IDeliveryChallanService, DeliveryChallanService>();
+    builder.Services.AddScoped<IClientService, ClientService>();
+    // "Common Clients" grouping — the same legal entity (matched by NTN, then
+    // fallback to normalised name) shared across multiple companies. Sits
+    // alongside the per-company ClientService; existing per-company flows
+    // keep working unchanged.
+    builder.Services.AddScoped<IClientGroupService, ClientGroupService>();
+    builder.Services.AddScoped<ISupplierService, SupplierService>();
+    // "Common Suppliers" grouping — same shape as IClientGroupService for
+    // the purchase side. Lets the same legal entity (matched by NTN, then
+    // fallback to normalised name) act as a single supplier across multiple
+    // tenants. Existing per-company SupplierService flows keep working
+    // unchanged; this is purely additive.
+    builder.Services.AddScoped<ISupplierGroupService, SupplierGroupService>();
+    builder.Services.AddScoped<CommercialCostService>();
+    builder.Services.AddScoped<LocalPurchaseSyncService>();
+    builder.Services.AddScoped<SupplierPayablesService>();
+    builder.Services.AddScoped<IPurchaseBillService, PurchaseBillService>();
+    builder.Services.AddScoped<IGoodsReceiptService, GoodsReceiptService>();
+    builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+    // Sales Quote (priced quotation) + Sales Order (quantity-only). SalesQuote
+    // depends on ISalesOrderService (convert-to-order); SalesOrder depends on
+    // IDeliveryChallanService (create-challan-from-order). No true DI cycle.
+    builder.Services.AddScoped<ISalesQuoteService, SalesQuoteService>();
+    builder.Services.AddScoped<EmailWorkspaceService>();
+    builder.Services.AddHttpClient<IGmailProvider, GmailProvider>(client => client.Timeout = TimeSpan.FromSeconds(30))
+        .RemoveAllLoggers()
+        .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+    builder.Services.AddHostedService<MyApp.Api.Services.HostedServices.GmailSyncService>();
+    builder.Services.AddScoped<ISalesOrderService, SalesOrderService>();
+    // Receipts (money in) + Payments (money out) — AR/AP subledger.
+    builder.Services.AddScoped<IPaymentService, PaymentService>();
+    builder.Services.AddScoped<IAccountTransferService, AccountTransferService>();
+    builder.Services.AddScoped<IPurchaseDebitNoteService, PurchaseDebitNoteService>();
+    builder.Services.AddScoped<IBankReconciliationService, BankReconciliationService>();
+    builder.Services.AddScoped<IBankStatementService, BankStatementService>();
+    // Chart of Accounts: the account tree plus the sector preset that makes a new
+    // company's chart usable without hand-building it.
+    builder.Services.AddScoped<IAccountService, AccountService>();
+    builder.Services.AddScoped<ICoaPresetSeeder, CoaPresetSeeder>();
+    // The general ledger: the one place an entry is written, plus the balance
+    // primitives every screen and report reads instead of summing lines itself.
+    builder.Services.AddScoped<IGeneralLedgerService, GeneralLedgerService>();
+    builder.Services.AddScoped<IJournalEntryService, JournalEntryService>();
+    // The posting engine decides a document's legs; the ledger service above is
+    // what actually writes them, so the balance invariant has one home.
+    builder.Services.AddScoped<IPostingService, PostingService>();
+    // The accounting reports. They read the ledger and reuse its primitives —
+    // nothing here recomputes a balance of its own.
+    builder.Services.AddScoped<IAccountingReportService, AccountingReportService>();
+    builder.Services.AddScoped<IAccountingCatalogService, AccountingCatalogService>();
+    // Customer Portal: management for internal users, plus the only anonymous
+    // surface in the app. See PublicCustomerPortalController for why.
+    builder.Services.AddScoped<ICustomerPortalService, CustomerPortalService>();
+    // Unified attachments + document folders. AttachmentStorage is stateless
+    // (just resolves paths under data/attachments) so it registers as a singleton.
+    builder.Services.AddScoped<IFolderService, FolderService>();
+    builder.Services.AddScoped<IAttachmentService, AttachmentService>();
+    builder.Services.AddSingleton<MyApp.Api.Helpers.AttachmentStorage>();
+    builder.Services.AddScoped<IItemTypeService, ItemTypeService>();
+    builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+    builder.Services.AddScoped<IFbrService, FbrService>();
+    builder.Services.AddScoped<IFbrLookupService, FbrLookupService>();
+    // Inventory accounting: stock movements + on-hand + availability check.
+    // All write operations are no-ops when Company.InventoryTrackingEnabled
+    // is false, so existing tenants keep working unchanged.
+    builder.Services.AddScoped<IStockService, StockService>();
+    builder.Services.AddScoped<StockEntryService>();
+    // Reporting module (read-only, company-scoped reports for the Reports navbar).
+    builder.Services.AddScoped<IReportService, ReportService>();
+    builder.Services.AddScoped<MyApp.Api.Services.Implementations.TaxSheetImportService>();
+    // Tax mapping engine: single source of truth for HS_UOM, SaleTypeToRate
+    // and scenario rules. Used by ItemType save (auto-pick UOM) and FBR
+    // pre-validate (combination check before submitting).
+    builder.Services.AddScoped<ITaxMappingEngine, TaxMappingEngine>();
+    // FBR Sandbox: backs the per-company FBR test-scenarios tab. Demo bills
+    // live in their own 900000+ number range and never collide with real
+    // company bill numbering (see Invoice.IsDemo / DeliveryChallan.IsDemo).
+    builder.Services.AddScoped<IFbrSandboxService, FbrSandboxService>();
+    builder.Services.AddSingleton<IPOParserService, POParserService>();
+    builder.Services.AddSingleton<IPOFormatFingerprintService, POFormatFingerprintService>();
+    builder.Services.AddScoped<IPOFormatRegistry, POFormatRegistry>();
+    builder.Services.AddSingleton<IRuleBasedPOParser, RuleBasedPOParser>();
+    builder.Services.AddScoped<IRegressionService, RegressionService>();
+    // Parser-feedback module (records whether a PO import parsed correctly +
+    // retains the original PDF for triage). Self-contained; see Helpers/
+    // ParserFeedbackServiceCollectionExtensions.
+    builder.Services.AddParserFeedback();
+
+    // ── FBR Purchase Import (Annexure-A xls upload, Phase 1: preview) ──
+    // Parser + filter are stateless / Scoped because they don't hold any
+    // per-request data; the orchestrator depends on AppDbContext via the
+    // matcher so it must be Scoped too. No singleton — keeps DB lifetime
+    // management trivial.
+    builder.Services.AddScoped<IFbrPurchaseLedgerParser, FbrPurchaseLedgerParser>();
+    builder.Services.AddScoped<IFbrPurchaseImportFilter, FbrPurchaseImportFilter>();
+    builder.Services.AddScoped<IFbrPurchaseImportMatcher, FbrPurchaseImportMatcher>();
+    builder.Services.AddScoped<IFbrPurchaseImportCommitter, FbrPurchaseImportCommitter>();
+    builder.Services.AddScoped<IFbrPurchaseImportService, FbrPurchaseImportService>();
+    builder.Services.AddScoped<IOnboardingImportService, OnboardingImportService>();
+
+    // Dashboard KPI aggregator. Scoped because it depends on AppDbContext
+    // and IPermissionService — both Scoped — and the queries use the
+    // per-request user identity for permission checks.
+    builder.Services.AddScoped<IDashboardService, DashboardService>();
+
+    // Tax-claim helper — drives the in-form HS-stock panel on the
+    // Invoices-tab edit screen. Scoped (depends on AppDbContext).
+    builder.Services.AddScoped<ITaxClaimService, TaxClaimService>();
+
+    // Historical challan import (reverse Excel template → preview → commit).
+    // Reverse mapper is a Singleton because it holds an in-memory cache keyed on
+    // the template file path + lastWriteTime — rebuilds automatically when the
+    // operator re-uploads a template, and shared safely across requests.
+    builder.Services.AddSingleton<IExcelTemplateReverseMapper, ExcelTemplateReverseMapper>();
+    builder.Services.AddScoped<IChallanExcelImporter, ChallanExcelImporter>();
+    // Sensitive-data redactor — shared by GlobalExceptionMiddleware and
+    // FbrService for consistent NTN/CNIC masking + credential redaction.
+    // Singleton because the regexes are stateless and compiled once.
+    builder.Services.AddSingleton<ISensitiveDataRedactor, SensitiveDataRedactor>();
+
+    // FBR communication log — dedicated trail for audit H-3.
+    builder.Services.AddScoped<IFbrCommunicationLogService, FbrCommunicationLogService>();
+
+    // Audit H-8 (2026-05-13): daily purge job. Soft-clears bodies on rows
+    // past Fbr:LogSoftPurgeDays (default 180), hard-deletes past
+    // Fbr:LogRetentionDays (default 365).
+    builder.Services.AddHostedService<MyApp.Api.Services.HostedServices.FbrCommunicationLogPurgeService>();
+
+    // HttpContextAccessor — needed by FbrService etc. so they can pull the
+    // current request's CorrelationId without taking HttpContext directly.
+    builder.Services.AddHttpContextAccessor();
+
+    // FBR HttpClient — see audit H-1 (no retry), H-2 (no timeout).
+    //   • 30 s timeout per attempt (vs 100 s framework default that was
+    //     blocking Kestrel threads under FBR brownouts)
+    //   • Standard resilience handler: retry transient failures, circuit-
+    //     break after sustained failures, plus per-attempt timeout. The
+    //     default policy in Microsoft.Extensions.Http.Resilience handles
+    //     5xx and HttpRequestException with exponential backoff.
+    builder.Services.AddHttpClient("FBR", client =>
     {
-        options.ListenAnyIP(int.Parse(port));
+        client.Timeout = TimeSpan.FromSeconds(30);
+        client.DefaultRequestHeaders.Add("User-Agent", "MyApp.Api/1.0");
+    })
+    .AddStandardResilienceHandler(options =>
+    {
+        // Total time across retries — must exceed per-attempt timeout × max
+        // attempts or the resilience pipeline trips its own guard.
+        options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(120);
+        options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(30);
+        options.Retry.MaxRetryAttempts = 3;
+        options.Retry.Delay = TimeSpan.FromSeconds(2);
+        options.Retry.BackoffType = DelayBackoffType.Exponential;
+        // Audit C-13 (2026-05-13): NEVER retry POST. PRAL's submit endpoint
+        // is not strictly idempotent — a retried POST after a connection
+        // timeout but a successful FBR-side commit issues a second IRN that
+        // PersistStatus would then overwrite the first with. Keep retries on
+        // GET / catalog lookups; submit/validate stay one-shot. Operator can
+        // manually retry through the UI if needed (after checking the
+        // monitor for a successful first IRN).
+        options.Retry.ShouldHandle = args =>
+        {
+            if (args.Outcome.Result?.RequestMessage?.Method == HttpMethod.Post)
+                return ValueTask.FromResult(false);
+            // Default predicate (transient errors): 5xx / HttpRequestException
+            // / timeouts on non-POST methods.
+            if (args.Outcome.Exception is HttpRequestException) return ValueTask.FromResult(true);
+            if (args.Outcome.Exception is TaskCanceledException) return ValueTask.FromResult(true);
+            var status = (int?)args.Outcome.Result?.StatusCode ?? 0;
+            return ValueTask.FromResult(status >= 500 && status < 600);
+        };
+        // Open circuit after 5 failures across a 30 s window; half-open
+        // after 15 s. Tuned to FBR sandbox behaviour (occasional 30-60 s
+        // outages during their nightly maintenance).
+        options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(60);
+        options.CircuitBreaker.MinimumThroughput = 5;
+        options.CircuitBreaker.FailureRatio = 0.5;
+        options.CircuitBreaker.BreakDuration = TimeSpan.FromSeconds(15);
     });
-}
+
+    // Audit C-1 (2026-05-13): ASP.NET Data Protection — keys persisted to
+    // disk so the encrypted Company.FbrToken column survives restarts. On
+    // MonsterASP the key ring lives under data/keys (must NOT be in
+    // wwwroot — that would serve them). The application name is fixed so
+    // staging keys don't accidentally decrypt prod payloads.
+    var dataProtectionKeyDir = Path.Combine(AppContext.BaseDirectory, "data", "keys");
+    Directory.CreateDirectory(dataProtectionKeyDir);
+    builder.Services.AddDataProtection()
+        .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeyDir))
+        .SetApplicationName("MyApp.Api");
+    builder.Services.AddSingleton<MyApp.Api.Helpers.IFbrTokenProtector, MyApp.Api.Helpers.FbrTokenProtector>();
+
+    // RBAC: permission service needs an in-process cache for the per-user
+    // permission-set TTL.
+    builder.Services.AddMemoryCache();
+    builder.Services.AddScoped<IPermissionService, PermissionService>();
+    builder.Services.AddScoped<McpUserAccessService>();
+
+    // Tenant-scope guard — answers "may this user touch this company?"
+    // in addition to RBAC's "may this user perform this action?". Reads
+    // the UserCompany table when Company.IsTenantIsolated=true; passes
+    // through otherwise (preserves Hakimi/Roshan behaviour).
+    builder.Services.AddScoped<ICompanyAccessGuard, CompanyAccessGuard>();
+    // Hierarchical admin scope (2026-09-11): who may administer which users
+    // and delegate which companies. See IManagementScopeService.
+    builder.Services.AddScoped<IManagementScopeService, ManagementScopeService>();
+
+    // CORS — origins read from configuration (Cors:AllowedOrigins, comma-
+    // separated). Empty / missing collapses to "no cross-origin allowed",
+    // which is correct when the SPA is served from the same host as the
+    // API (the standard MonsterASP / Render setup here). Never falls back
+    // to AllowAnyOrigin; that combined with a stolen JWT was the gap.
+    var corsOrigins = (builder.Configuration["Cors:AllowedOrigins"] ?? "")
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("AllowFrontend", p =>
+        {
+            if (corsOrigins.Length > 0)
+            {
+                p.WithOrigins(corsOrigins)
+                 .AllowAnyHeader()
+                 .AllowAnyMethod();
+            }
+            else
+            {
+                // No origins configured → effectively "same-origin only".
+                // No-op policy; the SPA from wwwroot still works because
+                // it never crosses an origin.
+            }
+        });
+    });
+
+    // Use PORT env variable for Docker/Render deployment; IIS/MonsterASP manages its own port
+    var port = Environment.GetEnvironmentVariable("PORT");
+    if (port != null)
+    {
+        builder.WebHost.ConfigureKestrel(options =>
+        {
+            options.ListenAnyIP(int.Parse(port));
+        });
+    }
 
 
-var app = builder.Build();
+    var app = builder.Build();
 
-// Auto-apply pending EF Core migrations on startup
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await using var startupLock = await DatabaseStartupLock.AcquireAsync(db.Database.GetConnectionString()!);
+    // Auto-apply pending EF Core migrations on startup
+    using (var scope = app.Services.CreateScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await using var startupLock = await DatabaseStartupLock.AcquireAsync(db.Database.GetConnectionString()!);
 
-    // Fix: remove bad migration records that ran as no-ops (Users table was never created).
-    // Gated on __EFMigrationsHistory existing — fresh databases don't have it yet
-    // and the DELETE would crash before the first Migrate() call could create it.
-    db.Database.ExecuteSqlRaw(@"
+        // Fix: remove bad migration records that ran as no-ops (Users table was never created).
+        // Gated on __EFMigrationsHistory existing — fresh databases don't have it yet
+        // and the DELETE would crash before the first Migrate() call could create it.
+        db.Database.ExecuteSqlRaw(@"
         IF OBJECT_ID(N'[__EFMigrationsHistory]', N'U') IS NOT NULL
            AND NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Users')
         BEGIN
@@ -704,45 +703,45 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
-    // Audit M-11 (2026-05-13): auto-migrate is convenient in dev / on
-    // every new feature deploy but it's also a foot-gun in prod — a
-    // half-shipped migration set will start applying on first boot
-    // without an operator looking. Gate behind config so production
-    // can flip it off once the schema is stable.
-    var autoMigrate = builder.Configuration.GetValue<bool>("Database:AutoMigrate", true);
-    if (autoMigrate)
-    {
-        db.Database.Migrate();
-    }
-    else
-    {
-        Log.Information("Database:AutoMigrate is false — skipping db.Database.Migrate(). Run `dotnet ef database update` manually.");
-    }
+        // Audit M-11 (2026-05-13): auto-migrate is convenient in dev / on
+        // every new feature deploy but it's also a foot-gun in prod — a
+        // half-shipped migration set will start applying on first boot
+        // without an operator looking. Gate behind config so production
+        // can flip it off once the schema is stable.
+        var autoMigrate = builder.Configuration.GetValue<bool>("Database:AutoMigrate", true);
+        if (autoMigrate)
+        {
+            db.Database.Migrate();
+        }
+        else
+        {
+            Log.Information("Database:AutoMigrate is false — skipping db.Database.Migrate(). Run `dotnet ef database update` manually.");
+        }
 
-    // Parser-feedback table — created idempotently in raw SQL (not a migration)
-    // so the feature stays in isolated files and cherry-picks across branches.
-    // Runs regardless of AutoMigrate so prod (AutoMigrate off) still gets it.
-    MyApp.Api.Data.ParserFeedbackSchema.EnsureCreated(db);
+        // Parser-feedback table — created idempotently in raw SQL (not a migration)
+        // so the feature stays in isolated files and cherry-picks across branches.
+        // Runs regardless of AutoMigrate so prod (AutoMigrate off) still gets it.
+        MyApp.Api.Data.ParserFeedbackSchema.EnsureCreated(db);
 
-    // ── Unique indexes on (CompanyId, *Number) for Invoice / PurchaseBill /
-    // GoodsReceipt — audit C-8 (2026-05-13). Pre-fix, two concurrent
-    // creates could both land MAX(*Number)+1 and silently duplicate.
-    // Idempotent: drops the prior NON-UNIQUE composite indexes if present
-    // and recreates them UNIQUE. DeliveryChallan stays non-unique by
-    // design (Duplicate Challan feature emits same-number rows).
-    //
-    // If duplicate rows already exist the CREATE UNIQUE INDEX would fail
-    // — we log a clear AuditLog row and leave the legacy non-unique
-    // index in place. Operators have to dedupe first; the system stays
-    // working in the meantime.
-    // 2026-07-02: the Invoice uniqueness is now scoped per document kind —
-    // the SplitCreditDebitNoteSeries migration owns
-    // UNIQUE (CompanyId, NoteKind, InvoiceNumber), which lets Credit Note #1,
-    // Debit Note #1 and sale bill #1 coexist while still catching concurrent
-    // MAX+1 collisions within each sequence (the C-8 guarantee). The legacy
-    // unscoped index this backfill used to (re)create must therefore be
-    // RETIRED — recreating it would make note #1 collide with bill #1.
-    db.Database.ExecuteSqlRaw(@"
+        // ── Unique indexes on (CompanyId, *Number) for Invoice / PurchaseBill /
+        // GoodsReceipt — audit C-8 (2026-05-13). Pre-fix, two concurrent
+        // creates could both land MAX(*Number)+1 and silently duplicate.
+        // Idempotent: drops the prior NON-UNIQUE composite indexes if present
+        // and recreates them UNIQUE. DeliveryChallan stays non-unique by
+        // design (Duplicate Challan feature emits same-number rows).
+        //
+        // If duplicate rows already exist the CREATE UNIQUE INDEX would fail
+        // — we log a clear AuditLog row and leave the legacy non-unique
+        // index in place. Operators have to dedupe first; the system stays
+        // working in the meantime.
+        // 2026-07-02: the Invoice uniqueness is now scoped per document kind —
+        // the SplitCreditDebitNoteSeries migration owns
+        // UNIQUE (CompanyId, NoteKind, InvoiceNumber), which lets Credit Note #1,
+        // Debit Note #1 and sale bill #1 coexist while still catching concurrent
+        // MAX+1 collisions within each sequence (the C-8 guarantee). The legacy
+        // unscoped index this backfill used to (re)create must therefore be
+        // RETIRED — recreating it would make note #1 collide with bill #1.
+        db.Database.ExecuteSqlRaw(@"
         BEGIN TRY
             IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Invoices_CompanyId_InvoiceNumber' AND object_id = OBJECT_ID('Invoices'))
             BEGIN
@@ -793,37 +792,37 @@ using (var scope = app.Services.CreateScope())
         END CATCH;
     ");
 
-    // ── SecurityStamp column for token revocation ──────────────────────
-    // Audit C-6 (2026-05-13). Adds the Users.SecurityStamp column out-of-
-    // band (no formal EF migration) so we don't need to regenerate the
-    // snapshot/designer files. The column is idempotently created and
-    // every existing user is seeded with a fresh stamp so prior bcrypt
-    // hashes still authenticate. Subsequent logouts / password changes
-    // rotate the value; the token validator compares the JWT's "stamp"
-    // claim to this column on every request — mismatch = 401.
-    //
-    // Each statement runs in its own ExecuteSqlRaw call because SQL
-    // Server compiles the whole batch upfront — a single batch that
-    // both ADDs the column and UPDATEs it would fail to parse on the
-    // first start ("Invalid column name 'SecurityStamp'") even though
-    // execution order is guarded by IF NOT EXISTS. EXEC() wraps the
-    // post-add work in a child batch that's only parsed after the
-    // outer statement runs.
-    db.Database.ExecuteSqlRaw(@"
+        // ── SecurityStamp column for token revocation ──────────────────────
+        // Audit C-6 (2026-05-13). Adds the Users.SecurityStamp column out-of-
+        // band (no formal EF migration) so we don't need to regenerate the
+        // snapshot/designer files. The column is idempotently created and
+        // every existing user is seeded with a fresh stamp so prior bcrypt
+        // hashes still authenticate. Subsequent logouts / password changes
+        // rotate the value; the token validator compares the JWT's "stamp"
+        // claim to this column on every request — mismatch = 401.
+        //
+        // Each statement runs in its own ExecuteSqlRaw call because SQL
+        // Server compiles the whole batch upfront — a single batch that
+        // both ADDs the column and UPDATEs it would fail to parse on the
+        // first start ("Invalid column name 'SecurityStamp'") even though
+        // execution order is guarded by IF NOT EXISTS. EXEC() wraps the
+        // post-add work in a child batch that's only parsed after the
+        // outer statement runs.
+        db.Database.ExecuteSqlRaw(@"
         IF NOT EXISTS (SELECT 1 FROM sys.columns
                        WHERE object_id = OBJECT_ID('Users') AND name = 'SecurityStamp')
         BEGIN
             ALTER TABLE [Users] ADD [SecurityStamp] nvarchar(64) NULL;
         END
     ");
-    db.Database.ExecuteSqlRaw(@"
+        db.Database.ExecuteSqlRaw(@"
         IF EXISTS (SELECT 1 FROM sys.columns
                    WHERE object_id = OBJECT_ID('Users') AND name = 'SecurityStamp')
         BEGIN
             EXEC('UPDATE [Users] SET [SecurityStamp] = REPLACE(CONVERT(varchar(36), NEWID()), ''-'', '''') WHERE [SecurityStamp] IS NULL');
         END
     ");
-    db.Database.ExecuteSqlRaw(@"
+        db.Database.ExecuteSqlRaw(@"
         IF EXISTS (SELECT 1 FROM sys.columns
                    WHERE object_id = OBJECT_ID('Users') AND name = 'SecurityStamp' AND is_nullable = 1)
         BEGIN
@@ -831,26 +830,26 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
-    // One-time tagging: any pre-existing bills whose paymentTerms start
-    // with "[SNxxx]" came from the legacy FBR Sandbox seed flow (or the
-    // python script). They predate the IsDemo column, so the migration
-    // left them with IsDemo=false — meaning they polluted the regular
-    // Bills page. Flip them to IsDemo=true once.
-    //
-    // CRITICAL: this MUST be guarded by an audit-log marker, not by
-    // `WHERE IsDemo = 0`. The new StandaloneInvoiceForm flow legitimately
-    // tags every bill with "[SNxxx]" so FbrService can route the right
-    // scenarioId on Validate / Submit — those are REAL bills, not demos.
-    // Without this guard, every non-demo bill with a scenario tag gets
-    // hidden from the Bills page on the next backend restart.
-    //
-    // Marker pattern matches what RbacSeeder / ItemTypeSeeder /
-    // CommonClientsBackfill etc. already use elsewhere in this file.
-    var sandboxTagBackfillRan = await db.AuditLogs
-        .AnyAsync(a => a.ExceptionType == "SANDBOX_SNTAG_BACKFILL_V1");
-    if (!sandboxTagBackfillRan)
-    {
-        db.Database.ExecuteSqlRaw(@"
+        // One-time tagging: any pre-existing bills whose paymentTerms start
+        // with "[SNxxx]" came from the legacy FBR Sandbox seed flow (or the
+        // python script). They predate the IsDemo column, so the migration
+        // left them with IsDemo=false — meaning they polluted the regular
+        // Bills page. Flip them to IsDemo=true once.
+        //
+        // CRITICAL: this MUST be guarded by an audit-log marker, not by
+        // `WHERE IsDemo = 0`. The new StandaloneInvoiceForm flow legitimately
+        // tags every bill with "[SNxxx]" so FbrService can route the right
+        // scenarioId on Validate / Submit — those are REAL bills, not demos.
+        // Without this guard, every non-demo bill with a scenario tag gets
+        // hidden from the Bills page on the next backend restart.
+        //
+        // Marker pattern matches what RbacSeeder / ItemTypeSeeder /
+        // CommonClientsBackfill etc. already use elsewhere in this file.
+        var sandboxTagBackfillRan = await db.AuditLogs
+            .AnyAsync(a => a.ExceptionType == "SANDBOX_SNTAG_BACKFILL_V1");
+        if (!sandboxTagBackfillRan)
+        {
+            db.Database.ExecuteSqlRaw(@"
             UPDATE Invoices
                SET IsDemo = 1
              WHERE IsDemo = 0
@@ -862,85 +861,85 @@ using (var scope = app.Services.CreateScope())
                AND EXISTS (SELECT 1 FROM Invoices i
                             WHERE i.Id = dc.InvoiceId AND i.IsDemo = 1);
         ");
-        db.AuditLogs.Add(new MyApp.Api.Models.AuditLog
+            db.AuditLogs.Add(new MyApp.Api.Models.AuditLog
+            {
+                Timestamp = DateTime.UtcNow,
+                Level = "Info",
+                UserName = "system",
+                HttpMethod = "SEED",
+                RequestPath = "/migrations/sandbox-sntag-backfill",
+                StatusCode = 200,
+                ExceptionType = "SANDBOX_SNTAG_BACKFILL_V1",
+                Message = "One-time backfill: flagged legacy [SNxxx]-tagged bills as IsDemo=true."
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // Seed public unit names independently for every company. Private item
+        // catalogs are populated by their owners and by the ownership migration.
+        foreach (var catalogCompanyId in await db.Companies.Select(c => c.Id).ToListAsync())
+            await MyApp.Api.Data.CompanyCatalogSeeder.SeedUnitsAsync(db, catalogCompanyId);
+
+        // Print-template merge-field catalogs for the newer document types (the
+        // field-picker shown in the Template Editor sidebar). Idempotent — keyed on
+        // the unique (TemplateType, FieldExpression) index, so re-running each boot
+        // is a no-op once seeded. (No DivisionMergeFieldSeeder here — master is
+        // Division-free.)
+        await MyApp.Api.Data.SalesMergeFieldSeeder.SeedAsync(db);          // SalesQuote / SalesOrder
+        await MyApp.Api.Data.NoteAndPurchaseMergeFieldSeeder.SeedAsync(db); // Credit/Debit Note, PurchaseBill, GoodsReceipt
+        await MyApp.Api.Data.TaxInvoiceBillItemsMergeFieldSeeder.SeedAsync(db); // TaxInvoice {{#each billItems}}
+        await MyApp.Api.Data.ChallanSerialNoMergeFieldSeeder.SeedAsync(db);
+        await MyApp.Api.Data.WithholdingReceiptMergeFieldSeeder.SeedAsync(db);
+        await MyApp.Api.Data.FreightMergeFieldSeeder.SeedAsync(db);
+        await MyApp.Api.Data.BillTaxMergeFieldSeeder.SeedAsync(db);
+        await MyApp.Api.Data.DocumentNotesMergeFieldSeeder.SeedAsync(db);        // {{{richText notes}}} on every document type
+
+        // ── GL back-post ────────────────────────────────────────────────────
+        // Companies created from now on keep books from their first document.
+        // A company that existed BEFORE the ledger did has documents and no
+        // entries, so this brings it up to date once. Guarded by its own
+        // audit-log marker; see Data/GlBackfill for why it cannot double-post
+        // and why one company failing does not stop the rest — or the app.
+        await MyApp.Api.Data.GlBackfill.RunAsync(
+            db,
+            scope.ServiceProvider.GetRequiredService<MyApp.Api.Services.Interfaces.ICoaPresetSeeder>(),
+            scope.ServiceProvider.GetRequiredService<MyApp.Api.Services.Interfaces.IPostingService>(),
+            app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("GlBackfill"));
+
+        // Demo-environment data seeder. Runs ONLY when ASPNETCORE_ENVIRONMENT
+        // is "Demo" (set by scripts/run-demo.ps1 which also points the
+        // connection string at the DeliveryChallanDemo database). Lays down
+        // a realistic ~6-month dataset — one demo company, a handful of
+        // clients and suppliers, dozens of challans and bills — so customer
+        // walkthroughs / training sessions can navigate every screen with
+        // believable numbers. Idempotent: writes an audit-log marker on
+        // success so subsequent boots are no-ops. Dev / Production never
+        // call this path; their DBs stay untouched.
+        if (string.Equals(app.Environment.EnvironmentName, "Demo", StringComparison.OrdinalIgnoreCase))
         {
-            Timestamp = DateTime.UtcNow,
-            Level = "Info",
-            UserName = "system",
-            HttpMethod = "SEED",
-            RequestPath = "/migrations/sandbox-sntag-backfill",
-            StatusCode = 200,
-            ExceptionType = "SANDBOX_SNTAG_BACKFILL_V1",
-            Message = "One-time backfill: flagged legacy [SNxxx]-tagged bills as IsDemo=true."
-        });
-        await db.SaveChangesAsync();
-    }
+            await MyApp.Api.Data.DemoDataSeeder.SeedAsync(db);
+        }
 
-    // Seed public unit names independently for every company. Private item
-    // catalogs are populated by their owners and by the ownership migration.
-    foreach (var catalogCompanyId in await db.Companies.Select(c => c.Id).ToListAsync())
-        await MyApp.Api.Data.CompanyCatalogSeeder.SeedUnitsAsync(db, catalogCompanyId);
-
-    // Print-template merge-field catalogs for the newer document types (the
-    // field-picker shown in the Template Editor sidebar). Idempotent — keyed on
-    // the unique (TemplateType, FieldExpression) index, so re-running each boot
-    // is a no-op once seeded. (No DivisionMergeFieldSeeder here — master is
-    // Division-free.)
-    await MyApp.Api.Data.SalesMergeFieldSeeder.SeedAsync(db);          // SalesQuote / SalesOrder
-    await MyApp.Api.Data.NoteAndPurchaseMergeFieldSeeder.SeedAsync(db); // Credit/Debit Note, PurchaseBill, GoodsReceipt
-    await MyApp.Api.Data.TaxInvoiceBillItemsMergeFieldSeeder.SeedAsync(db); // TaxInvoice {{#each billItems}}
-    await MyApp.Api.Data.ChallanSerialNoMergeFieldSeeder.SeedAsync(db);
-    await MyApp.Api.Data.WithholdingReceiptMergeFieldSeeder.SeedAsync(db);
-    await MyApp.Api.Data.FreightMergeFieldSeeder.SeedAsync(db);
-    await MyApp.Api.Data.BillTaxMergeFieldSeeder.SeedAsync(db);
-    await MyApp.Api.Data.DocumentNotesMergeFieldSeeder.SeedAsync(db);        // {{{richText notes}}} on every document type
-
-    // ── GL back-post ────────────────────────────────────────────────────
-    // Companies created from now on keep books from their first document.
-    // A company that existed BEFORE the ledger did has documents and no
-    // entries, so this brings it up to date once. Guarded by its own
-    // audit-log marker; see Data/GlBackfill for why it cannot double-post
-    // and why one company failing does not stop the rest — or the app.
-    await MyApp.Api.Data.GlBackfill.RunAsync(
-        db,
-        scope.ServiceProvider.GetRequiredService<MyApp.Api.Services.Interfaces.ICoaPresetSeeder>(),
-        scope.ServiceProvider.GetRequiredService<MyApp.Api.Services.Interfaces.IPostingService>(),
-        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("GlBackfill"));
-
-    // Demo-environment data seeder. Runs ONLY when ASPNETCORE_ENVIRONMENT
-    // is "Demo" (set by scripts/run-demo.ps1 which also points the
-    // connection string at the DeliveryChallanDemo database). Lays down
-    // a realistic ~6-month dataset — one demo company, a handful of
-    // clients and suppliers, dozens of challans and bills — so customer
-    // walkthroughs / training sessions can navigate every screen with
-    // believable numbers. Idempotent: writes an audit-log marker on
-    // success so subsequent boots are no-ops. Dev / Production never
-    // call this path; their DBs stay untouched.
-    if (string.Equals(app.Environment.EnvironmentName, "Demo", StringComparison.OrdinalIgnoreCase))
-    {
-        await MyApp.Api.Data.DemoDataSeeder.SeedAsync(db);
-    }
-
-    // ── Units backfill ──────────────────────────────────────────────────
-    // The Units table is the canonical store for the AllowsDecimalQuantity
-    // flag. Every UOM string that the operator might ever pick — both from
-    // FBR's master list AND from data already in the system — needs a row
-    // here so the admin grid can configure it.
-    //
-    // Sources for the union, all deduped against the Units table:
-    //   • FBR master UOM list      — hardcoded mirror of /api/fbr/uom (44
-    //                                 entries from gw.fbr.gov.pk/pdi/v1/uom).
-    //                                 Doesn't require a token; works offline.
-    //   • ItemType.UOM             — operator's catalog choice (FBR HS_UOM)
-    //   • InvoiceItem.UOM          — what was billed
-    //   • DeliveryItem.Unit        — what was delivered
-    //
-    // Idempotent: only inserts names not already present (case-insensitive
-    // match, matching SQL Server's CI collation on the unique index). After
-    // the insert pass, re-apply the decimal-default seed so newly-added
-    // rows (e.g. "Liter" coming in for the first time from FBR's list)
-    // get the flag set correctly.
-    db.Database.ExecuteSqlRaw(@"
+        // ── Units backfill ──────────────────────────────────────────────────
+        // The Units table is the canonical store for the AllowsDecimalQuantity
+        // flag. Every UOM string that the operator might ever pick — both from
+        // FBR's master list AND from data already in the system — needs a row
+        // here so the admin grid can configure it.
+        //
+        // Sources for the union, all deduped against the Units table:
+        //   • FBR master UOM list      — hardcoded mirror of /api/fbr/uom (44
+        //                                 entries from gw.fbr.gov.pk/pdi/v1/uom).
+        //                                 Doesn't require a token; works offline.
+        //   • ItemType.UOM             — operator's catalog choice (FBR HS_UOM)
+        //   • InvoiceItem.UOM          — what was billed
+        //   • DeliveryItem.Unit        — what was delivered
+        //
+        // Idempotent: only inserts names not already present (case-insensitive
+        // match, matching SQL Server's CI collation on the unique index). After
+        // the insert pass, re-apply the decimal-default seed so newly-added
+        // rows (e.g. "Liter" coming in for the first time from FBR's list)
+        // get the flag set correctly.
+        db.Database.ExecuteSqlRaw(@"
         ;WITH FbrMaster (Name) AS (
             -- Mirror of the FBR /uom reference list (V1.12 §5.5).
             -- Deduped by description (FBR returns multiple UOM_IDs per name).
@@ -1015,29 +1014,29 @@ using (var scope = app.Services.CreateScope())
          );
     ");
 
-    // PO format baseline seeding has been REMOVED. Fresh databases now
-    // start with zero PO formats — operators onboard each client layout
-    // through Configuration → PO Formats. Existing databases (Hakimi,
-    // Roshan, etc.) that ALREADY have the baseline formats keep them
-    // untouched: the seeder was idempotent (insert-if-missing only),
-    // not destructive, so removing the call doesn't delete anything.
-    //
-    // The seeder code at Data/POFormatSeeder.cs is preserved as
-    // reference for the rule-set JSON shape. Re-enable by un-commenting
-    // the two lines below if you ever want the baselines back.
-    //   var fp = scope.ServiceProvider.GetRequiredService<IPOFormatFingerprintService>();
-    //   await POFormatSeeder.SeedAsync(db, fp);
+        // PO format baseline seeding has been REMOVED. Fresh databases now
+        // start with zero PO formats — operators onboard each client layout
+        // through Configuration → PO Formats. Existing databases (Hakimi,
+        // Roshan, etc.) that ALREADY have the baseline formats keep them
+        // untouched: the seeder was idempotent (insert-if-missing only),
+        // not destructive, so removing the call doesn't delete anything.
+        //
+        // The seeder code at Data/POFormatSeeder.cs is preserved as
+        // reference for the rule-set JSON shape. Re-enable by un-commenting
+        // the two lines below if you ever want the baselines back.
+        //   var fp = scope.ServiceProvider.GetRequiredService<IPOFormatFingerprintService>();
+        //   await POFormatSeeder.SeedAsync(db, fp);
 
-    // ── One-time perm migration: challans.manage.duplicate carved out of create ──
-    // Pre-2026-05-08 the Duplicate button + endpoint were gated by
-    // challans.manage.create. We've split it into a dedicated permission so a
-    // role can be allowed to duplicate without also being granted
-    // create-from-scratch. To preserve existing capability, every role that
-    // already has challans.manage.create gets the new perm auto-granted on
-    // first run. NOT EXISTS guards keep this idempotent. RbacSeeder will
-    // insert the new permission row before this runs (because we INSERT it
-    // here defensively in case ordering changes).
-    db.Database.ExecuteSqlRaw(@"
+        // ── One-time perm migration: challans.manage.duplicate carved out of create ──
+        // Pre-2026-05-08 the Duplicate button + endpoint were gated by
+        // challans.manage.create. We've split it into a dedicated permission so a
+        // role can be allowed to duplicate without also being granted
+        // create-from-scratch. To preserve existing capability, every role that
+        // already has challans.manage.create gets the new perm auto-granted on
+        // first run. NOT EXISTS guards keep this idempotent. RbacSeeder will
+        // insert the new permission row before this runs (because we INSERT it
+        // here defensively in case ordering changes).
+        db.Database.ExecuteSqlRaw(@"
         INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
         SELECT 'challans.manage.duplicate', 'Challans', 'Manage', 'Duplicate',
                'Duplicate a delivery challan (clone with the same number for a different PO)'
@@ -1062,14 +1061,14 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
-    // ── One-time perm migration: split invoices.fbr.post → validate + submit ──
-    // The legacy single perm has been removed from the catalog and replaced
-    // with two narrower ones. RbacSeeder below will purge the old permission
-    // row (and cascade-delete its RolePermission rows) — so before that
-    // happens, copy each role's old grant into BOTH new perms. After this
-    // ran once, subsequent restarts are no-ops because the legacy perm no
-    // longer exists.
-    db.Database.ExecuteSqlRaw(@"
+        // ── One-time perm migration: split invoices.fbr.post → validate + submit ──
+        // The legacy single perm has been removed from the catalog and replaced
+        // with two narrower ones. RbacSeeder below will purge the old permission
+        // row (and cascade-delete its RolePermission rows) — so before that
+        // happens, copy each role's old grant into BOTH new perms. After this
+        // ran once, subsequent restarts are no-ops because the legacy perm no
+        // longer exists.
+        db.Database.ExecuteSqlRaw(@"
         DECLARE @oldId INT = (SELECT TOP 1 Id FROM Permissions WHERE [Key] = 'invoices.fbr.post');
         IF @oldId IS NOT NULL
         BEGIN
@@ -1101,15 +1100,15 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
-    // ── One-time perm migration: invoices.manage.update.itemtype.qty ──
-    // Strict superset of invoices.manage.update.itemtype — same narrow
-    // flow but allows Quantity edits too. Auto-grant to every role that
-    // already holds the broader invoices.manage.update so existing
-    // full-edit users keep working without manual configuration. The
-    // narrow .itemtype role is intentionally NOT auto-upgraded — that
-    // role exists specifically to BLOCK qty edits. Idempotent: NOT
-    // EXISTS guards make every restart after the first a no-op.
-    db.Database.ExecuteSqlRaw(@"
+        // ── One-time perm migration: invoices.manage.update.itemtype.qty ──
+        // Strict superset of invoices.manage.update.itemtype — same narrow
+        // flow but allows Quantity edits too. Auto-grant to every role that
+        // already holds the broader invoices.manage.update so existing
+        // full-edit users keep working without manual configuration. The
+        // narrow .itemtype role is intentionally NOT auto-upgraded — that
+        // role exists specifically to BLOCK qty edits. Idempotent: NOT
+        // EXISTS guards make every restart after the first a no-op.
+        db.Database.ExecuteSqlRaw(@"
         INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
         SELECT 'invoices.manage.update.itemtype.qty', 'Invoices', 'Manage', 'Update Item Type + Qty',
                'Edit Item Type and Quantity columns on a bill (no other fields)'
@@ -1126,15 +1125,15 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
-    // ── One-time perm migration: invoices.fbr.exclude carved out of update ──
-    // The Exclude/Include FBR toggle used to be gated by invoices.manage.update
-    // (the broad bill-edit permission). It now has its own dedicated permission
-    // so a role can hold the toggle without holding full edit rights.
-    //
-    // To preserve existing behaviour for roles that already had the broad
-    // edit perm, copy that grant into the new perm on first run. Idempotent —
-    // the NOT EXISTS guard makes subsequent restarts no-ops.
-    db.Database.ExecuteSqlRaw(@"
+        // ── One-time perm migration: invoices.fbr.exclude carved out of update ──
+        // The Exclude/Include FBR toggle used to be gated by invoices.manage.update
+        // (the broad bill-edit permission). It now has its own dedicated permission
+        // so a role can hold the toggle without holding full edit rights.
+        //
+        // To preserve existing behaviour for roles that already had the broad
+        // edit perm, copy that grant into the new perm on first run. Idempotent —
+        // the NOT EXISTS guard makes subsequent restarts no-ops.
+        db.Database.ExecuteSqlRaw(@"
         -- Make sure the new perm row exists (RbacSeeder finalises the
         -- Description below; we just need a row so the FK works).
         INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
@@ -1153,25 +1152,25 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
-    // ── One-time perm migration: split invoices.* into bills.* + invoices.* ──
-    // Sales is now two screens (Bills + Invoices) with their own permission
-    // namespaces. The bookkeeping side moved to bills.*; invoices.* keeps
-    // only the FBR-classification & print perms. We:
-    //   1. Insert the new bills.* perm rows if they don't exist yet (the
-    //      RbacSeeder does this anyway; doing it here so step 2 has IDs).
-    //   2. Copy each role's grant of an old invoices.manage.* perm onto its
-    //      bills.* equivalent so existing roles keep working.
-    //   3. Copy invoices.list.view → bills.list.view (the list endpoint now
-    //      requires bills.list.view; invoices.list.view keeps gating only
-    //      the Invoices tab visibility).
-    //   4. Copy invoices.print.view → bills.print.view (operator who could
-    //      print bills before keeps that ability; the surviving
-    //      invoices.print.view is narrowed to Tax-Invoice prints only).
-    // After this migration runs once, RbacSeeder.UpsertPermissionsAsync
-    // removes the now-stale invoices.manage.* keys (no longer in catalog),
-    // cascading the old role grants away. Idempotent: NOT EXISTS guards
-    // make subsequent restarts no-ops.
-    db.Database.ExecuteSqlRaw(@"
+        // ── One-time perm migration: split invoices.* into bills.* + invoices.* ──
+        // Sales is now two screens (Bills + Invoices) with their own permission
+        // namespaces. The bookkeeping side moved to bills.*; invoices.* keeps
+        // only the FBR-classification & print perms. We:
+        //   1. Insert the new bills.* perm rows if they don't exist yet (the
+        //      RbacSeeder does this anyway; doing it here so step 2 has IDs).
+        //   2. Copy each role's grant of an old invoices.manage.* perm onto its
+        //      bills.* equivalent so existing roles keep working.
+        //   3. Copy invoices.list.view → bills.list.view (the list endpoint now
+        //      requires bills.list.view; invoices.list.view keeps gating only
+        //      the Invoices tab visibility).
+        //   4. Copy invoices.print.view → bills.print.view (operator who could
+        //      print bills before keeps that ability; the surviving
+        //      invoices.print.view is narrowed to Tax-Invoice prints only).
+        // After this migration runs once, RbacSeeder.UpsertPermissionsAsync
+        // removes the now-stale invoices.manage.* keys (no longer in catalog),
+        // cascading the old role grants away. Idempotent: NOT EXISTS guards
+        // make subsequent restarts no-ops.
+        db.Database.ExecuteSqlRaw(@"
         -- Step 1: ensure new bills.* perm rows exist (RbacSeeder upserts
         -- them too, but we need them present BEFORE step 2 can copy grants).
         INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
@@ -1253,25 +1252,25 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
-    // ── One-time backfill: heal bills orphaned by the legacy UpdateChallanAsync bug ──
-    // Before the diff/sync refactor of UpdateChallanAsync, the whole-challan
-    // PUT replaced dc.Items via RemoveRange, which cascaded SET NULL on
-    // InvoiceItem.DeliveryItemId without ever syncing the bill — so any
-    // challan edit that touched items left the bill stuck with orphaned
-    // InvoiceItems (dlvId IS NULL) and no row for newly-added DeliveryItems.
-    //
-    // This block does two passes:
-    //   1. Re-link orphan InvoiceItems (dlvId IS NULL) to a matching unlinked
-    //      DeliveryItem on one of the bill's challans, matched by exact
-    //      Description (case-insensitive) AND Quantity.
-    //   2. Insert a fresh InvoiceItem (UnitPrice=0) for any DeliveryItem on a
-    //      linked challan that still has no matching InvoiceItem — the
-    //      operator opens Bill Edit afterwards to set the price.
-    //
-    // Skips FBR-submitted bills (the IRN is locked at FBR — we don't touch
-    // them). Idempotent: NOT EXISTS guards make re-runs no-ops, audit-log
-    // marker records what was healed on first run.
-    db.Database.ExecuteSqlRaw(@"
+        // ── One-time backfill: heal bills orphaned by the legacy UpdateChallanAsync bug ──
+        // Before the diff/sync refactor of UpdateChallanAsync, the whole-challan
+        // PUT replaced dc.Items via RemoveRange, which cascaded SET NULL on
+        // InvoiceItem.DeliveryItemId without ever syncing the bill — so any
+        // challan edit that touched items left the bill stuck with orphaned
+        // InvoiceItems (dlvId IS NULL) and no row for newly-added DeliveryItems.
+        //
+        // This block does two passes:
+        //   1. Re-link orphan InvoiceItems (dlvId IS NULL) to a matching unlinked
+        //      DeliveryItem on one of the bill's challans, matched by exact
+        //      Description (case-insensitive) AND Quantity.
+        //   2. Insert a fresh InvoiceItem (UnitPrice=0) for any DeliveryItem on a
+        //      linked challan that still has no matching InvoiceItem — the
+        //      operator opens Bill Edit afterwards to set the price.
+        //
+        // Skips FBR-submitted bills (the IRN is locked at FBR — we don't touch
+        // them). Idempotent: NOT EXISTS guards make re-runs no-ops, audit-log
+        // marker records what was healed on first run.
+        db.Database.ExecuteSqlRaw(@"
         IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'BILL_CHALLAN_SYNC_BACKFILL_V1')
         BEGIN
             DECLARE @relinked INT = 0, @added INT = 0;
@@ -1344,16 +1343,16 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
-    // ── One-time perm migration: move itemtype perms back to Invoices ──
-    // The narrow itemtype perms (`bills.manage.update.itemtype` and
-    // `bills.manage.update.itemtype.qty`) live under Invoices, not Bills —
-    // item-type classification is the Invoices tab's responsibility, so
-    // FBR-officer roles need them without holding any other bills.* perm.
-    // Copies any existing `bills.*` itemtype grants onto the new
-    // `invoices.*` keys; the seeder then auto-removes the stale `bills.*`
-    // ones (no longer in catalog), cascading away the old grants. Idempotent
-    // via the NOT EXISTS guard.
-    db.Database.ExecuteSqlRaw(@"
+        // ── One-time perm migration: move itemtype perms back to Invoices ──
+        // The narrow itemtype perms (`bills.manage.update.itemtype` and
+        // `bills.manage.update.itemtype.qty`) live under Invoices, not Bills —
+        // item-type classification is the Invoices tab's responsibility, so
+        // FBR-officer roles need them without holding any other bills.* perm.
+        // Copies any existing `bills.*` itemtype grants onto the new
+        // `invoices.*` keys; the seeder then auto-removes the stale `bills.*`
+        // ones (no longer in catalog), cascading away the old grants. Idempotent
+        // via the NOT EXISTS guard.
+        db.Database.ExecuteSqlRaw(@"
         INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
         SELECT 'invoices.manage.update.itemtype', 'Invoices', 'Manage', 'Update Item Type',
                'Edit ONLY the Item Type column on a bill from the Invoices tab'
@@ -1388,18 +1387,18 @@ using (var scope = app.Services.CreateScope())
         DEALLOCATE pairs2;
     ");
 
-    // ── One-time backfill: Common Clients grouping ──
-    // Walks every existing Client and assigns it to a ClientGroup based on
-    // the same canonical key the runtime EnsureGroupForClientAsync uses
-    // (NTN-digits ≥ 7 ⇒ "NTN:..."; otherwise "NAME:lower-trimmed-name").
-    // Re-runs are no-ops via the audit-log marker. Existing per-company
-    // client rows, controllers and UI are untouched — ClientGroupId is
-    // a nullable additive column.
-    //
-    // Also backfills POFormats.ClientGroupId from POFormats.ClientId so
-    // existing format → client links carry over to group → format links
-    // automatically. New formats can opt into ClientGroupId at save time.
-    db.Database.ExecuteSqlRaw(@"
+        // ── One-time backfill: Common Clients grouping ──
+        // Walks every existing Client and assigns it to a ClientGroup based on
+        // the same canonical key the runtime EnsureGroupForClientAsync uses
+        // (NTN-digits ≥ 7 ⇒ "NTN:..."; otherwise "NAME:lower-trimmed-name").
+        // Re-runs are no-ops via the audit-log marker. Existing per-company
+        // client rows, controllers and UI are untouched — ClientGroupId is
+        // a nullable additive column.
+        //
+        // Also backfills POFormats.ClientGroupId from POFormats.ClientId so
+        // existing format → client links carry over to group → format links
+        // automatically. New formats can opt into ClientGroupId at save time.
+        db.Database.ExecuteSqlRaw(@"
         IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'COMMON_CLIENTS_BACKFILL_V1')
         BEGIN
             -- Step 1: build a per-Client view of the canonical key. T-SQL
@@ -1523,22 +1522,22 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
-    // ── One-time data fix: align seeded ItemType UoMs to FBR HS_UOM ──
-    // The v2 seeder labelled six HS codes with UoMs that FBR's published
-    // HS_UOM master rejects (error 0099 at validateinvoicedata). Notably
-    // "Adhesive Tape" / 3919.1090 → was "Numbers, pieces, units", FBR
-    // requires "KG". This block:
-    //   1) updates the affected ItemType rows to the correct UoM /
-    //      FbrUOMId, but ONLY when the row still carries the old wrong
-    //      values — so an operator who already corrected one by hand is
-    //      left alone.
-    //   2) cascades the correction to InvoiceItem (non-Submitted bills
-    //      only) and DeliveryItem (non-Cancelled, not-yet-submitted)
-    //      rows that point to those ItemTypes via FK — same boundary
-    //      ItemTypeService.PropagateToLinesAsync uses.
-    //
-    // Gated by an audit-log marker so it runs at most once per database.
-    db.Database.ExecuteSqlRaw(@"
+        // ── One-time data fix: align seeded ItemType UoMs to FBR HS_UOM ──
+        // The v2 seeder labelled six HS codes with UoMs that FBR's published
+        // HS_UOM master rejects (error 0099 at validateinvoicedata). Notably
+        // "Adhesive Tape" / 3919.1090 → was "Numbers, pieces, units", FBR
+        // requires "KG". This block:
+        //   1) updates the affected ItemType rows to the correct UoM /
+        //      FbrUOMId, but ONLY when the row still carries the old wrong
+        //      values — so an operator who already corrected one by hand is
+        //      left alone.
+        //   2) cascades the correction to InvoiceItem (non-Submitted bills
+        //      only) and DeliveryItem (non-Cancelled, not-yet-submitted)
+        //      rows that point to those ItemTypes via FK — same boundary
+        //      ItemTypeService.PropagateToLinesAsync uses.
+        //
+        // Gated by an audit-log marker so it runs at most once per database.
+        db.Database.ExecuteSqlRaw(@"
         IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'FBR_HS_UOM_BACKFILL_V1')
         BEGIN
             -- Pairs: (HSCode, OldUOM, NewUOM, NewFbrUOMId). We only rewrite
@@ -1593,18 +1592,18 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
-    // ── One-time backfill: Customer Document Handover ──
-    // Existing FBR-submitted invoices predate the handover feature, so we
-    // ASSUME they were already delivered — that keeps the new "Pending"
-    // filter empty at launch, and only NEW submissions enter the pending
-    // flow. HandoverByUserId is left NULL so a migrated row is distinguishable
-    // from a real operator handover (UI shows "Delivered (migrated)", no
-    // fabricated operator name). HandoverAt ≈ FbrSubmittedAt (falls back to
-    // CreatedAt on legacy rows that never recorded a submit timestamp).
-    // The EF migration adds the columns during Migrate() above, so this
-    // separate batch can reference them directly (no split-batch issue —
-    // the ALTER already ran and committed). Idempotent via the marker.
-    db.Database.ExecuteSqlRaw(@"
+        // ── One-time backfill: Customer Document Handover ──
+        // Existing FBR-submitted invoices predate the handover feature, so we
+        // ASSUME they were already delivered — that keeps the new "Pending"
+        // filter empty at launch, and only NEW submissions enter the pending
+        // flow. HandoverByUserId is left NULL so a migrated row is distinguishable
+        // from a real operator handover (UI shows "Delivered (migrated)", no
+        // fabricated operator name). HandoverAt ≈ FbrSubmittedAt (falls back to
+        // CreatedAt on legacy rows that never recorded a submit timestamp).
+        // The EF migration adds the columns during Migrate() above, so this
+        // separate batch can reference them directly (no split-batch issue —
+        // the ALTER already ran and committed). Idempotent via the marker.
+        db.Database.ExecuteSqlRaw(@"
         IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'HANDOVER_BACKFILL_V1')
         BEGIN
             UPDATE Invoices
@@ -1621,19 +1620,19 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
-    // ── One-time backfill: clear stale FbrSubmittedAt from the validate bug ──
-    // Until 2026-08, PersistStatus stamped FbrSubmittedAt on EVERY status,
-    // including a successful VALIDATE (dry-run, no IRN). FbrSubmittedAt is the
-    // "is-filed" signal for the Tax Sheet worklist, the Tax-Sheet transfer, and
-    // the "submitted to FBR" sales report — so validated-but-never-submitted
-    // bills wrongly vanished from the worklist and over-counted as submitted.
-    // The code is fixed (only a real Submitted now stamps it); this clears the
-    // stale stamps left on bills that were NEVER actually filed:
-    //   FbrSubmittedAt set  AND  no IRN  AND  status is null/Validated/Failed.
-    // Genuinely-submitted (IRN present) and Uncertain (submit may have reached
-    // FBR — unconfirmed) bills are deliberately left untouched. Idempotent via
-    // the marker.
-    db.Database.ExecuteSqlRaw(@"
+        // ── One-time backfill: clear stale FbrSubmittedAt from the validate bug ──
+        // Until 2026-08, PersistStatus stamped FbrSubmittedAt on EVERY status,
+        // including a successful VALIDATE (dry-run, no IRN). FbrSubmittedAt is the
+        // "is-filed" signal for the Tax Sheet worklist, the Tax-Sheet transfer, and
+        // the "submitted to FBR" sales report — so validated-but-never-submitted
+        // bills wrongly vanished from the worklist and over-counted as submitted.
+        // The code is fixed (only a real Submitted now stamps it); this clears the
+        // stale stamps left on bills that were NEVER actually filed:
+        //   FbrSubmittedAt set  AND  no IRN  AND  status is null/Validated/Failed.
+        // Genuinely-submitted (IRN present) and Uncertain (submit may have reached
+        // FBR — unconfirmed) bills are deliberately left untouched. Idempotent via
+        // the marker.
+        db.Database.ExecuteSqlRaw(@"
         IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'FBR_SUBMITTEDAT_VALIDATE_FIX_V1')
         BEGIN
             UPDATE Invoices
@@ -1649,15 +1648,15 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
-    // ── One-time backfill: Common Suppliers grouping ──
-    // Mirrors the Common Clients backfill above. Walks every existing
-    // Supplier and assigns it to a SupplierGroup based on the same
-    // canonical key the runtime EnsureGroupForSupplierAsync uses
-    // (NTN-digits ≥ 7 ⇒ "NTN:..."; otherwise "NAME:lower-trimmed").
-    // Idempotent via the audit-log marker. Existing per-company supplier
-    // rows, controllers and UI are untouched — SupplierGroupId is a
-    // nullable additive column.
-    db.Database.ExecuteSqlRaw(@"
+        // ── One-time backfill: Common Suppliers grouping ──
+        // Mirrors the Common Clients backfill above. Walks every existing
+        // Supplier and assigns it to a SupplierGroup based on the same
+        // canonical key the runtime EnsureGroupForSupplierAsync uses
+        // (NTN-digits ≥ 7 ⇒ "NTN:..."; otherwise "NAME:lower-trimmed").
+        // Idempotent via the audit-log marker. Existing per-company supplier
+        // rows, controllers and UI are untouched — SupplierGroupId is a
+        // nullable additive column.
+        db.Database.ExecuteSqlRaw(@"
         IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'COMMON_SUPPLIERS_BACKFILL_V1')
         BEGIN
             ;WITH Digits(Id, DigitsNtn) AS (
@@ -1744,23 +1743,23 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
-    // ── One-time backfill: narrow InvoiceItemAdjustment scope ──
-    // 2026-05-12: the dual-book overlay's scope was narrowed to ONLY
-    // carry numerical fields (Quantity / UnitPrice / LineTotal). Item
-    // Type, UOM, HS Code, Sale Type, and Description are legitimate
-    // bill data that belong on InvoiceItem so the printed bill and the
-    // Tax Invoice render them correctly.
-    //
-    // For any overlay row that still carries the deprecated text
-    // fields from the brief 2026-05-11 → 2026-05-12 window: copy them
-    // onto the underlying InvoiceItem (operator's intent was to
-    // change those fields on the bill), then null them on the overlay.
-    // Idempotent — guarded by an audit marker.
-    var adjScopeBackfillRan = await db.AuditLogs
-        .AnyAsync(a => a.ExceptionType == "INVOICEITEMADJ_SCOPE_NARROW_V1");
-    if (!adjScopeBackfillRan)
-    {
-        db.Database.ExecuteSqlRaw(@"
+        // ── One-time backfill: narrow InvoiceItemAdjustment scope ──
+        // 2026-05-12: the dual-book overlay's scope was narrowed to ONLY
+        // carry numerical fields (Quantity / UnitPrice / LineTotal). Item
+        // Type, UOM, HS Code, Sale Type, and Description are legitimate
+        // bill data that belong on InvoiceItem so the printed bill and the
+        // Tax Invoice render them correctly.
+        //
+        // For any overlay row that still carries the deprecated text
+        // fields from the brief 2026-05-11 → 2026-05-12 window: copy them
+        // onto the underlying InvoiceItem (operator's intent was to
+        // change those fields on the bill), then null them on the overlay.
+        // Idempotent — guarded by an audit marker.
+        var adjScopeBackfillRan = await db.AuditLogs
+            .AnyAsync(a => a.ExceptionType == "INVOICEITEMADJ_SCOPE_NARROW_V1");
+        if (!adjScopeBackfillRan)
+        {
+            db.Database.ExecuteSqlRaw(@"
             -- Copy stale text fields from overlay → InvoiceItem when they diverge.
             UPDATE ii
                SET ii.ItemTypeId   = COALESCE(a.AdjustedItemTypeId,   ii.ItemTypeId),
@@ -1800,37 +1799,37 @@ using (var scope = app.Services.CreateScope())
                AND AdjustedUnitPrice IS NULL
                AND AdjustedLineTotal IS NULL;
         ");
-        db.AuditLogs.Add(new MyApp.Api.Models.AuditLog
-        {
-            Timestamp = DateTime.UtcNow,
-            Level = "Info",
-            UserName = "system",
-            HttpMethod = "SEED",
-            RequestPath = "/migrations/invoiceitemadj-scope-narrow",
-            StatusCode = 200,
-            ExceptionType = "INVOICEITEMADJ_SCOPE_NARROW_V1",
-            Message = "One-time backfill: copied overlay text fields (item type / UOM / HS code / sale type / description) onto InvoiceItem and nulled them on the overlay; dropped overlay rows that had no remaining numerical divergence.",
-        });
-        await db.SaveChangesAsync();
-    }
+            db.AuditLogs.Add(new MyApp.Api.Models.AuditLog
+            {
+                Timestamp = DateTime.UtcNow,
+                Level = "Info",
+                UserName = "system",
+                HttpMethod = "SEED",
+                RequestPath = "/migrations/invoiceitemadj-scope-narrow",
+                StatusCode = 200,
+                ExceptionType = "INVOICEITEMADJ_SCOPE_NARROW_V1",
+                Message = "One-time backfill: copied overlay text fields (item type / UOM / HS code / sale type / description) onto InvoiceItem and nulled them on the overlay; dropped overlay rows that had no remaining numerical divergence.",
+            });
+            await db.SaveChangesAsync();
+        }
 
-    // ── One-time backfill: snapshot AdjustedLineTotal on existing overlays ──
-    // 2026-07-15: the dual-book overlay was re-widened to carry the FBR
-    // reclassification, and the "adjustment out of date" guard detects a bill
-    // edited after the consultant reconciled it by comparing the overlay's
-    // snapshotted line total against the current bill line total. New saves
-    // now ALWAYS snapshot AdjustedLineTotal (even when it equals the bill).
-    // Overlays created before that fix have AdjustedLineTotal = NULL for lines
-    // reclassified WITHOUT a qty/price change (e.g. item-type-only) — leaving
-    // the guard with no reference point, so a later bill edit went undetected.
-    // Backfill the snapshot = effective (adjusted-or-bill) line total so those
-    // bills join the drift check on their next bill edit. FBR-neutral: it
-    // equals what ApplyAdjustmentOverlay already files (AdjustedLineTotal ?? base).
-    var adjSnapshotBackfillRan = await db.AuditLogs
-        .AnyAsync(a => a.ExceptionType == "ADJUSTEDLINETOTAL_SNAPSHOT_BACKFILL_V1");
-    if (!adjSnapshotBackfillRan)
-    {
-        db.Database.ExecuteSqlRaw(@"
+        // ── One-time backfill: snapshot AdjustedLineTotal on existing overlays ──
+        // 2026-07-15: the dual-book overlay was re-widened to carry the FBR
+        // reclassification, and the "adjustment out of date" guard detects a bill
+        // edited after the consultant reconciled it by comparing the overlay's
+        // snapshotted line total against the current bill line total. New saves
+        // now ALWAYS snapshot AdjustedLineTotal (even when it equals the bill).
+        // Overlays created before that fix have AdjustedLineTotal = NULL for lines
+        // reclassified WITHOUT a qty/price change (e.g. item-type-only) — leaving
+        // the guard with no reference point, so a later bill edit went undetected.
+        // Backfill the snapshot = effective (adjusted-or-bill) line total so those
+        // bills join the drift check on their next bill edit. FBR-neutral: it
+        // equals what ApplyAdjustmentOverlay already files (AdjustedLineTotal ?? base).
+        var adjSnapshotBackfillRan = await db.AuditLogs
+            .AnyAsync(a => a.ExceptionType == "ADJUSTEDLINETOTAL_SNAPSHOT_BACKFILL_V1");
+        if (!adjSnapshotBackfillRan)
+        {
+            db.Database.ExecuteSqlRaw(@"
             UPDATE a
                SET a.AdjustedLineTotal = ROUND(
                        COALESCE(a.AdjustedQuantity,  ii.Quantity) *
@@ -1839,122 +1838,122 @@ using (var scope = app.Services.CreateScope())
               JOIN InvoiceItems ii ON ii.Id = a.InvoiceItemId
              WHERE a.AdjustedLineTotal IS NULL;
         ");
-        db.AuditLogs.Add(new MyApp.Api.Models.AuditLog
-        {
-            Timestamp = DateTime.UtcNow,
-            Level = "Info",
-            UserName = "system",
-            HttpMethod = "SEED",
-            RequestPath = "/migrations/adjustedlinetotal-snapshot-backfill",
-            StatusCode = 200,
-            ExceptionType = "ADJUSTEDLINETOTAL_SNAPSHOT_BACKFILL_V1",
-            Message = "One-time backfill: snapshotted AdjustedLineTotal = effective (adjusted-or-bill) line total on overlays where it was NULL, so the FBR adjustment-out-of-date guard has a reference point for existing adjusted bills.",
-        });
-        await db.SaveChangesAsync();
-    }
-
-    // ── One-time backfill: re-sync stock movements for adjusted bills ──
-    // 2026-05-12: the stock-out trigger moved from "emit on FBR submit"
-    // to "emit on invoice save" AND the quantity source flipped to use
-    // the InvoiceItemAdjustment overlay (FBR-facing qty) when present.
-    //
-    // Bills that already have overlays saved BEFORE this code shipped
-    // either (a) have stock movements with the wrong qty (= bill row's
-    // real qty rather than overlay) or (b) have none yet. Re-sync each
-    // of them so the dashboard / availability check reflect the
-    // adjusted qty consistently with what gets reported to FBR.
-    //
-    // Non-overlay bills are untouched — their stock movements (if any)
-    // came from the legacy FBR-submit path and InvoiceItem.Quantity is
-    // already authoritative for those.
-    //
-    // Idempotent: guarded by an audit marker + the per-bill sync
-    // itself deletes-and-rewrites cleanly.
-    var stockOverlaySyncRan = await db.AuditLogs
-        .AnyAsync(a => a.ExceptionType == "STOCKMOVEMENT_OVERLAY_SYNC_V1");
-    if (!stockOverlaySyncRan)
-    {
-        var adjustedInvoiceIds = await db.InvoiceItemAdjustments
-            .Where(a => a.AdjustedItemTypeId != null || a.AdjustedQuantity != null)  // audit M4: include type-only reclassifications
-            .Select(a => a.InvoiceId)
-            .Distinct()
-            .ToListAsync();
-        var failedBillIds = new List<int>();
-        if (adjustedInvoiceIds.Count > 0)
-        {
-            var stockSvc = scope.ServiceProvider.GetRequiredService<MyApp.Api.Services.Interfaces.IStockService>();
-            var invoiceRepoSvc = scope.ServiceProvider.GetRequiredService<MyApp.Api.Repositories.Interfaces.IInvoiceRepository>();
-            foreach (var invId in adjustedInvoiceIds)
+            db.AuditLogs.Add(new MyApp.Api.Models.AuditLog
             {
-                var inv = await invoiceRepoSvc.GetByIdAsync(invId);
-                if (inv == null) continue;
-                try
+                Timestamp = DateTime.UtcNow,
+                Level = "Info",
+                UserName = "system",
+                HttpMethod = "SEED",
+                RequestPath = "/migrations/adjustedlinetotal-snapshot-backfill",
+                StatusCode = 200,
+                ExceptionType = "ADJUSTEDLINETOTAL_SNAPSHOT_BACKFILL_V1",
+                Message = "One-time backfill: snapshotted AdjustedLineTotal = effective (adjusted-or-bill) line total on overlays where it was NULL, so the FBR adjustment-out-of-date guard has a reference point for existing adjusted bills.",
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // ── One-time backfill: re-sync stock movements for adjusted bills ──
+        // 2026-05-12: the stock-out trigger moved from "emit on FBR submit"
+        // to "emit on invoice save" AND the quantity source flipped to use
+        // the InvoiceItemAdjustment overlay (FBR-facing qty) when present.
+        //
+        // Bills that already have overlays saved BEFORE this code shipped
+        // either (a) have stock movements with the wrong qty (= bill row's
+        // real qty rather than overlay) or (b) have none yet. Re-sync each
+        // of them so the dashboard / availability check reflect the
+        // adjusted qty consistently with what gets reported to FBR.
+        //
+        // Non-overlay bills are untouched — their stock movements (if any)
+        // came from the legacy FBR-submit path and InvoiceItem.Quantity is
+        // already authoritative for those.
+        //
+        // Idempotent: guarded by an audit marker + the per-bill sync
+        // itself deletes-and-rewrites cleanly.
+        var stockOverlaySyncRan = await db.AuditLogs
+            .AnyAsync(a => a.ExceptionType == "STOCKMOVEMENT_OVERLAY_SYNC_V1");
+        if (!stockOverlaySyncRan)
+        {
+            var adjustedInvoiceIds = await db.InvoiceItemAdjustments
+                .Where(a => a.AdjustedItemTypeId != null || a.AdjustedQuantity != null)  // audit M4: include type-only reclassifications
+                .Select(a => a.InvoiceId)
+                .Distinct()
+                .ToListAsync();
+            var failedBillIds = new List<int>();
+            if (adjustedInvoiceIds.Count > 0)
+            {
+                var stockSvc = scope.ServiceProvider.GetRequiredService<MyApp.Api.Services.Interfaces.IStockService>();
+                var invoiceRepoSvc = scope.ServiceProvider.GetRequiredService<MyApp.Api.Repositories.Interfaces.IInvoiceRepository>();
+                foreach (var invId in adjustedInvoiceIds)
                 {
-                    await stockSvc.SyncInvoiceStockMovementsAsync(inv);
-                }
-                catch (Exception ex)
-                {
-                    // Don't let one bad row halt the whole backfill —
-                    // the marker only gets written if we make it through.
-                    failedBillIds.Add(invId);
-                    db.AuditLogs.Add(new MyApp.Api.Models.AuditLog
+                    var inv = await invoiceRepoSvc.GetByIdAsync(invId);
+                    if (inv == null) continue;
+                    try
                     {
-                        Timestamp = DateTime.UtcNow,
-                        Level = "Warning",
-                        UserName = "system",
-                        HttpMethod = "SEED",
-                        RequestPath = "/migrations/stockmovement-overlay-sync",
-                        StatusCode = 500,
-                        ExceptionType = "STOCKMOVEMENT_OVERLAY_SYNC_V1_WARN",
-                        Message = $"Re-sync failed for invoice {invId}: {ex.Message}",
-                    });
+                        await stockSvc.SyncInvoiceStockMovementsAsync(inv);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Don't let one bad row halt the whole backfill —
+                        // the marker only gets written if we make it through.
+                        failedBillIds.Add(invId);
+                        db.AuditLogs.Add(new MyApp.Api.Models.AuditLog
+                        {
+                            Timestamp = DateTime.UtcNow,
+                            Level = "Warning",
+                            UserName = "system",
+                            HttpMethod = "SEED",
+                            RequestPath = "/migrations/stockmovement-overlay-sync",
+                            StatusCode = 500,
+                            ExceptionType = "STOCKMOVEMENT_OVERLAY_SYNC_V1_WARN",
+                            Message = $"Re-sync failed for invoice {invId}: {ex.Message}",
+                        });
+                    }
                 }
             }
+            // 2026-05-12 (#10): marker bumps to Warning when any bill failed,
+            // so the "show warnings/errors" filter in the AuditLogs page
+            // surfaces this run instead of burying it under the per-bill
+            // WARN rows. Message lists the failed ids inline for quick
+            // triage without needing a second query.
+            var anyFailed = failedBillIds.Count > 0;
+            db.AuditLogs.Add(new MyApp.Api.Models.AuditLog
+            {
+                Timestamp = DateTime.UtcNow,
+                Level = anyFailed ? "Warning" : "Info",
+                UserName = "system",
+                HttpMethod = "SEED",
+                RequestPath = "/migrations/stockmovement-overlay-sync",
+                StatusCode = anyFailed ? 207 : 200, // 207 Multi-Status
+                ExceptionType = "STOCKMOVEMENT_OVERLAY_SYNC_V1",
+                Message = anyFailed
+                    ? $"One-time backfill: re-synced StockMovements for {adjustedInvoiceIds.Count - failedBillIds.Count} of {adjustedInvoiceIds.Count} bill(s). FAILED bill ids: [{string.Join(", ", failedBillIds)}]. See per-bill WARN entries with type STOCKMOVEMENT_OVERLAY_SYNC_V1_WARN for details."
+                    : $"One-time backfill: re-synced StockMovements for {adjustedInvoiceIds.Count} bill(s) carrying tax-claim adjustment overlays. Quantity source = AdjustedQuantity (FBR-facing) when present, InvoiceItem.Quantity otherwise.",
+            });
+            await db.SaveChangesAsync();
         }
-        // 2026-05-12 (#10): marker bumps to Warning when any bill failed,
-        // so the "show warnings/errors" filter in the AuditLogs page
-        // surfaces this run instead of burying it under the per-bill
-        // WARN rows. Message lists the failed ids inline for quick
-        // triage without needing a second query.
-        var anyFailed = failedBillIds.Count > 0;
-        db.AuditLogs.Add(new MyApp.Api.Models.AuditLog
-        {
-            Timestamp = DateTime.UtcNow,
-            Level = anyFailed ? "Warning" : "Info",
-            UserName = "system",
-            HttpMethod = "SEED",
-            RequestPath = "/migrations/stockmovement-overlay-sync",
-            StatusCode = anyFailed ? 207 : 200, // 207 Multi-Status
-            ExceptionType = "STOCKMOVEMENT_OVERLAY_SYNC_V1",
-            Message = anyFailed
-                ? $"One-time backfill: re-synced StockMovements for {adjustedInvoiceIds.Count - failedBillIds.Count} of {adjustedInvoiceIds.Count} bill(s). FAILED bill ids: [{string.Join(", ", failedBillIds)}]. See per-bill WARN entries with type STOCKMOVEMENT_OVERLAY_SYNC_V1_WARN for details."
-                : $"One-time backfill: re-synced StockMovements for {adjustedInvoiceIds.Count} bill(s) carrying tax-claim adjustment overlays. Quantity source = AdjustedQuantity (FBR-facing) when present, InvoiceItem.Quantity otherwise.",
-        });
-        await db.SaveChangesAsync();
-    }
 
-    // RBAC: sync PermissionCatalog into the Permissions table and ensure the
-    // built-in "Administrator" system role exists and is wired to the seed
-    // admin user. Idempotent — runs every start.
-    var seedAdminUserId = builder.Configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
-    await MyApp.Api.Data.RbacSeeder.SeedAsync(db, seedAdminUserId);
+        // RBAC: sync PermissionCatalog into the Permissions table and ensure the
+        // built-in "Administrator" system role exists and is wired to the seed
+        // admin user. Idempotent — runs every start.
+        var seedAdminUserId = builder.Configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
+        await MyApp.Api.Data.RbacSeeder.SeedAsync(db, seedAdminUserId);
 
-    // ── One-time backfill: UserCompanies for existing non-admin users ──
-    //
-    // We just flipped to fail-closed semantics in CompanyAccessGuard:
-    // a non-admin user with zero UserCompanies rows now sees NOTHING.
-    // Without this backfill, every existing non-admin user would go dark
-    // on the next boot — anyone created before the Tenant Access UI
-    // shipped has zero rows.
-    //
-    // The fix: for every non-admin user with no rows yet, grant access
-    // to every IsTenantIsolated=false company at backfill time. That
-    // preserves their legacy access exactly. Isolated companies stay
-    // restricted (the operator clearly wanted that). After this runs,
-    // the rule is uniform: explicit rows = access; no rows = no access.
-    //
-    // Idempotent via the audit-log marker — runs once per database.
-    db.Database.ExecuteSqlRaw(@"
+        // ── One-time backfill: UserCompanies for existing non-admin users ──
+        //
+        // We just flipped to fail-closed semantics in CompanyAccessGuard:
+        // a non-admin user with zero UserCompanies rows now sees NOTHING.
+        // Without this backfill, every existing non-admin user would go dark
+        // on the next boot — anyone created before the Tenant Access UI
+        // shipped has zero rows.
+        //
+        // The fix: for every non-admin user with no rows yet, grant access
+        // to every IsTenantIsolated=false company at backfill time. That
+        // preserves their legacy access exactly. Isolated companies stay
+        // restricted (the operator clearly wanted that). After this runs,
+        // the rule is uniform: explicit rows = access; no rows = no access.
+        //
+        // Idempotent via the audit-log marker — runs once per database.
+        db.Database.ExecuteSqlRaw(@"
         IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'RBAC_USERCOMPANIES_BACKFILL_V1')
         BEGIN
             DECLARE @seedAdminId INT = " + seedAdminUserId + @";
@@ -1979,18 +1978,18 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
-    // Company creation grants its creator in CompaniesController. A company
-    // with no saved memberships stays private to the seed admin until assigned;
-    // startup must never recreate grants an operator deliberately removed.
+        // Company creation grants its creator in CompaniesController. A company
+        // with no saved memberships stays private to the seed admin until assigned;
+        // startup must never recreate grants an operator deliberately removed.
 
-    // ── One-time perm copy: accounting.reports.view → accounting.dashboard.view ──
-    // The accounting dashboard (Dashboards → Accounting) used to be the
-    // "Overview" screen under accounting.reports.view. It now has its own key;
-    // every role that could open the old screen keeps the new one. RbacSeeder
-    // has just inserted the permission row from the catalog. Run once (marker),
-    // so an administrator who later removes the key from a role is not
-    // overruled on the next boot.
-    db.Database.ExecuteSqlRaw(@"
+        // ── One-time perm copy: accounting.reports.view → accounting.dashboard.view ──
+        // The accounting dashboard (Dashboards → Accounting) used to be the
+        // "Overview" screen under accounting.reports.view. It now has its own key;
+        // every role that could open the old screen keeps the new one. RbacSeeder
+        // has just inserted the permission row from the catalog. Run once (marker),
+        // so an administrator who later removes the key from a role is not
+        // overruled on the next boot.
+        db.Database.ExecuteSqlRaw(@"
         IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'PERM_COPY_ACCOUNTING_DASHBOARD_V1')
         BEGIN
             DECLARE @reportsId   INT = (SELECT Id FROM Permissions WHERE [Key] = 'accounting.reports.view');
@@ -2010,13 +2009,13 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
-    // ── One-time perm grant: tenantaccess.manage.* → Administrator role ──
-    // The new keys are inserted by RbacSeeder (it walks PermissionCatalog),
-    // but RolePermissions is empty for them by default. Grant them to the
-    // built-in Administrator role on first run so the seed admin doesn't
-    // have to click into the role editor before the new screen works.
-    // Idempotent via the NOT EXISTS guard.
-    db.Database.ExecuteSqlRaw(@"
+        // ── One-time perm grant: tenantaccess.manage.* → Administrator role ──
+        // The new keys are inserted by RbacSeeder (it walks PermissionCatalog),
+        // but RolePermissions is empty for them by default. Grant them to the
+        // built-in Administrator role on first run so the seed admin doesn't
+        // have to click into the role editor before the new screen works.
+        // Idempotent via the NOT EXISTS guard.
+        db.Database.ExecuteSqlRaw(@"
         DECLARE @adminRoleId INT = (SELECT TOP 1 Id FROM Roles WHERE [Name] = 'Administrator');
         IF @adminRoleId IS NOT NULL
         BEGIN
@@ -2029,11 +2028,11 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
-    // ── 2026-05-14: auto-grant the new printtemplates.manage.sheetpin
-    //    permission to the Administrator role so the new Data-sheet
-    //    dropdown on the Print Templates page works for admins out of
-    //    the box. Idempotent via NOT EXISTS.
-    db.Database.ExecuteSqlRaw(@"
+        // ── 2026-05-14: auto-grant the new printtemplates.manage.sheetpin
+        //    permission to the Administrator role so the new Data-sheet
+        //    dropdown on the Print Templates page works for admins out of
+        //    the box. Idempotent via NOT EXISTS.
+        db.Database.ExecuteSqlRaw(@"
         DECLARE @adminRoleId INT = (SELECT TOP 1 Id FROM Roles WHERE [Name] = 'Administrator');
         IF @adminRoleId IS NOT NULL
         BEGIN
@@ -2043,13 +2042,13 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
-    // ── 2026-05-14: auto-grant the new clients.manage.copy and
-    //    suppliers.manage.copy permissions to the Administrator role
-    //    (the per-row "Copy to other companies" button on Clients /
-    //    Suppliers and the "Add to companies" action on the Common-
-    //    Client / Common-Supplier edit dialogs both require this perm).
-    //    Idempotent via NOT EXISTS.
-    db.Database.ExecuteSqlRaw(@"
+        // ── 2026-05-14: auto-grant the new clients.manage.copy and
+        //    suppliers.manage.copy permissions to the Administrator role
+        //    (the per-row "Copy to other companies" button on Clients /
+        //    Suppliers and the "Add to companies" action on the Common-
+        //    Client / Common-Supplier edit dialogs both require this perm).
+        //    Idempotent via NOT EXISTS.
+        db.Database.ExecuteSqlRaw(@"
         DECLARE @adminRoleId INT = (SELECT TOP 1 Id FROM Roles WHERE [Name] = 'Administrator');
         IF @adminRoleId IS NOT NULL
         BEGIN
@@ -2061,210 +2060,210 @@ using (var scope = app.Services.CreateScope())
                 INSERT INTO RolePermissions (RoleId, PermissionId) VALUES (@adminRoleId, @supplierCopyId);
         END
     ");
-}
-
-// Configure the HTTP request pipeline.
-// Audit C-9 (2026-05-13): Swagger/OpenAPI used to render in every
-// environment, leaking the full route map, [HasPermission] keys, and
-// DTO shapes. Gate behind dev OR an explicit opt-in config flag so
-// staging can still expose it when needed.
-var swaggerEnabled = app.Environment.IsDevelopment()
-    || app.Configuration.GetValue<bool>("Swagger:Enabled", false);
-if (swaggerEnabled)
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
-// Honour X-Forwarded-Proto / X-Forwarded-For from the reverse proxy
-// (Render, MonsterASP, etc.). Audit C-12 (2026-05-13): pre-fix
-// KnownProxies / KnownNetworks were at framework defaults (empty) so
-// behind a TLS-terminating proxy the rate-limit partition key was the
-// proxy's IP instead of the real client — every login attempt shared
-// one bucket = effectively no throttle. Now optionally populated via
-// config so the operator can restrict which proxies can rewrite these
-// headers.
-var fwdOptions = new ForwardedHeadersOptions
-{
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
-    // Allow more hops than the default 1 — MonsterASP, Cloudflare etc.
-    // can stack proxies before the request reaches us.
-    ForwardLimit = app.Configuration.GetValue<int?>("ForwardedHeaders:ForwardLimit") ?? 2,
-};
-var knownProxies = app.Configuration.GetSection("ForwardedHeaders:KnownProxies")
-    .Get<string[]>() ?? Array.Empty<string>();
-var knownNetworks = app.Configuration.GetSection("ForwardedHeaders:KnownNetworks")
-    .Get<string[]>() ?? Array.Empty<string>();
-if (knownProxies.Length > 0 || knownNetworks.Length > 0)
-{
-    fwdOptions.KnownProxies.Clear();
-    fwdOptions.KnownNetworks.Clear();
-    foreach (var p in knownProxies)
-    {
-        if (System.Net.IPAddress.TryParse(p, out var ip))
-            fwdOptions.KnownProxies.Add(ip);
     }
-    foreach (var n in knownNetworks)
+
+    // Configure the HTTP request pipeline.
+    // Audit C-9 (2026-05-13): Swagger/OpenAPI used to render in every
+    // environment, leaking the full route map, [HasPermission] keys, and
+    // DTO shapes. Gate behind dev OR an explicit opt-in config flag so
+    // staging can still expose it when needed.
+    var swaggerEnabled = app.Environment.IsDevelopment()
+        || app.Configuration.GetValue<bool>("Swagger:Enabled", false);
+    if (swaggerEnabled)
     {
-        var parts = n.Split('/');
-        if (parts.Length == 2
-            && System.Net.IPAddress.TryParse(parts[0], out var prefix)
-            && int.TryParse(parts[1], out var prefixLen))
+        app.UseSwagger();
+        app.UseSwaggerUI();
+    }
+
+    // Honour X-Forwarded-Proto / X-Forwarded-For from the reverse proxy
+    // (Render, MonsterASP, etc.). Audit C-12 (2026-05-13): pre-fix
+    // KnownProxies / KnownNetworks were at framework defaults (empty) so
+    // behind a TLS-terminating proxy the rate-limit partition key was the
+    // proxy's IP instead of the real client — every login attempt shared
+    // one bucket = effectively no throttle. Now optionally populated via
+    // config so the operator can restrict which proxies can rewrite these
+    // headers.
+    var fwdOptions = new ForwardedHeadersOptions
+    {
+        ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+        // Allow more hops than the default 1 — MonsterASP, Cloudflare etc.
+        // can stack proxies before the request reaches us.
+        ForwardLimit = app.Configuration.GetValue<int?>("ForwardedHeaders:ForwardLimit") ?? 2,
+    };
+    var knownProxies = app.Configuration.GetSection("ForwardedHeaders:KnownProxies")
+        .Get<string[]>() ?? Array.Empty<string>();
+    var knownNetworks = app.Configuration.GetSection("ForwardedHeaders:KnownNetworks")
+        .Get<string[]>() ?? Array.Empty<string>();
+    if (knownProxies.Length > 0 || knownNetworks.Length > 0)
+    {
+        fwdOptions.KnownProxies.Clear();
+        fwdOptions.KnownNetworks.Clear();
+        foreach (var p in knownProxies)
         {
-            fwdOptions.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(prefix, prefixLen));
+            if (System.Net.IPAddress.TryParse(p, out var ip))
+                fwdOptions.KnownProxies.Add(ip);
+        }
+        foreach (var n in knownNetworks)
+        {
+            var parts = n.Split('/');
+            if (parts.Length == 2
+                && System.Net.IPAddress.TryParse(parts[0], out var prefix)
+                && int.TryParse(parts[1], out var prefixLen))
+            {
+                fwdOptions.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(prefix, prefixLen));
+            }
         }
     }
-}
-app.UseForwardedHeaders(fwdOptions);
+    app.UseForwardedHeaders(fwdOptions);
 
-// HSTS in non-dev — tells browsers to never speak plaintext to this
-// host once they've seen one HTTPS response. Dev keeps using
-// HttpsRedirection only.
-if (!app.Environment.IsDevelopment())
-{
-    app.UseHsts();
-}
-
-// Security headers on every response. Chosen so that nothing the app does can
-// break: no page may frame this one (clickjacking), plugins and <base>
-// hijacking are off, and browsers do not sniff a download into HTML. A
-// script-src policy is deliberately NOT set for the app itself — Handlebars
-// compiles print templates with new Function — the print documents carry their
-// own script-blocking CSP instead (myapp-frontend/src/utils/printSafety.js).
-app.Use(async (ctx, next) =>
-{
-    var headers = ctx.Response.Headers;
-    headers["X-Content-Type-Options"] = "nosniff";
-    headers["X-Frame-Options"] = "DENY";
-    headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
-    headers["Content-Security-Policy"] = "frame-ancestors 'none'; object-src 'none'; base-uri 'self'";
-    await next();
-});
-
-// after app = builder.Build()
-app.UseCors("AllowFrontend");
-
-// Enable request body buffering so the exception middleware can read it
-app.Use(async (ctx, next) =>
-{
-    var body = ctx.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpRequestBodyDetectionFeature>();
-    if (body?.CanHaveBody ?? ctx.Request.ContentLength != 0)
-        ctx.Request.EnableBuffering();
-    await next();
-});
-
-// Correlation ID — must run BEFORE Serilog request logging and the
-// global exception middleware so all subsequent log lines for this
-// request carry the same CorrelationId property. See audit H-4.
-app.UseMiddleware<CorrelationIdMiddleware>();
-
-// Serilog request logging — one structured log line per request with
-// method, path, status, duration. Cheap and dramatically improves
-// diagnostics. Excluded from health-check / static asset noise via
-// the GetLevel callback below (returns Verbose for those, which is
-// below default minimum so they're filtered out without touching the
-// pipeline cost). Audit-log database writes are still handled by
-// GlobalExceptionMiddleware below — Serilog logs are the operational
-// trail; AuditLog is the business / security trail.
-app.UseSerilogRequestLogging(opts =>
-{
-    opts.GetLevel = (ctx, elapsed, ex) =>
+    // HSTS in non-dev — tells browsers to never speak plaintext to this
+    // host once they've seen one HTTPS response. Dev keeps using
+    // HttpsRedirection only.
+    if (!app.Environment.IsDevelopment())
     {
-        if (ex != null) return LogEventLevel.Error;
-        if (ctx.Response.StatusCode >= 500) return LogEventLevel.Error;
-        if (ctx.Response.StatusCode >= 400) return LogEventLevel.Warning;
-        // Static assets / SPA shell — silence at default min level.
-        var path = ctx.Request.Path.Value ?? "";
-        if (path.StartsWith("/assets/", StringComparison.OrdinalIgnoreCase)
-            || path.EndsWith(".js", StringComparison.OrdinalIgnoreCase)
-            || path.EndsWith(".css", StringComparison.OrdinalIgnoreCase)
-            || path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)
-            || path.EndsWith(".ico", StringComparison.OrdinalIgnoreCase)
-            || path.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
-            || path.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)) return LogEventLevel.Verbose;
-        return LogEventLevel.Information;
-    };
-    opts.EnrichDiagnosticContext = (diag, ctx) =>
-    {
-        diag.Set("UserName", ctx.User.Identity?.Name ?? "anonymous");
-        diag.Set("ClientIp", ctx.Connection.RemoteIpAddress?.ToString() ?? "");
-    };
-});
-
-// Global exception handling — logs to AuditLogs table
-app.UseMiddleware<GlobalExceptionMiddleware>();
-
-// Only redirect to HTTPS in production if not behind a reverse proxy (Render handles SSL)
-if (app.Environment.IsDevelopment())
-{
-    app.UseHttpsRedirection();
-}
-
-app.UseRateLimiter();
-
-app.UseAuthentication();
-app.UseAuthorization();
-app.UseMiddleware<CatalogAccessMiddleware>();
-app.UseMiddleware<PrivateDataFilesMiddleware>();
-
-// Serve React frontend static files from wwwroot
-app.UseDefaultFiles();
-app.UseStaticFiles();
-
-// Serve user-uploaded files (logos, avatars) from persistent data/ folder
-var dataPath = Path.Combine(app.Environment.ContentRootPath, "data");
-Directory.CreateDirectory(dataPath);
-// Attachment bytes live under data/attachments (created up-front so the very
-// first upload doesn't race the directory into existence).
-Directory.CreateDirectory(Path.Combine(dataPath, "attachments"));
-
-// Tenant business documents under /data must not be reachable through static
-// serving. PrivateDataFilesMiddleware authorizes owned image files and denies
-// every other directory. Keep these explicit historical document denies too:
-// attachments, tenant Excel print-templates (predictable company_N names,
-// embed GL mappings), archived customer POs, and retained parser-feedback PDFs
-// BEFORE the static middleware — each has its own authenticated, company-
-// asserted download endpoint (or is read server-side from disk only).
-app.Use(async (ctx, next) =>
-{
-    var p = ctx.Request.Path;
-    if (p.StartsWithSegments("/data/attachments", StringComparison.OrdinalIgnoreCase)
-        || p.StartsWithSegments("/data/uploads/excel-templates", StringComparison.OrdinalIgnoreCase)
-        || p.StartsWithSegments("/data/uploads/po_imports", StringComparison.OrdinalIgnoreCase)
-        || p.StartsWithSegments("/data/uploads/parser_feedback", StringComparison.OrdinalIgnoreCase))
-    {
-        ctx.Response.StatusCode = StatusCodes.Status404NotFound;
-        return;
+        app.UseHsts();
     }
-    await next();
-});
-app.UseStaticFiles(new StaticFileOptions
-{
-    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(dataPath),
-    RequestPath = "/data"
-});
 
-app.MapControllers(); // 👈 maps your controllers (like CompaniesController)
+    // Security headers on every response. Chosen so that nothing the app does can
+    // break: no page may frame this one (clickjacking), plugins and <base>
+    // hijacking are off, and browsers do not sniff a download into HTML. A
+    // script-src policy is deliberately NOT set for the app itself — Handlebars
+    // compiles print templates with new Function — the print documents carry their
+    // own script-blocking CSP instead (myapp-frontend/src/utils/printSafety.js).
+    app.Use(async (ctx, next) =>
+    {
+        var headers = ctx.Response.Headers;
+        headers["X-Content-Type-Options"] = "nosniff";
+        headers["X-Frame-Options"] = "DENY";
+        headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+        headers["Content-Security-Policy"] = "frame-ancestors 'none'; object-src 'none'; base-uri 'self'";
+        await next();
+    });
 
-// The ERP SPA lives under /admin (Vite base "/admin/", router basename
-// "/admin"). Deep links like /admin/bills/42 fall back to the app shell.
-// The :nonfile constraint is LOAD-BEARING: without it this endpoint also
-// matches /admin/assets/*.js, and StaticFileMiddleware skips any request
-// that already matched an endpoint — serving HTML for every asset.
-app.MapFallbackToFile("admin/{*path:nonfile}", "admin/index.html");
+    // after app = builder.Build()
+    app.UseCors("AllowFrontend");
 
-// The PUBLIC customer portal. The link a customer is sent is /portal/<token>,
-// which is NOT under /admin — so without this it would fall through to the
-// landing page below. It serves the same SPA shell: the shell's asset URLs are
-// absolute (/admin/assets/...), so they still resolve, and main.jsx detects the
-// path and renders the portal outside the router and the auth providers.
-app.MapFallbackToFile("portal/{*path:nonfile}", "admin/index.html");
+    // Enable request body buffering so the exception middleware can read it
+    app.Use(async (ctx, next) =>
+    {
+        var body = ctx.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpRequestBodyDetectionFeature>();
+        if (body?.CanHaveBody ?? ctx.Request.ContentLength != 0)
+            ctx.Request.EnableBuffering();
+        await next();
+    });
 
-// Everything else — including "/" — serves the public landing page.
-app.MapFallbackToFile("index.html");
+    // Correlation ID — must run BEFORE Serilog request logging and the
+    // global exception middleware so all subsequent log lines for this
+    // request carry the same CorrelationId property. See audit H-4.
+    app.UseMiddleware<CorrelationIdMiddleware>();
 
-Log.Information("MyApp.Api starting up — environment={Env}", app.Environment.EnvironmentName);
-app.Run();
+    // Serilog request logging — one structured log line per request with
+    // method, path, status, duration. Cheap and dramatically improves
+    // diagnostics. Excluded from health-check / static asset noise via
+    // the GetLevel callback below (returns Verbose for those, which is
+    // below default minimum so they're filtered out without touching the
+    // pipeline cost). Audit-log database writes are still handled by
+    // GlobalExceptionMiddleware below — Serilog logs are the operational
+    // trail; AuditLog is the business / security trail.
+    app.UseSerilogRequestLogging(opts =>
+    {
+        opts.GetLevel = (ctx, elapsed, ex) =>
+        {
+            if (ex != null) return LogEventLevel.Error;
+            if (ctx.Response.StatusCode >= 500) return LogEventLevel.Error;
+            if (ctx.Response.StatusCode >= 400) return LogEventLevel.Warning;
+            // Static assets / SPA shell — silence at default min level.
+            var path = ctx.Request.Path.Value ?? "";
+            if (path.StartsWith("/assets/", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith(".js", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith(".css", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith(".ico", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)) return LogEventLevel.Verbose;
+            return LogEventLevel.Information;
+        };
+        opts.EnrichDiagnosticContext = (diag, ctx) =>
+        {
+            diag.Set("UserName", ctx.User.Identity?.Name ?? "anonymous");
+            diag.Set("ClientIp", ctx.Connection.RemoteIpAddress?.ToString() ?? "");
+        };
+    });
+
+    // Global exception handling — logs to AuditLogs table
+    app.UseMiddleware<GlobalExceptionMiddleware>();
+
+    // Only redirect to HTTPS in production if not behind a reverse proxy (Render handles SSL)
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseHttpsRedirection();
+    }
+
+    app.UseRateLimiter();
+
+    app.UseAuthentication();
+    app.UseAuthorization();
+    app.UseMiddleware<CatalogAccessMiddleware>();
+    app.UseMiddleware<PrivateDataFilesMiddleware>();
+
+    // Serve React frontend static files from wwwroot
+    app.UseDefaultFiles();
+    app.UseStaticFiles();
+
+    // Serve user-uploaded files (logos, avatars) from persistent data/ folder
+    var dataPath = Path.Combine(app.Environment.ContentRootPath, "data");
+    Directory.CreateDirectory(dataPath);
+    // Attachment bytes live under data/attachments (created up-front so the very
+    // first upload doesn't race the directory into existence).
+    Directory.CreateDirectory(Path.Combine(dataPath, "attachments"));
+
+    // Tenant business documents under /data must not be reachable through static
+    // serving. PrivateDataFilesMiddleware authorizes owned image files and denies
+    // every other directory. Keep these explicit historical document denies too:
+    // attachments, tenant Excel print-templates (predictable company_N names,
+    // embed GL mappings), archived customer POs, and retained parser-feedback PDFs
+    // BEFORE the static middleware — each has its own authenticated, company-
+    // asserted download endpoint (or is read server-side from disk only).
+    app.Use(async (ctx, next) =>
+    {
+        var p = ctx.Request.Path;
+        if (p.StartsWithSegments("/data/attachments", StringComparison.OrdinalIgnoreCase)
+            || p.StartsWithSegments("/data/uploads/excel-templates", StringComparison.OrdinalIgnoreCase)
+            || p.StartsWithSegments("/data/uploads/po_imports", StringComparison.OrdinalIgnoreCase)
+            || p.StartsWithSegments("/data/uploads/parser_feedback", StringComparison.OrdinalIgnoreCase))
+        {
+            ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+        await next();
+    });
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(dataPath),
+        RequestPath = "/data"
+    });
+
+    app.MapControllers(); // 👈 maps your controllers (like CompaniesController)
+
+    // The ERP SPA lives under /admin (Vite base "/admin/", router basename
+    // "/admin"). Deep links like /admin/bills/42 fall back to the app shell.
+    // The :nonfile constraint is LOAD-BEARING: without it this endpoint also
+    // matches /admin/assets/*.js, and StaticFileMiddleware skips any request
+    // that already matched an endpoint — serving HTML for every asset.
+    app.MapFallbackToFile("admin/{*path:nonfile}", "admin/index.html");
+
+    // The PUBLIC customer portal. The link a customer is sent is /portal/<token>,
+    // which is NOT under /admin — so without this it would fall through to the
+    // landing page below. It serves the same SPA shell: the shell's asset URLs are
+    // absolute (/admin/assets/...), so they still resolve, and main.jsx detects the
+    // path and renders the portal outside the router and the auth providers.
+    app.MapFallbackToFile("portal/{*path:nonfile}", "admin/index.html");
+
+    // Everything else — including "/" — serves the public landing page.
+    app.MapFallbackToFile("index.html");
+
+    Log.Information("MyApp.Api starting up — environment={Env}", app.Environment.EnvironmentName);
+    app.Run();
 }
 catch (Exception ex) when (ex is not HostAbortedException
                            && ex.GetType().FullName != "Microsoft.EntityFrameworkCore.Design.OperationException")

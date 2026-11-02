@@ -120,7 +120,9 @@ namespace MyApp.Api.Services.Implementations
                     var pEarnings = -plThen;
                     lines.Add(new StatementLineDto
                     {
-                        Level = 1, Kind = "account", Label = "Current-Year Earnings",
+                        Level = 1,
+                        Kind = "account",
+                        Label = "Current-Year Earnings",
                         Amount = earnings,
                         Comparative = then == null ? null : pEarnings,
                         Change = then == null ? null : earnings - pEarnings,
@@ -154,7 +156,9 @@ namespace MyApp.Api.Services.Implementations
                 // does not balance is worse than no balance sheet.
                 lines.Add(new StatementLineDto
                 {
-                    Kind = "total", Label = "Out of balance by", Amount = report.Difference.Value,
+                    Kind = "total",
+                    Label = "Out of balance by",
+                    Amount = report.Difference.Value,
                 });
                 report.Notice = $"This balance sheet is out of balance by "
                               + $"{Math.Abs(report.Difference.Value):N2}. Check Accounting → Dashboard "
@@ -460,11 +464,22 @@ namespace MyApp.Api.Services.Implementations
             var rows = await ordered.Skip(offset).Take(size)
                 .Select(l => new
                 {
-                    l.Id, l.JournalEntryId, l.JournalEntry.EntryNo, l.JournalEntry.Date,
-                    l.JournalEntry.SourceDocType, l.JournalEntry.SourceDocId, l.JournalEntry.Narration,
-                    l.Description, l.Debit, l.Credit, l.AccountId,
-                    AccountName = l.Account.Name, l.Account.Code, l.Account.AccountType,
-                    l.PartyType, l.PartyId,
+                    l.Id,
+                    l.JournalEntryId,
+                    l.JournalEntry.EntryNo,
+                    l.JournalEntry.Date,
+                    l.JournalEntry.SourceDocType,
+                    l.JournalEntry.SourceDocId,
+                    l.JournalEntry.Narration,
+                    l.Description,
+                    l.Debit,
+                    l.Credit,
+                    l.AccountId,
+                    AccountName = l.Account.Name,
+                    l.Account.Code,
+                    l.Account.AccountType,
+                    l.PartyType,
+                    l.PartyId,
 
                 })
                 .ToListAsync();
@@ -819,8 +834,11 @@ namespace MyApp.Api.Services.Implementations
 
                 lines.Add(new StatementLineDto
                 {
-                    Level = level + 1, Kind = "account", Label = a.Name,
-                    AccountId = a.Id, Code = a.Code,
+                    Level = level + 1,
+                    Kind = "account",
+                    Label = a.Name,
+                    AccountId = a.Id,
+                    Code = a.Code,
                     Amount = amount,
                     Comparative = pAmount,
                     Change = pAmount is null ? null : amount - pAmount,
@@ -881,7 +899,10 @@ namespace MyApp.Api.Services.Implementations
         private static StatementLineDto Subtotal(string label, int level, decimal amount, decimal? comparative) =>
             new()
             {
-                Level = level, Kind = "subtotal", Label = label, Amount = amount,
+                Level = level,
+                Kind = "subtotal",
+                Label = label,
+                Amount = amount,
                 Comparative = comparative,
                 Change = comparative is null ? null : amount - comparative,
             };
@@ -889,7 +910,10 @@ namespace MyApp.Api.Services.Implementations
         private static StatementLineDto Total(string label, decimal amount, decimal? comparative) =>
             new()
             {
-                Level = 0, Kind = "total", Label = label, Amount = amount,
+                Level = 0,
+                Kind = "total",
+                Label = label,
+                Amount = amount,
                 Comparative = comparative,
                 Change = comparative is null ? null : amount - comparative,
             };

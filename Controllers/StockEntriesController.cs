@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
-using MyApp.Api.Models;
 using MyApp.Api.Middleware;
 using MyApp.Api.Services.Implementations;
 using MyApp.Api.Services.Interfaces;
@@ -53,9 +52,19 @@ public class StockEntriesController(AppDbContext db, ICompanyAccessGuard access,
             .OrderBy(i => i.Name).Select(i => new { i.Id, i.Name, i.HSCode, i.UOM }).ToListAsync();
         var quantities = await stock.GetOnHandBulkAsync(companyId, items.Select(i => i.Id));
         var costs = await InventoryCostBasis.LoadAsync(db, companyId, items.Select(i => i.Id).ToList());
-        return Ok(new { TrackingEnabled = await stock.IsTrackingEnabledAsync(companyId), Items = items.Select(i => new {
-            i.Id, i.Name, i.HSCode, i.UOM, CurrentQuantity = quantities.GetValueOrDefault(i.Id),
-            UnitCost = InventoryCostBasis.Average(costs.Where(r => r.ItemTypeId == i.Id && r.Date <= (asOf ?? PakistanClock.Today).Date)) }) });
+        return Ok(new
+        {
+            TrackingEnabled = await stock.IsTrackingEnabledAsync(companyId),
+            Items = items.Select(i => new
+            {
+                i.Id,
+                i.Name,
+                i.HSCode,
+                i.UOM,
+                CurrentQuantity = quantities.GetValueOrDefault(i.Id),
+                UnitCost = InventoryCostBasis.Average(costs.Where(r => r.ItemTypeId == i.Id && r.Date <= (asOf ?? PakistanClock.Today).Date))
+            })
+        });
     }
     [HttpPost]
     [HasAnyPermission("stock.opening.manage", "stock.adjust.create")]

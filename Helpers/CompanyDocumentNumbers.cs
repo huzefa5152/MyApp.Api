@@ -146,7 +146,13 @@ public static class CompanyDocumentNumbers
             ?? throw new KeyNotFoundException("Company not found.");
         var next = await NextAsync(db, company, kind);
         var error = check.HasValue ? await ErrorAsync(db, companyId, kind, check.Value, excludeId, clientId) : null;
-        return new { nextNumber = next, maxAllowed = Maximum(kind), startingNumberSet = true,
-            checkedAvailable = check.HasValue ? error == null : (bool?)null, checkedError = error };
+        return new
+        {
+            nextNumber = next,
+            maxAllowed = Maximum(kind),
+            startingNumberSet = true,
+            checkedAvailable = check.HasValue ? error == null : (bool?)null,
+            checkedError = error
+        };
     }
 }

@@ -44,8 +44,17 @@ public class StockEntryService(AppDbContext db, IStockService stock, IPostingSer
             cost = decimal.Round(InventoryCostBasis.Average(basis.Where(r => r.Date <= dto.Date.Date)), 4);
         }
         if (cost <= 0 || Math.Abs(dto.QuantityDelta) * cost > 999999999999999m) throw new InvalidOperationException("Enter a positive unit cost; reductions need an existing cost basis.");
-        var entry = new StockEntry { CompanyId = dto.CompanyId, ItemTypeId = item.Id, RequestId = dto.RequestId,
-            Kind = dto.Kind, Date = dto.Date.Date, QuantityDelta = dto.QuantityDelta, UnitCost = cost, Reason = dto.Reason.Trim() };
+        var entry = new StockEntry
+        {
+            CompanyId = dto.CompanyId,
+            ItemTypeId = item.Id,
+            RequestId = dto.RequestId,
+            Kind = dto.Kind,
+            Date = dto.Date.Date,
+            QuantityDelta = dto.QuantityDelta,
+            UnitCost = cost,
+            Reason = dto.Reason.Trim()
+        };
         db.StockEntries.Add(entry);
         await db.SaveChangesAsync();
         await stock.RecordMovementAsync(entry.CompanyId, entry.ItemTypeId,

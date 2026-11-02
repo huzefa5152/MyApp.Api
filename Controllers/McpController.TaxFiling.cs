@@ -30,14 +30,19 @@ public partial class McpController
         tools.Add(new("prepare_bill_tax_filing", "Prepare the FBR classification of a bill: every bill line must be in exactly one row, each row naming an item from this company's catalog (search_item_types; for a new code, search_fbr_hs_codes then prepare_item_type) with a complete HS code. Follow companyRules from get_bill_tax_filing: when printsOriginalBillLines is true every bill line is its own row (no combining) and FBR receives each line's own bill description, so several rows may share one item; otherwise rows may combine lines and FBR receives the row description, which defaults to the item name. FBR receives a blank description when omitsFbrProductDescription is true. Changing quantities or amounts needs the consultant quantity permission. Read get_bill_tax_filing first and pass its version. Nothing is saved: returns a plan to show the user. Call commit_action only after they approve. Never submits to FBR.",
             ExpandedSchema(new
             {
-                companyId = company, invoiceId = id,
+                companyId = company,
+                invoiceId = id,
                 version = new { type = "string", minLength = 1, maxLength = 200 },
                 rows = new
                 {
-                    type = "array", minItems = 1, maxItems = 100,
+                    type = "array",
+                    minItems = 1,
+                    maxItems = 100,
                     items = new
                     {
-                        type = "object", additionalProperties = false, required = new[] { "sourceLineIds", "itemTypeId", "quantity", "valueExclTax" },
+                        type = "object",
+                        additionalProperties = false,
+                        required = new[] { "sourceLineIds", "itemTypeId", "quantity", "valueExclTax" },
                         properties = new
                         {
                             sourceLineIds = new { type = "array", minItems = 1, maxItems = 100, items = new { type = "integer", minimum = 1 } },
@@ -76,7 +81,15 @@ public partial class McpController
 
     private static object FilingRow(TaxFilingRowDto r) => new
     {
-        r.SourceLineIds, r.ItemTypeId, r.Description, r.HSCode, r.UOM, r.FbrUOMId, r.SaleType, r.Quantity, r.ValueExclTax,
+        r.SourceLineIds,
+        r.ItemTypeId,
+        r.Description,
+        r.HSCode,
+        r.UOM,
+        r.FbrUOMId,
+        r.SaleType,
+        r.Quantity,
+        r.ValueExclTax,
     };
 
     // GET /api/invoices/{id}/tax-filing: invoices.list.view, access asserted against the stored company.
@@ -88,15 +101,24 @@ public partial class McpController
         var editor = await _invoices.GetTaxFilingAsync(bill.Id) ?? throw new ToolError("Resource unavailable or access denied.");
         return new
         {
-            invoiceId = bill.Id, bill.InvoiceNumber, date = Ymd(bill.Date), bill.ClientName, bill.FbrStatus, bill.TaxTreatment,
-            bill.Subtotal, bill.GSTAmount, bill.GrandTotal,
-            editor.Version, editor.HasSavedRows, editor.RequiresReview,
+            invoiceId = bill.Id,
+            bill.InvoiceNumber,
+            date = Ymd(bill.Date),
+            bill.ClientName,
+            bill.FbrStatus,
+            bill.TaxTreatment,
+            bill.Subtotal,
+            bill.GSTAmount,
+            bill.GrandTotal,
+            editor.Version,
+            editor.HasSavedRows,
+            editor.RequiresReview,
             companyRules = new
             {
                 printsOriginalBillLines = editor.Bill.TaxInvoiceUseOriginalBillLines,
                 omitsFbrProductDescription = editor.Bill.FbrOmitProductDescription,
                 rows = editor.Bill.TaxInvoiceUseOriginalBillLines
-                    ? "One row per bill line; never combine lines. Several lines may share one item: FBR receives each line's own bill description."
+                    ? "Rows may combine bill lines that share an HS code, unit and tax treatment; the printed invoice keeps each line. FBR receives the row description (default: the item name)."
                     : "Rows may combine bill lines that share an item, unit and tax treatment. FBR receives the row description (default: the item name).",
             },
             lines = editor.Bill.Items.Select(i => new { i.Id, i.Description, i.Quantity, i.UOM, i.UnitPrice, i.LineTotal, i.ItemTypeId, i.ItemTypeName, i.HSCode }),
@@ -145,10 +167,13 @@ public partial class McpController
             if (Has(r, "fbrUomId")) fbrUom = IntArg(r, "fbrUomId") is { } u and > 0 ? u : throw new ToolError("fbrUomId must be a positive integer.");
             rows.Add(new TaxFilingRowDto
             {
-                SourceLineIds = ids, ItemTypeId = itemTypeId, Description = OptText(r, "description", 500) ?? "",
+                SourceLineIds = ids,
+                ItemTypeId = itemTypeId,
+                Description = OptText(r, "description", 500) ?? "",
                 Quantity = Dec(q, "quantity", 0m, 999_999_999m, 4, minInclusive: false),
                 ValueExclTax = Dec(v, "valueExclTax", 0m, 9_999_999_999m, 2),
-                SelectedSaleType = OptText(r, "saleType", 100) is { Length: > 0 } st ? st : null, SelectedFbrUOMId = fbrUom,
+                SelectedSaleType = OptText(r, "saleType", 100) is { Length: > 0 } st ? st : null,
+                SelectedFbrUOMId = fbrUom,
             });
         }
         if (used.Count != lineIds.Count) throw new ToolError("Every bill line must be in exactly one row.");
@@ -159,24 +184,28 @@ public partial class McpController
         if (types.Count != typeIds.Count) throw new ToolError("An item is outside this company's catalog.");
         if (types.Values.FirstOrDefault(i => string.IsNullOrWhiteSpace(i.HSCode) || i.IsHsCodePartial) is { } partial)
             throw new ToolError($"Item \"{partial.Name}\" has no complete HS code. Classify it first (prepare_item_type).");
-        // The save's own rules for a company that prints its original lines, answered now with their reason.
-        if (editor.Bill.TaxInvoiceUseOriginalBillLines)
-        {
-            var problem = TaxFilingProjection.MergedRow(editor.HasSavedRows ? editor.Rows : null, rows)
-                ?? TaxFilingProjection.RepeatedHsCode(editor.Bill.Items.Select(i => new MyApp.Api.Models.InvoiceItem { Id = i.Id, Description = i.Description }),
-                    rows.Select(r => new TaxFilingRowDto { SourceLineIds = r.SourceLineIds, HSCode = types[r.ItemTypeId!.Value].HSCode }));
-            if (problem != null) throw new ToolError(problem);
-        }
 
         var payload = new
         {
-            invoiceId = bill.Id, bill.InvoiceNumber, bill.ClientName, version,
+            invoiceId = bill.Id,
+            bill.InvoiceNumber,
+            bill.ClientName,
+            version,
             rows = rows.Select(r => new
             {
-                r.SourceLineIds, r.ItemTypeId, itemName = types[r.ItemTypeId!.Value].Name, hsCode = types[r.ItemTypeId!.Value].HSCode,
-                r.Description, r.Quantity, r.ValueExclTax, saleType = r.SelectedSaleType, fbrUomId = r.SelectedFbrUOMId,
+                r.SourceLineIds,
+                r.ItemTypeId,
+                itemName = types[r.ItemTypeId!.Value].Name,
+                hsCode = types[r.ItemTypeId!.Value].HSCode,
+                r.Description,
+                r.Quantity,
+                r.ValueExclTax,
+                saleType = r.SelectedSaleType,
+                fbrUomId = r.SelectedFbrUOMId,
             }),
-            filingTotal = rows.Sum(r => r.ValueExclTax), billSubtotal = bill.Subtotal, currency = "PKR",
+            filingTotal = rows.Sum(r => r.ValueExclTax),
+            billSubtotal = bill.Subtotal,
+            currency = "PKR",
             note = "Saved as the bill's FBR filing rows. The commercial bill is unchanged. Nothing is sent to FBR.",
         };
         var summary = $"Classify bill #{bill.InvoiceNumber} (id {bill.Id}) for FBR in company {companyId}: {rows.Count} filing row(s), value {rows.Sum(r => r.ValueExclTax):0.00} PKR excl. tax";
@@ -195,7 +224,8 @@ public partial class McpController
                 SourceLineIds = r.GetProperty("sourceLineIds").EnumerateArray().Select(x => x.GetInt32()).ToList(),
                 ItemTypeId = r.GetProperty("itemTypeId").GetInt32(),
                 Description = r.TryGetProperty("description", out var d) && d.ValueKind == JsonValueKind.String ? d.GetString()! : "",
-                Quantity = r.GetProperty("quantity").GetDecimal(), ValueExclTax = r.GetProperty("valueExclTax").GetDecimal(),
+                Quantity = r.GetProperty("quantity").GetDecimal(),
+                ValueExclTax = r.GetProperty("valueExclTax").GetDecimal(),
                 SelectedSaleType = r.TryGetProperty("saleType", out var s) && s.ValueKind == JsonValueKind.String ? s.GetString() : null,
                 SelectedFbrUOMId = r.TryGetProperty("fbrUomId", out var u) && u.ValueKind == JsonValueKind.Number ? u.GetInt32() : null,
             }).ToList(),
@@ -223,9 +253,14 @@ public partial class McpController
         _resultSummary = $"FBR validation of bill #{bill.InvoiceNumber}: {(result.Success ? "valid" : "rejected")}";
         return new
         {
-            invoiceId = bill.Id, bill.InvoiceNumber, valid = result.Success, result.FbrStatus, result.ErrorMessage,
+            invoiceId = bill.Id,
+            bill.InvoiceNumber,
+            valid = result.Success,
+            result.FbrStatus,
+            result.ErrorMessage,
             itemErrors = result.ItemErrors?.Select(e => new { e.ItemSNo, e.StatusCode, e.Status, e.ErrorCode, e.Error }),
-            submitted = false, note = "Validation only. Submitting to FBR stays a human action on the Invoices screen.",
+            submitted = false,
+            note = "Validation only. Submitting to FBR stays a human action on the Invoices screen.",
         };
     }
 }

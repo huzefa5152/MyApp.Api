@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import React from "react";
 import { it, expect, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";

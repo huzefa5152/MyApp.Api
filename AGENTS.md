@@ -37,6 +37,15 @@ reached operators. Deleting user-visible variety — designs, templates, presets
 sample data — is its own change, needs its own commit, and needs the
 maintainer's agreement before it is written.
 
+## Format every change, and keep formatting out of behaviour commits
+
+JS, JSX, TS, CSS and JSON follow Prettier (`.prettierrc.json`; run
+`npm run format` in `myapp-frontend`). C# follows `.editorconfig` through
+`dotnet format whitespace`, with `Migrations/` left as generated. Format the
+files you changed before every commit. Where a file has never been formatted,
+format it in its own commit before the change. Leave no unused imports,
+variables or dead code behind. Full rules: `CLAUDE.md` section 3a.
+
 ## Never re-baseline a test to make your change pass
 
 That same commit rewrote the template test to assert the new single layout, so

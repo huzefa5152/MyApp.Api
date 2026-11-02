@@ -1,6 +1,5 @@
 import { logoDataUrl, selectReportInvoiceTemplate } from "./invoiceReportBranding";
 import { mergeTemplate } from "./templateEngine";
-import { defaultBillTemplate } from "./defaultTemplates";
 
 const escape = (value) =>
   String(value ?? "").replace(

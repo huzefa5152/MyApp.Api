@@ -13,14 +13,19 @@ public static class CustomerEmailTextReader
     static string Header(string value)
     {
         var s = Regex.Replace(Clean(value).ToLowerInvariant(), @"[\s.#:_-]", "");
-        return s switch {
+        return s switch
+        {
             "sno" or "sr" or "srno" or "serial" or "serialno" or "linenumber" or "lineno" => "serial",
             "description" or "itemdescription" or "item" or "iteam" or "particular" or "particulars" or "product" or "itemname" or "material" or "materialdescription" or "productdescription" or "particularsofitems" => "description",
-            "qty" or "quantity" or "requiredqty" or "requiredquantity" or "orderqty" => "quantity", "unit" or "uom" or "unitofmeasure" or "unitofmeasurement" => "unit",
+            "qty" or "quantity" or "requiredqty" or "requiredquantity" or "orderqty" => "quantity",
+            "unit" or "uom" or "unitofmeasure" or "unitofmeasurement" => "unit",
             "pr" or "prno" or "indent" or "indentno" or "pono" or "reference" => "reference",
-            "date" => "date", "brand" or "make" => "brand",
+            "date" => "date",
+            "brand" or "make" => "brand",
             "rate" or "rateexgst" or "unitprice" or "price" or "unitrate" => "price",
-            "remarks" => "remarks", "itemcode" or "code" => "code", _ => ""
+            "remarks" => "remarks",
+            "itemcode" or "code" => "code",
+            _ => ""
         };
     }
     static bool Decimal(string text, out decimal value) { value = 0; return Number.IsMatch(text.Trim()) && decimal.TryParse(text.Replace(",", ""), NumberStyles.Number, CultureInfo.InvariantCulture, out value); }
@@ -58,7 +63,8 @@ public static class CustomerEmailTextReader
         if (start >= 0)
         {
             if (!tabular && !headers.Contains("serial") && start < lines.Count && lines[start] == "1") headers.Insert(0, "serial");
-            if (tabular && !headers.Contains("serial") && start < lines.Count) {
+            if (tabular && !headers.Contains("serial") && start < lines.Count)
+            {
                 var firstCells = Regex.Split(lines[start], @"\t|\s*\|\s*|\s{2,}");
                 if (firstCells.Length == headers.Count + 1 && firstCells[0] == "1") headers.Insert(0, "serial");
             }
@@ -85,9 +91,11 @@ public static class CustomerEmailTextReader
                     {
                         // Empty optional cells vanish when a mail table is copied as plain text.
                         if (i >= lines.Count || (h is "brand" or "price" or "remarks" or "code") && (lines[i] == (expected + 1).ToString() || Signature(lines[i]) || !lines.Skip(i).Contains((expected + 1).ToString()))) cells.Add("");
-                        else {
+                        else
+                        {
                             var value = lines[i++];
-                            if (h == "description") {
+                            if (h == "description")
+                            {
                                 var nextHeader = headers.ElementAtOrDefault(cells.Count + 1);
                                 while (i < lines.Count && !Signature(lines[i]) &&
                                     (nextHeader == "unit" && !Regex.IsMatch(lines[i], "^(" + Units + ")$", RegexOptions.IgnoreCase) ||
@@ -111,8 +119,15 @@ public static class CustomerEmailTextReader
                 if (Cell("price") != "") { if (Decimal(Cell("price"), out var parsedPrice) && parsedPrice >= 0) price = parsedPrice; else result.Warnings.Add($"Table row {expected}: price was unclear and left pending."); }
                 var reference = Cell("reference"); if (reference != "") references.Add(reference);
                 if (DateTime.TryParseExact(Cell("date"), new[] { "dd/MM/yyyy", "d/M/yyyy", "yyyy-MM-dd", "dd-MM-yyyy" }, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)) dates.Add(date);
-                result.Items.Add(new ParsedPOItemDto { Description = description, Quantity = valid ? qty : 0, Unit = unit == "" ? "Pcs" : unit,
-                    UnitPrice = price, ItemCode = Cell("code"), Remarks = string.Join(" / ", new[] { reference == "" ? "" : "Reference " + reference, Cell("date"), Cell("brand") == "" ? "" : "Brand " + Cell("brand"), Cell("remarks") }.Where(x => x != "")) });
+                result.Items.Add(new ParsedPOItemDto
+                {
+                    Description = description,
+                    Quantity = valid ? qty : 0,
+                    Unit = unit == "" ? "Pcs" : unit,
+                    UnitPrice = price,
+                    ItemCode = Cell("code"),
+                    Remarks = string.Join(" / ", new[] { reference == "" ? "" : "Reference " + reference, Cell("date"), Cell("brand") == "" ? "" : "Brand " + Cell("brand"), Cell("remarks") }.Where(x => x != ""))
+                });
                 expected++;
                 // In a vertical table without an explicit serial heading, emails often still number rows.
             }
@@ -137,7 +152,8 @@ public static class CustomerEmailTextReader
         else { var m = Regex.Match(text, @"(?:requirement|enquiry|inquiry|rfq|pr|po)\s*(?:no\.?|number|#|\.)?\s*[:=-]?\s*(\d[\w/-]*)", RegexOptions.IgnoreCase); if (m.Success) result.PONumber = m.Groups[1].Value; }
         if (dates.Count == 1) result.PODate = dates.Single();
         if (result.Items.Count > 0) result.Warnings.Insert(0, $"Email extraction found {result.Items.Count} items. Check every description, quantity and unit against the original; missing prices remain pending.");
-        if (Regex.IsMatch(text, @"brand name|mention brand|make with every", RegexOptions.IgnoreCase)) {
+        if (Regex.IsMatch(text, @"brand name|mention brand|make with every", RegexOptions.IgnoreCase))
+        {
             result.SourceNotes = "Sender requirement: mention brand/make for every item before sending the quotation.";
             result.Warnings.Add("The sender requests a brand/make for each item. This requirement is retained in document notes.");
         }

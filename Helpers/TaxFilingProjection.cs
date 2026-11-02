@@ -12,15 +12,36 @@ public static class TaxFilingProjection
     private static string? Number(decimal? value) => value?.ToString("G29", CultureInfo.InvariantCulture);
 
     // Deliberately excludes workflow flags and filing data: a review cannot invalidate itself.
-    public static string SourceVersion(Invoice bill) => Hash(new {
-        bill.CompanyId, bill.ClientId, bill.InvoiceNumber, Date = bill.Date.ToString("yyyy-MM-ddTHH:mm:ss.fffffff", CultureInfo.InvariantCulture),
-        Subtotal = Number(bill.Subtotal), GSTRate = Number(bill.GSTRate), GSTAmount = Number(bill.GSTAmount),
-        FurtherTaxRate = Number(bill.FurtherTaxRate), FurtherTaxAmount = Number(bill.FurtherTaxAmount),
-        bill.DocumentType, bill.PaymentTerms,
-        Lines = bill.Items.OrderBy(i => i.Id).Select(i => new {
-            i.Id, i.DeliveryItemId, i.Description, i.ItemTypeId, i.ItemTypeName,
-            Quantity = Number(i.Quantity), i.UOM, UnitPrice = Number(i.UnitPrice), LineTotal = Number(i.LineTotal), i.HSCode, i.SaleType,
-            i.RateId, i.SroScheduleNo, i.SroItemSerialNo, Retail = Number(i.FixedNotifiedValueOrRetailPrice)
+    public static string SourceVersion(Invoice bill) => Hash(new
+    {
+        bill.CompanyId,
+        bill.ClientId,
+        bill.InvoiceNumber,
+        Date = bill.Date.ToString("yyyy-MM-ddTHH:mm:ss.fffffff", CultureInfo.InvariantCulture),
+        Subtotal = Number(bill.Subtotal),
+        GSTRate = Number(bill.GSTRate),
+        GSTAmount = Number(bill.GSTAmount),
+        FurtherTaxRate = Number(bill.FurtherTaxRate),
+        FurtherTaxAmount = Number(bill.FurtherTaxAmount),
+        bill.DocumentType,
+        bill.PaymentTerms,
+        Lines = bill.Items.OrderBy(i => i.Id).Select(i => new
+        {
+            i.Id,
+            i.DeliveryItemId,
+            i.Description,
+            i.ItemTypeId,
+            i.ItemTypeName,
+            Quantity = Number(i.Quantity),
+            i.UOM,
+            UnitPrice = Number(i.UnitPrice),
+            LineTotal = Number(i.LineTotal),
+            i.HSCode,
+            i.SaleType,
+            i.RateId,
+            i.SroScheduleNo,
+            i.SroItemSerialNo,
+            Retail = Number(i.FixedNotifiedValueOrRetailPrice)
         })
     });
     public static bool HasConsultantWork(Invoice bill) => bill.FbrReviewedAt != null
@@ -36,9 +57,12 @@ public static class TaxFilingProjection
     {
         var overlays = bill.Items.Where(i => i.Adjustment != null).Select(i => i.Adjustment!).ToList();
         if (bill.TaxFilingRowsJson != null || overlays.Count == 0) return;
-        bill.TaxFilingRowsJson = JsonSerializer.Serialize(new TaxFilingPlan {
-            SourceVersion = SourceVersion(bill), Rows = InitialRows(bill),
-            SavedAt = overlays.Max(a => a.UpdatedAt ?? a.CreatedAt), SavedBy = overlays[0].CreatedByUserId ?? 0
+        bill.TaxFilingRowsJson = JsonSerializer.Serialize(new TaxFilingPlan
+        {
+            SourceVersion = SourceVersion(bill),
+            Rows = InitialRows(bill, splitUnits: true),
+            SavedAt = overlays.Max(a => a.UpdatedAt ?? a.CreatedAt),
+            SavedBy = overlays[0].CreatedByUserId ?? 0
         });
     }
 
@@ -54,16 +78,23 @@ public static class TaxFilingProjection
           ?? throw new InvalidOperationException("The saved tax filing is unreadable. Review the invoice again.");
     public static bool IsStale(Invoice bill) => Plan(bill) is { } p && p.SourceVersion != SourceVersion(bill);
 
-    public static InvoiceItem LegacyLine(InvoiceItem i) => new() {
-        Id = i.Id, InvoiceId = i.InvoiceId, ItemTypeId = i.Adjustment?.AdjustedItemTypeId ?? i.ItemTypeId,
+    public static InvoiceItem LegacyLine(InvoiceItem i) => new()
+    {
+        Id = i.Id,
+        InvoiceId = i.InvoiceId,
+        ItemTypeId = i.Adjustment?.AdjustedItemTypeId ?? i.ItemTypeId,
         ItemTypeName = i.Adjustment?.AdjustedItemTypeName ?? i.ItemTypeName,
-        Description = i.Description, Quantity = i.Adjustment?.AdjustedQuantity ?? i.Quantity,
+        Description = i.Description,
+        Quantity = i.Adjustment?.AdjustedQuantity ?? i.Quantity,
         UnitPrice = i.Adjustment?.AdjustedUnitPrice ?? i.UnitPrice,
         LineTotal = i.Adjustment?.AdjustedLineTotal ?? i.LineTotal,
         HSCode = i.Adjustment?.AdjustedHSCode ?? i.HSCode,
         SaleType = i.Adjustment?.AdjustedSaleType ?? i.SaleType,
-        UOM = TaxInvoiceGrouping.Uom(i), FbrUOMId = TaxInvoiceGrouping.FbrUomId(i),
-        RateId = i.RateId, SroScheduleNo = i.SroScheduleNo, SroItemSerialNo = i.SroItemSerialNo,
+        UOM = TaxInvoiceGrouping.Uom(i),
+        FbrUOMId = TaxInvoiceGrouping.FbrUomId(i),
+        RateId = i.RateId,
+        SroScheduleNo = i.SroScheduleNo,
+        SroItemSerialNo = i.SroItemSerialNo,
         FixedNotifiedValueOrRetailPrice = i.FixedNotifiedValueOrRetailPrice
     };
 
@@ -71,16 +102,31 @@ public static class TaxFilingProjection
     /// The starting rows of the filing editor. <paramref name="perLine"/> gives every original bill line its own row
     /// (a company that prints its original lines never starts from item-type groups) and names the row by the bill's
     /// own description, so the consultant sees the line the customer was billed.
+    /// Lines of one classification start as ONE row whatever unit the bill used (Roshan bill 1139: 1 Set line and
+    /// 8 Pcs lines of Fastener Item). Quantities in different units are never summed: such a row starts with no
+    /// unit and no quantity, for the consultant to file in one FBR unit. <paramref name="splitUnits"/> keeps the
+    /// old split for converting a legacy overlay, which is saved as is and must keep a real quantity per row.
     /// </summary>
-    public static List<TaxFilingRowDto> InitialRows(Invoice bill, bool commercial = false, bool perLine = false) => bill.Items.Select(i => commercial ? i : LegacyLine(i))
-        .GroupBy(i => perLine ? (object)i.Id : new { Classification = TaxInvoiceGrouping.Key(i), i.UOM }).Select(g => new TaxFilingRowDto {
-            SourceLineIds = g.Select(i => i.Id).ToList(), ItemTypeId = g.First().ItemTypeId,
-            Description = perLine && !string.IsNullOrWhiteSpace(g.First().Description) ? g.First().Description : g.First().ItemTypeName ?? g.First().Description,
-            HSCode = g.First().HSCode, UOM = g.First().UOM, FbrUOMId = g.First().FbrUOMId,
-            SaleType = g.First().SaleType, RateId = g.First().RateId,
-            SroScheduleNo = g.First().SroScheduleNo, SroItemSerialNo = g.First().SroItemSerialNo,
-            Quantity = g.Sum(i => i.Quantity), ValueExclTax = g.Sum(i => i.LineTotal),
-            RetailPrice = g.Sum(i => i.FixedNotifiedValueOrRetailPrice ?? 0m)
+    public static List<TaxFilingRowDto> InitialRows(Invoice bill, bool commercial = false, bool perLine = false, bool splitUnits = false) => bill.Items.Select(i => commercial ? i : LegacyLine(i))
+        .GroupBy(i => perLine ? (object)i.Id : new { Classification = TaxInvoiceGrouping.Key(i), Unit = splitUnits ? i.UOM : null }).Select(g =>
+        {
+            var mixedUnits = g.Select(i => i.UOM?.Trim().ToUpperInvariant()).Distinct().Count() > 1;
+            return new TaxFilingRowDto
+            {
+                SourceLineIds = g.Select(i => i.Id).ToList(),
+                ItemTypeId = g.First().ItemTypeId,
+                Description = perLine && !string.IsNullOrWhiteSpace(g.First().Description) ? g.First().Description : g.First().ItemTypeName ?? g.First().Description,
+                HSCode = g.First().HSCode,
+                UOM = mixedUnits ? "" : g.First().UOM,
+                FbrUOMId = mixedUnits ? null : g.First().FbrUOMId,
+                SaleType = g.First().SaleType,
+                RateId = g.First().RateId,
+                SroScheduleNo = g.First().SroScheduleNo,
+                SroItemSerialNo = g.First().SroItemSerialNo,
+                Quantity = mixedUnits ? 0 : g.Sum(i => i.Quantity),
+                ValueExclTax = g.Sum(i => i.LineTotal),
+                RetailPrice = g.Sum(i => i.FixedNotifiedValueOrRetailPrice ?? 0m)
+            };
         }).ToList();
 
     /// <summary>
@@ -102,48 +148,25 @@ public static class TaxFilingProjection
     }
 
     public static List<InvoiceItem> Lines(Invoice bill) => Plan(bill) is { } p
-        ? p.Rows.Select((r, n) => new InvoiceItem {
-            Id = -(n + 1), InvoiceId = bill.Id, ItemTypeId = r.ItemTypeId,
-            ItemTypeName = r.Description, Description = r.Description,
-            HSCode = r.HSCode, UOM = r.UOM, FbrUOMId = r.FbrUOMId, SaleType = r.SaleType,
-            Quantity = r.Quantity, LineTotal = r.ValueExclTax,
+        ? p.Rows.Select((r, n) => new InvoiceItem
+        {
+            Id = -(n + 1),
+            InvoiceId = bill.Id,
+            ItemTypeId = r.ItemTypeId,
+            ItemTypeName = r.Description,
+            Description = r.Description,
+            HSCode = r.HSCode,
+            UOM = r.UOM,
+            FbrUOMId = r.FbrUOMId,
+            SaleType = r.SaleType,
+            Quantity = r.Quantity,
+            LineTotal = r.ValueExclTax,
             UnitPrice = r.Quantity > 0 ? r.ValueExclTax / r.Quantity : 0,
-            RateId = r.RateId, SroScheduleNo = r.SroScheduleNo, SroItemSerialNo = r.SroItemSerialNo,
+            RateId = r.RateId,
+            SroScheduleNo = r.SroScheduleNo,
+            SroItemSerialNo = r.SroItemSerialNo,
             FixedNotifiedValueOrRetailPrice = r.RetailPrice
         }).ToList() : bill.Items.Select(LegacyLine).ToList();
-
-    /// <summary>
-    /// For a company that files every bill line as its own row: the message for a row that combines lines,
-    /// unless that exact group was already saved (a row merged before the rule stays until it is separated).
-    /// </summary>
-    public static string? MergedRow(IEnumerable<TaxFilingRowDto>? saved, IEnumerable<TaxFilingRowDto> rows)
-    {
-        var kept = (saved ?? Enumerable.Empty<TaxFilingRowDto>()).Where(r => r.SourceLineIds.Count > 1)
-            .Select(r => string.Join(',', r.SourceLineIds.Order())).ToHashSet();
-        return rows.Any(r => r.SourceLineIds.Count > 1 && !kept.Contains(string.Join(',', r.SourceLineIds.Order())))
-            ? "This company files every bill line as its own row. Give each line its own HS code instead of combining them."
-            : null;
-    }
-
-    /// <summary>
-    /// For a company that gives each bill line its own HS code: the operator message for the first code
-    /// used on more than one row, naming the line that already holds it; null when every code is unique.
-    /// </summary>
-    public static string? RepeatedHsCode(IEnumerable<InvoiceItem> lines, IEnumerable<TaxFilingRowDto> rows)
-    {
-        var seen = new Dictionary<string, TaxFilingRowDto>(StringComparer.OrdinalIgnoreCase);
-        foreach (var row in rows)
-        {
-            var code = row.HSCode?.Trim();
-            if (string.IsNullOrEmpty(code)) continue;
-            if (!seen.TryAdd(code, row))
-            {
-                var holder = lines.FirstOrDefault(i => seen[code].SourceLineIds.Contains(i.Id))?.Description?.Trim();
-                return $"HS code {code} is already in use on the line \"{holder}\". Each bill line of this company needs its own HS code.";
-            }
-        }
-        return null;
-    }
 
     public static void ValidateCoverage(Invoice bill, List<TaxFilingRowDto> rows)
     {
@@ -158,7 +181,8 @@ public static class TaxFilingProjection
             throw new InvalidOperationException("Each row needs a positive quantity (up to 4 decimals) and amount (up to 2 decimals).");
         if (rows.Sum(r => r.ValueExclTax) != bill.Subtotal)
             throw new InvalidOperationException("Filing amounts must equal the bill subtotal exactly. Adjust the amounts before saving.");
-        foreach (var row in rows) {
+        foreach (var row in rows)
+        {
             var sources = bill.Items.Where(i => row.SourceLineIds.Contains(i.Id)).Select(LegacyLine).ToList();
             if (sources.Select(i => new { i.RateId, i.SroScheduleNo, i.SroItemSerialNo, Retail = (i.FixedNotifiedValueOrRetailPrice ?? 0) > 0 }).Distinct().Count() > 1
                 || sources.Select(i => i.SaleType?.Trim().ToUpperInvariant()).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().Count() > 1)

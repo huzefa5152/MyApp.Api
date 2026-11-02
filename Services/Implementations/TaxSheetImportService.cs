@@ -186,8 +186,8 @@ namespace MyApp.Api.Services.Implementations
 
         /// <summary>
         /// Filing rows for one invoice, or null when the sheet gave it no HS code.
-        /// Lines with the same HS code and description become one filing row, except for a company that
-        /// prints its original lines: there each line keeps its own row and its own HS code.
+        /// Lines with the same HS code become one filing row. For a company that prints its original lines the
+        /// description is not part of the key, so lines sharing a code merge even when their names differ.
         /// </summary>
         private async Task<List<TaxFilingRowDto>?> PlanAsync(int companyId, Invoice bill, List<SheetLine> sheet, bool allowNumbers)
         {
@@ -216,12 +216,10 @@ namespace MyApp.Api.Services.Implementations
                 chosen.Add((line, hs, s?.Description ?? "", qty, s?.Unit ?? ""));
             }
 
+            // An original-lines company keeps its printed lines but files every line that shares an HS code as one row.
             var perLine = bill.Company?.TaxInvoiceUseOriginalBillLines == true;
-            if (perLine && TaxFilingProjection.RepeatedHsCode(bill.Items, chosen.Select(c =>
-                    new TaxFilingRowDto { HSCode = c.Hs, SourceLineIds = new() { c.Line.Id } })) is { } repeated)
-                throw new InvalidOperationException(repeated);
             var rows = new List<TaxFilingRowDto>();
-            foreach (var g in chosen.GroupBy(c => (c.Hs, Desc: perLine ? c.Line.Id.ToString() : c.Desc.ToUpperInvariant())))
+            foreach (var g in chosen.GroupBy(c => (c.Hs, Desc: perLine ? "" : c.Desc.ToUpperInvariant())))
             {
                 var members = g.ToList();
                 var row = new TaxFilingRowDto

@@ -52,7 +52,12 @@ public sealed class McpCatalogController(AppDbContext db, IPermissionService per
         foreach (var tool in McpToolAccessCatalog.All)
             tools.Add(new
             {
-                tool.Name, tool.Group, tool.Label, tool.Scope, tool.Write, tool.Configurable,
+                tool.Name,
+                tool.Group,
+                tool.Label,
+                tool.Scope,
+                tool.Write,
+                tool.Configurable,
                 eligible = await catalog.EligibleAsync(userId, tool),
                 grantable = manage && (management.IsSeedAdmin(Actor) || await catalog.AllowedAsync(Actor, tool.Name)),
                 granted = !tool.Configurable || settings.Grants.Contains(tool.Name),
@@ -62,12 +67,20 @@ public sealed class McpCatalogController(AppDbContext db, IPermissionService per
         Response.Headers.CacheControl = "no-store";
         return Ok(new
         {
-            userId, user.Username, user.FullName, canManageGrants = manage, isSelf = userId == Actor,
-            revision = settings.Revision, accessGranted = settings.Access, writesGranted = settings.Writes,
-            accessEnabled = policy?.AccessEnabled ?? true, writesEnabled = policy?.WritesEnabled ?? true,
+            userId,
+            user.Username,
+            user.FullName,
+            canManageGrants = manage,
+            isSelf = userId == Actor,
+            revision = settings.Revision,
+            accessGranted = settings.Access,
+            writesGranted = settings.Writes,
+            accessEnabled = policy?.AccessEnabled ?? true,
+            writesEnabled = policy?.WritesEnabled ?? true,
             canGrantAccess = manage && (management.IsSeedAdmin(Actor) || await permissions.HasPermissionAsync(Actor, "mcp.access.use")),
             canGrantWrites = manage && (management.IsSeedAdmin(Actor) || await permissions.HasPermissionAsync(Actor, "mcp.write.use")),
-            tools, legacy = policy == null
+            tools,
+            legacy = policy == null
         });
     }
 

@@ -33,8 +33,10 @@ public class PrintTemplateMcpTests : IAsyncLifetime
         var server = Environment.GetEnvironmentVariable("PRINT_MCP_TEST_SERVER") ?? @".\MSSQLSERVER02";
         connection = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder
         {
-            DataSource = server, InitialCatalog = "MyApp_PrintMcp_Test_" + Guid.NewGuid().ToString("N"),
-            IntegratedSecurity = true, TrustServerCertificate = true
+            DataSource = server,
+            InitialCatalog = "MyApp_PrintMcp_Test_" + Guid.NewGuid().ToString("N"),
+            IntegratedSecurity = true,
+            TrustServerCertificate = true
         }.ConnectionString;
         DevelopmentSqlGuard.AssertLocal(connection, Environment.MachineName, false);
         db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseSqlServer(connection).Options);
@@ -43,9 +45,17 @@ public class PrintTemplateMcpTests : IAsyncLifetime
         user = new User { Username = "print-test", FullName = "Sample operator" };
         db.AddRange(own, foreign, user); await db.SaveChangesAsync();
         guard.Allowed.UnionWith([own.Id, foreign.Id]);
-        agent = new McpAgentToken { UserId = user.Id, CreatedByUserId = user.Id, Name = "Sample assistant",
-            TokenHash = McpAgentAuthHandler.Hash(Guid.NewGuid().ToString()), CompanyIds = own.Id.ToString(),
-            Scopes = "read,templates.read,templates.write", AllowWrites = true, ExpiresAt = DateTime.UtcNow.AddHours(1) };
+        agent = new McpAgentToken
+        {
+            UserId = user.Id,
+            CreatedByUserId = user.Id,
+            Name = "Sample assistant",
+            TokenHash = McpAgentAuthHandler.Hash(Guid.NewGuid().ToString()),
+            CompanyIds = own.Id.ToString(),
+            Scopes = "read,templates.read,templates.write",
+            AllowWrites = true,
+            ExpiresAt = DateTime.UtcNow.AddHours(1)
+        };
         db.Add(agent); await db.SaveChangesAsync();
         var services = new ServiceCollection();
         services.AddDbContext<AppDbContext>(o => o.UseSqlServer(connection));
@@ -64,13 +74,16 @@ public class PrintTemplateMcpTests : IAsyncLifetime
     private async Task<JsonElement> Rpc(string method, object? parameters = null, bool loginOnly = false, McpAgentToken? token = null)
     {
         db.ChangeTracker.Clear();
-        var http = new DefaultHttpContext { RequestServices = provider,
-            User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()), new Claim(ClaimTypes.Name, "sample")], "test")) };
+        var http = new DefaultHttpContext
+        {
+            RequestServices = provider,
+            User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()), new Claim(ClaimTypes.Name, "sample")], "test"))
+        };
         http.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { jsonrpc = "2.0", id = 1, method, @params = parameters })));
         if (!loginOnly) http.Items[McpAgentAuthHandler.ItemKey] = token ?? agent;
         var controller = new McpController(guard, grants, null!, null!, null!, null!, null!, null!, db,
             new SensitiveDataRedactor(), provider.GetRequiredService<IServiceScopeFactory>(), NullLogger<McpController>.Instance)
-            { ControllerContext = new ControllerContext { HttpContext = http } };
+        { ControllerContext = new ControllerContext { HttpContext = http } };
         return JsonSerializer.SerializeToElement(((JsonResult)await controller.Post()).Value).GetProperty("result");
     }
     private Task<JsonElement> Call(string name, object args, bool loginOnly = false, McpAgentToken? token = null) =>
@@ -83,9 +96,17 @@ public class PrintTemplateMcpTests : IAsyncLifetime
     private static void Denied(JsonElement result) => Assert.True(result.GetProperty("isError").GetBoolean(), result.ToString());
     private async Task<PrintTemplate> Template(string type = "SalesQuote", bool other = false)
     {
-        var row = new PrintTemplate { CompanyId = other ? foreign.Id : own.Id, TemplateType = type,
-            Name = "Sample design", HtmlContent = "<h1>{{clientName}}</h1>", TemplateJson = "{\"pages\":[]}", EditorMode = "visual",
-            ExcelTemplatePath = "/sample.xlsx", ExcelSheetName = "Sample" };
+        var row = new PrintTemplate
+        {
+            CompanyId = other ? foreign.Id : own.Id,
+            TemplateType = type,
+            Name = "Sample design",
+            HtmlContent = "<h1>{{clientName}}</h1>",
+            TemplateJson = "{\"pages\":[]}",
+            EditorMode = "visual",
+            ExcelTemplatePath = "/sample.xlsx",
+            ExcelSheetName = "Sample"
+        };
         db.Add(row); await db.SaveChangesAsync(); return row;
     }
     private async Task<string> Revision(PrintTemplate row) => Data(await Call("get_print_template", new { companyId = row.CompanyId, templateId = row.Id })).GetProperty("revision").GetString()!;
@@ -172,8 +193,15 @@ public class PrintTemplateMcpTests : IAsyncLifetime
         Assert.DoesNotContain((await Rpc("tools/list")).GetProperty("tools").EnumerateArray(),
             t => t.GetProperty("name").GetString() == "prepare_print_template_update");
         agent.Scopes = originalScopes;
-        object edit = new { companyId = own.Id, templateId = row.Id, documentType = "SalesQuote", revision,
-            htmlContent = "<h1>Updated {{clientName}}</h1>", idempotencyKey = "sample-template-operation" };
+        object edit = new
+        {
+            companyId = own.Id,
+            templateId = row.Id,
+            documentType = "SalesQuote",
+            revision,
+            htmlContent = "<h1>Updated {{clientName}}</h1>",
+            idempotencyKey = "sample-template-operation"
+        };
         var first = Data(await Call("prepare_print_template_update", edit));
         var second = Data(await Call("prepare_print_template_update", edit));
         Assert.Equal(first.GetProperty("planId").GetString(), second.GetProperty("planId").GetString());
@@ -206,7 +234,8 @@ public class PrintTemplateMcpTests : IAsyncLifetime
         public Task<bool> HasAccessAsync(int uid, int companyId) => Task.FromResult(Allowed.Contains(companyId));
         public Task AssertAccessAsync(int uid, int companyId) => Allowed.Contains(companyId) ? Task.CompletedTask : throw new UnauthorizedAccessException();
         public Task<HashSet<int>> GetAccessibleCompanyIdsAsync(int uid) => Task.FromResult(Allowed);
-        public void InvalidateUser(int uid) { } public void InvalidateAll() { }
+        public void InvalidateUser(int uid) { }
+        public void InvalidateAll() { }
     }
     private sealed class Grants : IPermissionService
     {
@@ -215,6 +244,7 @@ public class PrintTemplateMcpTests : IAsyncLifetime
         public Task<bool> HasMcpToolAccessAsync(int uid, string name) => Task.FromResult(!ToolsDenied.Contains(name));
         public Task<IReadOnlyCollection<string>> GetUserPermissionsAsync(int uid) => Task.FromResult<IReadOnlyCollection<string>>([]);
         public bool IsSeedAdmin(int uid) => false;
-        public void InvalidateUser(int uid) { } public void InvalidateAll() { }
+        public void InvalidateUser(int uid) { }
+        public void InvalidateAll() { }
     }
 }

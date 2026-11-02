@@ -203,7 +203,7 @@ namespace MyApp.Api.Services.Tax
                 ?? throw new KeyNotFoundException($"Company {companyId} not found.");
 
             var activities = TaxScenarios.SplitCsv(company.FbrBusinessActivity);
-            var sectors    = TaxScenarios.SplitCsv(company.FbrSector);
+            var sectors = TaxScenarios.SplitCsv(company.FbrSector);
             var applicable = TaxScenarios.GetApplicable(activities, sectors);
 
             // Existing demo bills for this company keyed by SN code.
@@ -226,14 +226,14 @@ namespace MyApp.Api.Services.Tax
             // who scan the sandbox tab and see real names). Instead we
             // auto-provision two clearly-labelled demo clients with FBR-spec
             // sample NTNs, idempotent by name so re-seeds reuse them.
-            const string DemoRegisteredName   = "[DEMO] FBR Sandbox Registered Buyer";
+            const string DemoRegisteredName = "[DEMO] FBR Sandbox Registered Buyer";
             const string DemoUnregisteredName = "[DEMO] FBR Sandbox Walk-in Customer";
 
             var demoClients = await _db.Clients
                 .Where(c => c.CompanyId == companyId
                             && (c.Name == DemoRegisteredName || c.Name == DemoUnregisteredName))
                 .ToListAsync();
-            var registeredClient   = demoClients.FirstOrDefault(c => c.Name == DemoRegisteredName);
+            var registeredClient = demoClients.FirstOrDefault(c => c.Name == DemoRegisteredName);
             var unregisteredClient = demoClients.FirstOrDefault(c => c.Name == DemoUnregisteredName);
 
             // PRAL's STATL check authoritatively determines the buyer's
@@ -542,10 +542,10 @@ namespace MyApp.Api.Services.Tax
         {
             // The scenario fixes sale-type + rate; pick HS / UOM defensively.
             var hsCode = sampleType?.HSCode ?? "8481.8090";
-            var uom    = sampleType?.UOM ?? "Numbers, pieces, units";
+            var uom = sampleType?.UOM ?? "Numbers, pieces, units";
             var fbrUom = sampleType?.FbrUOMId ?? 69;
-            var qty    = 1;
-            var unit   = sc.IsThirdSchedule ? 100m : 1000m;
+            var qty = 1;
+            var unit = sc.IsThirdSchedule ? 100m : 1000m;
             var lineTotal = qty * unit;
 
             // Per-scenario tweaks for FBR-correctness:

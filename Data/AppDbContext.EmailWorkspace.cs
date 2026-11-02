@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Models;
 namespace MyApp.Api.Data;
+
 public partial class AppDbContext
 {
     public DbSet<GmailConnection> GmailConnections => Set<GmailConnection>();

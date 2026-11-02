@@ -1,5 +1,6 @@
 using MyApp.Api.Models;
 namespace MyApp.Api.Helpers;
+
 public static class BillTaxTreatment
 {
     public static bool IsOutsideFbr(string? value) => value is "SRB" or "NoTax";

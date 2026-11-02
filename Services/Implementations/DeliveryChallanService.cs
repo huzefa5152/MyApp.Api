@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
@@ -125,7 +124,8 @@ namespace MyApp.Api.Services.Implementations
 
             await ValidatePrivateCostsAsync(dc.CompanyId, dto.Items.Select(i => new DeliveryItemDto
             {
-                SupplierId = i.SupplierId, ActualUnitCost = i.ActualUnitCost
+                SupplierId = i.SupplierId,
+                ActualUnitCost = i.ActualUnitCost
             }));
             foreach (var line in dc.Items)
             {
@@ -254,10 +254,25 @@ namespace MyApp.Api.Services.Implementations
         /// loaded via the bulk Excel import. Both statuses are billable.
         /// </summary>
         private static string DeliveryVersion(DeliveryChallan dc) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
-            System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new { dc.Id, dc.CompanyId, dc.ClientId, dc.ChallanNumber,
-                dc.PoNumber, PoDate=dc.PoDate?.ToString("yyyy-MM-ddTHH:mm:ss.fffffff"), dc.Site, dc.Notes, dc.IndentNo, DeliveryDate=dc.DeliveryDate?.ToString("yyyy-MM-ddTHH:mm:ss.fffffff"), dc.Status, dc.InvoiceId, dc.SalesOrderId,
-                FbrStatus = dc.Invoice?.FbrStatus, FbrIRN=dc.Invoice?.FbrIRN,
-                Items=dc.Items.OrderBy(i=>i.Id).Select(i=>new {i.Id,i.Description,Quantity=i.Quantity.ToString("G29",System.Globalization.CultureInfo.InvariantCulture),i.Unit,i.ItemTypeId,i.SalesOrderItemId,i.SupplierId,ActualUnitCost=i.ActualUnitCost?.ToString("G29",System.Globalization.CultureInfo.InvariantCulture)}) })));
+            System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                dc.Id,
+                dc.CompanyId,
+                dc.ClientId,
+                dc.ChallanNumber,
+                dc.PoNumber,
+                PoDate = dc.PoDate?.ToString("yyyy-MM-ddTHH:mm:ss.fffffff"),
+                dc.Site,
+                dc.Notes,
+                dc.IndentNo,
+                DeliveryDate = dc.DeliveryDate?.ToString("yyyy-MM-ddTHH:mm:ss.fffffff"),
+                dc.Status,
+                dc.InvoiceId,
+                dc.SalesOrderId,
+                FbrStatus = dc.Invoice?.FbrStatus,
+                FbrIRN = dc.Invoice?.FbrIRN,
+                Items = dc.Items.OrderBy(i => i.Id).Select(i => new { i.Id, i.Description, Quantity = i.Quantity.ToString("G29", System.Globalization.CultureInfo.InvariantCulture), i.Unit, i.ItemTypeId, i.SalesOrderItemId, i.SupplierId, ActualUnitCost = i.ActualUnitCost?.ToString("G29", System.Globalization.CultureInfo.InvariantCulture) })
+            })));
 
         private static bool IsEditable(DeliveryChallan dc) => dc.Status != "Cancelled"
             && (dc.InvoiceId != null ? dc.Invoice != null && SalesDocumentRules.BillEditable(dc.Invoice)
@@ -818,7 +833,9 @@ namespace MyApp.Api.Services.Implementations
                     InvoiceId = invoice.Id,
                     DeliveryItem = newDi,  // navigation → EF picks up the generated FK
                     ItemTypeName = type?.Name ?? "",
-                    HSCode = type?.HSCode, FbrUOMId = type?.FbrUOMId, SaleType = type?.SaleType,
+                    HSCode = type?.HSCode,
+                    FbrUOMId = type?.FbrUOMId,
+                    SaleType = type?.SaleType,
                     Description = newDi.Description,
                     Quantity = newDi.Quantity,
                     UOM = newDi.Unit,
@@ -1053,39 +1070,39 @@ namespace MyApp.Api.Services.Implementations
                         throw new InvalidOperationException("This challan changed after you opened it. Reload before saving.");
                 }
 
-            if (dto.ClientId > 0 && dto.ClientId != dc.ClientId)
-            {
-                if (dc.InvoiceId != null || dc.SalesOrderId != null)
-                    throw new InvalidOperationException("The customer cannot change on a challan linked to an order or bill.");
-            }
-            if (dto.ClientId > 0 && dto.ClientId != dc.ClientId)
-            {
-                var newClient = await _context.Clients.FindAsync(dto.ClientId);
-                if (newClient == null)
-                    throw new InvalidOperationException($"Client {dto.ClientId} not found.");
-                if (newClient.CompanyId != dc.CompanyId)
-                    throw new InvalidOperationException($"Client {dto.ClientId} does not belong to this company.");
-                dc.ClientId = dto.ClientId;
-                dc.Client = newClient;
-            }
+                if (dto.ClientId > 0 && dto.ClientId != dc.ClientId)
+                {
+                    if (dc.InvoiceId != null || dc.SalesOrderId != null)
+                        throw new InvalidOperationException("The customer cannot change on a challan linked to an order or bill.");
+                }
+                if (dto.ClientId > 0 && dto.ClientId != dc.ClientId)
+                {
+                    var newClient = await _context.Clients.FindAsync(dto.ClientId);
+                    if (newClient == null)
+                        throw new InvalidOperationException($"Client {dto.ClientId} not found.");
+                    if (newClient.CompanyId != dc.CompanyId)
+                        throw new InvalidOperationException($"Client {dto.ClientId} does not belong to this company.");
+                    dc.ClientId = dto.ClientId;
+                    dc.Client = newClient;
+                }
 
-            if (dto.DeliveryDate.HasValue) dc.DeliveryDate = dto.DeliveryDate.Value;
+                if (dto.DeliveryDate.HasValue) dc.DeliveryDate = dto.DeliveryDate.Value;
 
-            // Site: null or empty string clears it
-            dc.Site = string.IsNullOrWhiteSpace(dto.Site) ? null : dto.Site.Trim();
-            dc.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
+                // Site: null or empty string clears it
+                dc.Site = string.IsNullOrWhiteSpace(dto.Site) ? null : dto.Site.Trim();
+                dc.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
 
-            // PO: empty/whitespace = operator wants to clear the PO (→ No PO status)
-            var poNumber = (dto.PoNumber ?? "").Trim();
-            var hasPo = !string.IsNullOrWhiteSpace(poNumber);
-            dc.PoNumber = poNumber;
-            dc.PoDate = hasPo ? dto.PoDate : null;
+                // PO: empty/whitespace = operator wants to clear the PO (→ No PO status)
+                var poNumber = (dto.PoNumber ?? "").Trim();
+                var hasPo = !string.IsNullOrWhiteSpace(poNumber);
+                dc.PoNumber = poNumber;
+                dc.PoDate = hasPo ? dto.PoDate : null;
 
-            // Indent No is independent of PO — operators may set/clear it
-            // even when there's no PO (e.g. internal indents that pre-date
-            // a customer PO). Empty string clears it back to null so the
-            // print template's {{#if indentNo}} block hides correctly.
-            dc.IndentNo = string.IsNullOrWhiteSpace(dto.IndentNo) ? null : dto.IndentNo.Trim();
+                // Indent No is independent of PO — operators may set/clear it
+                // even when there's no PO (e.g. internal indents that pre-date
+                // a customer PO). Empty string clears it back to null so the
+                // print template's {{#if indentNo}} block hides correctly.
+                dc.IndentNo = string.IsNullOrWhiteSpace(dto.IndentNo) ? null : dto.IndentNo.Trim();
 
 
                 await CompanyDocumentNumbers.RenumberAsync(_context, dc.CompanyId, "challan", dc.Id, dc.ChallanNumber, dto.CustomNumber, dc.ClientId);
@@ -1107,7 +1124,7 @@ namespace MyApp.Api.Services.Implementations
                 {
                     var fbrReady = IsFbrReady(dc.Company, dc.Client);
                     dc.Status = !fbrReady ? "Setup Required"
-                              : hasPo     ? ReadyStatusFor(dc)
+                              : hasPo ? ReadyStatusFor(dc)
                                           : "No PO";
                 }
 

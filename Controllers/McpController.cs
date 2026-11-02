@@ -419,14 +419,27 @@ namespace MyApp.Api.Controllers
 
         private static object InvoiceRow(InvoiceDto r, bool payment) => new
         {
-            id = r.Id, companyId = r.CompanyId, clientId = r.ClientId, clientName = r.ClientName,
-            invoiceNumber = r.InvoiceNumber, date = r.Date.ToString("yyyy-MM-dd"),
-            subtotal = r.Subtotal, gstAmount = r.GSTAmount, grandTotal = r.GrandTotal,
-            freightCharges = r.FreightCharges, commercialTotal = r.CommercialTotal,
-            withholdingTaxRate = r.WithholdingTaxRate, withholdingTaxAmount = r.WithholdingTaxAmount, collectible = r.Collectible,
-            amountPaid = payment ? r.AmountPaid : null, balanceDue = payment ? r.BalanceDue : null,
+            id = r.Id,
+            companyId = r.CompanyId,
+            clientId = r.ClientId,
+            clientName = r.ClientName,
+            invoiceNumber = r.InvoiceNumber,
+            date = r.Date.ToString("yyyy-MM-dd"),
+            subtotal = r.Subtotal,
+            gstAmount = r.GSTAmount,
+            grandTotal = r.GrandTotal,
+            freightCharges = r.FreightCharges,
+            commercialTotal = r.CommercialTotal,
+            withholdingTaxRate = r.WithholdingTaxRate,
+            withholdingTaxAmount = r.WithholdingTaxAmount,
+            collectible = r.Collectible,
+            amountPaid = payment ? r.AmountPaid : null,
+            balanceDue = payment ? r.BalanceDue : null,
             paymentStatus = payment ? r.PaymentStatus : null,
-            fbrStatus = r.FbrStatus, fbrInvoiceNumber = r.FbrInvoiceNumber, isCancelled = r.IsCancelled, isFbrExcluded = r.IsFbrExcluded,
+            fbrStatus = r.FbrStatus,
+            fbrInvoiceNumber = r.FbrInvoiceNumber,
+            isCancelled = r.IsCancelled,
+            isFbrExcluded = r.IsFbrExcluded,
         };
 
         // GET /api/invoices/company/{id}/paged — bills.list.view OR invoices.list.view.
@@ -445,7 +458,10 @@ namespace MyApp.Api.Controllers
             return new
             {
                 items = result.Items.Where(r => r.CompanyId == companyId).Select(r => InvoiceRow(r, payment)),
-                totalCount = result.TotalCount, page = result.Page, pageSize = result.PageSize, totalPages = result.TotalPages,
+                totalCount = result.TotalCount,
+                page = result.Page,
+                pageSize = result.PageSize,
+                totalPages = result.TotalPages,
             };
         }
 
@@ -498,8 +514,14 @@ namespace MyApp.Api.Controllers
                 var totalOut = moves.Where(x => x.ItemTypeId == id && x.Direction == StockMovementDirection.Out).Sum(x => x.Qty);
                 return new
                 {
-                    itemTypeId = id, itemTypeName = it.Name, hsCode = it.HSCode, uom = it.UOM,
-                    openingBalance = opening, totalIn, totalOut, onHand = opening + totalIn - totalOut,
+                    itemTypeId = id,
+                    itemTypeName = it.Name,
+                    hsCode = it.HSCode,
+                    uom = it.UOM,
+                    openingBalance = opening,
+                    totalIn,
+                    totalOut,
+                    onHand = opening + totalIn - totalOut,
                     lastMovementAt = last.TryGetValue(id, out var d) ? d : (DateTime?)null,
                 };
             }).Where(r => search == "" || (r.itemTypeName + " " + r.hsCode).Contains(search, StringComparison.OrdinalIgnoreCase))
@@ -520,11 +542,21 @@ namespace MyApp.Api.Controllers
             {
                 items = result.Items.Where(q => q.CompanyId == companyId).Select(q => new
                 {
-                    id = q.Id, companyId = q.CompanyId, clientId = q.ClientId, clientName = q.ClientName,
-                    quoteNumber = q.QuoteNumber, date = q.Date.ToString("yyyy-MM-dd"),
-                    subtotal = q.Subtotal, gstAmount = q.GSTAmount, grandTotal = q.GrandTotal, status = q.Status,
+                    id = q.Id,
+                    companyId = q.CompanyId,
+                    clientId = q.ClientId,
+                    clientName = q.ClientName,
+                    quoteNumber = q.QuoteNumber,
+                    date = q.Date.ToString("yyyy-MM-dd"),
+                    subtotal = q.Subtotal,
+                    gstAmount = q.GSTAmount,
+                    grandTotal = q.GrandTotal,
+                    status = q.Status,
                 }),
-                totalCount = result.TotalCount, page = result.Page, pageSize = result.PageSize, totalPages = result.TotalPages,
+                totalCount = result.TotalCount,
+                page = result.Page,
+                pageSize = result.PageSize,
+                totalPages = result.TotalPages,
             };
         }
 

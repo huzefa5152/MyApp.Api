@@ -55,11 +55,11 @@ namespace MyApp.Api.Services.Implementations
                 ? await _permissions.GetUserPermissionsAsync(userId.Value)
                 : (IReadOnlyCollection<string>)Array.Empty<string>();
 
-            bool canSales      = perms.Contains("dashboard.kpi.sales.view");
-            bool canPurchases  = perms.Contains("dashboard.kpi.purchases.view");
-            bool canFbr        = perms.Contains("dashboard.kpi.fbr.view");
-            bool canInventory  = perms.Contains("dashboard.kpi.inventory.view");
-            bool canHero       = canSales || canPurchases;  // Hero needs ≥1 of these
+            bool canSales = perms.Contains("dashboard.kpi.sales.view");
+            bool canPurchases = perms.Contains("dashboard.kpi.purchases.view");
+            bool canFbr = perms.Contains("dashboard.kpi.fbr.view");
+            bool canInventory = perms.Contains("dashboard.kpi.inventory.view");
+            bool canHero = canSales || canPurchases;  // Hero needs ≥1 of these
 
             var period = BuildPeriod(periodCode);
             var company = await _context.Companies
@@ -94,10 +94,10 @@ namespace MyApp.Api.Services.Implementations
             // for the 4-section case anyway. Sequential here for
             // simplicity and to avoid the "second operation started
             // before previous completed" pitfall on AppDbContext.
-            if (canSales)      response.Sales      = await ComputeSalesAsync(companyId, period);
-            if (canPurchases)  response.Purchases  = await ComputePurchasesAsync(companyId, period);
-            if (canFbr)        response.Fbr        = await ComputeFbrAsync(companyId, period);
-            if (canInventory)  response.Inventory  = await ComputeInventoryAsync(companyId);
+            if (canSales) response.Sales = await ComputeSalesAsync(companyId, period);
+            if (canPurchases) response.Purchases = await ComputePurchasesAsync(companyId, period);
+            if (canFbr) response.Fbr = await ComputeFbrAsync(companyId, period);
+            if (canInventory) response.Inventory = await ComputeInventoryAsync(companyId);
 
             // Balances, money movement and open work. Same two KPI keys: what
             // customers owe is a sales figure, what is owed to suppliers a
@@ -134,72 +134,72 @@ namespace MyApp.Api.Services.Implementations
             switch (c)
             {
                 case "this-week":
-                {
-                    label = "This Week";
-                    var monday = today.AddDays(-(int)today.DayOfWeek + (today.DayOfWeek == DayOfWeek.Sunday ? -6 : 1));
-                    from = monday;
-                    to = monday.AddDays(7);
-                    prevFrom = monday.AddDays(-7);
-                    prevTo = monday;
-                    break;
-                }
+                    {
+                        label = "This Week";
+                        var monday = today.AddDays(-(int)today.DayOfWeek + (today.DayOfWeek == DayOfWeek.Sunday ? -6 : 1));
+                        from = monday;
+                        to = monday.AddDays(7);
+                        prevFrom = monday.AddDays(-7);
+                        prevTo = monday;
+                        break;
+                    }
                 case "last-week":
-                {
-                    label = "Last Week";
-                    var thisMonday = today.AddDays(-(int)today.DayOfWeek + (today.DayOfWeek == DayOfWeek.Sunday ? -6 : 1));
-                    from = thisMonday.AddDays(-7);
-                    to = thisMonday;
-                    prevFrom = thisMonday.AddDays(-14);
-                    prevTo = thisMonday.AddDays(-7);
-                    break;
-                }
+                    {
+                        label = "Last Week";
+                        var thisMonday = today.AddDays(-(int)today.DayOfWeek + (today.DayOfWeek == DayOfWeek.Sunday ? -6 : 1));
+                        from = thisMonday.AddDays(-7);
+                        to = thisMonday;
+                        prevFrom = thisMonday.AddDays(-14);
+                        prevTo = thisMonday.AddDays(-7);
+                        break;
+                    }
                 case "this-month":
-                {
-                    label = "This Month";
-                    var firstOfMonth = new DateTime(today.Year, today.Month, 1);
-                    from = firstOfMonth;
-                    to = firstOfMonth.AddMonths(1);
-                    prevFrom = firstOfMonth.AddMonths(-1);
-                    prevTo = firstOfMonth;
-                    break;
-                }
+                    {
+                        label = "This Month";
+                        var firstOfMonth = new DateTime(today.Year, today.Month, 1);
+                        from = firstOfMonth;
+                        to = firstOfMonth.AddMonths(1);
+                        prevFrom = firstOfMonth.AddMonths(-1);
+                        prevTo = firstOfMonth;
+                        break;
+                    }
                 case "last-month":
-                {
-                    label = "Last Month";
-                    var firstOfThisMonth = new DateTime(today.Year, today.Month, 1);
-                    from = firstOfThisMonth.AddMonths(-1);
-                    to = firstOfThisMonth;
-                    prevFrom = firstOfThisMonth.AddMonths(-2);
-                    prevTo = firstOfThisMonth.AddMonths(-1);
-                    break;
-                }
+                    {
+                        label = "Last Month";
+                        var firstOfThisMonth = new DateTime(today.Year, today.Month, 1);
+                        from = firstOfThisMonth.AddMonths(-1);
+                        to = firstOfThisMonth;
+                        prevFrom = firstOfThisMonth.AddMonths(-2);
+                        prevTo = firstOfThisMonth.AddMonths(-1);
+                        break;
+                    }
                 case "this-year":
-                {
-                    label = "This Year";
-                    var firstOfYear = new DateTime(today.Year, 1, 1);
-                    from = firstOfYear;
-                    to = firstOfYear.AddYears(1);
-                    prevFrom = firstOfYear.AddYears(-1);
-                    prevTo = firstOfYear;
-                    break;
-                }
+                    {
+                        label = "This Year";
+                        var firstOfYear = new DateTime(today.Year, 1, 1);
+                        from = firstOfYear;
+                        to = firstOfYear.AddYears(1);
+                        prevFrom = firstOfYear.AddYears(-1);
+                        prevTo = firstOfYear;
+                        break;
+                    }
                 case "last-year":
-                {
-                    label = "Last Year";
-                    var firstOfThisYear = new DateTime(today.Year, 1, 1);
-                    from = firstOfThisYear.AddYears(-1);
-                    to = firstOfThisYear;
-                    prevFrom = firstOfThisYear.AddYears(-2);
-                    prevTo = firstOfThisYear.AddYears(-1);
-                    break;
-                }
+                    {
+                        label = "Last Year";
+                        var firstOfThisYear = new DateTime(today.Year, 1, 1);
+                        from = firstOfThisYear.AddYears(-1);
+                        to = firstOfThisYear;
+                        prevFrom = firstOfThisYear.AddYears(-2);
+                        prevTo = firstOfThisYear.AddYears(-1);
+                        break;
+                    }
                 case "all-time":
                 default:
-                {
-                    label = "All Time";
-                    // No date filter; no previous-period delta.
-                    break;
-                }
+                    {
+                        label = "All Time";
+                        // No date filter; no previous-period delta.
+                        break;
+                    }
             }
 
             return new DashboardPeriod
@@ -278,13 +278,13 @@ namespace MyApp.Api.Services.Implementations
                 .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
                          && i.DocumentType != 9 && i.DocumentType != 10);
             if (from.HasValue) q = q.Where(i => i.Date >= from.Value);
-            if (to.HasValue)   q = q.Where(i => i.Date < to.Value);
+            if (to.HasValue) q = q.Where(i => i.Date < to.Value);
             var agg = await q
                 .GroupBy(_ => 1)
                 .Select(g => new
                 {
                     TotalGross = g.Sum(i => i.GrandTotal + i.FreightCharges),
-                    GstAmount  = g.Sum(i => i.GSTAmount),
+                    GstAmount = g.Sum(i => i.GSTAmount),
                 })
                 .FirstOrDefaultAsync();
             return (agg?.TotalGross ?? 0m, agg?.GstAmount ?? 0m);
@@ -297,13 +297,13 @@ namespace MyApp.Api.Services.Implementations
                 .AsNoTracking()
                 .Where(pb => pb.CompanyId == companyId);
             if (from.HasValue) q = q.Where(pb => pb.Date >= from.Value);
-            if (to.HasValue)   q = q.Where(pb => pb.Date < to.Value);
+            if (to.HasValue) q = q.Where(pb => pb.Date < to.Value);
             var agg = await q
                 .GroupBy(_ => 1)
                 .Select(g => new
                 {
                     TotalGross = g.Sum(pb => pb.GrandTotal),
-                    GstAmount  = g.Sum(pb => pb.GSTAmount),
+                    GstAmount = g.Sum(pb => pb.GSTAmount),
                 })
                 .FirstOrDefaultAsync();
             return (agg?.TotalGross ?? 0m, agg?.GstAmount ?? 0m);
@@ -321,7 +321,7 @@ namespace MyApp.Api.Services.Implementations
                 .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
                          && i.DocumentType != 9 && i.DocumentType != 10);
             if (period.From.HasValue) q = q.Where(i => i.Date >= period.From.Value);
-            if (period.To.HasValue)   q = q.Where(i => i.Date < period.To.Value);
+            if (period.To.HasValue) q = q.Where(i => i.Date < period.To.Value);
 
             var aggregate = await q
                 .GroupBy(_ => 1)
@@ -430,7 +430,7 @@ namespace MyApp.Api.Services.Implementations
                 .AsNoTracking()
                 .Where(pb => pb.CompanyId == companyId);
             if (period.From.HasValue) q = q.Where(pb => pb.Date >= period.From.Value);
-            if (period.To.HasValue)   q = q.Where(pb => pb.Date < period.To.Value);
+            if (period.To.HasValue) q = q.Where(pb => pb.Date < period.To.Value);
 
             var aggregate = await q
                 .GroupBy(_ => 1)
@@ -556,7 +556,7 @@ namespace MyApp.Api.Services.Implementations
                 .Where(i => i.TaxTreatment == "FBR" && i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
                          && i.DocumentType != 9 && i.DocumentType != 10);
             if (period.From.HasValue) q = q.Where(i => i.Date >= period.From.Value);
-            if (period.To.HasValue)   q = q.Where(i => i.Date < period.To.Value);
+            if (period.To.HasValue) q = q.Where(i => i.Date < period.To.Value);
 
             // Single round-trip — group by FbrStatus, then bucket in
             // memory. Five buckets max so this is cheap.
@@ -565,10 +565,10 @@ namespace MyApp.Api.Services.Implementations
                 .Select(g => new { Status = g.Key, Count = g.Count() })
                 .ToListAsync();
 
-            var pending   = byStatus.Where(x => x.Status != "Submitted" && x.Status != "Validated" && x.Status != "Failed").Sum(x => x.Count);
+            var pending = byStatus.Where(x => x.Status != "Submitted" && x.Status != "Validated" && x.Status != "Failed").Sum(x => x.Count);
             var validated = byStatus.Where(x => x.Status == "Validated").Sum(x => x.Count);
             var submitted = byStatus.Where(x => x.Status == "Submitted").Sum(x => x.Count);
-            var failed    = byStatus.Where(x => x.Status == "Failed").Sum(x => x.Count);
+            var failed = byStatus.Where(x => x.Status == "Failed").Sum(x => x.Count);
 
             var excluded = await q.CountAsync(i => i.IsFbrExcluded);
 
@@ -579,7 +579,7 @@ namespace MyApp.Api.Services.Implementations
                 .AsNoTracking()
                 .Where(pb => pb.CompanyId == companyId);
             if (period.From.HasValue) pbq = pbq.Where(pb => pb.Date >= period.From.Value);
-            if (period.To.HasValue)   pbq = pbq.Where(pb => pb.Date < period.To.Value);
+            if (period.To.HasValue) pbq = pbq.Where(pb => pb.Date < period.To.Value);
 
             var reconCounts = await pbq
                 .GroupBy(pb => pb.ReconciliationStatus ?? "")
@@ -593,8 +593,8 @@ namespace MyApp.Api.Services.Implementations
                 Submitted = submitted,
                 Failed = failed,
                 Excluded = excluded,
-                ReconciliationPending  = reconCounts.FirstOrDefault(x => x.Status == "Pending")?.Count ?? 0,
-                ReconciliationMatched  = reconCounts.FirstOrDefault(x => x.Status == "Matched")?.Count ?? 0,
+                ReconciliationPending = reconCounts.FirstOrDefault(x => x.Status == "Pending")?.Count ?? 0,
+                ReconciliationMatched = reconCounts.FirstOrDefault(x => x.Status == "Matched")?.Count ?? 0,
                 ReconciliationDisputed = reconCounts.FirstOrDefault(x => x.Status == "Disputed")?.Count ?? 0,
             };
         }

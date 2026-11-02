@@ -438,79 +438,79 @@ namespace MyApp.Api.Services.Implementations
             switch (sheetKey)
             {
                 case OnboardingSheets.Customers:
-                {
-                    var type = OnboardingRowRules.ResolveRegistrationType(row.Get("registrationType"), ctx.RegistrationTypes);
-                    await _clients.CreateAsync(new ClientDto
                     {
-                        CompanyId = companyId,
-                        Name = row.Get("name").Trim(),
-                        RegistrationType = type,
-                        NTN = OnboardingRowRules.NormaliseNtn(row.Get("ntn")),
-                        CNIC = Blank(OnboardingRowRules.DigitsOnly(row.Get("cnic"))),
-                        FbrProvinceCode = OnboardingRowRules.ResolveProvince(row.Get("province"), ctx.ProvinceCodeByLabel),
-                        Address = Blank(row.Get("address")),
-                        STRN = string.Equals(type, "Registered", StringComparison.OrdinalIgnoreCase) ? Blank(row.Get("strn")) : null,
-                        Phone = Blank(row.Get("phone")),
-                        Site = Blank(JoinList(row.Get("sites"))),
-                        ContactPerson = Blank(JoinList(row.Get("contactPerson"))),
-                    });
-                    break;
-                }
+                        var type = OnboardingRowRules.ResolveRegistrationType(row.Get("registrationType"), ctx.RegistrationTypes);
+                        await _clients.CreateAsync(new ClientDto
+                        {
+                            CompanyId = companyId,
+                            Name = row.Get("name").Trim(),
+                            RegistrationType = type,
+                            NTN = OnboardingRowRules.NormaliseNtn(row.Get("ntn")),
+                            CNIC = Blank(OnboardingRowRules.DigitsOnly(row.Get("cnic"))),
+                            FbrProvinceCode = OnboardingRowRules.ResolveProvince(row.Get("province"), ctx.ProvinceCodeByLabel),
+                            Address = Blank(row.Get("address")),
+                            STRN = string.Equals(type, "Registered", StringComparison.OrdinalIgnoreCase) ? Blank(row.Get("strn")) : null,
+                            Phone = Blank(row.Get("phone")),
+                            Site = Blank(JoinList(row.Get("sites"))),
+                            ContactPerson = Blank(JoinList(row.Get("contactPerson"))),
+                        });
+                        break;
+                    }
                 case OnboardingSheets.Suppliers:
-                {
-                    var type = OnboardingRowRules.ResolveRegistrationType(row.Get("registrationType"), ctx.RegistrationTypes);
-                    await _suppliers.CreateAsync(new SupplierDto
                     {
-                        CompanyId = companyId,
-                        Name = row.Get("name").Trim(),
-                        RegistrationType = type,
-                        NTN = OnboardingRowRules.NormaliseNtn(row.Get("ntn")),
-                        CNIC = Blank(OnboardingRowRules.DigitsOnly(row.Get("cnic"))),
-                        FbrProvinceCode = OnboardingRowRules.ResolveProvince(row.Get("province"), ctx.ProvinceCodeByLabel),
-                        Address = Blank(row.Get("address")),
-                        STRN = string.Equals(type, "Registered", StringComparison.OrdinalIgnoreCase) ? Blank(row.Get("strn")) : null,
-                        Phone = Blank(row.Get("phone")),
-                    });
-                    break;
-                }
+                        var type = OnboardingRowRules.ResolveRegistrationType(row.Get("registrationType"), ctx.RegistrationTypes);
+                        await _suppliers.CreateAsync(new SupplierDto
+                        {
+                            CompanyId = companyId,
+                            Name = row.Get("name").Trim(),
+                            RegistrationType = type,
+                            NTN = OnboardingRowRules.NormaliseNtn(row.Get("ntn")),
+                            CNIC = Blank(OnboardingRowRules.DigitsOnly(row.Get("cnic"))),
+                            FbrProvinceCode = OnboardingRowRules.ResolveProvince(row.Get("province"), ctx.ProvinceCodeByLabel),
+                            Address = Blank(row.Get("address")),
+                            STRN = string.Equals(type, "Registered", StringComparison.OrdinalIgnoreCase) ? Blank(row.Get("strn")) : null,
+                            Phone = Blank(row.Get("phone")),
+                        });
+                        break;
+                    }
                 case OnboardingSheets.Items:
-                {
-                    var hs = Blank(OnboardingRowRules.NormaliseHsCode(row.Get("hsCode")));
-                    var created = await _itemTypes.CreateAsync(new ItemTypeDto
                     {
-                        Name = row.Get("name").Trim(),
-                        HSCode = hs,
-                        UOM = Blank(row.Get("unit")),
-                        SaleType = OnboardingRowRules.ResolveSaleType(row.Get("saleType")),
-                        // The Item Type form's own default; it also confirms the
-                        // name, as the form does, past the near-duplicate guard.
-                        IsFavorite = true,
-                    }, companyId);
-                    createdItemIds[ItemKey(created.Name, created.HSCode)] = created.Id;
-                    break;
-                }
+                        var hs = Blank(OnboardingRowRules.NormaliseHsCode(row.Get("hsCode")));
+                        var created = await _itemTypes.CreateAsync(new ItemTypeDto
+                        {
+                            Name = row.Get("name").Trim(),
+                            HSCode = hs,
+                            UOM = Blank(row.Get("unit")),
+                            SaleType = OnboardingRowRules.ResolveSaleType(row.Get("saleType")),
+                            // The Item Type form's own default; it also confirms the
+                            // name, as the form does, past the near-duplicate guard.
+                            IsFavorite = true,
+                        }, companyId);
+                        createdItemIds[ItemKey(created.Name, created.HSCode)] = created.Id;
+                        break;
+                    }
                 case OnboardingSheets.OpeningStock:
-                {
-                    int itemTypeId;
-                    if (pr.ExistingItemTypeId is int existing) itemTypeId = existing;
-                    else if (pr.FileItemKey != null && createdItemIds.TryGetValue(pr.FileItemKey, out var fromFile)) itemTypeId = fromFile;
-                    else throw new InvalidOperationException("its item was not created, so there is nothing to hold the stock");
-
-                    if (await _db.OpeningStockBalances.AnyAsync(o => o.CompanyId == companyId && o.ItemTypeId == itemTypeId))
-                        throw new InvalidOperationException("this item already has an opening balance");
-
-                    _db.OpeningStockBalances.Add(new OpeningStockBalance
                     {
-                        CompanyId = companyId,
-                        ItemTypeId = itemTypeId,
-                        Quantity = OnboardingRowRules.ParseQuantity(row.Get("quantity"))!.Value,
-                        AsOfDate = OnboardingRowRules.ParseDate(row.Get("asOfDate"))!.Value,
-                        Notes = Blank(row.Get("notes")),
-                        CreatedAt = DateTime.UtcNow,
-                    });
-                    await _db.SaveChangesAsync();
-                    break;
-                }
+                        int itemTypeId;
+                        if (pr.ExistingItemTypeId is int existing) itemTypeId = existing;
+                        else if (pr.FileItemKey != null && createdItemIds.TryGetValue(pr.FileItemKey, out var fromFile)) itemTypeId = fromFile;
+                        else throw new InvalidOperationException("its item was not created, so there is nothing to hold the stock");
+
+                        if (await _db.OpeningStockBalances.AnyAsync(o => o.CompanyId == companyId && o.ItemTypeId == itemTypeId))
+                            throw new InvalidOperationException("this item already has an opening balance");
+
+                        _db.OpeningStockBalances.Add(new OpeningStockBalance
+                        {
+                            CompanyId = companyId,
+                            ItemTypeId = itemTypeId,
+                            Quantity = OnboardingRowRules.ParseQuantity(row.Get("quantity"))!.Value,
+                            AsOfDate = OnboardingRowRules.ParseDate(row.Get("asOfDate"))!.Value,
+                            Notes = Blank(row.Get("notes")),
+                            CreatedAt = DateTime.UtcNow,
+                        });
+                        await _db.SaveChangesAsync();
+                        break;
+                    }
             }
         }
 

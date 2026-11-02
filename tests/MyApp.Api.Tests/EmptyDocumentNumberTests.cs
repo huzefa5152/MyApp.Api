@@ -14,16 +14,27 @@ public class EmptyDocumentNumberTests
         var connection = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder
         {
             DataSource = Environment.GetEnvironmentVariable("PRINT_MCP_TEST_SERVER") ?? @".\MSSQLSERVER02",
-            InitialCatalog = "MyApp_Numbering_Test_" + Guid.NewGuid().ToString("N"), IntegratedSecurity = true, TrustServerCertificate = true
+            InitialCatalog = "MyApp_Numbering_Test_" + Guid.NewGuid().ToString("N"),
+            IntegratedSecurity = true,
+            TrustServerCertificate = true
         }.ConnectionString;
         DevelopmentSqlGuard.AssertLocal(connection, Environment.MachineName, false);
         await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseSqlServer(connection).Options);
         try
         {
             await db.Database.EnsureCreatedAsync();
-            var a = new Company { Name = "Numbering sample", StartingSalesQuoteNumber = 1, CurrentSalesQuoteNumber = 900,
-                StartingChallanNumber = 1, CurrentChallanNumber = 900, StartingPurchaseBillNumber = 1, CurrentPurchaseBillNumber = 900,
-                StartingGoodsReceiptNumber = 1, CurrentGoodsReceiptNumber = 900 };
+            var a = new Company
+            {
+                Name = "Numbering sample",
+                StartingSalesQuoteNumber = 1,
+                CurrentSalesQuoteNumber = 900,
+                StartingChallanNumber = 1,
+                CurrentChallanNumber = 900,
+                StartingPurchaseBillNumber = 1,
+                CurrentPurchaseBillNumber = 900,
+                StartingGoodsReceiptNumber = 1,
+                CurrentGoodsReceiptNumber = 900
+            };
             var b = new Company { Name = "Other numbering sample", StartingSalesQuoteNumber = 75, CurrentSalesQuoteNumber = 700 };
             db.AddRange(a, b); await db.SaveChangesAsync();
             var client = new Client { CompanyId = a.Id, Name = "Sample customer" };

@@ -3,6 +3,7 @@ using MyApp.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 namespace MyApp.Api.Tests;
+
 public class EmailModuleTests
 {
     [Fact]

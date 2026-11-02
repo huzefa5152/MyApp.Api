@@ -9,17 +9,17 @@ namespace MyApp.Api.Models
     public enum StockMovementSourceType
     {
         OpeningBalance = 0,
-        PurchaseBill   = 1,
-        Invoice        = 2,
-        Adjustment     = 3,
-        GoodsReceipt   = 4,
+        PurchaseBill = 1,
+        Invoice = 2,
+        Adjustment = 3,
+        GoodsReceipt = 4,
         PurchaseDebitNote = 5,
         StockEntry = 6,
     }
 
     public enum StockMovementDirection
     {
-        In  = 1,
+        In = 1,
         Out = 2,
     }
 

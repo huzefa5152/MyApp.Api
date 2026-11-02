@@ -34,10 +34,10 @@ public sealed class CatalogCompanyFilter(AppDbContext db, ICompanyAccessGuard ac
         if (context.ActionArguments.TryGetValue("id", out var idValue) && idValue is int id)
         {
             int? owner = request.Path.StartsWithSegments("/api/itemtypes")
-                ? await db.ItemTypes.IgnoreQueryFilters().Where(x=>x.Id==id).Select(x=>x.CompanyId).FirstOrDefaultAsync()
+                ? await db.ItemTypes.IgnoreQueryFilters().Where(x => x.Id == id).Select(x => x.CompanyId).FirstOrDefaultAsync()
                 : request.Path.StartsWithSegments("/api/units")
-                    ? await db.Units.IgnoreQueryFilters().Where(x=>x.Id==id).Select(x=>x.CompanyId).FirstOrDefaultAsync()
-                    : await db.ItemDescriptions.IgnoreQueryFilters().Where(x=>x.Id==id).Select(x=>x.CompanyId).FirstOrDefaultAsync();
+                    ? await db.Units.IgnoreQueryFilters().Where(x => x.Id == id).Select(x => x.CompanyId).FirstOrDefaultAsync()
+                    : await db.ItemDescriptions.IgnoreQueryFilters().Where(x => x.Id == id).Select(x => x.CompanyId).FirstOrDefaultAsync();
             if (owner == null || (companyId != null && companyId != owner)
                 || !await access.HasAccessAsync(userId, owner.Value))
             { context.Result = new NotFoundResult(); return; }

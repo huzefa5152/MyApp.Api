@@ -19,7 +19,7 @@ namespace MyApp.Api.Helpers
         public static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".webp", ".gif" };
 
         public const int DefaultMaxBytes = 2 * 1024 * 1024;   // avatars
-        public const int LogoMaxBytes    = 5 * 1024 * 1024;   // logos a bit larger
+        public const int LogoMaxBytes = 5 * 1024 * 1024;   // logos a bit larger
 
         /// <summary>
         /// Returns null when the file passes every check; otherwise a

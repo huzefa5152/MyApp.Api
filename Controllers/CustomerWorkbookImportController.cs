@@ -51,10 +51,15 @@ public sealed class CustomerWorkbookImportController(AppDbContext db, ICompanyAc
             return Conflict(new { error = "This customer already has a format with this name." });
         try
         {
-        var format = await registry.CreateAsync(new POFormatCreateDto { CompanyId = companyId, ClientId = clientId,
-            Name = name, RawText = string.Join(" ", request.Mapping.Headers),
-            RuleSetJson = JsonSerializer.Serialize(new { engine = "excel-columns-v1", mapping = request.Mapping }, new JsonSerializerOptions(JsonSerializerDefaults.Web)) }, UserId.ToString());
-        return Ok(new { format.Id, format.Name, format.CurrentVersion });
+            var format = await registry.CreateAsync(new POFormatCreateDto
+            {
+                CompanyId = companyId,
+                ClientId = clientId,
+                Name = name,
+                RawText = string.Join(" ", request.Mapping.Headers),
+                RuleSetJson = JsonSerializer.Serialize(new { engine = "excel-columns-v1", mapping = request.Mapping }, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+            }, UserId.ToString());
+            return Ok(new { format.Id, format.Name, format.CurrentVersion });
         }
         catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
         {
@@ -70,9 +75,12 @@ public sealed class CustomerWorkbookImportController(AppDbContext db, ICompanyAc
         if (archive?.CompanyId is not int companyId) return NotFound();
         await access.AssertAccessAsync(UserId, companyId);
         if (documentKind is not ("salesquote" or "salesorder" or "challan")) return BadRequest();
-        return Ok(new { duplicate = archive.ContentSha256 != null && await db.PoImportArchives.AsNoTracking().AnyAsync(a =>
+        return Ok(new
+        {
+            duplicate = archive.ContentSha256 != null && await db.PoImportArchives.AsNoTracking().AnyAsync(a =>
             a.CompanyId == companyId && a.Id != archiveId && a.ContentSha256 == archive.ContentSha256
-            && a.DocumentKind == documentKind && a.DocumentId != null) });
+            && a.DocumentKind == documentKind && a.DocumentId != null)
+        });
     }
 
     [HttpPost("archives/{archiveId:int}/link")]
@@ -133,10 +141,19 @@ public sealed class CustomerWorkbookImportController(AppDbContext db, ICompanyAc
             using var stream = file.OpenReadStream();
             using var workbook = CustomerWorkbookReader.Open(stream);
             if (string.IsNullOrWhiteSpace(mapping))
-                return Ok(new { sheets = workbook.Worksheets.Select(s => new { name = s.Name,
-                    rows = s.RowsUsed().Take(30).Select(r => new { number = r.RowNumber(),
-                        cells = Enumerable.Range(1, s.LastColumnUsed()?.ColumnNumber() ?? 1)
-                            .Select(c => r.Cell(c).GetFormattedString()).ToArray() }).ToArray() }).ToArray() });
+                return Ok(new
+                {
+                    sheets = workbook.Worksheets.Select(s => new
+                    {
+                        name = s.Name,
+                        rows = s.RowsUsed().Take(30).Select(r => new
+                        {
+                            number = r.RowNumber(),
+                            cells = Enumerable.Range(1, s.LastColumnUsed()?.ColumnNumber() ?? 1)
+                                .Select(c => r.Cell(c).GetFormattedString()).ToArray()
+                        }).ToArray()
+                    }).ToArray()
+                });
             var map = JsonSerializer.Deserialize<CustomerWorkbookMapping>(mapping,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             if (map == null) return BadRequest(new { error = "Choose the workbook columns." });
@@ -148,10 +165,18 @@ public sealed class CustomerWorkbookImportController(AppDbContext db, ICompanyAc
             using var bytes = new MemoryStream();
             using (var original = file.OpenReadStream()) await original.CopyToAsync(bytes);
             await System.IO.File.WriteAllBytesAsync(Path.Combine(directory, filename), bytes.ToArray());
-            var archive = new PoImportArchive { CompanyId = companyId, UploadedByUserId = UserId, UploadedAt = uploadedAt,
-                OriginalFileName = Path.GetFileName(file.FileName), StoredPath = uploadedAt.ToString("yyyy/MM/") + filename,
-                FileSizeBytes = file.Length, ContentSha256 = Convert.ToHexString(SHA256.HashData(bytes.ToArray())).ToLowerInvariant(),
-                ParseOutcome = parsed.Warnings.Count > 0 ? "partial-ok" : "ok", ItemsExtracted = parsed.Items.Count };
+            var archive = new PoImportArchive
+            {
+                CompanyId = companyId,
+                UploadedByUserId = UserId,
+                UploadedAt = uploadedAt,
+                OriginalFileName = Path.GetFileName(file.FileName),
+                StoredPath = uploadedAt.ToString("yyyy/MM/") + filename,
+                FileSizeBytes = file.Length,
+                ContentSha256 = Convert.ToHexString(SHA256.HashData(bytes.ToArray())).ToLowerInvariant(),
+                ParseOutcome = parsed.Warnings.Count > 0 ? "partial-ok" : "ok",
+                ItemsExtracted = parsed.Items.Count
+            };
             db.PoImportArchives.Add(archive);
             await db.SaveChangesAsync();
             parsed.ArchiveId = archive.Id;

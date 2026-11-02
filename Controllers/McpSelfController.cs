@@ -68,12 +68,18 @@ public class McpSelfController(
             maxLifetimeDays = McpScopes.MaxLifetimeDays(isSeed),
             tokens = tokens.Select(t => new
             {
-                t.Id, t.Name, t.Hint,
+                t.Id,
+                t.Name,
+                t.Hint,
                 allCompanies = t.AllCompanies,
                 companies = t.CompanyIdList().Select(id => new { id, name = names.GetValueOrDefault(id, "(no longer reachable)") }),
                 scopes = t.Scopes.Split(',', StringSplitOptions.RemoveEmptyEntries),
-                t.CreatedAt, t.ExpiresAt, t.LastUsedAt, t.RevokedAt,
-                status = t.Status(now), signIn = t.OAuthClientId != null,
+                t.CreatedAt,
+                t.ExpiresAt,
+                t.LastUsedAt,
+                t.RevokedAt,
+                status = t.Status(now),
+                signIn = t.OAuthClientId != null,
             }),
         });
     }
@@ -104,10 +110,16 @@ public class McpSelfController(
         var token = new McpAgentToken
         {
             SecurityStamp = stamp,
-            UserId = uid, Name = name, TokenHash = McpAgentAuthHandler.Hash(secret),
+            UserId = uid,
+            Name = name,
+            TokenHash = McpAgentAuthHandler.Hash(secret),
             Hint = secret.Substring(0, McpAgentToken.Prefix.Length + 4),
-            CompanyIds = companyValue!, Scopes = string.Join(',', scopes), AllowWrites = scopes.Any(McpScopes.IsWrite),
-            CreatedAt = now, CreatedByUserId = uid, ExpiresAt = now.AddDays(req.ExpiresInDays),
+            CompanyIds = companyValue!,
+            Scopes = string.Join(',', scopes),
+            AllowWrites = scopes.Any(McpScopes.IsWrite),
+            CreatedAt = now,
+            CreatedByUserId = uid,
+            ExpiresAt = now.AddDays(req.ExpiresInDays),
         };
         db.McpAgentTokens.Add(token);
         await db.SaveChangesAsync();

@@ -28,19 +28,15 @@ vi.mock("../api/supplierApi", () => ({
 }));
 vi.mock("../api/invoiceApi", () => ({
   getInvoiceById: vi.fn(),
-  getPagedInvoicesByCompany: vi
-    .fn()
-    .mockResolvedValue({
-      data: { items: [{ id: 81, invoiceNumber: 101, grandTotal: 100, balanceDue: 100 }] },
-    }),
+  getPagedInvoicesByCompany: vi.fn().mockResolvedValue({
+    data: { items: [{ id: 81, invoiceNumber: 101, grandTotal: 100, balanceDue: 100 }] },
+  }),
 }));
 vi.mock("../api/purchaseBillApi", () => ({
   getPurchaseBillById: vi.fn(),
-  getPurchaseBillsByCompanyPaged: vi
-    .fn()
-    .mockResolvedValue({
-      data: { items: [{ id: 82, purchaseBillNumber: 102, grandTotal: 100, balanceDue: 100 }] },
-    }),
+  getPurchaseBillsByCompanyPaged: vi.fn().mockResolvedValue({
+    data: { items: [{ id: 82, purchaseBillNumber: 102, grandTotal: 100, balanceDue: 100 }] },
+  }),
 }));
 vi.mock("../api/paymentApi", () => ({ createPayment: vi.fn(), updatePayment: vi.fn() }));
 vi.mock("./AttachmentManager", () => ({ default: () => null }));

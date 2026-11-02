@@ -6,15 +6,23 @@ using MyApp.Api.Services.Implementations;
 using Xunit;
 
 namespace MyApp.Api.Tests;
+
 public class GmailBodyIsolationTests
 {
     [Fact]
     public async Task AttachedMessagesDoNotBecomeCurrentEmailBody()
     {
         string Encode(string value) => Convert.ToBase64String(Encoding.UTF8.GetBytes(value)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-        var payload = new {
-            id = "message", threadId = "thread", internalDate = "1791474000000", labelIds = new[] { "INBOX" },
-            payload = new { mimeType = "multipart/mixed", headers = new[] { new { name = "From", value = "buyer@example.com" }, new { name = "Subject", value = "RFQ" } },
+        var payload = new
+        {
+            id = "message",
+            threadId = "thread",
+            internalDate = "1791474000000",
+            labelIds = new[] { "INBOX" },
+            payload = new
+            {
+                mimeType = "multipart/mixed",
+                headers = new[] { new { name = "From", value = "buyer@example.com" }, new { name = "Subject", value = "RFQ" } },
                 parts = new object[] {
                     new { mimeType = "text/html", filename = "", body = new { data = Encode("<p>Current request</p>") } },
                     new { mimeType = "message/rfc822", filename = "old.eml", body = new { attachmentId = "attached", size = 100 },

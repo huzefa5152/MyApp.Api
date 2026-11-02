@@ -424,7 +424,7 @@ export default function StandaloneInvoiceForm({
   const [showAddItemType, setShowAddItemType] = useState(false);
   // Which row's item-type select triggered the Add modal — used so the
   // newly-created type auto-selects on that row when the modal closes.
-  const [pendingItemTypeRow, setPendingItemTypeRow] = useState(null);
+  const [, setPendingItemTypeRow] = useState(null);
 
   const refreshClients = async () => {
     const { data } = await getClientsByCompany(companyId);
@@ -1595,7 +1595,6 @@ export default function StandaloneInvoiceForm({
                         <div style={styles.mcards}>
                           {rows.map((r) => {
                             const q = parseFloat(r.quantity) || 0;
-                            const p = parseFloat(r.unitPrice) || 0;
                             const mrpTotal = (parseFloat(r.mrp) || 0) * q;
                             return (
                               <div key={r.localId} style={styles.mcard}>
@@ -1968,7 +1967,6 @@ export default function StandaloneInvoiceForm({
                             <tbody>
                               {rows.map((r) => {
                                 const q = parseFloat(r.quantity) || 0;
-                                const p = parseFloat(r.unitPrice) || 0;
                                 return (
                                   <tr key={r.localId} style={styles.unifiedRow}>
                                     <td style={styles.unifiedTd}>

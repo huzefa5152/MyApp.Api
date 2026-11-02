@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
@@ -210,9 +209,9 @@ namespace MyApp.Api.Services.Implementations
                 // flag it "missing HS Code". Mirrors
                 // FbrService.ApplyAdjustmentOverlay's precedence.
                 var a = it.Adjustment;
-                var hsCode   = a?.AdjustedHSCode   ?? it.HSCode;
+                var hsCode = a?.AdjustedHSCode ?? it.HSCode;
                 var saleType = a?.AdjustedSaleType ?? it.SaleType;
-                var uom      = a?.AdjustedUOM      ?? it.UOM;
+                var uom = a?.AdjustedUOM ?? it.UOM;
                 var fbrUomId = a?.AdjustedFbrUOMId ?? it.FbrUOMId;
                 var unitPrice = a?.AdjustedUnitPrice ?? it.UnitPrice;
                 if (string.IsNullOrWhiteSpace(hsCode))
@@ -265,10 +264,13 @@ namespace MyApp.Api.Services.Implementations
                     .OrderByDescending(i => Value(rows[i]) * rate / 100m - amounts[i]).ToArray();
                 for (var n = 0; n < pennies; n++) amounts[order[n % order.Length]] += 0.01m;
                 for (var i = 0; i < rows.Count; i++)
-                    if (invoiceChoice) {
+                    if (invoiceChoice)
+                    {
                         rows[i].InvoiceGstAmount = amounts[i];
                         rows[i].InvoiceTotalInclTax = rows[i].InvoiceValueExclTax + amounts[i];
-                    } else {
+                    }
+                    else
+                    {
                         rows[i].GSTAmount = amounts[i];
                         rows[i].TotalInclTax = rows[i].ValueExclTax + amounts[i];
                     }
@@ -300,161 +302,162 @@ namespace MyApp.Api.Services.Implementations
                 : (decimal?)null;
             bool adjustmentStale = anyOverlay
                 && Math.Abs(fbrAdjustedSubtotal!.Value - inv.Subtotal) > _totalTolerancePkr;
-            if (inv.TaxFilingRowsJson != null) {
+            if (inv.TaxFilingRowsJson != null)
+            {
                 fbrAdjustedSubtotal = TaxFilingProjection.Lines(inv).Sum(i => i.LineTotal);
                 adjustmentStale = TaxFilingProjection.IsStale(inv);
             }
             return new InvoiceDto
-        {
-            CostingLineCount = inv.Items.Count,
-            CostedLineCount = inv.Items.Count(i => (i.DeliveryItemId.HasValue ? i.DeliveryItem?.ActualUnitCost : i.ActualUnitCost).HasValue),
-            Id = inv.Id,
-            HasTaxFilingRows = inv.TaxFilingRowsJson != null,
-            InvoiceNumber = inv.InvoiceNumber,
-            Date = inv.Date,
-            CompanyId = inv.CompanyId,
-            CompanyName = inv.Company?.Name ?? "",
-            ClientId = inv.ClientId,
-            ClientName = inv.Client?.Name ?? "",
-            Subtotal = inv.Subtotal,
-            GSTRate = inv.GSTRate,
-            GSTAmount = inv.GSTAmount,
-            GrandTotal = inv.GrandTotal,
-            FreightCharges = inv.FreightCharges,
-            AmountInWords = inv.AmountInWords,
-            GroupTaxInvoiceByItemType = inv.GroupTaxInvoiceByItemType,
-            PaymentTerms = inv.PaymentTerms,
-            Notes = inv.Notes,
-            DocumentType = inv.DocumentType,
-            PaymentMode = inv.PaymentMode,
-            FbrInvoiceNumber = inv.FbrInvoiceNumber,
-            FbrIRN = inv.FbrIRN,
-            FbrStatus = inv.FbrStatus,
-            FbrSubmittedAt = inv.FbrSubmittedAt,
-            FbrErrorMessage = inv.FbrErrorMessage,
-            CreatedAt = inv.CreatedAt,
-            IsEditable = IsInvoiceEditable(inv),
-            CanCreateSalesOrder = !inv.IsCancelled && !inv.IsDemo && inv.DocumentType == 4
+            {
+                CostingLineCount = inv.Items.Count,
+                CostedLineCount = inv.Items.Count(i => (i.DeliveryItemId.HasValue ? i.DeliveryItem?.ActualUnitCost : i.ActualUnitCost).HasValue),
+                Id = inv.Id,
+                HasTaxFilingRows = inv.TaxFilingRowsJson != null,
+                InvoiceNumber = inv.InvoiceNumber,
+                Date = inv.Date,
+                CompanyId = inv.CompanyId,
+                CompanyName = inv.Company?.Name ?? "",
+                ClientId = inv.ClientId,
+                ClientName = inv.Client?.Name ?? "",
+                Subtotal = inv.Subtotal,
+                GSTRate = inv.GSTRate,
+                GSTAmount = inv.GSTAmount,
+                GrandTotal = inv.GrandTotal,
+                FreightCharges = inv.FreightCharges,
+                AmountInWords = inv.AmountInWords,
+                GroupTaxInvoiceByItemType = inv.GroupTaxInvoiceByItemType,
+                PaymentTerms = inv.PaymentTerms,
+                Notes = inv.Notes,
+                DocumentType = inv.DocumentType,
+                PaymentMode = inv.PaymentMode,
+                FbrInvoiceNumber = inv.FbrInvoiceNumber,
+                FbrIRN = inv.FbrIRN,
+                FbrStatus = inv.FbrStatus,
+                FbrSubmittedAt = inv.FbrSubmittedAt,
+                FbrErrorMessage = inv.FbrErrorMessage,
+                CreatedAt = inv.CreatedAt,
+                IsEditable = IsInvoiceEditable(inv),
+                CanCreateSalesOrder = !inv.IsCancelled && !inv.IsDemo && inv.DocumentType == 4
                 && inv.OriginalInvoiceId == null && inv.SupplementsInvoiceId == null
                 && inv.DeliveryChallans.Any() && inv.DeliveryChallans.All(c => c.SalesOrderId == null),
-            SalesOrders = inv.DeliveryChallans.Where(c => c.SalesOrderId != null).GroupBy(c => c.SalesOrderId!.Value)
-                .Select(g => new BillSalesOrderLinkDto { Id=g.Key, Number=g.First().SalesOrder?.SalesOrderNumber ?? 0 }).ToList(),
-            AllowNonFbrBills = inv.Company?.AllowNonFbrBills ?? false,
-            TaxInvoiceUseOriginalBillLines = inv.Company?.TaxInvoiceUseOriginalBillLines ?? false,
-            FbrOmitProductDescription = inv.Company?.FbrOmitProductDescription ?? false,
-            TaxTreatment = inv.TaxTreatment,
-            IsFbrExcluded = inv.IsFbrExcluded,
-            IsCancelled = inv.IsCancelled,
-            CancelledAt = inv.CancelledAt,
-            CancelReason = inv.CancelReason,
-            FbrCancelledAt = inv.FbrCancelledAt,
-            FbrCancelledReason = inv.FbrCancelledReason,
-            // IsFullyReversed is filled by AttachReversalInfoAsync, which
-            // already fetches this bill's notes in one batched query.
-            OriginalInvoiceId = inv.OriginalInvoiceId,
-            OriginalInvoiceNumber = inv.OriginalInvoice?.InvoiceNumber,
-            OriginalInvoiceRefIRN = inv.OriginalInvoiceRefIRN,
-            SupplementsInvoiceId = inv.SupplementsInvoiceId,
-            SupplementsInvoiceNumber = inv.SupplementsInvoice?.InvoiceNumber,
-            NoteReason = inv.NoteReason,
-            NoteReasonRemarks = inv.NoteReasonRemarks,
-            NoteAffectsStock = inv.NoteAffectsStock,
-            FbrReady = !BillTaxTreatment.IsOutsideFbr(inv.TaxTreatment) && missing.Count == 0 && !adjustmentStale && !TaxFilingProjection.NeedsReReview(inv) && !TaxFilingProjection.NeedsInitialAdjustment(inv),
-            FbrAdjustmentRequired = !BillTaxTreatment.IsOutsideFbr(inv.TaxTreatment) && TaxFilingProjection.NeedsInitialAdjustment(inv),
-            FbrReviewRequired = !BillTaxTreatment.IsOutsideFbr(inv.TaxTreatment) && TaxFilingProjection.NeedsReReview(inv),
-            FbrReviewRequiredAt = inv.FbrReviewRequiredAt,
-            FbrReviewedAt = inv.FbrReviewedAt,
-            FbrReviewVersion = BillChallanVersion(inv),
-            FbrMissing = missing,
-            FbrAdjustmentStale = adjustmentStale,
-            FbrAdjustedSubtotal = fbrAdjustedSubtotal,
-            // AR subledger: AmountPaid is stored; balance/status/days-overdue
-            // are derived at read time (Pakistan calendar) so "Overdue" flips
-            // correctly without a write.
-            DueDate = inv.DueDate,
-            AmountPaid = inv.AmountPaid,
-            // Measured against the COLLECTIBLE, not the grand total: the
-            // customer only ever pays GrandTotal minus what they withhold, so an
-            // invoice with withholding on it would otherwise never read as paid.
-            // Identical to the grand total whenever nothing is withheld.
-            FurtherTaxRate = inv.FurtherTaxRate,
-            FurtherTaxAmount = inv.FurtherTaxAmount,
-            WithholdingTaxRate = inv.WithholdingTaxRate,
-            WithholdingTaxAmount = inv.WithholdingTaxAmount,
-            Collectible = Collectible(inv),
-            BalanceDue = MyApp.Api.Helpers.PaymentStatusCalculator.BalanceDue(Collectible(inv), inv.AmountPaid),
-            PaymentStatus = MyApp.Api.Helpers.PaymentStatusCalculator.Status(Collectible(inv), inv.AmountPaid, inv.DueDate).ToString(),
-            DaysOverdue = MyApp.Api.Helpers.PaymentStatusCalculator.DaysOverdue(Collectible(inv), inv.AmountPaid, inv.DueDate),
-            // Customer document handover — DERIVED, never stored. Gated to
-            // FBR-submitted, non-cancelled, non-demo bills; everything else is
-            // "—" (NotApplicable). Independent of FBR/payment/print events.
-            HandoverStatus = (inv.IsCancelled || inv.IsDemo || inv.FbrStatus != "Submitted")
+                SalesOrders = inv.DeliveryChallans.Where(c => c.SalesOrderId != null).GroupBy(c => c.SalesOrderId!.Value)
+                .Select(g => new BillSalesOrderLinkDto { Id = g.Key, Number = g.First().SalesOrder?.SalesOrderNumber ?? 0 }).ToList(),
+                AllowNonFbrBills = inv.Company?.AllowNonFbrBills ?? false,
+                TaxInvoiceUseOriginalBillLines = inv.Company?.TaxInvoiceUseOriginalBillLines ?? false,
+                FbrOmitProductDescription = inv.Company?.FbrOmitProductDescription ?? false,
+                TaxTreatment = inv.TaxTreatment,
+                IsFbrExcluded = inv.IsFbrExcluded,
+                IsCancelled = inv.IsCancelled,
+                CancelledAt = inv.CancelledAt,
+                CancelReason = inv.CancelReason,
+                FbrCancelledAt = inv.FbrCancelledAt,
+                FbrCancelledReason = inv.FbrCancelledReason,
+                // IsFullyReversed is filled by AttachReversalInfoAsync, which
+                // already fetches this bill's notes in one batched query.
+                OriginalInvoiceId = inv.OriginalInvoiceId,
+                OriginalInvoiceNumber = inv.OriginalInvoice?.InvoiceNumber,
+                OriginalInvoiceRefIRN = inv.OriginalInvoiceRefIRN,
+                SupplementsInvoiceId = inv.SupplementsInvoiceId,
+                SupplementsInvoiceNumber = inv.SupplementsInvoice?.InvoiceNumber,
+                NoteReason = inv.NoteReason,
+                NoteReasonRemarks = inv.NoteReasonRemarks,
+                NoteAffectsStock = inv.NoteAffectsStock,
+                FbrReady = !BillTaxTreatment.IsOutsideFbr(inv.TaxTreatment) && missing.Count == 0 && !adjustmentStale && !TaxFilingProjection.NeedsReReview(inv) && !TaxFilingProjection.NeedsInitialAdjustment(inv),
+                FbrAdjustmentRequired = !BillTaxTreatment.IsOutsideFbr(inv.TaxTreatment) && TaxFilingProjection.NeedsInitialAdjustment(inv),
+                FbrReviewRequired = !BillTaxTreatment.IsOutsideFbr(inv.TaxTreatment) && TaxFilingProjection.NeedsReReview(inv),
+                FbrReviewRequiredAt = inv.FbrReviewRequiredAt,
+                FbrReviewedAt = inv.FbrReviewedAt,
+                FbrReviewVersion = BillChallanVersion(inv),
+                FbrMissing = missing,
+                FbrAdjustmentStale = adjustmentStale,
+                FbrAdjustedSubtotal = fbrAdjustedSubtotal,
+                // AR subledger: AmountPaid is stored; balance/status/days-overdue
+                // are derived at read time (Pakistan calendar) so "Overdue" flips
+                // correctly without a write.
+                DueDate = inv.DueDate,
+                AmountPaid = inv.AmountPaid,
+                // Measured against the COLLECTIBLE, not the grand total: the
+                // customer only ever pays GrandTotal minus what they withhold, so an
+                // invoice with withholding on it would otherwise never read as paid.
+                // Identical to the grand total whenever nothing is withheld.
+                FurtherTaxRate = inv.FurtherTaxRate,
+                FurtherTaxAmount = inv.FurtherTaxAmount,
+                WithholdingTaxRate = inv.WithholdingTaxRate,
+                WithholdingTaxAmount = inv.WithholdingTaxAmount,
+                Collectible = Collectible(inv),
+                BalanceDue = MyApp.Api.Helpers.PaymentStatusCalculator.BalanceDue(Collectible(inv), inv.AmountPaid),
+                PaymentStatus = MyApp.Api.Helpers.PaymentStatusCalculator.Status(Collectible(inv), inv.AmountPaid, inv.DueDate).ToString(),
+                DaysOverdue = MyApp.Api.Helpers.PaymentStatusCalculator.DaysOverdue(Collectible(inv), inv.AmountPaid, inv.DueDate),
+                // Customer document handover — DERIVED, never stored. Gated to
+                // FBR-submitted, non-cancelled, non-demo bills; everything else is
+                // "—" (NotApplicable). Independent of FBR/payment/print events.
+                HandoverStatus = (inv.IsCancelled || inv.IsDemo || inv.FbrStatus != "Submitted")
                 ? "NotApplicable"
                 : (inv.HandoverAt == null ? "Pending" : "Delivered"),
-            HandoverAt = inv.HandoverAt,
-            HandoverByName = inv.HandoverBy?.FullName is { Length: > 0 } fn ? fn : inv.HandoverBy?.Username,
-            HandoverRemark = inv.HandoverRemark,
-            Items = inv.Items.Select(ii => new InvoiceItemDto
-            {
-                Id = ii.Id,
-                DeliveryItemId = ii.DeliveryItemId,
-                ItemTypeId = ii.ItemTypeId,
-                ItemTypeName = ii.ItemType?.Name ?? ii.ItemTypeName,
-                Description = ii.Description,
-                Quantity = ii.Quantity,
-                UOM = ii.UOM,
-                UnitPrice = ii.UnitPrice,
-                LineTotal = ii.LineTotal,
-                HSCode = ii.HSCode,
-                FbrUOMId = ii.FbrUOMId,
-                SaleType = ii.SaleType,
-                RateId = ii.RateId,
-                FixedNotifiedValueOrRetailPrice = ii.FixedNotifiedValueOrRetailPrice,
-                // Dual-book overlay (2026-05-11). Null when no overlay
-                // exists for this line — frontend treats the row above
-                // as both bill-mode and invoice-mode values. Non-null
-                // means Invoice-mode view should render AdjustedXxx as
-                // "current" with the row's own fields as "original".
-                Adjustment = ii.Adjustment == null ? null : new InvoiceItemAdjustmentDto
+                HandoverAt = inv.HandoverAt,
+                HandoverByName = inv.HandoverBy?.FullName is { Length: > 0 } fn ? fn : inv.HandoverBy?.Username,
+                HandoverRemark = inv.HandoverRemark,
+                Items = inv.Items.Select(ii => new InvoiceItemDto
                 {
-                    Id = ii.Adjustment.Id,
-                    AdjustedQuantity = ii.Adjustment.AdjustedQuantity,
-                    AdjustedUnitPrice = ii.Adjustment.AdjustedUnitPrice,
-                    AdjustedLineTotal = ii.Adjustment.AdjustedLineTotal,
-                    AdjustedItemTypeId = ii.Adjustment.AdjustedItemTypeId,
-                    AdjustedItemTypeName = ii.Adjustment.AdjustedItemTypeName,
-                    AdjustedDescription = ii.Adjustment.AdjustedDescription,
-                    AdjustedUOM = ii.Adjustment.AdjustedUOM,
-                    AdjustedFbrUOMId = ii.Adjustment.AdjustedFbrUOMId,
-                    AdjustedHSCode = ii.Adjustment.AdjustedHSCode,
-                    AdjustedSaleType = ii.Adjustment.AdjustedSaleType,
-                    Reason = ii.Adjustment.Reason,
-                    CreatedAt = ii.Adjustment.CreatedAt,
-                    UpdatedAt = ii.Adjustment.UpdatedAt,
-                },
-            }).ToList(),
-            ManualChallanNumber = inv.ManualChallanNumber,
-            ChallanNumbers = inv.DeliveryChallans.Select(dc => dc.ChallanNumber).ToList(),
-            // Aggregate Site / IndentNo / PoNumber from linked challans
-            // — joined with "; " when distinct values exist (covers
-            // multi-challan bills rolling up two different POs / sites).
-            // Empty / whitespace-only entries are dropped before the
-            // join so a single-challan bill with a blank PO doesn't
-            // surface "" in the card.
-            // A standalone bill stores its own PO (no challan to derive from);
-            // challan-linked bills roll it up from the linked challans.
-            PoNumber = !string.IsNullOrWhiteSpace(inv.PoNumber)
+                    Id = ii.Id,
+                    DeliveryItemId = ii.DeliveryItemId,
+                    ItemTypeId = ii.ItemTypeId,
+                    ItemTypeName = ii.ItemType?.Name ?? ii.ItemTypeName,
+                    Description = ii.Description,
+                    Quantity = ii.Quantity,
+                    UOM = ii.UOM,
+                    UnitPrice = ii.UnitPrice,
+                    LineTotal = ii.LineTotal,
+                    HSCode = ii.HSCode,
+                    FbrUOMId = ii.FbrUOMId,
+                    SaleType = ii.SaleType,
+                    RateId = ii.RateId,
+                    FixedNotifiedValueOrRetailPrice = ii.FixedNotifiedValueOrRetailPrice,
+                    // Dual-book overlay (2026-05-11). Null when no overlay
+                    // exists for this line — frontend treats the row above
+                    // as both bill-mode and invoice-mode values. Non-null
+                    // means Invoice-mode view should render AdjustedXxx as
+                    // "current" with the row's own fields as "original".
+                    Adjustment = ii.Adjustment == null ? null : new InvoiceItemAdjustmentDto
+                    {
+                        Id = ii.Adjustment.Id,
+                        AdjustedQuantity = ii.Adjustment.AdjustedQuantity,
+                        AdjustedUnitPrice = ii.Adjustment.AdjustedUnitPrice,
+                        AdjustedLineTotal = ii.Adjustment.AdjustedLineTotal,
+                        AdjustedItemTypeId = ii.Adjustment.AdjustedItemTypeId,
+                        AdjustedItemTypeName = ii.Adjustment.AdjustedItemTypeName,
+                        AdjustedDescription = ii.Adjustment.AdjustedDescription,
+                        AdjustedUOM = ii.Adjustment.AdjustedUOM,
+                        AdjustedFbrUOMId = ii.Adjustment.AdjustedFbrUOMId,
+                        AdjustedHSCode = ii.Adjustment.AdjustedHSCode,
+                        AdjustedSaleType = ii.Adjustment.AdjustedSaleType,
+                        Reason = ii.Adjustment.Reason,
+                        CreatedAt = ii.Adjustment.CreatedAt,
+                        UpdatedAt = ii.Adjustment.UpdatedAt,
+                    },
+                }).ToList(),
+                ManualChallanNumber = inv.ManualChallanNumber,
+                ChallanNumbers = inv.DeliveryChallans.Select(dc => dc.ChallanNumber).ToList(),
+                // Aggregate Site / IndentNo / PoNumber from linked challans
+                // — joined with "; " when distinct values exist (covers
+                // multi-challan bills rolling up two different POs / sites).
+                // Empty / whitespace-only entries are dropped before the
+                // join so a single-challan bill with a blank PO doesn't
+                // surface "" in the card.
+                // A standalone bill stores its own PO (no challan to derive from);
+                // challan-linked bills roll it up from the linked challans.
+                PoNumber = !string.IsNullOrWhiteSpace(inv.PoNumber)
                 ? inv.PoNumber
                 : string.Join("; ", inv.DeliveryChallans
                     .Select(dc => dc.PoNumber)
                     .Where(s => !string.IsNullOrWhiteSpace(s))
                     .Distinct()),
-            PoDate = inv.PoDate,
-            IndentNo = string.Join("; ", inv.DeliveryChallans
+                PoDate = inv.PoDate,
+                IndentNo = string.Join("; ", inv.DeliveryChallans
                 .Select(dc => dc.IndentNo)
                 .Where(s => !string.IsNullOrWhiteSpace(s))
                 .Distinct()),
-            Site = string.Join("; ", inv.DeliveryChallans
+                Site = string.Join("; ", inv.DeliveryChallans
                 .Select(dc => dc.Site)
                 .Where(s => !string.IsNullOrWhiteSpace(s))
                 .Distinct()),
@@ -806,7 +809,7 @@ namespace MyApp.Api.Services.Implementations
                 // 3rd-schedule / reduced-rate / zero-rate sales are opt-in per line
                 // via the ItemType catalog entry or direct edit, so the default only
                 // covers the common-case SN001/SN002/SN026 standard-rate flow.
-                var companyDefaultUOM      = !string.IsNullOrWhiteSpace(company.FbrDefaultUOM)
+                var companyDefaultUOM = !string.IsNullOrWhiteSpace(company.FbrDefaultUOM)
                     ? company.FbrDefaultUOM
                     : "Numbers, pieces, units";
                 var companyDefaultSaleType = !string.IsNullOrWhiteSpace(company.FbrDefaultSaleType)
@@ -1040,7 +1043,7 @@ namespace MyApp.Api.Services.Implementations
                         WithholdingTaxRate = withholdingTaxRate,
                         WithholdingTaxAmount = withholdingTaxAmount,
                         GrandTotal = grandTotal,
-                    FreightCharges = freightCharges,
+                        FreightCharges = freightCharges,
                         AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                         GroupTaxInvoiceByItemType = dto.GroupTaxInvoiceByItemType ?? company.DefaultGroupTaxInvoiceByItemType,
                         PaymentTerms = dto.PaymentTerms,
@@ -1129,11 +1132,11 @@ namespace MyApp.Api.Services.Implementations
 
                     // 2026-05-12: stock-out on save (create path).
                     await _stock.SyncInvoiceStockMovementsAsync(created);
-                // Post to the ledger from the same places stock reflows: those are
-                // exactly the points where the bill changed. A no-op while the
-                // company's ledger is not live, and replace-on-edit otherwise.
-                await _posting.PostInvoiceAsync(created);
-                await SalesDocumentRules.RefreshOrdersAsync(_context, created.CompanyId);
+                    // Post to the ledger from the same places stock reflows: those are
+                    // exactly the points where the bill changed. A no-op while the
+                    // company's ledger is not live, and replace-on-edit otherwise.
+                    await _posting.PostInvoiceAsync(created);
+                    await SalesDocumentRules.RefreshOrdersAsync(_context, created.CompanyId);
                     if (splitIds.Count > 0)
                     {
                         // Re-join with any earlier unbilled row of the same challan,
@@ -1459,7 +1462,7 @@ namespace MyApp.Api.Services.Implementations
                         WithholdingTaxRate = withholdingTaxRate,
                         WithholdingTaxAmount = withholdingTaxAmount,
                         GrandTotal = grandTotal,
-                    FreightCharges = freightCharges,
+                        FreightCharges = freightCharges,
                         AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                         GroupTaxInvoiceByItemType = dto.GroupTaxInvoiceByItemType ?? company.DefaultGroupTaxInvoiceByItemType,
                         PaymentTerms = finalPaymentTerms,
@@ -1511,11 +1514,11 @@ namespace MyApp.Api.Services.Implementations
 
                     // 2026-05-12: stock-out on save (standalone create path).
                     await _stock.SyncInvoiceStockMovementsAsync(created);
-                // Post to the ledger from the same places stock reflows: those are
-                // exactly the points where the bill changed. A no-op while the
-                // company's ledger is not live, and replace-on-edit otherwise.
-                await _posting.PostInvoiceAsync(created);
-                await SalesDocumentRules.RefreshOrdersAsync(_context, created.CompanyId);
+                    // Post to the ledger from the same places stock reflows: those are
+                    // exactly the points where the bill changed. A no-op while the
+                    // company's ledger is not live, and replace-on-edit otherwise.
+                    await _posting.PostInvoiceAsync(created);
+                    await SalesDocumentRules.RefreshOrdersAsync(_context, created.CompanyId);
                     await _purchases.SyncBillAsync(created.Id);
                     await transaction.CommitAsync();
 
@@ -2190,7 +2193,8 @@ namespace MyApp.Api.Services.Implementations
                 var rowsToValidate = asAdjustment
                     ? projected.GroupBy(TaxInvoiceGrouping.Key)
                         .Select(g => new { Qty = g.Sum(i => i.Quantity), Unit = g.First().UOM }).ToList()
-                    : dto.Items.Where(r => r.Quantity.HasValue).Select(r => new {
+                    : dto.Items.Where(r => r.Quantity.HasValue).Select(r => new
+                    {
                         Qty = r.Quantity!.Value,
                         Unit = r.ItemTypeId.HasValue && typeMap.TryGetValue(r.ItemTypeId.Value, out var t)
                             ? t.UOM ?? "" : invoice.Items.First(i => i.Id == r.Id).UOM
@@ -2297,17 +2301,17 @@ namespace MyApp.Api.Services.Implementations
                         // the snapshot, even after the consultant accepted the
                         // bill's numbers on a prior round (which would otherwise
                         // leave AdjustedLineTotal null and defeat detection).
-                        decimal? newQty   = row.Quantity.HasValue && row.Quantity.Value > 0 ? row.Quantity.Value : (decimal?)null;
+                        decimal? newQty = row.Quantity.HasValue && row.Quantity.Value > 0 ? row.Quantity.Value : (decimal?)null;
                         decimal? newPrice = row.UnitPrice.HasValue && row.UnitPrice.Value >= 0 ? row.UnitPrice.Value : (decimal?)null;
-                        var qtyEff   = newQty   ?? existing.Quantity;
+                        var qtyEff = newQty ?? existing.Quantity;
                         var priceEff = newPrice ?? existing.UnitPrice;
                         var snapshotLineTotal = Math.Round(qtyEff * priceEff, 2, MidpointRounding.AwayFromZero);
 
-                        bool qtyDiverges       = newQty.HasValue   && newQty.Value   != existing.Quantity;
-                        bool priceDiverges     = newPrice.HasValue && newPrice.Value != existing.UnitPrice;
+                        bool qtyDiverges = newQty.HasValue && newQty.Value != existing.Quantity;
+                        bool priceDiverges = newPrice.HasValue && newPrice.Value != existing.UnitPrice;
                         bool lineTotalDiverges = snapshotLineTotal != existing.LineTotal;
-                        bool anyNumDivergence  = qtyDiverges || priceDiverges || lineTotalDiverges;
-                        bool anyDivergence     = itemTypeDiverges || anyNumDivergence;
+                        bool anyNumDivergence = qtyDiverges || priceDiverges || lineTotalDiverges;
+                        bool anyDivergence = itemTypeDiverges || anyNumDivergence;
 
                         existingOverlays.TryGetValue(existing.Id, out var overlay);
                         if (!anyDivergence)
@@ -2328,9 +2332,9 @@ namespace MyApp.Api.Services.Implementations
                             overlay = new InvoiceItemAdjustment
                             {
                                 InvoiceItemId = existing.Id,
-                                InvoiceId     = invoice.Id,
-                                Reason        = "tax-claim-optimization",
-                                CreatedAt     = DateTime.UtcNow,
+                                InvoiceId = invoice.Id,
+                                Reason = "tax-claim-optimization",
+                                CreatedAt = DateTime.UtcNow,
                             };
                             _context.InvoiceItemAdjustments.Add(overlay);
                             // Keep the in-memory map in sync so the
@@ -2347,7 +2351,7 @@ namespace MyApp.Api.Services.Implementations
                         // (keeps a partial edit minimal). Line total is ALWAYS
                         // snapshotted (see above) so drift detection survives
                         // repeated bill edits.
-                        overlay.AdjustedQuantity  = qtyDiverges   ? newQty   : null;
+                        overlay.AdjustedQuantity = qtyDiverges ? newQty : null;
                         overlay.AdjustedUnitPrice = priceDiverges ? newPrice : null;
                         overlay.AdjustedLineTotal = snapshotLineTotal;
 
@@ -2358,21 +2362,21 @@ namespace MyApp.Api.Services.Implementations
                         // from a previous save is cleared).
                         if (itemTypeDiverges)
                         {
-                            overlay.AdjustedItemTypeId   = picked!.Id;
+                            overlay.AdjustedItemTypeId = picked!.Id;
                             overlay.AdjustedItemTypeName = picked.Name;
-                            overlay.AdjustedHSCode       = picked.HSCode;
-                            overlay.AdjustedSaleType     = picked.SaleType;
-                            overlay.AdjustedUOM          = picked.UOM;
-                            overlay.AdjustedFbrUOMId     = picked.FbrUOMId;
+                            overlay.AdjustedHSCode = picked.HSCode;
+                            overlay.AdjustedSaleType = picked.SaleType;
+                            overlay.AdjustedUOM = picked.UOM;
+                            overlay.AdjustedFbrUOMId = picked.FbrUOMId;
                         }
                         else
                         {
-                            overlay.AdjustedItemTypeId   = null;
+                            overlay.AdjustedItemTypeId = null;
                             overlay.AdjustedItemTypeName = null;
-                            overlay.AdjustedHSCode       = null;
-                            overlay.AdjustedSaleType     = null;
-                            overlay.AdjustedUOM          = null;
-                            overlay.AdjustedFbrUOMId     = null;
+                            overlay.AdjustedHSCode = null;
+                            overlay.AdjustedSaleType = null;
+                            overlay.AdjustedUOM = null;
+                            overlay.AdjustedFbrUOMId = null;
                         }
                         overlay.AdjustedDescription = null;
                         continue;
@@ -2536,10 +2540,13 @@ namespace MyApp.Api.Services.Implementations
                 if (dto.CompleteConsultantReview)
                     await _auditLog.LogAsync(new AuditLog
                     {
-                        CompanyId = invoice.CompanyId, UserName = actorUserName,
-                        ExceptionType = "BILL_FBR_REVIEW_COMPLETED", Level = "Information",
+                        CompanyId = invoice.CompanyId,
+                        UserName = actorUserName,
+                        ExceptionType = "BILL_FBR_REVIEW_COMPLETED",
+                        Level = "Information",
                         Message = $"Bill #{invoice.InvoiceNumber}: all current items reviewed.",
-                        Timestamp = DateTime.UtcNow, OccurrenceCount = 1
+                        Timestamp = DateTime.UtcNow,
+                        OccurrenceCount = 1
                     });
 
                 // ── Audit log (after commit so we don't log a rolled-back op) ──
@@ -2554,56 +2561,56 @@ namespace MyApp.Api.Services.Implementations
                     {
                         if (!beforeSnapshot.TryGetValue(current.Id, out var before)) continue;
                         var changed =
-                            before.ItemTypeId      != current.ItemTypeId
-                         || before.ItemTypeName    != current.ItemTypeName
-                         || before.Quantity        != current.Quantity
-                         || before.UnitPrice       != current.UnitPrice
-                         || before.LineTotal       != current.LineTotal;
+                            before.ItemTypeId != current.ItemTypeId
+                         || before.ItemTypeName != current.ItemTypeName
+                         || before.Quantity != current.Quantity
+                         || before.UnitPrice != current.UnitPrice
+                         || before.LineTotal != current.LineTotal;
                         if (!changed) continue;
                         changedRows.Add(new
                         {
-                            invoiceItemId      = current.Id,
+                            invoiceItemId = current.Id,
                             previousItemTypeId = before.ItemTypeId,
-                            previousItemType   = before.ItemTypeName,
-                            newItemTypeId      = current.ItemTypeId,
-                            newItemType        = current.ItemTypeName,
-                            previousQuantity   = before.Quantity,
-                            newQuantity        = current.Quantity,
-                            previousUnitPrice  = before.UnitPrice,
-                            newUnitPrice       = current.UnitPrice,
-                            previousLineTotal  = before.LineTotal,
-                            newLineTotal       = current.LineTotal,
+                            previousItemType = before.ItemTypeName,
+                            newItemTypeId = current.ItemTypeId,
+                            newItemType = current.ItemTypeName,
+                            previousQuantity = before.Quantity,
+                            newQuantity = current.Quantity,
+                            previousUnitPrice = before.UnitPrice,
+                            newUnitPrice = current.UnitPrice,
+                            previousLineTotal = before.LineTotal,
+                            newLineTotal = current.LineTotal,
                         });
                     }
                     if (changedRows.Count > 0)
                     {
                         var payload = System.Text.Json.JsonSerializer.Serialize(new
                         {
-                            invoiceId          = invoice.Id,
-                            invoiceNumber      = invoice.InvoiceNumber,
-                            companyId          = invoice.CompanyId,
-                            mode               = allowQuantityEdit ? "itemtype+qty+price" : "itemtype-only",
-                            previousSubtotal   = beforeSubtotal,
-                            newSubtotal        = invoice.Subtotal,
+                            invoiceId = invoice.Id,
+                            invoiceNumber = invoice.InvoiceNumber,
+                            companyId = invoice.CompanyId,
+                            mode = allowQuantityEdit ? "itemtype+qty+price" : "itemtype-only",
+                            previousSubtotal = beforeSubtotal,
+                            newSubtotal = invoice.Subtotal,
                             previousGrandTotal = beforeGrandTotal,
-                            newGrandTotal      = invoice.GrandTotal,
-                            differenceAmount   = Math.Abs(invoice.Subtotal - beforeSubtotal),
-                            rows               = changedRows,
+                            newGrandTotal = invoice.GrandTotal,
+                            differenceAmount = Math.Abs(invoice.Subtotal - beforeSubtotal),
+                            rows = changedRows,
                         });
 
                         await _auditLog.LogAsync(new AuditLog
                         {
-                            Level         = "Info",
-                            UserName      = actorUserName,
-                            HttpMethod    = "PATCH",
-                            RequestPath   = $"/invoices/{invoice.Id}/{(allowQuantityEdit ? "itemtypes-and-qty" : "itemtypes")}",
-                            StatusCode    = 200,
+                            Level = "Info",
+                            UserName = actorUserName,
+                            HttpMethod = "PATCH",
+                            RequestPath = $"/invoices/{invoice.Id}/{(allowQuantityEdit ? "itemtypes-and-qty" : "itemtypes")}",
+                            StatusCode = 200,
                             ExceptionType = "Invoice.NarrowEdit",
-                            Message       = $"Bill #{invoice.InvoiceNumber}: {changedRows.Count} line(s) edited "
+                            Message = $"Bill #{invoice.InvoiceNumber}: {changedRows.Count} line(s) edited "
                                           + $"({(allowQuantityEdit ? "itemtype+qty+price" : "itemtype-only")}). "
                                           + $"Subtotal {beforeSubtotal:N2} → {invoice.Subtotal:N2} "
                                           + $"(diff Rs. {Math.Abs(invoice.Subtotal - beforeSubtotal):N2}).",
-                            RequestBody   = payload.Length > 4000 ? payload[..4000] : payload,
+                            RequestBody = payload.Length > 4000 ? payload[..4000] : payload,
                         });
                     }
                 }
@@ -2782,13 +2789,13 @@ namespace MyApp.Api.Services.Implementations
 
             await _auditLog.LogAsync(new AuditLog
             {
-                Level         = "Info",
-                UserName      = actorUserName,
-                HttpMethod    = "POST",
-                RequestPath   = $"/invoices/{invoice.Id}/fbr-cancelled",
-                StatusCode    = 200,
+                Level = "Info",
+                UserName = actorUserName,
+                HttpMethod = "POST",
+                RequestPath = $"/invoices/{invoice.Id}/fbr-cancelled",
+                StatusCode = 200,
                 ExceptionType = "Invoice.FbrCancelled",
-                Message       = $"Bill #{invoice.InvoiceNumber} (IRN {invoice.FbrIRN}) marked cancelled at the FBR portal"
+                Message = $"Bill #{invoice.InvoiceNumber} (IRN {invoice.FbrIRN}) marked cancelled at the FBR portal"
                               + (released.Count > 0 ? $"; challans {string.Join(", ", released)} released for re-billing" : "")
                               + (stockReturned ? "; stock returned" : "; stock already returned by a credit note")
                               + (string.IsNullOrWhiteSpace(reason) ? "" : $"; reason: {reason.Trim()}"),
@@ -2854,12 +2861,12 @@ namespace MyApp.Api.Services.Implementations
                 {
                     await _auditLog.LogAsync(new AuditLog
                     {
-                        Level         = "Info",
-                        HttpMethod    = "PUT",
-                        RequestPath   = $"/invoices/{invoice.Id}/fbr-excluded",
-                        StatusCode    = 200,
+                        Level = "Info",
+                        HttpMethod = "PUT",
+                        RequestPath = $"/invoices/{invoice.Id}/fbr-excluded",
+                        StatusCode = 200,
                         ExceptionType = "Invoice.FbrExcluded",
-                        Message       = excluded
+                        Message = excluded
                             ? $"Bill #{invoice.InvoiceNumber} EXCLUDED from FBR — its stock movements were reversed (on-hand restored)."
                             : $"Bill #{invoice.InvoiceNumber} re-INCLUDED in FBR — stock re-deducted for classified item lines.",
                     });
@@ -3053,14 +3060,14 @@ namespace MyApp.Api.Services.Implementations
                 {
                     await _auditLog.LogAsync(new AuditLog
                     {
-                        Level         = "Info",
-                        UserName      = actorUserName,
-                        HttpMethod    = "DELETE",
-                        RequestPath   = $"/invoices/{invoice.Id}",
-                        StatusCode    = 400,
-                        CompanyId     = invoice.CompanyId,
+                        Level = "Info",
+                        UserName = actorUserName,
+                        HttpMethod = "DELETE",
+                        RequestPath = $"/invoices/{invoice.Id}",
+                        StatusCode = 400,
+                        CompanyId = invoice.CompanyId,
                         ExceptionType = "Invoice.DeleteRefused",
-                        Message       = $"Delete of bill #{invoice.InvoiceNumber} refused: {reason}",
+                        Message = $"Delete of bill #{invoice.InvoiceNumber} refused: {reason}",
                     });
                 }
                 catch { /* audit must never break the operation */ }
@@ -3133,9 +3140,9 @@ namespace MyApp.Api.Services.Implementations
                 // a live deduction. SourceId references aren't FKs so
                 // EF won't cascade these; we delete explicitly.
                 var staleMovements = await _context.StockMovements
-                    .Where(m => m.CompanyId  == invoice.CompanyId
+                    .Where(m => m.CompanyId == invoice.CompanyId
                              && m.SourceType == StockMovementSourceType.Invoice
-                             && m.SourceId   == invoice.Id)
+                             && m.SourceId == invoice.Id)
                     .ToListAsync();
                 if (staleMovements.Count > 0)
                     _context.StockMovements.RemoveRange(staleMovements);
@@ -3226,9 +3233,9 @@ namespace MyApp.Api.Services.Implementations
                 // so on-hand reflects reality and the re-bill can re-deduct
                 // cleanly. SourceId isn't an FK, so EF won't cascade these.
                 var staleMovements = await _context.StockMovements
-                    .Where(m => m.CompanyId  == invoice.CompanyId
+                    .Where(m => m.CompanyId == invoice.CompanyId
                              && m.SourceType == StockMovementSourceType.Invoice
-                             && m.SourceId   == invoice.Id)
+                             && m.SourceId == invoice.Id)
                     .ToListAsync();
                 if (staleMovements.Count > 0)
                     _context.StockMovements.RemoveRange(staleMovements);
@@ -3265,13 +3272,13 @@ namespace MyApp.Api.Services.Implementations
             {
                 await _auditLog.LogAsync(new AuditLog
                 {
-                    Level         = "Info",
-                    UserName      = actorUserName,
-                    HttpMethod    = "POST",
-                    RequestPath   = $"/invoices/{invoice.Id}/cancel",
-                    StatusCode    = 200,
+                    Level = "Info",
+                    UserName = actorUserName,
+                    HttpMethod = "POST",
+                    RequestPath = $"/invoices/{invoice.Id}/cancel",
+                    StatusCode = 200,
                     ExceptionType = "Invoice.Cancelled",
-                    Message       = $"Bill #{invoice.InvoiceNumber} cancelled. "
+                    Message = $"Bill #{invoice.InvoiceNumber} cancelled. "
                                   + (revertedChallans.Count > 0
                                         ? $"Reverted challan(s) #{string.Join(", #", revertedChallans)} to billable. "
                                         : "")
@@ -3298,10 +3305,10 @@ namespace MyApp.Api.Services.Implementations
             => CreateNoteAsync(new CreateNoteDto
             {
                 OriginalInvoiceId = originalInvoiceId,
-                DocumentType      = documentTypeOverride == 9 ? 9 : 10,
-                Reason            = string.IsNullOrWhiteSpace(reason) ? "Return of goods" : reason,
-                Remarks           = remarks,
-                Lines             = new(),   // empty = full reversal
+                DocumentType = documentTypeOverride == 9 ? 9 : 10,
+                Reason = string.IsNullOrWhiteSpace(reason) ? "Return of goods" : reason,
+                Remarks = remarks,
+                Lines = new(),   // empty = full reversal
             }, actorUserName);
 
         public async Task<InvoiceDto?> CreateNoteAsync(CreateNoteDto dto, string? actorUserName = null)
@@ -3357,25 +3364,25 @@ namespace MyApp.Api.Services.Implementations
                 overlays.TryGetValue(src.Id, out var ov);
                 return new InvoiceItem
                 {
-                    ItemTypeId   = ov?.AdjustedItemTypeId ?? src.ItemTypeId,
+                    ItemTypeId = ov?.AdjustedItemTypeId ?? src.ItemTypeId,
                     ItemTypeName = ov?.AdjustedItemTypeName ?? src.ItemTypeName,
-                    Description  = ov?.AdjustedDescription ?? src.Description,
-                    Quantity     = qty,
-                    UOM          = src.UOM,
-                    UnitPrice    = unitPrice,
-                    LineTotal    = lineTotal,
-                    HSCode       = ov?.AdjustedHSCode   ?? src.HSCode,
-                    FbrUOMId     = src.FbrUOMId,
-                    SaleType     = ov?.AdjustedSaleType ?? src.SaleType,
-                    RateId       = src.RateId,
+                    Description = ov?.AdjustedDescription ?? src.Description,
+                    Quantity = qty,
+                    UOM = src.UOM,
+                    UnitPrice = unitPrice,
+                    LineTotal = lineTotal,
+                    HSCode = ov?.AdjustedHSCode ?? src.HSCode,
+                    FbrUOMId = src.FbrUOMId,
+                    SaleType = ov?.AdjustedSaleType ?? src.SaleType,
+                    RateId = src.RateId,
                     FixedNotifiedValueOrRetailPrice = src.FixedNotifiedValueOrRetailPrice,
-                    SroScheduleNo   = src.SroScheduleNo,
+                    SroScheduleNo = src.SroScheduleNo,
                     SroItemSerialNo = src.SroItemSerialNo,
-                    DeliveryItemId  = null,   // a note isn't tied to challan lines
+                    DeliveryItemId = null,   // a note isn't tied to challan lines
                 };
             }
 
-            decimal EffQty(InvoiceItem src)   => overlays.TryGetValue(src.Id, out var ov) && ov.AdjustedQuantity  != null ? ov.AdjustedQuantity.Value  : src.Quantity;
+            decimal EffQty(InvoiceItem src) => overlays.TryGetValue(src.Id, out var ov) && ov.AdjustedQuantity != null ? ov.AdjustedQuantity.Value : src.Quantity;
             decimal EffPrice(InvoiceItem src) => overlays.TryGetValue(src.Id, out var ov) && ov.AdjustedUnitPrice != null ? ov.AdjustedUnitPrice.Value : src.UnitPrice;
             decimal EffTotal(InvoiceItem src) => overlays.TryGetValue(src.Id, out var ov) && ov.AdjustedLineTotal != null ? ov.AdjustedLineTotal.Value : src.LineTotal;
 
@@ -3387,7 +3394,8 @@ namespace MyApp.Api.Services.Implementations
             if (!partial)
             {
                 // Full reversal — every line at its full effective quantity.
-                foreach (var src in original.Items) {
+                foreach (var src in original.Items)
+                {
                     noteItems.Add(BuildLine(src, EffQty(src), EffPrice(src), EffTotal(src)));
                     noteSourceIds.Add(src.Id);
                 }
@@ -3437,14 +3445,14 @@ namespace MyApp.Api.Services.Implementations
             decimal subtotal, gstAmount, grandTotal;
             if (!partial)
             {
-                subtotal   = original.Subtotal;
-                gstAmount  = original.GSTAmount;
+                subtotal = original.Subtotal;
+                gstAmount = original.GSTAmount;
                 grandTotal = original.GrandTotal;
             }
             else
             {
-                subtotal   = noteItems.Sum(i => i.LineTotal);
-                gstAmount  = Math.Round(subtotal * gstRate / 100m, 2);
+                subtotal = noteItems.Sum(i => i.LineTotal);
+                gstAmount = Math.Round(subtotal * gstRate / 100m, 2);
                 // A partial note carries the original's further-tax rate, so the
                 // reversal is proportionate to what was charged.
                 grandTotal = FurtherTaxCalculator.GrandTotal(
@@ -3467,7 +3475,7 @@ namespace MyApp.Api.Services.Implementations
             // (FBR 0035). 180-day ceiling (0034) is enforced at FBR pre-validate.
             var baseDate = (dto.Date ?? DateTime.UtcNow).Date;
             var noteDate = baseDate < original.Date.Date ? original.Date.Date : baseDate;
-            var reason  = dto.Reason;
+            var reason = dto.Reason;
             var remarks = dto.Remarks;
 
             // Stock semantics (industry pattern: separate the physical return
@@ -3511,40 +3519,53 @@ namespace MyApp.Api.Services.Implementations
                     // Fresh line entities each attempt (a rolled-back attempt detaches them).
                     var attemptItems = noteItems
                         .Select(i => BuildLine(
-                            new InvoiceItem { Id = 0, ItemTypeId = i.ItemTypeId, ItemTypeName = i.ItemTypeName,
-                                Description = i.Description, Quantity = i.Quantity, UOM = i.UOM, UnitPrice = i.UnitPrice,
-                                LineTotal = i.LineTotal, HSCode = i.HSCode, FbrUOMId = i.FbrUOMId, SaleType = i.SaleType,
-                                RateId = i.RateId, FixedNotifiedValueOrRetailPrice = i.FixedNotifiedValueOrRetailPrice,
-                                SroScheduleNo = i.SroScheduleNo, SroItemSerialNo = i.SroItemSerialNo },
+                            new InvoiceItem
+                            {
+                                Id = 0,
+                                ItemTypeId = i.ItemTypeId,
+                                ItemTypeName = i.ItemTypeName,
+                                Description = i.Description,
+                                Quantity = i.Quantity,
+                                UOM = i.UOM,
+                                UnitPrice = i.UnitPrice,
+                                LineTotal = i.LineTotal,
+                                HSCode = i.HSCode,
+                                FbrUOMId = i.FbrUOMId,
+                                SaleType = i.SaleType,
+                                RateId = i.RateId,
+                                FixedNotifiedValueOrRetailPrice = i.FixedNotifiedValueOrRetailPrice,
+                                SroScheduleNo = i.SroScheduleNo,
+                                SroItemSerialNo = i.SroItemSerialNo
+                            },
                             i.Quantity, i.UnitPrice, i.LineTotal))
                         .ToList();
 
                     var note = new Invoice
                     {
                         InvoiceNumber = nextInvoiceNumber,
-                        Date          = noteDate,
-                        CompanyId     = original.CompanyId,
-                        ClientId      = original.ClientId,
-                        Subtotal      = subtotal,
+                        Date = noteDate,
+                        CompanyId = original.CompanyId,
+                        ClientId = original.ClientId,
+                        Subtotal = subtotal,
                         TaxTreatment = original.TaxTreatment,
-                        GSTRate       = gstRate,
-                        GSTAmount     = gstAmount,
+                        GSTRate = gstRate,
+                        GSTAmount = gstAmount,
                         // A note reverses (or adds to) a sale that carried
                         // further tax, so it carries the same rate; the amount
                         // is already inside grandTotal above.
-                        FurtherTaxRate   = original.FurtherTaxRate,
+                        FurtherTaxRate = original.FurtherTaxRate,
                         FurtherTaxAmount = FurtherTaxCalculator.Resolve(original.FurtherTaxRate, subtotal),
-                        GrandTotal    = grandTotal,
-                    FreightCharges = !partial && docType == 10 ? original.FreightCharges : 0m,
+                        GrandTotal = grandTotal,
+                        FreightCharges = !partial && docType == 10 ? original.FreightCharges : 0m,
                         AmountInWords = NumberToWordsConverter.Convert(grandTotal),
-                        PaymentTerms  = original.PaymentTerms,   // carries [SNxxx] scenario tag
-                        DocumentType  = docType,
-                        PaymentMode   = original.PaymentMode,
-                        OriginalInvoiceId     = original.Id,
+                        PaymentTerms = original.PaymentTerms,   // carries [SNxxx] scenario tag
+                        DocumentType = docType,
+                        PaymentMode = original.PaymentMode,
+                        OriginalInvoiceId = original.Id,
                         OriginalInvoiceRefIRN = original.FbrIRN,
-                        NoteReason            = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim(),
-                        NoteReasonRemarks     = string.IsNullOrWhiteSpace(remarks) ? null : remarks.Trim(),
-                        NoteAffectsStock      = affectsStock,
+                        NoteReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim(),
+                        NoteReasonRemarks = string.IsNullOrWhiteSpace(remarks) ? null : remarks.Trim(),
+                        NoteAffectsStock = affectsStock,
                         // "CN-"/"DN-" marks the per-type note sequence so the
                         // display number can never be read as a sale-invoice number.
                         FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
@@ -3554,13 +3575,16 @@ namespace MyApp.Api.Services.Implementations
                     };
 
                     var created = await _invoiceRepo.CreateAsync(note);
-                    if (noteFilingRows != null) {
+                    if (noteFilingRows != null)
+                    {
                         var mapped = System.Text.Json.JsonSerializer.Deserialize<List<TaxFilingRowDto>>(
                             System.Text.Json.JsonSerializer.Serialize(noteFilingRows))!;
                         foreach (var row in mapped) row.SourceLineIds = row.SourceLineIds
                             .Select(source => created.Items.ElementAt(noteSourceIds.IndexOf(source)).Id).ToList();
-                        created.TaxFilingRowsJson = System.Text.Json.JsonSerializer.Serialize(new TaxFilingPlan {
-                            SourceVersion = TaxFilingProjection.SourceVersion(created), Rows = mapped,
+                        created.TaxFilingRowsJson = System.Text.Json.JsonSerializer.Serialize(new TaxFilingPlan
+                        {
+                            SourceVersion = TaxFilingProjection.SourceVersion(created),
+                            Rows = mapped,
                             SavedAt = DateTime.UtcNow
                         });
                         await _context.SaveChangesAsync();
@@ -3571,11 +3595,11 @@ namespace MyApp.Api.Services.Implementations
                     // move) — Credit Note → IN (return), Debit Note → OUT
                     // (extra goods). Value-only notes leave inventory alone.
                     await _stock.SyncInvoiceStockMovementsAsync(created);
-                // Post to the ledger from the same places stock reflows: those are
-                // exactly the points where the bill changed. A no-op while the
-                // company's ledger is not live, and replace-on-edit otherwise.
-                await _posting.PostInvoiceAsync(created);
-                await SalesDocumentRules.RefreshOrdersAsync(_context, created.CompanyId);
+                    // Post to the ledger from the same places stock reflows: those are
+                    // exactly the points where the bill changed. A no-op while the
+                    // company's ledger is not live, and replace-on-edit otherwise.
+                    await _posting.PostInvoiceAsync(created);
+                    await SalesDocumentRules.RefreshOrdersAsync(_context, created.CompanyId);
 
                     // A CREDIT note that reverses the bill IN FULL puts the goods
                     // back, so the delivery challans behind it are undelivered
@@ -3609,13 +3633,13 @@ namespace MyApp.Api.Services.Implementations
                     {
                         await _auditLog.LogAsync(new AuditLog
                         {
-                            Level         = "Info",
-                            UserName      = actorUserName,
-                            HttpMethod    = "POST",
-                            RequestPath   = $"/invoices/{original.Id}/reverse",
-                            StatusCode    = 200,
+                            Level = "Info",
+                            UserName = actorUserName,
+                            HttpMethod = "POST",
+                            RequestPath = $"/invoices/{original.Id}/reverse",
+                            StatusCode = 200,
                             ExceptionType = "Invoice.ReversalNote",
-                            Message       = $"{label} #{nextInvoiceNumber} ({(partial ? "partial" : "full")}) created against bill #{original.InvoiceNumber} (IRN {original.FbrIRN}). "
+                            Message = $"{label} #{nextInvoiceNumber} ({(partial ? "partial" : "full")}) created against bill #{original.InvoiceNumber} (IRN {original.FbrIRN}). "
                                           + (string.IsNullOrWhiteSpace(reason) ? "" : $"Reason: {reason!.Trim()}. ")
                                           + (releasedChallans.Count > 0
                                               ? $"Challans {string.Join(", ", releasedChallans)} released for re-billing. "
@@ -3694,9 +3718,9 @@ namespace MyApp.Api.Services.Implementations
             if (plannedLines.Count == 0)
                 throw new InvalidOperationException("No positive delta quantity to bill.");
 
-            var subtotal   = plannedLines.Sum(l => l.LineTotal);
-            var gstRate    = original.GSTRate;
-            var gstAmount  = Math.Round(subtotal * gstRate / 100m, 2);
+            var subtotal = plannedLines.Sum(l => l.LineTotal);
+            var gstRate = original.GSTRate;
+            var gstAmount = Math.Round(subtotal * gstRate / 100m, 2);
             var supplementFurtherTax = FurtherTaxCalculator.Resolve(original.FurtherTaxRate, subtotal);
             var grandTotal = FurtherTaxCalculator.GrandTotal(subtotal, gstAmount, supplementFurtherTax);
 
@@ -3766,13 +3790,13 @@ namespace MyApp.Api.Services.Implementations
                             : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
                         Items = plannedLines.Select(l => new InvoiceItem
                         {
-                            ItemTypeId   = l.ItemTypeId,
+                            ItemTypeId = l.ItemTypeId,
                             ItemTypeName = l.ItemTypeName,
-                            Description  = l.Description,
-                            Quantity     = l.Quantity,
-                            UOM          = l.UOM,
-                            UnitPrice    = l.UnitPrice,
-                            LineTotal    = l.LineTotal,
+                            Description = l.Description,
+                            Quantity = l.Quantity,
+                            UOM = l.UOM,
+                            UnitPrice = l.UnitPrice,
+                            LineTotal = l.LineTotal,
                             DeliveryItemId = null,
                             // UNCLASSIFIED: no HSCode / SaleType / RateId — consultant sets these.
                         }).ToList(),
@@ -3817,24 +3841,24 @@ namespace MyApp.Api.Services.Implementations
                     // Stock: same pipeline as a normal bill. An unclassified (no-HS)
                     // line records no movement until it is classified downstream.
                     await _stock.SyncInvoiceStockMovementsAsync(created);
-                // Post to the ledger from the same places stock reflows: those are
-                // exactly the points where the bill changed. A no-op while the
-                // company's ledger is not live, and replace-on-edit otherwise.
-                await _posting.PostInvoiceAsync(created);
-                await SalesDocumentRules.RefreshOrdersAsync(_context, created.CompanyId);
+                    // Post to the ledger from the same places stock reflows: those are
+                    // exactly the points where the bill changed. A no-op while the
+                    // company's ledger is not live, and replace-on-edit otherwise.
+                    await _posting.PostInvoiceAsync(created);
+                    await SalesDocumentRules.RefreshOrdersAsync(_context, created.CompanyId);
                     await transaction.CommitAsync();
 
                     try
                     {
                         await _auditLog.LogAsync(new AuditLog
                         {
-                            Level         = "Info",
-                            UserName      = actorUserName,
-                            HttpMethod    = "POST",
-                            RequestPath   = $"/invoices/{original.Id}/supplement",
-                            StatusCode    = 200,
+                            Level = "Info",
+                            UserName = actorUserName,
+                            HttpMethod = "POST",
+                            RequestPath = $"/invoices/{original.Id}/supplement",
+                            StatusCode = 200,
                             ExceptionType = "Invoice.Supplement",
-                            Message       = $"Delta bill #{nextInvoiceNumber} created supplementing bill #{original.InvoiceNumber} (IRN {original.FbrIRN}); "
+                            Message = $"Delta bill #{nextInvoiceNumber} created supplementing bill #{original.InvoiceNumber} (IRN {original.FbrIRN}); "
                                           + $"{plannedLines.Count} line(s), {(dto.CarryChallan ? plannedChallans.Count : 0)} challan(s) cloned. Awaiting tax-consultant classification.",
                         });
                     }
@@ -4103,10 +4127,12 @@ namespace MyApp.Api.Services.Implementations
                 // the delivery document keeps the operator's declared type.
                 Items = inv.GroupTaxInvoiceByItemType
                     ? inv.Items
-                        .GroupBy(ii => new {
+                        .GroupBy(ii => new
+                        {
                             ItemTypeName = ii.Adjustment?.AdjustedItemTypeName ?? ii.ItemTypeName,
                             ItemTypeId = ii.Adjustment?.AdjustedItemTypeId ?? ii.ItemTypeId,
-                            ii.SroScheduleNo, ii.SroItemSerialNo,
+                            ii.SroScheduleNo,
+                            ii.SroItemSerialNo,
                             HSCode = ii.Adjustment?.AdjustedHSCode ?? ii.HSCode,
                             SaleType = ii.Adjustment?.AdjustedSaleType ?? ii.SaleType,
                             UOM = TaxInvoiceGrouping.Uom(ii, string.IsNullOrWhiteSpace(inv.FbrIRN) && inv.FbrSubmittedAt == null),
@@ -4142,7 +4168,7 @@ namespace MyApp.Api.Services.Implementations
                     : inv.Items.Select(ii =>
                         {
                             var lineTotal = EffectivePrintLineTotal(ii);
-                            var qty       = ii.Adjustment?.AdjustedQuantity ?? ii.Quantity;
+                            var qty = ii.Adjustment?.AdjustedQuantity ?? ii.Quantity;
                             var gstAmt = Math.Round(lineTotal * inv.GSTRate / 100, 2);
                             return AddPrintChoices(new PrintTaxItemDto
                             {
@@ -4213,21 +4239,32 @@ namespace MyApp.Api.Services.Implementations
                             }, new[] { ii }, inv.GSTRate);
                         }).ToList()
             };
-            if (inv.TaxFilingRowsJson != null) {
+            if (inv.TaxFilingRowsJson != null)
+            {
                 var filing = TaxFilingProjection.Plan(inv)!;
                 var lines = TaxFilingProjection.Lines(inv);
                 var taxes = FurtherTaxCalculator.Allocate(inv.GSTAmount, lines.Select(i =>
                     string.Equals(i.SaleType, "3rd Schedule Goods", StringComparison.OrdinalIgnoreCase)
                         ? i.FixedNotifiedValueOrRetailPrice ?? 0m : i.LineTotal).ToArray());
-                result.Items = lines.Select((i, n) => new PrintTaxItemDto {
-                    ItemTypeName = i.ItemTypeName, Description = i.Description, HSCode = i.HSCode,
-                    UOM = i.UOM, Quantity = i.Quantity, UnitPrice = Math.Round(i.UnitPrice, 12),
-                    ValueExclTax = i.LineTotal, GSTRate = inv.GSTRate,
-                    GSTAmount = taxes[n], TotalInclTax = i.LineTotal + taxes[n],
-                    InvoiceItemTypeName = i.ItemTypeName, InvoiceUom = i.UOM,
-                    InvoiceQuantity = i.Quantity, InvoiceUnitPrice = Math.Round(i.UnitPrice, 12),
+                result.Items = lines.Select((i, n) => new PrintTaxItemDto
+                {
+                    ItemTypeName = i.ItemTypeName,
+                    Description = i.Description,
+                    HSCode = i.HSCode,
+                    UOM = i.UOM,
+                    Quantity = i.Quantity,
+                    UnitPrice = Math.Round(i.UnitPrice, 12),
+                    ValueExclTax = i.LineTotal,
+                    GSTRate = inv.GSTRate,
+                    GSTAmount = taxes[n],
+                    TotalInclTax = i.LineTotal + taxes[n],
+                    InvoiceItemTypeName = i.ItemTypeName,
+                    InvoiceUom = i.UOM,
+                    InvoiceQuantity = i.Quantity,
+                    InvoiceUnitPrice = Math.Round(i.UnitPrice, 12),
                     InvoiceValueExclTax = i.LineTotal,
-                    InvoiceGstAmount = taxes[n], InvoiceTotalInclTax = i.LineTotal + taxes[n],
+                    InvoiceGstAmount = taxes[n],
+                    InvoiceTotalInclTax = i.LineTotal + taxes[n],
                     BillQuantity = inv.Items.Where(s => filing.Rows[n].SourceLineIds.Contains(s.Id)).Sum(s => s.Quantity),
                     BillItemTypeName = string.Join(" / ", inv.Items.Where(s => filing.Rows[n].SourceLineIds.Contains(s.Id)).Select(s => s.ItemTypeName).Distinct()),
                     BillUom = string.Join(" / ", inv.Items.Where(s => filing.Rows[n].SourceLineIds.Contains(s.Id)).Select(s => s.UOM).Distinct())
@@ -4239,11 +4276,16 @@ namespace MyApp.Api.Services.Implementations
                 var filedHsByLine = TaxFilingProjection.HsCodeByLine(inv);
                 result.Items = inv.Items.Select(ii => PrintItemChoices.Apply(new PrintTaxItemDto
                 {
-                    ItemTypeName = ii.ItemTypeName, Description = ii.Description,
-                    Quantity = ii.Quantity, UnitPrice = ii.UnitPrice,
+                    ItemTypeName = ii.ItemTypeName,
+                    Description = ii.Description,
+                    Quantity = ii.Quantity,
+                    UnitPrice = ii.UnitPrice,
                     // The line stays the bill's own; only its code follows the consultant's classification (empty until classified).
-                    UOM = ii.UOM, HSCode = filedHsByLine.TryGetValue(ii.Id, out var filedCode) && !string.IsNullOrWhiteSpace(filedCode) ? filedCode : ii.Adjustment?.AdjustedHSCode ?? ii.HSCode, ValueExclTax = ii.LineTotal,
-                    GSTRate = inv.GSTRate, GSTAmount = Math.Round(ii.LineTotal * inv.GSTRate / 100, 2),
+                    UOM = ii.UOM,
+                    HSCode = filedHsByLine.TryGetValue(ii.Id, out var filedCode) && !string.IsNullOrWhiteSpace(filedCode) ? filedCode : ii.Adjustment?.AdjustedHSCode ?? ii.HSCode,
+                    ValueExclTax = ii.LineTotal,
+                    GSTRate = inv.GSTRate,
+                    GSTAmount = Math.Round(ii.LineTotal * inv.GSTRate / 100, 2),
                     TotalInclTax = ii.LineTotal + Math.Round(ii.LineTotal * inv.GSTRate / 100, 2)
                 }, new[] { new PrintItemSource(ii.Quantity, ii.Quantity, ii.ItemTypeName, ii.ItemTypeName, ii.UOM, ii.UOM, ii.LineTotal) }, inv.GSTRate)).ToList();
                 result.BillItems = result.Items;
@@ -4267,24 +4309,24 @@ namespace MyApp.Api.Services.Implementations
             var a = ii.Adjustment;
             return new InvoiceItem
             {
-                Id              = ii.Id,
-                InvoiceId       = ii.InvoiceId,
-                DeliveryItemId  = ii.DeliveryItemId,
-                ItemTypeId      = ii.ItemTypeId,
-                ItemTypeName    = ii.ItemTypeName,
-                Description     = ii.Description,
-                Quantity        = a.AdjustedQuantity  ?? ii.Quantity,
-                UOM             = ii.UOM,
-                UnitPrice       = a.AdjustedUnitPrice ?? ii.UnitPrice,
-                LineTotal       = a.AdjustedLineTotal ?? ii.LineTotal,
-                HSCode          = ii.HSCode,
-                FbrUOMId        = ii.FbrUOMId,
-                SaleType        = ii.SaleType,
-                RateId          = ii.RateId,
+                Id = ii.Id,
+                InvoiceId = ii.InvoiceId,
+                DeliveryItemId = ii.DeliveryItemId,
+                ItemTypeId = ii.ItemTypeId,
+                ItemTypeName = ii.ItemTypeName,
+                Description = ii.Description,
+                Quantity = a.AdjustedQuantity ?? ii.Quantity,
+                UOM = ii.UOM,
+                UnitPrice = a.AdjustedUnitPrice ?? ii.UnitPrice,
+                LineTotal = a.AdjustedLineTotal ?? ii.LineTotal,
+                HSCode = ii.HSCode,
+                FbrUOMId = ii.FbrUOMId,
+                SaleType = ii.SaleType,
+                RateId = ii.RateId,
                 FixedNotifiedValueOrRetailPrice = ii.FixedNotifiedValueOrRetailPrice,
-                SroScheduleNo   = ii.SroScheduleNo,
+                SroScheduleNo = ii.SroScheduleNo,
                 SroItemSerialNo = ii.SroItemSerialNo,
-                ItemType        = ii.ItemType,
+                ItemType = ii.ItemType,
             };
         }
 
@@ -4345,8 +4387,13 @@ namespace MyApp.Api.Services.Implementations
                         .Sum(p => (int?)p.Quantity) ?? 0,
                 }).ToListAsync();
 
-            var grouped = rawLines.GroupBy(x => new {
-                x.Id, x.InvoiceNumber, x.Date, x.ClientId, x.ClientName
+            var grouped = rawLines.GroupBy(x => new
+            {
+                x.Id,
+                x.InvoiceNumber,
+                x.Date,
+                x.ClientId,
+                x.ClientName
             });
 
             var result = new List<AwaitingPurchaseInvoiceDto>();
@@ -4408,7 +4455,8 @@ namespace MyApp.Api.Services.Implementations
             var groups = invoice.Items
                 .Where(ii => string.IsNullOrWhiteSpace(ii.HSCode) && ii.ItemTypeId.HasValue)
                 .GroupBy(ii => ii.ItemTypeId!.Value)
-                .Select(g => {
+                .Select(g =>
+                {
                     var sample = g.First();
                     var soldQty = g.Sum(x => x.Quantity);
                     var procuredQty = g.Sum(x => procuredMap.GetValueOrDefault(x.Id));

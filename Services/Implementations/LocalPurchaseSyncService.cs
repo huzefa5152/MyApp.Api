@@ -84,24 +84,24 @@ namespace MyApp.Api.Services.Implementations
             var ownTx = db.Database.CurrentTransaction == null ? await db.Database.BeginTransactionAsync() : null;
             try
             {
-            await LocalPurchaseAllocations.LockAsync(db, d, b);
-            var openIds = OpenAuto(db).Select(p => p.Id);
-            var linked = db.PurchaseItems.Where(p => (p.LocalDeliveryItemId.HasValue && d.Contains(p.LocalDeliveryItemId.Value))
-                || (p.LocalInvoiceItemId.HasValue && b.Contains(p.LocalInvoiceItemId.Value)));
-            if (await linked.AnyAsync(p => !openIds.Contains(p.PurchaseBillId)))
-                throw new InvalidOperationException("A line being removed is already on a paid, credited or manually entered supplier bill. Remove or credit that supplier bill first.");
-            var bills = await OpenAuto(db).Include(p => p.Items)
-                .Where(p => p.CompanyId == companyId && p.Items.Any(i => (i.LocalDeliveryItemId.HasValue && d.Contains(i.LocalDeliveryItemId.Value))
-                    || (i.LocalInvoiceItemId.HasValue && b.Contains(i.LocalInvoiceItemId.Value))))
-                .ToListAsync();
-            foreach (var bill in bills)
-            {
-                var keep = bill.Items.Where(i => !(i.LocalDeliveryItemId.HasValue && d.Contains(i.LocalDeliveryItemId.Value))
-                    && !(i.LocalInvoiceItemId.HasValue && b.Contains(i.LocalInvoiceItemId.Value))).ToList();
-                if (keep.Count == 0) await DeleteBillAsync(bill);
-                else await ReplaceItemsAsync(bill, keep.Select(Copy).ToList(), bill.Date);
-            }
-            if (ownTx != null) await ownTx.CommitAsync();
+                await LocalPurchaseAllocations.LockAsync(db, d, b);
+                var openIds = OpenAuto(db).Select(p => p.Id);
+                var linked = db.PurchaseItems.Where(p => (p.LocalDeliveryItemId.HasValue && d.Contains(p.LocalDeliveryItemId.Value))
+                    || (p.LocalInvoiceItemId.HasValue && b.Contains(p.LocalInvoiceItemId.Value)));
+                if (await linked.AnyAsync(p => !openIds.Contains(p.PurchaseBillId)))
+                    throw new InvalidOperationException("A line being removed is already on a paid, credited or manually entered supplier bill. Remove or credit that supplier bill first.");
+                var bills = await OpenAuto(db).Include(p => p.Items)
+                    .Where(p => p.CompanyId == companyId && p.Items.Any(i => (i.LocalDeliveryItemId.HasValue && d.Contains(i.LocalDeliveryItemId.Value))
+                        || (i.LocalInvoiceItemId.HasValue && b.Contains(i.LocalInvoiceItemId.Value))))
+                    .ToListAsync();
+                foreach (var bill in bills)
+                {
+                    var keep = bill.Items.Where(i => !(i.LocalDeliveryItemId.HasValue && d.Contains(i.LocalDeliveryItemId.Value))
+                        && !(i.LocalInvoiceItemId.HasValue && b.Contains(i.LocalInvoiceItemId.Value))).ToList();
+                    if (keep.Count == 0) await DeleteBillAsync(bill);
+                    else await ReplaceItemsAsync(bill, keep.Select(Copy).ToList(), bill.Date);
+                }
+                if (ownTx != null) await ownTx.CommitAsync();
             }
             finally
             {
@@ -146,10 +146,16 @@ namespace MyApp.Api.Services.Implementations
 
                 var wanted = lines.Where(l => l.SupplierId.HasValue && l.Cost.HasValue && l.Quantity - Fixed(l) > 0)
                     .GroupBy(l => l.SupplierId!.Value)
-                    .ToDictionary(g => g.Key, g => g.Select(l => new PurchaseItem {
-                        Description = l.Description, UOM = l.Unit, Quantity = l.Quantity - Fixed(l), UnitPrice = l.Cost!.Value,
+                    .ToDictionary(g => g.Key, g => g.Select(l => new PurchaseItem
+                    {
+                        Description = l.Description,
+                        UOM = l.Unit,
+                        Quantity = l.Quantity - Fixed(l),
+                        UnitPrice = l.Cost!.Value,
                         LineTotal = Math.Round((l.Quantity - Fixed(l)) * l.Cost.Value, 2),
-                        LocalDeliveryItemId = l.DeliveryId, LocalInvoiceItemId = l.InvoiceItemId }).ToList());
+                        LocalDeliveryItemId = l.DeliveryId,
+                        LocalInvoiceItemId = l.InvoiceItemId
+                    }).ToList());
                 var supplierIds = wanted.Keys.ToList();
                 if (await db.Suppliers.CountAsync(s => s.CompanyId == companyId && supplierIds.Contains(s.Id)) != supplierIds.Count)
                     throw new InvalidOperationException("A selected supplier does not belong to this company.");
@@ -175,8 +181,16 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
-        private static PurchaseItem Copy(PurchaseItem i) => new() { Description = i.Description, UOM = i.UOM, Quantity = i.Quantity,
-            UnitPrice = i.UnitPrice, LineTotal = i.LineTotal, LocalDeliveryItemId = i.LocalDeliveryItemId, LocalInvoiceItemId = i.LocalInvoiceItemId };
+        private static PurchaseItem Copy(PurchaseItem i) => new()
+        {
+            Description = i.Description,
+            UOM = i.UOM,
+            Quantity = i.Quantity,
+            UnitPrice = i.UnitPrice,
+            LineTotal = i.LineTotal,
+            LocalDeliveryItemId = i.LocalDeliveryItemId,
+            LocalInvoiceItemId = i.LocalInvoiceItemId
+        };
 
         private static string Key(PurchaseItem i) => $"{i.LocalDeliveryItemId}|{i.LocalInvoiceItemId}|{i.Quantity:0.####}|{i.UnitPrice:0.####}|{i.Description}|{i.UOM}";
 
@@ -185,10 +199,22 @@ namespace MyApp.Api.Services.Implementations
 
         private async Task CreateBillAsync(int companyId, int supplierId, int? challanId, int? invoiceId, DateTime date, string label, List<PurchaseItem> items)
         {
-            var bill = new PurchaseBill { CompanyId = companyId, SupplierId = supplierId, Source = AutoSource, PurchaseCategory = "LocalDirect",
-                SourceDeliveryChallanId = challanId, SourceInvoiceId = invoiceId, Date = date.Date, GSTRate = 0,
+            var bill = new PurchaseBill
+            {
+                CompanyId = companyId,
+                SupplierId = supplierId,
+                Source = AutoSource,
+                PurchaseCategory = "LocalDirect",
+                SourceDeliveryChallanId = challanId,
+                SourceInvoiceId = invoiceId,
+                Date = date.Date,
+                GSTRate = 0,
                 PurchaseBillNumber = await CompanyDocumentNumbers.AllocateAsync(db, companyId, "purchase-bill"),
-                ReconciliationStatus = "ManualOnly", Notes = $"Supplier cost from {label}", CreatedAt = DateTime.UtcNow, Items = items };
+                ReconciliationStatus = "ManualOnly",
+                Notes = $"Supplier cost from {label}",
+                CreatedAt = DateTime.UtcNow,
+                Items = items
+            };
             Total(bill);
             db.PurchaseBills.Add(bill);
             await db.SaveChangesAsync();

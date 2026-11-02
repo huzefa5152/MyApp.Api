@@ -58,9 +58,15 @@ namespace MyApp.Api.Controllers
 
         internal static StarterDto ToDto(StarterTemplate s, bool withHtml) => new()
         {
-            Id = s.Id, TemplateType = s.TemplateType, Name = s.Name, Description = s.Description,
-            HtmlContent = withHtml ? s.HtmlContent : null, IsActive = s.IsActive, SortOrder = s.SortOrder,
-            Revision = StarterTemplateService.Revision(s), UpdatedAt = s.UpdatedAt ?? s.CreatedAt,
+            Id = s.Id,
+            TemplateType = s.TemplateType,
+            Name = s.Name,
+            Description = s.Description,
+            HtmlContent = withHtml ? s.HtmlContent : null,
+            IsActive = s.IsActive,
+            SortOrder = s.SortOrder,
+            Revision = StarterTemplateService.Revision(s),
+            UpdatedAt = s.UpdatedAt ?? s.CreatedAt,
         };
 
         private IActionResult Refused(StarterTemplateException ex) => StatusCode(ex.Status, new { message = ex.Message });

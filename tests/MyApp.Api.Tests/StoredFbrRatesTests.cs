@@ -23,8 +23,12 @@ public class StoredFbrRatesTests
         await using var db = new AppDbContext(options);
         db.Companies.Add(new Company { Id = 8, Name = "Rates Co", FbrProvinceCode = 8, FbrToken = "t" });
         var today = DateTime.UtcNow.Date.ToString("yyyy-MM-dd");
-        db.FbrLookups.Add(new FbrLookup { Category = TaxMappingEngine.SaleTypeRateCategory, Code = $"18|8|{today}",
-            Label = JsonSerializer.Serialize(new List<FbrSaleTypeRateDto> { new() { RATE_ID = 734, RATE_DESC = "18%", RATE_VALUE = 18m } }) });
+        db.FbrLookups.Add(new FbrLookup
+        {
+            Category = TaxMappingEngine.SaleTypeRateCategory,
+            Code = $"18|8|{today}",
+            Label = JsonSerializer.Serialize(new List<FbrSaleTypeRateDto> { new() { RATE_ID = 734, RATE_DESC = "18%", RATE_VALUE = 18m } })
+        });
         db.FbrLookups.Add(new FbrLookup { Category = TaxMappingEngine.HsUomCategory, Code = "5602.2100|13", Label = "KG" });
         await db.SaveChangesAsync();
         foreach (var name in new[] { "_hsUomCache", "_saleTypeRateCache" })
@@ -68,8 +72,12 @@ public class StoredFbrRatesTests
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         await using var db = new AppDbContext(options);
-        db.FbrLookups.Add(new FbrLookup { Category = TaxMappingEngine.HsUomCategory, Code = "9801.1000|none",
-            Label = DateTime.UtcNow.Date.AddDays(-daysOld).ToString("yyyy-MM-dd") });
+        db.FbrLookups.Add(new FbrLookup
+        {
+            Category = TaxMappingEngine.HsUomCategory,
+            Code = "9801.1000|none",
+            Label = DateTime.UtcNow.Date.AddDays(-daysOld).ToString("yyyy-MM-dd")
+        });
         await db.SaveChangesAsync();
         ((IDictionary)typeof(TaxMappingEngine).GetField("_hsUomCache", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!).Clear();
         var asked = 0;

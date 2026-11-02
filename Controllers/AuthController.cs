@@ -81,9 +81,14 @@ namespace MyApp.Api.Controllers
             if (session == null && sid == null)
             {
                 var now = DateTime.UtcNow;
-                session = new Models.UserSession {
-                    Id = id, UserId = user.Id, SecurityStamp = user.SecurityStamp,
-                    CreatedAt = now, LastSeenAt = now, ExpiresAt = now.AddDays(30),
+                session = new Models.UserSession
+                {
+                    Id = id,
+                    UserId = user.Id,
+                    SecurityStamp = user.SecurityStamp,
+                    CreatedAt = now,
+                    LastSeenAt = now,
+                    ExpiresAt = now.AddDays(30),
                     TokenExpiresAt = now.AddHours(_configuration.GetValue<double>("Jwt:SessionExpirationHours", 168)),
                     UserAgent = Request.Headers.UserAgent.ToString()[..Math.Min(Request.Headers.UserAgent.ToString().Length, 512)],
                     IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? ""
@@ -167,8 +172,12 @@ namespace MyApp.Api.Controllers
 
             var session = new Models.UserSession
             {
-                Id = Guid.NewGuid().ToString("N"), UserId = user.Id, SecurityStamp = user.SecurityStamp ?? "",
-                ExpiresAt = DateTime.UtcNow.AddDays(30), CreatedAt = now, LastSeenAt = now,
+                Id = Guid.NewGuid().ToString("N"),
+                UserId = user.Id,
+                SecurityStamp = user.SecurityStamp ?? "",
+                ExpiresAt = DateTime.UtcNow.AddDays(30),
+                CreatedAt = now,
+                LastSeenAt = now,
                 TokenExpiresAt = now.AddHours(_configuration.GetValue<double>("Jwt:SessionExpirationHours", 168)),
                 UserAgent = Request.Headers.UserAgent.ToString()[..Math.Min(Request.Headers.UserAgent.ToString().Length, 512)],
                 IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? ""
@@ -423,9 +432,15 @@ namespace MyApp.Api.Controllers
 
         private void SetImageSession(string token, DateTime expires) =>
             Response.Cookies.Append(MyApp.Api.Middleware.PrivateDataFilesMiddleware.CookieName, token,
-                new CookieOptions { HttpOnly = true, Secure = Request.IsHttps
+                new CookieOptions
+                {
+                    HttpOnly = true,
+                    Secure = Request.IsHttps
                     || !HttpContext.RequestServices.GetRequiredService<IWebHostEnvironment>().IsDevelopment(),
-                    SameSite = SameSiteMode.Strict, Path = "/data", Expires = expires });
+                    SameSite = SameSiteMode.Strict,
+                    Path = "/data",
+                    Expires = expires
+                });
 
         [HttpPost("refresh")]
         [Authorize]
