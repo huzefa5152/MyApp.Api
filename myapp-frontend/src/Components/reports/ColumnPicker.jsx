@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MdViewColumn, MdCheck } from "react-icons/md";
 import { useUiPreference } from "../../hooks/useUiPreference";
+import { Button } from "../../ui/Kit";
+import "./ReportWorkspace.css";
 
 /**
  * Which columns of a report this user wants to see, remembered per report.
@@ -47,18 +49,16 @@ export default function ColumnPicker({ columns, hidden, onChange, onReset, note 
 
   return (
     <div className="rw-colpick" ref={wrap}>
-      <button
-        type="button"
-        className="rw-btn"
+      <Button
+        icon={MdViewColumn}
         aria-expanded={open}
         aria-haspopup="true"
         onClick={() => setOpen((o) => !o)}
         title="Choose which columns to show"
       >
-        <MdViewColumn size={17} />
         <span>Columns</span>
         {shown < columns.length && <span className="rw-colpick__count">{shown}/{columns.length}</span>}
-      </button>
+      </Button>
       {open && (
         <div className="rw-colpick__panel" role="group" aria-label="Columns to show">
           <div className="rw-colpick__head">

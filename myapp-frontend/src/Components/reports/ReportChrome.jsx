@@ -1,4 +1,5 @@
 import { MdPictureAsPdf, MdPrint } from "react-icons/md";
+import { Button } from "../../ui/Kit";
 import "./ReportWorkspace.css";
 
 /**
@@ -56,16 +57,16 @@ export function CompanyPicker({ icon, companies, selectedCompany, onChange }) {
   );
 }
 
-/** Print + PDF of the report itself, on the company letterhead. */
+/** Print + PDF of the report itself, on the company letterhead. Kit buttons, so they match the actions beside them. */
 export function PrintPdfButtons({ onPrint, onPdf, busy, disabled }) {
   return (
     <>
-      <button type="button" className="rw-btn" onClick={onPrint} disabled={disabled || !!busy} title="Print this report on the company letterhead">
-        <MdPrint size={17} /><span>Print</span>
-      </button>
-      <button type="button" className="rw-btn rw-btn--primary" onClick={onPdf} disabled={disabled || !!busy} title="Save this report as a PDF on the company letterhead">
-        <MdPictureAsPdf size={17} /><span>{busy === "pdf" ? "Building…" : "PDF"}</span>
-      </button>
+      <Button icon={MdPrint} onClick={onPrint} disabled={disabled || !!busy} title="Print this report on the company letterhead">
+        <span>Print</span>
+      </Button>
+      <Button variant="primary" icon={MdPictureAsPdf} onClick={onPdf} disabled={disabled || !!busy} title="Save this report as a PDF on the company letterhead">
+        <span>{busy === "pdf" ? "Building…" : "PDF"}</span>
+      </Button>
     </>
   );
 }
