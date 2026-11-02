@@ -1,4 +1,3 @@
-using System;
 
 namespace MyApp.Api.Helpers
 {

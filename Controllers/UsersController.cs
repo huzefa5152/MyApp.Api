@@ -4,7 +4,6 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using MyApp.Api.Controllers;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Middleware;

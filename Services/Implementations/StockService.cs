@@ -1,6 +1,5 @@
 using MyApp.Api.Helpers;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.Models;
 using MyApp.Api.Services.Interfaces;

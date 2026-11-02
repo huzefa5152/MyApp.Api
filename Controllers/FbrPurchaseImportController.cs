@@ -3,7 +3,6 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using MyApp.Api.DTOs;
 using MyApp.Api.Middleware;
 using MyApp.Api.Services.Implementations;
 using MyApp.Api.Services.Interfaces;

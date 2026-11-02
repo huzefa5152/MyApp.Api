@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Helpers;
 
 namespace MyApp.Api.Controllers;

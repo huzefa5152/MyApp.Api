@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.Services.Interfaces;
 

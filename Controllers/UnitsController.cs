@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Middleware;
-using MyApp.Api.Models;
 
 namespace MyApp.Api.Controllers
 {

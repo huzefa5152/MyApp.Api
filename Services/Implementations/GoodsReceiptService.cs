@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.Helpers;
 using MyApp.Api.DTOs;
