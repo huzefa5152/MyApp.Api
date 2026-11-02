@@ -234,7 +234,7 @@ export default function SalesOrderDetailModal({
               continue fulfillment.
             </p>
           )}
-          <p style={{ color: colors.textSecondary }}>
+          <p style={{ color: "var(--k-muted)" }}>
             Ordered quantities record the customer's commitment. Delivery and billing changes update
             delivered, remaining and billed status automatically.
           </p>
