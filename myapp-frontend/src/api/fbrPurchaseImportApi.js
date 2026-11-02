@@ -81,9 +81,8 @@ export async function downloadFbrPurchaseSample(format = "annexa") {
     responseType: "blob",
     timeout: 60000,
   });
-  const fileName = format === "ledger"
-    ? "FBR-Sales-Ledger-SAMPLE.xlsx"
-    : "FBR-AnnexureA-SAMPLE.xlsx";
+  const fileName =
+    format === "ledger" ? "FBR-Sales-Ledger-SAMPLE.xlsx" : "FBR-AnnexureA-SAMPLE.xlsx";
   const url = URL.createObjectURL(res.data);
   const a = document.createElement("a");
   a.href = url;

@@ -6,7 +6,6 @@
  */
 
 export const challanStarters = [
-
   // ─── 1. Classic Serif (double-border header) ──────────────────────────────
   {
     id: "challan-classic-serif",
@@ -233,7 +232,8 @@ tbody tr:nth-child(even) td { background: #eef2f9 !important; }
     id: "challan-bold-banner",
     name: "Bold Colored Banner",
     type: "Challan",
-    description: "High-contrast teal banner header with large bold DC number and vivid table header",
+    description:
+      "High-contrast teal banner header with large bold DC number and vivid table header",
     html: `<!DOCTYPE html><html><head><style>
 @media print { @page { size: A4; margin: 0; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -539,7 +539,8 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
     id: "challan-left-sidebar",
     name: "Left Sidebar Strip",
     type: "Challan",
-    description: "Vertical deep-blue sidebar strip on the left carrying DC number rotated vertically",
+    description:
+      "Vertical deep-blue sidebar strip on the left carrying DC number rotated vertically",
     html: `<!DOCTYPE html><html><head><style>
 @media print { @page { size: A4; margin: 0; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -616,7 +617,8 @@ tbody tr:nth-child(even) td { background: #e8eaf6 !important; }
     id: "challan-boxed-traditional",
     name: "Boxed Traditional",
     type: "Challan",
-    description: "Heavy-bordered box sections for each field group, classic Pakistani wholesale style",
+    description:
+      "Heavy-bordered box sections for each field group, classic Pakistani wholesale style",
     html: `<!DOCTYPE html><html><head><style>
 @media print { @page { size: A4; margin: 10mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -693,7 +695,8 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
     id: "challan-bismillah",
     name: "Bismillah Header",
     type: "Challan",
-    description: "Centered Bismillah calligraphy line at the top, traditional Pakistani business format",
+    description:
+      "Centered Bismillah calligraphy line at the top, traditional Pakistani business format",
     html: `<!DOCTYPE html><html><head><style>
 @media print { @page { size: A4; margin: 10mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -766,7 +769,8 @@ tbody tr:nth-child(even) td { background: #fbe9e7 !important; }
     id: "challan-green-gold",
     name: "Green & Gold",
     type: "Challan",
-    description: "Pakistani national colors — forest green header with gold accent lines and olive tints",
+    description:
+      "Pakistani national colors — forest green header with gold accent lines and olive tints",
     html: `<!DOCTYPE html><html><head><style>
 @media print { @page { size: A4; margin: 0; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -927,7 +931,8 @@ tbody tr:nth-child(even) td { background: #eceff1 !important; }
     id: "challan-big-letterhead",
     name: "Big Letterhead",
     type: "Challan",
-    description: "Oversized centered company name as letterhead with ruled lines and logo prominent",
+    description:
+      "Oversized centered company name as letterhead with ruled lines and logo prominent",
     html: `<!DOCTYPE html><html><head><style>
 @media print { @page { size: A4; margin: 10mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -1082,7 +1087,8 @@ tbody tr:nth-child(even) td { background: #f5f7f9 !important; }
     id: "challan-government-form",
     name: "Government Form Grid",
     type: "Challan",
-    description: "Heavy-ruled form-style grid with labeled header cells, mimicking official government forms",
+    description:
+      "Heavy-ruled form-style grid with labeled header cells, mimicking official government forms",
     html: `<!DOCTYPE html><html><head><style>
 @media print { @page { size: A4; margin: 10mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -1159,5 +1165,4 @@ table.items td.c { text-align: center; }
 </div>
 </body></html>`,
   },
-
 ];

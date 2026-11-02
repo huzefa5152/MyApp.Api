@@ -11,15 +11,10 @@ export const previewChallanImport = (companyId, files, sheetName) => {
   const form = new FormData();
   for (const f of files) form.append("files", f);
   if (sheetName) form.append("sheetName", sheetName);
-  return httpClient.post(
-    `/deliverychallans/company/${companyId}/import-excel/preview`,
-    form,
-    { headers: { "Content-Type": "multipart/form-data" } }
-  );
+  return httpClient.post(`/deliverychallans/company/${companyId}/import-excel/preview`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
 };
 
 export const commitChallanImport = (companyId, rows) =>
-  httpClient.post(
-    `/deliverychallans/company/${companyId}/import-excel/commit`,
-    rows
-  );
+  httpClient.post(`/deliverychallans/company/${companyId}/import-excel/commit`, rows);

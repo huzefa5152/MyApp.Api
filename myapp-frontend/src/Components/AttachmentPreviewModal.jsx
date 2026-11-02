@@ -19,7 +19,10 @@ export default function AttachmentPreviewModal({ title, ext, loadBlob, onDownloa
     let cancelled = false;
     let created = null;
     (async () => {
-      if (!previewable) { setLoading(false); return; }
+      if (!previewable) {
+        setLoading(false);
+        return;
+      }
       try {
         const blob = await loadBlob();
         if (cancelled) return;
@@ -31,7 +34,10 @@ export default function AttachmentPreviewModal({ title, ext, loadBlob, onDownloa
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; if (created) URL.revokeObjectURL(created); };
+    return () => {
+      cancelled = true;
+      if (created) URL.revokeObjectURL(created);
+    };
   }, [previewable, loadBlob]);
 
   const { Icon, color } = fileIconFor(ext || title);
@@ -40,16 +46,54 @@ export default function AttachmentPreviewModal({ title, ext, loadBlob, onDownloa
   // parent <form> / modal subtree it may be embedded in.
   return createPortal(
     <div data-admin-backdrop="" style={{ ...formStyles.backdrop, zIndex: 1103 }} onClick={onClose}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, height: "90vh" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, height: "90vh" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
           {/* File names are user-supplied: 2-line clamp rather than nowrap + ellipsis. */}
-          <h5 title={title} style={{ ...formStyles.title, minWidth: 0, overflowWrap: "anywhere", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{title}</h5>
+          <h5
+            title={title}
+            style={{
+              ...formStyles.title,
+              minWidth: 0,
+              overflowWrap: "anywhere",
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
+          >
+            {title}
+          </h5>
           <div style={{ display: "flex", gap: 8 }}>
-            {onDownload && <button style={formStyles.closeButton} title="Download" onClick={onDownload}><MdDownload size={18} /></button>}
-            <button data-admin-close="" style={formStyles.closeButton} title="Close" onClick={onClose}><MdClose size={18} /></button>
+            {onDownload && (
+              <button style={formStyles.closeButton} title="Download" onClick={onDownload}>
+                <MdDownload size={18} />
+              </button>
+            )}
+            <button
+              data-admin-close=""
+              style={formStyles.closeButton}
+              title="Close"
+              onClick={onClose}
+            >
+              <MdClose size={18} />
+            </button>
           </div>
         </div>
-        <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "none", display: "flex", alignItems: "center", justifyContent: "center", background: "#f1f3f6" }}>
+        <div
+          data-admin-body=""
+          style={{
+            ...formStyles.body,
+            maxHeight: "none",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "#f1f3f6",
+          }}
+        >
           {loading ? (
             <Loading>Loading preview…</Loading>
           ) : err ? (
@@ -59,19 +103,30 @@ export default function AttachmentPreviewModal({ title, ext, loadBlob, onDownloa
               <Icon size={72} color={color} />
               <p style={{ marginTop: 12 }}>No inline preview for this file type.</p>
               {onDownload && (
-                <button onClick={onDownload} style={{ ...formStyles.button, ...formStyles.submit, marginTop: 8 }}>
+                <button
+                  onClick={onDownload}
+                  style={{ ...formStyles.button, ...formStyles.submit, marginTop: 8 }}
+                >
                   Download to view
                 </button>
               )}
             </div>
           ) : isImageExt(ext) ? (
-            <img src={url} alt={title} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+            <img
+              src={url}
+              alt={title}
+              style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
+            />
           ) : (
-            <iframe src={url} title={title} style={{ width: "100%", height: "100%", border: "none", background: "#fff" }} />
+            <iframe
+              src={url}
+              title={title}
+              style={{ width: "100%", height: "100%", border: "none", background: "#fff" }}
+            />
           )}
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

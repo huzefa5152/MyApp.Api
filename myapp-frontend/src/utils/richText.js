@@ -20,7 +20,10 @@ function escapeHtml(s) {
 export function renderRichTextHtml(text) {
   if (text == null) return "";
   let out = escapeHtml(text);
-  out = out.replace(new RegExp(`&lt;(/?)(${ALLOWED})&gt;`, "gi"), (_m, slash, tag) => `<${slash}${tag.toLowerCase()}>`);
+  out = out.replace(
+    new RegExp(`&lt;(/?)(${ALLOWED})&gt;`, "gi"),
+    (_m, slash, tag) => `<${slash}${tag.toLowerCase()}>`,
+  );
   out = out.replace(/\r\n|\r|\n/g, "<br>");
   return out;
 }

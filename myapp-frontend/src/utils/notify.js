@@ -3,7 +3,9 @@ let listener = null;
 
 export function onNotify(callback) {
   listener = callback;
-  return () => { listener = null; };
+  return () => {
+    listener = null;
+  };
 }
 
 export function notify(message, severity = "error") {

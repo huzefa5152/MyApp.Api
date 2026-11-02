@@ -3,7 +3,20 @@ import { canEditBilledDelivery } from "../utils/billedChallanEdit";
 import { isBillableChallan } from "../utils/challanBilling";
 import CardActions from "./CardActions";
 import { useState } from "react";
-import { MdVisibility, MdEdit, MdPrint, MdPictureAsPdf, MdGridOn, MdRequestQuote, MdContentCopy, MdCancel, MdDelete, MdWarning, MdLink, MdAddShoppingCart } from "react-icons/md";
+import {
+  MdVisibility,
+  MdEdit,
+  MdPrint,
+  MdPictureAsPdf,
+  MdGridOn,
+  MdRequestQuote,
+  MdContentCopy,
+  MdCancel,
+  MdDelete,
+  MdWarning,
+  MdLink,
+  MdAddShoppingCart,
+} from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
 import DataTable from "./DataTable";
 import StatusBadge, { toneForStatus } from "./StatusBadge";
@@ -13,16 +26,18 @@ import AttachmentBadge from "./AttachmentBadge";
 // Mirror of ChallanList's eligibility checks so the table view enforces the
 // exact same business rules around editability / cancel / delete / duplicate.
 export function evalRowFlags(c, perms) {
-  const isEditable = c.isEditable ?? (
-    c.status === "Pending" || c.status === "Imported" || c.status === "No PO" || c.status === "Setup Required"
-  );
+  const isEditable =
+    c.isEditable ??
+    (c.status === "Pending" ||
+      c.status === "Imported" ||
+      c.status === "No PO" ||
+      c.status === "Setup Required");
   const canCancel = c.status !== "Invoiced" && isEditable;
   const isDuplicate = c.duplicatedFromId != null;
   const canDelete = canCancel && (isDuplicate || c.isLatest === true);
   const canGenerateBill = perms.permCreateBill && isBillableChallan(c);
-  const canDuplicate = perms.permDuplicate
-    && !isDuplicate
-    && (c.status === "Pending" || c.status === "Imported");
+  const canDuplicate =
+    perms.permDuplicate && !isDuplicate && (c.status === "Pending" || c.status === "Imported");
   return { isEditable, canCancel, isDuplicate, canDelete, canGenerateBill, canDuplicate };
 }
 
@@ -58,7 +73,15 @@ export default function ChallanTable({
   const [selectedChallan, setSelectedChallan] = useState(null);
 
   const columns = [
-    ...(onCosts ? [{ key: "costing", header: "Actual costing", render: (c) => <CostingStatus document={c} onOpen={() => onCosts(c)} /> }] : []),
+    ...(onCosts
+      ? [
+          {
+            key: "costing",
+            header: "Actual costing",
+            render: (c) => <CostingStatus document={c} onOpen={() => onCosts(c)} />,
+          },
+        ]
+      : []),
     {
       key: "challanNumber",
       header: "DC #",
@@ -68,12 +91,22 @@ export default function ChallanTable({
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <strong>{c.challanNumber}</strong>
           {c.duplicatedFromId != null && (
-            <span title={c.duplicatedFromChallanNumber ? `Duplicate of #${c.duplicatedFromChallanNumber}` : "Duplicate"} style={{ color: "#4527a0", display: "inline-flex" }}>
+            <span
+              title={
+                c.duplicatedFromChallanNumber
+                  ? `Duplicate of #${c.duplicatedFromChallanNumber}`
+                  : "Duplicate"
+              }
+              style={{ color: "#4527a0", display: "inline-flex" }}
+            >
               <MdContentCopy size={13} />
             </span>
           )}
           {c.warnings && c.warnings.length > 0 && (
-            <span title={`FBR setup issues:\n• ${c.warnings.join("\n• ")}`} style={{ color: "#e65100", display: "inline-flex" }}>
+            <span
+              title={`FBR setup issues:\n• ${c.warnings.join("\n• ")}`}
+              style={{ color: "#e65100", display: "inline-flex" }}
+            >
               <MdWarning size={14} />
             </span>
           )}
@@ -97,9 +130,12 @@ export default function ChallanTable({
       header: "SO #",
       width: 90,
       accessor: (c) => c.salesOrderNumber || 0,
-      render: (c) => c.salesOrderNumber
-        ? <span style={{ color: "#0d47a1", fontWeight: 700 }}>#{c.salesOrderNumber}</span>
-        : "—",
+      render: (c) =>
+        c.salesOrderNumber ? (
+          <span style={{ color: "#0d47a1", fontWeight: 700 }}>#{c.salesOrderNumber}</span>
+        ) : (
+          "—"
+        ),
     },
     {
       key: "indentNo",
@@ -118,8 +154,8 @@ export default function ChallanTable({
       key: "deliveryDate",
       header: "Date",
       width: 110,
-      accessor: (c) => c.deliveryDate ? new Date(c.deliveryDate).getTime() : 0,
-      render: (c) => c.deliveryDate ? new Date(c.deliveryDate).toLocaleDateString() : "—",
+      accessor: (c) => (c.deliveryDate ? new Date(c.deliveryDate).getTime() : 0),
+      render: (c) => (c.deliveryDate ? new Date(c.deliveryDate).toLocaleDateString() : "—"),
     },
     {
       key: "items",
@@ -136,12 +172,23 @@ export default function ChallanTable({
       accessor: (c) => c.status,
       render: (c) => (
         <>
-          <StatusBadge tone={c.isPartiallyBilled ? "warning" : toneForStatus(c.status)}
-            status={!c.isPartiallyBilled ? (c.status === "Invoiced" ? "Billed" : c.status)
-              : c.status === "Invoiced" ? "Partially billed" : `${c.status} · rest of #${c.challanNumber}`} />
+          <StatusBadge
+            tone={c.isPartiallyBilled ? "warning" : toneForStatus(c.status)}
+            status={
+              !c.isPartiallyBilled
+                ? c.status === "Invoiced"
+                  ? "Billed"
+                  : c.status
+                : c.status === "Invoiced"
+                  ? "Partially billed"
+                  : `${c.status} · rest of #${c.challanNumber}`
+            }
+          />
           {/* Which bill it went onto. */}
           {c.invoiceNumber != null && (
-            <div style={{ fontSize: "0.72rem", color: "#5f6d7e", marginTop: 2, whiteSpace: "nowrap" }}>
+            <div
+              style={{ fontSize: "0.72rem", color: "#5f6d7e", marginTop: 2, whiteSpace: "nowrap" }}
+            >
               Bill #{c.invoiceNumber}
             </div>
           )}
@@ -156,12 +203,24 @@ export default function ChallanTable({
     const canLink = onLinkOrder && c.status === "No PO" && !c.salesOrderId && !c.invoiceId;
     return (
       <CardActions nowrap label={`More actions for challan ${c.challanNumber}`}>
-        <button data-label="View" data-primary style={btnStyles.view} onClick={() => setSelectedChallan(c)} title="View challan">
+        <button
+          data-label="View"
+          data-primary
+          style={btnStyles.view}
+          onClick={() => setSelectedChallan(c)}
+          title="View challan"
+        >
           <MdVisibility size={14} />
         </button>
         {perms.permPrint && (
-          <button data-label="Print" data-primary
-            style={{ ...btnStyles.print, opacity: printDisabled ? 0.5 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+          <button
+            data-label="Print"
+            data-primary
+            style={{
+              ...btnStyles.print,
+              opacity: printDisabled ? 0.5 : 1,
+              cursor: printDisabled ? "not-allowed" : "pointer",
+            }}
             disabled={printDisabled}
             onClick={() => onPrint?.(c)}
             title={printDisabled ? printDisabledReason : "Print"}
@@ -170,36 +229,74 @@ export default function ChallanTable({
           </button>
         )}
         {perms.permPrint && (
-          <button data-label="PDF"
-            style={{ ...btnStyles.pdf, opacity: printDisabled || exportingId ? 0.55 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+          <button
+            data-label="PDF"
+            style={{
+              ...btnStyles.pdf,
+              opacity: printDisabled || exportingId ? 0.55 : 1,
+              cursor: printDisabled ? "not-allowed" : "pointer",
+            }}
             disabled={printDisabled || !!exportingId}
             onClick={() => onExportPdf?.(c)}
             title={printDisabled ? printDisabledReason : "Export PDF"}
           >
-            {exportingId === c.id + "-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />}
+            {exportingId === c.id + "-pdf" ? (
+              <span className="btn-spinner" />
+            ) : (
+              <MdPictureAsPdf size={14} />
+            )}
           </button>
         )}
         {perms.permPrint && onExportExcel && (
-          <button data-label="Excel"
+          <button
+            data-label="Excel"
             style={{ ...btnStyles.excel, opacity: exportingId ? 0.55 : 1 }}
             disabled={!!exportingId}
             onClick={() => onExportExcel(c)}
             title="Export Excel"
           >
-            {exportingId === c.id + "-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />}
+            {exportingId === c.id + "-excel" ? (
+              <span className="btn-spinner" />
+            ) : (
+              <MdGridOn size={14} />
+            )}
           </button>
         )}
-        {onLocalPurchase && c.status !== "Cancelled" && <button data-label="Local purchase" style={btnStyles.edit} onClick={() => onLocalPurchase(c)} title="Create local purchase"><MdAddShoppingCart size={14} /></button>}
-          {perms.permUpdate && flags.isEditable && !c.invoiceId && (
-          <button data-label={c.invoiceId || c.status === "Invoiced" ? "Supplier & cost" : "Edit items"} data-primary={(!flags.canGenerateBill) || undefined} style={btnStyles.edit} onClick={() => onEditItems?.(c)} title={c.invoiceId || c.status === "Invoiced" ? "Edit supplier & cost" : "Edit items"}>
+        {onLocalPurchase && c.status !== "Cancelled" && (
+          <button
+            data-label="Local purchase"
+            style={btnStyles.edit}
+            onClick={() => onLocalPurchase(c)}
+            title="Create local purchase"
+          >
+            <MdAddShoppingCart size={14} />
+          </button>
+        )}
+        {perms.permUpdate && flags.isEditable && !c.invoiceId && (
+          <button
+            data-label={c.invoiceId || c.status === "Invoiced" ? "Supplier & cost" : "Edit items"}
+            data-primary={!flags.canGenerateBill || undefined}
+            style={btnStyles.edit}
+            onClick={() => onEditItems?.(c)}
+            title={c.invoiceId || c.status === "Invoiced" ? "Edit supplier & cost" : "Edit items"}
+          >
             <MdEdit size={14} />
           </button>
         )}
-        {onEditDelivery && canEditBilledDelivery(c, has) && <button
-          data-label="Edit delivery & update bill" data-primary style={{ ...btnStyles.edit, minHeight: 44 }}
-          title="Edit delivery & update bill" onClick={() => onEditDelivery(c)}><MdEdit size={14} /></button>}
+        {onEditDelivery && canEditBilledDelivery(c, has) && (
+          <button
+            data-label="Edit delivery & update bill"
+            data-primary
+            style={{ ...btnStyles.edit, minHeight: 44 }}
+            title="Edit delivery & update bill"
+            onClick={() => onEditDelivery(c)}
+          >
+            <MdEdit size={14} />
+          </button>
+        )}
         {flags.canDuplicate && onDuplicate && (
-          <button data-label="Duplicate"
+          <button
+            data-label="Duplicate"
             style={{
               ...btnStyles.duplicate,
               opacity: duplicatingId ? 0.55 : 1,
@@ -213,22 +310,44 @@ export default function ChallanTable({
           </button>
         )}
         {flags.canGenerateBill && (
-          <button data-label="Generate bill" data-primary style={btnStyles.generateBill} onClick={() => onGenerateBill?.(c)} title="Generate Bill from this challan">
+          <button
+            data-label="Generate bill"
+            data-primary
+            style={btnStyles.generateBill}
+            onClick={() => onGenerateBill?.(c)}
+            title="Generate Bill from this challan"
+          >
             <MdRequestQuote size={14} />
           </button>
         )}
         {canLink && (
-          <button data-label="Link to sales order" style={btnStyles.link} onClick={() => onLinkOrder?.(c)} title="Link this challan to a Sales Order">
+          <button
+            data-label="Link to sales order"
+            style={btnStyles.link}
+            onClick={() => onLinkOrder?.(c)}
+            title="Link this challan to a Sales Order"
+          >
             <MdLink size={14} />
           </button>
         )}
         {perms.permUpdate && flags.canCancel && (
-          <button data-label="Cancel challan" data-admin-close="" style={btnStyles.cancel} onClick={() => onCancel?.(c)} title="Cancel challan">
+          <button
+            data-label="Cancel challan"
+            data-admin-close=""
+            style={btnStyles.cancel}
+            onClick={() => onCancel?.(c)}
+            title="Cancel challan"
+          >
             <MdCancel size={14} />
           </button>
         )}
         {perms.permDelete && flags.canDelete && (
-          <button data-label="Delete" style={btnStyles.delete} onClick={() => onDelete?.(c)} title="Delete">
+          <button
+            data-label="Delete"
+            style={btnStyles.delete}
+            onClick={() => onDelete?.(c)}
+            title="Delete"
+          >
             <MdDelete size={14} />
           </button>
         )}
@@ -264,14 +383,14 @@ const baseBtn = {
   padding: 0,
 };
 const btnStyles = {
-  view:         { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1" },
-  print:        { ...baseBtn, backgroundColor: "#f3e5f5", color: "#7b1fa2" },
-  pdf:          { ...baseBtn, backgroundColor: "#ffebee", color: "#c62828" },
-  excel:        { ...baseBtn, backgroundColor: "#e8f5e9", color: "#2e7d32" },
-  edit:         { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
-  duplicate:    { ...baseBtn, backgroundColor: "#ede7f6", color: "#4527a0" },
+  view: { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1" },
+  print: { ...baseBtn, backgroundColor: "#f3e5f5", color: "#7b1fa2" },
+  pdf: { ...baseBtn, backgroundColor: "#ffebee", color: "#c62828" },
+  excel: { ...baseBtn, backgroundColor: "#e8f5e9", color: "#2e7d32" },
+  edit: { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
+  duplicate: { ...baseBtn, backgroundColor: "#ede7f6", color: "#4527a0" },
   generateBill: { ...baseBtn, backgroundColor: "#e0f2f1", color: "#00695c" },
-  link:         { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1" },
-  cancel:       { ...baseBtn, backgroundColor: "#fce4ec", color: "#c62828" },
-  delete:       { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },
+  link: { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1" },
+  cancel: { ...baseBtn, backgroundColor: "#fce4ec", color: "#c62828" },
+  delete: { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },
 };

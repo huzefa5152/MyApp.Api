@@ -4,11 +4,9 @@ import httpClient from "./httpClient";
 // list and the bank/cash list feed the pickers on documents, receipts and
 // payments (which is why those two are gated more widely than coa.view).
 
-export const getCoaTree = (companyId) =>
-  httpClient.get(`/accounts/company/${companyId}/tree`);
+export const getCoaTree = (companyId) => httpClient.get(`/accounts/company/${companyId}/tree`);
 
-export const getAccountsFlat = (companyId) =>
-  httpClient.get(`/accounts/company/${companyId}/flat`);
+export const getAccountsFlat = (companyId) => httpClient.get(`/accounts/company/${companyId}/flat`);
 
 // includeInactive is for the management screen — the pickers want active only,
 // and skipping it also skips the per-row "has activity?" lookup on the server.
@@ -21,17 +19,14 @@ export const createAccountGroup = (companyId, payload) =>
 export const updateAccountGroup = (id, payload) =>
   httpClient.put(`/accounts/groups/${id}`, payload);
 
-export const deleteAccountGroup = (id) =>
-  httpClient.delete(`/accounts/groups/${id}`);
+export const deleteAccountGroup = (id) => httpClient.delete(`/accounts/groups/${id}`);
 
 export const createAccount = (companyId, payload) =>
   httpClient.post(`/accounts/company/${companyId}`, payload);
 
-export const updateAccount = (id, payload) =>
-  httpClient.put(`/accounts/${id}`, payload);
+export const updateAccount = (id, payload) => httpClient.put(`/accounts/${id}`, payload);
 
-export const deleteAccount = (id) =>
-  httpClient.delete(`/accounts/${id}`);
+export const deleteAccount = (id) => httpClient.delete(`/accounts/${id}`);
 
 // Correct a bank/cash account's starting balance. The offsetting delta lands on
 // Retained earnings server-side, so the opening balance sheet still balances.

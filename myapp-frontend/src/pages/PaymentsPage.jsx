@@ -1,10 +1,21 @@
 import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback } from "react";
 import {
-  MdAdd, MdDelete, MdReceiptLong, MdPayments,
-  MdExpandMore, MdPerson, MdAccountBalanceWallet,
-  MdCalendarToday, MdNotes, MdVisibility, MdEdit, MdClose,
-  MdPrint, MdPictureAsPdf, MdBusiness,
+  MdAdd,
+  MdDelete,
+  MdReceiptLong,
+  MdPayments,
+  MdExpandMore,
+  MdPerson,
+  MdAccountBalanceWallet,
+  MdCalendarToday,
+  MdNotes,
+  MdVisibility,
+  MdEdit,
+  MdClose,
+  MdPrint,
+  MdPictureAsPdf,
+  MdBusiness,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -28,13 +39,23 @@ import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { defaultReceiptTemplate, defaultPaymentTemplate } from "../utils/accountingDocTemplates";
 import RichText from "../Components/RichText";
 import {
-  PageHeader, CompanyPicker, Button, Toolbar, ToolbarSpacer, SearchBox, EmptyState, Loading,
+  PageHeader,
+  CompanyPicker,
+  Button,
+  Toolbar,
+  ToolbarSpacer,
+  SearchBox,
+  EmptyState,
+  Loading,
 } from "../ui/Kit";
 import useQueryAction from "../hooks/useQueryAction";
 
 const fmtMoney = (n) =>
   Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-const fmtDate = (d) => (d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—");
+const fmtDate = (d) =>
+  d
+    ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+    : "—";
 
 /**
  * Receipts (money in) / Payments (money out) list. mode = "receipts" |
@@ -80,39 +101,59 @@ export default function PaymentsPage({ mode = "receipts" }) {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState(null);   // payment being edited
-  const [viewing, setViewing] = useState(null);    // payment being viewed (read-only)
-  const [exportingId, setExportingId] = useState(null);   // PDF export in flight
+  const [editing, setEditing] = useState(null); // payment being edited
+  const [viewing, setViewing] = useState(null); // payment being viewed (read-only)
+  const [exportingId, setExportingId] = useState(null); // PDF export in flight
   const [attachTarget, setAttachTarget] = useState(null);
 
   const companyId = selectedCompany?.id;
-  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(companyId, "Payment", rows.map((r) => r.id));
+  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(
+    companyId,
+    "Payment",
+    rows.map((r) => r.id),
+  );
 
-  const fetchRows = useCallback(async (pg) => {
-    if (!companyId) { setRows([]); return; }
-    setLoading(true);
-    try {
-      const params = { page: pg || page };
-      if (pageSize) params.pageSize = pageSize;
-      if (search.trim()) params.search = search.trim();
-      const { data } = await getPagedPayments(dir, companyId, params);
-      setRows(data.items || []);
-      setTotalCount(data.totalCount || 0);
-      setTotalPages(data.totalPages || 0);
-      setObservedSize(data.pageSize ?? null);
-    } catch {
-      setRows([]); setTotalCount(0); setTotalPages(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [companyId, dir, page, pageSize, search]);
+  const fetchRows = useCallback(
+    async (pg) => {
+      if (!companyId) {
+        setRows([]);
+        return;
+      }
+      setLoading(true);
+      try {
+        const params = { page: pg || page };
+        if (pageSize) params.pageSize = pageSize;
+        if (search.trim()) params.search = search.trim();
+        const { data } = await getPagedPayments(dir, companyId, params);
+        setRows(data.items || []);
+        setTotalCount(data.totalCount || 0);
+        setTotalPages(data.totalPages || 0);
+        setObservedSize(data.pageSize ?? null);
+      } catch {
+        setRows([]);
+        setTotalCount(0);
+        setTotalPages(0);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [companyId, dir, page, pageSize, search],
+  );
 
   // Reset to page 1 on company / mode switch.
-  useEffect(() => { setPage(1); setSearch(""); setShowForm(false); setEditing(null); setViewing(null); }, [companyId, dir]);
+  useEffect(() => {
+    setPage(1);
+    setSearch("");
+    setShowForm(false);
+    setEditing(null);
+    setViewing(null);
+  }, [companyId, dir]);
   // Dashboard quick action: ?new=1 opens Record Receipt / Record Payment. After
   // the reset above, which would otherwise close the form it just opened.
   useQueryAction("new", !!companyId && canCreate, () => setShowForm(true));
-  useEffect(() => { fetchRows(page); }, [fetchRows, page]);
+  useEffect(() => {
+    fetchRows(page);
+  }, [fetchRows, page]);
 
   const handleDelete = async (p) => {
     const ok = await confirm({
@@ -131,16 +172,26 @@ export default function PaymentsPage({ mode = "receipts" }) {
     }
   };
 
-  const onSaved = () => { setPage(1); fetchRows(1); notify(`${isReceipt ? "Receipt" : "Payment"} saved.`, "success"); };
+  const onSaved = () => {
+    setPage(1);
+    fetchRows(1);
+    notify(`${isReceipt ? "Receipt" : "Payment"} saved.`, "success");
+  };
 
   const handlePrint = async (p) => {
     const w = window.open("", "_blank");
-    if (!w) { notify("Popup blocked. Please allow popups for this site.", "warning"); return; }
+    if (!w) {
+      notify("Popup blocked. Please allow popups for this site.", "warning");
+      return;
+    }
     w.document.write("<p>Loading voucher...</p>");
     try {
       const { data } = await getPaymentPrintData(dir, p.id);
       writeAndPrint(w, mergeTemplate(resolveTpl(p), data));
-    } catch { w.close(); notify("Failed to load print data.", "error"); }
+    } catch {
+      w.close();
+      notify("Failed to load print data.", "error");
+    }
   };
 
   const handleExportPdf = async (p) => {
@@ -148,17 +199,28 @@ export default function PaymentsPage({ mode = "receipts" }) {
     setExportingId(p.id);
     try {
       const { data } = await getPaymentPrintData(dir, p.id);
-      await exportToPdf(mergeTemplate(resolveTpl(p), data), `${isReceipt ? "Receipt" : "Payment"} ${data.reference || p.id}`);
-    } catch { notify("Failed to export PDF.", "error"); }
-    finally { setExportingId(null); }
+      await exportToPdf(
+        mergeTemplate(resolveTpl(p), data),
+        `${isReceipt ? "Receipt" : "Payment"} ${data.reference || p.id}`,
+      );
+    } catch {
+      notify("Failed to export PDF.", "error");
+    } finally {
+      setExportingId(null);
+    }
   };
 
   if (!canView) {
-    return <EmptyState icon={Icon}>You don't have permission to view {title.toLowerCase()}.</EmptyState>;
+    return (
+      <EmptyState icon={Icon}>You don't have permission to view {title.toLowerCase()}.</EmptyState>
+    );
   }
 
   // Sum of what's shown on this page — a quick "money on screen" cue.
-  const pageTotal = rows.reduce((s, r) => s + (!r.isCancelled && r.chequeStatus !== "Bounced" ? Number(r.amount || 0) : 0), 0);
+  const pageTotal = rows.reduce(
+    (s, r) => s + (!r.isCancelled && r.chequeStatus !== "Bounced" ? Number(r.amount || 0) : 0),
+    0,
+  );
 
   return (
     <div>
@@ -167,11 +229,14 @@ export default function PaymentsPage({ mode = "receipts" }) {
         tone={isReceipt ? "green" : "blue"}
         title={title}
         subtitle={isReceipt ? "Money received from customers" : "Money paid to suppliers"}
-        actions={canCreate && companyId && (
-          <Button variant="primary" icon={MdAdd} onClick={() => setShowForm(true)}>
-            {isReceipt ? "Record Receipt" : "Record Payment"}
-          </Button>
-        )}
+        actions={
+          canCreate &&
+          companyId && (
+            <Button variant="primary" icon={MdAdd} onClick={() => setShowForm(true)}>
+              {isReceipt ? "Record Receipt" : "Record Payment"}
+            </Button>
+          )
+        }
       />
 
       {companies.length > 0 && <CompanyPicker />}
@@ -185,47 +250,56 @@ export default function PaymentsPage({ mode = "receipts" }) {
               placeholder={`Search ${title.toLowerCase()}…`}
               value={search}
               onChange={setSearch}
-              onKeyDown={(e) => { if (e.key === "Enter") { setPage(1); fetchRows(1); } }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  setPage(1);
+                  fetchRows(1);
+                }
+              }}
             />
             {tplPicker.canChoose && <PrintTemplateSelect picker={tplPicker} />}
             <ToolbarSpacer />
             {rows.length > 0 && (
               <div style={st.pageSummary}>
-                <span style={st.pageSummaryCount}>{totalCount} {title.toLowerCase()}</span>
+                <span style={st.pageSummaryCount}>
+                  {totalCount} {title.toLowerCase()}
+                </span>
                 <span style={st.pageSummaryDot}>·</span>
                 <span>Rs {fmtMoney(pageTotal)} on this page</span>
               </div>
             )}
           </Toolbar>
 
-          <RecordsViewport label="Payments records">{loading ? (
-            <Loading>Loading…</Loading>
-          ) : rows.length === 0 ? (
-            <EmptyState icon={Icon}>No {title.toLowerCase()} yet.</EmptyState>
-          ) : (
-            <div style={st.grid}>
-              {rows.map((p) => (
-                <PayCard
-                  key={p.id}
-                  p={p}
-                  accent={accent}
-                  docNoun={docNoun}
-                  canDelete={canDelete}
-                  canEdit={canCreate}
-                  canPrint={canPrint}
-                  tplPicker={{ ...tplPicker, noTemplate: !defaultTpl && tplPicker.noTemplate }}
-                  exportingId={exportingId}
-                  attachCount={attachCounts[p.id]}
-                  onDelete={() => handleDelete(p)}
-                  onEdit={() => setEditing(p)}
-                  onView={() => setViewing(p)}
-                  onPrint={() => handlePrint(p)}
-                  onExportPdf={() => handleExportPdf(p)}
-                  onAttach={() => setAttachTarget(p)}
-                />
-              ))}
-            </div>
-          )}</RecordsViewport>
+          <RecordsViewport label="Payments records">
+            {loading ? (
+              <Loading>Loading…</Loading>
+            ) : rows.length === 0 ? (
+              <EmptyState icon={Icon}>No {title.toLowerCase()} yet.</EmptyState>
+            ) : (
+              <div style={st.grid}>
+                {rows.map((p) => (
+                  <PayCard
+                    key={p.id}
+                    p={p}
+                    accent={accent}
+                    docNoun={docNoun}
+                    canDelete={canDelete}
+                    canEdit={canCreate}
+                    canPrint={canPrint}
+                    tplPicker={{ ...tplPicker, noTemplate: !defaultTpl && tplPicker.noTemplate }}
+                    exportingId={exportingId}
+                    attachCount={attachCounts[p.id]}
+                    onDelete={() => handleDelete(p)}
+                    onEdit={() => setEditing(p)}
+                    onView={() => setViewing(p)}
+                    onPrint={() => handlePrint(p)}
+                    onExportPdf={() => handleExportPdf(p)}
+                    onAttach={() => setAttachTarget(p)}
+                  />
+                ))}
+              </div>
+            )}
+          </RecordsViewport>
 
           {totalCount > PAGE_SIZE_OPTIONS[0] && (
             <Pagination
@@ -234,14 +308,25 @@ export default function PaymentsPage({ mode = "receipts" }) {
               total={totalCount}
               onPage={setPage}
               pageSize={pageSize ?? observedSize}
-              onPageSize={(n) => { setPageSize(n); setPage(1); }}
+              onPageSize={(n) => {
+                setPageSize(n);
+                setPage(1);
+              }}
             />
           )}
         </>
       )}
 
       {showForm && companyId && (
-        <PaymentForm mode={mode} companyId={companyId} onClose={() => { setShowForm(false); refreshAttachCounts(); }} onSaved={onSaved} />
+        <PaymentForm
+          mode={mode}
+          companyId={companyId}
+          onClose={() => {
+            setShowForm(false);
+            refreshAttachCounts();
+          }}
+          onSaved={onSaved}
+        />
       )}
 
       {editing && companyId && (
@@ -249,13 +334,27 @@ export default function PaymentsPage({ mode = "receipts" }) {
           mode={mode}
           companyId={companyId}
           editPayment={editing}
-          onClose={() => { setEditing(null); refreshAttachCounts(); }}
-          onSaved={() => { setEditing(null); fetchRows(page); notify(`${isReceipt ? "Receipt" : "Payment"} updated.`, "success"); refreshAttachCounts(); }}
+          onClose={() => {
+            setEditing(null);
+            refreshAttachCounts();
+          }}
+          onSaved={() => {
+            setEditing(null);
+            fetchRows(page);
+            notify(`${isReceipt ? "Receipt" : "Payment"} updated.`, "success");
+            refreshAttachCounts();
+          }}
         />
       )}
 
       {viewing && (
-        <PaymentViewDialog p={viewing} companyId={companyId} accent={accent} docNoun={docNoun} onClose={() => setViewing(null)} />
+        <PaymentViewDialog
+          p={viewing}
+          companyId={companyId}
+          accent={accent}
+          docNoun={docNoun}
+          onClose={() => setViewing(null)}
+        />
       )}
 
       {attachTarget && selectedCompany && (
@@ -264,7 +363,10 @@ export default function PaymentsPage({ mode = "receipts" }) {
           entityType="Payment"
           entityId={attachTarget.id}
           title={`#${attachTarget.number} — Attachments`}
-          onClose={() => { setAttachTarget(null); refreshAttachCounts(); }}
+          onClose={() => {
+            setAttachTarget(null);
+            refreshAttachCounts();
+          }}
         />
       )}
     </div>
@@ -276,7 +378,23 @@ export default function PaymentsPage({ mode = "receipts" }) {
  * settled-document breakdown is collapsed behind an expander so a 10-invoice
  * receipt and a 1-invoice receipt take the same space until you drill in.
  */
-function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, exportingId, attachCount, onDelete, onEdit, onView, onPrint, onExportPdf, onAttach }) {
+function PayCard({
+  p,
+  accent,
+  docNoun,
+  canDelete,
+  canEdit,
+  canPrint,
+  tplPicker,
+  exportingId,
+  attachCount,
+  onDelete,
+  onEdit,
+  onView,
+  onPrint,
+  onExportPdf,
+  onAttach,
+}) {
   const [open, setOpen] = useState(false);
   const allocs = p.allocations || [];
   const count = allocs.length;
@@ -316,8 +434,12 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, 
 
         {/* Meta grid: date · method */}
         <div style={st.metaGrid}>
-          <span style={st.metaItem}><MdCalendarToday size={13} /> {fmtDate(p.date)}</span>
-          <span style={st.metaItem}><MdAccountBalanceWallet size={13} /> {p.method}</span>
+          <span style={st.metaItem}>
+            <MdCalendarToday size={13} /> {fmtDate(p.date)}
+          </span>
+          <span style={st.metaItem}>
+            <MdAccountBalanceWallet size={13} /> {p.method}
+          </span>
         </div>
 
         {/* Cheque / bank detail line */}
@@ -349,7 +471,11 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, 
               <span style={st.allocToggleLabel}>
                 <MdExpandMore
                   size={18}
-                  style={{ transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none", color: accent }}
+                  style={{
+                    transition: "transform 0.2s",
+                    transform: open ? "rotate(180deg)" : "none",
+                    color: accent,
+                  }}
                 />
                 {count} allocation{count !== 1 ? "s" : ""}
               </span>
@@ -360,7 +486,10 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, 
               <div style={st.allocList}>
                 {allocs.map((a) => (
                   <div key={a.id} style={st.allocRow}>
-                    <span style={st.allocLabel}>{a.documentLabel || `${docNoun} #${a.invoiceNumber ?? a.purchaseBillNumber ?? ""}`}</span>
+                    <span style={st.allocLabel}>
+                      {a.documentLabel ||
+                        `${docNoun} #${a.invoiceNumber ?? a.purchaseBillNumber ?? ""}`}
+                    </span>
                     <span style={st.allocAmt}>Rs {fmtMoney(a.amount)}</span>
                   </div>
                 ))}
@@ -375,7 +504,9 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, 
 
         {/* Footer — View / Print / PDF / Edit / Delete */}
         <div style={st.cardActions}>
-          <Button size="sm" icon={MdVisibility} onClick={onView} title="View details">View</Button>
+          <Button size="sm" icon={MdVisibility} onClick={onView} title="View details">
+            View
+          </Button>
           {canPrint && (
             <Button
               size="sm"
@@ -399,10 +530,14 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, 
             </Button>
           )}
           {canEdit && !p.isCancelled && (
-            <Button size="sm" icon={MdEdit} onClick={onEdit} title="Edit">Edit</Button>
+            <Button size="sm" icon={MdEdit} onClick={onEdit} title="Edit">
+              Edit
+            </Button>
           )}
           {canDelete && (
-            <Button size="sm" variant="danger" icon={MdDelete} onClick={onDelete} title="Delete">Delete</Button>
+            <Button size="sm" variant="danger" icon={MdDelete} onClick={onDelete} title="Delete">
+              Delete
+            </Button>
           )}
         </div>
       </div>
@@ -413,15 +548,31 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, 
 /** Read-only detail view of a single receipt/payment. */
 function PaymentViewDialog({ p, companyId, accent, docNoun, onClose }) {
   const allocs = p.allocations || [];
-  const Row = ({ label, value }) => value == null || value === "" ? null : (
-    <div style={vd.row}><span style={vd.k}>{label}</span><span style={vd.v}>{value}</span></div>
-  );
+  const Row = ({ label, value }) =>
+    value == null || value === "" ? null : (
+      <div style={vd.row}>
+        <span style={vd.k}>{label}</span>
+        <span style={vd.v}>{value}</span>
+      </div>
+    );
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: 460, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: 460, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{p.reference}</h5>
-          <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
+          <button
+            data-admin-close=""
+            type="button"
+            style={formStyles.closeButton}
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <MdClose size={18} />
+          </button>
         </div>
         <div data-admin-body="" style={formStyles.body}>
           <div style={{ ...vd.amount, color: accent }}>Rs {fmtMoney(p.amount)}</div>
@@ -429,18 +580,51 @@ function PaymentViewDialog({ p, companyId, accent, docNoun, onClose }) {
           <Row label="Contact" value={p.contactName} />
           <Row label="Method" value={p.method} />
           <Row label="Bank / Cash account" value={p.bankAccountName} />
-          {p.chequeNumber && <Row label="Cheque #" value={`${p.chequeNumber}${p.chequeDate ? ` · ${fmtDate(p.chequeDate)}` : ""}`} />}
-          <Row label="Status" value={p.isCancelled ? "Cancelled" : (p.chequeStatus && p.chequeStatus !== "None" ? p.chequeStatus : "Active")} />
+          {p.chequeNumber && (
+            <Row
+              label="Cheque #"
+              value={`${p.chequeNumber}${p.chequeDate ? ` · ${fmtDate(p.chequeDate)}` : ""}`}
+            />
+          )}
+          <Row
+            label="Status"
+            value={
+              p.isCancelled
+                ? "Cancelled"
+                : p.chequeStatus && p.chequeStatus !== "None"
+                  ? p.chequeStatus
+                  : "Active"
+            }
+          />
           {p.description && <Row label="Description" value={p.description} />}
-          {p.notes && <div style={{ marginTop: 12 }}><div style={vd.k}>Notes</div><div style={{ marginTop: 5, padding: 10, border: "1px solid var(--k-line)", borderRadius: 8 }}><RichText text={p.notes} /></div></div>}
+          {p.notes && (
+            <div style={{ marginTop: 12 }}>
+              <div style={vd.k}>Notes</div>
+              <div
+                style={{
+                  marginTop: 5,
+                  padding: 10,
+                  border: "1px solid var(--k-line)",
+                  borderRadius: 8,
+                }}
+              >
+                <RichText text={p.notes} />
+              </div>
+            </div>
+          )}
           {allocs.length > 0 && (
             <div style={{ marginTop: "0.6rem" }}>
               <div style={vd.k}>Allocation details</div>
               <div style={{ marginTop: 4 }}>
                 {allocs.map((a) => (
                   <div key={a.id} style={vd.allocRow}>
-                    <span style={{ overflowWrap: "anywhere" }}>{a.documentLabel || `${docNoun} #${a.invoiceNumber ?? a.purchaseBillNumber ?? ""}`}</span>
-                    <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>Rs {fmtMoney(a.amount)}</span>
+                    <span style={{ overflowWrap: "anywhere" }}>
+                      {a.documentLabel ||
+                        `${docNoun} #${a.invoiceNumber ?? a.purchaseBillNumber ?? ""}`}
+                    </span>
+                    <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>
+                      Rs {fmtMoney(a.amount)}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -448,12 +632,24 @@ function PaymentViewDialog({ p, companyId, accent, docNoun, onClose }) {
           )}
           {companyId && (
             <div style={{ marginTop: "1rem" }}>
-              <AttachmentManager companyId={companyId} entityType="Payment" entityId={p.id} mode="view" />
+              <AttachmentManager
+                companyId={companyId}
+                entityType="Payment"
+                entityId={p.id}
+                mode="view"
+              />
             </div>
           )}
         </div>
         <div data-admin-footer="" style={formStyles.footer}>
-          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
+          <button
+            data-admin-close=""
+            type="button"
+            style={{ ...formStyles.button, ...formStyles.cancel }}
+            onClick={onClose}
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>
@@ -461,11 +657,24 @@ function PaymentViewDialog({ p, companyId, accent, docNoun, onClose }) {
 }
 
 const st = {
-  pageSummary: { display: "flex", alignItems: "center", gap: 6, fontSize: "var(--k-font-sm)", color: "var(--k-muted)", flexWrap: "wrap", fontVariantNumeric: "tabular-nums" },
+  pageSummary: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: "var(--k-font-sm)",
+    color: "var(--k-muted)",
+    flexWrap: "wrap",
+    fontVariantNumeric: "tabular-nums",
+  },
   pageSummaryCount: { fontWeight: 700, color: "var(--k-ink)" },
   pageSummaryDot: { opacity: 0.5 },
 
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(300px, 100%), 1fr))", gap: "var(--k-gap)", alignItems: "start" },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(300px, 100%), 1fr))",
+    gap: "var(--k-gap)",
+    alignItems: "start",
+  },
   // marginTop: 0 cancels the kit's ".k-card + .k-card" stacking gap — these sit in a grid.
   card: { position: "relative", overflow: "hidden", display: "flex", marginTop: 0 },
   accentStrip: { width: 5, flexShrink: 0 },
@@ -475,35 +684,142 @@ const st = {
   ref: { fontWeight: 800, fontSize: "calc(var(--k-font) + 0.02rem)", letterSpacing: "0.3px" },
   badges: { display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" },
 
-  amount: { fontSize: "calc(var(--k-stat-value) + 0.15rem)", fontWeight: 800, marginTop: 6, lineHeight: 1.1, wordBreak: "break-word", fontVariantNumeric: "tabular-nums" },
+  amount: {
+    fontSize: "calc(var(--k-stat-value) + 0.15rem)",
+    fontWeight: 800,
+    marginTop: 6,
+    lineHeight: 1.1,
+    wordBreak: "break-word",
+    fontVariantNumeric: "tabular-nums",
+  },
   rs: { fontSize: "0.85rem", fontWeight: 700, opacity: 0.7 },
 
   contactRow: { display: "flex", alignItems: "center", gap: 5, marginTop: 8 },
-  contact: { fontSize: "var(--k-font)", color: "var(--k-ink)", fontWeight: 700, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" },
+  contact: {
+    fontSize: "var(--k-font)",
+    color: "var(--k-ink)",
+    fontWeight: 700,
+    overflow: "hidden",
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+  },
 
   metaGrid: { display: "flex", flexWrap: "wrap", gap: "4px 12px", marginTop: 8 },
-  metaItem: { display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--k-font-sm)", color: "var(--k-muted)" },
+  metaItem: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    fontSize: "var(--k-font-sm)",
+    color: "var(--k-muted)",
+  },
 
-  bankLine: { display: "flex", flexWrap: "wrap", gap: 5, marginTop: 6, fontSize: "var(--k-font-sm)", color: "var(--k-muted)", fontStyle: "italic" },
-  descRow: { display: "flex", gap: 5, marginTop: 8, fontSize: "var(--k-font-sm)", color: "var(--k-muted)", lineHeight: 1.4 },
+  bankLine: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 5,
+    marginTop: 6,
+    fontSize: "var(--k-font-sm)",
+    color: "var(--k-muted)",
+    fontStyle: "italic",
+  },
+  descRow: {
+    display: "flex",
+    gap: 5,
+    marginTop: 8,
+    fontSize: "var(--k-font-sm)",
+    color: "var(--k-muted)",
+    lineHeight: 1.4,
+  },
 
   allocWrap: { marginTop: 10, borderTop: "1px dashed var(--k-line)", paddingTop: 8 },
-  allocToggle: { display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", minHeight: 36, padding: "0.3rem 0", background: "none", border: "none", boxShadow: "none", cursor: "pointer", font: "inherit", color: "var(--k-ink)" },
-  allocToggleLabel: { display: "inline-flex", alignItems: "center", gap: 5, fontSize: "var(--k-font-sm)", fontWeight: 700 },
+  allocToggle: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
+    minHeight: 36,
+    padding: "0.3rem 0",
+    background: "none",
+    border: "none",
+    boxShadow: "none",
+    cursor: "pointer",
+    font: "inherit",
+    color: "var(--k-ink)",
+  },
+  allocToggleLabel: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    fontSize: "var(--k-font-sm)",
+    fontWeight: 700,
+  },
   allocToggleHint: { fontSize: "0.72rem", color: "var(--k-muted)" },
   allocList: { marginTop: 4, display: "flex", flexDirection: "column", gap: 1 },
-  allocRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "0.4rem 0.5rem", borderRadius: 6, background: "var(--k-surface-2)", fontSize: "var(--k-font-sm)" },
+  allocRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
+    padding: "0.4rem 0.5rem",
+    borderRadius: 6,
+    background: "var(--k-surface-2)",
+    fontSize: "var(--k-font-sm)",
+  },
   allocLabel: { color: "var(--k-ink)", minWidth: 0, overflowWrap: "anywhere" },
-  allocAmt: { color: "var(--k-muted)", fontWeight: 700, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" },
-  allocTotalRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "0.45rem 0.5rem 0.1rem", fontSize: "var(--k-font-sm)", fontWeight: 800, color: "var(--k-ink)", fontVariantNumeric: "tabular-nums" },
+  allocAmt: {
+    color: "var(--k-muted)",
+    fontWeight: 700,
+    whiteSpace: "nowrap",
+    fontVariantNumeric: "tabular-nums",
+  },
+  allocTotalRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
+    padding: "0.45rem 0.5rem 0.1rem",
+    fontSize: "var(--k-font-sm)",
+    fontWeight: 800,
+    color: "var(--k-ink)",
+    fontVariantNumeric: "tabular-nums",
+  },
 
-  cardActions: { display: "flex", justifyContent: "flex-end", gap: 6, marginTop: 10, flexWrap: "wrap" },
+  cardActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 6,
+    marginTop: 10,
+    flexWrap: "wrap",
+  },
 };
 
 const vd = {
-  amount: { fontSize: "1.5rem", fontWeight: 800, marginBottom: "0.75rem", fontVariantNumeric: "tabular-nums" },
-  row: { display: "flex", justifyContent: "space-between", gap: 12, padding: "0.3rem 0", borderBottom: "1px solid var(--k-surface-3)", fontSize: "var(--k-font)" },
+  amount: {
+    fontSize: "1.5rem",
+    fontWeight: 800,
+    marginBottom: "0.75rem",
+    fontVariantNumeric: "tabular-nums",
+  },
+  row: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    padding: "0.3rem 0",
+    borderBottom: "1px solid var(--k-surface-3)",
+    fontSize: "var(--k-font)",
+  },
   k: { color: "var(--k-muted)", fontWeight: 600 },
   v: { color: "var(--k-ink)", fontWeight: 600, textAlign: "right", overflowWrap: "anywhere" },
-  allocRow: { display: "flex", justifyContent: "space-between", gap: 12, padding: "0.25rem 0.5rem", background: "var(--k-surface-2)", borderRadius: 6, marginBottom: 4, fontSize: "var(--k-font-sm)", fontVariantNumeric: "tabular-nums" },
+  allocRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    padding: "0.25rem 0.5rem",
+    background: "var(--k-surface-2)",
+    borderRadius: 6,
+    marginBottom: 4,
+    fontSize: "var(--k-font-sm)",
+    fontVariantNumeric: "tabular-nums",
+  },
 };

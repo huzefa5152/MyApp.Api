@@ -58,23 +58,34 @@ export default class ErrorBoundary extends React.Component {
             >
               !
             </div>
-            <h2 style={{ margin: "0 0 8px", fontSize: "var(--k-title, 1.5rem)", color: "var(--k-ink, #1a2332)" }}>
+            <h2
+              style={{
+                margin: "0 0 8px",
+                fontSize: "var(--k-title, 1.5rem)",
+                color: "var(--k-ink, #1a2332)",
+              }}
+            >
               Something Went Wrong
             </h2>
-            <p style={{ margin: "0 0 24px", color: "var(--k-muted, #5f6d7e)", fontSize: "0.95rem", lineHeight: 1.5 }}>
+            <p
+              style={{
+                margin: "0 0 24px",
+                color: "var(--k-muted, #5f6d7e)",
+                fontSize: "0.95rem",
+                lineHeight: 1.5,
+              }}
+            >
               An unexpected error occurred. Please try again or return to the dashboard.
             </p>
             <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-              <button
-                onClick={this.handleReset}
-                className="k-btn k-btn--secondary"
-              >
+              <button onClick={this.handleReset} className="k-btn k-btn--secondary">
                 Try Again
               </button>
               <button
                 onClick={() => {
                   this.handleReset();
-                  window.location.href = (import.meta.env.BASE_URL || "/").replace(/\/+$/, "") + "/dashboard";
+                  window.location.href =
+                    (import.meta.env.BASE_URL || "/").replace(/\/+$/, "") + "/dashboard";
                 }}
                 className="k-btn k-btn--primary"
               >

@@ -1,7 +1,13 @@
 import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback } from "react";
 import {
-  MdAccountTree, MdAdd, MdEdit, MdDelete, MdAutoAwesome, MdLock, MdBusiness,
+  MdAccountTree,
+  MdAdd,
+  MdEdit,
+  MdDelete,
+  MdAutoAwesome,
+  MdLock,
+  MdBusiness,
   MdReceiptLong,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
@@ -10,11 +16,25 @@ import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
 import { colors, formStyles, modalSizes } from "../theme";
 import SearchableSelect from "../Components/SearchableSelect";
-import { PageHeader, CompanyPicker, Button, IconButton, Card, EmptyState, Loading } from "../ui/Kit";
+import {
+  PageHeader,
+  CompanyPicker,
+  Button,
+  IconButton,
+  Card,
+  EmptyState,
+  Loading,
+} from "../ui/Kit";
 import useScrollToError from "../hooks/useScrollToError";
 import {
-  getCoaTree, seedWholesaleCoa, createAccountGroup, createAccount,
-  updateAccount, deleteAccount, deleteAccountGroup, adjustOpeningBalance,
+  getCoaTree,
+  seedWholesaleCoa,
+  createAccountGroup,
+  createAccount,
+  updateAccount,
+  deleteAccount,
+  deleteAccountGroup,
+  adjustOpeningBalance,
 } from "../api/accountApi";
 import { getGlStatus, setGlLockDate } from "../api/accountingApi";
 import AccountLedgerDialog from "../Components/AccountLedgerDialog";
@@ -31,10 +51,22 @@ const ACCOUNT_TYPES = ["Asset", "Liability", "Equity", "Income", "Expense"];
 // chart an operator has pruned has no other way to designate the account, and a
 // missing control account sends its postings to Suspense.
 const CONTROL_TYPES = [
-  "None", "AccountsReceivable", "AccountsPayable", "Inventory", "BankCash",
-  "Capital", "RetainedEarnings", "OutputTax", "InputTax",
-  "WithholdingReceivable", "WithholdingPayable", "Rounding",
-  "DiscountAllowed", "DiscountReceived", "BadDebtWriteOff", "WriteBackIncome",
+  "None",
+  "AccountsReceivable",
+  "AccountsPayable",
+  "Inventory",
+  "BankCash",
+  "Capital",
+  "RetainedEarnings",
+  "OutputTax",
+  "InputTax",
+  "WithholdingReceivable",
+  "WithholdingPayable",
+  "Rounding",
+  "DiscountAllowed",
+  "DiscountReceived",
+  "BadDebtWriteOff",
+  "WriteBackIncome",
   "FurtherTaxPayable",
 ];
 
@@ -67,15 +99,19 @@ export default function ChartOfAccountsPage() {
   const [tree, setTree] = useState({ balanceSheet: [], profitAndLoss: [] });
   const [loading, setLoading] = useState(false);
   const [seeding, setSeeding] = useState(false);
-  const [form, setForm] = useState(null);   // { kind: "account" | "group", ... }
+  const [form, setForm] = useState(null); // { kind: "account" | "group", ... }
   const [glStatus, setGlStatus] = useState(null);
-  const [ledgerAccount, setLedgerAccount] = useState(null);  // { id, name, code }
+  const [ledgerAccount, setLedgerAccount] = useState(null); // { id, name, code }
   const [periodOpen, setPeriodOpen] = useState(false);
 
   const companyId = selectedCompany?.id;
 
   const load = useCallback(async () => {
-    if (!companyId) { setTree({ balanceSheet: [], profitAndLoss: [] }); setGlStatus(null); return; }
+    if (!companyId) {
+      setTree({ balanceSheet: [], profitAndLoss: [] });
+      setGlStatus(null);
+      return;
+    }
     setLoading(true);
     try {
       const [treeRes, statusRes] = await Promise.all([
@@ -89,20 +125,25 @@ export default function ChartOfAccountsPage() {
     } catch {
       setTree({ balanceSheet: [], profitAndLoss: [] });
       setGlStatus(null);
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }, [companyId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const isEmpty = (tree.balanceSheet?.length || 0) === 0 && (tree.profitAndLoss?.length || 0) === 0;
 
   // Flatten the groups for the "parent group" / "account group" pickers. The
   // em-dash prefix shows nesting depth in a plain <option>, which can't indent.
   const flatGroups = [];
-  const walk = (nodes, depth, statement) => (nodes || []).forEach((n) => {
-    flatGroups.push({ id: n.id, name: `${"— ".repeat(depth)}${n.name}`, statement });
-    walk(n.children, depth + 1, statement);
-  });
+  const walk = (nodes, depth, statement) =>
+    (nodes || []).forEach((n) => {
+      flatGroups.push({ id: n.id, name: `${"— ".repeat(depth)}${n.name}`, statement });
+      walk(n.children, depth + 1, statement);
+    });
   walk(tree.balanceSheet, 0, "BalanceSheet");
   walk(tree.profitAndLoss, 0, "ProfitAndLoss");
 
@@ -114,29 +155,43 @@ export default function ChartOfAccountsPage() {
       await load();
     } catch (err) {
       notify(err.response?.data?.error || "Could not seed preset.", "error");
-    } finally { setSeeding(false); }
+    } finally {
+      setSeeding(false);
+    }
   };
 
   const handleDeleteAccount = async (a) => {
     const ok = await confirm({
       title: "Delete account?",
       message: `Delete "${a.name}"? This cannot be undone.`,
-      variant: "danger", confirmText: "Delete",
+      variant: "danger",
+      confirmText: "Delete",
     });
     if (!ok) return;
-    try { await deleteAccount(a.id); notify("Account deleted.", "success"); load(); }
-    catch (err) { notify(err.response?.data?.error || "Failed to delete.", "error"); }
+    try {
+      await deleteAccount(a.id);
+      notify("Account deleted.", "success");
+      load();
+    } catch (err) {
+      notify(err.response?.data?.error || "Failed to delete.", "error");
+    }
   };
 
   const handleDeleteGroup = async (g) => {
     const ok = await confirm({
       title: "Delete group?",
       message: `Delete group "${g.name}"?`,
-      variant: "danger", confirmText: "Delete",
+      variant: "danger",
+      confirmText: "Delete",
     });
     if (!ok) return;
-    try { await deleteAccountGroup(g.id); notify("Group deleted.", "success"); load(); }
-    catch (err) { notify(err.response?.data?.error || "Failed to delete.", "error"); }
+    try {
+      await deleteAccountGroup(g.id);
+      notify("Group deleted.", "success");
+      load();
+    } catch (err) {
+      notify(err.response?.data?.error || "Failed to delete.", "error");
+    }
   };
 
   if (!canView) {
@@ -152,7 +207,10 @@ export default function ChartOfAccountsPage() {
   // one so an empty parent still reads the right way round.
   const firstAcctType = (node) => {
     if (node.accounts?.length) return node.accounts[0].accountType;
-    for (const c of node.children || []) { const t = firstAcctType(c); if (t) return t; }
+    for (const c of node.children || []) {
+      const t = firstAcctType(c);
+      if (t) return t;
+    }
     return null;
   };
 
@@ -164,12 +222,25 @@ export default function ChartOfAccountsPage() {
         <span style={st.groupName}>
           {node.name}
           {node.isSystem && (
-            <MdLock size={12} style={{ marginLeft: 5, opacity: 0.5, verticalAlign: "middle" }} title="System group — can't be renamed or deleted" />
+            <MdLock
+              size={12}
+              style={{ marginLeft: 5, opacity: 0.5, verticalAlign: "middle" }}
+              title="System group — can't be renamed or deleted"
+            />
           )}
         </span>
-        <span style={st.groupTotal}>{money((creditNormal ? -1 : 1) * (node.balanceTotal ?? 0))}</span>
+        <span style={st.groupTotal}>
+          {money((creditNormal ? -1 : 1) * (node.balanceTotal ?? 0))}
+        </span>
         {canManage && !node.isSystem && (
-          <IconButton danger icon={MdDelete} size={15} label={`Delete group ${node.name}`} title="Delete group" onClick={() => handleDeleteGroup(node)} />
+          <IconButton
+            danger
+            icon={MdDelete}
+            size={15}
+            label={`Delete group ${node.name}`}
+            title="Delete group"
+            onClick={() => handleDeleteGroup(node)}
+          />
         )}
       </div>
 
@@ -178,27 +249,48 @@ export default function ChartOfAccountsPage() {
           key={`${a.id}-${a.externalRef || a.name}`}
           style={{ ...st.accountRow, cursor: a.id > 0 ? "pointer" : "default" }}
           title={a.id > 0 ? "View ledger" : undefined}
-          onClick={a.id > 0 ? () => setLedgerAccount({ id: a.id, name: a.name, code: a.code }) : undefined}
+          onClick={
+            a.id > 0 ? () => setLedgerAccount({ id: a.id, name: a.name, code: a.code }) : undefined
+          }
         >
           <span style={st.accName}>
             {a.code && <span style={st.code}>{a.code}</span>}
             {a.name}
-            {a.isControlAccount && <span style={st.ctrlBadge} title={`Control account: ${a.controlType}`}>control</span>}
+            {a.isControlAccount && (
+              <span style={st.ctrlBadge} title={`Control account: ${a.controlType}`}>
+                control
+              </span>
+            )}
             {!a.isActive && <span style={st.inactiveBadge}>inactive</span>}
           </span>
-          <span style={st.accAmt}>{a.balance ? money((isCreditNormal(a.accountType) ? -1 : 1) * a.balance) : ""}</span>
+          <span style={st.accAmt}>
+            {a.balance ? money((isCreditNormal(a.accountType) ? -1 : 1) * a.balance) : ""}
+          </span>
           {/* id 0 is the synthetic Current-Year Earnings line — it has no row
               behind it, so it gets no actions. */}
           {canManage && a.id > 0 && (
             <span style={st.rowActions}>
               <IconButton
-                icon={MdEdit} size={14} label={`Edit ${a.name}`} title="Edit"
-                onClick={(e) => { e.stopPropagation(); setForm({ kind: "account", ...a }); }}
+                icon={MdEdit}
+                size={14}
+                label={`Edit ${a.name}`}
+                title="Edit"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setForm({ kind: "account", ...a });
+                }}
               />
               {!a.isControlAccount && (
                 <IconButton
-                  danger icon={MdDelete} size={14} label={`Delete ${a.name}`} title="Delete"
-                  onClick={(e) => { e.stopPropagation(); handleDeleteAccount(a); }}
+                  danger
+                  icon={MdDelete}
+                  size={14}
+                  label={`Delete ${a.name}`}
+                  title="Delete"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteAccount(a);
+                  }}
                 />
               )}
             </span>
@@ -213,9 +305,11 @@ export default function ChartOfAccountsPage() {
   const Column = ({ title, nodes }) => (
     // marginTop: 0 cancels the kit's ".k-card + .k-card" stacking gap — the columns sit in a grid.
     <Card title={title} style={{ marginTop: 0 }}>
-      {nodes?.length
-        ? nodes.map((n) => renderNode(n, 0, isCreditNormal(firstAcctType(n))))
-        : <div style={st.emptyCol}>No groups yet.</div>}
+      {nodes?.length ? (
+        nodes.map((n) => renderNode(n, 0, isCreditNormal(firstAcctType(n))))
+      ) : (
+        <div style={st.emptyCol}>No groups yet.</div>
+      )}
     </Card>
   );
 
@@ -229,12 +323,19 @@ export default function ChartOfAccountsPage() {
           false if something wrote around the service. Say so here rather
           than letting a report discover it later. */}
       {glStatus.isBalanced === false && (
-        <span style={st.glChipWarn} title="Total debits and credits do not match">unbalanced</span>
+        <span style={st.glChipWarn} title="Total debits and credits do not match">
+          unbalanced
+        </span>
       )}
       {glStatus.lockDate && (
         <span style={st.lockedChip}>
           <MdLock size={11} style={{ verticalAlign: "-1px", marginRight: 3 }} />
-          closed to {new Date(glStatus.lockDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+          closed to{" "}
+          {new Date(glStatus.lockDate).toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          })}
         </span>
       )}
       {canClosePeriod && (
@@ -252,44 +353,65 @@ export default function ChartOfAccountsPage() {
         tone="blue"
         title="Chart of Accounts"
         subtitle={glChips || undefined}
-        actions={canManage && companyId && !isEmpty && (
-          <>
-            <Button icon={MdAdd} onClick={() => setForm({ kind: "group", statement: "BalanceSheet" })}>
-              New Group
-            </Button>
-            <Button variant="primary" icon={MdAdd} onClick={() => setForm({ kind: "account" })} disabled={flatGroups.length === 0}>
-              New Account
-            </Button>
-          </>
-        )}
+        actions={
+          canManage &&
+          companyId &&
+          !isEmpty && (
+            <>
+              <Button
+                icon={MdAdd}
+                onClick={() => setForm({ kind: "group", statement: "BalanceSheet" })}
+              >
+                New Group
+              </Button>
+              <Button
+                variant="primary"
+                icon={MdAdd}
+                onClick={() => setForm({ kind: "account" })}
+                disabled={flatGroups.length === 0}
+              >
+                New Account
+              </Button>
+            </>
+          )
+        }
       />
 
       {companies.length > 0 && <CompanyPicker />}
 
-      <RecordsViewport label="Chart Of Accounts records">{!companyId ? (
-        <EmptyState icon={MdBusiness}>Select a company to view its chart of accounts.</EmptyState>
-      ) : loading ? (
-        <Loading>Loading…</Loading>
-      ) : isEmpty ? (
-        <EmptyState
-          icon={MdAutoAwesome}
-          title="No chart of accounts yet"
-          action={canManage && (
-            <Button variant="primary" icon={MdAutoAwesome} onClick={handleSeed} disabled={seeding}>
-              {seeding ? "Seeding…" : "Seed wholesale preset"}
-            </Button>
-          )}
-        >
-          Start with the <strong>Wholesale / Distribution</strong> preset — Bank &amp; Cash, A/R, A/P,
-          Inventory, Input/Output Sales Tax, Capital, Sales, Cost of goods sold and the common
-          expense categories, ready to use. You can rename, add to or prune it afterwards.
-        </EmptyState>
-      ) : (
-        <div style={st.grid}>
-          <Column title="Balance Sheet" nodes={tree.balanceSheet} />
-          <Column title="Profit & Loss" nodes={tree.profitAndLoss} />
-        </div>
-      )}</RecordsViewport>
+      <RecordsViewport label="Chart Of Accounts records">
+        {!companyId ? (
+          <EmptyState icon={MdBusiness}>Select a company to view its chart of accounts.</EmptyState>
+        ) : loading ? (
+          <Loading>Loading…</Loading>
+        ) : isEmpty ? (
+          <EmptyState
+            icon={MdAutoAwesome}
+            title="No chart of accounts yet"
+            action={
+              canManage && (
+                <Button
+                  variant="primary"
+                  icon={MdAutoAwesome}
+                  onClick={handleSeed}
+                  disabled={seeding}
+                >
+                  {seeding ? "Seeding…" : "Seed wholesale preset"}
+                </Button>
+              )
+            }
+          >
+            Start with the <strong>Wholesale / Distribution</strong> preset — Bank &amp; Cash, A/R,
+            A/P, Inventory, Input/Output Sales Tax, Capital, Sales, Cost of goods sold and the
+            common expense categories, ready to use. You can rename, add to or prune it afterwards.
+          </EmptyState>
+        ) : (
+          <div style={st.grid}>
+            <Column title="Balance Sheet" nodes={tree.balanceSheet} />
+            <Column title="Profit & Loss" nodes={tree.profitAndLoss} />
+          </div>
+        )}
+      </RecordsViewport>
 
       {form && (
         <CoaForm
@@ -297,7 +419,10 @@ export default function ChartOfAccountsPage() {
           companyId={companyId}
           flatGroups={flatGroups}
           onClose={() => setForm(null)}
-          onSaved={() => { setForm(null); load(); }}
+          onSaved={() => {
+            setForm(null);
+            load();
+          }}
         />
       )}
 
@@ -310,7 +435,10 @@ export default function ChartOfAccountsPage() {
           companyId={companyId}
           current={glStatus?.lockDate || null}
           onClose={() => setPeriodOpen(false)}
-          onSaved={() => { setPeriodOpen(false); load(); }}
+          onSaved={() => {
+            setPeriodOpen(false);
+            load();
+          }}
         />
       )}
     </div>
@@ -329,7 +457,8 @@ function PeriodCloseDialog({ companyId, current, onClose, onSaved }) {
 
   const save = async (value) => {
     if (saving) return;
-    setSaving(true); setError("");
+    setSaving(true);
+    setError("");
     try {
       await setGlLockDate(companyId, value || null);
       notify(value ? "Period closed." : "Period reopened.", "success");
@@ -342,29 +471,62 @@ function PeriodCloseDialog({ companyId, current, onClose, onSaved }) {
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>Accounting Period</h5>
-          <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close">&times;</button>
+          <button
+            data-admin-close=""
+            type="button"
+            style={formStyles.closeButton}
+            onClick={onClose}
+            aria-label="Close"
+          >
+            &times;
+          </button>
         </div>
         <div data-admin-body="" style={formStyles.body}>
-          {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
+          {error && (
+            <div ref={errRef} style={formStyles.error}>
+              {error}
+            </div>
+          )}
           <div style={formStyles.formGroup}>
             <label style={formStyles.label}>Books are closed up to and including</label>
-            <input type="date" style={formStyles.input} value={lockDate} onChange={(e) => setLockDate(e.target.value)} />
+            <input
+              type="date"
+              style={formStyles.input}
+              value={lockDate}
+              onChange={(e) => setLockDate(e.target.value)}
+            />
             <div style={st.fieldHint}>
-              Nothing dated on or before this day can be added, changed or removed —
-              including deleting an entry, which moves a filed figure just as much
-              as adding one. Leave it empty to reopen the books.
+              Nothing dated on or before this day can be added, changed or removed — including
+              deleting an entry, which moves a filed figure just as much as adding one. Leave it
+              empty to reopen the books.
             </div>
           </div>
         </div>
         <div data-admin-footer="" style={formStyles.footer}>
-          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+          <button
+            data-admin-close=""
+            type="button"
+            style={{ ...formStyles.button, ...formStyles.cancel }}
+            onClick={onClose}
+          >
+            Cancel
+          </button>
           {current && (
             <button
               type="button"
-              style={{ ...formStyles.button, background: "#fff", color: colors.danger, border: `1px solid ${colors.danger}40` }}
+              style={{
+                ...formStyles.button,
+                background: "#fff",
+                color: colors.danger,
+                border: `1px solid ${colors.danger}40`,
+              }}
               disabled={saving}
               onClick={() => save("")}
             >
@@ -373,7 +535,11 @@ function PeriodCloseDialog({ companyId, current, onClose, onSaved }) {
           )}
           <button
             type="button"
-            style={{ ...formStyles.button, ...formStyles.submit, opacity: saving || !lockDate ? 0.6 : 1 }}
+            style={{
+              ...formStyles.button,
+              ...formStyles.submit,
+              opacity: saving || !lockDate ? 0.6 : 1,
+            }}
             disabled={saving || !lockDate}
             onClick={() => save(lockDate)}
           >
@@ -395,7 +561,11 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
   const [statement, setStatement] = useState(form.statement || "BalanceSheet");
   const [parentGroupId, setParentGroupId] = useState("");
   const [accountGroupId, setAccountGroupId] = useState(
-    form.accountGroupId ? String(form.accountGroupId) : (flatGroups[0]?.id ? String(flatGroups[0].id) : "")
+    form.accountGroupId
+      ? String(form.accountGroupId)
+      : flatGroups[0]?.id
+        ? String(flatGroups[0].id)
+        : "",
   );
   const [accountType, setAccountType] = useState(form.accountType || "Asset");
   const [controlType, setControlType] = useState(form.controlType || "None");
@@ -419,11 +589,19 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
   const submit = async (e) => {
     e.preventDefault();
     if (saving) return;
-    if (!name.trim()) { setError("Name is required."); return; }
-    setSaving(true); setError("");
+    if (!name.trim()) {
+      setError("Name is required.");
+      return;
+    }
+    setSaving(true);
+    setError("");
     try {
       if (isAccount) {
-        if (!accountGroupId) { setError("Pick a group."); setSaving(false); return; }
+        if (!accountGroupId) {
+          setError("Pick a group.");
+          setSaving(false);
+          return;
+        }
         if (isEdit) {
           await updateAccount(form.id, {
             name: name.trim(),
@@ -467,19 +645,45 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
-          <h5 style={formStyles.title}>{isAccount ? (isEdit ? "Edit Account" : "New Account") : "New Group"}</h5>
-          <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close">&times;</button>
+          <h5 style={formStyles.title}>
+            {isAccount ? (isEdit ? "Edit Account" : "New Account") : "New Group"}
+          </h5>
+          <button
+            data-admin-close=""
+            type="button"
+            style={formStyles.closeButton}
+            onClick={onClose}
+            aria-label="Close"
+          >
+            &times;
+          </button>
         </div>
 
-        <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+        <form
+          onSubmit={submit}
+          style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}
+        >
           <div data-admin-body="" style={formStyles.body}>
-            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
+            {error && (
+              <div ref={errRef} style={formStyles.error}>
+                {error}
+              </div>
+            )}
 
             <div style={formStyles.formGroup}>
               <label style={formStyles.label}>Name</label>
-              <input style={formStyles.input} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+              <input
+                style={formStyles.input}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoFocus
+              />
             </div>
 
             {!isAccount && (
@@ -491,7 +695,11 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
                     value={statement}
                     onChange={(e) => setStatement(e.target.value)}
                     disabled={!!parentGroupId}
-                    title={parentGroupId ? "A sub-group always follows its parent's statement" : undefined}
+                    title={
+                      parentGroupId
+                        ? "A sub-group always follows its parent's statement"
+                        : undefined
+                    }
                   >
                     <option value="BalanceSheet">Balance Sheet</option>
                     <option value="ProfitAndLoss">Profit &amp; Loss</option>
@@ -518,7 +726,9 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
                     <SearchableSelect
                       items={flatGroups}
                       value={accountGroupId}
-                      onChange={(id) => setAccountGroupId(id === "" || id == null ? "" : String(id))}
+                      onChange={(id) =>
+                        setAccountGroupId(id === "" || id == null ? "" : String(id))
+                      }
                       allowClear={false}
                       placeholder="Pick a group"
                       ariaLabel="Group"
@@ -530,18 +740,33 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
                     {isEdit ? (
                       <>
                         <input style={formStyles.input} value={accountType} readOnly disabled />
-                        <div style={st.fieldHint}>Fixed after creation — reclassifying an account would rewrite its history.</div>
+                        <div style={st.fieldHint}>
+                          Fixed after creation — reclassifying an account would rewrite its history.
+                        </div>
                       </>
                     ) : (
-                      <select className="k-select" value={accountType} onChange={(e) => setAccountType(e.target.value)}>
-                        {ACCOUNT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                      <select
+                        className="k-select"
+                        value={accountType}
+                        onChange={(e) => setAccountType(e.target.value)}
+                      >
+                        {ACCOUNT_TYPES.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
                       </select>
                     )}
                   </div>
 
                   <div style={formStyles.formGroup}>
                     <label style={formStyles.label}>Code (optional)</label>
-                    <input style={formStyles.input} value={code} onChange={(e) => setCode(e.target.value)} placeholder="e.g. 1100" />
+                    <input
+                      style={formStyles.input}
+                      value={code}
+                      onChange={(e) => setCode(e.target.value)}
+                      placeholder="e.g. 1100"
+                    />
                   </div>
 
                   <div style={formStyles.formGroup}>
@@ -552,8 +777,16 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
                         <div style={st.fieldHint}>Fixed after creation.</div>
                       </>
                     ) : (
-                      <select className="k-select" value={controlType} onChange={(e) => setControlType(e.target.value)}>
-                        {CONTROL_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                      <select
+                        className="k-select"
+                        value={controlType}
+                        onChange={(e) => setControlType(e.target.value)}
+                      >
+                        {CONTROL_TYPES.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
                       </select>
                     )}
                   </div>
@@ -562,16 +795,27 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
                 <div style={st.formGrid}>
                   <div style={formStyles.formGroup}>
                     <label style={formStyles.label}>Opening balance</label>
-                    <input type="number" step="0.01" style={formStyles.input} value={openingBalance} onChange={(e) => setOpeningBalance(e.target.value)} />
+                    <input
+                      type="number"
+                      step="0.01"
+                      style={formStyles.input}
+                      value={openingBalance}
+                      onChange={(e) => setOpeningBalance(e.target.value)}
+                    />
                     {isEdit && openingChanged && (
                       <div style={st.fieldHint}>
-                        The difference is posted to Retained earnings so the opening balance sheet stays balanced.
+                        The difference is posted to Retained earnings so the opening balance sheet
+                        stays balanced.
                       </div>
                     )}
                   </div>
                   <div style={formStyles.formGroup}>
                     <label style={formStyles.label}>Side</label>
-                    <select className="k-select" value={isDebit ? "debit" : "credit"} onChange={(e) => setIsDebit(e.target.value === "debit")}>
+                    <select
+                      className="k-select"
+                      value={isDebit ? "debit" : "credit"}
+                      onChange={(e) => setIsDebit(e.target.value === "debit")}
+                    >
                       <option value="debit">Debit</option>
                       <option value="credit">Credit</option>
                     </select>
@@ -580,7 +824,15 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
 
                 {isEdit && (
                   <div style={formStyles.formGroup}>
-                    <label style={{ ...formStyles.label, display: "flex", alignItems: "center", gap: 8, cursor: lockedActive ? "not-allowed" : "pointer" }}>
+                    <label
+                      style={{
+                        ...formStyles.label,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        cursor: lockedActive ? "not-allowed" : "pointer",
+                      }}
+                    >
                       <input
                         type="checkbox"
                         checked={isActive}
@@ -602,8 +854,19 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
           </div>
 
           <div data-admin-footer="" style={formStyles.footer}>
-            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
-            <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }} disabled={saving}>
+            <button
+              data-admin-close=""
+              type="button"
+              style={{ ...formStyles.button, ...formStyles.cancel }}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}
+              disabled={saving}
+            >
               {saving ? "Saving…" : "Save"}
             </button>
           </div>
@@ -614,25 +877,125 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
 }
 
 const st = {
-  glChip: { fontSize: "0.72rem", fontWeight: 700, color: "var(--k-blue)", background: "#eef2ff", border: "1px solid var(--k-line)", padding: "3px 10px", borderRadius: 12, whiteSpace: "nowrap" },
-  glChipWarn: { fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#b71c1c", background: "#ffebee", border: "1px solid #ffcdd2", padding: "3px 10px", borderRadius: 12 },
-  lockedChip: { fontSize: "0.7rem", fontWeight: 700, color: "#8a5a00", background: "#fff3cd", border: "1px solid #ffe69c", padding: "3px 9px", borderRadius: 12, whiteSpace: "nowrap" },
+  glChip: {
+    fontSize: "0.72rem",
+    fontWeight: 700,
+    color: "var(--k-blue)",
+    background: "#eef2ff",
+    border: "1px solid var(--k-line)",
+    padding: "3px 10px",
+    borderRadius: 12,
+    whiteSpace: "nowrap",
+  },
+  glChipWarn: {
+    fontSize: "0.72rem",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    color: "#b71c1c",
+    background: "#ffebee",
+    border: "1px solid #ffcdd2",
+    padding: "3px 10px",
+    borderRadius: 12,
+  },
+  lockedChip: {
+    fontSize: "0.7rem",
+    fontWeight: 700,
+    color: "#8a5a00",
+    background: "#fff3cd",
+    border: "1px solid #ffe69c",
+    padding: "3px 9px",
+    borderRadius: 12,
+    whiteSpace: "nowrap",
+  },
   // auto-fit collapses the two statement columns to one on a phone with no
   // media query; min() keeps it from forcing horizontal scroll at 375px.
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))", gap: "var(--k-gap)", alignItems: "start" },
-  groupHeader: { display: "flex", alignItems: "center", gap: 6, padding: "4px 0", borderBottom: "1px solid var(--k-line)" },
-  groupName: { fontWeight: 800, color: "var(--k-ink)", fontSize: "var(--k-font)", flex: 1, minWidth: 0, overflowWrap: "anywhere" },
-  groupTotal: { fontWeight: 700, color: "var(--k-muted)", fontSize: "var(--k-td-font)", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" },
-  accountRow: { display: "flex", alignItems: "center", gap: 6, padding: "3px 0 3px 14px", fontSize: "var(--k-td-font)" },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))",
+    gap: "var(--k-gap)",
+    alignItems: "start",
+  },
+  groupHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "4px 0",
+    borderBottom: "1px solid var(--k-line)",
+  },
+  groupName: {
+    fontWeight: 800,
+    color: "var(--k-ink)",
+    fontSize: "var(--k-font)",
+    flex: 1,
+    minWidth: 0,
+    overflowWrap: "anywhere",
+  },
+  groupTotal: {
+    fontWeight: 700,
+    color: "var(--k-muted)",
+    fontSize: "var(--k-td-font)",
+    whiteSpace: "nowrap",
+    fontVariantNumeric: "tabular-nums",
+  },
+  accountRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "3px 0 3px 14px",
+    fontSize: "var(--k-td-font)",
+  },
   // Account names are operator-supplied: wrap them rather than truncating, so
   // two that share a prefix can never render identically.
-  accName: { flex: 1, minWidth: 0, color: "var(--k-ink)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", overflowWrap: "anywhere" },
-  code: { fontFamily: "monospace", fontSize: "0.72rem", color: "var(--k-muted)", background: "var(--k-surface-2)", padding: "0 4px", borderRadius: 4 },
-  ctrlBadge: { fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", background: "#e3f2fd", color: "#0d47a1", padding: "1px 5px", borderRadius: 10 },
-  inactiveBadge: { fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", background: "#eceff1", color: "#607d8b", padding: "1px 5px", borderRadius: 10 },
-  accAmt: { color: "var(--k-muted)", fontSize: "var(--k-font-sm)", minWidth: 70, textAlign: "right", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" },
+  accName: {
+    flex: 1,
+    minWidth: 0,
+    color: "var(--k-ink)",
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap",
+    overflowWrap: "anywhere",
+  },
+  code: {
+    fontFamily: "monospace",
+    fontSize: "0.72rem",
+    color: "var(--k-muted)",
+    background: "var(--k-surface-2)",
+    padding: "0 4px",
+    borderRadius: 4,
+  },
+  ctrlBadge: {
+    fontSize: "0.62rem",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    background: "#e3f2fd",
+    color: "#0d47a1",
+    padding: "1px 5px",
+    borderRadius: 10,
+  },
+  inactiveBadge: {
+    fontSize: "0.62rem",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    background: "#eceff1",
+    color: "#607d8b",
+    padding: "1px 5px",
+    borderRadius: 10,
+  },
+  accAmt: {
+    color: "var(--k-muted)",
+    fontSize: "var(--k-font-sm)",
+    minWidth: 70,
+    textAlign: "right",
+    whiteSpace: "nowrap",
+    fontVariantNumeric: "tabular-nums",
+  },
   rowActions: { display: "flex", gap: 2, flexShrink: 0 },
-  formGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.75rem" },
+  formGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))",
+    gap: "0.75rem",
+  },
   fieldHint: { fontSize: "0.72rem", color: "var(--k-muted)", marginTop: 4, lineHeight: 1.4 },
   emptyCol: { padding: "1rem", color: "var(--k-muted)", fontSize: "var(--k-font)" },
 };

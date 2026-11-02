@@ -8,7 +8,8 @@ export default function SyncWarningModal({ onConfirm, onCancel }) {
   // Backdrop click is a no-op — explicit Cancel / Continue only.
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
-      <div data-admin-dialog=""
+      <div
+        data-admin-dialog=""
         style={{ ...formStyles.modal, maxWidth: `${modalSizes.sm}px` }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
@@ -16,24 +17,34 @@ export default function SyncWarningModal({ onConfirm, onCancel }) {
         aria-labelledby="sync-warning-title"
       >
         <div style={formStyles.header}>
-          <h3 id="sync-warning-title" style={formStyles.title}>Switch to Visual Editor?</h3>
+          <h3 id="sync-warning-title" style={formStyles.title}>
+            Switch to Visual Editor?
+          </h3>
         </div>
         <div style={formStyles.body}>
           <p style={styles.text}>
-            This template was created in Code mode. Loading it into the Visual
-            Builder may not preserve all formatting. Complex Handlebars constructs
-            (nested helpers, block helpers like <code>{"{{#each}}"}</code>) will
-            appear as placeholder tags.
+            This template was created in Code mode. Loading it into the Visual Builder may not
+            preserve all formatting. Complex Handlebars constructs (nested helpers, block helpers
+            like <code>{"{{#each}}"}</code>) will appear as placeholder tags.
           </p>
           <p style={styles.textSmall}>
             Your code will not be modified until you save from Visual mode.
           </p>
         </div>
         <div style={formStyles.footer}>
-          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onCancel}>
+          <button
+            data-admin-close=""
+            type="button"
+            style={{ ...formStyles.button, ...formStyles.cancel }}
+            onClick={onCancel}
+          >
             Cancel
           </button>
-          <button type="button" style={{ ...formStyles.button, ...formStyles.submit }} onClick={onConfirm}>
+          <button
+            type="button"
+            style={{ ...formStyles.button, ...formStyles.submit }}
+            onClick={onConfirm}
+          >
             Continue
           </button>
         </div>

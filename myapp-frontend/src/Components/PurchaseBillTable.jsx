@@ -5,7 +5,21 @@ import StatusBadge from "./StatusBadge";
 import PaymentStatusBadge from "./PaymentStatusBadge";
 import AttachmentBadge from "./AttachmentBadge";
 
-export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDelete, onPrint, onExportPdf, exportingId, printDisabled = false, printDisabledReason = "", showPaymentStatus = false, attachCounts = {}, onAttach }) {
+export default function PurchaseBillTable({
+  bills,
+  perms,
+  onView,
+  onEdit,
+  onDelete,
+  onPrint,
+  onExportPdf,
+  exportingId,
+  printDisabled = false,
+  printDisabledReason = "",
+  showPaymentStatus = false,
+  attachCounts = {},
+  onAttach,
+}) {
   const columns = [
     {
       key: "purchaseBillNumber",
@@ -25,7 +39,21 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
       render: (b) => (
         <>
           {b.supplierName || "—"}
-          {b.isNonStockSupplierPurchase && <span style={{ marginLeft: 6, padding: "1px 6px", borderRadius: 6, fontSize: "0.7rem", fontWeight: 600, background: "#e0f2f1", color: "#00695c" }}>{b.source === "auto-cost" ? "From costs" : "Local direct purchase"}</span>}
+          {b.isNonStockSupplierPurchase && (
+            <span
+              style={{
+                marginLeft: 6,
+                padding: "1px 6px",
+                borderRadius: 6,
+                fontSize: "0.7rem",
+                fontWeight: 600,
+                background: "#e0f2f1",
+                color: "#00695c",
+              }}
+            >
+              {b.source === "auto-cost" ? "From costs" : "Local direct purchase"}
+            </span>
+          )}
         </>
       ),
     },
@@ -33,8 +61,8 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
       key: "date",
       header: "Date",
       width: 110,
-      accessor: (b) => b.date ? new Date(b.date).getTime() : 0,
-      render: (b) => b.date ? new Date(b.date).toLocaleDateString() : "—",
+      accessor: (b) => (b.date ? new Date(b.date).getTime() : 0),
+      render: (b) => (b.date ? new Date(b.date).toLocaleDateString() : "—"),
     },
     {
       key: "items",
@@ -57,35 +85,52 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
       header: "Status",
       width: 130,
       accessor: (b) => b.reconciliationStatus || "",
-      render: (b) => b.reconciliationStatus
-        ? <StatusBadge status={b.reconciliationStatus} />
-        : "—",
+      render: (b) =>
+        b.reconciliationStatus ? <StatusBadge status={b.reconciliationStatus} /> : "—",
     },
-    ...(showPaymentStatus ? [{
-      key: "paymentStatus",
-      header: "Payment",
-      width: 150,
-      accessor: (b) => b.paymentStatus || "",
-      render: (b) => b.paymentStatus
-        ? <PaymentStatusBadge status={b.paymentStatus} balanceDue={b.balanceDue} daysOverdue={b.daysOverdue} />
-        : "—",
-    }] : []),
+    ...(showPaymentStatus
+      ? [
+          {
+            key: "paymentStatus",
+            header: "Payment",
+            width: 150,
+            accessor: (b) => b.paymentStatus || "",
+            render: (b) =>
+              b.paymentStatus ? (
+                <PaymentStatusBadge
+                  status={b.paymentStatus}
+                  balanceDue={b.balanceDue}
+                  daysOverdue={b.daysOverdue}
+                />
+              ) : (
+                "—"
+              ),
+          },
+        ]
+      : []),
     {
       key: "supplierIRN",
       header: "Supplier IRN",
       defaultHidden: true,
-      render: (b) => b.supplierIRN
-        ? <span style={{ fontFamily: "monospace", fontSize: "0.75rem", wordBreak: "break-all" }}>{b.supplierIRN}</span>
-        : "—",
+      render: (b) =>
+        b.supplierIRN ? (
+          <span style={{ fontFamily: "monospace", fontSize: "0.75rem", wordBreak: "break-all" }}>
+            {b.supplierIRN}
+          </span>
+        ) : (
+          "—"
+        ),
     },
   ];
 
   const renderActions = (b) => (
     <>
       <IconButton label="View" icon={MdVisibility} size={16} onClick={() => onView?.(b)} />
-      {perms.canUpdate && (!["local-direct", "auto-cost"].includes(b.source) || !(b.amountPaid > 0 || b.amountCredited > 0)) && (
-        <IconButton label="Edit" icon={MdEdit} size={16} onClick={() => onEdit?.(b)} />
-      )}
+      {perms.canUpdate &&
+        (!["local-direct", "auto-cost"].includes(b.source) ||
+          !(b.amountPaid > 0 || b.amountCredited > 0)) && (
+          <IconButton label="Edit" icon={MdEdit} size={16} onClick={() => onEdit?.(b)} />
+        )}
       {onPrint && (
         <IconButton
           label="Print"

@@ -13,7 +13,8 @@ import {
   MdShield,
   MdDelete,
   MdCloudUpload,
-  MdSmartToy, MdPalette,
+  MdSmartToy,
+  MdPalette,
   MdManageAccounts,
   MdAdminPanelSettings,
 } from "react-icons/md";
@@ -37,7 +38,10 @@ const colors = {
 function Msg({ msg }) {
   if (!msg) return null;
   return (
-    <Alert tone={msg.type === "success" ? "success" : "error"} icon={msg.type === "success" ? MdCheckCircle : undefined}>
+    <Alert
+      tone={msg.type === "success" ? "success" : "error"}
+      icon={msg.type === "success" ? MdCheckCircle : undefined}
+    >
       {msg.text}
     </Alert>
   );
@@ -69,23 +73,38 @@ export default function ProfilePage() {
   const canAdministerMcp = user?.isSeedAdmin === true && has("mcp.admin.manage");
   const rawTargetUserId = searchParams.get("userId");
   const parsedTargetUserId = Number(rawTargetUserId);
-  const targetUserId = /^[1-9]\d*$/.test(rawTargetUserId || "") && Number.isSafeInteger(parsedTargetUserId)
-    ? parsedTargetUserId : undefined;
+  const targetUserId =
+    /^[1-9]\d*$/.test(rawTargetUserId || "") && Number.isSafeInteger(parsedTargetUserId)
+      ? parsedTargetUserId
+      : undefined;
   const requestedTab = searchParams.get("tab");
-  const tab = requestedTab === "mcp" ? "mcp-connections"
-    : requestedTab === "appearance" || requestedTab === "mcp-connections" ? requestedTab
-    : requestedTab === "mcp-catalog" && canAdministerMcp ? requestedTab
-    : requestedTab === "mcp-admin" && canAdministerMcp ? "mcp-admin" : "profile";
+  const tab =
+    requestedTab === "mcp"
+      ? "mcp-connections"
+      : requestedTab === "appearance" || requestedTab === "mcp-connections"
+        ? requestedTab
+        : requestedTab === "mcp-catalog" && canAdministerMcp
+          ? requestedTab
+          : requestedTab === "mcp-admin" && canAdministerMcp
+            ? "mcp-admin"
+            : "profile";
   const setTab = (nextTab) => {
     const next = new URLSearchParams(searchParams);
     next.set("tab", nextTab);
     if (nextTab !== "mcp-catalog") next.delete("userId");
     setSearchParams(next);
   };
-  const tabs = [["profile", "Profile", MdAccountCircle], ["appearance", "Appearance", MdPalette],
+  const tabs = [
+    ["profile", "Profile", MdAccountCircle],
+    ["appearance", "Appearance", MdPalette],
     ["mcp-connections", "MCP Connections", MdSmartToy],
-    ...(canAdministerMcp ? [["mcp-catalog", "Manage MCP Access", MdManageAccounts],
-      ["mcp-admin", "MCP Administration", MdAdminPanelSettings]] : [])];
+    ...(canAdministerMcp
+      ? [
+          ["mcp-catalog", "Manage MCP Access", MdManageAccounts],
+          ["mcp-admin", "MCP Administration", MdAdminPanelSettings],
+        ]
+      : []),
+  ];
   const fileRef = useRef(null);
 
   // Edit profile state
@@ -208,17 +227,20 @@ export default function ProfilePage() {
 
   const handlePickClick = () => fileRef.current?.click();
 
-  const stageFile = useCallback((file) => {
-    const err = validateImage(file);
-    if (err) {
-      showAvatarMsg({ type: "error", text: err });
-      return;
-    }
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPendingFile(file);
-    setPreviewUrl(URL.createObjectURL(file));
-    setAvatarMsg(null);
-  }, [previewUrl, showAvatarMsg]);
+  const stageFile = useCallback(
+    (file) => {
+      const err = validateImage(file);
+      if (err) {
+        showAvatarMsg({ type: "error", text: err });
+        return;
+      }
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPendingFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
+      setAvatarMsg(null);
+    },
+    [previewUrl, showAvatarMsg],
+  );
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -310,12 +332,22 @@ export default function ProfilePage() {
 
   return (
     // MCP tabs hold tables and catalogs, so they get the full content width.
-    <div style={{ maxWidth: tab === "profile" || tab === "appearance" ? 800 : 1200, margin: "0 auto", minWidth: 0 }}>
+    <div
+      style={{
+        maxWidth: tab === "profile" || tab === "appearance" ? 800 : 1200,
+        margin: "0 auto",
+        minWidth: 0,
+      }}
+    >
       <PageHeader
         icon={MdAccountCircle}
         tone="brand"
         title="My Profile"
-        subtitle={canAdministerMcp ? "Manage your account, AI connections and MCP access" : "Manage your account settings and AI connections"}
+        subtitle={
+          canAdministerMcp
+            ? "Manage your account, AI connections and MCP access"
+            : "Manage your account settings and AI connections"
+        }
       />
 
       <Tabs
@@ -326,240 +358,284 @@ export default function ProfilePage() {
         tabs={tabs.map(([key, label, icon]) => ({ key, label, icon }))}
       />
       {tab === "mcp-catalog" && canAdministerMcp ? (
-        <div role="tabpanel" id="profile-tab-panel-mcp-catalog" aria-labelledby="profile-tab-mcp-catalog"><McpAccessManagementPanel key={targetUserId ?? "picker"} targetUserId={targetUserId} /></div>
+        <div
+          role="tabpanel"
+          id="profile-tab-panel-mcp-catalog"
+          aria-labelledby="profile-tab-mcp-catalog"
+        >
+          <McpAccessManagementPanel key={targetUserId ?? "picker"} targetUserId={targetUserId} />
+        </div>
       ) : tab === "mcp-connections" ? (
-        <div role="tabpanel" id="profile-tab-panel-mcp-connections" aria-labelledby="profile-tab-mcp-connections"><McpMyAccessPanel /></div>
+        <div
+          role="tabpanel"
+          id="profile-tab-panel-mcp-connections"
+          aria-labelledby="profile-tab-mcp-connections"
+        >
+          <McpMyAccessPanel />
+        </div>
       ) : tab === "mcp-admin" && canAdministerMcp ? (
-        <div role="tabpanel" id="profile-tab-panel-mcp-admin" aria-labelledby="profile-tab-mcp-admin"><McpAgentsPanel /></div>
+        <div
+          role="tabpanel"
+          id="profile-tab-panel-mcp-admin"
+          aria-labelledby="profile-tab-mcp-admin"
+        >
+          <McpAgentsPanel />
+        </div>
       ) : tab === "appearance" ? (
-        <Card role="tabpanel" id="profile-tab-panel-appearance" aria-labelledby="profile-tab-appearance" title="Interface theme" icon={MdPalette}>
-          <p style={{ color: "var(--k-muted)", fontSize: "var(--k-font-sm)", margin: "0 0 0.9rem" }}>
-            Changes how screens look, not what they do. Saved for your account on this browser, so other users keep their own choice.
+        <Card
+          role="tabpanel"
+          id="profile-tab-panel-appearance"
+          aria-labelledby="profile-tab-appearance"
+          title="Interface theme"
+          icon={MdPalette}
+        >
+          <p
+            style={{ color: "var(--k-muted)", fontSize: "var(--k-font-sm)", margin: "0 0 0.9rem" }}
+          >
+            Changes how screens look, not what they do. Saved for your account on this browser, so
+            other users keep their own choice.
           </p>
-          <div className="u2" style={{ maxWidth: 420 }}><ThemePicker /></div>
+          <div className="u2" style={{ maxWidth: 420 }}>
+            <ThemePicker />
+          </div>
         </Card>
       ) : (
-      <div role="tabpanel" id="profile-tab-panel-profile" aria-labelledby="profile-tab-profile">
+        <div role="tabpanel" id="profile-tab-panel-profile" aria-labelledby="profile-tab-profile">
+          {/* Avatar + Info Card */}
+          <div className="k-card" style={styles.profileCard}>
+            <div style={styles.profileBanner} />
 
-      {/* Avatar + Info Card */}
-      <div className="k-card" style={styles.profileCard}>
-        <div style={styles.profileBanner} />
-
-        {/* Avatar with drag-and-drop zone wrapping the circle */}
-        <div style={styles.avatarRow}>
-          <div
-            style={{
-              ...styles.avatarWrapper,
-              outline: dragOver ? `3px dashed ${colors.cyan}` : "none",
-              outlineOffset: dragOver ? 4 : 0,
-            }}
-            onMouseEnter={() => setAvatarHover(true)}
-            onMouseLeave={() => setAvatarHover(false)}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            title="Click, or drag an image here"
-          >
-            {showInitials ? (
-              <div style={styles.avatarFallback}>{initials}</div>
-            ) : (
-              <img src={displayedSrc} alt="Avatar" style={styles.avatarImg} />
-            )}
-            {/* Hover overlay — hidden while uploading or when a preview is staged */}
-            {!avatarLoading && !previewUrl && (
-              <div style={{ ...styles.avatarOverlay, opacity: avatarHover ? 1 : 0 }}>
-                {hasServerAvatar ? (
-                  <div style={styles.avatarOverlayActions}>
-                    <button
-                      type="button"
-                      onClick={handlePickClick}
-                      style={styles.avatarOverlayBtn}
-                      title="Change photo"
-                    >
-                      <MdCameraAlt size={18} />
-                      <span style={styles.avatarOverlayLabel}>Change</span>
-                    </button>
-                    <div style={styles.avatarOverlayDivider} />
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); handleRemoveAvatar(); }}
-                      disabled={avatarLoading}
-                      style={styles.avatarOverlayBtn}
-                      title="Remove photo"
-                    >
-                      <MdDelete size={18} />
-                      <span style={styles.avatarOverlayLabel}>Remove</span>
-                    </button>
-                  </div>
+            {/* Avatar with drag-and-drop zone wrapping the circle */}
+            <div style={styles.avatarRow}>
+              <div
+                style={{
+                  ...styles.avatarWrapper,
+                  outline: dragOver ? `3px dashed ${colors.cyan}` : "none",
+                  outlineOffset: dragOver ? 4 : 0,
+                }}
+                onMouseEnter={() => setAvatarHover(true)}
+                onMouseLeave={() => setAvatarHover(false)}
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                title="Click, or drag an image here"
+              >
+                {showInitials ? (
+                  <div style={styles.avatarFallback}>{initials}</div>
                 ) : (
-                  <div onClick={handlePickClick} style={{ cursor: "pointer", textAlign: "center" }}>
-                    <MdCameraAlt size={24} color="#fff" />
+                  <img src={displayedSrc} alt="Avatar" style={styles.avatarImg} />
+                )}
+                {/* Hover overlay — hidden while uploading or when a preview is staged */}
+                {!avatarLoading && !previewUrl && (
+                  <div style={{ ...styles.avatarOverlay, opacity: avatarHover ? 1 : 0 }}>
+                    {hasServerAvatar ? (
+                      <div style={styles.avatarOverlayActions}>
+                        <button
+                          type="button"
+                          onClick={handlePickClick}
+                          style={styles.avatarOverlayBtn}
+                          title="Change photo"
+                        >
+                          <MdCameraAlt size={18} />
+                          <span style={styles.avatarOverlayLabel}>Change</span>
+                        </button>
+                        <div style={styles.avatarOverlayDivider} />
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveAvatar();
+                          }}
+                          disabled={avatarLoading}
+                          style={styles.avatarOverlayBtn}
+                          title="Remove photo"
+                        >
+                          <MdDelete size={18} />
+                          <span style={styles.avatarOverlayLabel}>Remove</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        onClick={handlePickClick}
+                        style={{ cursor: "pointer", textAlign: "center" }}
+                      >
+                        <MdCameraAlt size={24} color="#fff" />
+                      </div>
+                    )}
                   </div>
                 )}
+                {avatarLoading && <div style={styles.avatarSpinner} />}
+              </div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".jpg,.jpeg,.png,.webp"
+                onChange={handleFileChange}
+                style={{ display: "none" }}
+              />
+            </div>
+
+            <div style={styles.profileInfo}>
+              <h3 style={styles.profileName}>{user?.fullName || "User"}</h3>
+              <p style={styles.profileUsername}>@{user?.username}</p>
+              <span style={styles.roleBadge}>
+                <MdShield size={13} style={{ marginRight: 4 }} />
+                {user?.role || "User"}
+              </span>
+            </div>
+
+            {avatarMsg && (
+              <div style={{ padding: "0 1.5rem", marginTop: "0.75rem" }}>
+                <Msg msg={avatarMsg} />
               </div>
             )}
-            {avatarLoading && <div style={styles.avatarSpinner} />}
-          </div>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".jpg,.jpeg,.png,.webp"
-            onChange={handleFileChange}
-            style={{ display: "none" }}
-          />
-        </div>
 
-        <div style={styles.profileInfo}>
-          <h3 style={styles.profileName}>{user?.fullName || "User"}</h3>
-          <p style={styles.profileUsername}>@{user?.username}</p>
-          <span style={styles.roleBadge}>
-            <MdShield size={13} style={{ marginRight: 4 }} />
-            {user?.role || "User"}
-          </span>
-        </div>
-
-        {avatarMsg && (
-          <div style={{ padding: "0 1.5rem", marginTop: "0.75rem" }}>
-            <Msg msg={avatarMsg} />
-          </div>
-        )}
-
-        {/* Avatar actions: preview-staged → Save / Cancel; otherwise → Upload */}
-        <div style={styles.avatarActions}>
-          {previewUrl ? (
-            <>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleSaveAvatar}
-                disabled={avatarLoading}
-              >
-                {avatarLoading ? <span className="btn-spinner" /> : <MdCloudUpload size={16} />}
-                {avatarLoading ? "Uploading..." : "Save Photo"}
-              </Button>
-              <Button
-                size="sm"
-                icon={MdClose}
-                onClick={handleCancelPreview}
-                disabled={avatarLoading}
-              >
-                Cancel
-              </Button>
-            </>
-          ) : (
-            <Button variant="primary" size="sm" icon={MdCameraAlt} onClick={handlePickClick} disabled={avatarLoading}>
-              {hasServerAvatar ? "Change Photo" : "Upload Photo"}
-            </Button>
-          )}
-        </div>
-        <p style={styles.avatarHint}>
-          {previewUrl
-            ? "Preview shown above. Click Save Photo to upload, or Cancel to discard."
-            : "JPG, PNG or WebP. Max 7 MB. You can also drag an image onto the avatar."}
-        </p>
-      </div>
-
-      {/* Profile Details Card */}
-      <Card
-        title="Profile Details"
-        icon={MdPerson}
-        tone="blue"
-        actions={(
-          <Button
-            variant={editing ? "secondary" : "primary"}
-            size="sm"
-            icon={editing ? MdClose : MdEdit}
-            onClick={handleEditToggle}
-          >
-            {editing ? "Cancel" : "Edit"}
-          </Button>
-        )}
-      >
-        <Msg msg={profileMsg} />
-
-        <form onSubmit={handleProfileSave} style={styles.form}>
-          <Field label={<><MdBadge size={14} style={styles.labelIcon} />Username</>}>
-            {editing ? (
-              <input
-                className="k-input"
-                value={profileForm.username}
-                onChange={(e) => setProfileForm({ ...profileForm, username: e.target.value })}
-              />
-            ) : (
-              <p style={styles.value}>{user?.username}</p>
-            )}
-          </Field>
-          <Field label={<><MdPerson size={14} style={styles.labelIcon} />Full Name</>}>
-            {editing ? (
-              <input
-                className="k-input"
-                value={profileForm.fullName}
-                onChange={(e) => setProfileForm({ ...profileForm, fullName: e.target.value })}
-              />
-            ) : (
-              <p style={styles.value}>{user?.fullName}</p>
-            )}
-          </Field>
-          {editing && (
-            <div style={styles.formActions}>
-              <Button
-                type="submit"
-                variant="primary"
-                icon={MdSave}
-                disabled={profileLoading}
-              >
-                {profileLoading ? "Saving..." : "Save Changes"}
-              </Button>
+            {/* Avatar actions: preview-staged → Save / Cancel; otherwise → Upload */}
+            <div style={styles.avatarActions}>
+              {previewUrl ? (
+                <>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={handleSaveAvatar}
+                    disabled={avatarLoading}
+                  >
+                    {avatarLoading ? <span className="btn-spinner" /> : <MdCloudUpload size={16} />}
+                    {avatarLoading ? "Uploading..." : "Save Photo"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    icon={MdClose}
+                    onClick={handleCancelPreview}
+                    disabled={avatarLoading}
+                  >
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={MdCameraAlt}
+                  onClick={handlePickClick}
+                  disabled={avatarLoading}
+                >
+                  {hasServerAvatar ? "Change Photo" : "Upload Photo"}
+                </Button>
+              )}
             </div>
-          )}
-        </form>
-      </Card>
-
-      {/* Change Password Card */}
-      <Card title="Change Password" icon={MdLock} tone="teal">
-        <Msg msg={pwMsg} />
-
-        <form onSubmit={handlePasswordChange} style={styles.form}>
-          <Field label="Current Password">
-            <input
-              type="password"
-              className="k-input"
-              value={pwForm.currentPassword}
-              onChange={(e) => setPwForm({ ...pwForm, currentPassword: e.target.value })}
-              placeholder="Enter current password"
-            />
-          </Field>
-          <Field label="New Password">
-            <input
-              type="password"
-              className="k-input"
-              value={pwForm.newPassword}
-              onChange={(e) => setPwForm({ ...pwForm, newPassword: e.target.value })}
-              placeholder="At least 6 characters"
-            />
-          </Field>
-          <Field label="Confirm New Password">
-            <input
-              type="password"
-              className="k-input"
-              value={pwForm.confirmPassword}
-              onChange={(e) => setPwForm({ ...pwForm, confirmPassword: e.target.value })}
-              placeholder="Re-enter new password"
-            />
-          </Field>
-          <div style={styles.formActions}>
-            <Button
-              type="submit"
-              variant="teal"
-              icon={MdLock}
-              disabled={pwLoading}
-            >
-              {pwLoading ? "Changing..." : "Change Password"}
-            </Button>
+            <p style={styles.avatarHint}>
+              {previewUrl
+                ? "Preview shown above. Click Save Photo to upload, or Cancel to discard."
+                : "JPG, PNG or WebP. Max 7 MB. You can also drag an image onto the avatar."}
+            </p>
           </div>
-        </form>
-      </Card>
-      </div>
+
+          {/* Profile Details Card */}
+          <Card
+            title="Profile Details"
+            icon={MdPerson}
+            tone="blue"
+            actions={
+              <Button
+                variant={editing ? "secondary" : "primary"}
+                size="sm"
+                icon={editing ? MdClose : MdEdit}
+                onClick={handleEditToggle}
+              >
+                {editing ? "Cancel" : "Edit"}
+              </Button>
+            }
+          >
+            <Msg msg={profileMsg} />
+
+            <form onSubmit={handleProfileSave} style={styles.form}>
+              <Field
+                label={
+                  <>
+                    <MdBadge size={14} style={styles.labelIcon} />
+                    Username
+                  </>
+                }
+              >
+                {editing ? (
+                  <input
+                    className="k-input"
+                    value={profileForm.username}
+                    onChange={(e) => setProfileForm({ ...profileForm, username: e.target.value })}
+                  />
+                ) : (
+                  <p style={styles.value}>{user?.username}</p>
+                )}
+              </Field>
+              <Field
+                label={
+                  <>
+                    <MdPerson size={14} style={styles.labelIcon} />
+                    Full Name
+                  </>
+                }
+              >
+                {editing ? (
+                  <input
+                    className="k-input"
+                    value={profileForm.fullName}
+                    onChange={(e) => setProfileForm({ ...profileForm, fullName: e.target.value })}
+                  />
+                ) : (
+                  <p style={styles.value}>{user?.fullName}</p>
+                )}
+              </Field>
+              {editing && (
+                <div style={styles.formActions}>
+                  <Button type="submit" variant="primary" icon={MdSave} disabled={profileLoading}>
+                    {profileLoading ? "Saving..." : "Save Changes"}
+                  </Button>
+                </div>
+              )}
+            </form>
+          </Card>
+
+          {/* Change Password Card */}
+          <Card title="Change Password" icon={MdLock} tone="teal">
+            <Msg msg={pwMsg} />
+
+            <form onSubmit={handlePasswordChange} style={styles.form}>
+              <Field label="Current Password">
+                <input
+                  type="password"
+                  className="k-input"
+                  value={pwForm.currentPassword}
+                  onChange={(e) => setPwForm({ ...pwForm, currentPassword: e.target.value })}
+                  placeholder="Enter current password"
+                />
+              </Field>
+              <Field label="New Password">
+                <input
+                  type="password"
+                  className="k-input"
+                  value={pwForm.newPassword}
+                  onChange={(e) => setPwForm({ ...pwForm, newPassword: e.target.value })}
+                  placeholder="At least 6 characters"
+                />
+              </Field>
+              <Field label="Confirm New Password">
+                <input
+                  type="password"
+                  className="k-input"
+                  value={pwForm.confirmPassword}
+                  onChange={(e) => setPwForm({ ...pwForm, confirmPassword: e.target.value })}
+                  placeholder="Re-enter new password"
+                />
+              </Field>
+              <div style={styles.formActions}>
+                <Button type="submit" variant="teal" icon={MdLock} disabled={pwLoading}>
+                  {pwLoading ? "Changing..." : "Change Password"}
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
       )}
     </div>
   );

@@ -15,7 +15,14 @@ import "../ui/shared-components.css";
  *   onChange   — (newId, pickedItemType) ⇒ void
  *   placeholder, style — passthroughs
  */
-export default function SearchableItemTypeSelect({ items, value, onChange, placeholder, style, groupByHsCode = false }) {
+export default function SearchableItemTypeSelect({
+  items,
+  value,
+  onChange,
+  placeholder,
+  style,
+  groupByHsCode = false,
+}) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlightIdx, setHighlightIdx] = useState(-1);
@@ -29,7 +36,7 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
 
   const selected = useMemo(
     () => (items || []).find((it) => String(it.id) === String(value)),
-    [items, value]
+    [items, value],
   );
 
   // Sort:
@@ -56,7 +63,8 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
       }
       if (hasHs(a) !== hasHs(b)) return hasHs(a) ? 1 : -1;
       if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
-      if ((b.usageCount || 0) !== (a.usageCount || 0)) return (b.usageCount || 0) - (a.usageCount || 0);
+      if ((b.usageCount || 0) !== (a.usageCount || 0))
+        return (b.usageCount || 0) - (a.usageCount || 0);
       return (a.name || "").localeCompare(b.name || "");
     });
     return arr;
@@ -65,11 +73,12 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
   const filteredItems = useMemo(() => {
     const term = query.trim().toLowerCase();
     if (!term) return sortedItems;
-    return sortedItems.filter((it) =>
-      (it.name || "").toLowerCase().includes(term) ||
-      (it.hsCode || "").toLowerCase().includes(term) ||
-      (it.uom || "").toLowerCase().includes(term) ||
-      (it.fbrDescription || "").toLowerCase().includes(term)
+    return sortedItems.filter(
+      (it) =>
+        (it.name || "").toLowerCase().includes(term) ||
+        (it.hsCode || "").toLowerCase().includes(term) ||
+        (it.uom || "").toLowerCase().includes(term) ||
+        (it.fbrDescription || "").toLowerCase().includes(term),
     );
   }, [sortedItems, query]);
 
@@ -77,8 +86,10 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
   useEffect(() => {
     const onMouseDown = (e) => {
       if (
-        wrapperRef.current && !wrapperRef.current.contains(e.target) &&
-        triggerRef.current && !triggerRef.current.contains(e.target)
+        wrapperRef.current &&
+        !wrapperRef.current.contains(e.target) &&
+        triggerRef.current &&
+        !triggerRef.current.contains(e.target)
       ) {
         setOpen(false);
       }
@@ -128,7 +139,7 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
     if (!open) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setHighlightIdx((i) => Math.min((filteredItems.length - 1), i + 1));
+      setHighlightIdx((i) => Math.min(filteredItems.length - 1, i + 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setHighlightIdx((i) => Math.max(0, i - 1));
@@ -174,7 +185,13 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
         <span className="k-combo__label">
           {selected ? (
             <>
-              {selected.isFavorite && <MdStar size={12} color="#f59f00" style={{ verticalAlign: "middle", marginRight: 3 }} />}
+              {selected.isFavorite && (
+                <MdStar
+                  size={12}
+                  color="#f59f00"
+                  style={{ verticalAlign: "middle", marginRight: 3 }}
+                />
+              )}
               {selected.name}
               {selected.hsCode && <span style={styles.hsInline}> · {selected.hsCode}</span>}
             </>
@@ -183,91 +200,152 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
           )}
         </span>
         {selected && (
-          <span onClick={handleClear} className="k-combo__clear" title="Clear selection">×</span>
+          <span onClick={handleClear} className="k-combo__clear" title="Clear selection">
+            ×
+          </span>
         )}
         <MdArrowDropDown size={18} className="k-combo__caret" />
       </button>
 
-      {open && triggerRect && createPortal(
-        <div
-          ref={wrapperRef}
-          data-admin-popup="" className="k-combo__pop"
-          style={styles.dropdown(triggerRect)}
-          onKeyDown={handleKeyDown}
-        >
-          <div className="k-combo__search">
-            <MdSearch size={16} aria-hidden="true" />
-            <input
-              ref={searchRef}
-              type="text"
-              placeholder="Search by name, HS code…"
-              aria-label="Search by name, HS code…"
-              value={query}
-              onChange={(e) => { setQuery(e.target.value); setHighlightIdx(0); }}
-              onKeyDown={handleKeyDown}
-            />
-          </div>
+      {open &&
+        triggerRect &&
+        createPortal(
+          <div
+            ref={wrapperRef}
+            data-admin-popup=""
+            className="k-combo__pop"
+            style={styles.dropdown(triggerRect)}
+            onKeyDown={handleKeyDown}
+          >
+            <div className="k-combo__search">
+              <MdSearch size={16} aria-hidden="true" />
+              <input
+                ref={searchRef}
+                type="text"
+                placeholder="Search by name, HS code…"
+                aria-label="Search by name, HS code…"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setHighlightIdx(0);
+                }}
+                onKeyDown={handleKeyDown}
+              />
+            </div>
 
-          <div className="k-combo__list" role="listbox">
-            {filteredItems.length === 0 && (
-              <div className="k-combo__empty">
-                {items?.length === 0
-                  ? "No items in catalog yet. Add one on the Item Types page."
-                  : `No items match "${query}".`}
-              </div>
-            )}
+            <div className="k-combo__list" role="listbox">
+              {filteredItems.length === 0 && (
+                <div className="k-combo__empty">
+                  {items?.length === 0
+                    ? "No items in catalog yet. Add one on the Item Types page."
+                    : `No items match "${query}".`}
+                </div>
+              )}
 
-            {groupByHsCode && [true, false].map(withHs => {
-              const group = filteredItems.filter(it => hasHs(it) === withHs);
-              return group.length > 0 && <div key={String(withHs)}>
-                <div className="k-combo__group sc-combo-sticky">{withHs ? "With HS code · inventory items" : "Without HS code · no stock movement"}</div>
-                {group.map(it => renderItem(it, filteredItems.indexOf(it), highlightIdx, setHighlightIdx, handlePick, value, withHs))}
-              </div>;
-            })}
-            {!groupByHsCode && stocked.length > 0 && (
-              <>
-                <div className="k-combo__group sc-combo-sticky">📦 IN STOCK</div>
-                {stocked.map((it, i) => renderItem(it, i, highlightIdx, setHighlightIdx, handlePick, value))}
-              </>
-            )}
-            {!groupByHsCode && quick.length > 0 && (
-              <>
-                <div className="k-combo__group sc-combo-sticky">⚡ QUICK (no HS code)</div>
-                {quick.map((it, i) => {
-                  const realIdx = stocked.length + i;
-                  return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick, value);
+              {groupByHsCode &&
+                [true, false].map((withHs) => {
+                  const group = filteredItems.filter((it) => hasHs(it) === withHs);
+                  return (
+                    group.length > 0 && (
+                      <div key={String(withHs)}>
+                        <div className="k-combo__group sc-combo-sticky">
+                          {withHs
+                            ? "With HS code · inventory items"
+                            : "Without HS code · no stock movement"}
+                        </div>
+                        {group.map((it) =>
+                          renderItem(
+                            it,
+                            filteredItems.indexOf(it),
+                            highlightIdx,
+                            setHighlightIdx,
+                            handlePick,
+                            value,
+                            withHs,
+                          ),
+                        )}
+                      </div>
+                    )
+                  );
                 })}
-              </>
-            )}
-            {!groupByHsCode && favorites.length > 0 && (
-              <>
-                <div className="k-combo__group sc-combo-sticky">★ FAVORITES</div>
-                {favorites.map((it, i) => {
-                  const realIdx = stocked.length + quick.length + i;
-                  return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick, value);
-                })}
-              </>
-            )}
-            {!groupByHsCode && others.length > 0 && (
-              <>
-                {(stocked.length > 0 || quick.length > 0 || favorites.length > 0) && <div className="k-combo__group sc-combo-sticky">OTHER</div>}
-                {others.map((it, i) => {
-                  const realIdx = stocked.length + quick.length + favorites.length + i;
-                  return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick, value);
-                })}
-              </>
-            )}
-          </div>
-        </div>,
-        document.body
-      )}
+              {!groupByHsCode && stocked.length > 0 && (
+                <>
+                  <div className="k-combo__group sc-combo-sticky">📦 IN STOCK</div>
+                  {stocked.map((it, i) =>
+                    renderItem(it, i, highlightIdx, setHighlightIdx, handlePick, value),
+                  )}
+                </>
+              )}
+              {!groupByHsCode && quick.length > 0 && (
+                <>
+                  <div className="k-combo__group sc-combo-sticky">⚡ QUICK (no HS code)</div>
+                  {quick.map((it, i) => {
+                    const realIdx = stocked.length + i;
+                    return renderItem(
+                      it,
+                      realIdx,
+                      highlightIdx,
+                      setHighlightIdx,
+                      handlePick,
+                      value,
+                    );
+                  })}
+                </>
+              )}
+              {!groupByHsCode && favorites.length > 0 && (
+                <>
+                  <div className="k-combo__group sc-combo-sticky">★ FAVORITES</div>
+                  {favorites.map((it, i) => {
+                    const realIdx = stocked.length + quick.length + i;
+                    return renderItem(
+                      it,
+                      realIdx,
+                      highlightIdx,
+                      setHighlightIdx,
+                      handlePick,
+                      value,
+                    );
+                  })}
+                </>
+              )}
+              {!groupByHsCode && others.length > 0 && (
+                <>
+                  {(stocked.length > 0 || quick.length > 0 || favorites.length > 0) && (
+                    <div className="k-combo__group sc-combo-sticky">OTHER</div>
+                  )}
+                  {others.map((it, i) => {
+                    const realIdx = stocked.length + quick.length + favorites.length + i;
+                    return renderItem(
+                      it,
+                      realIdx,
+                      highlightIdx,
+                      setHighlightIdx,
+                      handlePick,
+                      value,
+                    );
+                  })}
+                </>
+              )}
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
 
-function renderItem(it, idx, highlightIdx, setHighlightIdx, handlePick, currentValue, showStock = true) {
+function renderItem(
+  it,
+  idx,
+  highlightIdx,
+  setHighlightIdx,
+  handlePick,
+  currentValue,
+  showStock = true,
+) {
   const highlighted = idx === highlightIdx;
-  const current = currentValue !== "" && currentValue != null && String(it.id) === String(currentValue);
+  const current =
+    currentValue !== "" && currentValue != null && String(it.id) === String(currentValue);
   return (
     <div
       key={it.id}
@@ -279,15 +357,22 @@ function renderItem(it, idx, highlightIdx, setHighlightIdx, handlePick, currentV
     >
       <div className="k-combo__opt-main">
         <div className="sc-opt-name">
-          {it.isFavorite && <MdStar size={12} color="#f59f00" style={{ verticalAlign: "middle", marginRight: 3 }} />}
+          {it.isFavorite && (
+            <MdStar size={12} color="#f59f00" style={{ verticalAlign: "middle", marginRight: 3 }} />
+          )}
           {it.name}
         </div>
         <div className="sc-opt-meta">
           {it.hsCode && <span className="sc-chip sc-chip--hs">{it.hsCode}</span>}
           {it.uom && <span> {it.uom}</span>}
           {showStock && typeof it.availableQty === "number" && (
-            <span className={`sc-chip ${(it.availableQty || 0) > 0 ? "sc-chip--ok" : "sc-chip--empty"}`} style={{ marginLeft: 4 }}>
-              {(it.availableQty || 0) > 0 ? `${Number(it.availableQty).toLocaleString("en-PK")} in stock` : "out of stock"}
+            <span
+              className={`sc-chip ${(it.availableQty || 0) > 0 ? "sc-chip--ok" : "sc-chip--empty"}`}
+              style={{ marginLeft: 4 }}
+            >
+              {(it.availableQty || 0) > 0
+                ? `${Number(it.availableQty).toLocaleString("en-PK")} in stock`
+                : "out of stock"}
             </span>
           )}
           {it.usageCount > 0 && <span style={{ marginLeft: 4 }}>· used {it.usageCount}×</span>}
@@ -298,7 +383,12 @@ function renderItem(it, idx, highlightIdx, setHighlightIdx, handlePick, currentV
 }
 
 const styles = {
-  hsInline: { color: "var(--k-muted, #5f6d7e)", fontFamily: "monospace", fontSize: "0.75rem", marginLeft: 4 },
+  hsInline: {
+    color: "var(--k-muted, #5f6d7e)",
+    fontFamily: "monospace",
+    fontSize: "0.75rem",
+    marginLeft: 4,
+  },
   // position: fixed (from .k-combo__pop) uses viewport coords (no scrollY math).
   // Anchored directly to the trigger's getBoundingClientRect(), and the component
   // re-measures on every ancestor scroll/resize so the list tracks the trigger
@@ -314,7 +404,9 @@ const styles = {
       bottom: flipAbove ? window.innerHeight - rect.top + 2 : undefined,
       left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
       width,
-      maxHeight: flipAbove ? Math.min(listHeight, rect.top - 10) : Math.min(listHeight, spaceBelow - 10),
+      maxHeight: flipAbove
+        ? Math.min(listHeight, rect.top - 10)
+        : Math.min(listHeight, spaceBelow - 10),
     };
   },
 };

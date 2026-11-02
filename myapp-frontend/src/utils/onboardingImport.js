@@ -26,7 +26,8 @@ export const SHEETS = [
     title: "Bill categories & FBR classifications",
     permission: "itemtypes.manage.create",
     viewPermission: "itemtypes.manage.view",
-    blurb: "Items sheet: blank HS Code creates a bill category; an HS Code creates an FBR classification.",
+    blurb:
+      "Items sheet: blank HS Code creates a bill category; an HS Code creates an FBR classification.",
     required: 1,
     listPath: "/item-types",
     listLabel: "Item Catalog",
@@ -67,7 +68,10 @@ export function allowedSheets(has) {
  */
 export function sheetsFromQuery(search, allowedKeys) {
   const raw = new URLSearchParams(search || "").get("sheets") || "";
-  const asked = raw.split(",").map((s) => s.trim()).filter(Boolean);
+  const asked = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   const picked = allowedKeys.filter((k) => asked.some((a) => a.toLowerCase() === k.toLowerCase()));
   return picked.length ? picked : [...allowedKeys];
 }
@@ -76,13 +80,16 @@ export function sheetsFromQuery(search, allowedKeys) {
 export const importLinkFor = (key) => `/import-data?sheets=${encodeURIComponent(key)}`;
 
 /** The comma-separated list the API takes, in display order. */
-export const sheetsParam = (keys) => SHEETS.map((s) => s.key).filter((k) => keys.includes(k)).join(",");
+export const sheetsParam = (keys) =>
+  SHEETS.map((s) => s.key)
+    .filter((k) => keys.includes(k))
+    .join(",");
 
 export const STATUS = {
-  import:  { label: "Will import",            color: "#1b5e20", bg: "#e8f5e9", border: "#a5d6a7" },
+  import: { label: "Will import", color: "#1b5e20", bg: "#e8f5e9", border: "#a5d6a7" },
   warning: { label: "Imports with a warning", color: "#8a4b00", bg: "#fff4e0", border: "#ffcc80" },
-  exists:  { label: "Already exists, skipped", color: "#37474f", bg: "#eceff1", border: "#b0bec5" },
-  error:   { label: "Needs fixing",           color: "#b71c1c", bg: "#ffebee", border: "#ef9a9a" },
+  exists: { label: "Already exists, skipped", color: "#37474f", bg: "#eceff1", border: "#b0bec5" },
+  error: { label: "Needs fixing", color: "#b71c1c", bg: "#ffebee", border: "#ef9a9a" },
 };
 
 export const STATUS_ORDER = ["error", "warning", "import", "exists"];
@@ -105,8 +112,10 @@ export function summarise(preview) {
 export function rowsFor(sheetPreview, status = "all") {
   const rows = sheetPreview?.rows || [];
   const picked = status === "all" ? rows : rows.filter((r) => r.status === status);
-  return [...picked].sort((a, b) =>
-    STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) || a.rowNumber - b.rowNumber);
+  return [...picked].sort(
+    (a, b) =>
+      STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) || a.rowNumber - b.rowNumber,
+  );
 }
 
 /** "Row 14 · NTN: must be 7 digits" — the line shown under a row. */
@@ -124,15 +133,37 @@ export function missingSheets(preview) {
  * the order the operator meets it.
  */
 export function checklist({ selected, file, preview, busy, result }) {
-  if (result) return [{ done: true, text: `Imported ${result.totalCreated} record${result.totalCreated === 1 ? "" : "s"}` }];
+  if (result)
+    return [
+      {
+        done: true,
+        text: `Imported ${result.totalCreated} record${result.totalCreated === 1 ? "" : "s"}`,
+      },
+    ];
   const items = [];
-  items.push({ done: selected.length > 0, text: selected.length ? `${selected.length} sheet${selected.length === 1 ? "" : "s"} chosen` : "Choose at least one sheet" });
+  items.push({
+    done: selected.length > 0,
+    text: selected.length
+      ? `${selected.length} sheet${selected.length === 1 ? "" : "s"} chosen`
+      : "Choose at least one sheet",
+  });
   items.push({ done: !!file, text: file ? `File: ${file.name}` : "Upload your filled-in file" });
-  if (file && !preview) items.push({ done: false, text: busy ? "Checking the file…" : "Waiting for the check" });
+  if (file && !preview)
+    items.push({ done: false, text: busy ? "Checking the file…" : "Waiting for the check" });
   if (preview) {
     const t = summarise(preview);
-    if (t.errors) items.push({ done: true, warn: true, text: `${t.errors} row${t.errors === 1 ? " needs" : "s need"} fixing; ${t.errors === 1 ? "it" : "they"} will be skipped` });
-    items.push({ done: t.willCreate > 0, text: t.willCreate ? `${t.willCreate} row${t.willCreate === 1 ? "" : "s"} ready to import` : "Nothing new to import in this file" });
+    if (t.errors)
+      items.push({
+        done: true,
+        warn: true,
+        text: `${t.errors} row${t.errors === 1 ? " needs" : "s need"} fixing; ${t.errors === 1 ? "it" : "they"} will be skipped`,
+      });
+    items.push({
+      done: t.willCreate > 0,
+      text: t.willCreate
+        ? `${t.willCreate} row${t.willCreate === 1 ? "" : "s"} ready to import`
+        : "Nothing new to import in this file",
+    });
   }
   return items;
 }
@@ -141,7 +172,10 @@ export const canImport = (preview, busy) => !busy && summarise(preview).willCrea
 
 /** A file name for the sample: "import-data-hakimi-traders.xlsx". */
 export function sampleFileName(companyName) {
-  const slug = String(companyName || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const slug = String(companyName || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
   return slug ? `import-data-${slug}.xlsx` : "import-data.xlsx";
 }
 
@@ -152,7 +186,8 @@ export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export function fileProblem(file) {
   if (!file) return "Choose a file.";
   const name = String(file.name || "").toLowerCase();
-  if (!ACCEPTED_EXTENSIONS.some((ext) => name.endsWith(ext))) return "Choose an Excel file (.xlsx or .xls).";
+  if (!ACCEPTED_EXTENSIONS.some((ext) => name.endsWith(ext)))
+    return "Choose an Excel file (.xlsx or .xls).";
   if (file.size > MAX_UPLOAD_BYTES) return "The file is larger than 10 MB.";
   if (file.size === 0) return "The file is empty.";
   return null;

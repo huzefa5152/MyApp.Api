@@ -40,7 +40,7 @@ export default function QuantityInput({
   ...rest
 }) {
   const allowsDecimal = isDecimalUnit(unit, units) && !integerOnly;
-  const effectiveMin = min != null ? min : (allowsDecimal ? 0 : 1);
+  const effectiveMin = min != null ? min : allowsDecimal ? 0 : 1;
 
   return (
     <input

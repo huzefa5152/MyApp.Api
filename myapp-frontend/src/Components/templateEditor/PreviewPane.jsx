@@ -5,7 +5,9 @@ export default function PreviewPane({ html, isMobile }) {
   // a template carrying a large embedded image that gap is seconds, and a
   // blank grey pane reads as "broken". Cover it until the load event fires.
   const [loaded, setLoaded] = useState(false);
-  useEffect(() => { setLoaded(false); }, [html]);
+  useEffect(() => {
+    setLoaded(false);
+  }, [html]);
 
   return (
     <div
@@ -22,7 +24,9 @@ export default function PreviewPane({ html, isMobile }) {
       {!loaded && (
         <div style={overlay} role="status">
           <span style={spin} />
-          <span style={{ color: "#5f6d7e", fontSize: "0.9rem", fontWeight: 600 }}>Rendering preview…</span>
+          <span style={{ color: "#5f6d7e", fontSize: "0.9rem", fontWeight: 600 }}>
+            Rendering preview…
+          </span>
         </div>
       )}
       <iframe
@@ -53,7 +57,8 @@ const overlay = {
   zIndex: 2,
 };
 const spin = {
-  width: 22, height: 22,
+  width: 22,
+  height: 22,
   border: "3px solid #d0d7e2",
   borderTopColor: "#0d47a1",
   borderRadius: "50%",

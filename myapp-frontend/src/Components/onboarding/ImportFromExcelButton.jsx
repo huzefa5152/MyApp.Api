@@ -13,7 +13,11 @@ export default function ImportFromExcelButton({ sheet }) {
   const meta = sheetByKey(sheet);
   if (!meta || !has(IMPORT_PERMISSION) || !has(meta.permission)) return null;
   return (
-    <Link to={importLinkFor(sheet)} className="k-btn k-btn--secondary" title={`Import ${meta.title.toLowerCase()} from an Excel file`}>
+    <Link
+      to={importLinkFor(sheet)}
+      className="k-btn k-btn--secondary"
+      title={`Import ${meta.title.toLowerCase()} from an Excel file`}
+    >
       <MdUploadFile size={17} aria-hidden="true" /> Import from Excel
     </Link>
   );

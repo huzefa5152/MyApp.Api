@@ -22,16 +22,23 @@ export function useEntityAttachmentCounts(companyId, entityType, ids) {
   const idKey = (ids || []).join(",");
 
   const refresh = useCallback(async () => {
-    if (!companyId || !entityType || !canView || !idKey) { setCounts({}); return; }
+    if (!companyId || !entityType || !canView || !idKey) {
+      setCounts({});
+      return;
+    }
     try {
       const { data } = await getEntityAttachmentCounts(companyId, entityType, idKey.split(","));
       // Only accept a plain id→count object; an absent endpoint serves index.html
       // (200 text/html) via SPA fallback, which must not leak into the UI.
       setCounts(data && typeof data === "object" && !Array.isArray(data) ? data : {});
-    } catch { setCounts({}); }
+    } catch {
+      setCounts({});
+    }
   }, [companyId, entityType, canView, idKey]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   return { counts, refresh };
 }

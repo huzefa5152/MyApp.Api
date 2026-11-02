@@ -22,7 +22,14 @@ import { todayYmd } from "../utils/dateInput";
 import SearchableClientSelect from "./SearchableClientSelect";
 import { Button, Field } from "../ui/Kit";
 
-const blankItem = () => ({ id: 0, itemTypeId: null, description: "", quantity: 1, unit: "", unitPrice: "" });
+const blankItem = () => ({
+  id: 0,
+  itemTypeId: null,
+  description: "",
+  quantity: 1,
+  unit: "",
+  unitPrice: "",
+});
 
 // Create + edit a Sales Order (quantity-only). Pass `order` to edit.
 export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
@@ -31,22 +38,43 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
   const [applyRates, setApplyRates] = useState(false);
   const [applyDetails, setApplyDetails] = useState(false);
   const [linkedChallans, setLinkedChallans] = useState([]);
-  useEffect(() => { if (order?.id) getSalesOrderChallans(order.id).then(({data}) => setLinkedChallans(data || [])).catch(() => setLinkedChallans([])); }, [order?.id]);
+  useEffect(() => {
+    if (order?.id)
+      getSalesOrderChallans(order.id)
+        .then(({ data }) => setLinkedChallans(data || []))
+        .catch(() => setLinkedChallans([]));
+  }, [order?.id]);
   const canCreateItemType = has("itemtypes.manage.create");
   const canCreateClient = has("clients.manage.create");
   const [showAddClient, setShowAddClient] = useState(false);
   const isEdit = !!order;
-  const [client, setClient] = useState(order ? { id: order.clientId, label: order.clientName } : null);
-  const [orderDate, setOrderDate] = useState(order?.orderDate ? order.orderDate.slice(0, 10) : todayYmd());
-  const [requiredDate, setRequiredDate] = useState(order?.requiredDate ? order.requiredDate.slice(0, 10) : "");
+  const [client, setClient] = useState(
+    order ? { id: order.clientId, label: order.clientName } : null,
+  );
+  const [orderDate, setOrderDate] = useState(
+    order?.orderDate ? order.orderDate.slice(0, 10) : todayYmd(),
+  );
+  const [requiredDate, setRequiredDate] = useState(
+    order?.requiredDate ? order.requiredDate.slice(0, 10) : "",
+  );
   const [poNumber, setPoNumber] = useState(order?.customerPoNumber || "");
-  const [poDate, setPoDate] = useState(order?.customerPoDate ? order.customerPoDate.slice(0, 10) : "");
+  const [poDate, setPoDate] = useState(
+    order?.customerPoDate ? order.customerPoDate.slice(0, 10) : "",
+  );
   const [site, setSite] = useState(order?.site || "");
   const [notes, setNotes] = useState(order?.notes || "");
   const [items, setItems] = useState(
     order?.items?.length
-      ? order.items.map((i) => ({ id: i.id, itemTypeId: i.itemTypeId, description: i.description, quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice ?? "", delivered: i.deliveredQuantity }))
-      : [blankItem()]
+      ? order.items.map((i) => ({
+          id: i.id,
+          itemTypeId: i.itemTypeId,
+          description: i.description,
+          quantity: i.quantity,
+          unit: i.unit,
+          unitPrice: i.unitPrice ?? "",
+          delivered: i.deliveredQuantity,
+        }))
+      : [blankItem()],
   );
   const [units, setUnits] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
@@ -55,21 +83,35 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
   const [error, setError] = useState("");
   const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
-  const [salesQuoteId, setSalesQuoteId] = useState(order?.salesQuoteId ? String(order.salesQuoteId) : "");
+  const [salesQuoteId, setSalesQuoteId] = useState(
+    order?.salesQuoteId ? String(order.salesQuoteId) : "",
+  );
   const [quotes, setQuotes] = useState([]);
   const [quoteLoadedMsg, setQuoteLoadedMsg] = useState("");
   const attachmentRef = useRef(null);
 
-  useEffect(() => { getAllUnits(companyId).then(({ data }) => setUnits(data)).catch(() => setUnits([])); }, [companyId]);
-  useEffect(() => { getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([])); }, [companyId]);
-  useEffect(() => { getClientsByCompany(companyId).then(({ data }) => setClients(data || [])).catch(() => setClients([])); }, [companyId]);
+  useEffect(() => {
+    getAllUnits(companyId)
+      .then(({ data }) => setUnits(data))
+      .catch(() => setUnits([]));
+  }, [companyId]);
+  useEffect(() => {
+    getItemTypes(companyId)
+      .then(({ data }) => setItemTypes(data || []))
+      .catch(() => setItemTypes([]));
+  }, [companyId]);
+  useEffect(() => {
+    getClientsByCompany(companyId)
+      .then(({ data }) => setClients(data || []))
+      .catch(() => setClients([]));
+  }, [companyId]);
 
   // A sales order is a pre-sale document (not an FBR document), so — like Bill
   // mode — it only offers item types WITHOUT an HS code (HS-coded types are the
   // FBR-classification set used on the Invoices tab).
   const nonHsItemTypes = useMemo(
     () => itemTypes.filter((it) => !(it.hsCode && String(it.hsCode).trim())),
-    [itemTypes]
+    [itemTypes],
   );
 
   useEffect(() => {
@@ -87,8 +129,11 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
   // client is chosen every linkable quote is offered; picking a client narrows.
   const QUOTE_LINKABLE = ["Active", "Draft", "Sent"];
   const quoteOptions = quotes
-    .filter((q) => (QUOTE_LINKABLE.includes(q.status) || String(q.id) === salesQuoteId)
-      && (!client || q.clientId === client.id))
+    .filter(
+      (q) =>
+        (QUOTE_LINKABLE.includes(q.status) || String(q.id) === salesQuoteId) &&
+        (!client || q.clientId === client.id),
+    )
     .map((q) => ({ id: q.id, label: `Quote #${q.quoteNumber} — ${q.clientName}` }));
 
   // Picking a quote on a NEW order pulls its client + line items in (quantity
@@ -101,10 +146,22 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
     if (!value || isEdit) return;
     const q = quotes.find((x) => String(x.id) === String(value));
     if (!q) return;
-    if (q.clientId && (!client || client.id !== q.clientId)) setClient({ id: q.clientId, label: q.clientName });
+    if (q.clientId && (!client || client.id !== q.clientId))
+      setClient({ id: q.clientId, label: q.clientName });
     if (q.items?.length) {
-      setItems(q.items.map((i) => ({ id: 0, itemTypeId: i.itemTypeId || null, description: i.description, quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice ?? "" })));
-      setQuoteLoadedMsg(`Loaded ${q.items.length} item${q.items.length !== 1 ? "s" : ""} from Quote #${q.quoteNumber} — edit as needed.`);
+      setItems(
+        q.items.map((i) => ({
+          id: 0,
+          itemTypeId: i.itemTypeId || null,
+          description: i.description,
+          quantity: i.quantity,
+          unit: i.unit,
+          unitPrice: i.unitPrice ?? "",
+        })),
+      );
+      setQuoteLoadedMsg(
+        `Loaded ${q.items.length} item${q.items.length !== 1 ? "s" : ""} from Quote #${q.quoteNumber} — edit as needed.`,
+      );
     }
   };
 
@@ -113,16 +170,41 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
     if (saving) return;
     setError("");
     const valid = items.filter((i) => i.description.trim());
-    if (!client) { setError("Please select a client."); return; }
-    if (valid.length === 0) { setError("Add at least one item."); return; }
+    if (!client) {
+      setError("Please select a client.");
+      return;
+    }
+    if (valid.length === 0) {
+      setError("Add at least one item.");
+      return;
+    }
 
-    if (isEdit && (applyRates || applyDetails) && !await confirm({ title: "Apply order changes to existing documents?",
-      message: `Linked challans: ${linkedChallans.filter(c => c.status !== "Cancelled").map(c => `#${c.challanNumber}${c.invoiceId ? ` (bill #${c.invoiceNumber}, ${c.fbrStatus || "not submitted"})` : " (unbilled)"}`).join(", ") || "none"}. Only affected lines will change. Bill totals, stock and accounting will recalculate; adjusted bills require consultant review again. Locked bills cause the entire change to be refused. Ordered quantity changes do not change delivered quantities.`, confirmText: "Apply changes", variant: "warning" })) return;
+    if (
+      isEdit &&
+      (applyRates || applyDetails) &&
+      !(await confirm({
+        title: "Apply order changes to existing documents?",
+        message: `Linked challans: ${
+          linkedChallans
+            .filter((c) => c.status !== "Cancelled")
+            .map(
+              (c) =>
+                `#${c.challanNumber}${c.invoiceId ? ` (bill #${c.invoiceNumber}, ${c.fbrStatus || "not submitted"})` : " (unbilled)"}`,
+            )
+            .join(", ") || "none"
+        }. Only affected lines will change. Bill totals, stock and accounting will recalculate; adjusted bills require consultant review again. Locked bills cause the entire change to be refused. Ordered quantity changes do not change delivered quantities.`,
+        confirmText: "Apply changes",
+        variant: "warning",
+      }))
+    )
+      return;
     setSaving(true);
     try {
       const saved = await onSaved({
         clientId: client.id,
-        version: order?.version, applyRatesToBills: applyRates, applyDetailsToDeliveries: applyDetails,
+        version: order?.version,
+        applyRatesToBills: applyRates,
+        applyDetailsToDeliveries: applyDetails,
         salesQuoteId: salesQuoteId ? parseInt(salesQuoteId) : null,
         orderDate: orderDate ? new Date(orderDate).toISOString() : null,
         requiredDate: requiredDate ? new Date(requiredDate).toISOString() : null,
@@ -134,20 +216,28 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
           id: i.id || 0,
           itemTypeId: i.itemTypeId || null,
           description: i.description.trim(),
-          quantity: typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1),
+          quantity: typeof i.quantity === "number" ? i.quantity : parseFloat(i.quantity) || 1,
           unit: i.unit,
           // Optional — send null when left blank so the order stays price-free.
-          unitPrice: (i.unitPrice === "" || i.unitPrice == null) ? null : parseFloat(i.unitPrice),
+          unitPrice: i.unitPrice === "" || i.unitPrice == null ? null : parseFloat(i.unitPrice),
         })),
       });
       // Upload any files staged before the record had an id (no-op on edit /
       // when nothing was staged). Best-effort — the order is already saved.
       const savedId = saved?.id ?? order?.id;
-      if (savedId) { try { await attachmentRef.current?.flush(savedId); } catch { /* attachments best-effort */ } }
+      if (savedId) {
+        try {
+          await attachmentRef.current?.flush(savedId);
+        } catch {
+          /* attachments best-effort */
+        }
+      }
       onClose();
     } catch (err) {
       const msg = err.response?.data?.error || err.response?.data?.message;
-      setError(msg || (!err.response ? "Could not reach the server." : "Could not save the order."));
+      setError(
+        msg || (!err.response ? "Could not reach the server." : "Could not save the order."),
+      );
       setSaving(false);
     }
   };
@@ -156,26 +246,95 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
-          <h5 style={formStyles.title}>{isEdit ? `Edit Sales Order #${order.salesOrderNumber}` : "Create Sales Order"}</h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <h5 style={formStyles.title}>
+            {isEdit ? `Edit Sales Order #${order.salesOrderNumber}` : "Create Sales Order"}
+          </h5>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            &times;
+          </button>
         </div>
         <form onSubmit={handleSubmit}>
           <div data-admin-body="" style={formStyles.body}>
-            <DocumentCopyPicker companyId={companyId} destination="Order" allowDetails={!isEdit} disabled={!!salesQuoteId}
-              onCopy={(source,lines,details) => {
-                setItems(prev => appendCopiedLines(details ? [] : prev, lines, blankItem));
-                if(details) { setClient({id:source.clientId,label:source.clientName});setNotes(source.notes||"");setPoNumber(source.customerPoNumber||"");setPoDate(source.customerPoDate?.slice(0,10)||"");setSite(source.site||"");setSalesQuoteId(""); }
-              }} />
-            {isEdit && <div style={{ background: "#eff6ff", padding: 12, borderRadius: 8, marginBottom: 12 }}>
-              <p>Changing ordered quantities changes the remaining commitment; it does not rewrite actual deliveries. Rates and descriptions apply to future deliveries unless you choose below. PO changes update unbilled challans.</p>
-              {has("bills.manage.update") && <label style={{ display: "flex", gap: 8, minHeight: 44, alignItems: "center" }}><input type="checkbox" checked={applyRates} onChange={e => setApplyRates(e.target.checked)} />Apply changed rates to existing editable bills</label>}
-              {has("bills.manage.update") && has("challans.manage.update") && <label style={{ display: "flex", gap: 8, minHeight: 44, alignItems: "center" }}><input type="checkbox" checked={applyDetails} onChange={e => setApplyDetails(e.target.checked)} />Apply changed descriptions, units and item types to existing deliveries and editable bills</label>}
-              <div>{linkedChallans.filter(c => c.status !== "Cancelled").map(c => <div key={c.id}>Challan #{c.challanNumber}{c.invoiceId ? ` → Bill #${c.invoiceNumber} · ${c.fbrStatus || "Not submitted"}` : " · Unbilled"}</div>)}</div>
-            </div>}
-            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
-            <Field label={<>Sales Quote <span style={s.opt}>(optional — picking one pre-fills the order)</span></>}>
+            <DocumentCopyPicker
+              companyId={companyId}
+              destination="Order"
+              allowDetails={!isEdit}
+              disabled={!!salesQuoteId}
+              onCopy={(source, lines, details) => {
+                setItems((prev) => appendCopiedLines(details ? [] : prev, lines, blankItem));
+                if (details) {
+                  setClient({ id: source.clientId, label: source.clientName });
+                  setNotes(source.notes || "");
+                  setPoNumber(source.customerPoNumber || "");
+                  setPoDate(source.customerPoDate?.slice(0, 10) || "");
+                  setSite(source.site || "");
+                  setSalesQuoteId("");
+                }
+              }}
+            />
+            {isEdit && (
+              <div
+                style={{ background: "#eff6ff", padding: 12, borderRadius: 8, marginBottom: 12 }}
+              >
+                <p>
+                  Changing ordered quantities changes the remaining commitment; it does not rewrite
+                  actual deliveries. Rates and descriptions apply to future deliveries unless you
+                  choose below. PO changes update unbilled challans.
+                </p>
+                {has("bills.manage.update") && (
+                  <label style={{ display: "flex", gap: 8, minHeight: 44, alignItems: "center" }}>
+                    <input
+                      type="checkbox"
+                      checked={applyRates}
+                      onChange={(e) => setApplyRates(e.target.checked)}
+                    />
+                    Apply changed rates to existing editable bills
+                  </label>
+                )}
+                {has("bills.manage.update") && has("challans.manage.update") && (
+                  <label style={{ display: "flex", gap: 8, minHeight: 44, alignItems: "center" }}>
+                    <input
+                      type="checkbox"
+                      checked={applyDetails}
+                      onChange={(e) => setApplyDetails(e.target.checked)}
+                    />
+                    Apply changed descriptions, units and item types to existing deliveries and
+                    editable bills
+                  </label>
+                )}
+                <div>
+                  {linkedChallans
+                    .filter((c) => c.status !== "Cancelled")
+                    .map((c) => (
+                      <div key={c.id}>
+                        Challan #{c.challanNumber}
+                        {c.invoiceId
+                          ? ` → Bill #${c.invoiceNumber} · ${c.fbrStatus || "Not submitted"}`
+                          : " · Unbilled"}
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+            {error && (
+              <div ref={errRef} style={formStyles.error}>
+                {error}
+              </div>
+            )}
+            <Field
+              label={
+                <>
+                  Sales Quote{" "}
+                  <span style={s.opt}>(optional — picking one pre-fills the order)</span>
+                </>
+              }
+            >
               <SearchableSelect
                 items={quoteOptions}
                 value={salesQuoteId}
@@ -183,7 +342,11 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
                 labelKey="label"
                 placeholder="— not linked —"
               />
-              {quoteLoadedMsg && <div style={{ fontSize: "0.72rem", color: "var(--k-teal)", fontWeight: 600 }}>{quoteLoadedMsg}</div>}
+              {quoteLoadedMsg && (
+                <div style={{ fontSize: "0.72rem", color: "var(--k-teal)", fontWeight: 600 }}>
+                  {quoteLoadedMsg}
+                </div>
+              )}
             </Field>
             <div data-admin-form-row="" className="k-form-grid" style={s.grid}>
               <Field label="Client">
@@ -193,7 +356,11 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
                     <SearchableClientSelect
                       clients={clients}
                       value={client?.id || ""}
-                      onChange={(id, item) => { setClient(item); setSite(""); setSalesQuoteId(""); }}
+                      onChange={(id, item) => {
+                        setClient(item);
+                        setSite("");
+                        setSalesQuoteId("");
+                      }}
                       placeholder="— Select Client —"
                     />
                   </div>
@@ -210,43 +377,107 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
                     </Button>
                   )}
                 </div>
-                {!canCreateClient && <PermissionLackedHint perm="clients.manage.create" what="add a new client" />}
+                {!canCreateClient && (
+                  <PermissionLackedHint perm="clients.manage.create" what="add a new client" />
+                )}
               </Field>
-              <Field label={<>Site / Department <span style={s.opt}>(optional)</span></>}>
+              <Field
+                label={
+                  <>
+                    Site / Department <span style={s.opt}>(optional)</span>
+                  </>
+                }
+              >
                 {(() => {
                   // Derive sites from the loaded `clients` list by id — the
                   // `client` object is only { id, label } in edit mode (no
                   // `.site`), so reading client.site directly leaves the
                   // dropdown empty when editing. Look up the full record.
-                  const selectedClientFull = clients.find((c) => String(c.id) === String(client?.id));
-                  const sites = selectedClientFull?.site ? selectedClientFull.site.split(";").map((x) => x.trim()).filter(Boolean) : [];
+                  const selectedClientFull = clients.find(
+                    (c) => String(c.id) === String(client?.id),
+                  );
+                  const sites = selectedClientFull?.site
+                    ? selectedClientFull.site
+                        .split(";")
+                        .map((x) => x.trim())
+                        .filter(Boolean)
+                    : [];
                   return sites.length > 0 ? (
-                    <select className="k-select" value={site} onChange={(e) => setSite(e.target.value)}>
+                    <select
+                      className="k-select"
+                      value={site}
+                      onChange={(e) => setSite(e.target.value)}
+                    >
                       <option value="">(none)</option>
-                      {sites.map((x) => <option key={x} value={x}>{x}</option>)}
+                      {sites.map((x) => (
+                        <option key={x} value={x}>
+                          {x}
+                        </option>
+                      ))}
                     </select>
                   ) : (
-                    <input type="text" className="k-input" value={site} onChange={(e) => setSite(e.target.value)} placeholder={client ? "Optional" : "Pick a client first"} disabled={!client} />
+                    <input
+                      type="text"
+                      className="k-input"
+                      value={site}
+                      onChange={(e) => setSite(e.target.value)}
+                      placeholder={client ? "Optional" : "Pick a client first"}
+                      disabled={!client}
+                    />
                   );
                 })()}
               </Field>
             </div>
             <div data-admin-form-row="" className="k-form-grid" style={s.grid}>
               <Field label="Order Date">
-                <input type="date" className="k-input" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} />
+                <input
+                  type="date"
+                  className="k-input"
+                  value={orderDate}
+                  onChange={(e) => setOrderDate(e.target.value)}
+                />
               </Field>
-              <Field label={<>Required By <span style={s.opt}>(optional)</span></>}>
-                <input type="date" className="k-input" value={requiredDate} onChange={(e) => setRequiredDate(e.target.value)} />
+              <Field
+                label={
+                  <>
+                    Required By <span style={s.opt}>(optional)</span>
+                  </>
+                }
+              >
+                <input
+                  type="date"
+                  className="k-input"
+                  value={requiredDate}
+                  onChange={(e) => setRequiredDate(e.target.value)}
+                />
               </Field>
-              <Field label={<>Customer PO # <span style={s.opt}>(optional)</span></>}>
-                <input type="text" className="k-input" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Their PO number" />
+              <Field
+                label={
+                  <>
+                    Customer PO # <span style={s.opt}>(optional)</span>
+                  </>
+                }
+              >
+                <input
+                  type="text"
+                  className="k-input"
+                  value={poNumber}
+                  onChange={(e) => setPoNumber(e.target.value)}
+                  placeholder="Their PO number"
+                />
               </Field>
               <Field label="Customer PO Date">
-                <input type="date" className="k-input" value={poDate} onChange={(e) => setPoDate(e.target.value)} />
+                <input
+                  type="date"
+                  className="k-input"
+                  value={poDate}
+                  onChange={(e) => setPoDate(e.target.value)}
+                />
               </Field>
             </div>
 
-            <LineItemsEditor companyId={companyId}
+            <LineItemsEditor
+              companyId={companyId}
               entryModeKey="sales-order"
               items={items}
               onItemsChange={setItems}
@@ -259,23 +490,60 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
               showUnitPrice
               itemsLabel="Items (unit price optional — pre-fills the bill)"
               isRowLocked={(it) => isEdit && it.id > 0 && it.delivered > 0}
-              rowLockHint={(it) => (isEdit && it.id > 0 && it.delivered > 0) ? `${it.delivered} already delivered — qty can't go below that` : null}
-              getRowMin={(it) => (isEdit && it.id > 0 && Number(it.delivered) > 0) ? Number(it.delivered) : undefined}
+              rowLockHint={(it) =>
+                isEdit && it.id > 0 && it.delivered > 0
+                  ? `${it.delivered} already delivered — qty can't go below that`
+                  : null
+              }
+              getRowMin={(it) =>
+                isEdit && it.id > 0 && Number(it.delivered) > 0 ? Number(it.delivered) : undefined
+              }
             />
 
             <div style={{ marginTop: "1rem" }}>
-              <Field label={<>Notes <span style={s.opt}>(optional)</span></>}>
-                <textarea className="k-textarea" style={{ minHeight: 56 }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Internal notes for this order" />
+              <Field
+                label={
+                  <>
+                    Notes <span style={s.opt}>(optional)</span>
+                  </>
+                }
+              >
+                <textarea
+                  className="k-textarea"
+                  style={{ minHeight: 56 }}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Internal notes for this order"
+                />
               </Field>
             </div>
 
             <div style={{ marginTop: "1rem" }}>
-              <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="SalesOrder" entityId={order?.id ?? null} mode="edit" />
+              <AttachmentManager
+                ref={attachmentRef}
+                companyId={companyId}
+                entityType="SalesOrder"
+                entityId={order?.id ?? null}
+                mode="edit"
+              />
             </div>
           </div>
           <div data-admin-footer="" style={formStyles.footer}>
-            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
-            <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.6 : 1 }} disabled={disabled}>{saving ? "Saving..." : isEdit ? "Update Order" : "Save Order"}</button>
+            <button
+              data-admin-close=""
+              type="button"
+              style={{ ...formStyles.button, ...formStyles.cancel }}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.6 : 1 }}
+              disabled={disabled}
+            >
+              {saving ? "Saving..." : isEdit ? "Update Order" : "Save Order"}
+            </button>
           </div>
         </form>
       </div>
@@ -294,8 +562,13 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
             setShowAddClient(false);
             const { data } = await getClientsByCompany(companyId).catch(() => ({ data: [] }));
             setClients(data || []);
-            if (created?.id) setClient((data || []).find((c) => String(c.id) === String(created.id))
-              || { id: created.id, label: created.name });
+            if (created?.id)
+              setClient(
+                (data || []).find((c) => String(c.id) === String(created.id)) || {
+                  id: created.id,
+                  label: created.name,
+                },
+              );
           }}
         />
       )}
@@ -304,7 +577,12 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
         <ItemTypeForm
           companyId={companyId}
           onClose={() => setShowAddItemType(false)}
-          onSaved={() => { setShowAddItemType(false); getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => {}); }}
+          onSaved={() => {
+            setShowAddItemType(false);
+            getItemTypes(companyId)
+              .then(({ data }) => setItemTypes(data || []))
+              .catch(() => {});
+          }}
         />
       )}
     </div>
@@ -314,6 +592,11 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
 const s = {
   grid: { gap: "var(--k-gap)", margin: "1rem 0" },
   pickerRow: { display: "flex", gap: "0.5rem", alignItems: "stretch" },
-  inlineAddBtn: { flexShrink: 0, whiteSpace: "nowrap", color: "var(--k-teal)", borderColor: "var(--k-teal)" },
+  inlineAddBtn: {
+    flexShrink: 0,
+    whiteSpace: "nowrap",
+    color: "var(--k-teal)",
+    borderColor: "var(--k-teal)",
+  },
   opt: { color: "var(--k-muted)", fontWeight: 400 },
 };

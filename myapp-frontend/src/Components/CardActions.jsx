@@ -1,4 +1,14 @@
-import { Children, Fragment, cloneElement, isValidElement, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  Children,
+  Fragment,
+  cloneElement,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { MdMoreHoriz } from "react-icons/md";
 import { colors } from "../theme";
@@ -32,12 +42,21 @@ function flatten(children) {
 
 const MENU_WIDTH = 232;
 
-export default function CardActions({ children, style, label = "More actions", nowrap = false, className }) {
+export default function CardActions({
+  children,
+  style,
+  label = "More actions",
+  nowrap = false,
+  className,
+}) {
   const items = flatten(children);
   const primary = items.filter((c) => c.props["data-primary"]);
   let rest = items.filter((c) => !c.props["data-primary"]);
   // A menu holding one action is a click for nothing: show it inline.
-  if (rest.length === 1) { primary.push(rest[0]); rest = []; }
+  if (rest.length === 1) {
+    primary.push(rest[0]);
+    rest = [];
+  }
 
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
@@ -54,7 +73,9 @@ export default function CardActions({ children, style, label = "More actions", n
     setPos({ left, top: up ? Math.max(8, b.top - menuH - 6) : b.bottom + 6, up });
   }, []);
 
-  useLayoutEffect(() => { if (open) place(); }, [open, place]);
+  useLayoutEffect(() => {
+    if (open) place();
+  }, [open, place]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -62,7 +83,12 @@ export default function CardActions({ children, style, label = "More actions", n
       if (btnRef.current?.contains(e.target) || menuRef.current?.contains(e.target)) return;
       setOpen(false);
     };
-    const onKey = (e) => { if (e.key === "Escape") { setOpen(false); btnRef.current?.focus(); } };
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        btnRef.current?.focus();
+      }
+    };
     const onMove = () => setOpen(false);
     document.addEventListener("mousedown", close);
     document.addEventListener("keydown", onKey);
@@ -82,12 +108,22 @@ export default function CardActions({ children, style, label = "More actions", n
     e.preventDefault();
     const btns = [...menuRef.current.querySelectorAll("button:not([disabled])")];
     const i = btns.indexOf(document.activeElement);
-    const next = e.key === "ArrowDown" ? (i + 1) % btns.length : (i - 1 + btns.length) % btns.length;
+    const next =
+      e.key === "ArrowDown" ? (i + 1) % btns.length : (i - 1 + btns.length) % btns.length;
     btns[next]?.focus();
   };
 
   return (
-    <div className={className} style={{ display: "flex", flexWrap: nowrap ? "nowrap" : "wrap", gap: nowrap ? 4 : "0.4rem", alignItems: "center", ...style }}>
+    <div
+      className={className}
+      style={{
+        display: "flex",
+        flexWrap: nowrap ? "nowrap" : "wrap",
+        gap: nowrap ? 4 : "0.4rem",
+        alignItems: "center",
+        ...style,
+      }}
+    >
       {primary}
       {rest.length > 0 && (
         <button
@@ -100,55 +136,101 @@ export default function CardActions({ children, style, label = "More actions", n
           aria-label={label}
           title={label}
           style={{
-            display: "grid", placeItems: "center", width: 32, height: 30, padding: 0,
-            flexShrink: 0, marginLeft: nowrap ? 0 : "auto",
-            borderRadius: 8, border: `1px solid ${colors.inputBorder}`,
-            background: open ? colors.inputBg : "#fff", color: colors.textSecondary,
-            cursor: "pointer", boxShadow: "none",
+            display: "grid",
+            placeItems: "center",
+            width: 32,
+            height: 30,
+            padding: 0,
+            flexShrink: 0,
+            marginLeft: nowrap ? 0 : "auto",
+            borderRadius: 8,
+            border: `1px solid ${colors.inputBorder}`,
+            background: open ? colors.inputBg : "#fff",
+            color: colors.textSecondary,
+            cursor: "pointer",
+            boxShadow: "none",
           }}
         >
           <MdMoreHoriz size={18} aria-hidden="true" />
         </button>
       )}
-      {open && createPortal(
-        <div
-          ref={menuRef}
-          role="menu"
-          aria-label={label}
-          onKeyDown={onMenuKey}
-          className={pos?.up ? "card-actions-menu card-actions-menu--up" : "card-actions-menu"}
-          style={{
-            position: "fixed", left: pos?.left ?? -9999, top: pos?.top ?? -9999, zIndex: 1200,
-            width: MENU_WIDTH, maxHeight: "60vh", overflowY: "auto",
-            background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10,
-            boxShadow: "0 12px 32px rgba(10,22,40,0.18)", padding: 4,
-          }}
-        >
-          {rest.map((c, i) => cloneElement(c, {
-            key: c.key ?? i,
-            role: "menuitem",
-            children: c.props["data-label"]
-              ? <>{c.props.children}<span>{c.props["data-label"]}</span></>
-              : c.props.children,
-            // Close first, then act: an action that opens a dialog must not
-            // leave the menu floating over it.
-            onClick: (e) => { setOpen(false); c.props.onClick?.(e); },
-            style: {
-              ...c.props.style,
-              display: "flex", alignItems: "center", gap: 8, width: "100%", height: "auto",
-              minHeight: 38, padding: "0.4rem 0.65rem", margin: 0,
-              background: "transparent", backgroundColor: "transparent",
-              border: "none", borderRadius: 7, boxShadow: "none",
-              justifyContent: "flex-start", textAlign: "left", fontSize: "0.82rem",
-            },
-            onMouseEnter: (e) => { e.currentTarget.style.backgroundColor = colors.inputBg; },
-            onMouseLeave: (e) => { e.currentTarget.style.backgroundColor = "transparent"; },
-            onFocus: (e) => { e.currentTarget.style.backgroundColor = colors.inputBg; },
-            onBlur: (e) => { e.currentTarget.style.backgroundColor = "transparent"; },
-          }))}
-        </div>,
-        document.body,
-      )}
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            aria-label={label}
+            onKeyDown={onMenuKey}
+            className={pos?.up ? "card-actions-menu card-actions-menu--up" : "card-actions-menu"}
+            style={{
+              position: "fixed",
+              left: pos?.left ?? -9999,
+              top: pos?.top ?? -9999,
+              zIndex: 1200,
+              width: MENU_WIDTH,
+              maxHeight: "60vh",
+              overflowY: "auto",
+              background: "#fff",
+              border: `1px solid ${colors.cardBorder}`,
+              borderRadius: 10,
+              boxShadow: "0 12px 32px rgba(10,22,40,0.18)",
+              padding: 4,
+            }}
+          >
+            {rest.map((c, i) =>
+              cloneElement(c, {
+                key: c.key ?? i,
+                role: "menuitem",
+                children: c.props["data-label"] ? (
+                  <>
+                    {c.props.children}
+                    <span>{c.props["data-label"]}</span>
+                  </>
+                ) : (
+                  c.props.children
+                ),
+                // Close first, then act: an action that opens a dialog must not
+                // leave the menu floating over it.
+                onClick: (e) => {
+                  setOpen(false);
+                  c.props.onClick?.(e);
+                },
+                style: {
+                  ...c.props.style,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  width: "100%",
+                  height: "auto",
+                  minHeight: 38,
+                  padding: "0.4rem 0.65rem",
+                  margin: 0,
+                  background: "transparent",
+                  backgroundColor: "transparent",
+                  border: "none",
+                  borderRadius: 7,
+                  boxShadow: "none",
+                  justifyContent: "flex-start",
+                  textAlign: "left",
+                  fontSize: "0.82rem",
+                },
+                onMouseEnter: (e) => {
+                  e.currentTarget.style.backgroundColor = colors.inputBg;
+                },
+                onMouseLeave: (e) => {
+                  e.currentTarget.style.backgroundColor = "transparent";
+                },
+                onFocus: (e) => {
+                  e.currentTarget.style.backgroundColor = colors.inputBg;
+                },
+                onBlur: (e) => {
+                  e.currentTarget.style.backgroundColor = "transparent";
+                },
+              }),
+            )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

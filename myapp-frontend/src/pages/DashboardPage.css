@@ -9,8 +9,12 @@
    hover lift, and proper focus states for the hero pickers. */
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes dashRise {
@@ -38,15 +42,31 @@
 }
 
 /* Stagger the hero KPI row (max 4 cards) */
-.dash-hero-grid .dash-kpi-card:nth-child(1) { animation-delay: 0.04s; }
-.dash-hero-grid .dash-kpi-card:nth-child(2) { animation-delay: 0.1s; }
-.dash-hero-grid .dash-kpi-card:nth-child(3) { animation-delay: 0.16s; }
-.dash-hero-grid .dash-kpi-card:nth-child(4) { animation-delay: 0.22s; }
+.dash-hero-grid .dash-kpi-card:nth-child(1) {
+  animation-delay: 0.04s;
+}
+.dash-hero-grid .dash-kpi-card:nth-child(2) {
+  animation-delay: 0.1s;
+}
+.dash-hero-grid .dash-kpi-card:nth-child(3) {
+  animation-delay: 0.16s;
+}
+.dash-hero-grid .dash-kpi-card:nth-child(4) {
+  animation-delay: 0.22s;
+}
 
-.dash-section-grid > .dash-card:nth-child(1) { animation-delay: 0.08s; }
-.dash-section-grid > .dash-card:nth-child(2) { animation-delay: 0.16s; }
-.dash-section-grid > .dash-card:nth-child(3) { animation-delay: 0.24s; }
-.dash-section-grid > .dash-card:nth-child(4) { animation-delay: 0.32s; }
+.dash-section-grid > .dash-card:nth-child(1) {
+  animation-delay: 0.08s;
+}
+.dash-section-grid > .dash-card:nth-child(2) {
+  animation-delay: 0.16s;
+}
+.dash-section-grid > .dash-card:nth-child(3) {
+  animation-delay: 0.24s;
+}
+.dash-section-grid > .dash-card:nth-child(4) {
+  animation-delay: 0.32s;
+}
 
 @media (hover: hover) {
   .dash-kpi-card:hover {
@@ -73,7 +93,10 @@
 
 /* Section-card "Open" ghost button */
 .dash-section-card__open {
-  transition: background-color 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    transform 0.25s ease;
 }
 
 .dash-section-card__open:hover {

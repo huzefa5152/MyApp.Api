@@ -33,31 +33,48 @@ export function getEditorConfig(container) {
           name: "Typography",
           open: false,
           properties: [
-            "font-family", "font-size", "font-weight", "letter-spacing",
-            "color", "line-height", "text-align", "text-decoration", "text-shadow",
+            "font-family",
+            "font-size",
+            "font-weight",
+            "letter-spacing",
+            "color",
+            "line-height",
+            "text-align",
+            "text-decoration",
+            "text-shadow",
           ],
         },
         {
           name: "Dimensions",
           open: false,
-          properties: [
-            "width", "height", "max-width", "min-height", "padding", "margin",
-          ],
+          properties: ["width", "height", "max-width", "min-height", "padding", "margin"],
         },
         {
           name: "Layout",
           open: false,
           properties: [
-            "display", "flex-direction", "justify-content", "align-items",
-            "gap", "position", "top", "right", "bottom", "left",
+            "display",
+            "flex-direction",
+            "justify-content",
+            "align-items",
+            "gap",
+            "position",
+            "top",
+            "right",
+            "bottom",
+            "left",
           ],
         },
         {
           name: "Decorations",
           open: false,
           properties: [
-            "background-color", "background-image", "border",
-            "border-radius", "box-shadow", "opacity",
+            "background-color",
+            "background-image",
+            "border",
+            "border-radius",
+            "box-shadow",
+            "opacity",
           ],
         },
       ],
@@ -72,7 +89,12 @@ export function registerCommands(editor, confirmFn) {
   editor.Commands.add("canvas-clear", {
     async run(ed) {
       const ok = confirmFn
-        ? await confirmFn({ title: "Clear Canvas?", message: "Clear the entire canvas? This cannot be undone.", variant: "danger", confirmText: "Clear" })
+        ? await confirmFn({
+            title: "Clear Canvas?",
+            message: "Clear the entire canvas? This cannot be undone.",
+            variant: "danger",
+            confirmText: "Clear",
+          })
         : confirm("Clear the entire canvas? This cannot be undone.");
       if (ok) {
         ed.DomComponents.clear();
@@ -162,7 +184,8 @@ export function registerCustomBlocks(editor) {
   bm.add("quote", {
     label: "Quote",
     category: "Basic",
-    content: '<blockquote style="border-left:3px solid #1f4e79;padding:8px 14px;margin:10px 0;font-style:italic;color:#333">Quote text here</blockquote>',
+    content:
+      '<blockquote style="border-left:3px solid #1f4e79;padding:8px 14px;margin:10px 0;font-style:italic;color:#333">Quote text here</blockquote>',
   });
 
   bm.add("spacer", {
@@ -215,7 +238,8 @@ export function registerCustomBlocks(editor) {
   bm.add("section", {
     label: "Section",
     category: "Layout",
-    content: '<div style="width:100%;padding:15px;border:1px dashed #ccc;min-height:60px;box-sizing:border-box">Section content</div>',
+    content:
+      '<div style="width:100%;padding:15px;border:1px dashed #ccc;min-height:60px;box-sizing:border-box">Section content</div>',
   });
 
   bm.add("table", {
@@ -401,13 +425,15 @@ export function registerCustomBlocks(editor) {
   bm.add("page-break", {
     label: "Page Break",
     category: "Invoice",
-    content: '<div style="page-break-after:always;border-bottom:2px dashed #ccc;margin:20px 0;padding:4px;text-align:center;font-size:9px;color:#999">— Page Break —</div>',
+    content:
+      '<div style="page-break-after:always;border-bottom:2px dashed #ccc;margin:20px 0;padding:4px;text-align:center;font-size:9px;color:#999">— Page Break —</div>',
   });
 
   bm.add("bordered-container", {
     label: "Bordered Box",
     category: "Invoice",
-    content: '<div style="border:1px solid #000;padding:12px;margin:10px 0;min-height:50px">Content here</div>',
+    content:
+      '<div style="border:1px solid #000;padding:12px;margin:10px 0;min-height:50px">Content here</div>',
   });
 
   bm.add("note-box", {

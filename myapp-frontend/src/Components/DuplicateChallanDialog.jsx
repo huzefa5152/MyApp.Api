@@ -43,19 +43,30 @@ export default function DuplicateChallanDialog({ open, challanNumber, onConfirm,
   };
 
   return (
-    <div data-admin-backdrop=""
+    <div
+      data-admin-backdrop=""
       style={{ ...formStyles.backdrop, zIndex: 1102, animation: "fadeIn 0.2s ease" }}
       // No backdrop-close — keeps the operator's intent unambiguous.
     >
-      <div data-admin-dialog=""
-        style={{ ...formStyles.modal, maxWidth: `${modalSizes.sm}px`, animation: "fadeIn 0.25s ease" }}
+      <div
+        data-admin-dialog=""
+        style={{
+          ...formStyles.modal,
+          maxWidth: `${modalSizes.sm}px`,
+          animation: "fadeIn 0.25s ease",
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", justifyContent: "center", paddingTop: 28 }}>
           <div
             style={{
-              width: 56, height: 56, borderRadius: "50%", background: "#ede7f6",
-              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 56,
+              height: 56,
+              borderRadius: "50%",
+              background: "#ede7f6",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
             <MdContentCopy size={28} color="#4527a0" />
@@ -63,12 +74,26 @@ export default function DuplicateChallanDialog({ open, challanNumber, onConfirm,
         </div>
 
         <div style={{ padding: "16px 28px 4px", textAlign: "center" }}>
-          <h3 style={{ margin: "0 0 8px", fontSize: "var(--ui-modal-title-size, 1.15rem)", fontWeight: 700, color: "var(--k-ink)" }}>
+          <h3
+            style={{
+              margin: "0 0 8px",
+              fontSize: "var(--ui-modal-title-size, 1.15rem)",
+              fontWeight: 700,
+              color: "var(--k-ink)",
+            }}
+          >
             Duplicate Challan #{challanNumber}?
           </h3>
-          <p style={{ margin: 0, fontSize: "var(--k-font)", color: "var(--k-muted)", lineHeight: 1.5 }}>
-            How many copies should be created? Each copy reuses the same challan
-            number and can be edited (PO, items) independently.
+          <p
+            style={{
+              margin: 0,
+              fontSize: "var(--k-font)",
+              color: "var(--k-muted)",
+              lineHeight: 1.5,
+            }}
+          >
+            How many copies should be created? Each copy reuses the same challan number and can be
+            edited (PO, items) independently.
           </p>
         </div>
 
@@ -79,7 +104,9 @@ export default function DuplicateChallanDialog({ open, challanNumber, onConfirm,
                 label="Decrease"
                 onClick={() => setCount((c) => clamp((+c || 1) - 1))}
                 style={S.stepBtn}
-              >−</IconButton>
+              >
+                −
+              </IconButton>
               <input
                 ref={inputRef}
                 type="number"
@@ -97,25 +124,34 @@ export default function DuplicateChallanDialog({ open, challanNumber, onConfirm,
                 label="Increase"
                 onClick={() => setCount((c) => clamp((+c || 1) + 1))}
                 style={S.stepBtn}
-              >+</IconButton>
+              >
+                +
+              </IconButton>
             </div>
           </div>
-          <div style={{ textAlign: "center", fontSize: "0.75rem", color: "var(--k-faint)", padding: "0 28px 4px" }}>
+          <div
+            style={{
+              textAlign: "center",
+              fontSize: "0.75rem",
+              color: "var(--k-faint)",
+              padding: "0 28px 4px",
+            }}
+          >
             Maximum 20 per request.
           </div>
 
-          <div style={{ display: "flex", gap: 10, padding: "16px 28px 24px", justifyContent: "center" }}>
-            <button data-admin-close=""
-              type="button"
-              onClick={onCancel}
-              style={S.cancelBtn}
-            >
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              padding: "16px 28px 24px",
+              justifyContent: "center",
+            }}
+          >
+            <button data-admin-close="" type="button" onClick={onCancel} style={S.cancelBtn}>
               Cancel
             </button>
-            <button
-              type="submit"
-              style={S.confirmBtn}
-            >
+            <button type="submit" style={S.confirmBtn}>
               {clamp(+count) === 1 ? "Create 1 copy" : `Create ${clamp(+count)} copies`}
             </button>
           </div>
@@ -127,18 +163,30 @@ export default function DuplicateChallanDialog({ open, challanNumber, onConfirm,
 
 const S = {
   stepBtn: {
-    border: "1px solid var(--k-line-strong)", background: "var(--k-surface)",
-    color: "var(--k-ink)", fontWeight: 700, fontSize: "1.1rem",
+    border: "1px solid var(--k-line-strong)",
+    background: "var(--k-surface)",
+    color: "var(--k-ink)",
+    fontWeight: 700,
+    fontSize: "1.1rem",
   },
   input: {
-    width: 84, fontSize: "1.1rem", fontWeight: 700, textAlign: "center", padding: "0 10px",
+    width: 84,
+    fontSize: "1.1rem",
+    fontWeight: 700,
+    textAlign: "center",
+    padding: "0 10px",
   },
   cancelBtn: {
-    ...formStyles.button, ...formStyles.cancel, flex: 1,
+    ...formStyles.button,
+    ...formStyles.cancel,
+    flex: 1,
   },
   // Purple keeps the duplicate action in the same colour family as the
   // DUPLICATE pill and button on the challan card.
   confirmBtn: {
-    ...formStyles.button, flex: 1, background: "#4527a0", color: "#fff",
+    ...formStyles.button,
+    flex: 1,
+    background: "#4527a0",
+    color: "#fff",
   },
 };

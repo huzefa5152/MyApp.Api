@@ -56,10 +56,8 @@ import LookupAutocomplete from "./LookupAutocomplete";
 // every keystroke isn't free, but UOM-less hint entries are useless
 // so it's the better trade-off.
 const hsHintCache = new Map();
-const hsHintCacheKey = (companyId, hsCode) =>
-  `${companyId}:${String(hsCode).trim().toLowerCase()}`;
-const isCacheable = (data) =>
-  Array.isArray(data?.uoms) && data.uoms.length > 0;
+const hsHintCacheKey = (companyId, hsCode) => `${companyId}:${String(hsCode).trim().toLowerCase()}`;
+const isCacheable = (data) => Array.isArray(data?.uoms) && data.uoms.length > 0;
 
 const SALE_TYPES = [
   "Goods at standard rate (default)",
@@ -95,7 +93,11 @@ export default function ItemTypeForm({
 }) {
   const isBillCategory = purpose === "bill";
   const isClassification = purpose === "classification";
-  const entityLabel = isBillCategory ? "bill category" : isClassification ? "FBR classification" : "item type";
+  const entityLabel = isBillCategory
+    ? "bill category"
+    : isClassification
+      ? "FBR classification"
+      : "item type";
   const mode = editItem ? "edit" : "create";
   const lockedSaleType = !!scenarioSaleType;
 
@@ -104,7 +106,7 @@ export default function ItemTypeForm({
   const [uom, setUom] = useState(editItem?.uom || "");
   const [fbrUOMId, setFbrUOMId] = useState(editItem?.fbrUOMId || null);
   const [saleType, setSaleType] = useState(
-    scenarioSaleType || editItem?.saleType || "Goods at standard rate (default)"
+    scenarioSaleType || editItem?.saleType || "Goods at standard rate (default)",
   );
   const [fbrDescription, setFbrDescription] = useState(editItem?.fbrDescription || "");
   const [isFavorite, setIsFavorite] = useState(editItem?.isFavorite ?? true);
@@ -202,12 +204,19 @@ export default function ItemTypeForm({
         const { data } = await getFbrHsUom(companyId, code, 3);
         if (!aliveRef.current || myVersion !== lookupSeqRef.current) return null;
         if (Array.isArray(data) && data.length > 0) {
-          const synthetic = { uoms: data, defaultUom: data[0], defaultSaleType: null, saleTypeOptions: [] };
+          const synthetic = {
+            uoms: data,
+            defaultUom: data[0],
+            defaultSaleType: null,
+            saleTypeOptions: [],
+          };
           hsHintCache.set(cacheKey, synthetic);
           setHsHints(synthetic);
           return synthetic;
         }
-      } catch { /* nothing */ }
+      } catch {
+        /* nothing */
+      }
       return null;
     } finally {
       if (aliveRef.current && !silent && myVersion === lookupSeqRef.current) {
@@ -260,15 +269,16 @@ export default function ItemTypeForm({
     }, 250);
   };
 
-  const saleTypeMismatch = lockedSaleType
-    && hsHints?.defaultSaleType
-    && hsHints.defaultSaleType !== scenarioSaleType;
+  const saleTypeMismatch =
+    lockedSaleType && hsHints?.defaultSaleType && hsHints.defaultSaleType !== scenarioSaleType;
 
   const submit = async (e) => {
     e.preventDefault();
     setError("");
     if (saving || hintLoading || !uom.trim()) {
-      setError(hintLoading ? "Wait for the unit lookup to finish." : "Choose a unit before saving.");
+      setError(
+        hintLoading ? "Wait for the unit lookup to finish." : "Choose a unit before saving.",
+      );
       return;
     }
     if (!name.trim()) {
@@ -292,7 +302,11 @@ export default function ItemTypeForm({
       };
       let saved;
       if (mode === "edit") {
-        const { data } = await updateItemType(editItem.id, { ...payload, id: editItem.id }, companyId);
+        const { data } = await updateItemType(
+          editItem.id,
+          { ...payload, id: editItem.id },
+          companyId,
+        );
         saved = data;
       } else {
         const { data } = await createItemType(payload, companyId);
@@ -314,22 +328,43 @@ export default function ItemTypeForm({
       : null;
   const blocked = saving || hintLoading || uomMissing;
   const submitLabel = saving
-    ? (mode === "edit" ? "Saving…" : "Creating…")
+    ? mode === "edit"
+      ? "Saving…"
+      : "Creating…"
     : hintLoading
       ? "Looking up UOM…"
-      : mode === "edit" ? "Update" : "Create";
+      : mode === "edit"
+        ? "Update"
+        : "Create";
 
   return (
     <div data-admin-backdrop="" style={{ ...formStyles.backdrop, zIndex: 1100 }}>
-      <div data-admin-dialog="" role="dialog" aria-modal="true" aria-label={`${mode === "edit" ? "Edit" : "New"} ${entityLabel}`}
-        onKeyDown={e => {
+      <div
+        data-admin-dialog=""
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${mode === "edit" ? "Edit" : "New"} ${entityLabel}`}
+        onKeyDown={(e) => {
           if (e.target.closest?.("[data-admin-popup]")) return;
-          if (e.key === "Escape") { e.stopPropagation(); if (!saving) onClose(); }
+          if (e.key === "Escape") {
+            e.stopPropagation();
+            if (!saving) onClose();
+          }
           if (e.key !== "Tab") return;
-          const nodes = [...e.currentTarget.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]')];
-          const first = nodes[0], last = nodes.at(-1);
-          if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
-          else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+          const nodes = [
+            ...e.currentTarget.querySelectorAll(
+              'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]',
+            ),
+          ];
+          const first = nodes[0],
+            last = nodes.at(-1);
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last?.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first?.focus();
+          }
         }}
         style={{
           ...formStyles.modal,
@@ -344,22 +379,38 @@ export default function ItemTypeForm({
             {mode === "edit" ? `Edit ${entityLabel}` : `New ${entityLabel}`}
             {scenarioCode && <span style={styles.scenarioPill}>{scenarioCode}</span>}
           </h5>
-          <button data-admin-close="" type="button" aria-label={`Close ${entityLabel}`} style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button
+            data-admin-close=""
+            type="button"
+            aria-label={`Close ${entityLabel}`}
+            style={formStyles.closeButton}
+            onClick={onClose}
+          >
+            &times;
+          </button>
         </div>
 
         <form onSubmit={submit}>
           <div data-admin-body="" style={formStyles.body}>
-            {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
+            {error && (
+              <div ref={errRef} style={styles.errorAlert}>
+                {error}
+              </div>
+            )}
 
             <p style={styles.intro}>
-              {isBillCategory ? "Used on bills and challans. Tax classifications are selected separately when preparing an FBR invoice." : "Save a reusable FBR classification and choose its default unit. Filing rows can use any unit FBR supports for this HS code."}{" "}
+              {isBillCategory
+                ? "Used on bills and challans. Tax classifications are selected separately when preparing an FBR invoice."
+                : "Save a reusable FBR classification and choose its default unit. Filing rows can use any unit FBR supports for this HS code."}{" "}
               {!isBillCategory && scenarioCode
                 ? `Sale Type is locked to ${scenarioCode}'s rule; UOM auto-fills from FBR's HS-UOM mapping.`
                 : ""}
             </p>
 
             <div data-admin-field="" style={formStyles.formGroup}>
-              <label htmlFor="catalog-item-name" style={styles.label}>Name *</label>
+              <label htmlFor="catalog-item-name" style={styles.label}>
+                Name *
+              </label>
               <input
                 style={styles.input}
                 id="catalog-item-name"
@@ -370,87 +421,101 @@ export default function ItemTypeForm({
               />
             </div>
 
-            {!isBillCategory && <div data-admin-field="" style={formStyles.formGroup}>
-              <label style={styles.label}>
-                HS Code{" "}
-                {hintLoading && <span style={styles.lockedTag}>looking up UOM…</span>}
-                {!hintLoading && mode === "create" && !isClassification && <span style={styles.optTag}>Optional</span>}
-              </label>
-              <HsCodeAutocomplete
-                companyId={companyId}
-                value={hsCode}
-                onChange={onHsChange}
-                // A new item picked from the catalog starts with its one-line name, not FBR's paragraph.
-                onSelect={(option) => { if (mode === "create" && !name.trim() && option.shortName) setName(option.shortName); onHsChange(option.hS_CODE); }}
-                saleType={scenarioSaleType || null}
-                style={{ ...styles.input, fontFamily: "monospace" }}
-                placeholder={
-                  scenarioSaleType
-                    ? `Click to browse — filtered to ${scenarioSaleType}`
-                    : "Click to browse FBR catalog, or type e.g. 'valve', 'mobile'"
-                }
-                excludeHsCodes={existingHsCodes}
-              />
-              <p style={styles.hint}>
-                Must be picked from FBR's official catalog. A free-typed code that
-                isn't in PRAL's master list will be rejected at save time.
-              </p>
+            {!isBillCategory && (
+              <div data-admin-field="" style={formStyles.formGroup}>
+                <label style={styles.label}>
+                  HS Code {hintLoading && <span style={styles.lockedTag}>looking up UOM…</span>}
+                  {!hintLoading && mode === "create" && !isClassification && (
+                    <span style={styles.optTag}>Optional</span>
+                  )}
+                </label>
+                <HsCodeAutocomplete
+                  companyId={companyId}
+                  value={hsCode}
+                  onChange={onHsChange}
+                  // A new item picked from the catalog starts with its one-line name, not FBR's paragraph.
+                  onSelect={(option) => {
+                    if (mode === "create" && !name.trim() && option.shortName)
+                      setName(option.shortName);
+                    onHsChange(option.hS_CODE);
+                  }}
+                  saleType={scenarioSaleType || null}
+                  style={{ ...styles.input, fontFamily: "monospace" }}
+                  placeholder={
+                    scenarioSaleType
+                      ? `Click to browse — filtered to ${scenarioSaleType}`
+                      : "Click to browse FBR catalog, or type e.g. 'valve', 'mobile'"
+                  }
+                  excludeHsCodes={existingHsCodes}
+                />
+                <p style={styles.hint}>
+                  Must be picked from FBR's official catalog. A free-typed code that isn't in PRAL's
+                  master list will be rejected at save time.
+                </p>
 
-              {showRichHints && hsHints && (
-                <div style={styles.hintBox}>
-                  <div style={styles.hintBoxTitle}>FBR suggestions for this HS code</div>
-                  {hsHints.defaultRate != null && (
-                    <div style={styles.hintRow}>
-                      <span style={styles.hintLabel}>Recommended rate:</span>
-                      <strong>{hsHints.defaultRate}%</strong>
-                      <span style={styles.hintLabel} title="Pre-fills the GST Rate when this item is added to a bill">
-                        (applied to bills automatically)
-                      </span>
-                    </div>
-                  )}
-                  {hsHints.defaultSaleType && (
-                    <div style={styles.hintRow}>
-                      <span style={styles.hintLabel}>Suggested sale type:</span>
-                      <em>{hsHints.defaultSaleType}</em>
-                    </div>
-                  )}
-                  {hsHints.uoms?.length > 0 ? (
-                    <div style={styles.hintRow}>
-                      <span style={styles.hintLabel}>Valid UOM(s):</span>
-                      <span>{hsHints.uoms.map((u) => u.description).join(", ")}</span>
-                    </div>
-                  ) : (
-                    <div style={styles.hintRow}>
-                      <span style={styles.hintLabel}>Valid UOM(s):</span>
-                      {/* Empty uoms means two very different things — branch on
+                {showRichHints && hsHints && (
+                  <div style={styles.hintBox}>
+                    <div style={styles.hintBoxTitle}>FBR suggestions for this HS code</div>
+                    {hsHints.defaultRate != null && (
+                      <div style={styles.hintRow}>
+                        <span style={styles.hintLabel}>Recommended rate:</span>
+                        <strong>{hsHints.defaultRate}%</strong>
+                        <span
+                          style={styles.hintLabel}
+                          title="Pre-fills the GST Rate when this item is added to a bill"
+                        >
+                          (applied to bills automatically)
+                        </span>
+                      </div>
+                    )}
+                    {hsHints.defaultSaleType && (
+                      <div style={styles.hintRow}>
+                        <span style={styles.hintLabel}>Suggested sale type:</span>
+                        <em>{hsHints.defaultSaleType}</em>
+                      </div>
+                    )}
+                    {hsHints.uoms?.length > 0 ? (
+                      <div style={styles.hintRow}>
+                        <span style={styles.hintLabel}>Valid UOM(s):</span>
+                        <span>{hsHints.uoms.map((u) => u.description).join(", ")}</span>
+                      </div>
+                    ) : (
+                      <div style={styles.hintRow}>
+                        <span style={styles.hintLabel}>Valid UOM(s):</span>
+                        {/* Empty uoms means two very different things — branch on
                           whether the HS_UOM lookup actually reached PRAL
                           (uomLookupRan, set by the backend when a token
                           exists). Many valid codes (e.g. 8482.1090) simply
                           carry no UOM restriction; that's not an error. */}
-                      <span><em>
-                        {hsHints.uomLookupRan
-                          ? "FBR places no UOM restriction on this HS code — any unit from your Units catalog is accepted."
-                          : "FBR's UOM list couldn't be loaded (this company has no FBR token set). Your selected UOM below is what gets used."}
-                      </em></span>
-                    </div>
-                  )}
-                  {hsHints.rateOptions?.length > 0 && (
-                    <div style={styles.hintRow}>
-                      <span style={styles.hintLabel}>All FBR rate options today:</span>
-                      <span>{hsHints.rateOptions.map((r) => `${r.rateValue}%`).join(" · ")}</span>
-                    </div>
-                  )}
-                  {hsHints.notes?.length > 0 && (
-                    <ul style={styles.hintNotes}>
-                      {hsHints.notes.map((n, i) => <li key={i}>{n}</li>)}
-                    </ul>
-                  )}
-                </div>
-              )}
-              {!showRichHints && hsHints?.notes?.length > 0 && (
-                <span style={styles.compactNote}>{hsHints.notes[0]}</span>
-              )}
-            </div>}
+                        <span>
+                          <em>
+                            {hsHints.uomLookupRan
+                              ? "FBR places no UOM restriction on this HS code — any unit from your Units catalog is accepted."
+                              : "FBR's UOM list couldn't be loaded (this company has no FBR token set). Your selected UOM below is what gets used."}
+                          </em>
+                        </span>
+                      </div>
+                    )}
+                    {hsHints.rateOptions?.length > 0 && (
+                      <div style={styles.hintRow}>
+                        <span style={styles.hintLabel}>All FBR rate options today:</span>
+                        <span>{hsHints.rateOptions.map((r) => `${r.rateValue}%`).join(" · ")}</span>
+                      </div>
+                    )}
+                    {hsHints.notes?.length > 0 && (
+                      <ul style={styles.hintNotes}>
+                        {hsHints.notes.map((n, i) => (
+                          <li key={i}>{n}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+                {!showRichHints && hsHints?.notes?.length > 0 && (
+                  <span style={styles.compactNote}>{hsHints.notes[0]}</span>
+                )}
+              </div>
+            )}
 
             <div data-admin-form-row="" style={styles.row}>
               <div style={{ flex: 1 }}>
@@ -458,56 +523,83 @@ export default function ItemTypeForm({
                   {isBillCategory ? "Usual unit" : "Default filing unit"} *
                 </label>
                 {hsHints?.uoms?.length > 0 ? (
-                  <select id="catalog-default-unit" aria-label="Default filing unit" style={styles.input}
-                    value={fbrUOMId || ""} disabled={hintLoading}
-                    onChange={e => {
-                      const picked = hsHints.uoms.find(u => String(u.uoM_ID) === e.target.value);
-                      setUom(picked?.description || ""); setFbrUOMId(picked?.uoM_ID || null);
-                    }}>
-                    <option value="">Choose a supported unit</option>
-                    {hsHints.uoms.map(u => <option key={u.uoM_ID} value={u.uoM_ID}>{u.description}</option>)}
-                  </select>
-                ) : (
-                  <LookupAutocomplete companyId={companyId} endpoint="/lookup/units"
-                    label="type to pick from your units" value={uom}
-                    onChange={val => { setUom(val); setFbrUOMId(null); }} inputClassName="" inputStyle={styles.input} />
-                )}
-                {!isBillCategory && <p style={styles.hint}>This is the default, not a restriction to one unit.</p>}
-              </div>
-              {!isBillCategory && <div style={{ flex: 1 }}>
-                <label style={styles.label}>
-                  Sale Type
-                  {lockedSaleType && (
-                    <span style={styles.lockedTag}>
-                      <MdLock size={10} /> {scenarioCode}
-                    </span>
-                  )}
-                </label>
-                {lockedSaleType ? (
-                  <input
-                    style={{ ...styles.input, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
-                    value={saleType}
-                    readOnly
-                    title={`Locked to ${scenarioCode}'s sale type. Cancel to use a different scenario.`}
-                  />
-                ) : (
                   <select
+                    id="catalog-default-unit"
+                    aria-label="Default filing unit"
                     style={styles.input}
-                    value={saleType}
-                    onChange={(e) => setSaleType(e.target.value)}
+                    value={fbrUOMId || ""}
+                    disabled={hintLoading}
+                    onChange={(e) => {
+                      const picked = hsHints.uoms.find((u) => String(u.uoM_ID) === e.target.value);
+                      setUom(picked?.description || "");
+                      setFbrUOMId(picked?.uoM_ID || null);
+                    }}
                   >
-                    {SALE_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    <option value="">Choose a supported unit</option>
+                    {hsHints.uoms.map((u) => (
+                      <option key={u.uoM_ID} value={u.uoM_ID}>
+                        {u.description}
+                      </option>
+                    ))}
                   </select>
+                ) : (
+                  <LookupAutocomplete
+                    companyId={companyId}
+                    endpoint="/lookup/units"
+                    label="type to pick from your units"
+                    value={uom}
+                    onChange={(val) => {
+                      setUom(val);
+                      setFbrUOMId(null);
+                    }}
+                    inputClassName=""
+                    inputStyle={styles.input}
+                  />
                 )}
-              </div>}
+                {!isBillCategory && (
+                  <p style={styles.hint}>This is the default, not a restriction to one unit.</p>
+                )}
+              </div>
+              {!isBillCategory && (
+                <div style={{ flex: 1 }}>
+                  <label style={styles.label}>
+                    Sale Type
+                    {lockedSaleType && (
+                      <span style={styles.lockedTag}>
+                        <MdLock size={10} /> {scenarioCode}
+                      </span>
+                    )}
+                  </label>
+                  {lockedSaleType ? (
+                    <input
+                      style={{ ...styles.input, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
+                      value={saleType}
+                      readOnly
+                      title={`Locked to ${scenarioCode}'s sale type. Cancel to use a different scenario.`}
+                    />
+                  ) : (
+                    <select
+                      style={styles.input}
+                      value={saleType}
+                      onChange={(e) => setSaleType(e.target.value)}
+                    >
+                      {SALE_TYPES.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
             </div>
 
             {saleTypeMismatch && (
               <div style={styles.warnAlert}>
                 <MdInfo size={14} /> Heads-up: FBR usually treats this HS code as
-                <b style={{ margin: "0 0.25rem" }}>{hsHints.defaultSaleType}</b>,
-                but you're saving it as <b>{saleType}</b> to match {scenarioCode}.
-                That's fine — the bill will validate as long as your scenario allows this HS code.
+                <b style={{ margin: "0 0.25rem" }}>{hsHints.defaultSaleType}</b>, but you're saving
+                it as <b>{saleType}</b> to match {scenarioCode}. That's fine — the bill will
+                validate as long as your scenario allows this HS code.
               </div>
             )}
 
@@ -526,7 +618,8 @@ export default function ItemTypeForm({
           </div>
 
           <div data-admin-footer="" style={formStyles.footer}>
-            <button data-admin-close=""
+            <button
+              data-admin-close=""
               type="button"
               style={{ ...formStyles.button, ...formStyles.cancel }}
               onClick={onClose}
@@ -569,18 +662,97 @@ const styles = {
   label: formStyles.label,
   hint: { fontSize: "0.72rem", color: colors.textSecondary, margin: "0.35rem 0 0" },
   input: { ...formStyles.input, boxSizing: "border-box" },
-  row: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(180px, 100%), 1fr))", gap: "0.75rem" },
+  row: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(180px, 100%), 1fr))",
+    gap: "0.75rem",
+  },
   field: { marginTop: "0.75rem" },
-  favoriteLabel: { display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", fontSize: "0.85rem", color: colors.textPrimary, fontWeight: 600 },
+  favoriteLabel: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    cursor: "pointer",
+    fontSize: "0.85rem",
+    color: colors.textPrimary,
+    fontWeight: 600,
+  },
   errorAlert: formStyles.error,
-  warnAlert: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.65rem 0.85rem", borderRadius: 8, backgroundColor: colors.warnLight, border: `1px solid ${colors.warn}30`, color: colors.warn, fontSize: "0.85rem", marginTop: "0.75rem" },
-  lockedTag: { marginLeft: "0.3rem", padding: "0.05rem 0.3rem", borderRadius: 4, backgroundColor: "#e0f2f1", color: "#00695c", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 2 },
-  optTag: { marginLeft: "0.3rem", padding: "0.05rem 0.3rem", borderRadius: 4, backgroundColor: "#f1f5f9", color: "#475569", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase" },
-  scenarioPill: { marginLeft: "0.5rem", padding: "0.1rem 0.4rem", borderRadius: 4, backgroundColor: "#e3f2fd", color: colors.blue, fontSize: "0.7rem", fontWeight: 800, fontFamily: "monospace" },
-  hintBox: { marginTop: "0.5rem", padding: "0.6rem 0.75rem", borderRadius: 8, backgroundColor: colors.hintBg, border: `1px solid ${colors.hintBorder}`, fontSize: "0.78rem" },
+  warnAlert: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    padding: "0.65rem 0.85rem",
+    borderRadius: 8,
+    backgroundColor: colors.warnLight,
+    border: `1px solid ${colors.warn}30`,
+    color: colors.warn,
+    fontSize: "0.85rem",
+    marginTop: "0.75rem",
+  },
+  lockedTag: {
+    marginLeft: "0.3rem",
+    padding: "0.05rem 0.3rem",
+    borderRadius: 4,
+    backgroundColor: "#e0f2f1",
+    color: "#00695c",
+    fontSize: "0.62rem",
+    fontWeight: 700,
+    letterSpacing: "0.03em",
+    textTransform: "uppercase",
+    whiteSpace: "nowrap",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 2,
+  },
+  optTag: {
+    marginLeft: "0.3rem",
+    padding: "0.05rem 0.3rem",
+    borderRadius: 4,
+    backgroundColor: "#f1f5f9",
+    color: "#475569",
+    fontSize: "0.62rem",
+    fontWeight: 700,
+    letterSpacing: "0.03em",
+    textTransform: "uppercase",
+  },
+  scenarioPill: {
+    marginLeft: "0.5rem",
+    padding: "0.1rem 0.4rem",
+    borderRadius: 4,
+    backgroundColor: "#e3f2fd",
+    color: colors.blue,
+    fontSize: "0.7rem",
+    fontWeight: 800,
+    fontFamily: "monospace",
+  },
+  hintBox: {
+    marginTop: "0.5rem",
+    padding: "0.6rem 0.75rem",
+    borderRadius: 8,
+    backgroundColor: colors.hintBg,
+    border: `1px solid ${colors.hintBorder}`,
+    fontSize: "0.78rem",
+  },
   hintBoxTitle: { fontWeight: 700, color: colors.blue, marginBottom: "0.25rem" },
-  hintRow: { display: "flex", flexWrap: "wrap", gap: "0.35rem", lineHeight: 1.4, marginBottom: "0.2rem" },
+  hintRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "0.35rem",
+    lineHeight: 1.4,
+    marginBottom: "0.2rem",
+  },
   hintLabel: { color: colors.textSecondary },
-  hintNotes: { margin: "0.35rem 0 0 1.1rem", padding: 0, fontSize: "0.75rem", color: colors.textPrimary },
-  compactNote: { display: "block", fontSize: "0.72rem", color: colors.textSecondary, marginTop: "0.2rem" },
+  hintNotes: {
+    margin: "0.35rem 0 0 1.1rem",
+    padding: 0,
+    fontSize: "0.75rem",
+    color: colors.textPrimary,
+  },
+  compactNote: {
+    display: "block",
+    fontSize: "0.72rem",
+    color: colors.textSecondary,
+    marginTop: "0.2rem",
+  },
 };

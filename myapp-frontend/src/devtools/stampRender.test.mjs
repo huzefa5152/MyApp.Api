@@ -29,7 +29,9 @@ function check(label, got, want) {
   if (JSON.stringify(got) === JSON.stringify(want)) {
     passed++;
   } else {
-    failures.push(`${label}\n     got:  ${JSON.stringify(got)}\n     want: ${JSON.stringify(want)}`);
+    failures.push(
+      `${label}\n     got:  ${JSON.stringify(got)}\n     want: ${JSON.stringify(want)}`,
+    );
   }
 }
 
@@ -42,7 +44,11 @@ const assigned = mergeTemplate(
   withStamp({ htmlContent: TPL, stampSlug: "sig" }, { sig: URL_ }).htmlContent,
   { items: [] },
 );
-check("assigned stamp survives withStamp -> mergeTemplate", assigned.includes(`src="${URL_}"`), true);
+check(
+  "assigned stamp survives withStamp -> mergeTemplate",
+  assigned.includes(`src="${URL_}"`),
+  true,
+);
 check("assigned leaves no raw token", assigned.includes("{{stamp}}"), false);
 
 const unassigned = mergeTemplate(withStamp({ htmlContent: TPL }, {}).htmlContent, { items: [] });
@@ -53,9 +59,11 @@ check("unassigned leaves no raw token", unassigned.includes("{{stamp}}"), false)
 // ── Idempotence: the net may run over already-resolved markup ──
 const once = materializeStamp(TPL, URL_);
 check("materialize is idempotent when resolved", materializeStamp(once, null), once);
-check("materialize is idempotent when stripped",
+check(
+  "materialize is idempotent when stripped",
   materializeStamp(materializeStamp(TPL, null), null),
-  '<html><body><div class="sig"></div></body></html>');
+  '<html><body><div class="sig"></div></body></html>',
+);
 
 // ── Mixed: one resolved slot, one not ──
 const mixed = `<div>${slotMarkup()}</div><div><span class="stamp-slot"><img src="/keep.png"></span></div>`;
@@ -71,7 +79,10 @@ const shipped = [
 ];
 for (const [name, tpl] of shipped) {
   check(`${name} is slotted`, detectStampState(tpl), "slotted");
-  const on = mergeTemplate(withStamp({ htmlContent: tpl, stampSlug: "sig" }, { sig: URL_ }).htmlContent, { items: [] });
+  const on = mergeTemplate(
+    withStamp({ htmlContent: tpl, stampSlug: "sig" }, { sig: URL_ }).htmlContent,
+    { items: [] },
+  );
   const off = mergeTemplate(withStamp({ htmlContent: tpl }, {}).htmlContent, { items: [] });
   check(`${name} renders the stamp when assigned`, on.includes(`src="${URL_}"`), true);
   check(`${name} renders nothing when unassigned`, off.includes("stamp-slot"), false);

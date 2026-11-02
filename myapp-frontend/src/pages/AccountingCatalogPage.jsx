@@ -3,9 +3,21 @@ import RecordsViewport from "../Components/RecordsViewport";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
-  MdAccountBalance, MdAccountBalanceWallet, MdArrowBack, MdAssessment, MdBusiness,
-  MdCheckCircle, MdChevronRight, MdInsights, MdLocalShipping, MdPeople,
-  MdPointOfSale, MdReceiptLong, MdRuleFolder, MdShoppingCart, MdWarning,
+  MdAccountBalance,
+  MdAccountBalanceWallet,
+  MdArrowBack,
+  MdAssessment,
+  MdBusiness,
+  MdCheckCircle,
+  MdChevronRight,
+  MdInsights,
+  MdLocalShipping,
+  MdPeople,
+  MdPointOfSale,
+  MdReceiptLong,
+  MdRuleFolder,
+  MdShoppingCart,
+  MdWarning,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -17,9 +29,7 @@ import AccountingCatalogShell from "../Components/AccountingCatalogShell";
 import "../Components/reports/ReportWorkspace.css";
 import { getReport, downloadReportExcel, saveBlob } from "../api/accountingCatalogApi";
 import { getTrialBalance, getAgedReceivables, getAgedPayables } from "../api/accountingApi";
-import {
-  REPORT_CATEGORIES, REPORTS_BY_ID, isAvailable,
-} from "../config/accountingCatalog";
+import { REPORT_CATEGORIES, REPORTS_BY_ID, isAvailable } from "../config/accountingCatalog";
 
 /**
  * Accounting → Reports.
@@ -63,22 +73,25 @@ export default function AccountingCatalogPage() {
 
   // One picker, two homes: beside the page title on the index, inside the
   // report's own bar once a report is open (so the rows get the height).
-  const companyPicker = companies.length > 1 ? (
-    <label className="rw-company">
-      <MdBusiness size={18} />
-      <select
-        value={selectedCompany?.id || ""}
-        onChange={(e) =>
-          setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))
-        }
-        aria-label="Company"
-      >
-        {companies.map((c) => (
-          <option key={c.id} value={c.id}>{c.brandName || c.name}</option>
-        ))}
-      </select>
-    </label>
-  ) : null;
+  const companyPicker =
+    companies.length > 1 ? (
+      <label className="rw-company">
+        <MdBusiness size={18} />
+        <select
+          value={selectedCompany?.id || ""}
+          onChange={(e) =>
+            setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))
+          }
+          aria-label="Company"
+        >
+          {companies.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.brandName || c.name}
+            </option>
+          ))}
+        </select>
+      </label>
+    ) : null;
   const reportHeaderExtra = backTo ? (
     <>
       <button type="button" className="rw-back-link" onClick={goBack}>
@@ -86,18 +99,24 @@ export default function AccountingCatalogPage() {
       </button>
       {companyPicker}
     </>
-  ) : companyPicker;
+  ) : (
+    companyPicker
+  );
 
   return (
     <div className="accounting-reports-page" style={st.page}>
       {(!reportId || !companyId) && (
         <div className="rw-head" style={{ marginBottom: 12 }}>
           <div className="rw-head__id">
-            <span className="rw-icon"><MdAssessment size={20} /></span>
+            <span className="rw-icon">
+              <MdAssessment size={20} />
+            </span>
             <div className="rw-head__text">
               <span className="rw-crumb">Accounting</span>
               <h2 className="rw-title">Accounting Reports</h2>
-              <div className="rw-meta">Every report the books can answer, grouped by the question it answers.</div>
+              <div className="rw-meta">
+                Every report the books can answer, grouped by the question it answers.
+              </div>
             </div>
           </div>
           <div className="rw-head__actions">{companyPicker}</div>
@@ -107,7 +126,12 @@ export default function AccountingCatalogPage() {
       {!companyId ? (
         <div style={st.state}>Select a company to view reports.</div>
       ) : !reportId ? (
-        <div><button type="button" style={st.linkBtn} onClick={() => navigate("/accounting/reports")}>Open financial summaries and tax control</button><ReportIndex onOpen={(id) => navigate(`/accounting/reports/catalog/${id}`)} /></div>
+        <div>
+          <button type="button" style={st.linkBtn} onClick={() => navigate("/accounting/reports")}>
+            Open financial summaries and tax control
+          </button>
+          <ReportIndex onOpen={(id) => navigate(`/accounting/reports/catalog/${id}`)} />
+        </div>
       ) : !report ? (
         <div style={st.state}>
           That report doesn’t exist.{" "}
@@ -129,7 +153,13 @@ export default function AccountingCatalogPage() {
         <div className="rw">
           <div className="rw-head">
             <div className="rw-head__id">
-              <button type="button" className="rw-back" onClick={() => navigate("/accounting/reports/catalog")} aria-label="All reports" title="All reports">
+              <button
+                type="button"
+                className="rw-back"
+                onClick={() => navigate("/accounting/reports/catalog")}
+                aria-label="All reports"
+                title="All reports"
+              >
                 <MdArrowBack size={18} />
               </button>
               <div className="rw-head__text">
@@ -173,79 +203,93 @@ const CATEGORY_ICONS = {
 
 function ReportIndex({ onOpen }) {
   const featured = useMemo(
-    () => REPORT_CATEGORIES.flatMap((c) => c.reports)
-      .filter((r) => r.featured && isAvailable(r)),
-    []
+    () => REPORT_CATEGORIES.flatMap((c) => c.reports).filter((r) => r.featured && isAvailable(r)),
+    [],
   );
 
   return (
-    <RecordsViewport label="Available accounting reports"><div>
-      {featured.length > 0 && (
-        <>
-          <SectionLabel>Start here</SectionLabel>
-          <div style={st.featuredGrid}>
-            {featured.map((r) => (
-              <button key={r.id} type="button" style={st.featuredCard} onClick={() => onOpen(r.id)}>
-                <span style={st.featuredTitle}>{r.title}</span>
-                <span style={st.featuredBlurb}>{r.blurb}</span>
-                <span style={st.featuredGo}>Open <MdChevronRight size={15} /></span>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+    <RecordsViewport label="Available accounting reports">
+      <div>
+        {featured.length > 0 && (
+          <>
+            <SectionLabel>Start here</SectionLabel>
+            <div style={st.featuredGrid}>
+              {featured.map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  style={st.featuredCard}
+                  onClick={() => onOpen(r.id)}
+                >
+                  <span style={st.featuredTitle}>{r.title}</span>
+                  <span style={st.featuredBlurb}>{r.blurb}</span>
+                  <span style={st.featuredGo}>
+                    Open <MdChevronRight size={15} />
+                  </span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
 
-      <SectionLabel>All reports</SectionLabel>
-      <div style={st.categoryGrid}>
-        {REPORT_CATEGORIES.map((cat) => {
-          const Icon = CATEGORY_ICONS[cat.id] || MdAssessment;
-          const live = cat.reports.filter(isAvailable).length;
-          return (
-            <section key={cat.id} style={st.categoryCard}>
-              <header style={st.categoryHead}>
-                <span style={st.categoryIcon}><Icon size={19} color="#fff" /></span>
-                <div style={{ minWidth: 0 }}>
-                  <h3 style={st.categoryTitle}>{cat.title}</h3>
-                  <p style={st.categoryBlurb}>{cat.blurb}</p>
-                </div>
-                <span style={st.categoryCount}>
-                  {live}/{cat.reports.length}
-                </span>
-              </header>
+        <SectionLabel>All reports</SectionLabel>
+        <div style={st.categoryGrid}>
+          {REPORT_CATEGORIES.map((cat) => {
+            const Icon = CATEGORY_ICONS[cat.id] || MdAssessment;
+            const live = cat.reports.filter(isAvailable).length;
+            return (
+              <section key={cat.id} style={st.categoryCard}>
+                <header style={st.categoryHead}>
+                  <span style={st.categoryIcon}>
+                    <Icon size={19} color="#fff" />
+                  </span>
+                  <div style={{ minWidth: 0 }}>
+                    <h3 style={st.categoryTitle}>{cat.title}</h3>
+                    <p style={st.categoryBlurb}>{cat.blurb}</p>
+                  </div>
+                  <span style={st.categoryCount}>
+                    {live}/{cat.reports.length}
+                  </span>
+                </header>
 
-              <ul style={st.reportList}>
-                {cat.reports.map((r) => {
-                  const available = isAvailable(r);
-                  return (
-                    <li key={r.id}>
-                      <button
-                        type="button"
-                        style={{ ...st.reportRow, ...(available ? {} : st.reportRowMuted) }}
-                        onClick={available ? () => onOpen(r.id) : undefined}
-                        disabled={!available}
-                        title={available ? r.blurb : r.blockedReason || "Not built yet"}
-                      >
-                        <span style={{ minWidth: 0, textAlign: "left" }}>
-                          <span style={st.reportName}>{r.title}</span>
-                          <span style={st.reportBlurb}>{r.blurb}</span>
-                        </span>
-                        {available ? (
-                          <MdChevronRight size={18} color={colors.textSecondary} style={{ flexShrink: 0 }} />
-                        ) : (
-                          <span style={r.status === "blocked" ? st.badgeBlocked : st.badgeSoon}>
-                            {r.status === "blocked" ? "Blocked" : "Soon"}
+                <ul style={st.reportList}>
+                  {cat.reports.map((r) => {
+                    const available = isAvailable(r);
+                    return (
+                      <li key={r.id}>
+                        <button
+                          type="button"
+                          style={{ ...st.reportRow, ...(available ? {} : st.reportRowMuted) }}
+                          onClick={available ? () => onOpen(r.id) : undefined}
+                          disabled={!available}
+                          title={available ? r.blurb : r.blockedReason || "Not built yet"}
+                        >
+                          <span style={{ minWidth: 0, textAlign: "left" }}>
+                            <span style={st.reportName}>{r.title}</span>
+                            <span style={st.reportBlurb}>{r.blurb}</span>
                           </span>
-                        )}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          );
-        })}
+                          {available ? (
+                            <MdChevronRight
+                              size={18}
+                              color={colors.textSecondary}
+                              style={{ flexShrink: 0 }}
+                            />
+                          ) : (
+                            <span style={r.status === "blocked" ? st.badgeBlocked : st.badgeSoon}>
+                              {r.status === "blocked" ? "Blocked" : "Soon"}
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            );
+          })}
+        </div>
       </div>
-    </div></RecordsViewport>
+    </RecordsViewport>
   );
 }
 
@@ -266,7 +310,9 @@ function NotBuiltYet({ report, onBack }) {
       ) : (
         <p style={{ margin: "0 0 1rem" }}>This report isn’t built yet.</p>
       )}
-      <button style={st.linkBtn} onClick={onBack}>Back to all reports</button>
+      <button style={st.linkBtn} onClick={onBack}>
+        Back to all reports
+      </button>
     </div>
   );
 }
@@ -285,31 +331,37 @@ function GenericReport({ companyId, report, canExport, onBack, onNavigate, heade
   // or dashboard card can arrive pre-filtered.
   const filters = useMemo(() => {
     const f = {};
-    searchParams.forEach((v, k) => { f[k] = NUMERIC_KEYS.has(k) ? parseInt(v, 10) : v; });
+    searchParams.forEach((v, k) => {
+      f[k] = NUMERIC_KEYS.has(k) ? parseInt(v, 10) : v;
+    });
     if (!f.period) f.period = report.defaultPeriod || "thisMonth";
     if (!f.page) f.page = 1;
     return f;
   }, [searchParams, report.defaultPeriod]);
 
-  const applyFilters = useCallback((next) => {
-    const params = {};
-    Object.entries(next).forEach(([k, v]) => {
-      if (v === null || v === undefined || v === "" || k === "pageSize") return;
-      params[k] = String(v);
-    });
-    setSearchParams(params, { replace: true });
-  }, [setSearchParams]);
+  const applyFilters = useCallback(
+    (next) => {
+      const params = {};
+      Object.entries(next).forEach(([k, v]) => {
+        if (v === null || v === undefined || v === "" || k === "pageSize") return;
+        params[k] = String(v);
+      });
+      setSearchParams(params, { replace: true });
+    },
+    [setSearchParams],
+  );
 
   const requestParams = useMemo(
     () => ({ ...filters, ...(report.query || {}), ...(pageSize ? { pageSize } : {}) }),
-    [filters, report.query, pageSize]
+    [filters, report.query, pageSize],
   );
 
   useEffect(() => {
     if (!companyId) return;
     let alive = true;
     (async () => {
-      setLoading(true); setError("");
+      setLoading(true);
+      setError("");
       try {
         const { data } = await getReport(companyId, report.path, requestParams);
         if (alive) setData(data);
@@ -317,20 +369,25 @@ function GenericReport({ companyId, report, canExport, onBack, onNavigate, heade
         if (alive) {
           setData(null);
           setError(
-            err?.response?.data?.message
-            || "Could not load this report. Check the filters and try again."
+            err?.response?.data?.message ||
+              "Could not load this report. Check the filters and try again.",
           );
         }
       } finally {
         if (alive) setLoading(false);
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [companyId, report.path, requestParams]);
 
   const exportExcel = async (presentation = {}) => {
     try {
-      const res = await downloadReportExcel(companyId, report.exportId || report.id, { ...requestParams, ...presentation });
+      const res = await downloadReportExcel(companyId, report.exportId || report.id, {
+        ...requestParams,
+        ...presentation,
+      });
       saveBlob(res, `${report.title}.xlsx`);
     } catch {
       setError("Could not build the Excel file.");
@@ -338,13 +395,22 @@ function GenericReport({ companyId, report, canExport, onBack, onNavigate, heade
   };
 
   const loadPrintReport = async () => {
-    const { data: first } = await getReport(companyId, report.path, { ...requestParams, page: 1, pageSize: 200 });
+    const { data: first } = await getReport(companyId, report.path, {
+      ...requestParams,
+      page: 1,
+      pageSize: 200,
+    });
     const rows = [...(first.rows || [])];
     const size = first.pageSize || rows.length;
     if (first.totalCount > rows.length && !size) throw new Error("Empty report page");
     for (let page = 2; rows.length < first.totalCount; page++) {
-      const { data: next } = await getReport(companyId, report.path, { ...requestParams, page, pageSize: size });
-      if (!next.rows?.length || next.totalCount !== first.totalCount) throw new Error("Report changed during export");
+      const { data: next } = await getReport(companyId, report.path, {
+        ...requestParams,
+        page,
+        pageSize: size,
+      });
+      if (!next.rows?.length || next.totalCount !== first.totalCount)
+        throw new Error("Report changed during export");
       rows.push(...next.rows);
     }
     return { ...first, rows, page: 1, pageSize: rows.length };
@@ -362,7 +428,7 @@ function GenericReport({ companyId, report, canExport, onBack, onNavigate, heade
     const qs = new URLSearchParams(
       Object.entries(carried)
         .filter(([, v]) => v !== null && v !== undefined && v !== "")
-        .map(([k, v]) => [k, String(v)])
+        .map(([k, v]) => [k, String(v)]),
     );
     onNavigate(`/accounting/reports/catalog/${target}?${qs}`);
   };
@@ -377,21 +443,28 @@ function GenericReport({ companyId, report, canExport, onBack, onNavigate, heade
     <div className="rw">
       <AccountingCatalogShell
         headerExtra={headerExtra}
-        toolbar={<ListFilters><AccountingCatalogFilterBar
-          companyId={companyId}
-          filters={report.filters || []}
-          value={filters}
-          onApply={applyFilters}
-          loading={loading}
-          accountKind={report.accountKind}
-        /></ListFilters>}
+        toolbar={
+          <ListFilters>
+            <AccountingCatalogFilterBar
+              companyId={companyId}
+              filters={report.filters || []}
+              value={filters}
+              onApply={applyFilters}
+              loading={loading}
+              accountKind={report.accountKind}
+            />
+          </ListFilters>
+        }
         report={data}
         loading={loading}
         error={error}
         categoryTitle={report.categoryTitle}
         onBack={onBack}
         onPage={(p) => applyFilters({ ...filters, page: p })}
-        onPageSize={(size) => { setPageSize(size); applyFilters({ ...filters, page: 1 }); }}
+        onPageSize={(size) => {
+          setPageSize(size);
+          applyFilters({ ...filters, page: 1 });
+        }}
         pageSize={pageSize}
         canExport={canExport}
         onExportExcel={exportExcel}
@@ -407,8 +480,13 @@ function GenericReport({ companyId, report, canExport, onBack, onNavigate, heade
 }
 
 const NUMERIC_KEYS = new Set([
-  "accountId", "accountGroupId", "paymentAccountId",
-  "payeeId", "clientId", "supplierId", "page",
+  "accountId",
+  "accountGroupId",
+  "paymentAccountId",
+  "payeeId",
+  "clientId",
+  "supplierId",
+  "page",
 ]);
 
 /**
@@ -424,11 +502,16 @@ function documentRoute(row) {
       return row?.direction === "Receipt" || String(row?.documentNo || "").startsWith("RCP")
         ? `/receipts?highlight=${id}`
         : `/payments?highlight=${id}`;
-    case "PurchaseBill": return `/purchase-bills?highlight=${id}`;
-    case "Invoice": return `/bills?highlight=${id}`;
-    case "ManualJournal": return `/journal-entries?highlight=${id}`;
-    case "AccountTransfer": return `/transfers?highlight=${id}`;
-    default: return null;
+    case "PurchaseBill":
+      return `/purchase-bills?highlight=${id}`;
+    case "Invoice":
+      return `/bills?highlight=${id}`;
+    case "ManualJournal":
+      return `/journal-entries?highlight=${id}`;
+    case "AccountTransfer":
+      return `/transfers?highlight=${id}`;
+    default:
+      return null;
   }
 }
 
@@ -442,20 +525,32 @@ function LegacyReport({ companyId, kind, title, categoryTitle, onBack, companyNa
     <div className="rw">
       <header className="rw-head">
         <div className="rw-head__id">
-          <button type="button" className="rw-back" onClick={onBack} aria-label="All reports" title="All reports">
+          <button
+            type="button"
+            className="rw-back"
+            onClick={onBack}
+            aria-label="All reports"
+            title="All reports"
+          >
             <MdArrowBack size={18} />
           </button>
           <div className="rw-head__text">
             <span className="rw-crumb">{categoryTitle}</span>
             <h2 className="rw-title">{title}</h2>
-            {companyName && <div className="rw-meta"><strong>{companyName}</strong></div>}
+            {companyName && (
+              <div className="rw-meta">
+                <strong>{companyName}</strong>
+              </div>
+            )}
           </div>
         </div>
         <div className="rw-head__actions">{headerExtra}</div>
       </header>
-      {kind === "trial-balance"
-        ? <TrialBalanceReport companyId={companyId} />
-        : <AgingReport companyId={companyId} kind={kind} />}
+      {kind === "trial-balance" ? (
+        <TrialBalanceReport companyId={companyId} />
+      ) : (
+        <AgingReport companyId={companyId} kind={kind} />
+      )}
     </div>
   );
 }
@@ -470,7 +565,8 @@ function TrialBalanceReport({ companyId }) {
   const narrow = useIsNarrow(820);
 
   const load = useCallback(async () => {
-    setLoading(true); setError("");
+    setLoading(true);
+    setError("");
     try {
       const params = {};
       if (applied.from) params.from = applied.from;
@@ -480,10 +576,14 @@ function TrialBalanceReport({ companyId }) {
     } catch {
       setData(null);
       setError("Could not load the trial balance.");
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }, [companyId, applied]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const diff = Number(data?.totalDebit || 0) - Number(data?.totalCredit || 0);
   const balanced = Math.abs(diff) < 0.005;
@@ -493,91 +593,130 @@ function TrialBalanceReport({ companyId }) {
       <div className="rw-filters" style={st.simpleFilterBar}>
         <label style={st.field}>
           <span style={st.fieldLabel}>From</span>
-          <input type="date" style={st.dateInput} value={from} onChange={(e) => setFrom(e.target.value)} />
+          <input
+            type="date"
+            style={st.dateInput}
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+          />
         </label>
         <label style={st.field}>
           <span style={st.fieldLabel}>To</span>
-          <input type="date" style={st.dateInput} value={to} onChange={(e) => setTo(e.target.value)} />
+          <input
+            type="date"
+            style={st.dateInput}
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+          />
         </label>
-        <button style={st.applyBtn} onClick={() => setApplied({ from, to })} disabled={loading}>Apply</button>
-        {data && (balanced ? (
-          <span style={st.okChip}><MdCheckCircle size={16} /> Debits = Credits</span>
-        ) : (
-          <span style={st.badChip}><MdWarning size={16} /> Out of balance by Rs {money(Math.abs(diff))}</span>
-        ))}
+        <button style={st.applyBtn} onClick={() => setApplied({ from, to })} disabled={loading}>
+          Apply
+        </button>
+        {data &&
+          (balanced ? (
+            <span style={st.okChip}>
+              <MdCheckCircle size={16} /> Debits = Credits
+            </span>
+          ) : (
+            <span style={st.badChip}>
+              <MdWarning size={16} /> Out of balance by Rs {money(Math.abs(diff))}
+            </span>
+          ))}
       </div>
 
       {data && (
         <div className="rw-kpis">
-          <div className="rw-kpi"><span className="rw-kpi__label">Opening</span><span className="rw-kpi__value">{money(data.totalOpening)}</span></div>
-          <div className="rw-kpi"><span className="rw-kpi__label">Debits</span><span className="rw-kpi__value">{money(data.totalDebit)}</span></div>
-          <div className="rw-kpi"><span className="rw-kpi__label">Credits</span><span className="rw-kpi__value">{money(data.totalCredit)}</span></div>
-          <div className="rw-kpi rw-kpi--lead"><span className="rw-kpi__label">Closing</span><span className="rw-kpi__value">{money(data.totalClosing)}</span></div>
+          <div className="rw-kpi">
+            <span className="rw-kpi__label">Opening</span>
+            <span className="rw-kpi__value">{money(data.totalOpening)}</span>
+          </div>
+          <div className="rw-kpi">
+            <span className="rw-kpi__label">Debits</span>
+            <span className="rw-kpi__value">{money(data.totalDebit)}</span>
+          </div>
+          <div className="rw-kpi">
+            <span className="rw-kpi__label">Credits</span>
+            <span className="rw-kpi__value">{money(data.totalCredit)}</span>
+          </div>
+          <div className="rw-kpi rw-kpi--lead">
+            <span className="rw-kpi__label">Closing</span>
+            <span className="rw-kpi__value">{money(data.totalClosing)}</span>
+          </div>
         </div>
       )}
-      <RecordsViewport label="Financial summary records" enabled={!narrow}>{loading ? <div className="rw-state" role="status">Loading…</div>
-        : error ? <div className="rw-state rw-state--error">{error}</div>
-        : !data || (data.rows || []).length === 0
-          ? <div className="rw-state">No account activity {applied.from || applied.to ? "in this period" : "yet"}.</div>
-          : narrow ? (
-            <div className="rw-cards">
-              {data.rows.map((r) => (
-                <div key={r.accountId} className="rw-card">
-                  <div className="rw-card__top">
-                    <span className="rw-card__lead">{r.name}</span>
-                    <span style={st.miniAmount}>{money(r.closing)}</span>
-                  </div>
-                  <div className="rw-card__meta" style={{ marginTop: 6 }}>
-                    <Meta label="Code" value={r.code || "—"} />
-                    <Meta label="Type" value={r.accountType} />
-                    <Meta label="Opening" value={money(r.opening)} />
-                    <Meta label="Debit" value={money(r.debit)} />
-                    <Meta label="Credit" value={money(r.credit)} />
-                  </div>
+      <RecordsViewport label="Financial summary records" enabled={!narrow}>
+        {loading ? (
+          <div className="rw-state" role="status">
+            Loading…
+          </div>
+        ) : error ? (
+          <div className="rw-state rw-state--error">{error}</div>
+        ) : !data || (data.rows || []).length === 0 ? (
+          <div className="rw-state">
+            No account activity {applied.from || applied.to ? "in this period" : "yet"}.
+          </div>
+        ) : narrow ? (
+          <div className="rw-cards">
+            {data.rows.map((r) => (
+              <div key={r.accountId} className="rw-card">
+                <div className="rw-card__top">
+                  <span className="rw-card__lead">{r.name}</span>
+                  <span style={st.miniAmount}>{money(r.closing)}</span>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div data-admin-table-region="" className="rw-table-wrap">
-              <table className="rw-table">
-                <thead>
-                  <tr>
-                    <th>Code</th>
-                    <th>Account</th>
-                    <th>Type</th>
-                    <th className="rw-num">Opening</th>
-                    <th className="rw-num">Debit</th>
-                    <th className="rw-num">Credit</th>
-                    <th className="rw-num">Closing</th>
+                <div className="rw-card__meta" style={{ marginTop: 6 }}>
+                  <Meta label="Code" value={r.code || "—"} />
+                  <Meta label="Type" value={r.accountType} />
+                  <Meta label="Opening" value={money(r.opening)} />
+                  <Meta label="Debit" value={money(r.debit)} />
+                  <Meta label="Credit" value={money(r.credit)} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div data-admin-table-region="" className="rw-table-wrap">
+            <table className="rw-table">
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Account</th>
+                  <th>Type</th>
+                  <th className="rw-num">Opening</th>
+                  <th className="rw-num">Debit</th>
+                  <th className="rw-num">Credit</th>
+                  <th className="rw-num">Closing</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.rows.map((r) => (
+                  <tr key={r.accountId}>
+                    <td className="rw-code">{r.code || ""}</td>
+                    <td className="rw-text rw-strong">
+                      <span className="rw-clamp">{r.name}</span>
+                    </td>
+                    <td className="rw-muted rw-nowrap">{r.accountType}</td>
+                    <td className="rw-num">{money(r.opening)}</td>
+                    <td className="rw-num">{money(r.debit)}</td>
+                    <td className="rw-num">{money(r.credit)}</td>
+                    <td className="rw-num rw-strong">{money(r.closing)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {data.rows.map((r) => (
-                    <tr key={r.accountId}>
-                      <td className="rw-code">{r.code || ""}</td>
-                      <td className="rw-text rw-strong"><span className="rw-clamp">{r.name}</span></td>
-                      <td className="rw-muted rw-nowrap">{r.accountType}</td>
-                      <td className="rw-num">{money(r.opening)}</td>
-                      <td className="rw-num">{money(r.debit)}</td>
-                      <td className="rw-num">{money(r.credit)}</td>
-                      <td className="rw-num rw-strong">{money(r.closing)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td />
-                    <td>Total</td>
-                    <td />
-                    <td className="rw-num">{money(data.totalOpening)}</td>
-                    <td className="rw-num">{money(data.totalDebit)}</td>
-                    <td className="rw-num">{money(data.totalCredit)}</td>
-                    <td className="rw-num">{money(data.totalClosing)}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )}</RecordsViewport>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td />
+                  <td>Total</td>
+                  <td />
+                  <td className="rw-num">{money(data.totalOpening)}</td>
+                  <td className="rw-num">{money(data.totalDebit)}</td>
+                  <td className="rw-num">{money(data.totalCredit)}</td>
+                  <td className="rw-num">{money(data.totalClosing)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </RecordsViewport>
     </div>
   );
 }
@@ -592,19 +731,32 @@ function AgingReport({ companyId, kind }) {
   useEffect(() => {
     let alive = true;
     (async () => {
-      setLoading(true); setError("");
+      setLoading(true);
+      setError("");
       try {
         const fn = isReceivables ? getAgedReceivables : getAgedPayables;
         const { data } = await fn(companyId);
         if (alive) setData(data);
       } catch {
-        if (alive) { setData(null); setError(`Could not load aged ${kind}.`); }
-      } finally { if (alive) setLoading(false); }
+        if (alive) {
+          setData(null);
+          setError(`Could not load aged ${kind}.`);
+        }
+      } finally {
+        if (alive) setLoading(false);
+      }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [companyId, kind, isReceivables]);
 
-  if (loading) return <div className="rw-state" role="status">Loading…</div>;
+  if (loading)
+    return (
+      <div className="rw-state" role="status">
+        Loading…
+      </div>
+    );
   if (error) return <div className="rw-state rw-state--error">{error}</div>;
   if (!data) return null;
 
@@ -612,7 +764,11 @@ function AgingReport({ companyId, kind }) {
   const bucket = (v, tone) => {
     const has = Number(v || 0) > 0;
     const tint = !has ? {} : tone === "amber" ? st.cellAmber : st.cellRed;
-    return <td className="rw-num" style={tint}>{money(v)}</td>;
+    return (
+      <td className="rw-num" style={tint}>
+        {money(v)}
+      </td>
+    );
   };
 
   return (
@@ -625,80 +781,103 @@ function AgingReport({ companyId, kind }) {
         <Tile label="61–90 days" value={data.days61To90} />
         <Tile label="Over 90 days" value={data.over90} danger />
       </div>
-      <div className="rw-section-head"><span>As of {new Date(data.asOf).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span><span>{rows.length} {isReceivables ? "customer" : "supplier"}{rows.length === 1 ? "" : "s"}</span></div>
+      <div className="rw-section-head">
+        <span>
+          As of{" "}
+          {new Date(data.asOf).toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          })}
+        </span>
+        <span>
+          {rows.length} {isReceivables ? "customer" : "supplier"}
+          {rows.length === 1 ? "" : "s"}
+        </span>
+      </div>
 
-      <RecordsViewport label="Party outstanding records" enabled={!narrow}>{rows.length === 0 ? (
-        <div className="rw-state">No outstanding {isReceivables ? "invoices" : "bills"}. All settled.</div>
-      ) : narrow ? (
-        <div className="rw-cards">
-          {rows.map((r) => (
-            <div key={r.partyId} className="rw-card">
-              <div className="rw-card__top">
-                <span className="rw-card__lead">{r.name}</span>
-                <span style={st.miniAmount}>{money(r.total)}</span>
+      <RecordsViewport label="Party outstanding records" enabled={!narrow}>
+        {rows.length === 0 ? (
+          <div className="rw-state">
+            No outstanding {isReceivables ? "invoices" : "bills"}. All settled.
+          </div>
+        ) : narrow ? (
+          <div className="rw-cards">
+            {rows.map((r) => (
+              <div key={r.partyId} className="rw-card">
+                <div className="rw-card__top">
+                  <span className="rw-card__lead">{r.name}</span>
+                  <span style={st.miniAmount}>{money(r.total)}</span>
+                </div>
+                <div className="rw-card__meta" style={{ marginTop: 6 }}>
+                  <Meta label="Open docs" value={r.openDocuments} />
+                  <Meta label="Current" value={money(r.current)} />
+                  <Meta label="1–30" value={money(r.days1To30)} />
+                  <Meta label="31–60" value={money(r.days31To60)} />
+                  <Meta label="61–90" value={money(r.days61To90)} />
+                  <Meta label="90+" value={money(r.over90)} />
+                </div>
               </div>
-              <div className="rw-card__meta" style={{ marginTop: 6 }}>
-                <Meta label="Open docs" value={r.openDocuments} />
-                <Meta label="Current" value={money(r.current)} />
-                <Meta label="1–30" value={money(r.days1To30)} />
-                <Meta label="31–60" value={money(r.days31To60)} />
-                <Meta label="61–90" value={money(r.days61To90)} />
-                <Meta label="90+" value={money(r.over90)} />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div data-admin-table-region="" className="rw-table-wrap">
-          <table className="rw-table">
-            <thead>
-              <tr>
-                <th>{isReceivables ? "Customer" : "Supplier"}</th>
-                <th className="rw-num">Open docs</th>
-                <th className="rw-num">Current</th>
-                <th className="rw-num">1–30</th>
-                <th className="rw-num">31–60</th>
-                <th className="rw-num">61–90</th>
-                <th className="rw-num">90+</th>
-                <th className="rw-num">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.partyId}>
-                  <td className="rw-text rw-strong"><span className="rw-clamp">{r.name}</span></td>
-                  <td className="rw-num">{r.openDocuments}</td>
-                  <td className="rw-num">{money(r.current)}</td>
-                  <td className="rw-num">{money(r.days1To30)}</td>
-                  <td className="rw-num">{money(r.days31To60)}</td>
-                  {bucket(r.days61To90, "amber")}
-                  {bucket(r.over90, "red")}
-                  <td className="rw-num rw-strong">{money(r.total)}</td>
+            ))}
+          </div>
+        ) : (
+          <div data-admin-table-region="" className="rw-table-wrap">
+            <table className="rw-table">
+              <thead>
+                <tr>
+                  <th>{isReceivables ? "Customer" : "Supplier"}</th>
+                  <th className="rw-num">Open docs</th>
+                  <th className="rw-num">Current</th>
+                  <th className="rw-num">1–30</th>
+                  <th className="rw-num">31–60</th>
+                  <th className="rw-num">61–90</th>
+                  <th className="rw-num">90+</th>
+                  <th className="rw-num">Total</th>
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td>Total</td>
-                <td className="rw-num">{rows.reduce((s, r) => s + Number(r.openDocuments || 0), 0)}</td>
-                <td className="rw-num">{money(data.current)}</td>
-                <td className="rw-num">{money(data.days1To30)}</td>
-                <td className="rw-num">{money(data.days31To60)}</td>
-                {bucket(data.days61To90, "amber")}
-                {bucket(data.over90, "red")}
-                <td className="rw-num">{money(data.total)}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}</RecordsViewport>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.partyId}>
+                    <td className="rw-text rw-strong">
+                      <span className="rw-clamp">{r.name}</span>
+                    </td>
+                    <td className="rw-num">{r.openDocuments}</td>
+                    <td className="rw-num">{money(r.current)}</td>
+                    <td className="rw-num">{money(r.days1To30)}</td>
+                    <td className="rw-num">{money(r.days31To60)}</td>
+                    {bucket(r.days61To90, "amber")}
+                    {bucket(r.over90, "red")}
+                    <td className="rw-num rw-strong">{money(r.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td>Total</td>
+                  <td className="rw-num">
+                    {rows.reduce((s, r) => s + Number(r.openDocuments || 0), 0)}
+                  </td>
+                  <td className="rw-num">{money(data.current)}</td>
+                  <td className="rw-num">{money(data.days1To30)}</td>
+                  <td className="rw-num">{money(data.days31To60)}</td>
+                  {bucket(data.days61To90, "amber")}
+                  {bucket(data.over90, "red")}
+                  <td className="rw-num">{money(data.total)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </RecordsViewport>
     </>
   );
 }
 
 function Tile({ label, value, strong, danger }) {
   return (
-    <div className={`rw-kpi${strong ? " rw-kpi--lead" : ""}${danger && Number(value) > 0 ? " rw-kpi--bad" : ""}`}>
+    <div
+      className={`rw-kpi${strong ? " rw-kpi--lead" : ""}${danger && Number(value) > 0 ? " rw-kpi--bad" : ""}`}
+    >
       <span className="rw-kpi__label">{label}</span>
       <span className="rw-kpi__value">{money(value)}</span>
     </div>
@@ -716,7 +895,10 @@ function Meta({ label, value }) {
 
 const money = (n) => {
   const v = Number(n || 0);
-  const abs = Math.abs(v).toLocaleString("en-PK", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  const abs = Math.abs(v).toLocaleString("en-PK", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
   return v < 0 ? `(${abs})` : abs;
 };
 
@@ -724,203 +906,442 @@ const money = (n) => {
 const st = {
   page: { padding: 0 },
   pageHead: {
-    display: "flex", flexWrap: "wrap", alignItems: "center",
-    justifyContent: "space-between", gap: "0.75rem", marginBottom: "1.25rem",
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "0.75rem",
+    marginBottom: "1.25rem",
   },
   pageTitleRow: { display: "flex", alignItems: "center", gap: "0.5rem" },
-  h2: { margin: 0, fontSize: "clamp(1.25rem, 3vw, 1.5rem)", color: colors.textPrimary, fontWeight: 800 },
+  h2: {
+    margin: 0,
+    fontSize: "clamp(1.25rem, 3vw, 1.5rem)",
+    color: colors.textPrimary,
+    fontWeight: 800,
+  },
   companyPicker: {
-    display: "flex", alignItems: "center", gap: "0.6rem",
-    flex: "1 1 220px", minWidth: 0, maxWidth: 320,
+    display: "flex",
+    alignItems: "center",
+    gap: "0.6rem",
+    flex: "1 1 220px",
+    minWidth: 0,
+    maxWidth: 320,
   },
 
   state: {
-    padding: "2.5rem 1.25rem", textAlign: "center", color: colors.textSecondary,
-    background: colors.cardBg, border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 14, fontSize: "0.92rem", lineHeight: 1.55,
+    padding: "2.5rem 1.25rem",
+    textAlign: "center",
+    color: colors.textSecondary,
+    background: colors.cardBg,
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 14,
+    fontSize: "0.92rem",
+    lineHeight: 1.55,
   },
   linkBtn: {
-    background: "none", border: "none", padding: "0.5rem 0",
+    background: "none",
+    border: "none",
+    padding: "0.5rem 0",
     // 44px tap target even though it reads as an inline link — it is the only
     // way out of an empty / unknown-report state on a phone.
     minHeight: 44,
-    color: colors.blue, fontWeight: 700, cursor: "pointer", fontSize: "inherit",
+    color: colors.blue,
+    fontWeight: 700,
+    cursor: "pointer",
+    fontSize: "inherit",
     boxShadow: "none",
   },
 
   sectionLabel: {
-    fontSize: "0.7rem", fontWeight: 800, textTransform: "uppercase",
-    letterSpacing: "0.07em", color: colors.textSecondary,
-    margin: "0 0 0.6rem", paddingTop: "0.25rem",
+    fontSize: "0.7rem",
+    fontWeight: 800,
+    textTransform: "uppercase",
+    letterSpacing: "0.07em",
+    color: colors.textSecondary,
+    margin: "0 0 0.6rem",
+    paddingTop: "0.25rem",
   },
 
   // Quick links: the four or five reports most people open.
   featuredGrid: {
-    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(240px, 100%), 1fr))",
-    gap: "0.85rem", marginBottom: "1.75rem",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(240px, 100%), 1fr))",
+    gap: "0.85rem",
+    marginBottom: "1.75rem",
   },
   featuredCard: {
-    display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-start",
-    textAlign: "left", padding: "1rem 1.1rem", borderRadius: 14, cursor: "pointer",
+    display: "flex",
+    flexDirection: "column",
+    gap: 5,
+    alignItems: "flex-start",
+    textAlign: "left",
+    padding: "1rem 1.1rem",
+    borderRadius: 14,
+    cursor: "pointer",
     border: `1px solid ${colors.cardBorder}`,
     background: `linear-gradient(135deg, rgba(13,71,161,0.05), rgba(0,137,123,0.07))`,
-    boxShadow: "0 2px 10px rgba(0,0,0,0.04)", minHeight: 44,
+    boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
+    minHeight: 44,
   },
   featuredTitle: { fontSize: "1rem", fontWeight: 800, color: colors.textPrimary, lineHeight: 1.25 },
   featuredBlurb: { fontSize: "0.8rem", color: colors.textSecondary, lineHeight: 1.45 },
   featuredGo: {
-    display: "inline-flex", alignItems: "center", gap: 2, marginTop: 4,
-    fontSize: "0.78rem", fontWeight: 700, color: colors.blue,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 2,
+    marginTop: 4,
+    fontSize: "0.78rem",
+    fontWeight: 700,
+    color: colors.blue,
   },
 
   categoryGrid: {
-    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(330px, 100%), 1fr))",
-    gap: "1rem", alignItems: "start",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(330px, 100%), 1fr))",
+    gap: "1rem",
+    alignItems: "start",
   },
   categoryCard: {
-    background: colors.cardBg, border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
+    background: colors.cardBg,
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 14,
+    overflow: "hidden",
+    boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
   },
   categoryHead: {
-    display: "flex", alignItems: "flex-start", gap: "0.7rem",
-    padding: "0.9rem 1rem", borderBottom: `1px solid ${colors.cardBorder}`,
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "0.7rem",
+    padding: "0.9rem 1rem",
+    borderBottom: `1px solid ${colors.cardBorder}`,
     background: "#f7f9fc",
   },
   categoryIcon: {
-    display: "grid", placeItems: "center", width: 34, height: 34, padding: 0, borderRadius: 10,
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, flexShrink: 0,
+    display: "grid",
+    placeItems: "center",
+    width: 34,
+    height: 34,
+    padding: 0,
+    borderRadius: 10,
+    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
+    flexShrink: 0,
   },
   categoryTitle: { margin: 0, fontSize: "0.98rem", fontWeight: 800, color: colors.textPrimary },
-  categoryBlurb: { margin: "2px 0 0", fontSize: "0.78rem", color: colors.textSecondary, lineHeight: 1.4 },
+  categoryBlurb: {
+    margin: "2px 0 0",
+    fontSize: "0.78rem",
+    color: colors.textSecondary,
+    lineHeight: 1.4,
+  },
   categoryCount: {
-    marginLeft: "auto", flexShrink: 0, fontSize: "0.7rem", fontWeight: 700,
-    color: colors.textSecondary, background: colors.inputBg,
-    border: `1px solid ${colors.inputBorder}`, borderRadius: 20, padding: "0.15rem 0.5rem",
+    marginLeft: "auto",
+    flexShrink: 0,
+    fontSize: "0.7rem",
+    fontWeight: 700,
+    color: colors.textSecondary,
+    background: colors.inputBg,
+    border: `1px solid ${colors.inputBorder}`,
+    borderRadius: 20,
+    padding: "0.15rem 0.5rem",
   },
   reportList: { listStyle: "none", margin: 0, padding: 0 },
   reportRow: {
-    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
-    width: "100%", minHeight: 52, padding: "0.6rem 1rem",
-    border: "none", borderBottom: `1px solid ${colors.cardBorder}`,
-    background: "none", cursor: "pointer", textAlign: "left", boxShadow: "none",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    width: "100%",
+    minHeight: 52,
+    padding: "0.6rem 1rem",
+    border: "none",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+    background: "none",
+    cursor: "pointer",
+    textAlign: "left",
+    boxShadow: "none",
   },
   reportRowMuted: { cursor: "default", opacity: 0.6 },
-  reportName: { display: "block", fontSize: "0.87rem", fontWeight: 700, color: colors.textPrimary, lineHeight: 1.3 },
+  reportName: {
+    display: "block",
+    fontSize: "0.87rem",
+    fontWeight: 700,
+    color: colors.textPrimary,
+    lineHeight: 1.3,
+  },
   reportBlurb: {
-    display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
-    fontSize: "0.75rem", color: colors.textSecondary, lineHeight: 1.35, marginTop: 1,
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+    fontSize: "0.75rem",
+    color: colors.textSecondary,
+    lineHeight: 1.35,
+    marginTop: 1,
   },
   badgeSoon: {
-    flexShrink: 0, fontSize: "0.66rem", fontWeight: 800, textTransform: "uppercase",
-    letterSpacing: "0.05em", color: colors.textSecondary,
-    background: colors.inputBg, border: `1px solid ${colors.inputBorder}`,
-    borderRadius: 20, padding: "0.15rem 0.5rem",
+    flexShrink: 0,
+    fontSize: "0.66rem",
+    fontWeight: 800,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: colors.textSecondary,
+    background: colors.inputBg,
+    border: `1px solid ${colors.inputBorder}`,
+    borderRadius: 20,
+    padding: "0.15rem 0.5rem",
   },
   badgeBlocked: {
-    flexShrink: 0, fontSize: "0.66rem", fontWeight: 800, textTransform: "uppercase",
-    letterSpacing: "0.05em", color: "#8a5a00",
-    background: "#fff8e1", border: "1px solid #ffe0a3",
-    borderRadius: 20, padding: "0.15rem 0.5rem",
+    flexShrink: 0,
+    fontSize: "0.66rem",
+    fontWeight: 800,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: "#8a5a00",
+    background: "#fff8e1",
+    border: "1px solid #ffe0a3",
+    borderRadius: 20,
+    padding: "0.15rem 0.5rem",
   },
 
   // Legacy report header — same identity band as AccountingCatalogShell.
   legacyHead: {
-    background: colors.cardBg, border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 14, overflow: "hidden", marginBottom: "1rem",
+    background: colors.cardBg,
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 14,
+    overflow: "hidden",
+    marginBottom: "1rem",
     boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
   },
   headerBar: { height: 4, background: `linear-gradient(90deg, ${colors.blue}, ${colors.teal})` },
   legacyHeadInner: { padding: "1rem clamp(0.85rem, 1.8vw, 1.3rem)" },
-  legacyTitle: { margin: "0.15rem 0 0", fontSize: "clamp(1.15rem, 2.4vw, 1.5rem)", fontWeight: 800, color: colors.textPrimary },
+  legacyTitle: {
+    margin: "0.15rem 0 0",
+    fontSize: "clamp(1.15rem, 2.4vw, 1.5rem)",
+    fontWeight: 800,
+    color: colors.textPrimary,
+  },
   backBtn: {
-    display: "inline-flex", alignItems: "center", minHeight: 44,
-    padding: "0 0.75rem 0 0", marginBottom: 2,
-    border: "none", background: "none", color: colors.textSecondary,
-    fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", boxShadow: "none",
+    display: "inline-flex",
+    alignItems: "center",
+    minHeight: 44,
+    padding: "0 0.75rem 0 0",
+    marginBottom: 2,
+    border: "none",
+    background: "none",
+    color: colors.textSecondary,
+    fontSize: "0.82rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    boxShadow: "none",
   },
   crumb: {
-    fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase",
-    letterSpacing: "0.06em", color: colors.teal,
+    fontSize: "0.7rem",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    color: colors.teal,
   },
 
   simpleFilterBar: {
-    display: "flex", alignItems: "flex-end", gap: "8px 10px", flexWrap: "wrap",
-    background: colors.cardBg, border: `1px solid ${colors.cardBorder}`,
+    display: "flex",
+    alignItems: "flex-end",
+    gap: "8px 10px",
+    flexWrap: "wrap",
+    background: colors.cardBg,
+    border: `1px solid ${colors.cardBorder}`,
   },
-  field: { display: "flex", flexDirection: "column", gap: 4, flex: "1 1 150px", maxWidth: 220, minWidth: 0 },
+  field: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    flex: "1 1 150px",
+    maxWidth: 220,
+    minWidth: 0,
+  },
   fieldLabel: {
-    fontSize: "0.66rem", fontWeight: 700, textTransform: "uppercase",
-    letterSpacing: "0.05em", color: colors.textSecondary,
+    fontSize: "0.66rem",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: colors.textSecondary,
   },
   dateInput: { ...dropdownStyles.base, minHeight: 38, width: "100%", minWidth: 0, cursor: "auto" },
   applyBtn: {
-    minHeight: 38, padding: "0 1.3rem", borderRadius: 9, border: "none",
+    minHeight: 38,
+    padding: "0 1.3rem",
+    borderRadius: 9,
+    border: "none",
     background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
-    color: "#fff", fontWeight: 700, fontSize: "0.88rem", cursor: "pointer",
+    color: "#fff",
+    fontWeight: 700,
+    fontSize: "0.88rem",
+    cursor: "pointer",
     boxShadow: "0 2px 8px rgba(13,71,161,0.22)",
   },
   okChip: {
-    display: "inline-flex", alignItems: "center", gap: 5, minHeight: 34,
-    padding: "0 0.8rem", borderRadius: 22, background: "#e8f5e9",
-    color: colors.success, border: "1px solid #c8e6c9", fontSize: "0.82rem", fontWeight: 700,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    minHeight: 34,
+    padding: "0 0.8rem",
+    borderRadius: 22,
+    background: "#e8f5e9",
+    color: colors.success,
+    border: "1px solid #c8e6c9",
+    fontSize: "0.82rem",
+    fontWeight: 700,
   },
   badChip: {
-    display: "inline-flex", alignItems: "center", gap: 5, minHeight: 34,
-    padding: "0 0.8rem", borderRadius: 22, background: colors.dangerLight,
-    color: colors.danger, border: "1px solid #f5c6cb", fontSize: "0.82rem", fontWeight: 700,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    minHeight: 34,
+    padding: "0 0.8rem",
+    borderRadius: 22,
+    background: colors.dangerLight,
+    color: colors.danger,
+    border: "1px solid #f5c6cb",
+    fontSize: "0.82rem",
+    fontWeight: 700,
   },
 
   totalsStrip: {
-    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(150px, 100%), 1fr))",
-    gap: "0.7rem", marginBottom: "0.9rem",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(150px, 100%), 1fr))",
+    gap: "0.7rem",
+    marginBottom: "0.9rem",
   },
   totalTile: {
-    display: "flex", flexDirection: "column", gap: 3,
-    padding: "0.75rem 0.9rem", borderRadius: 12,
+    display: "flex",
+    flexDirection: "column",
+    gap: 3,
+    padding: "0.75rem 0.9rem",
+    borderRadius: 12,
     background: "linear-gradient(135deg, rgba(13,71,161,0.06), rgba(0,137,123,0.07))",
     border: `1px solid ${colors.cardBorder}`,
   },
-  totalValue: { fontSize: "1.2rem", fontWeight: 800, color: colors.blue, fontVariantNumeric: "tabular-nums" },
-  asOf: { fontSize: "0.82rem", fontWeight: 700, color: colors.textSecondary, marginBottom: "0.75rem" },
+  totalValue: {
+    fontSize: "1.2rem",
+    fontWeight: 800,
+    color: colors.blue,
+    fontVariantNumeric: "tabular-nums",
+  },
+  asOf: {
+    fontSize: "0.82rem",
+    fontWeight: 700,
+    color: colors.textSecondary,
+    marginBottom: "0.75rem",
+  },
 
   tableWrap: {
-    overflowX: "auto", background: colors.cardBg,
-    border: `1px solid ${colors.cardBorder}`, borderRadius: 14,
+    overflowX: "auto",
+    background: colors.cardBg,
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 14,
     boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
   },
   table: { width: "100%", borderCollapse: "collapse", fontSize: "0.84rem" },
   th: {
-    textAlign: "left", padding: "0.7rem 0.8rem", background: "#f7f9fc",
-    fontSize: "0.68rem", fontWeight: 800, textTransform: "uppercase",
-    letterSpacing: "0.05em", color: colors.blue,
-    borderBottom: `2px solid ${colors.cardBorder}`, whiteSpace: "nowrap",
+    textAlign: "left",
+    padding: "0.7rem 0.8rem",
+    background: "#f7f9fc",
+    fontSize: "0.68rem",
+    fontWeight: 800,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: colors.blue,
+    borderBottom: `2px solid ${colors.cardBorder}`,
+    whiteSpace: "nowrap",
   },
-  get thNum() { return { ...this.th, textAlign: "right" }; },
+  get thNum() {
+    return { ...this.th, textAlign: "right" };
+  },
   tr: { borderBottom: `1px solid ${colors.cardBorder}` },
-  tdCode: { padding: "0.55rem 0.8rem", fontFamily: "monospace", fontSize: "0.76rem", color: colors.textSecondary, whiteSpace: "nowrap" },
-  tdName: { padding: "0.55rem 0.8rem", color: colors.textPrimary, fontWeight: 600, minWidth: 160, maxWidth: 280 },
+  tdCode: {
+    padding: "0.55rem 0.8rem",
+    fontFamily: "monospace",
+    fontSize: "0.76rem",
+    color: colors.textSecondary,
+    whiteSpace: "nowrap",
+  },
+  tdName: {
+    padding: "0.55rem 0.8rem",
+    color: colors.textPrimary,
+    fontWeight: 600,
+    minWidth: 160,
+    maxWidth: 280,
+  },
   tdMuted: { padding: "0.55rem 0.8rem", color: colors.textSecondary, whiteSpace: "nowrap" },
-  tdNum: { padding: "0.55rem 0.8rem", textAlign: "right", color: colors.textPrimary, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" },
+  tdNum: {
+    padding: "0.55rem 0.8rem",
+    textAlign: "right",
+    color: colors.textPrimary,
+    whiteSpace: "nowrap",
+    fontVariantNumeric: "tabular-nums",
+  },
   totalsRow: { fontWeight: 800, background: colors.inputBg, borderTop: `2px solid ${colors.blue}` },
-  clamp2: { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", lineHeight: 1.35 },
+  clamp2: {
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+    lineHeight: 1.35,
+  },
   cellAmber: { background: "#fff8e1", color: "#b26a00", fontWeight: 700 },
   cellRed: { background: colors.dangerLight, color: colors.danger, fontWeight: 700 },
 
   cardList: { display: "flex", flexDirection: "column", gap: "0.7rem" },
   miniCard: {
-    background: colors.cardBg, border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 12, padding: "0.85rem 0.95rem", boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+    background: colors.cardBg,
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 12,
+    padding: "0.85rem 0.95rem",
+    boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
   },
-  miniCardTop: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: "0.55rem" },
+  miniCardTop: {
+    display: "flex",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    gap: 8,
+    marginBottom: "0.55rem",
+  },
   miniLead: {
-    fontSize: "0.92rem", fontWeight: 700, color: colors.textPrimary, lineHeight: 1.3,
-    display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+    fontSize: "0.92rem",
+    fontWeight: 700,
+    color: colors.textPrimary,
+    lineHeight: 1.3,
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
   },
-  miniAmount: { fontSize: "1.05rem", fontWeight: 800, color: colors.blue, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" },
-  miniMeta: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(110px, 100%), 1fr))", gap: "0.45rem 0.85rem" },
+  miniAmount: {
+    fontSize: "1.05rem",
+    fontWeight: 800,
+    color: colors.blue,
+    whiteSpace: "nowrap",
+    fontVariantNumeric: "tabular-nums",
+  },
+  miniMeta: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(110px, 100%), 1fr))",
+    gap: "0.45rem 0.85rem",
+  },
   metaLabel: {
-    display: "block", fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase",
-    letterSpacing: "0.05em", color: colors.textSecondary, marginBottom: 1,
+    display: "block",
+    fontSize: "0.62rem",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: colors.textSecondary,
+    marginBottom: 1,
   },
-  metaValue: { fontSize: "0.83rem", fontWeight: 600, color: colors.textPrimary, lineHeight: 1.3, wordBreak: "break-word" },
+  metaValue: {
+    fontSize: "0.83rem",
+    fontWeight: 600,
+    color: colors.textPrimary,
+    lineHeight: 1.3,
+    wordBreak: "break-word",
+  },
 };

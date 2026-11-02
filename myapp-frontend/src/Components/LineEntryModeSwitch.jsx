@@ -6,7 +6,12 @@ import { ENTRY_MODE } from "../utils/lineAmount";
  * every line of the form. The other one is worked out and shown read-only
  * (CalculatedField), so a sale of 500 grams for 450 is typed as 0.5 and 450.
  */
-export default function LineEntryModeSwitch({ mode, onChange, totalLabel = "Line total", disabled = false }) {
+export default function LineEntryModeSwitch({
+  mode,
+  onChange,
+  totalLabel = "Line total",
+  disabled = false,
+}) {
   const option = (value, label) => {
     const on = mode === value;
     return (
@@ -55,16 +60,44 @@ export function CalculatedField({ value, label, style }) {
 const st = {
   wrap: { display: "inline-flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" },
   lead: { fontSize: "0.78rem", fontWeight: 600, color: "#5f6d7e", whiteSpace: "nowrap" },
-  seg: { display: "inline-flex", border: "1px solid #d0d7e2", borderRadius: 8, overflow: "hidden", background: "#fff" },
+  seg: {
+    display: "inline-flex",
+    border: "1px solid #d0d7e2",
+    borderRadius: 8,
+    overflow: "hidden",
+    background: "#fff",
+  },
   option: {
-    minHeight: 44, padding: "0 0.75rem", margin: 0, border: "none", borderRadius: 0, boxShadow: "none",
-    background: "transparent", color: "#5f6d7e", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+    minHeight: 44,
+    padding: "0 0.75rem",
+    margin: 0,
+    border: "none",
+    borderRadius: 0,
+    boxShadow: "none",
+    background: "transparent",
+    color: "#5f6d7e",
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
   },
   optionOn: { background: "#0d47a1", color: "#fff", cursor: "default" },
   calc: {
-    display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, minHeight: 36, width: "100%",
-    boxSizing: "border-box", padding: "0.45rem 0.55rem", borderRadius: 8, border: "1px dashed #c9d3e0",
-    background: "#eef3fa", color: "#3d4a5c", fontSize: "0.88rem", fontVariantNumeric: "tabular-nums", userSelect: "text",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 6,
+    minHeight: 36,
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "0.45rem 0.55rem",
+    borderRadius: 8,
+    border: "1px dashed #c9d3e0",
+    background: "#eef3fa",
+    color: "#3d4a5c",
+    fontSize: "0.88rem",
+    fontVariantNumeric: "tabular-nums",
+    userSelect: "text",
   },
   calcValue: { minWidth: 0, overflowWrap: "anywhere", textAlign: "right" },
 };

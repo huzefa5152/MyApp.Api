@@ -2,12 +2,21 @@ import { useEffect, useRef, useImperativeHandle, forwardRef, useState, useCallba
 import grapesjs from "grapesjs";
 import "grapesjs/dist/css/grapes.min.css";
 import {
-  MdUndo, MdRedo, MdVisibility, MdFullscreen, MdDelete,
-  MdBorderAll, MdPhoneAndroid, MdDescription,
+  MdUndo,
+  MdRedo,
+  MdVisibility,
+  MdFullscreen,
+  MdDelete,
+  MdBorderAll,
+  MdPhoneAndroid,
+  MdDescription,
 } from "react-icons/md";
 import {
-  getEditorConfig, registerHbsComponent, registerCustomBlocks,
-  registerCommands, injectA4Styles,
+  getEditorConfig,
+  registerHbsComponent,
+  registerCustomBlocks,
+  registerCommands,
+  injectA4Styles,
 } from "../../utils/grapesConfig";
 import { encodeHandlebars, decodeHandlebars } from "../../utils/handlebarsCodec";
 import { MergeFieldList } from "./MergeFieldSidebar";
@@ -47,7 +56,7 @@ div:fullscreen { background: #1e1e26; }
 
 const VisualEditor = forwardRef(function VisualEditor(
   { htmlContent, templateJson, fields, onReady },
-  ref
+  ref,
 ) {
   const confirmFn = useConfirm();
   const wrapperRef = useRef(null);
@@ -87,7 +96,7 @@ const VisualEditor = forwardRef(function VisualEditor(
       const html = editorRef.current.getHtml();
       const css = editorRef.current.getCss();
       return decodeHandlebars(
-        `<!DOCTYPE html><html><head><style>${css}</style></head><body>${html}</body></html>`
+        `<!DOCTYPE html><html><head><style>${css}</style></head><body>${html}</body></html>`,
       );
     },
     getCss() {
@@ -127,29 +136,32 @@ const VisualEditor = forwardRef(function VisualEditor(
           selectorRef.current.innerHTML = "";
           selectorRef.current.appendChild(el);
         }
-      } catch (e) { console.warn("SelectorManager render:", e); }
+      } catch (e) {
+        console.warn("SelectorManager render:", e);
+      }
       try {
         if (styleRef.current) {
           const el = editor.StyleManager.render();
           styleRef.current.innerHTML = "";
           styleRef.current.appendChild(el);
         }
-      } catch (e) { console.warn("StyleManager render:", e); }
+      } catch (e) {
+        console.warn("StyleManager render:", e);
+      }
       try {
         if (traitRef.current) {
           const el = editor.TraitManager.render();
           traitRef.current.innerHTML = "";
           traitRef.current.appendChild(el);
         }
-      } catch (e) { console.warn("TraitManager render:", e); }
+      } catch (e) {
+        console.warn("TraitManager render:", e);
+      }
 
       // Load content
       if (templateJson) {
         try {
-          const data =
-            typeof templateJson === "string"
-              ? JSON.parse(templateJson)
-              : templateJson;
+          const data = typeof templateJson === "string" ? JSON.parse(templateJson) : templateJson;
           editor.loadProjectData(data);
         } catch {
           loadFromHtml(editor, htmlContent);
@@ -203,14 +215,42 @@ const VisualEditor = forwardRef(function VisualEditor(
           <ToolBtn icon={<MdUndo size={18} />} label="Undo" onClick={() => runCmd("core:undo")} />
           <ToolBtn icon={<MdRedo size={18} />} label="Redo" onClick={() => runCmd("core:redo")} />
           <div style={vs.sep} />
-          <ToolBtn icon={<MdBorderAll size={18} />} label="Borders" onClick={toggleBorders} active={bordersOn} />
-          <ToolBtn icon={<MdVisibility size={18} />} label="Preview" onClick={() => runCmd("preview")} />
-          <ToolBtn icon={<MdFullscreen size={18} />} label="Fullscreen" onClick={toggleFullscreen} />
+          <ToolBtn
+            icon={<MdBorderAll size={18} />}
+            label="Borders"
+            onClick={toggleBorders}
+            active={bordersOn}
+          />
+          <ToolBtn
+            icon={<MdVisibility size={18} />}
+            label="Preview"
+            onClick={() => runCmd("preview")}
+          />
+          <ToolBtn
+            icon={<MdFullscreen size={18} />}
+            label="Fullscreen"
+            onClick={toggleFullscreen}
+          />
           <div style={vs.sep} />
-          <ToolBtn icon={<MdDescription size={16} />} label="A4" onClick={() => switchDevice("A4 Portrait")} active={device === "A4 Portrait"} />
-          <ToolBtn icon={<MdPhoneAndroid size={16} />} label="Mobile" onClick={() => switchDevice("Mobile")} active={device === "Mobile"} />
+          <ToolBtn
+            icon={<MdDescription size={16} />}
+            label="A4"
+            onClick={() => switchDevice("A4 Portrait")}
+            active={device === "A4 Portrait"}
+          />
+          <ToolBtn
+            icon={<MdPhoneAndroid size={16} />}
+            label="Mobile"
+            onClick={() => switchDevice("Mobile")}
+            active={device === "Mobile"}
+          />
           <div style={vs.sep} />
-          <ToolBtn icon={<MdDelete size={18} />} label="Clear" onClick={() => runCmd("canvas-clear")} danger />
+          <ToolBtn
+            icon={<MdDelete size={18} />}
+            label="Clear"
+            onClick={() => runCmd("canvas-clear")}
+            danger
+          />
         </div>
       </div>
 
@@ -239,11 +279,7 @@ const VisualEditor = forwardRef(function VisualEditor(
               style={{ display: leftTab === "blocks" ? "block" : "none" }}
             />
             {leftTab === "fields" && (
-              <MergeFieldList
-                fields={fields || []}
-                onInsert={insertMergeField}
-                dark
-              />
+              <MergeFieldList fields={fields || []} onInsert={insertMergeField} dark />
             )}
           </div>
         </div>
@@ -295,9 +331,7 @@ function loadFromHtml(editor, htmlContent) {
   const styleMatch = htmlContent.match(/<style[^>]*>([\s\S]*?)<\/style>/gi);
   let css = "";
   if (styleMatch) {
-    css = styleMatch
-      .map((s) => s.replace(/<\/?style[^>]*>/gi, ""))
-      .join("\n");
+    css = styleMatch.map((s) => s.replace(/<\/?style[^>]*>/gi, "")).join("\n");
   }
   const bodyMatch = htmlContent.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
   const bodyHtml = bodyMatch ? bodyMatch[1] : htmlContent;

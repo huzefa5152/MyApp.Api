@@ -12,7 +12,12 @@ export default function CompanyList({ companies, onEdit, fetchCompanies }) {
   const canDelete = has("companies.manage.delete");
 
   const handleDelete = async (id) => {
-    const ok = await confirm({ title: "Delete Company?", message: "Are you sure you want to delete this company? This action cannot be undone.", variant: "danger", confirmText: "Delete" });
+    const ok = await confirm({
+      title: "Delete Company?",
+      message: "Are you sure you want to delete this company? This action cannot be undone.",
+      variant: "danger",
+      confirmText: "Delete",
+    });
     if (!ok) return;
     try {
       await deleteCompany(id);
@@ -27,7 +32,9 @@ export default function CompanyList({ companies, onEdit, fetchCompanies }) {
       {companies.map((c) => (
         <article key={c.id} className="k-card" style={styles.card}>
           <div className="k-card__body" style={styles.body}>
-            <h3 style={styles.name} title={c.brandName || c.name}>{c.brandName || c.name}</h3>
+            <h3 style={styles.name} title={c.brandName || c.name}>
+              {c.brandName || c.name}
+            </h3>
             {c.inventoryTrackingEnabled && (
               <span style={styles.badge}>✓ Inventory tracking ON</span>
             )}
@@ -39,23 +46,41 @@ export default function CompanyList({ companies, onEdit, fetchCompanies }) {
                 c.ntn && ["NTN", c.ntn],
                 c.cnic && ["CNIC", c.cnic],
                 c.strn && ["STRN", c.strn],
-                ["Challan #", `Starts at ${c.startingChallanNumber}${c.currentChallanNumber > 0 ? ` → Current: #${c.currentChallanNumber}` : ""}`],
-                ["Invoice #", `Starts at ${c.startingInvoiceNumber}${c.currentInvoiceNumber > 0 ? ` → Current: #${c.currentInvoiceNumber}` : ""}`],
+                [
+                  "Challan #",
+                  `Starts at ${c.startingChallanNumber}${c.currentChallanNumber > 0 ? ` → Current: #${c.currentChallanNumber}` : ""}`,
+                ],
+                [
+                  "Invoice #",
+                  `Starts at ${c.startingInvoiceNumber}${c.currentInvoiceNumber > 0 ? ` → Current: #${c.currentInvoiceNumber}` : ""}`,
+                ],
               ]}
             />
             {c.logoPath && (
               <div style={styles.logo}>
-                <img src={c.logoPath} alt="Company Logo" style={{ height: "36px", borderRadius: 4, objectFit: "contain" }} />
-                <span style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", fontWeight: 500 }}>Company Logo</span>
+                <img
+                  src={c.logoPath}
+                  alt="Company Logo"
+                  style={{ height: "36px", borderRadius: 4, objectFit: "contain" }}
+                />
+                <span
+                  style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", fontWeight: 500 }}
+                >
+                  Company Logo
+                </span>
               </div>
             )}
             {(canUpdate || canDelete) && (
               <div style={styles.actions}>
                 {canUpdate && (
-                  <Button variant="primary" icon={MdEdit} onClick={() => onEdit(c)}>Edit</Button>
+                  <Button variant="primary" icon={MdEdit} onClick={() => onEdit(c)}>
+                    Edit
+                  </Button>
                 )}
                 {canDelete && (
-                  <Button variant="danger" icon={MdDelete} onClick={() => handleDelete(c.id)}>Delete</Button>
+                  <Button variant="danger" icon={MdDelete} onClick={() => handleDelete(c.id)}>
+                    Delete
+                  </Button>
                 )}
               </div>
             )}
@@ -72,16 +97,46 @@ const styles = {
   card: { display: "flex", flexDirection: "column", overflow: "hidden", marginTop: 0 },
   body: { flex: 1, display: "flex", flexDirection: "column", gap: "0.75rem" },
   name: {
-    margin: 0, fontSize: "calc(var(--k-font) + 0.22rem)", fontWeight: 800, lineHeight: 1.3, letterSpacing: "-0.01em", color: "var(--k-ink)",
-    display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere",
+    margin: 0,
+    fontSize: "calc(var(--k-font) + 0.22rem)",
+    fontWeight: 800,
+    lineHeight: 1.3,
+    letterSpacing: "-0.01em",
+    color: "var(--k-ink)",
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+    overflowWrap: "anywhere",
   },
   badge: {
-    display: "inline-flex", alignItems: "center", gap: "0.3rem", width: "fit-content", padding: "0.15rem 0.55rem", borderRadius: 12,
-    backgroundColor: "#e0f2f1", color: "#00695c", fontSize: "0.72rem", fontWeight: 700,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    width: "fit-content",
+    padding: "0.15rem 0.55rem",
+    borderRadius: 12,
+    backgroundColor: "#e0f2f1",
+    color: "#00695c",
+    fontSize: "0.72rem",
+    fontWeight: 700,
   },
   logo: {
-    display: "flex", alignItems: "center", gap: "0.5rem", width: "fit-content", padding: "0.4rem 0.6rem",
-    backgroundColor: "var(--k-surface-2)", borderRadius: 8, border: "1px solid var(--k-line)",
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    width: "fit-content",
+    padding: "0.4rem 0.6rem",
+    backgroundColor: "var(--k-surface-2)",
+    borderRadius: 8,
+    border: "1px solid var(--k-line)",
   },
-  actions: { display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "auto", paddingTop: "0.75rem", borderTop: "1px solid var(--k-line)" },
+  actions: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "0.5rem",
+    marginTop: "auto",
+    paddingTop: "0.75rem",
+    borderTop: "1px solid var(--k-line)",
+  },
 };

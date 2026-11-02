@@ -12,13 +12,13 @@
  */
 
 export const creditNoteStarters = [
-
   // ─── 1. Classic Serif ────────────────────────────────────────
   {
     id: "creditnote-classic-serif",
     name: "Classic Serif",
     type: "CreditNote",
-    description: "Traditional Times New Roman layout with double-rule header, maroon note title and FBR block",
+    description:
+      "Traditional Times New Roman layout with double-rule header, maroon note title and FBR block",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Credit Note #{{invoiceNumber}}</title><style>
 @media print { @page { size: A4; margin: 8mm 10mm; } .footer { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -275,7 +275,8 @@ table.items thead th.left { text-align: left; }
     id: "creditnote-corporate-navy",
     name: "Corporate Maroon Band",
     type: "CreditNote",
-    description: "Deep maroon header band with white text, reference bar and maroon-accented tables",
+    description:
+      "Deep maroon header band with white text, reference bar and maroon-accented tables",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Credit Note #{{invoiceNumber}}</title><style>
 @media print { @page { size: A4; margin: 0; } .footer { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -1575,7 +1576,8 @@ tbody tr:nth-child(even) td { background: #fbe9e7 !important; }
     id: "creditnote-big-letterhead",
     name: "Big Letterhead",
     type: "CreditNote",
-    description: "Tall letterhead-style header with large logo space, full-bleed color bar and FBR footer",
+    description:
+      "Tall letterhead-style header with large logo space, full-bleed color bar and FBR footer",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Credit Note #{{invoiceNumber}}</title><style>
 @media print { @page { size: A4; margin: 0; } .footer { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -1853,7 +1855,8 @@ tbody tr:nth-child(even) td { background: #f7eced !important; }
     id: "creditnote-govt-form-grid",
     name: "Government-Form Grid",
     type: "CreditNote",
-    description: "FBR-official government-form style: rigid grid with reference row and prominent FBR block",
+    description:
+      "FBR-official government-form style: rigid grid with reference row and prominent FBR block",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Credit Note #{{invoiceNumber}}</title><style>
 @media print { @page { size: A4; margin: 7mm 9mm; } .footer { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -2006,5 +2009,4 @@ tbody tr:nth-child(even) td { background: #f7f7f7 !important; }
 </div>
 </body></html>`,
   },
-
 ];

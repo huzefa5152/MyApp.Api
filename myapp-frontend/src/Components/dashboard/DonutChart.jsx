@@ -89,11 +89,44 @@ export default function DonutChart({
   // Empty state — render a flat ring so card height stays consistent.
   if (segments.length === 0 || total <= 0) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem 0" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "1rem 0",
+        }}
+      >
         <svg width={size} height={size} viewBox="0 0 100 100" style={{ maxWidth: "100%" }}>
-          <circle cx="50" cy="50" r="38" fill="none" stroke="#eef2f7" strokeWidth="14" style={{ stroke: "var(--k-surface-3, #eef2f7)" }} />
-          <text x="50" y="48" textAnchor="middle" fontSize="9" fill="#5f6d7e" style={{ fill: "var(--k-muted, #5f6d7e)" }}>No data</text>
-          <text x="50" y="58" textAnchor="middle" fontSize="6" fill="#9aa3ad" style={{ fill: "var(--k-faint, #9aa3ad)" }}>in this period</text>
+          <circle
+            cx="50"
+            cy="50"
+            r="38"
+            fill="none"
+            stroke="#eef2f7"
+            strokeWidth="14"
+            style={{ stroke: "var(--k-surface-3, #eef2f7)" }}
+          />
+          <text
+            x="50"
+            y="48"
+            textAnchor="middle"
+            fontSize="9"
+            fill="#5f6d7e"
+            style={{ fill: "var(--k-muted, #5f6d7e)" }}
+          >
+            No data
+          </text>
+          <text
+            x="50"
+            y="58"
+            textAnchor="middle"
+            fontSize="6"
+            fill="#9aa3ad"
+            style={{ fill: "var(--k-faint, #9aa3ad)" }}
+          >
+            in this period
+          </text>
         </svg>
       </div>
     );
@@ -102,7 +135,10 @@ export default function DonutChart({
   // Compute SVG arc paths. We use a viewBox of 100×100; outer radius
   // 38, inner radius 26 — a 12-unit donut ring. Each segment's arc
   // is `M outerStart A outerR L innerEnd A innerR Z`.
-  const cx = 50, cy = 50, rOuter = 38, rInner = 26;
+  const cx = 50,
+    cy = 50,
+    rOuter = 38,
+    rInner = 26;
   let cumulative = 0;
   const paths = segments.map((s, i) => {
     const fraction = total > 0 ? s.value / total : 0;
@@ -110,7 +146,19 @@ export default function DonutChart({
     cumulative += fraction;
     const endAngle = cumulative * 2 * Math.PI - Math.PI / 2;
     const isHighlighted = highlightIndex === s.originalIndex;
-    return arcPath({ startAngle, endAngle, cx, cy, rOuter, rInner, isHighlighted, color: s.color, key: s.key, fraction, segment: s });
+    return arcPath({
+      startAngle,
+      endAngle,
+      cx,
+      cy,
+      rOuter,
+      rInner,
+      isHighlighted,
+      color: s.color,
+      key: s.key,
+      fraction,
+      segment: s,
+    });
   });
 
   return (
@@ -132,20 +180,49 @@ export default function DonutChart({
               fillOpacity={isHighlighted ? 1 : 0.92}
               stroke={isHighlighted ? "#1a2332" : "#fff"}
               strokeWidth={isHighlighted ? 0.6 : 0.4}
-              style={{ stroke: isHighlighted ? "var(--k-ink, #1a2332)" : "var(--k-surface, #fff)", cursor: onSegmentClick ? "pointer" : "default", transition: "fill-opacity 0.15s" }}
+              style={{
+                stroke: isHighlighted ? "var(--k-ink, #1a2332)" : "var(--k-surface, #fff)",
+                cursor: onSegmentClick ? "pointer" : "default",
+                transition: "fill-opacity 0.15s",
+              }}
               onClick={() => onSegmentClick?.(segment.originalIndex)}
             >
-              <title>{segment.name}: {formatValue(segment.value)} ({((segment.value / total) * 100).toFixed(1)}%)</title>
+              <title>
+                {segment.name}: {formatValue(segment.value)} (
+                {((segment.value / total) * 100).toFixed(1)}%)
+              </title>
             </path>
           ))}
         </g>
         {/* Center label — total + caption */}
         {/* Shrink a long total to fit the hole: at size 9 a monospace
             "Rs. 156,568" is wider than the ring's inner radius allows. */}
-        <text x={cx} y={cy - 1} textAnchor="middle" fontSize={Math.min(9, 44 / (String(formatValue(total)).length * 0.6))} fontWeight="800" fill="#1a2332" style={{ fill: "var(--k-ink, #1a2332)", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+        <text
+          x={cx}
+          y={cy - 1}
+          textAnchor="middle"
+          fontSize={Math.min(9, 44 / (String(formatValue(total)).length * 0.6))}
+          fontWeight="800"
+          fill="#1a2332"
+          style={{
+            fill: "var(--k-ink, #1a2332)",
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+          }}
+        >
           {formatValue(total)}
         </text>
-        <text x={cx} y={cy + 8} textAnchor="middle" fontSize="4.5" fill="#5f6d7e" style={{ fill: "var(--k-muted, #5f6d7e)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+        <text
+          x={cx}
+          y={cy + 8}
+          textAnchor="middle"
+          fontSize="4.5"
+          fill="#5f6d7e"
+          style={{
+            fill: "var(--k-muted, #5f6d7e)",
+            textTransform: "uppercase",
+            letterSpacing: "0.1em",
+          }}
+        >
           {centerLabel}
         </text>
       </svg>
@@ -156,7 +233,19 @@ export default function DonutChart({
 // SVG arc-segment path. Handles full-circle case (single 100% segment)
 // with two half-arcs because a single arc with start === end is a
 // no-op.
-function arcPath({ startAngle, endAngle, cx, cy, rOuter, rInner, isHighlighted, color, key, fraction, segment }) {
+function arcPath({
+  startAngle,
+  endAngle,
+  cx,
+  cy,
+  rOuter,
+  rInner,
+  isHighlighted,
+  color,
+  key,
+  fraction,
+  segment,
+}) {
   const largeArc = fraction > 0.5 ? 1 : 0;
 
   // Apply a tiny radial offset for the highlighted segment — gives a

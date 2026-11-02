@@ -7,7 +7,20 @@ import { stripActiveContent, withPrintCsp } from "./printSafety.js";
 Handlebars.registerHelper("fmtDate", (d) => {
   if (!d) return "";
   const dt = new Date(d);
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
   const dd = String(dt.getDate()).padStart(2, "0");
   const mmm = months[dt.getMonth()];
   const yy = String(dt.getFullYear()).slice(-2);
@@ -24,18 +37,18 @@ Handlebars.registerHelper("fmtDMY", (d) => {
 });
 
 Handlebars.registerHelper("fmt", (n) =>
-  Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+  Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }),
 );
 
 Handlebars.registerHelper("fmtDec", (n) =>
-  Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
 );
 
 // Quantity format: thousands separator, but keep decimals ONLY when present
 // (1000 -> "1,000", 500 -> "500", 2.5 -> "2.5"). Use for item quantities so
 // whole units read like Manager's "1,000" yet fractional units aren't rounded.
 Handlebars.registerHelper("fmtQty", (n) =>
-  Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })
+  Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 }),
 );
 
 // Audit H-13 (2026-05-13): pre-fix, nl2br only replaced \n with <br>
@@ -63,16 +76,38 @@ Handlebars.registerHelper("richText", (s) => {
 });
 
 Handlebars.registerHelper("join", (arr, sep) =>
-  (arr || []).join(typeof sep === "string" ? sep : ", ")
+  (arr || []).join(typeof sep === "string" ? sep : ", "),
 );
 
 Handlebars.registerHelper("joinDates", (arr) =>
-  (arr || []).map(d => {
-    if (!d) return "";
-    const dt = new Date(d);
-    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    return String(dt.getDate()).padStart(2,"0") + "-" + months[dt.getMonth()] + "-" + String(dt.getFullYear()).slice(-2);
-  }).filter(Boolean).join(", ")
+  (arr || [])
+    .map((d) => {
+      if (!d) return "";
+      const dt = new Date(d);
+      const months = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+      ];
+      return (
+        String(dt.getDate()).padStart(2, "0") +
+        "-" +
+        months[dt.getMonth()] +
+        "-" +
+        String(dt.getFullYear()).slice(-2)
+      );
+    })
+    .filter(Boolean)
+    .join(", "),
 );
 
 Handlebars.registerHelper("emptyRows", (count, cols) => {
@@ -98,7 +133,7 @@ Handlebars.registerHelper("eq", (a, b) => a === b);
 Handlebars.registerHelper("or", (a, b) => a || b);
 
 Handlebars.registerHelper("uniqueTypes", (items) => {
-  const names = [...new Set((items || []).map(i => i.itemTypeName).filter(Boolean))];
+  const names = [...new Set((items || []).map((i) => i.itemTypeName).filter(Boolean))];
   return names.length > 0 ? names.join(" | ") + " |" : "";
 });
 
@@ -107,13 +142,13 @@ Handlebars.registerHelper("inc", (n) => Number(n) + 1);
 Handlebars.registerHelper("billEmptyRows", (count) => {
   let html = "";
   for (let i = 0; i < count; i++) {
-    html += '<tr>';
+    html += "<tr>";
     html += '<td class="cell c">&nbsp;</td>';
     html += '<td class="cell c">&nbsp;</td>';
     html += '<td class="cell">&nbsp;</td>';
     html += '<td class="cell r">&nbsp;</td>';
     html += '<td class="cell r">Rs &nbsp;&nbsp; -</td>';
-    html += '</tr>';
+    html += "</tr>";
   }
   return new Handlebars.SafeString(html);
 });
@@ -121,15 +156,15 @@ Handlebars.registerHelper("billEmptyRows", (count) => {
 Handlebars.registerHelper("taxEmptyRows", (count) => {
   let html = "";
   for (let i = 0; i < count; i++) {
-    html += '<tr>';
-    html += '<td></td>';
-    html += '<td></td>';
-    html += '<td></td>';
+    html += "<tr>";
+    html += "<td></td>";
+    html += "<td></td>";
+    html += "<td></td>";
     html += '<td class="right">-</td>';
     html += '<td class="center">-</td>';
     html += '<td class="right">-</td>';
     html += '<td class="right">-</td>';
-    html += '</tr>';
+    html += "</tr>";
   }
   return new Handlebars.SafeString(html);
 });
@@ -157,8 +192,6 @@ export function setActiveStamps(dict) {
   _activeStamps = dict || {};
 }
 
-
-
 // Templates saved before the richText helper existed (and hand-written ones)
 // print a description as {{this.description}}, which HTML-escapes it and
 // collapses the line breaks the operator typed into one run-on line. Route
@@ -181,9 +214,10 @@ export function mergeTemplate(htmlTemplate, data) {
   // leave <img src=""> behind — a broken-image box that silently adds ~64px to
   // the document and can push a one-page invoice onto a second page. Strip the
   // whole slot instead, so an unresolved stamp renders as nothing at all.
-  const src = data && data.stamp
-    ? materializeStamp(htmlTemplate, data.stamp)
-    : materializeStamp(htmlTemplate, null);
+  const src =
+    data && data.stamp
+      ? materializeStamp(htmlTemplate, data.stamp)
+      : materializeStamp(htmlTemplate, null);
 
   const compiled = Handlebars.compile(src);
   // Inject stamps unless the caller already supplied its own.
@@ -194,9 +228,9 @@ export function mergeTemplate(htmlTemplate, data) {
   const html = stripActiveContent(compiled(merged));
   if (typeof window !== "undefined" && window.location?.origin) {
     const base = `<base href="${window.location.origin}/">`;
-    return withPrintCsp(/<head[^>]*>/i.test(html)
-      ? html.replace(/<head[^>]*>/i, (m) => m + base)
-      : base + html);
+    return withPrintCsp(
+      /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + base) : base + html,
+    );
   }
   return withPrintCsp(html);
 }
@@ -290,15 +324,27 @@ export const MERGE_FIELDS = {
     { field: "{{{richText notes}}}", label: "Notes (formatted)" },
     { field: "{{#each billItems}}", label: "Loop: Group by original Bill item type" },
     { field: "{{this.billQuantity}}", label: "Original Bill quantity (sum in current group)" },
-    { field: "{{this.invoiceQuantity}}", label: "Adjusted Invoice quantity (sum in current group)" },
+    {
+      field: "{{this.invoiceQuantity}}",
+      label: "Adjusted Invoice quantity (sum in current group)",
+    },
     { field: "{{this.billItemTypeName}}", label: "Original Bill item type name(s), no HS code" },
-    { field: "{{this.invoiceItemTypeName}}", label: "Adjusted Invoice item type name(s), no HS code" },
+    {
+      field: "{{this.invoiceItemTypeName}}",
+      label: "Adjusted Invoice item type name(s), no HS code",
+    },
     { field: "{{this.billUom}}", label: "Original Bill unit(s)" },
     { field: "{{this.invoiceUom}}", label: "Adjusted Invoice unit(s)" },
     { field: "{{fmtDec this.invoiceUnitPrice}}", label: "Invoice unit price (in either grouping)" },
-    { field: "{{fmtDec this.invoiceValueExclTax}}", label: "Invoice value excluding tax (in either grouping)" },
+    {
+      field: "{{fmtDec this.invoiceValueExclTax}}",
+      label: "Invoice value excluding tax (in either grouping)",
+    },
     { field: "{{fmtDec this.invoiceGstAmount}}", label: "Invoice tax amount (in either grouping)" },
-    { field: "{{fmtDec this.invoiceTotalInclTax}}", label: "Invoice value including tax (in either grouping)" },
+    {
+      field: "{{fmtDec this.invoiceTotalInclTax}}",
+      label: "Invoice value including tax (in either grouping)",
+    },
     { field: "{{supplierName}}", label: "Supplier Name" },
     { field: "{{{nl2br supplierAddress}}}", label: "Supplier Address (with line breaks)" },
     { field: "{{{nl2br supplierPhone}}}", label: "Supplier Phone (with line breaks)" },

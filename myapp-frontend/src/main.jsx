@@ -45,7 +45,7 @@ if (isPublicPortal) {
       <ErrorBoundary>
         <PublicPortalPage />
       </ErrorBoundary>
-    </React.StrictMode>
+    </React.StrictMode>,
   );
 } else {
   startVersionWatch();
@@ -71,6 +71,6 @@ if (isPublicPortal) {
           </NotificationProvider>
         </BrowserRouter>
       </ErrorBoundary>
-    </React.StrictMode>
+    </React.StrictMode>,
   );
 }

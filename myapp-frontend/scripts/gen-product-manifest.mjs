@@ -32,5 +32,5 @@ mkdirSync(outDir, { recursive: true });
 writeFileSync(outFile, JSON.stringify(manifest, null, 2) + "\n");
 console.log(
   `product-manifest.json: ${Object.keys(manifest).length} categories, ` +
-    `${Object.values(manifest).reduce((n, a) => n + a.length, 0)} images`
+    `${Object.values(manifest).reduce((n, a) => n + a.length, 0)} images`,
 );

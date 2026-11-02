@@ -13,9 +13,30 @@ export function useConfirm() {
 }
 
 const variants = {
-  danger: { bg: "#fdeded", color: "#842029", border: "#f5c6cb", icon: <MdDelete size={28} color="#dc3545" />, btnBg: "#dc3545", btnHover: "#b02a37" },
-  warning: { bg: "#fff3cd", color: "#664d03", border: "#ffecb5", icon: <MdWarning size={28} color="#fd7e14" />, btnBg: "#fd7e14", btnHover: "#e8590c" },
-  info: { bg: "#cff4fc", color: "#055160", border: "#b6effb", icon: <MdInfo size={28} color="#0d6efd" />, btnBg: "#0d6efd", btnHover: "#0b5ed7" },
+  danger: {
+    bg: "#fdeded",
+    color: "#842029",
+    border: "#f5c6cb",
+    icon: <MdDelete size={28} color="#dc3545" />,
+    btnBg: "#dc3545",
+    btnHover: "#b02a37",
+  },
+  warning: {
+    bg: "#fff3cd",
+    color: "#664d03",
+    border: "#ffecb5",
+    icon: <MdWarning size={28} color="#fd7e14" />,
+    btnBg: "#fd7e14",
+    btnHover: "#e8590c",
+  },
+  info: {
+    bg: "#cff4fc",
+    color: "#055160",
+    border: "#b6effb",
+    icon: <MdInfo size={28} color="#0d6efd" />,
+    btnBg: "#0d6efd",
+    btnHover: "#0b5ed7",
+  },
 };
 
 export default function ConfirmProvider({ children }) {
@@ -25,13 +46,23 @@ export default function ConfirmProvider({ children }) {
   const [inputValue, setInputValue] = useState("");
   const resolveRef = useRef(null);
 
-  const confirm = useCallback(({ title = "Are you sure?", message = "", variant = "danger", confirmText = "Confirm", cancelText = "Cancel", input = null } = {}) => {
-    return new Promise((resolve) => {
-      resolveRef.current = resolve;
-      setInputValue(input?.defaultValue ?? "");
-      setState({ title, message, variant, confirmText, cancelText, input });
-    });
-  }, []);
+  const confirm = useCallback(
+    ({
+      title = "Are you sure?",
+      message = "",
+      variant = "danger",
+      confirmText = "Confirm",
+      cancelText = "Cancel",
+      input = null,
+    } = {}) => {
+      return new Promise((resolve) => {
+        resolveRef.current = resolve;
+        setInputValue(input?.defaultValue ?? "");
+        setState({ title, message, variant, confirmText, cancelText, input });
+      });
+    },
+    [],
+  );
 
   // Backward-compatible resolution contract:
   //   • no `input`  → resolves the plain boolean (existing callers).
@@ -48,13 +79,14 @@ export default function ConfirmProvider({ children }) {
     else resolver?.(confirmed);
   };
 
-  const v = state ? (variants[state.variant] || variants.danger) : null;
+  const v = state ? variants[state.variant] || variants.danger : null;
 
   return (
     <ConfirmContext.Provider value={confirm}>
       {children}
       {state && (
-        <div data-admin-backdrop=""
+        <div
+          data-admin-backdrop=""
           // Sit slightly above the standard modal layer so a confirm-on-top-
           // of-a-modal stack still wins (e.g. "Discard unsaved changes?"
           // shown above an open Edit dialog). 1101 is just one above
@@ -64,7 +96,8 @@ export default function ConfirmProvider({ children }) {
           // confirmations should require explicit Cancel / Confirm.
           style={{ ...formStyles.backdrop, zIndex: 1101 }}
         >
-          <div data-admin-dialog=""
+          <div
+            data-admin-dialog=""
             // Smallest size tier — confirm dialogs are short by design.
             // Reuses formStyles.modal so width/border-radius/box-shadow/
             // non-movable behaviour all match the rest of the app.
@@ -72,22 +105,45 @@ export default function ConfirmProvider({ children }) {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Icon header */}
-            <div style={{ display: "flex", justifyContent: "center", paddingTop: "var(--sc-dlg-icon-top, 28px)" }}>
-              <div className="sc-dlg-icon" style={{
-                width: "var(--sc-dlg-icon, 56px)", height: "var(--sc-dlg-icon, 56px)", borderRadius: "50%", background: v.bg,
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                paddingTop: "var(--sc-dlg-icon-top, 28px)",
+              }}
+            >
+              <div
+                className="sc-dlg-icon"
+                style={{
+                  width: "var(--sc-dlg-icon, 56px)",
+                  height: "var(--sc-dlg-icon, 56px)",
+                  borderRadius: "50%",
+                  background: v.bg,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
                 {v.icon}
               </div>
             </div>
 
             {/* Content */}
             <div style={{ padding: "16px var(--sc-dlg-pad-x, 28px) 8px", textAlign: "center" }}>
-              <h3 style={{ ...formStyles.title, margin: "0 0 8px", color: "var(--k-ink, #1a2332)" }}>
+              <h3
+                style={{ ...formStyles.title, margin: "0 0 8px", color: "var(--k-ink, #1a2332)" }}
+              >
                 {state.title}
               </h3>
               {state.message && (
-                <p style={{ margin: 0, fontSize: "var(--sc-dlg-msg, 0.9rem)", color: "var(--k-muted, #5f6d7e)", lineHeight: 1.5 }}>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "var(--sc-dlg-msg, 0.9rem)",
+                    color: "var(--k-muted, #5f6d7e)",
+                    lineHeight: 1.5,
+                  }}
+                >
                   {state.message}
                 </p>
               )}
@@ -113,8 +169,16 @@ export default function ConfirmProvider({ children }) {
             )}
 
             {/* Buttons */}
-            <div style={{ display: "flex", gap: 10, padding: "16px var(--sc-dlg-pad-x, 28px) var(--sc-dlg-icon-top, 24px)", justifyContent: "center" }}>
-              <button data-admin-close=""
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                padding: "16px var(--sc-dlg-pad-x, 28px) var(--sc-dlg-icon-top, 24px)",
+                justifyContent: "center",
+              }}
+            >
+              <button
+                data-admin-close=""
                 className="k-btn k-btn--secondary sc-dlg-btn"
                 onClick={() => handleClose(false)}
               >

@@ -1,11 +1,25 @@
 import { useState, useEffect } from "react";
 import { MdTune, MdAdd, MdEdit, MdDelete, MdLock } from "react-icons/md";
-import { getFbrLookups, createFbrLookup, updateFbrLookup, deleteFbrLookup } from "../api/fbrLookupApi";
+import {
+  getFbrLookups,
+  createFbrLookup,
+  updateFbrLookup,
+  deleteFbrLookup,
+} from "../api/fbrLookupApi";
 import { formStyles, modalSizes } from "../theme";
 import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
-import { PageHeader, Button, IconButton, Toolbar, SearchBox, Card, EmptyState, Alert } from "../ui/Kit";
+import {
+  PageHeader,
+  Button,
+  IconButton,
+  Toolbar,
+  SearchBox,
+  Card,
+  EmptyState,
+  Alert,
+} from "../ui/Kit";
 
 const CATEGORIES = [
   "Province",
@@ -51,19 +65,33 @@ export default function FbrSettingsPage() {
     }
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => {
+    fetchAll();
+  }, []);
 
   const openAdd = (category = "") => {
     setEditItem(null);
-    const maxSort = lookups.filter((l) => l.category === (category || filterCategory)).reduce((m, l) => Math.max(m, l.sortOrder), 0);
-    setFormData({ category: category || filterCategory || "", code: "", label: "", sortOrder: maxSort + 1 });
+    const maxSort = lookups
+      .filter((l) => l.category === (category || filterCategory))
+      .reduce((m, l) => Math.max(m, l.sortOrder), 0);
+    setFormData({
+      category: category || filterCategory || "",
+      code: "",
+      label: "",
+      sortOrder: maxSort + 1,
+    });
     setError("");
     setShowForm(true);
   };
 
   const openEdit = (item) => {
     setEditItem(item);
-    setFormData({ category: item.category, code: item.code, label: item.label, sortOrder: item.sortOrder });
+    setFormData({
+      category: item.category,
+      code: item.code,
+      label: item.label,
+      sortOrder: item.sortOrder,
+    });
     setError("");
     setShowForm(true);
   };
@@ -116,7 +144,7 @@ export default function FbrSettingsPage() {
 
   const grouped = CATEGORIES.reduce((acc, cat) => {
     const items = filtered.filter((l) => l.category === cat);
-    if (items.length > 0 || (!filterCategory || filterCategory === cat)) acc[cat] = items;
+    if (items.length > 0 || !filterCategory || filterCategory === cat) acc[cat] = items;
     return acc;
   }, {});
 
@@ -135,20 +163,34 @@ export default function FbrSettingsPage() {
         tone="brand"
         title="FBR Settings"
         subtitle={`${lookups.length} lookup value${lookups.length !== 1 ? "s" : ""} configured`}
-        actions={canEdit && <Button variant="primary" icon={MdAdd} onClick={() => openAdd()}>New Value</Button>}
+        actions={
+          canEdit && (
+            <Button variant="primary" icon={MdAdd} onClick={() => openAdd()}>
+              New Value
+            </Button>
+          )
+        }
       />
 
       {!canEdit && (
         <Alert tone="info">
-          These lookup values are shared by every company on this installation, so only the system administrator can change them.
+          These lookup values are shared by every company on this installation, so only the system
+          administrator can change them.
         </Alert>
       )}
       <Toolbar>
         <SearchBox value={search} onChange={setSearch} placeholder="Search..." />
-        <select className="k-select" aria-label="Category" value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
+        <select
+          className="k-select"
+          aria-label="Category"
+          value={filterCategory}
+          onChange={(e) => setFilterCategory(e.target.value)}
+        >
           <option value="">All Categories</option>
           {CATEGORIES.map((c) => (
-            <option key={c} value={c}>{categoryLabels[c] || c}</option>
+            <option key={c} value={c}>
+              {categoryLabels[c] || c}
+            </option>
           ))}
         </select>
       </Toolbar>
@@ -160,29 +202,58 @@ export default function FbrSettingsPage() {
           <Card
             key={cat}
             title={categoryLabels[cat] || cat}
-            actions={canEdit && <Button size="sm" icon={MdAdd} onClick={() => openAdd(cat)}>Add</Button>}
+            actions={
+              canEdit && (
+                <Button size="sm" icon={MdAdd} onClick={() => openAdd(cat)}>
+                  Add
+                </Button>
+              )
+            }
           >
             {items.length === 0 ? (
               <p style={styles.emptyCat}>No values in this category.</p>
             ) : (
               <div style={styles.list}>
-                {items.sort((a, b) => a.sortOrder - b.sortOrder).map((item) => (
-                  <div key={item.id} style={styles.item}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flex: 1, minWidth: 0 }}>
-                      <span style={styles.sortBadge}>{item.sortOrder}</span>
-                      <div style={{ minWidth: 0, overflowWrap: "anywhere" }}>
-                        <span style={styles.itemLabel}>{item.label}</span>
-                        {item.code !== item.label && (
-                          <span style={styles.itemCode}> ({item.code})</span>
-                        )}
+                {items
+                  .sort((a, b) => a.sortOrder - b.sortOrder)
+                  .map((item) => (
+                    <div key={item.id} style={styles.item}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.75rem",
+                          flex: 1,
+                          minWidth: 0,
+                        }}
+                      >
+                        <span style={styles.sortBadge}>{item.sortOrder}</span>
+                        <div style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+                          <span style={styles.itemLabel}>{item.label}</span>
+                          {item.code !== item.label && (
+                            <span style={styles.itemCode}> ({item.code})</span>
+                          )}
+                        </div>
                       </div>
+                      {canEdit && (
+                        <div style={{ display: "flex", gap: "0.25rem" }}>
+                          <IconButton
+                            label="Edit"
+                            icon={MdEdit}
+                            size={16}
+                            onClick={() => openEdit(item)}
+                          />
+                          <IconButton
+                            label="Delete"
+                            icon={MdDelete}
+                            size={16}
+                            danger
+                            onClick={() => handleDelete(item)}
+                          />
+                        </div>
+                      )}
                     </div>
-                    {canEdit && <div style={{ display: "flex", gap: "0.25rem" }}>
-                      <IconButton label="Edit" icon={MdEdit} size={16} onClick={() => openEdit(item)} />
-                      <IconButton label="Delete" icon={MdDelete} size={16} danger onClick={() => handleDelete(item)} />
-                    </div>}
-                  </div>
-                ))}
+                  ))}
               </div>
             )}
           </Card>
@@ -193,10 +264,23 @@ export default function FbrSettingsPage() {
         // Backdrop click is a no-op so a stray click can't drop the FBR
         // lookup form before the operator finishes typing.
         <div data-admin-backdrop="" style={formStyles.backdrop}>
-          <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.sm}px`, cursor: "default" }}>
+          <div
+            data-admin-dialog=""
+            style={{ ...formStyles.modal, maxWidth: `${modalSizes.sm}px`, cursor: "default" }}
+          >
             <div data-admin-header="" style={formStyles.header}>
-              <h5 style={formStyles.title}>{editItem ? "Edit Lookup Value" : "New Lookup Value"}</h5>
-              <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={() => setShowForm(false)} aria-label="Close">&times;</button>
+              <h5 style={formStyles.title}>
+                {editItem ? "Edit Lookup Value" : "New Lookup Value"}
+              </h5>
+              <button
+                data-admin-close=""
+                type="button"
+                style={formStyles.closeButton}
+                onClick={() => setShowForm(false)}
+                aria-label="Close"
+              >
+                &times;
+              </button>
             </div>
             <form onSubmit={handleSubmit}>
               <div data-admin-body="" style={formStyles.body}>
@@ -212,7 +296,9 @@ export default function FbrSettingsPage() {
                   >
                     <option value="">Select...</option>
                     {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>{categoryLabels[c] || c}</option>
+                      <option key={c} value={c}>
+                        {categoryLabels[c] || c}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -220,22 +306,52 @@ export default function FbrSettingsPage() {
                 <div className="form-grid-2col" style={formStyles.formGroup}>
                   <div>
                     <label style={formStyles.label}>Code *</label>
-                    <input type="text" value={formData.code} onChange={(e) => setFormData({ ...formData, code: e.target.value })} style={formStyles.input} placeholder="e.g. 7 or Registered" />
+                    <input
+                      type="text"
+                      value={formData.code}
+                      onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                      style={formStyles.input}
+                      placeholder="e.g. 7 or Registered"
+                    />
                   </div>
                   <div>
                     <label style={formStyles.label}>Sort Order</label>
-                    <input type="number" value={formData.sortOrder} onChange={(e) => setFormData({ ...formData, sortOrder: Number(e.target.value) })} style={formStyles.input} min={0} />
+                    <input
+                      type="number"
+                      value={formData.sortOrder}
+                      onChange={(e) =>
+                        setFormData({ ...formData, sortOrder: Number(e.target.value) })
+                      }
+                      style={formStyles.input}
+                      min={0}
+                    />
                   </div>
                 </div>
 
                 <div style={formStyles.formGroup}>
                   <label style={formStyles.label}>Label *</label>
-                  <input type="text" value={formData.label} onChange={(e) => setFormData({ ...formData, label: e.target.value })} style={formStyles.input} placeholder="Display name" autoFocus />
+                  <input
+                    type="text"
+                    value={formData.label}
+                    onChange={(e) => setFormData({ ...formData, label: e.target.value })}
+                    style={formStyles.input}
+                    placeholder="Display name"
+                    autoFocus
+                  />
                 </div>
               </div>
               <div data-admin-footer="" style={formStyles.footer}>
-                <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setShowForm(false)}>Cancel</button>
-                <button type="submit" style={{ ...formStyles.button, ...formStyles.submit }}>{editItem ? "Update" : "Create"}</button>
+                <button
+                  data-admin-close=""
+                  type="button"
+                  style={{ ...formStyles.button, ...formStyles.cancel }}
+                  onClick={() => setShowForm(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" style={{ ...formStyles.button, ...formStyles.submit }}>
+                  {editItem ? "Update" : "Create"}
+                </button>
               </div>
             </form>
           </div>
@@ -248,8 +364,30 @@ export default function FbrSettingsPage() {
 const styles = {
   emptyCat: { margin: 0, color: "var(--k-muted)", fontSize: "var(--k-font-sm)" },
   list: { display: "flex", flexDirection: "column", gap: "0.35rem" },
-  item: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", padding: "0.35rem 0.5rem 0.35rem 0.85rem", minHeight: "var(--k-h)", borderRadius: "var(--k-radius)", border: "1px solid var(--k-line)", backgroundColor: "var(--k-surface)" },
-  sortBadge: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 6, backgroundColor: "#e3f2fd", color: "var(--k-blue)", fontSize: "0.78rem", fontWeight: 700, flexShrink: 0 },
+  item: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "0.5rem",
+    padding: "0.35rem 0.5rem 0.35rem 0.85rem",
+    minHeight: "var(--k-h)",
+    borderRadius: "var(--k-radius)",
+    border: "1px solid var(--k-line)",
+    backgroundColor: "var(--k-surface)",
+  },
+  sortBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    backgroundColor: "#e3f2fd",
+    color: "var(--k-blue)",
+    fontSize: "0.78rem",
+    fontWeight: 700,
+    flexShrink: 0,
+  },
   itemLabel: { fontWeight: 600, fontSize: "var(--k-font)", color: "var(--k-ink)" },
   itemCode: { fontSize: "var(--k-font-sm)", color: "var(--k-muted)" },
 };

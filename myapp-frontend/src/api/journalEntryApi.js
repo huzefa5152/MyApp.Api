@@ -7,8 +7,7 @@ import httpClient from "./httpClient";
 export const getPagedJournalEntries = (companyId, params = {}) =>
   httpClient.get(`/journal-entries/company/${companyId}/paged`, { params });
 
-export const getJournalEntry = (id) =>
-  httpClient.get(`/journal-entries/${id}`);
+export const getJournalEntry = (id) => httpClient.get(`/journal-entries/${id}`);
 
 export const createJournalEntry = (companyId, payload) =>
   httpClient.post(`/journal-entries/company/${companyId}`, payload);
@@ -16,5 +15,4 @@ export const createJournalEntry = (companyId, payload) =>
 export const updateJournalEntry = (id, payload) =>
   httpClient.put(`/journal-entries/${id}`, payload);
 
-export const deleteJournalEntry = (id) =>
-  httpClient.delete(`/journal-entries/${id}`);
+export const deleteJournalEntry = (id) => httpClient.delete(`/journal-entries/${id}`);

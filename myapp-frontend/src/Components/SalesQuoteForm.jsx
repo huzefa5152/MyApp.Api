@@ -22,7 +22,17 @@ import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import { todayYmd } from "../utils/dateInput";
 import { Button, Field } from "../ui/Kit";
 
-const blankItem = () => ({ id: 0, _imageKey: crypto.randomUUID(), imagePath: null, itemTypeId: null, description: "", quantity: 1, unit: "", unitPrice: 0, rateHint: "" });
+const blankItem = () => ({
+  id: 0,
+  _imageKey: crypto.randomUUID(),
+  imagePath: null,
+  itemTypeId: null,
+  description: "",
+  quantity: 1,
+  unit: "",
+  unitPrice: 0,
+  rateHint: "",
+});
 
 // Create + edit a Sales Quote. Pass `quote` to edit; omit to create.
 export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
@@ -31,7 +41,9 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
   const canCreateClient = has("clients.manage.create");
   const [showAddClient, setShowAddClient] = useState(false);
   const isEdit = !!quote;
-  const [client, setClient] = useState(quote ? { id: quote.clientId, label: quote.clientName } : null);
+  const [client, setClient] = useState(
+    quote ? { id: quote.clientId, label: quote.clientName } : null,
+  );
   const [date, setDate] = useState(quote?.date ? quote.date.slice(0, 10) : todayYmd());
   // "Valid for N days" drives expiry: ValidUntil = issue date + N days. Blank =
   // no expiry (quote stays Active until accepted). On edit, derive the day count
@@ -44,18 +56,34 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
     return "";
   });
   const [enquiryRef, setEnquiryRef] = useState(quote?.customerEnquiryRef || "");
-  const [enquiryDate, setEnquiryDate] = useState(quote?.enquiryDate ? quote.enquiryDate.slice(0, 10) : "");
+  const [enquiryDate, setEnquiryDate] = useState(
+    quote?.enquiryDate ? quote.enquiryDate.slice(0, 10) : "",
+  );
   const [gstRate, setGstRate] = useState(quote?.gstRate ?? 18);
   const [notes, setNotes] = useState(quote?.notes || "");
   const [contactPerson, setContactPerson] = useState(quote?.contactPerson || "");
   // Whole-quote discount: "5%" or "5000", taken off before GST. It stays on
   // the quote; a bill made from it only shows a reminder.
-  const [quoteDiscount, setQuoteDiscount] = useState(discountText(quote?.discountValue, quote?.discountIsPercent));
+  const [quoteDiscount, setQuoteDiscount] = useState(
+    discountText(quote?.discountValue, quote?.discountIsPercent),
+  );
   const [quoteDiscountReason, setQuoteDiscountReason] = useState(quote?.discountReason || "");
   const [items, setItems] = useState(
     quote?.items?.length
-      ? quote.items.map((i) => ({ id: i.id, _imageKey: crypto.randomUUID(), imagePath: i.imagePath || null, itemTypeId: i.itemTypeId, description: i.description, quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice, rateHint: "", discountText: discountText(i.discountValue, i.discountIsPercent), discountReason: i.discountReason || "" }))
-      : [blankItem()]
+      ? quote.items.map((i) => ({
+          id: i.id,
+          _imageKey: crypto.randomUUID(),
+          imagePath: i.imagePath || null,
+          itemTypeId: i.itemTypeId,
+          description: i.description,
+          quantity: i.quantity,
+          unit: i.unit,
+          unitPrice: i.unitPrice,
+          rateHint: "",
+          discountText: discountText(i.discountValue, i.discountIsPercent),
+          discountReason: i.discountReason || "",
+        }))
+      : [blankItem()],
   );
   const [units, setUnits] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
@@ -70,15 +98,27 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
   const [imageUploads, setImageUploads] = useState(0);
   const attachmentRef = useRef(null);
 
-  useEffect(() => { getAllUnits(companyId).then(({ data }) => setUnits(data)).catch(() => setUnits([])); }, [companyId]);
-  useEffect(() => { getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([])); }, [companyId]);
-  useEffect(() => { getClientsByCompany(companyId).then(({ data }) => setClients(data || [])).catch(() => setClients([])); }, [companyId]);
+  useEffect(() => {
+    getAllUnits(companyId)
+      .then(({ data }) => setUnits(data))
+      .catch(() => setUnits([]));
+  }, [companyId]);
+  useEffect(() => {
+    getItemTypes(companyId)
+      .then(({ data }) => setItemTypes(data || []))
+      .catch(() => setItemTypes([]));
+  }, [companyId]);
+  useEffect(() => {
+    getClientsByCompany(companyId)
+      .then(({ data }) => setClients(data || []))
+      .catch(() => setClients([]));
+  }, [companyId]);
   // A quote is a pre-sale document (never sent to FBR), so — like Bill mode —
   // it only offers item types WITHOUT an HS code (HS-coded types are the
   // FBR-classification set used on the Invoices tab).
   const nonHsItemTypes = useMemo(
     () => itemTypes.filter((it) => !(it.hsCode && String(it.hsCode).trim())),
-    [itemTypes]
+    [itemTypes],
   );
 
   // Last-billed-rate lookup for the shared editor's price auto-fill. Returns
@@ -94,7 +134,11 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
     };
   };
 
-  const totals = quoteTotals(items.filter((i) => i.description.trim()), quoteDiscount, gstRate);
+  const totals = quoteTotals(
+    items.filter((i) => i.description.trim()),
+    quoteDiscount,
+    gstRate,
+  );
   const money = (n) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
   const handleSubmit = async (e) => {
@@ -102,19 +146,38 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
     if (saving || imageUploads > 0 || !numberValid) return;
     setError("");
     const valid = items.filter((i) => i.description.trim());
-    if (!client) { setError("Please select a client."); return; }
-    if (valid.length === 0) { setError("Add at least one item."); return; }
+    if (!client) {
+      setError("Please select a client.");
+      return;
+    }
+    if (valid.length === 0) {
+      setError("Add at least one item.");
+      return;
+    }
     const badLine = valid.findIndex((i) => lineAmounts(i).error);
-    if (badLine >= 0) { setError(`Line ${items.indexOf(valid[badLine]) + 1}: the discount is not valid (${lineAmounts(valid[badLine]).error.toLowerCase()}).`); return; }
-    if (totals.error) { setError(`Quote discount: ${totals.error.toLowerCase()}.`); return; }
+    if (badLine >= 0) {
+      setError(
+        `Line ${items.indexOf(valid[badLine]) + 1}: the discount is not valid (${lineAmounts(valid[badLine]).error.toLowerCase()}).`,
+      );
+      return;
+    }
+    if (totals.error) {
+      setError(`Quote discount: ${totals.error.toLowerCase()}.`);
+      return;
+    }
 
     setSaving(true);
     try {
       const saved = await onSaved({
         clientId: client.id,
-        customNumber: quote ? billNumberPayload("custom", customNumber) : billNumberPayload(numberMode, customNumber),
+        customNumber: quote
+          ? billNumberPayload("custom", customNumber)
+          : billNumberPayload(numberMode, customNumber),
         date: date ? new Date(date).toISOString() : null,
-        validUntil: validForDays && date ? new Date(new Date(date).getTime() + Number(validForDays) * 86400000).toISOString() : null,
+        validUntil:
+          validForDays && date
+            ? new Date(new Date(date).getTime() + Number(validForDays) * 86400000).toISOString()
+            : null,
         customerEnquiryRef: enquiryRef.trim() || null,
         enquiryDate: enquiryDate ? new Date(enquiryDate).toISOString() : null,
         gstRate: Number(gstRate) || 0,
@@ -125,7 +188,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
           id: i.id || 0,
           itemTypeId: i.itemTypeId || null,
           description: i.description.trim(),
-          quantity: typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1),
+          quantity: typeof i.quantity === "number" ? i.quantity : parseFloat(i.quantity) || 1,
           unit: i.unit,
           unitPrice: Number(i.unitPrice) || 0,
           imagePath: i.imagePath || null,
@@ -135,41 +198,114 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
       // Upload any files staged before the record had an id (no-op in edit
       // mode / when nothing was staged). Best-effort — the quote is saved.
       const savedId = saved?.id ?? quote?.id;
-      if (savedId) { try { await attachmentRef.current?.flush(savedId); } catch { /* attachments best-effort */ } }
+      if (savedId) {
+        try {
+          await attachmentRef.current?.flush(savedId);
+        } catch {
+          /* attachments best-effort */
+        }
+      }
       onClose();
     } catch (err) {
       const msg = err.response?.data?.error || err.response?.data?.message;
-      setError(msg || (!err.response ? "Could not reach the server." : "Could not save the quote."));
+      setError(
+        msg || (!err.response ? "Could not reach the server." : "Could not save the quote."),
+      );
       setSaving(false);
     }
   };
 
-  const disabled = !client || items.every((i) => !i.description.trim()) || saving || imageUploads > 0 || !numberValid;
+  const disabled =
+    !client ||
+    items.every((i) => !i.description.trim()) ||
+    saving ||
+    imageUploads > 0 ||
+    !numberValid;
 
   // Contact-person dropdown options come from the selected client's
   // semicolon-separated ContactPerson list (mirrors the challan Site dropdown).
   const contactOptions = useMemo(() => {
     const sel = clients.find((c) => String(c.id) === String(client?.id));
-    return sel?.contactPerson ? sel.contactPerson.split(";").map((x) => x.trim()).filter(Boolean) : [];
+    return sel?.contactPerson
+      ? sel.contactPerson
+          .split(";")
+          .map((x) => x.trim())
+          .filter(Boolean)
+      : [];
   }, [clients, client]);
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
-          <h5 style={formStyles.title}>{isEdit ? `Edit Quote #${quote.quoteNumber}` : "Create Sales Quote"}</h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <h5 style={formStyles.title}>
+            {isEdit ? `Edit Quote #${quote.quoteNumber}` : "Create Sales Quote"}
+          </h5>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            &times;
+          </button>
         </div>
         <form onSubmit={handleSubmit}>
           <div data-admin-body="" className="admin-quote-body" style={formStyles.body}>
-            <DocumentCopyPicker companyId={companyId} destination="Quote" allowDetails={!isEdit} disabled={false}
-              onCopy={(source,lines,details) => {
-                setItems(prev => appendCopiedLines(details ? [] : prev, lines, blankItem, true));
-                if (details && source.discountValue) { setQuoteDiscount(discountText(source.discountValue, source.discountIsPercent)); setQuoteDiscountReason(source.discountReason || ""); }
-                if(details) { setClient({id:source.clientId,label:source.clientName});setNotes(source.notes||"");setGstRate(source.gstRate??18);setContactPerson(source.contactPerson||"");setEnquiryRef(source.customerEnquiryRef||"");setEnquiryDate(source.enquiryDate?.slice(0,10)||"");setValidForDays(source.validUntil && source.date ? String(Math.max(0, Math.round((new Date(source.validUntil)-new Date(source.date))/86400000))) : ""); }
-              }} />
-            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
-            {<div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="quote" variant={quote ? "edit" : "create"} currentNumber={quote?.quoteNumber} editRecordId={quote?.id} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>}
+            <DocumentCopyPicker
+              companyId={companyId}
+              destination="Quote"
+              allowDetails={!isEdit}
+              disabled={false}
+              onCopy={(source, lines, details) => {
+                setItems((prev) => appendCopiedLines(details ? [] : prev, lines, blankItem, true));
+                if (details && source.discountValue) {
+                  setQuoteDiscount(discountText(source.discountValue, source.discountIsPercent));
+                  setQuoteDiscountReason(source.discountReason || "");
+                }
+                if (details) {
+                  setClient({ id: source.clientId, label: source.clientName });
+                  setNotes(source.notes || "");
+                  setGstRate(source.gstRate ?? 18);
+                  setContactPerson(source.contactPerson || "");
+                  setEnquiryRef(source.customerEnquiryRef || "");
+                  setEnquiryDate(source.enquiryDate?.slice(0, 10) || "");
+                  setValidForDays(
+                    source.validUntil && source.date
+                      ? String(
+                          Math.max(
+                            0,
+                            Math.round(
+                              (new Date(source.validUntil) - new Date(source.date)) / 86400000,
+                            ),
+                          ),
+                        )
+                      : "",
+                  );
+                }
+              }}
+            />
+            {error && (
+              <div ref={errRef} style={formStyles.error}>
+                {error}
+              </div>
+            )}
+            {
+              <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}>
+                <BillNumberField
+                  companyId={companyId}
+                  documentType="quote"
+                  variant={quote ? "edit" : "create"}
+                  currentNumber={quote?.quoteNumber}
+                  editRecordId={quote?.id}
+                  mode={numberMode}
+                  onModeChange={setNumberMode}
+                  number={customNumber}
+                  onNumberChange={setCustomNumber}
+                  onValidityChange={setNumberValid}
+                  disabled={saving}
+                />
+              </div>
+            }
             <div data-admin-form-row="" className="k-form-grid" style={s.grid}>
               <Field label="Client">
                 <div style={s.pickerRow}>
@@ -194,43 +330,122 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
                     </Button>
                   )}
                 </div>
-                {!canCreateClient && <PermissionLackedHint perm="clients.manage.create" what="add a new client" />}
+                {!canCreateClient && (
+                  <PermissionLackedHint perm="clients.manage.create" what="add a new client" />
+                )}
               </Field>
               <Field label="Issue Date">
-                <input type="date" className="k-input" value={date} onChange={(e) => setDate(e.target.value)} />
+                <input
+                  type="date"
+                  className="k-input"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                />
               </Field>
-              <Field label={<>Valid for (days) <span style={s.opt}>(optional)</span></>}>
-                <input type="number" min={1} step={1} className="k-input" value={validForDays} onChange={(e) => setValidForDays(e.target.value)} placeholder="blank = no expiry" />
+              <Field
+                label={
+                  <>
+                    Valid for (days) <span style={s.opt}>(optional)</span>
+                  </>
+                }
+              >
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  className="k-input"
+                  value={validForDays}
+                  onChange={(e) => setValidForDays(e.target.value)}
+                  placeholder="blank = no expiry"
+                />
               </Field>
             </div>
             <div data-admin-form-row="" className="k-form-grid" style={s.grid}>
-              <Field label={<>Customer Enquiry Ref <span style={s.opt}>(optional)</span></>}>
-                <input type="text" className="k-input" value={enquiryRef} onChange={(e) => setEnquiryRef(e.target.value)} placeholder="Their RFQ / enquiry number" />
+              <Field
+                label={
+                  <>
+                    Customer Enquiry Ref <span style={s.opt}>(optional)</span>
+                  </>
+                }
+              >
+                <input
+                  type="text"
+                  className="k-input"
+                  value={enquiryRef}
+                  onChange={(e) => setEnquiryRef(e.target.value)}
+                  placeholder="Their RFQ / enquiry number"
+                />
               </Field>
-              <Field label={<>Enquiry Date <span style={s.opt}>(optional)</span></>}>
-                <input type="date" className="k-input" value={enquiryDate} onChange={(e) => setEnquiryDate(e.target.value)} />
+              <Field
+                label={
+                  <>
+                    Enquiry Date <span style={s.opt}>(optional)</span>
+                  </>
+                }
+              >
+                <input
+                  type="date"
+                  className="k-input"
+                  value={enquiryDate}
+                  onChange={(e) => setEnquiryDate(e.target.value)}
+                />
               </Field>
               <Field label="GST Rate (%)">
-                <input type="number" min="0" max="100" step="0.01" className="k-input" style={{ textAlign: "right" }} value={gstRate} onChange={(e) => setGstRate(e.target.value)} />
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  className="k-input"
+                  style={{ textAlign: "right" }}
+                  value={gstRate}
+                  onChange={(e) => setGstRate(e.target.value)}
+                />
               </Field>
-              <Field label={<>Contact Person <span style={s.opt}>(optional)</span></>}>
+              <Field
+                label={
+                  <>
+                    Contact Person <span style={s.opt}>(optional)</span>
+                  </>
+                }
+              >
                 {contactOptions.length > 0 ? (
-                  <select className="k-select" value={contactPerson} onChange={(e) => setContactPerson(e.target.value)}>
+                  <select
+                    className="k-select"
+                    value={contactPerson}
+                    onChange={(e) => setContactPerson(e.target.value)}
+                  >
                     <option value="">(none)</option>
-                    {contactPerson && !contactOptions.includes(contactPerson) && <option value={contactPerson}>{contactPerson}</option>}
-                    {contactOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+                    {contactPerson && !contactOptions.includes(contactPerson) && (
+                      <option value={contactPerson}>{contactPerson}</option>
+                    )}
+                    {contactOptions.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
                   </select>
                 ) : (
-                  <input type="text" className="k-input" value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} placeholder={client ? "Optional (client has no saved contacts)" : "Pick a client first"} disabled={!client} />
+                  <input
+                    type="text"
+                    className="k-input"
+                    value={contactPerson}
+                    onChange={(e) => setContactPerson(e.target.value)}
+                    placeholder={
+                      client ? "Optional (client has no saved contacts)" : "Pick a client first"
+                    }
+                    disabled={!client}
+                  />
                 )}
               </Field>
             </div>
 
-            <LineItemsEditor companyId={companyId}
+            <LineItemsEditor
+              companyId={companyId}
               entryModeKey="quote"
               showImage
-              onUploadImage={async file => (await uploadQuoteLineImage(companyId, file)).data.url}
-              onImageBusyChange={delta => setImageUploads(count => Math.max(0, count + delta))}
+              onUploadImage={async (file) => (await uploadQuoteLineImage(companyId, file)).data.url}
+              onImageBusyChange={(delta) => setImageUploads((count) => Math.max(0, count + delta))}
               items={items}
               onItemsChange={setItems}
               makeBlankItem={blankItem}
@@ -247,28 +462,81 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
             />
 
             <div style={s.totals}>
-              <div style={s.tRow}><span>Subtotal</span><span style={s.tAmt}>Rs {money(totals.subtotal)}</span></div>
+              <div style={s.tRow}>
+                <span>Subtotal</span>
+                <span style={s.tAmt}>Rs {money(totals.subtotal)}</span>
+              </div>
               <div style={s.discRow}>
-                <label htmlFor="quote-discount" style={s.discLabel}>Discount <span style={s.opt}>(whole quote)</span></label>
-                <input id="quote-discount" className="k-input" style={{ ...s.discInput, ...(totals.error ? s.inputError : null) }} value={quoteDiscount} onChange={(e) => setQuoteDiscount(e.target.value)} placeholder="5% or 500" />
-                <span style={totals.error ? s.discErr : s.tAmt}>{totals.error || (totals.discount ? `− Rs ${money(totals.discount)}` : "—")}</span>
+                <label htmlFor="quote-discount" style={s.discLabel}>
+                  Discount <span style={s.opt}>(whole quote)</span>
+                </label>
+                <input
+                  id="quote-discount"
+                  className="k-input"
+                  style={{ ...s.discInput, ...(totals.error ? s.inputError : null) }}
+                  value={quoteDiscount}
+                  onChange={(e) => setQuoteDiscount(e.target.value)}
+                  placeholder="5% or 500"
+                />
+                <span style={totals.error ? s.discErr : s.tAmt}>
+                  {totals.error || (totals.discount ? `− Rs ${money(totals.discount)}` : "—")}
+                </span>
               </div>
               {String(quoteDiscount).trim() !== "" && (
-                <input aria-label="Quote discount reason" className="k-input" style={{ marginTop: "0.35rem" }} value={quoteDiscountReason} maxLength={200} onChange={(e) => setQuoteDiscountReason(e.target.value)} placeholder="Reason (optional), e.g. bulk order" />
+                <input
+                  aria-label="Quote discount reason"
+                  className="k-input"
+                  style={{ marginTop: "0.35rem" }}
+                  value={quoteDiscountReason}
+                  maxLength={200}
+                  onChange={(e) => setQuoteDiscountReason(e.target.value)}
+                  placeholder="Reason (optional), e.g. bulk order"
+                />
               )}
-              <div style={s.tRow}><span>GST @ {gstRate || 0}%{totals.discount ? ` on Rs ${money(totals.taxable)}` : ""}</span><span style={s.tAmt}>Rs {money(totals.gstAmount)}</span></div>
-              <div style={{ ...s.tRow, ...s.grand }}><span>Grand Total</span><span style={s.tAmt}>Rs {money(totals.grandTotal)}</span></div>
+              <div style={s.tRow}>
+                <span>
+                  GST @ {gstRate || 0}%{totals.discount ? ` on Rs ${money(totals.taxable)}` : ""}
+                </span>
+                <span style={s.tAmt}>Rs {money(totals.gstAmount)}</span>
+              </div>
+              <div style={{ ...s.tRow, ...s.grand }}>
+                <span>Grand Total</span>
+                <span style={s.tAmt}>Rs {money(totals.grandTotal)}</span>
+              </div>
             </div>
 
-            <DocumentNotesEditor value={notes} onChange={setNotes} label="Notes / Terms (optional)" />
+            <DocumentNotesEditor
+              value={notes}
+              onChange={setNotes}
+              label="Notes / Terms (optional)"
+            />
 
             <div style={{ marginTop: "1rem" }}>
-              <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="SalesQuote" entityId={quote?.id ?? null} mode="edit" />
+              <AttachmentManager
+                ref={attachmentRef}
+                companyId={companyId}
+                entityType="SalesQuote"
+                entityId={quote?.id ?? null}
+                mode="edit"
+              />
             </div>
           </div>
           <div data-admin-footer="" style={formStyles.footer}>
-            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
-            <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.6 : 1 }} disabled={disabled}>{saving ? "Saving..." : isEdit ? "Update Quote" : "Save Quote"}</button>
+            <button
+              data-admin-close=""
+              type="button"
+              style={{ ...formStyles.button, ...formStyles.cancel }}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.6 : 1 }}
+              disabled={disabled}
+            >
+              {saving ? "Saving..." : isEdit ? "Update Quote" : "Save Quote"}
+            </button>
           </div>
         </form>
       </div>
@@ -287,8 +555,13 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
             setShowAddClient(false);
             const { data } = await getClientsByCompany(companyId).catch(() => ({ data: [] }));
             setClients(data || []);
-            if (created?.id) setClient((data || []).find((c) => String(c.id) === String(created.id))
-              || { id: created.id, label: created.name });
+            if (created?.id)
+              setClient(
+                (data || []).find((c) => String(c.id) === String(created.id)) || {
+                  id: created.id,
+                  label: created.name,
+                },
+              );
           }}
         />
       )}
@@ -297,7 +570,12 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
         <ItemTypeForm
           companyId={companyId}
           onClose={() => setShowAddItemType(false)}
-          onSaved={() => { setShowAddItemType(false); getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => {}); }}
+          onSaved={() => {
+            setShowAddItemType(false);
+            getItemTypes(companyId)
+              .then(({ data }) => setItemTypes(data || []))
+              .catch(() => {});
+          }}
         />
       )}
     </div>
@@ -308,15 +586,52 @@ const s = {
   grid: { gap: "var(--k-gap)", marginBottom: "1rem" },
   // New Client sits beside the picker rather than on a line of its own.
   pickerRow: { display: "flex", gap: "0.5rem", alignItems: "stretch" },
-  inlineAddBtn: { flexShrink: 0, whiteSpace: "nowrap", color: "var(--k-teal)", borderColor: "var(--k-teal)" },
+  inlineAddBtn: {
+    flexShrink: 0,
+    whiteSpace: "nowrap",
+    color: "var(--k-teal)",
+    borderColor: "var(--k-teal)",
+  },
   opt: { color: "var(--k-muted)", fontWeight: 400 },
-  totals: { marginTop: "1rem", marginLeft: "auto", width: "100%", maxWidth: 380, boxSizing: "border-box" },
+  totals: {
+    marginTop: "1rem",
+    marginLeft: "auto",
+    width: "100%",
+    maxWidth: 380,
+    boxSizing: "border-box",
+  },
   tAmt: { whiteSpace: "nowrap", textAlign: "right" },
-  discRow: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.3rem 0", fontSize: "var(--k-font)", color: "var(--k-muted)" },
+  discRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    padding: "0.3rem 0",
+    fontSize: "var(--k-font)",
+    color: "var(--k-muted)",
+  },
   discLabel: { flex: "1 1 auto", minWidth: 0 },
   discInput: { width: 110, flex: "0 0 110px", textAlign: "right" },
-  discErr: { whiteSpace: "nowrap", color: "var(--k-danger)", fontSize: "var(--k-font-sm)", fontWeight: 600 },
+  discErr: {
+    whiteSpace: "nowrap",
+    color: "var(--k-danger)",
+    fontSize: "var(--k-font-sm)",
+    fontWeight: 600,
+  },
   inputError: { borderColor: "var(--k-danger)", background: "var(--k-danger-bg)" },
-  tRow: { display: "flex", justifyContent: "space-between", gap: "0.75rem", padding: "0.25rem 0", fontSize: "var(--k-font)", color: "var(--k-muted)" },
-  grand: { borderTop: "2px solid var(--k-blue)", marginTop: 4, paddingTop: 8, fontWeight: 800, fontSize: "calc(var(--k-font) + 0.1rem)", color: "var(--k-blue)" },
+  tRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "0.75rem",
+    padding: "0.25rem 0",
+    fontSize: "var(--k-font)",
+    color: "var(--k-muted)",
+  },
+  grand: {
+    borderTop: "2px solid var(--k-blue)",
+    marginTop: 4,
+    paddingTop: 8,
+    fontWeight: 800,
+    fontSize: "calc(var(--k-font) + 0.1rem)",
+    color: "var(--k-blue)",
+  },
 };

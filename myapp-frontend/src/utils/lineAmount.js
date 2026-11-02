@@ -92,7 +92,8 @@ export function recalcLine({ quantity, unitPrice, lineTotal }, edited) {
 
   if (edited === "lineTotal") {
     // The total is the operator's word; the rate absorbs the remainder.
-    if (!(q > 0) || !Number.isFinite(t)) return { quantity: qStr, unitPrice: pStr, lineTotal: tStr };
+    if (!(q > 0) || !Number.isFinite(t))
+      return { quantity: qStr, unitPrice: pStr, lineTotal: tStr };
     const derived = unitPriceFrom(t, q);
     return { quantity: qStr, unitPrice: asText(derived), lineTotal: tStr };
   }
@@ -102,7 +103,11 @@ export function recalcLine({ quantity, unitPrice, lineTotal }, edited) {
     // fixed. With a rate present the total follows it; with only a total
     // present the rate re-derives against the new quantity.
     if (Number.isFinite(p) && pStr !== "") {
-      return { quantity: qStr, unitPrice: pStr, lineTotal: q > 0 ? asText(lineTotalFrom(q, p)) : "" };
+      return {
+        quantity: qStr,
+        unitPrice: pStr,
+        lineTotal: q > 0 ? asText(lineTotalFrom(q, p)) : "",
+      };
     }
     if (Number.isFinite(t) && q > 0) {
       return { quantity: qStr, unitPrice: asText(unitPriceFrom(t, q)), lineTotal: tStr };
@@ -140,7 +145,8 @@ export function applyLineEntry({ quantity, unitPrice, lineTotal }, field, value,
     const next = { ...row, [field]: value ?? "" };
     const t = parseFloat(next.lineTotal);
     const q = parseFloat(next.quantity);
-    if (String(next.lineTotal).trim() === "" || !Number.isFinite(t)) return { ...next, unitPrice: "" };
+    if (String(next.lineTotal).trim() === "" || !Number.isFinite(t))
+      return { ...next, unitPrice: "" };
     const p = unitPriceFrom(t, q);
     return { ...next, unitPrice: p == null ? "" : String(p) };
   }
@@ -161,13 +167,24 @@ export function applyLineEntry({ quantity, unitPrice, lineTotal }, field, value,
 export function lineForMode({ quantity, unitPrice, lineTotal }, mode) {
   const q = parseFloat(quantity);
   const p = parseFloat(unitPrice);
-  const total = String(lineTotal ?? "").trim() !== "" && Number.isFinite(parseFloat(lineTotal))
-    ? parseFloat(lineTotal)
-    : (q > 0 && Number.isFinite(p) ? lineTotalFrom(q, p) : null);
+  const total =
+    String(lineTotal ?? "").trim() !== "" && Number.isFinite(parseFloat(lineTotal))
+      ? parseFloat(lineTotal)
+      : q > 0 && Number.isFinite(p)
+        ? lineTotalFrom(q, p)
+        : null;
   if (mode === ENTRY_MODE.total)
-    return { quantity: quantity ?? "", unitPrice: unitPrice ?? "", lineTotal: total == null ? "" : String(total) };
+    return {
+      quantity: quantity ?? "",
+      unitPrice: unitPrice ?? "",
+      lineTotal: total == null ? "" : String(total),
+    };
   const shown = Number.isFinite(p) ? displayUnitPrice(p, q, total) : (unitPrice ?? "");
-  return { quantity: quantity ?? "", unitPrice: String(shown), lineTotal: total == null ? "" : String(total) };
+  return {
+    quantity: quantity ?? "",
+    unitPrice: String(shown),
+    lineTotal: total == null ? "" : String(total),
+  };
 }
 
 /**

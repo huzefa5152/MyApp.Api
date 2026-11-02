@@ -27,9 +27,7 @@ export default function CompanyPage() {
     setShowModal(true);
   };
 
-  const filtered = companies.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = companies.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div>
@@ -38,7 +36,13 @@ export default function CompanyPage() {
         tone="blue"
         title="Companies"
         subtitle={`${companies.length} registered ${companies.length === 1 ? "company" : "companies"}`}
-        actions={canCreate && <Button variant="primary" icon={MdAdd} onClick={handleAdd}>New Company</Button>}
+        actions={
+          canCreate && (
+            <Button variant="primary" icon={MdAdd} onClick={handleAdd}>
+              New Company
+            </Button>
+          )
+        }
       />
 
       {companies.length > 2 && (
@@ -47,17 +51,17 @@ export default function CompanyPage() {
         </Toolbar>
       )}
 
-      <RecordsViewport label="Company records">{filtered.length === 0 ? (
-        <EmptyState icon={MdBusiness}>
-          {companies.length === 0 ? "No companies added yet. Click \"New Company\" to get started." : "No companies match your search."}
-        </EmptyState>
-      ) : (
-        <CompanyList
-          companies={filtered}
-          onEdit={handleEdit}
-          fetchCompanies={refreshCompanies}
-        />
-      )}</RecordsViewport>
+      <RecordsViewport label="Company records">
+        {filtered.length === 0 ? (
+          <EmptyState icon={MdBusiness}>
+            {companies.length === 0
+              ? 'No companies added yet. Click "New Company" to get started.'
+              : "No companies match your search."}
+          </EmptyState>
+        ) : (
+          <CompanyList companies={filtered} onEdit={handleEdit} fetchCompanies={refreshCompanies} />
+        )}
+      </RecordsViewport>
 
       {showModal && (
         <CompanyForm

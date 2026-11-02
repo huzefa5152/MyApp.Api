@@ -28,7 +28,9 @@ export function fmtMoney(v) {
 export function fmtDate(d) {
   if (!d) return "—";
   const dt = new Date(d);
-  return isNaN(dt) ? "—" : dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  return isNaN(dt)
+    ? "—"
+    : dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 const pad2 = (n) => String(n).padStart(2, "0");
@@ -41,8 +43,10 @@ export function ymd(d) {
 /** Whole days between a date and today; null when there is no date. */
 export function daysSince(d) {
   if (!d) return null;
-  const then = new Date(d); then.setHours(0, 0, 0, 0);
-  const now = new Date(); now.setHours(0, 0, 0, 0);
+  const then = new Date(d);
+  then.setHours(0, 0, 0, 0);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
   return Math.round((now - then) / 86400000);
 }
 
@@ -54,7 +58,8 @@ export function daysSince(d) {
  */
 export function change(current, previous) {
   if (previous == null || current == null) return null;
-  const cur = Number(current), prev = Number(previous);
+  const cur = Number(current),
+    prev = Number(previous);
   if (prev > 0 && cur >= 0) return { pct: ((cur - prev) / prev) * 100 };
   if (prev === 0 && cur > 0) return { isNew: true };
   return null;
@@ -63,7 +68,9 @@ export function change(current, previous) {
 /** /accounting/reports/catalog/{id}?… — the report screen reads its filters from the URL. */
 export function reportHref(id, params = {}) {
   const qs = new URLSearchParams();
-  Object.entries(params).forEach(([k, v]) => { if (v !== null && v !== undefined && v !== "") qs.set(k, String(v)); });
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== null && v !== undefined && v !== "") qs.set(k, String(v));
+  });
   const s = qs.toString();
   return `/accounting/reports/catalog/${id}${s ? `?${s}` : ""}`;
 }
@@ -121,7 +128,11 @@ export function Panel({ title, kind, action, children, className = "" }) {
 /** A small "Open …" link for a section or panel header. Null `to` → nothing. */
 export function HeadLink({ to, children }) {
   if (!to) return null;
-  return <Link className="cc-headlink" to={to}>{children} <MdChevronRight size={15} aria-hidden /></Link>;
+  return (
+    <Link className="cc-headlink" to={to}>
+      {children} <MdChevronRight size={15} aria-hidden />
+    </Link>
+  );
 }
 
 // ── Metric tile ──────────────────────────────────────────────────────────
@@ -130,7 +141,18 @@ export function HeadLink({ to, children }) {
  * One headline figure. `delta` is the change() result; `higherIsBetter`
  * decides its colour. `tone` colours the value itself (danger for a loss).
  */
-export function Metric({ label, value, sub, hint, delta, higherIsBetter = true, tone, to, accent = "#0d47a1", icon: Icon }) {
+export function Metric({
+  label,
+  value,
+  sub,
+  hint,
+  delta,
+  higherIsBetter = true,
+  tone,
+  to,
+  accent = "#0d47a1",
+  icon: Icon,
+}) {
   let deltaEl = null;
   if (delta?.isNew) {
     deltaEl = <span className="cc-delta cc-delta--flat">new vs previous</span>;
@@ -143,7 +165,8 @@ export function Metric({ label, value, sub, hint, delta, higherIsBetter = true, 
     deltaEl = (
       <span className={`cc-delta ${cls}`}>
         {!flat && <Arrow size={13} aria-hidden />}
-        {`${up ? "+" : ""}${delta.pct.toFixed(1)}%`} <span className="cc-delta__suffix">vs previous</span>
+        {`${up ? "+" : ""}${delta.pct.toFixed(1)}%`}{" "}
+        <span className="cc-delta__suffix">vs previous</span>
       </span>
     );
   }
@@ -152,7 +175,11 @@ export function Metric({ label, value, sub, hint, delta, higherIsBetter = true, 
     <>
       <span className="cc-metric__accent" style={{ background: accent }} aria-hidden />
       <span className="cc-metric__label">
-        {Icon && <span className="cc-metric__icon" style={{ color: accent, background: `${accent}14` }}><Icon size={15} aria-hidden /></span>}
+        {Icon && (
+          <span className="cc-metric__icon" style={{ color: accent, background: `${accent}14` }}>
+            <Icon size={15} aria-hidden />
+          </span>
+        )}
         {label}
       </span>
       <span className={`cc-metric__value ${tone ? `cc-tone--${tone}` : ""}`}>{value}</span>
@@ -161,18 +188,36 @@ export function Metric({ label, value, sub, hint, delta, higherIsBetter = true, 
       {/* The definition is a tooltip (title) for the eye and real text for a
           screen reader — inline it made every tile three lines taller. */}
       {hint && <span className="cc-sr">{hint}</span>}
-      {to &&<span className="cc-metric__drill">View records <MdChevronRight size={14} aria-hidden /></span>}
+      {to && (
+        <span className="cc-metric__drill">
+          View records <MdChevronRight size={14} aria-hidden />
+        </span>
+      )}
     </>
   );
 
-  return to
-    ? <Link to={to} className="cc-metric cc-metric--link" title={hint || undefined}
-        aria-label={`${label}: ${typeof value === "string" ? value : ""}${sub && typeof sub === "string" ? `, ${sub}` : ""}. View records`}>{body}</Link>
-    : <div className="cc-metric" title={hint || undefined}>{body}</div>;
+  return to ? (
+    <Link
+      to={to}
+      className="cc-metric cc-metric--link"
+      title={hint || undefined}
+      aria-label={`${label}: ${typeof value === "string" ? value : ""}${sub && typeof sub === "string" ? `, ${sub}` : ""}. View records`}
+    >
+      {body}
+    </Link>
+  ) : (
+    <div className="cc-metric" title={hint || undefined}>
+      {body}
+    </div>
+  );
 }
 
 export function MetricGrid({ children, min = 210 }) {
-  return <div className="cc-grid" style={{ "--cc-min": `${min}px` }}>{children}</div>;
+  return (
+    <div className="cc-grid" style={{ "--cc-min": `${min}px` }}>
+      {children}
+    </div>
+  );
 }
 
 // ── Quick actions ────────────────────────────────────────────────────────
@@ -186,7 +231,11 @@ export function QuickActions({ actions }) {
         const Icon = a.icon;
         return (
           <Link key={a.label} to={a.to} className="cc-action">
-            {Icon && <span className="cc-action__icon"><Icon size={18} aria-hidden /></span>}
+            {Icon && (
+              <span className="cc-action__icon">
+                <Icon size={18} aria-hidden />
+              </span>
+            )}
             <span className="cc-action__label">{a.label}</span>
           </Link>
         );
@@ -216,14 +265,23 @@ export function AttentionList({ items, emptyText = "Nothing needs your attention
             </span>
             <span className="cc-attention__side">
               {it.figure && <span className="cc-attention__figure">{it.figure}</span>}
-              {it.to && it.actionLabel && <span className="cc-attention__cta">{it.actionLabel} <MdChevronRight size={14} aria-hidden /></span>}
+              {it.to && it.actionLabel && (
+                <span className="cc-attention__cta">
+                  {it.actionLabel} <MdChevronRight size={14} aria-hidden />
+                </span>
+              )}
             </span>
           </>
         );
         return (
           <li key={it.title}>
-            {it.to ? <Link to={it.to} className="cc-attention__row cc-attention__row--link">{inner}</Link>
-                   : <div className="cc-attention__row">{inner}</div>}
+            {it.to ? (
+              <Link to={it.to} className="cc-attention__row cc-attention__row--link">
+                {inner}
+              </Link>
+            ) : (
+              <div className="cc-attention__row">{inner}</div>
+            )}
           </li>
         );
       })}
@@ -259,7 +317,11 @@ export function TrendChart({ points, bars, line = null, height = 220, ariaLabel 
   const min = Math.min(0, ...values);
   const span = max - min || 1;
 
-  const H = height, padL = 8, padR = 8, padT = 12, padB = 26;
+  const H = height,
+    padL = 8,
+    padR = 8,
+    padT = 12,
+    padB = 26;
   const plotH = H - padT - padB;
   const y = (v) => padT + ((max - v) / span) * plotH;
   const slot = (W - padL - padR) / points.length;
@@ -269,14 +331,33 @@ export function TrendChart({ points, bars, line = null, height = 220, ariaLabel 
   const showEvery = Math.max(1, Math.ceil(points.length / Math.max(1, Math.floor(W / 56))));
 
   const linePath = line
-    ? points.map((p, i) => `${i ? "L" : "M"}${(padL + slot * i + slot / 2).toFixed(1)},${y(Number(p[line.key] || 0)).toFixed(1)}`).join(" ")
+    ? points
+        .map(
+          (p, i) =>
+            `${i ? "L" : "M"}${(padL + slot * i + slot / 2).toFixed(1)},${y(Number(p[line.key] || 0)).toFixed(1)}`,
+        )
+        .join(" ")
     : null;
 
   return (
     <figure className="cc-chart" ref={box}>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} role="img" aria-label={ariaLabel} className="cc-chart__svg">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%"
+        height={H}
+        role="img"
+        aria-label={ariaLabel}
+        className="cc-chart__svg"
+      >
         {[0, 0.25, 0.5, 0.75, 1].map((t) => (
-          <line key={t} x1={padL} x2={W - padR} y1={padT + t * plotH} y2={padT + t * plotH} className="cc-chart__grid" />
+          <line
+            key={t}
+            x1={padL}
+            x2={W - padR}
+            y1={padT + t * plotH}
+            y2={padT + t * plotH}
+            className="cc-chart__grid"
+          />
         ))}
         <line x1={padL} x2={W - padR} y1={zeroY} y2={zeroY} className="cc-chart__zero" />
         {points.map((p, i) => {
@@ -284,12 +365,27 @@ export function TrendChart({ points, bars, line = null, height = 220, ariaLabel 
           const tip = `${p.label}\n${[...bars, ...(line ? [line] : [])].map((s) => `${s.label}: ${fmtMoney(p[s.key])}`).join("\n")}`;
           const group = (
             <g>
-              <rect x={padL + slot * i} y={padT} width={slot} height={plotH} className="cc-chart__hit" />
+              <rect
+                x={padL + slot * i}
+                y={padT}
+                width={slot}
+                height={plotH}
+                className="cc-chart__hit"
+              />
               {bars.map((b, j) => {
                 const v = Number(p[b.key] || 0);
                 const top = Math.min(y(v), zeroY);
-                return <rect key={b.key} x={x0 + j * barW + 1} y={top} width={Math.max(barW - 2, 1)}
-                  height={Math.max(Math.abs(y(v) - zeroY), v ? 1 : 0)} rx={2} fill={b.color} />;
+                return (
+                  <rect
+                    key={b.key}
+                    x={x0 + j * barW + 1}
+                    y={top}
+                    width={Math.max(barW - 2, 1)}
+                    height={Math.max(Math.abs(y(v) - zeroY), v ? 1 : 0)}
+                    rx={2}
+                    fill={b.color}
+                  />
+                );
               })}
               <title>{tip}</title>
             </g>
@@ -297,21 +393,65 @@ export function TrendChart({ points, bars, line = null, height = 220, ariaLabel 
           if (!p.to) return <g key={p.label}>{group}</g>;
           const go = () => navigate(p.to);
           return (
-            <g key={p.label} role="link" tabIndex={0} className="cc-chart__link" aria-label={tip.replace(/\n/g, ", ")}
-              onClick={go} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } }}>
+            <g
+              key={p.label}
+              role="link"
+              tabIndex={0}
+              className="cc-chart__link"
+              aria-label={tip.replace(/\n/g, ", ")}
+              onClick={go}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  go();
+                }
+              }}
+            >
               {group}
             </g>
           );
         })}
-        {linePath && <path d={linePath} fill="none" stroke={line.color} strokeWidth={2.2} strokeLinejoin="round" pointerEvents="none" />}
-        {points.map((p, i) => (i % showEvery === 0 || i === points.length - 1) && (
-          <text key={p.label} x={padL + slot * i + slot / 2} y={H - 8} textAnchor="middle" className="cc-chart__axis">{p.short || p.label}</text>
-        ))}
+        {linePath && (
+          <path
+            d={linePath}
+            fill="none"
+            stroke={line.color}
+            strokeWidth={2.2}
+            strokeLinejoin="round"
+            pointerEvents="none"
+          />
+        )}
+        {points.map(
+          (p, i) =>
+            (i % showEvery === 0 || i === points.length - 1) && (
+              <text
+                key={p.label}
+                x={padL + slot * i + slot / 2}
+                y={H - 8}
+                textAnchor="middle"
+                className="cc-chart__axis"
+              >
+                {p.short || p.label}
+              </text>
+            ),
+        )}
       </svg>
       <figcaption className="cc-legend">
-        {bars.map((b) => <span key={b.key}><i style={{ background: b.color }} />{b.label}</span>)}
-        {line && <span><i className="cc-legend__line" style={{ background: line.color }} />{line.label}</span>}
-        <span className="cc-legend__scale">Scale {fmtMoney(min)} – {fmtMoney(max)}</span>
+        {bars.map((b) => (
+          <span key={b.key}>
+            <i style={{ background: b.color }} />
+            {b.label}
+          </span>
+        ))}
+        {line && (
+          <span>
+            <i className="cc-legend__line" style={{ background: line.color }} />
+            {line.label}
+          </span>
+        )}
+        <span className="cc-legend__scale">
+          Scale {fmtMoney(min)} – {fmtMoney(max)}
+        </span>
       </figcaption>
     </figure>
   );
@@ -336,11 +476,20 @@ export function AgingBar({ buckets, hrefFor }) {
   if (total <= 0) return <p className="cc-empty">Nothing outstanding.</p>;
   return (
     <div className="cc-aging">
-      <div className="cc-aging__bar" role="img"
-        aria-label={AGING.map((b) => `${b.label} ${fmtMoney(buckets[b.key])}`).join(", ")}>
+      <div
+        className="cc-aging__bar"
+        role="img"
+        aria-label={AGING.map((b) => `${b.label} ${fmtMoney(buckets[b.key])}`).join(", ")}
+      >
         {AGING.map((b) => {
           const v = Number(buckets[b.key] || 0);
-          return v > 0 ? <span key={b.key} style={{ width: `${(v / total) * 100}%`, background: b.color }} title={`${b.label}: ${fmtMoney(v)}`} /> : null;
+          return v > 0 ? (
+            <span
+              key={b.key}
+              style={{ width: `${(v / total) * 100}%`, background: b.color }}
+              title={`${b.label}: ${fmtMoney(v)}`}
+            />
+          ) : null;
         })}
       </div>
       <ul className="cc-aging__legend">
@@ -373,7 +522,11 @@ export function PartyTable({ columns, rows, hrefFor, emptyText = "No records." }
   return (
     <div className="cc-table" role="table" style={{ "--cc-cols": columns.length - 1 }}>
       <div className="cc-table__row cc-table__row--head" role="row">
-        {columns.map((c) => <span key={c.key} role="columnheader" className={c.money ? "cc-num" : ""}>{c.label}</span>)}
+        {columns.map((c) => (
+          <span key={c.key} role="columnheader" className={c.money ? "cc-num" : ""}>
+            {c.label}
+          </span>
+        ))}
       </div>
       {rows.map((r) => {
         const cells = columns.map((c, i) => {
@@ -381,16 +534,26 @@ export function PartyTable({ columns, rows, hrefFor, emptyText = "No records." }
           const content = c.render ? c.render(r) : c.money ? fmtMoney(raw) : raw;
           const tone = c.tone?.(r);
           return (
-            <span key={c.key} role="cell" data-label={i === 0 ? undefined : c.label}
-              className={`${i === 0 ? "cc-table__name" : ""} ${c.money ? "cc-num" : ""} ${tone ? `cc-tone--${tone}` : ""}`}>
+            <span
+              key={c.key}
+              role="cell"
+              data-label={i === 0 ? undefined : c.label}
+              className={`${i === 0 ? "cc-table__name" : ""} ${c.money ? "cc-num" : ""} ${tone ? `cc-tone--${tone}` : ""}`}
+            >
               {content}
             </span>
           );
         });
         const to = hrefFor?.(r);
-        return to
-          ? <Link key={r.id} to={to} role="row" className="cc-table__row cc-table__row--link">{cells}</Link>
-          : <div key={r.id} role="row" className="cc-table__row">{cells}</div>;
+        return to ? (
+          <Link key={r.id} to={to} role="row" className="cc-table__row cc-table__row--link">
+            {cells}
+          </Link>
+        ) : (
+          <div key={r.id} role="row" className="cc-table__row">
+            {cells}
+          </div>
+        );
       })}
     </div>
   );
@@ -402,8 +565,14 @@ export function Skeleton({ rows = 2 }) {
   return (
     <div aria-busy="true" aria-label="Loading">
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="cc-grid" style={{ "--cc-min": "210px", marginBottom: "var(--cc-gap)" }}>
-          {[0, 1, 2, 3].map((j) => <div key={j} className="cc-skeleton" />)}
+        <div
+          key={i}
+          className="cc-grid"
+          style={{ "--cc-min": "210px", marginBottom: "var(--cc-gap)" }}
+        >
+          {[0, 1, 2, 3].map((j) => (
+            <div key={j} className="cc-skeleton" />
+          ))}
         </div>
       ))}
     </div>
@@ -414,7 +583,11 @@ export function ErrorBanner({ message, onRetry }) {
   return (
     <div className="cc-error" role="alert">
       <span>{message}</span>
-      {onRetry && <button type="button" className="cc-error__retry" onClick={onRetry}>Try again</button>}
+      {onRetry && (
+        <button type="button" className="cc-error__retry" onClick={onRetry}>
+          Try again
+        </button>
+      )}
     </div>
   );
 }

@@ -1,4 +1,12 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+} from "react";
 import { getCompanies } from "../api/companyApi";
 import { getCompanyStamps } from "../api/stampApi";
 import { setActiveStamps } from "../utils/templateEngine";
@@ -24,23 +32,31 @@ export function CompanyProvider({ children }) {
   const stampRequest = useRef(0);
   const companyRequest = useRef(0);
 
-  const loadStamps = useCallback(async (companyId) => {
-    const request = ++stampRequest.current;
-    setCompanyStamps([]); setActiveStamps({});
-    if (!companyId || !canViewStamps) { setCompanyStamps([]); setActiveStamps({}); return; }
-    try {
-      const { data } = await getCompanyStamps(companyId);
-      if (request !== stampRequest.current) return;
-      const list = data || [];
-      setCompanyStamps(list);
-      setActiveStamps(Object.fromEntries(list.map((s) => [s.slug, s.url])));
-    } catch {
-      if (request !== stampRequest.current) return;
-      // No view permission or transient error — clear rather than leave stale.
+  const loadStamps = useCallback(
+    async (companyId) => {
+      const request = ++stampRequest.current;
       setCompanyStamps([]);
       setActiveStamps({});
-    }
-  }, [canViewStamps, token]);
+      if (!companyId || !canViewStamps) {
+        setCompanyStamps([]);
+        setActiveStamps({});
+        return;
+      }
+      try {
+        const { data } = await getCompanyStamps(companyId);
+        if (request !== stampRequest.current) return;
+        const list = data || [];
+        setCompanyStamps(list);
+        setActiveStamps(Object.fromEntries(list.map((s) => [s.slug, s.url])));
+      } catch {
+        if (request !== stampRequest.current) return;
+        // No view permission or transient error — clear rather than leave stale.
+        setCompanyStamps([]);
+        setActiveStamps({});
+      }
+    },
+    [canViewStamps, token],
+  );
 
   const fetchCompanies = useCallback(async () => {
     const request = ++companyRequest.current;
@@ -73,12 +89,15 @@ export function CompanyProvider({ children }) {
       setSelectedCompanyState(null);
       setLoading(false);
     }
-    return () => { ++companyRequest.current; };
+    return () => {
+      ++companyRequest.current;
+    };
   }, [isAuthenticated, token, fetchCompanies]);
 
   const setSelectedCompany = useCallback((company) => {
     ++stampRequest.current;
-    setCompanyStamps([]); setActiveStamps({});
+    setCompanyStamps([]);
+    setActiveStamps({});
     setSelectedCompanyState(company);
     if (company?.id) localStorage.setItem(STORAGE_KEY, company.id);
     else localStorage.removeItem(STORAGE_KEY);
@@ -87,7 +106,9 @@ export function CompanyProvider({ children }) {
   // (Re)load stamps whenever the selected company changes.
   useEffect(() => {
     loadStamps(isAuthenticated ? selectedCompany?.id || null : null);
-    return () => { ++stampRequest.current; };
+    return () => {
+      ++stampRequest.current;
+    };
   }, [selectedCompany?.id, isAuthenticated, loadStamps]);
 
   // Called by the Stamps tab after an upload / rename / delete so pickers +
@@ -121,8 +142,14 @@ export function CompanyProvider({ children }) {
   // "No Company Configured" screen.
   useEffect(() => {
     if (!isAuthenticated) return;
-    const revalidate = () => { refreshCompanies().catch(() => { /* transient */ }); };
-    const onVisible = () => { if (document.visibilityState === "visible") revalidate(); };
+    const revalidate = () => {
+      refreshCompanies().catch(() => {
+        /* transient */
+      });
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") revalidate();
+    };
     window.addEventListener("focus", revalidate);
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("company-access-denied", revalidate);
@@ -133,16 +160,28 @@ export function CompanyProvider({ children }) {
     };
   }, [isAuthenticated, refreshCompanies]);
 
-  const value = useMemo(() => ({ companies, selectedCompany, setSelectedCompany, refreshCompanies, loading, companyStamps, refreshStamps }),
-    [companies, selectedCompany, setSelectedCompany, refreshCompanies, loading, companyStamps, refreshStamps]);
-
-  return (
-    <CompanyContext.Provider
-      value={value}
-    >
-      {children}
-    </CompanyContext.Provider>
+  const value = useMemo(
+    () => ({
+      companies,
+      selectedCompany,
+      setSelectedCompany,
+      refreshCompanies,
+      loading,
+      companyStamps,
+      refreshStamps,
+    }),
+    [
+      companies,
+      selectedCompany,
+      setSelectedCompany,
+      refreshCompanies,
+      loading,
+      companyStamps,
+      refreshStamps,
+    ],
   );
+
+  return <CompanyContext.Provider value={value}>{children}</CompanyContext.Provider>;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components

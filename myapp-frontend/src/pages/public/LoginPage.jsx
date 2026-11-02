@@ -36,7 +36,9 @@ export default function LoginPage() {
         setSessionExpired(true);
         sessionStorage.removeItem("loginReason");
       }
-    } catch { /* private mode — non-fatal */ }
+    } catch {
+      /* private mode — non-fatal */
+    }
   }, []);
 
   const handleSubmit = async (e) => {
@@ -60,10 +62,18 @@ export default function LoginPage() {
       let returnTo = "/dashboard";
       try {
         const stored = sessionStorage.getItem("postLoginReturnTo");
-        if (stored && stored.startsWith("/") && !stored.startsWith("//") && stored !== "/" && !stored.startsWith("/login")) {
+        if (
+          stored &&
+          stored.startsWith("/") &&
+          !stored.startsWith("//") &&
+          stored !== "/" &&
+          !stored.startsWith("/login")
+        ) {
           returnTo = stored;
         }
-      } catch { /* non-fatal */ }
+      } catch {
+        /* non-fatal */
+      }
       const completed = await login(username.trim(), password, returnTo);
       if (completed !== false) navigate(returnTo, { replace: true });
     } catch (err) {
@@ -99,15 +109,28 @@ export default function LoginPage() {
           {/* The explicit {" "} keeps "Digital Invoicing" spaced when the
               <br/> is display:none in the compact mobile banner. */}
           <h1 className="ht-brand-title">
-            FBR Digital{" "}<br />Invoicing <em>ERP</em>
+            FBR Digital <br />
+            Invoicing <em>ERP</em>
           </h1>
 
           <ul className="ht-brand-features" role="list">
             {FEATURES.map((f) => (
               <li key={f} className="ht-brand-feature-item">
                 <span className="ht-feature-check" aria-hidden="true">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" fill="none" viewBox="0 0 16 16">
-                    <path d="M2.5 8.5 6 12l7.5-8" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="11"
+                    height="11"
+                    fill="none"
+                    viewBox="0 0 16 16"
+                  >
+                    <path
+                      d="M2.5 8.5 6 12l7.5-8"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
                   </svg>
                 </span>
                 {f}
@@ -132,9 +155,16 @@ export default function LoginPage() {
               wasn't a typo. */}
           {sessionExpired && !error && (
             <div className="ht-session-banner" role="status">
-              <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71V3.5z"/>
-                <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0z"/>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="17"
+                height="17"
+                fill="currentColor"
+                viewBox="0 0 16 16"
+                aria-hidden="true"
+              >
+                <path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71V3.5z" />
+                <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0z" />
               </svg>
               <span>
                 <strong>Your session expired.</strong> Please sign in again to continue.
@@ -146,7 +176,13 @@ export default function LoginPage() {
           {error && (
             <div key={errorKey} className="ht-error-alert" role="alert">
               <span className="ht-error-icon" aria-hidden="true">
-                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="15"
+                  height="15"
+                  fill="currentColor"
+                  viewBox="0 0 16 16"
+                >
                   <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" />
                 </svg>
               </span>
@@ -157,10 +193,18 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} noValidate>
             {/* Username field */}
             <div className="ht-field">
-              <label className="ht-field-label" htmlFor="ht-username">Username</label>
+              <label className="ht-field-label" htmlFor="ht-username">
+                Username
+              </label>
               <div className="ht-input-group">
                 <span className="ht-input-icon" aria-hidden="true">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    fill="currentColor"
+                    viewBox="0 0 16 16"
+                  >
                     <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.029 10 8 10c-2.029 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z" />
                   </svg>
                 </span>
@@ -181,10 +225,18 @@ export default function LoginPage() {
 
             {/* Password field */}
             <div className="ht-field">
-              <label className="ht-field-label" htmlFor="ht-password">Password</label>
+              <label className="ht-field-label" htmlFor="ht-password">
+                Password
+              </label>
               <div className="ht-input-group">
                 <span className="ht-input-icon" aria-hidden="true">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    fill="currentColor"
+                    viewBox="0 0 16 16"
+                  >
                     <path d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2zm3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z" />
                   </svg>
                 </span>
@@ -208,14 +260,26 @@ export default function LoginPage() {
                 >
                   {showPassword ? (
                     /* eye-slash */
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      fill="currentColor"
+                      viewBox="0 0 16 16"
+                    >
                       <path d="M13.359 11.238C15.06 9.72 16 8 16 8s-3-5.5-8-5.5a7.028 7.028 0 0 0-2.79.588l.77.771A5.944 5.944 0 0 1 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.134 13.134 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755-.165.165-.337.328-.517.486l.708.709z" />
                       <path d="M11.297 9.176a3.5 3.5 0 0 0-4.474-4.474l.823.823a2.5 2.5 0 0 1 2.829 2.829l.822.822zm-2.943 1.299.822.822a3.5 3.5 0 0 1-4.474-4.474l.823.823a2.5 2.5 0 0 0 2.829 2.829z" />
                       <path d="M3.35 5.47c-.18.16-.353.322-.518.487A13.134 13.134 0 0 0 1.172 8l.195.288c.335.48.83 1.12 1.465 1.755C4.121 11.332 5.881 12.5 8 12.5c.716 0 1.39-.133 2.02-.36l.77.772A7.029 7.029 0 0 1 8 13.5C3 13.5 0 8 0 8s.939-1.721 2.641-3.238l.708.709zm10.296 8.884-12-12 .708-.708 12 12-.708.708z" />
                     </svg>
                   ) : (
                     /* eye */
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      fill="currentColor"
+                      viewBox="0 0 16 16"
+                    >
                       <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z" />
                       <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z" />
                     </svg>
@@ -238,15 +302,30 @@ export default function LoginPage() {
               ) : (
                 <>
                   Sign in
-                  <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 16 16" aria-hidden="true">
-                    <path d="M3 8h10m0 0L9.5 4.5M13 8l-3.5 3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="15"
+                    height="15"
+                    fill="none"
+                    viewBox="0 0 16 16"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M3 8h10m0 0L9.5 4.5M13 8l-3.5 3.5"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
                   </svg>
                 </>
               )}
             </button>
           </form>
 
-          <p style={{textAlign:"center", padding:"0 16px"}}><Link to="/mcp-guide">Connect ChatGPT, Claude or a coding agent — MCP setup guide</Link></p>
+          <p style={{ textAlign: "center", padding: "0 16px" }}>
+            <Link to="/mcp-guide">Connect ChatGPT, Claude or a coding agent — MCP setup guide</Link>
+          </p>
           <div className="ht-form-footer">
             {/* Plain anchor to the SITE root, not a router Link: each
                 deployment's landing page lives at the real "/" — master's
@@ -255,15 +334,26 @@ export default function LoginPage() {
                 under the /admin basename and (on customize) bounce straight
                 back to /login. */}
             <a href="/" className="ht-back-link">
-              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16">
-                <path fillRule="evenodd" d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8z" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="13"
+                height="13"
+                fill="currentColor"
+                viewBox="0 0 16 16"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8z"
+                />
               </svg>
               Back to Website
             </a>
           </div>
         </div>
 
-        <p className="ht-form-fineprint">Secure session &middot; JWT-based access &middot; All activity is audited</p>
+        <p className="ht-form-fineprint">
+          Secure session &middot; JWT-based access &middot; All activity is audited
+        </p>
       </main>
     </div>
   );

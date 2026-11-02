@@ -17,7 +17,9 @@ export function useHiddenColumns(storageKey) {
     try {
       const list = JSON.parse(raw || "[]");
       return new Set(Array.isArray(list) ? list.map(String) : []);
-    } catch { return new Set(); }
+    } catch {
+      return new Set();
+    }
   }, [raw]);
   const setHidden = (next) => setRaw(next.size ? JSON.stringify([...next]) : null);
   return [hidden, setHidden];
@@ -31,11 +33,18 @@ export default function ColumnPicker({ columns, hidden, onChange, onReset, note 
 
   useEffect(() => {
     if (!open) return undefined;
-    const close = (e) => { if (wrap.current && !wrap.current.contains(e.target)) setOpen(false); };
-    const esc = (e) => { if (e.key === "Escape") setOpen(false); };
+    const close = (e) => {
+      if (wrap.current && !wrap.current.contains(e.target)) setOpen(false);
+    };
+    const esc = (e) => {
+      if (e.key === "Escape") setOpen(false);
+    };
     document.addEventListener("mousedown", close);
     document.addEventListener("keydown", esc);
-    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", esc); };
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", esc);
+    };
   }, [open]);
 
   if (columns.length < 2) return null;
@@ -57,15 +66,28 @@ export default function ColumnPicker({ columns, hidden, onChange, onReset, note 
         title="Choose which columns to show"
       >
         <span>Columns</span>
-        {shown < columns.length && <span className="rw-colpick__count">{shown}/{columns.length}</span>}
+        {shown < columns.length && (
+          <span className="rw-colpick__count">
+            {shown}/{columns.length}
+          </span>
+        )}
       </Button>
       {open && (
         <div className="rw-colpick__panel" role="group" aria-label="Columns to show">
           <div className="rw-colpick__head">
             <strong>Show columns</strong>
             <span style={{ display: "flex", gap: 12 }}>
-              {onReset && <button type="button" className="rw-colpick__link" onClick={onReset}>Reset</button>}
-              <button type="button" className="rw-colpick__link" onClick={() => onChange(new Set())} disabled={shown === columns.length}>
+              {onReset && (
+                <button type="button" className="rw-colpick__link" onClick={onReset}>
+                  Reset
+                </button>
+              )}
+              <button
+                type="button"
+                className="rw-colpick__link"
+                onClick={() => onChange(new Set())}
+                disabled={shown === columns.length}
+              >
                 Show all
               </button>
             </span>
@@ -76,15 +98,28 @@ export default function ColumnPicker({ columns, hidden, onChange, onReset, note 
               const on = !hidden.has(key);
               const last = on && shown === 1;
               return (
-                <label key={key} className={`rw-colpick__item${on ? " is-on" : ""}${last ? " is-locked" : ""}`} title={last ? "At least one column stays visible" : undefined}>
-                  <input type="checkbox" checked={on} disabled={last} onChange={() => toggle(key)} />
-                  <span className="rw-colpick__box" aria-hidden="true">{on && <MdCheck size={13} />}</span>
+                <label
+                  key={key}
+                  className={`rw-colpick__item${on ? " is-on" : ""}${last ? " is-locked" : ""}`}
+                  title={last ? "At least one column stays visible" : undefined}
+                >
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    disabled={last}
+                    onChange={() => toggle(key)}
+                  />
+                  <span className="rw-colpick__box" aria-hidden="true">
+                    {on && <MdCheck size={13} />}
+                  </span>
                   <span className="rw-colpick__label">{c.label || key}</span>
                 </label>
               );
             })}
           </div>
-          <p className="rw-colpick__note">{note || "Hidden columns are left out of Print, PDF and Excel too."}</p>
+          <p className="rw-colpick__note">
+            {note || "Hidden columns are left out of Print, PDF and Excel too."}
+          </p>
         </div>
       )}
     </div>

@@ -24,8 +24,10 @@ export function withBillFbrSection(html) {
   if (!html || /data-bill-fbr\s*=|\{\{\{?\s*fbrQrPngDataUrl\s*\}\}\}?/i.test(html)) return html;
   // Prefer the signature/footer boundary. Unknown custom layouts retain their
   // contents and get the block at the end of the document.
-  const footer = /<div\b[^>]*class=["'][^"']*\b(?:footer-section|footer-sect|sig-row|sigs|signatures)\b[^"']*["'][^>]*>/i;
+  const footer =
+    /<div\b[^>]*class=["'][^"']*\b(?:footer-section|footer-sect|sig-row|sigs|signatures)\b[^"']*["'][^>]*>/i;
   if (footer.test(html)) return html.replace(footer, (tag) => BILL_FBR_SECTION + tag);
-  if (/<\/body\s*>/i.test(html)) return html.replace(/<\/body\s*>/i, (tag) => BILL_FBR_SECTION + tag);
+  if (/<\/body\s*>/i.test(html))
+    return html.replace(/<\/body\s*>/i, (tag) => BILL_FBR_SECTION + tag);
   return html + BILL_FBR_SECTION;
 }

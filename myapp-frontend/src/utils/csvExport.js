@@ -10,7 +10,14 @@ export function csvSafe(raw) {
   const s = String(raw ?? "");
   if (!s) return s;
   const first = s[0];
-  if (first === "=" || first === "+" || first === "-" || first === "@" || first === "\t" || first === "\r") {
+  if (
+    first === "=" ||
+    first === "+" ||
+    first === "-" ||
+    first === "@" ||
+    first === "\t" ||
+    first === "\r"
+  ) {
     return "'" + s;
   }
   return s;

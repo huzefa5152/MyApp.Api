@@ -4,7 +4,20 @@ import { IconButton } from "../ui/Kit";
 import StatusBadge from "./StatusBadge";
 import AttachmentBadge from "./AttachmentBadge";
 
-export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onDelete, onPrint, onExportPdf, exportingId, printDisabled = false, printDisabledReason = "", attachCounts, onAttach }) {
+export default function GoodsReceiptTable({
+  receipts,
+  perms,
+  onView,
+  onEdit,
+  onDelete,
+  onPrint,
+  onExportPdf,
+  exportingId,
+  printDisabled = false,
+  printDisabledReason = "",
+  attachCounts,
+  onAttach,
+}) {
   const columns = [
     {
       key: "goodsReceiptNumber",
@@ -27,8 +40,8 @@ export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onD
       key: "receiptDate",
       header: "Date",
       width: 110,
-      accessor: (g) => g.receiptDate ? new Date(g.receiptDate).getTime() : 0,
-      render: (g) => g.receiptDate ? new Date(g.receiptDate).toLocaleDateString() : "—",
+      accessor: (g) => (g.receiptDate ? new Date(g.receiptDate).getTime() : 0),
+      render: (g) => (g.receiptDate ? new Date(g.receiptDate).toLocaleDateString() : "—"),
     },
     {
       key: "items",
@@ -42,7 +55,7 @@ export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onD
       key: "purchaseBillNumber",
       header: "Linked PB",
       width: 110,
-      render: (g) => g.purchaseBillNumber ? `#${g.purchaseBillNumber}` : "—",
+      render: (g) => (g.purchaseBillNumber ? `#${g.purchaseBillNumber}` : "—"),
     },
     {
       key: "supplierChallanNumber",
@@ -55,7 +68,7 @@ export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onD
       header: "Status",
       width: 130,
       accessor: (g) => g.status || "",
-      render: (g) => g.status ? <StatusBadge status={g.status} /> : "—",
+      render: (g) => (g.status ? <StatusBadge status={g.status} /> : "—"),
     },
   ];
 

@@ -11,7 +11,6 @@
  */
 
 export const taxInvoiceStarters = [
-
   // ─── 1. Classic Serif ────────────────────────────────────────
   {
     id: "taxinvoice-classic-serif",
@@ -630,7 +629,6 @@ table.items th.left { text-align: left; }
 </body></html>`,
   },
 
-
   // ─── 6. Elegant Premium (Charcoal + Gold) ────────────────────
   {
     id: "taxinvoice-elegant-premium",
@@ -1138,7 +1136,8 @@ table.items th.left { text-align: left; }
     id: "taxinvoice-bismillah",
     name: "Bismillah Header",
     type: "TaxInvoice",
-    description: "Opens with Bismillah in Arabic calligraphy, traditional Pakistani style with FBR block",
+    description:
+      "Opens with Bismillah in Arabic calligraphy, traditional Pakistani style with FBR block",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @media print { @page { size: A4; margin: 8mm 10mm; } .footer { page-break-inside: avoid; } .fbr-block, .fbr-strip, .fbr-box, .fbr-row, .fbr-section, .sb-qr, .no-break { page-break-inside: avoid; break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -1266,7 +1265,6 @@ tbody tr:nth-child(even) td { background: #fdf6e3 !important; }
 </div>
 </body></html>`,
   },
-
 
   // ─── 11. Green & Gold ────────────────────────────────────────
   {
@@ -1540,7 +1538,8 @@ tbody tr:nth-child(even) td { background: #e0f2f1 !important; }
     id: "taxinvoice-big-letterhead",
     name: "Big Letterhead",
     type: "TaxInvoice",
-    description: "Tall letterhead-style header with large logo space, full-bleed color bar and FBR footer",
+    description:
+      "Tall letterhead-style header with large logo space, full-bleed color bar and FBR footer",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @media print { @page { size: A4; margin: 0; } .footer { page-break-inside: avoid; } .fbr-block, .fbr-strip, .fbr-box, .fbr-row, .fbr-section, .sb-qr, .no-break { page-break-inside: avoid; break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -1811,7 +1810,8 @@ tbody tr:nth-child(even) td { background: #e8eaf6 !important; }
     id: "taxinvoice-government-grid",
     name: "Government-Form Grid",
     type: "TaxInvoice",
-    description: "FBR-official government-form style: all cells in a rigid grid with prominent FBR block",
+    description:
+      "FBR-official government-form style: all cells in a rigid grid with prominent FBR block",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @media print { @page { size: A4; margin: 7mm 9mm; } .footer { page-break-inside: avoid; } .fbr-block, .fbr-strip, .fbr-box, .fbr-row, .fbr-section, .sb-qr, .no-break { page-break-inside: avoid; break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -1974,5 +1974,4 @@ tbody tr:nth-child(even) td { background: #f7f7f7 !important; }
 </div>
 </body></html>`,
   },
-
 ];

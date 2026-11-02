@@ -32,7 +32,9 @@ async function blobError(err) {
       const parsed = JSON.parse(await data.text());
       err.response.data = parsed;
       if (!parsed.message && parsed.error) parsed.message = parsed.error;
-    } catch { /* not JSON — leave it */ }
+    } catch {
+      /* not JSON — leave it */
+    }
   }
   return err;
 }
@@ -40,7 +42,9 @@ async function blobError(err) {
 export async function downloadOnboardingSample(companyId, sheets, fileName) {
   try {
     const res = await httpClient.get(`${base(companyId)}/sample`, {
-      params: { sheets }, responseType: "blob", timeout: 60000,
+      params: { sheets },
+      responseType: "blob",
+      timeout: 60000,
     });
     saveBlob(res.data, fileName);
   } catch (err) {
@@ -50,14 +54,16 @@ export async function downloadOnboardingSample(companyId, sheets, fileName) {
 
 export async function previewOnboardingImport(companyId, file, sheets) {
   const { data } = await httpClient.post(`${base(companyId)}/preview`, form(file, sheets), {
-    headers: { "Content-Type": "multipart/form-data" }, timeout: 120000,
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: 120000,
   });
   return data;
 }
 
 export async function commitOnboardingImport(companyId, file, sheets) {
   const { data } = await httpClient.post(`${base(companyId)}/commit`, form(file, sheets), {
-    headers: { "Content-Type": "multipart/form-data" }, timeout: 300000,
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: 300000,
   });
   return data;
 }
@@ -65,7 +71,9 @@ export async function commitOnboardingImport(companyId, file, sheets) {
 export async function downloadOnboardingFixList(companyId, file, sheets, fileName) {
   try {
     const res = await httpClient.post(`${base(companyId)}/fix-list`, form(file, sheets), {
-      headers: { "Content-Type": "multipart/form-data" }, responseType: "blob", timeout: 120000,
+      headers: { "Content-Type": "multipart/form-data" },
+      responseType: "blob",
+      timeout: 120000,
     });
     saveBlob(res.data, fileName);
   } catch (err) {

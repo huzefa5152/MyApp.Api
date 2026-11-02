@@ -59,27 +59,11 @@ const EXPENSE_FILTERS = [
   FILTERS.search,
 ];
 
-const CUSTOMER_FILTERS = [
-  FILTERS.period,
-  FILTERS.client,
-  FILTERS.status,
-  FILTERS.search,
-];
+const CUSTOMER_FILTERS = [FILTERS.period, FILTERS.client, FILTERS.status, FILTERS.search];
 
-const SUPPLIER_FILTERS = [
-  FILTERS.period,
-  FILTERS.supplier,
-  FILTERS.status,
-  FILTERS.search,
-];
+const SUPPLIER_FILTERS = [FILTERS.period, FILTERS.supplier, FILTERS.status, FILTERS.search];
 
-const SALES_FILTERS = [
-  FILTERS.period,
-  FILTERS.client,
-  FILTERS.tax,
-  FILTERS.status,
-  FILTERS.search,
-];
+const SALES_FILTERS = [FILTERS.period, FILTERS.client, FILTERS.tax, FILTERS.status, FILTERS.search];
 
 const PURCHASE_FILTERS = [
   FILTERS.period,
@@ -89,12 +73,7 @@ const PURCHASE_FILTERS = [
   FILTERS.search,
 ];
 
-const TAX_FILTERS = [
-  FILTERS.period,
-  FILTERS.client,
-  FILTERS.supplier,
-  FILTERS.status,
-];
+const TAX_FILTERS = [FILTERS.period, FILTERS.client, FILTERS.supplier, FILTERS.status];
 
 const MONEY_FILTERS = [
   FILTERS.period,
@@ -333,16 +312,26 @@ export const REPORT_CATEGORIES = [
         path: "general-ledger",
         title: "General Ledger",
         blurb: "Every posting across all accounts in one chronological stream.",
-        filters: [FILTERS.period, FILTERS.account, FILTERS.accountGroup,
-                  FILTERS.status, FILTERS.search],
+        filters: [
+          FILTERS.period,
+          FILTERS.account,
+          FILTERS.accountGroup,
+          FILTERS.status,
+          FILTERS.search,
+        ],
       },
       {
         id: "account-balance-summary",
         path: "account-balances",
         title: "Account Balance Summary",
         blurb: "Opening, movement and closing per account, filterable by group and type.",
-        filters: [FILTERS.period, FILTERS.account, FILTERS.accountGroup,
-                  FILTERS.status, FILTERS.search],
+        filters: [
+          FILTERS.period,
+          FILTERS.account,
+          FILTERS.accountGroup,
+          FILTERS.status,
+          FILTERS.search,
+        ],
         exportId: "account-balances",
         drill: { filter: "accountId", to: "general-ledger" },
       },
@@ -357,7 +346,8 @@ export const REPORT_CATEGORIES = [
         id: "aged-receivables",
         path: "receivables-aging",
         title: "Accounts Receivable Aging",
-        blurb: "Outstanding customer balances bucketed by age. Click a customer for the invoices behind it.",
+        blurb:
+          "Outstanding customer balances bucketed by age. Click a customer for the invoices behind it.",
         filters: [FILTERS.period, FILTERS.client, FILTERS.status, FILTERS.search],
         featured: true,
         drill: { filter: "clientId", to: "customer-outstanding" },
@@ -423,7 +413,8 @@ export const REPORT_CATEGORIES = [
         id: "aged-payables",
         path: "payables-aging",
         title: "Accounts Payable Aging",
-        blurb: "Outstanding supplier balances bucketed by age. Click a supplier for the bills behind it.",
+        blurb:
+          "Outstanding supplier balances bucketed by age. Click a supplier for the bills behind it.",
         filters: [FILTERS.period, FILTERS.supplier, FILTERS.status, FILTERS.search],
         featured: true,
         drill: { filter: "supplierId", to: "supplier-outstanding" },
@@ -483,9 +474,9 @@ export const REPORT_CATEGORIES = [
         // Stated on the card rather than quietly omitted, because it was asked
         // for explicitly.
         blockedReason:
-          "Not applicable in this system: a sales invoice is always raised to a Client, "
-          + "and suppliers are purchase-side only. If you ever sell to a supplier, add them "
-          + "as a customer too and they will appear in the customer reports.",
+          "Not applicable in this system: a sales invoice is always raised to a Client, " +
+          "and suppliers are purchase-side only. If you ever sell to a supplier, add them " +
+          "as a customer too and they will appear in the customer reports.",
       },
     ],
   },
@@ -759,7 +750,8 @@ export const REPORT_CATEGORIES = [
         id: "posting-exceptions",
         path: "posting-exceptions",
         title: "Posting Exceptions",
-        blurb: "Suspense postings, documents with no ledger entry, unbalanced entries — and what to do.",
+        blurb:
+          "Suspense postings, documents with no ledger entry, unbalanced entries — and what to do.",
         filters: [FILTERS.period],
       },
     ],
@@ -825,7 +817,8 @@ export const REPORT_CATEGORIES = [
         id: "monthly-profit",
         path: "monthly-profit",
         title: "Monthly Profit",
-        blurb: "Revenue, cost of sales, gross profit and net profit per month — each month is its Profit & Loss.",
+        blurb:
+          "Revenue, cost of sales, gross profit and net profit per month — each month is its Profit & Loss.",
         filters: [FILTERS.period],
         // A trend needs more than one month to read as one.
         defaultPeriod: "thisYear",
@@ -843,7 +836,8 @@ export const REPORT_CATEGORIES = [
         id: "customer-profitability",
         path: "customer-profitability",
         title: "Customer Profitability",
-        blurb: "Revenue, cost of goods sold and margin per customer. Click a customer for their ledger.",
+        blurb:
+          "Revenue, cost of goods sold and margin per customer. Click a customer for their ledger.",
         filters: [FILTERS.period],
         drill: { filter: "clientId", to: "customer-ledger" },
       },
@@ -854,8 +848,8 @@ export const REPORT_CATEGORIES = [
 /** Flat lookup by report id. */
 export const REPORTS_BY_ID = Object.fromEntries(
   REPORT_CATEGORIES.flatMap((c) =>
-    c.reports.map((r) => [r.id, { ...r, categoryId: c.id, categoryTitle: c.title }])
-  )
+    c.reports.map((r) => [r.id, { ...r, categoryId: c.id, categoryTitle: c.title }]),
+  ),
 );
 
 /** Reports that are actually built (have a server path or a legacy tab). */
@@ -863,7 +857,6 @@ export const isAvailable = (report) =>
   !!report && !report.status && (!!report.path || !!report.legacy);
 
 /** The handful surfaced as quick links at the top of the index. */
-export const FEATURED_REPORT_IDS = REPORT_CATEGORIES
-  .flatMap((c) => c.reports)
+export const FEATURED_REPORT_IDS = REPORT_CATEGORIES.flatMap((c) => c.reports)
   .filter((r) => r.featured)
   .map((r) => r.id);

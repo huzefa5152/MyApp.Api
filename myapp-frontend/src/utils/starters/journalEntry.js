@@ -9,13 +9,13 @@
  */
 
 export const journalEntryStarters = [
-
   // ─── 1. Classic Serif (double-rule header, dark table head) — DEFAULT ────────
   {
     id: "journal-classic-serif",
     name: "Classic Serif",
     type: "JournalEntry",
-    description: "Traditional Times New Roman voucher with double-rule header and dark ledger header row",
+    description:
+      "Traditional Times New Roman voucher with double-rule header and dark ledger header row",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Journal Voucher {{reference}}</title><style>
 @media print { @page { size: A4; margin: 12mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -162,7 +162,8 @@ tr.total td.lbl { text-align: right; text-transform: uppercase; letter-spacing: 
     id: "journal-corporate-band",
     name: "Corporate Band",
     type: "JournalEntry",
-    description: "Full-width slate header band with white reversed company name and voucher reference",
+    description:
+      "Full-width slate header band with white reversed company name and voucher reference",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Journal Voucher {{reference}}</title><style>
 @media print { @page { size: A4; margin: 0; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -246,7 +247,8 @@ tr.total td.lbl { text-align: right; text-transform: uppercase; letter-spacing: 
     id: "journal-monochrome-ink",
     name: "Monochrome Ink-Saver",
     type: "JournalEntry",
-    description: "Hairline black borders only, no fills, pure black-and-white for minimum toner use",
+    description:
+      "Hairline black borders only, no fills, pure black-and-white for minimum toner use",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Journal Voucher {{reference}}</title><style>
 @media print { @page { size: A4; margin: 12mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -315,5 +317,4 @@ tr.total td.lbl { text-align: right; text-transform: uppercase; letter-spacing: 
 </div>
 </body></html>`,
   },
-
 ];

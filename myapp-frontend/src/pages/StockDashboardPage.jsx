@@ -1,17 +1,42 @@
 import { useState, useEffect, useCallback, useRef, Fragment } from "react";
-import { MdInventory, MdBusiness, MdAdd, MdHistory, MdClose, MdSwapHoriz, MdExpandMore, MdChevronRight, MdRefresh } from "react-icons/md";
+import {
+  MdInventory,
+  MdBusiness,
+  MdAdd,
+  MdHistory,
+  MdClose,
+  MdSwapHoriz,
+  MdExpandMore,
+  MdChevronRight,
+  MdRefresh,
+} from "react-icons/md";
 import { getStockOnHand, getStockMovements } from "../api/stockApi";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import Pagination from "../Components/Pagination";
 import StockEntryHistory from "../Components/StockEntryHistory";
 import StockEntryForm from "../Components/StockEntryForm";
-import { PageHeader, CompanyPicker, Button, IconButton, Toolbar, ToolbarSpacer, SearchBox, Tabs, TableWrap, StatGrid, StatCard, Alert, EmptyState, Loading } from "../ui/Kit";
+import {
+  PageHeader,
+  CompanyPicker,
+  Button,
+  IconButton,
+  Toolbar,
+  ToolbarSpacer,
+  SearchBox,
+  Tabs,
+  TableWrap,
+  StatGrid,
+  StatCard,
+  Alert,
+  EmptyState,
+  Loading,
+} from "../ui/Kit";
 import "./StockDashboardPage.css";
 
 export default function StockDashboardPage() {
-  const {selectedCompany} = useCompany();
-  return <CompanyStockDashboard key={selectedCompany?.id || 'none'}/>;
+  const { selectedCompany } = useCompany();
+  return <CompanyStockDashboard key={selectedCompany?.id || "none"} />;
 }
 
 function CompanyStockDashboard() {
@@ -21,9 +46,16 @@ function CompanyStockDashboard() {
   const canAdjust = has("stock.adjust.create");
   const canViewMovements = has("stock.movements.view");
   const [entryDraft, setEntryDraft] = useState(null);
-  const [loadError, setLoadError] = useState('');
-  const alive = useRef(true), loadRequest = useRef(0), movementRequest = useRef(0);
-  useEffect(() => {alive.current = true; return () => {alive.current = false;};}, []);
+  const [loadError, setLoadError] = useState("");
+  const alive = useRef(true),
+    loadRequest = useRef(0),
+    movementRequest = useRef(0);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
 
   const [tab, setTab] = useState("onhand");
   const [onhand, setOnhand] = useState([]);
@@ -39,13 +71,13 @@ function CompanyStockDashboard() {
   // On-hand drill-down: which item-type row is expanded, plus a cache of
   // the full movement history per item type (so re-expanding is instant).
   const [expandedId, setExpandedId] = useState(null);
-  const [drill, setDrill] = useState({});        // itemTypeId → movement[]
+  const [drill, setDrill] = useState({}); // itemTypeId → movement[]
   const [drillLoading, setDrillLoading] = useState(null); // itemTypeId being fetched
 
   const fetchAll = useCallback(async () => {
     if (!selectedCompany) return;
     const request = ++loadRequest.current;
-    setLoadError('');
+    setLoadError("");
     setMovPage(1);
     setLoading(true);
     try {
@@ -57,7 +89,9 @@ function CompanyStockDashboard() {
         // until the tab was opened, which made the tab look empty even
         // when there were 20+ records waiting.
         canViewMovements
-          ? getStockMovements(selectedCompany.id, { page: 1 }).catch(() => ({ data: { items: [], totalCount: 0, pageSize: 0 } }))
+          ? getStockMovements(selectedCompany.id, { page: 1 }).catch(() => ({
+              data: { items: [], totalCount: 0, pageSize: 0 },
+            }))
           : Promise.resolve({ data: { items: [], totalCount: 0, pageSize: 0 } }),
       ]);
       if (!alive.current || request !== loadRequest.current) return;
@@ -71,45 +105,55 @@ function CompanyStockDashboard() {
     } catch {
       if (!alive.current || request !== loadRequest.current) return;
       setOnhand([]);
-      setLoadError('Could not load inventory. Please refresh.');
+      setLoadError("Could not load inventory. Please refresh.");
     } finally {
       if (alive.current && request === loadRequest.current) setLoading(false);
     }
   }, [selectedCompany, canViewMovements]);
 
-  const fetchMovements = useCallback(async (pg) => {
-    if (!selectedCompany || !canViewMovements) return;
-    const request = ++movementRequest.current;
-    try {
-      // Don't send pageSize — let the server apply Pagination:DefaultPageSize
-      // from appsettings.json. Read it back from the response so totalPages
-      // is accurate.
-      const { data } = await getStockMovements(selectedCompany.id, { page: pg || movPage });
-      if (!alive.current || request !== movementRequest.current) return;
-      setMovements(data.items || []);
-      setMovTotal(data.totalCount || 0);
-      setMovPageSize(data.pageSize || 0);
-    } catch {
-      if (!alive.current || request !== movementRequest.current) return;
-      setMovements([]); setMovTotal(0);
-    }
-  }, [selectedCompany, movPage, canViewMovements]);
-
-  useEffect(() => { if (selectedCompany) fetchAll(); }, [fetchAll]);
-  useEffect(() => { if (tab === "movements") fetchMovements(movPage); }, [tab, selectedCompany, movPage]);
-
-  const filteredOnhand = onhand.filter(r =>
-    !search || r.itemTypeName.toLowerCase().includes(search.toLowerCase()) ||
-    (r.hsCode || "").toLowerCase().includes(search.toLowerCase())
+  const fetchMovements = useCallback(
+    async (pg) => {
+      if (!selectedCompany || !canViewMovements) return;
+      const request = ++movementRequest.current;
+      try {
+        // Don't send pageSize — let the server apply Pagination:DefaultPageSize
+        // from appsettings.json. Read it back from the response so totalPages
+        // is accurate.
+        const { data } = await getStockMovements(selectedCompany.id, { page: pg || movPage });
+        if (!alive.current || request !== movementRequest.current) return;
+        setMovements(data.items || []);
+        setMovTotal(data.totalCount || 0);
+        setMovPageSize(data.pageSize || 0);
+      } catch {
+        if (!alive.current || request !== movementRequest.current) return;
+        setMovements([]);
+        setMovTotal(0);
+      }
+    },
+    [selectedCompany, movPage, canViewMovements],
   );
 
-  const openAdjustForRow = (row) => setEntryDraft({kind:'Adjustment',itemId:row.itemTypeId});
+  useEffect(() => {
+    if (selectedCompany) fetchAll();
+  }, [fetchAll]);
+  useEffect(() => {
+    if (tab === "movements") fetchMovements(movPage);
+  }, [tab, selectedCompany, movPage]);
+
+  const filteredOnhand = onhand.filter(
+    (r) =>
+      !search ||
+      r.itemTypeName.toLowerCase().includes(search.toLowerCase()) ||
+      (r.hsCode || "").toLowerCase().includes(search.toLowerCase()),
+  );
+
+  const openAdjustForRow = (row) => setEntryDraft({ kind: "Adjustment", itemId: row.itemTypeId });
 
   // Expand/collapse the per-item movement drill-down. Pure toggle — the
   // fetch is driven by the effect below so a cache-clear (after an
   // adjustment / bill edit) re-loads an already-open row automatically.
   const toggleDrill = useCallback((itemTypeId) => {
-    setExpandedId(prev => (prev === itemTypeId ? null : itemTypeId));
+    setExpandedId((prev) => (prev === itemTypeId ? null : itemTypeId));
   }, []);
 
   // Load the FULL movement history for the expanded item (paging through
@@ -122,27 +166,38 @@ function CompanyStockDashboard() {
     (async () => {
       setDrillLoading(expandedId);
       try {
-        let page = 1, all = [], total = 0, size = 0;
+        let page = 1,
+          all = [],
+          total = 0,
+          size = 0;
         do {
-          const { data } = await getStockMovements(selectedCompany.id, { itemTypeId: expandedId, page });
+          const { data } = await getStockMovements(selectedCompany.id, {
+            itemTypeId: expandedId,
+            page,
+          });
           all = all.concat(data.items || []);
           total = data.totalCount || 0;
-          size = data.pageSize || (data.items?.length || 0);
+          size = data.pageSize || data.items?.length || 0;
           page += 1;
           if (!size) break;
         } while (all.length < total);
-        if (!cancelled) setDrill(prev => ({ ...prev, [expandedId]: all }));
+        if (!cancelled) setDrill((prev) => ({ ...prev, [expandedId]: all }));
       } catch {
-        if (!cancelled) setDrill(prev => ({ ...prev, [expandedId]: [] }));
+        if (!cancelled) setDrill((prev) => ({ ...prev, [expandedId]: [] }));
       } finally {
         if (!cancelled) setDrillLoading(null);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [expandedId, drill, canViewMovements, selectedCompany]);
 
   // Drop the drill cache + collapse whenever the company changes.
-  useEffect(() => { setExpandedId(null); setDrill({}); }, [selectedCompany]);
+  useEffect(() => {
+    setExpandedId(null);
+    setDrill({});
+  }, [selectedCompany]);
 
   const tabs = [
     { key: "onhand", label: "Stock on hand" },
@@ -170,55 +225,130 @@ function CompanyStockDashboard() {
           {loadError && <Alert tone="error">{loadError}</Alert>}
 
           <StatGrid>
-            <StatCard label="Stock items" value={loading ? "—" : onhand.length} hint="Tracked inventory" tone="blue" />
-            <StatCard label="Stock value" value={loading ? "—" : `Rs. ${onhand.reduce((total, row) => total + (row.stockValue || 0), 0).toLocaleString("en-PK", { maximumFractionDigits: 2 })}`} hint="Current cost basis" tone="teal" />
-            <StatCard label="Out of stock" value={loading ? "—" : onhand.filter(row => row.onHand <= 0).length} hint="Items to review" tone="orange" />
-            <StatCard label="Inventory tracking" value={selectedCompany.inventoryTrackingEnabled ? "Enabled" : "Off"} hint="For this company" tone="purple" />
+            <StatCard
+              label="Stock items"
+              value={loading ? "—" : onhand.length}
+              hint="Tracked inventory"
+              tone="blue"
+            />
+            <StatCard
+              label="Stock value"
+              value={
+                loading
+                  ? "—"
+                  : `Rs. ${onhand.reduce((total, row) => total + (row.stockValue || 0), 0).toLocaleString("en-PK", { maximumFractionDigits: 2 })}`
+              }
+              hint="Current cost basis"
+              tone="teal"
+            />
+            <StatCard
+              label="Out of stock"
+              value={loading ? "—" : onhand.filter((row) => row.onHand <= 0).length}
+              hint="Items to review"
+              tone="orange"
+            />
+            <StatCard
+              label="Inventory tracking"
+              value={selectedCompany.inventoryTrackingEnabled ? "Enabled" : "Off"}
+              hint="For this company"
+              tone="purple"
+            />
           </StatGrid>
 
           {!selectedCompany.inventoryTrackingEnabled && (
             <Alert tone="warn">Tracking is off. Automatic stock movements are paused.</Alert>
           )}
 
-          <Tabs tabs={tabs} value={tab} onChange={setTab} label="Inventory views" idPrefix="stock-tab" />
+          <Tabs
+            tabs={tabs}
+            value={tab}
+            onChange={setTab}
+            label="Inventory views"
+            idPrefix="stock-tab"
+          />
 
           <section aria-label="Inventory records">
             {tab !== "entries" && (
               <Toolbar>
                 {tab === "onhand" ? (
                   <>
-                    <SearchBox value={search} onChange={setSearch} placeholder="Search item or HS code…" label="Search inventory" />
-                    {search && <IconButton label="Clear search" icon={MdClose} size={16} onClick={() => setSearch("")} />}
+                    <SearchBox
+                      value={search}
+                      onChange={setSearch}
+                      placeholder="Search item or HS code…"
+                      label="Search inventory"
+                    />
+                    {search && (
+                      <IconButton
+                        label="Clear search"
+                        icon={MdClose}
+                        size={16}
+                        onClick={() => setSearch("")}
+                      />
+                    )}
                   </>
                 ) : (
                   <span className="k-muted">Stock movement history</span>
                 )}
                 <ToolbarSpacer />
-                <Button icon={MdRefresh} disabled={loading} aria-label="Refresh inventory" onClick={fetchAll}>Refresh</Button>
-                {canManageOpening && <Button icon={MdAdd} onClick={() => setEntryDraft({ kind: "Opening" })}>Opening stock</Button>}
-                {canAdjust && <Button variant="primary" icon={MdSwapHoriz} onClick={() => setEntryDraft({ kind: "Adjustment" })}>Adjustment</Button>}
+                <Button
+                  icon={MdRefresh}
+                  disabled={loading}
+                  aria-label="Refresh inventory"
+                  onClick={fetchAll}
+                >
+                  Refresh
+                </Button>
+                {canManageOpening && (
+                  <Button icon={MdAdd} onClick={() => setEntryDraft({ kind: "Opening" })}>
+                    Opening stock
+                  </Button>
+                )}
+                {canAdjust && (
+                  <Button
+                    variant="primary"
+                    icon={MdSwapHoriz}
+                    onClick={() => setEntryDraft({ kind: "Adjustment" })}
+                  >
+                    Adjustment
+                  </Button>
+                )}
               </Toolbar>
             )}
 
             {tab === "entries" && (canManageOpening || canAdjust) && (
-              <StockEntryHistory companyId={selectedCompany.id} onChanged={fetchAll} onNewEntry={kind => setEntryDraft({ kind })} />
+              <StockEntryHistory
+                companyId={selectedCompany.id}
+                onChanged={fetchAll}
+                onNewEntry={(kind) => setEntryDraft({ kind })}
+              />
             )}
 
             {tab === "onhand" && (
-              <div className="inventory-record-scroll" role="region" aria-label="Stock on hand records" tabIndex={0}>
+              <div
+                className="inventory-record-scroll"
+                role="region"
+                aria-label="Stock on hand records"
+                tabIndex={0}
+              >
                 {loading ? (
                   <Loading>Loading stock…</Loading>
                 ) : filteredOnhand.length === 0 ? (
                   search ? (
                     <EmptyState
                       icon={MdInventory}
-                      action={<Button size="sm" onClick={() => setSearch("")}>Clear search</Button>}
+                      action={
+                        <Button size="sm" onClick={() => setSearch("")}>
+                          Clear search
+                        </Button>
+                      }
                     >
                       No items match "{search}".
                     </EmptyState>
                   ) : (
                     <EmptyState icon={MdInventory}>
-                      No stock data yet. Record opening stock or post a stock purchase / FBR-submitted invoice to start tracking.
+                      No stock data yet. Record opening stock or post a stock purchase /
+                      FBR-submitted invoice to start tracking.
                     </EmptyState>
                   )
                 ) : (
@@ -228,7 +358,9 @@ function CompanyStockDashboard() {
                       <table className="k-table">
                         <thead>
                           <tr>
-                            {canViewMovements && <th style={{ width: 34 }} aria-label="Expand"></th>}
+                            {canViewMovements && (
+                              <th style={{ width: 34 }} aria-label="Expand"></th>
+                            )}
                             <th style={{ width: "25%" }}>Item / HS code</th>
                             <th>UOM</th>
                             <th className="k-num">Opening</th>
@@ -244,50 +376,98 @@ function CompanyStockDashboard() {
                             const isOpen = expandedId === r.itemTypeId;
                             const colCount = 7 + (canViewMovements ? 1 : 0) + (canAdjust ? 1 : 0);
                             return (
-                            <Fragment key={r.itemTypeId}>
-                            <tr
-                              style={{ backgroundColor: isOpen ? BAND_BG : undefined, cursor: canViewMovements ? "pointer" : "default" }}
-                              onClick={canViewMovements ? () => toggleDrill(r.itemTypeId) : undefined}
-                            >
-                              {canViewMovements && (
-                                <td className="is-center k-muted">
-                                  {isOpen ? <MdExpandMore size={18} /> : <MdChevronRight size={18} />}
-                                </td>
-                              )}
-                              <td>
-                                {canViewMovements
-                                  ? <button type="button" className="inventory-item-link" aria-label={`Movement history for ${r.itemTypeName}`} aria-expanded={isOpen} onClick={e => { e.stopPropagation(); toggleDrill(r.itemTypeId); }}>{r.itemTypeName}</button>
-                                  : <strong>{r.itemTypeName}</strong>}
-                                <small>{r.hsCode || "—"}</small>
-                              </td>
-                              <td>{r.uom || "—"}</td>
-                              <td className="k-num">{r.openingBalance.toLocaleString()}</td>
-                              <td className="k-num" style={{ color: IN_COLOR }}>+{r.totalIn.toLocaleString()}</td>
-                              <td className="k-num" style={{ color: OUT_COLOR }}>−{r.totalOut.toLocaleString()}</td>
-                              <td className="k-num" style={{ fontWeight: 700, color: r.onHand < 0 ? OUT_COLOR : "var(--k-blue)" }}>{r.onHand.toLocaleString()}</td>
-                              <td className="k-muted" style={smallCell}>
-                                {r.lastMovementAt ? new Date(r.lastMovementAt).toLocaleDateString() : "—"}
-                              </td>
-                              {canAdjust && (
-                                <td className="k-actions" onClick={e => e.stopPropagation()}>
-                                  <Button size="sm" icon={MdSwapHoriz} onClick={() => openAdjustForRow(r)} title={`Record a stock adjustment for ${r.itemTypeName}`}>
-                                    Adjust
-                                  </Button>
-                                </td>
-                              )}
-                            </tr>
-                            {isOpen && canViewMovements && (
-                              <tr>
-                                <td colSpan={colCount} style={{ padding: 0, height: "auto", backgroundColor: BAND_BG }}>
-                                  <DrillPanel
-                                    rows={drill[r.itemTypeId]}
-                                    loading={drillLoading === r.itemTypeId}
-                                    uom={r.uom}
-                                  />
-                                </td>
-                              </tr>
-                            )}
-                            </Fragment>
+                              <Fragment key={r.itemTypeId}>
+                                <tr
+                                  style={{
+                                    backgroundColor: isOpen ? BAND_BG : undefined,
+                                    cursor: canViewMovements ? "pointer" : "default",
+                                  }}
+                                  onClick={
+                                    canViewMovements ? () => toggleDrill(r.itemTypeId) : undefined
+                                  }
+                                >
+                                  {canViewMovements && (
+                                    <td className="is-center k-muted">
+                                      {isOpen ? (
+                                        <MdExpandMore size={18} />
+                                      ) : (
+                                        <MdChevronRight size={18} />
+                                      )}
+                                    </td>
+                                  )}
+                                  <td>
+                                    {canViewMovements ? (
+                                      <button
+                                        type="button"
+                                        className="inventory-item-link"
+                                        aria-label={`Movement history for ${r.itemTypeName}`}
+                                        aria-expanded={isOpen}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          toggleDrill(r.itemTypeId);
+                                        }}
+                                      >
+                                        {r.itemTypeName}
+                                      </button>
+                                    ) : (
+                                      <strong>{r.itemTypeName}</strong>
+                                    )}
+                                    <small>{r.hsCode || "—"}</small>
+                                  </td>
+                                  <td>{r.uom || "—"}</td>
+                                  <td className="k-num">{r.openingBalance.toLocaleString()}</td>
+                                  <td className="k-num" style={{ color: IN_COLOR }}>
+                                    +{r.totalIn.toLocaleString()}
+                                  </td>
+                                  <td className="k-num" style={{ color: OUT_COLOR }}>
+                                    −{r.totalOut.toLocaleString()}
+                                  </td>
+                                  <td
+                                    className="k-num"
+                                    style={{
+                                      fontWeight: 700,
+                                      color: r.onHand < 0 ? OUT_COLOR : "var(--k-blue)",
+                                    }}
+                                  >
+                                    {r.onHand.toLocaleString()}
+                                  </td>
+                                  <td className="k-muted" style={smallCell}>
+                                    {r.lastMovementAt
+                                      ? new Date(r.lastMovementAt).toLocaleDateString()
+                                      : "—"}
+                                  </td>
+                                  {canAdjust && (
+                                    <td className="k-actions" onClick={(e) => e.stopPropagation()}>
+                                      <Button
+                                        size="sm"
+                                        icon={MdSwapHoriz}
+                                        onClick={() => openAdjustForRow(r)}
+                                        title={`Record a stock adjustment for ${r.itemTypeName}`}
+                                      >
+                                        Adjust
+                                      </Button>
+                                    </td>
+                                  )}
+                                </tr>
+                                {isOpen && canViewMovements && (
+                                  <tr>
+                                    <td
+                                      colSpan={colCount}
+                                      style={{
+                                        padding: 0,
+                                        height: "auto",
+                                        backgroundColor: BAND_BG,
+                                      }}
+                                    >
+                                      <DrillPanel
+                                        rows={drill[r.itemTypeId]}
+                                        loading={drillLoading === r.itemTypeId}
+                                        uom={r.uom}
+                                      />
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
                             );
                           })}
                         </tbody>
@@ -301,57 +481,84 @@ function CompanyStockDashboard() {
                       {filteredOnhand.map((r) => {
                         const isOpen = expandedId === r.itemTypeId;
                         return (
-                        <div key={r.itemTypeId} className="stock-card">
-                          <div className="stock-card__top">
-                            <div className="stock-card__top-left">
-                              <span className="stock-card__name">{r.itemTypeName}</span>
-                              {r.hsCode && <span className="stock-card__hs">{r.hsCode}</span>}
+                          <div key={r.itemTypeId} className="stock-card">
+                            <div className="stock-card__top">
+                              <div className="stock-card__top-left">
+                                <span className="stock-card__name">{r.itemTypeName}</span>
+                                {r.hsCode && <span className="stock-card__hs">{r.hsCode}</span>}
+                              </div>
+                              <div className="stock-card__onhand">
+                                <span className="stock-card__onhand-label">On-Hand</span>
+                                <span
+                                  className="stock-card__onhand-value"
+                                  style={{ color: r.onHand < 0 ? OUT_COLOR : "var(--k-blue)" }}
+                                >
+                                  {r.onHand.toLocaleString()}
+                                  {r.uom && <span className="stock-card__uom"> {r.uom}</span>}
+                                </span>
+                              </div>
                             </div>
-                            <div className="stock-card__onhand">
-                              <span className="stock-card__onhand-label">On-Hand</span>
-                              <span
-                                className="stock-card__onhand-value"
-                                style={{ color: r.onHand < 0 ? OUT_COLOR : "var(--k-blue)" }}
+                            <div className="stock-card__stats">
+                              <div className="stock-card__stat">
+                                <span className="stock-card__stat-label">Opening</span>
+                                <span className="stock-card__stat-value">
+                                  {r.openingBalance.toLocaleString()}
+                                </span>
+                              </div>
+                              <div className="stock-card__stat">
+                                <span className="stock-card__stat-label">Total IN</span>
+                                <span
+                                  className="stock-card__stat-value"
+                                  style={{ color: IN_COLOR }}
+                                >
+                                  +{r.totalIn.toLocaleString()}
+                                </span>
+                              </div>
+                              <div className="stock-card__stat">
+                                <span className="stock-card__stat-label">Total OUT</span>
+                                <span
+                                  className="stock-card__stat-value"
+                                  style={{ color: OUT_COLOR }}
+                                >
+                                  −{r.totalOut.toLocaleString()}
+                                </span>
+                              </div>
+                              <div className="stock-card__stat">
+                                <span className="stock-card__stat-label">Last Move</span>
+                                <span className="stock-card__stat-value stock-card__stat-value--muted">
+                                  {r.lastMovementAt
+                                    ? new Date(r.lastMovementAt).toLocaleDateString()
+                                    : "—"}
+                                </span>
+                              </div>
+                            </div>
+                            {canViewMovements && (
+                              <Button
+                                variant="ghost"
+                                icon={isOpen ? MdExpandMore : MdChevronRight}
+                                style={cardWideBtn}
+                                onClick={() => toggleDrill(r.itemTypeId)}
                               >
-                                {r.onHand.toLocaleString()}
-                                {r.uom && <span className="stock-card__uom"> {r.uom}</span>}
-                              </span>
-                            </div>
+                                {isOpen ? "Hide movements" : "View movements"}
+                              </Button>
+                            )}
+                            {isOpen && canViewMovements && (
+                              <DrillPanel
+                                rows={drill[r.itemTypeId]}
+                                loading={drillLoading === r.itemTypeId}
+                                uom={r.uom}
+                              />
+                            )}
+                            {canAdjust && (
+                              <Button
+                                icon={MdSwapHoriz}
+                                style={cardWideBtn}
+                                onClick={() => openAdjustForRow(r)}
+                              >
+                                Adjustment
+                              </Button>
+                            )}
                           </div>
-                          <div className="stock-card__stats">
-                            <div className="stock-card__stat">
-                              <span className="stock-card__stat-label">Opening</span>
-                              <span className="stock-card__stat-value">{r.openingBalance.toLocaleString()}</span>
-                            </div>
-                            <div className="stock-card__stat">
-                              <span className="stock-card__stat-label">Total IN</span>
-                              <span className="stock-card__stat-value" style={{ color: IN_COLOR }}>+{r.totalIn.toLocaleString()}</span>
-                            </div>
-                            <div className="stock-card__stat">
-                              <span className="stock-card__stat-label">Total OUT</span>
-                              <span className="stock-card__stat-value" style={{ color: OUT_COLOR }}>−{r.totalOut.toLocaleString()}</span>
-                            </div>
-                            <div className="stock-card__stat">
-                              <span className="stock-card__stat-label">Last Move</span>
-                              <span className="stock-card__stat-value stock-card__stat-value--muted">
-                                {r.lastMovementAt ? new Date(r.lastMovementAt).toLocaleDateString() : "—"}
-                              </span>
-                            </div>
-                          </div>
-                          {canViewMovements && (
-                            <Button variant="ghost" icon={isOpen ? MdExpandMore : MdChevronRight} style={cardWideBtn} onClick={() => toggleDrill(r.itemTypeId)}>
-                              {isOpen ? "Hide movements" : "View movements"}
-                            </Button>
-                          )}
-                          {isOpen && canViewMovements && (
-                            <DrillPanel rows={drill[r.itemTypeId]} loading={drillLoading === r.itemTypeId} uom={r.uom} />
-                          )}
-                          {canAdjust && (
-                            <Button icon={MdSwapHoriz} style={cardWideBtn} onClick={() => openAdjustForRow(r)}>
-                              Adjustment
-                            </Button>
-                          )}
-                        </div>
                         );
                       })}
                     </div>
@@ -366,7 +573,12 @@ function CompanyStockDashboard() {
                   <EmptyState icon={MdHistory}>No movements recorded yet.</EmptyState>
                 ) : (
                   <>
-                    <div className="inventory-record-scroll" role="region" aria-label="Stock movement records" tabIndex={0}>
+                    <div
+                      className="inventory-record-scroll"
+                      role="region"
+                      aria-label="Stock movement records"
+                      tabIndex={0}
+                    >
                       {/* Desktop — table */}
                       <TableWrap data-admin-table-region="" className="stock-table">
                         <table className="k-table">
@@ -385,10 +597,24 @@ function CompanyStockDashboard() {
                               <tr key={m.id}>
                                 <td>{new Date(m.movementDate).toLocaleDateString()}</td>
                                 <td>{m.itemTypeName}</td>
-                                <td style={{ color: m.direction === "In" ? IN_COLOR : OUT_COLOR, fontWeight: 600 }}>{m.direction}</td>
-                                <td className="k-num" style={{ fontWeight: 600 }}>{m.quantity.toLocaleString()}</td>
-                                <td style={smallCell}>{m.sourceType}{m.sourceDocNumber ? ` #${m.sourceDocNumber}` : ""}</td>
-                                <td className="k-muted" style={smallCell}>{m.notes || "—"}</td>
+                                <td
+                                  style={{
+                                    color: m.direction === "In" ? IN_COLOR : OUT_COLOR,
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {m.direction}
+                                </td>
+                                <td className="k-num" style={{ fontWeight: 600 }}>
+                                  {m.quantity.toLocaleString()}
+                                </td>
+                                <td style={smallCell}>
+                                  {m.sourceType}
+                                  {m.sourceDocNumber ? ` #${m.sourceDocNumber}` : ""}
+                                </td>
+                                <td className="k-muted" style={smallCell}>
+                                  {m.notes || "—"}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -402,14 +628,17 @@ function CompanyStockDashboard() {
                             <div className="stock-card__top">
                               <div className="stock-card__top-left">
                                 <span className="stock-card__name">{m.itemTypeName}</span>
-                                <span className="stock-card__hs">{new Date(m.movementDate).toLocaleDateString()}</span>
+                                <span className="stock-card__hs">
+                                  {new Date(m.movementDate).toLocaleDateString()}
+                                </span>
                               </div>
                               <div className="stock-card__onhand">
                                 <span
                                   className="stock-card__direction"
                                   style={{ color: m.direction === "In" ? IN_COLOR : OUT_COLOR }}
                                 >
-                                  {m.direction === "In" ? "+" : "−"}{m.quantity.toLocaleString()}
+                                  {m.direction === "In" ? "+" : "−"}
+                                  {m.quantity.toLocaleString()}
                                 </span>
                                 <span className="stock-card__direction-label">{m.direction}</span>
                               </div>
@@ -417,7 +646,8 @@ function CompanyStockDashboard() {
                             <div className="stock-card__source">
                               <span className="stock-card__stat-label">Source</span>
                               <span className="stock-card__stat-value">
-                                {m.sourceType}{m.sourceDocNumber ? ` #${m.sourceDocNumber}` : ""}
+                                {m.sourceType}
+                                {m.sourceDocNumber ? ` #${m.sourceDocNumber}` : ""}
                               </span>
                             </div>
                             {m.notes && <div className="stock-card__notes">{m.notes}</div>}
@@ -441,10 +671,25 @@ function CompanyStockDashboard() {
         </>
       )}
 
-      {entryDraft && selectedCompany && (entryDraft.kind === "Opening" ? canManageOpening : canAdjust) && (
-        <StockEntryForm key={selectedCompany.id} companyId={selectedCompany.id} initialKind={entryDraft.kind} initialItemId={entryDraft.itemId} compact
-          onClose={() => { setEntryDraft(null); fetchAll(); }} onBack={() => { setEntryDraft(null); fetchAll(); }} />
-      )}
+      {entryDraft &&
+        selectedCompany &&
+        (entryDraft.kind === "Opening" ? canManageOpening : canAdjust) && (
+          <StockEntryForm
+            key={selectedCompany.id}
+            companyId={selectedCompany.id}
+            initialKind={entryDraft.kind}
+            initialItemId={entryDraft.itemId}
+            compact
+            onClose={() => {
+              setEntryDraft(null);
+              fetchAll();
+            }}
+            onBack={() => {
+              setEntryDraft(null);
+              fetchAll();
+            }}
+          />
+        )}
     </div>
   );
 }
@@ -457,7 +702,11 @@ function CompanyStockDashboard() {
 // running on-hand computed after each whole document.
 function DrillPanel({ rows, loading, uom }) {
   if (loading) {
-    return <div style={drillStyles.state}><span className="k-spinner" aria-hidden="true" /></div>;
+    return (
+      <div style={drillStyles.state}>
+        <span className="k-spinner" aria-hidden="true" />
+      </div>
+    );
   }
   if (!rows) {
     return <div style={drillStyles.state}>Loading…</div>;
@@ -484,10 +733,16 @@ function DrillPanel({ rows, loading, uom }) {
       last.quantity = Number(last.quantity) + Number(m.quantity);
       last.balance = bal;
       last.lineCount += 1;
-      last.id = m.id;                     // newest id keeps the React key stable
+      last.id = m.id; // newest id keeps the React key stable
       last.movementDate = m.movementDate; // same document date; keep newest
     } else {
-      grouped.push({ ...m, groupKey: key, quantity: Number(m.quantity), balance: bal, lineCount: 1 });
+      grouped.push({
+        ...m,
+        groupKey: key,
+        quantity: Number(m.quantity),
+        balance: bal,
+        lineCount: 1,
+      });
     }
   }
   grouped.reverse();
@@ -495,7 +750,8 @@ function DrillPanel({ rows, loading, uom }) {
   return (
     <div style={drillStyles.wrap}>
       <div style={drillStyles.heading}>
-        <MdHistory size={15} /> Movement history ({grouped.length}{grouped.length !== rows.length ? ` documents · ${rows.length} line movements` : ""})
+        <MdHistory size={15} /> Movement history ({grouped.length}
+        {grouped.length !== rows.length ? ` documents · ${rows.length} line movements` : ""})
       </div>
       <div style={drillStyles.list}>
         {grouped.map((m) => {
@@ -504,22 +760,35 @@ function DrillPanel({ rows, loading, uom }) {
           // Grouped rows: keep the note's document prefix, drop the per-line
           // detail (each line carried its own qty breakdown), and say how
           // many line items were summed.
-          const noteText = m.lineCount > 1
-            ? `${(m.notes || "").split(" (")[0]}${m.notes ? " — " : ""}${m.lineCount} line items summed`
-            : m.notes;
+          const noteText =
+            m.lineCount > 1
+              ? `${(m.notes || "").split(" (")[0]}${m.notes ? " — " : ""}${m.lineCount} line items summed`
+              : m.notes;
           return (
             <div key={m.id} style={drillStyles.row}>
               <div style={drillStyles.rowMain}>
-                <span style={{ ...drillStyles.dirBadge, ...(isIn ? drillStyles.dirIn : drillStyles.dirOut) }}>
+                <span
+                  style={{
+                    ...drillStyles.dirBadge,
+                    ...(isIn ? drillStyles.dirIn : drillStyles.dirOut),
+                  }}
+                >
                   {isIn ? "IN" : "OUT"}
                 </span>
                 <span style={{ ...drillStyles.qty, color: isIn ? IN_COLOR : OUT_COLOR }}>
-                  {isIn ? "+" : "−"}{fmtQty(m.quantity)}{uom ? ` ${uom}` : ""}
+                  {isIn ? "+" : "−"}
+                  {fmtQty(m.quantity)}
+                  {uom ? ` ${uom}` : ""}
                 </span>
-                <span style={{ ...drillStyles.srcChip, ...(isAdjust ? drillStyles.srcAdjust : null) }}>
-                  {m.sourceType}{m.sourceDocNumber ? ` #${m.sourceDocNumber}` : ""}
+                <span
+                  style={{ ...drillStyles.srcChip, ...(isAdjust ? drillStyles.srcAdjust : null) }}
+                >
+                  {m.sourceType}
+                  {m.sourceDocNumber ? ` #${m.sourceDocNumber}` : ""}
                 </span>
-                <span style={drillStyles.date}>{new Date(m.movementDate).toLocaleDateString()}</span>
+                <span style={drillStyles.date}>
+                  {new Date(m.movementDate).toLocaleDateString()}
+                </span>
                 <span style={drillStyles.bal}>bal {fmtQty(m.balance)}</span>
               </div>
               {noteText && <div style={drillStyles.notes}>{noteText}</div>}
@@ -541,18 +810,62 @@ const cardWideBtn = { width: "100%" };
 
 const drillStyles = {
   wrap: { padding: "0.6rem 0.85rem 0.85rem" },
-  heading: { display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.74rem", fontWeight: 700, color: "var(--k-muted)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.5rem" },
-  state: { padding: "1rem 0.85rem", textAlign: "center", color: "var(--k-muted)", fontSize: "var(--k-font-sm)", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 48 },
+  heading: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.35rem",
+    fontSize: "0.74rem",
+    fontWeight: 700,
+    color: "var(--k-muted)",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    marginBottom: "0.5rem",
+  },
+  state: {
+    padding: "1rem 0.85rem",
+    textAlign: "center",
+    color: "var(--k-muted)",
+    fontSize: "var(--k-font-sm)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
+  },
   list: { display: "flex", flexDirection: "column", gap: "0.4rem" },
-  row: { padding: "0.5rem 0.65rem", borderRadius: 8, border: "1px solid var(--k-line)", backgroundColor: "var(--k-surface)" },
+  row: {
+    padding: "0.5rem 0.65rem",
+    borderRadius: 8,
+    border: "1px solid var(--k-line)",
+    backgroundColor: "var(--k-surface)",
+  },
   rowMain: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" },
-  dirBadge: { fontSize: "0.66rem", fontWeight: 800, padding: "0.1rem 0.4rem", borderRadius: 5, letterSpacing: "0.03em" },
+  dirBadge: {
+    fontSize: "0.66rem",
+    fontWeight: 800,
+    padding: "0.1rem 0.4rem",
+    borderRadius: 5,
+    letterSpacing: "0.03em",
+  },
   dirIn: { backgroundColor: "#e8f5e9", color: IN_COLOR },
   dirOut: { backgroundColor: "#fdecea", color: OUT_COLOR },
   qty: { fontSize: "var(--k-font)", fontWeight: 700, minWidth: 70 },
-  srcChip: { fontSize: "0.74rem", fontWeight: 600, color: "#37474f", backgroundColor: "#eef2f7", padding: "0.12rem 0.45rem", borderRadius: 5 },
+  srcChip: {
+    fontSize: "0.74rem",
+    fontWeight: 600,
+    color: "#37474f",
+    backgroundColor: "#eef2f7",
+    padding: "0.12rem 0.45rem",
+    borderRadius: 5,
+  },
   srcAdjust: { backgroundColor: "#fff3e0", color: "#e65100" },
   date: { fontSize: "0.76rem", color: "var(--k-muted)", marginLeft: "auto" },
-  bal: { fontSize: "0.74rem", fontWeight: 700, color: "var(--k-blue)", backgroundColor: BAND_BG, padding: "0.12rem 0.45rem", borderRadius: 5 },
+  bal: {
+    fontSize: "0.74rem",
+    fontWeight: 700,
+    color: "var(--k-blue)",
+    backgroundColor: BAND_BG,
+    padding: "0.12rem 0.45rem",
+    borderRadius: 5,
+  },
   notes: { fontSize: "0.74rem", color: "var(--k-muted)", marginTop: "0.35rem", lineHeight: 1.35 },
 };

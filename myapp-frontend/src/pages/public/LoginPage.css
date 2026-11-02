@@ -40,7 +40,9 @@
 }
 
 @supports (min-height: 100svh) {
-  .ht-login-root { min-height: 100svh; }
+  .ht-login-root {
+    min-height: 100svh;
+  }
 }
 
 .ht-login-root *,
@@ -59,8 +61,12 @@
   justify-content: center;
   padding: 3rem 2.5rem;
   overflow: hidden;
-  background:
-    radial-gradient(120% 100% at 80% 0%, #0b1a31 0%, var(--lg-ink-1) 55%, var(--lg-ink-0) 100%);
+  background: radial-gradient(
+    120% 100% at 80% 0%,
+    #0b1a31 0%,
+    var(--lg-ink-1) 55%,
+    var(--lg-ink-0) 100%
+  );
 }
 
 .ht-brand-bg {
@@ -80,7 +86,12 @@
   height: 480px;
   top: -16%;
   right: -28%;
-  background: radial-gradient(circle, rgba(34, 224, 255, 0.16) 0%, rgba(34, 224, 255, 0.05) 40%, transparent 70%);
+  background: radial-gradient(
+    circle,
+    rgba(34, 224, 255, 0.16) 0%,
+    rgba(34, 224, 255, 0.05) 40%,
+    transparent 70%
+  );
   animation: ht-orb-drift 18s ease-in-out infinite alternate;
 }
 
@@ -89,13 +100,22 @@
   height: 420px;
   bottom: -22%;
   left: -24%;
-  background: radial-gradient(circle, rgba(20, 184, 166, 0.15) 0%, rgba(20, 184, 166, 0.05) 42%, transparent 70%);
+  background: radial-gradient(
+    circle,
+    rgba(20, 184, 166, 0.15) 0%,
+    rgba(20, 184, 166, 0.05) 42%,
+    transparent 70%
+  );
   animation: ht-orb-drift 22s ease-in-out infinite alternate-reverse;
 }
 
 @keyframes ht-orb-drift {
-  from { transform: translate3d(0, 0, 0) scale(1); }
-  to   { transform: translate3d(-36px, 28px, 0) scale(1.08); }
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(-36px, 28px, 0) scale(1.08);
+  }
 }
 
 /* blueprint grid */
@@ -207,8 +227,12 @@
 }
 
 @keyframes ht-fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes ht-slide-up {
@@ -286,13 +310,28 @@
 }
 
 @keyframes ht-shake {
-  0%, 100% { transform: translateX(0); }
-  15%       { transform: translateX(-7px); }
-  30%       { transform: translateX(7px); }
-  45%       { transform: translateX(-5px); }
-  60%       { transform: translateX(5px); }
-  75%       { transform: translateX(-3px); }
-  90%       { transform: translateX(3px); }
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  15% {
+    transform: translateX(-7px);
+  }
+  30% {
+    transform: translateX(7px);
+  }
+  45% {
+    transform: translateX(-5px);
+  }
+  60% {
+    transform: translateX(5px);
+  }
+  75% {
+    transform: translateX(-3px);
+  }
+  90% {
+    transform: translateX(3px);
+  }
 }
 
 .ht-error-alert {
@@ -405,7 +444,9 @@
   cursor: pointer;
   padding: 0;
   line-height: 1;
-  transition: color 0.2s ease, background-color 0.2s ease;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease;
   z-index: 2;
 }
 
@@ -494,7 +535,9 @@
 }
 
 @keyframes ht-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ── Footer ───────────────────────────────────────────────── */

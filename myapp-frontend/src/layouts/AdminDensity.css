@@ -7,45 +7,136 @@ html:not([data-ui-layout="workspace"]) body.admin-ui {
   --admin-button-padding: 0.4rem 0.85rem;
   --admin-input-font: 0.85rem;
 }
-html:not([data-ui-layout="workspace"]) .dl-shell { --sidebar-width: 236px; --topbar-height: 50px; font-size: 14px; }
-html:not([data-ui-layout="workspace"]) .dl-brand { padding: 0.85rem 0.9rem; }
-html:not([data-ui-layout="workspace"]) .dl-brand__name { font-size: 0.95rem; }
-html:not([data-ui-layout="workspace"]) .dl-topbar { padding: 0 1rem; box-shadow: none; }
-html:not([data-ui-layout="workspace"]) .dl-main { padding: 1rem 1.25rem; }
-.dl-main > div { max-width: 100%; }
-html:not([data-ui-layout="workspace"]) .dl-main .accounting-reports-page { padding: 0 !important; }
-html:not([data-ui-layout="workspace"]) .dl-main h1, html:not([data-ui-layout="workspace"]) .dl-main h2 { font-size: clamp(1.1rem, 1.6vw, 1.3rem) !important; line-height: 1.3; }
-html:not([data-ui-layout="workspace"]) .dl-main h3 { font-size: 1rem; }
-.dl-group { margin-top: 0.2rem; }
-html:not([data-ui-layout="workspace"]) .dl-group__header, html:not([data-ui-layout="workspace"]) .dl-item { font-size: 0.82rem; gap: 0.5rem; padding: 0.4rem 0.65rem; }
-html:not([data-ui-layout="workspace"]) .dl-subitem { font-size: 0.79rem; padding: 0.35rem 0.65rem 0.35rem 1.65rem; }
-html:not([data-ui-layout="workspace"]) .dl-sidebar { box-shadow: 2px 0 12px rgba(13, 71, 161, 0.12); }
-html:not([data-ui-layout="workspace"]) body.admin-ui button { box-shadow: none; }
-body.admin-ui button:hover { transform: none; }
-html:not([data-ui-layout="workspace"]) body.admin-ui :is(input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]), select, textarea) {
+html:not([data-ui-layout="workspace"]) .dl-shell {
+  --sidebar-width: 236px;
+  --topbar-height: 50px;
+  font-size: 14px;
+}
+html:not([data-ui-layout="workspace"]) .dl-brand {
+  padding: 0.85rem 0.9rem;
+}
+html:not([data-ui-layout="workspace"]) .dl-brand__name {
+  font-size: 0.95rem;
+}
+html:not([data-ui-layout="workspace"]) .dl-topbar {
+  padding: 0 1rem;
+  box-shadow: none;
+}
+html:not([data-ui-layout="workspace"]) .dl-main {
+  padding: 1rem 1.25rem;
+}
+.dl-main > div {
+  max-width: 100%;
+}
+html:not([data-ui-layout="workspace"]) .dl-main .accounting-reports-page {
+  padding: 0 !important;
+}
+html:not([data-ui-layout="workspace"]) .dl-main h1,
+html:not([data-ui-layout="workspace"]) .dl-main h2 {
+  font-size: clamp(1.1rem, 1.6vw, 1.3rem) !important;
+  line-height: 1.3;
+}
+html:not([data-ui-layout="workspace"]) .dl-main h3 {
+  font-size: 1rem;
+}
+.dl-group {
+  margin-top: 0.2rem;
+}
+html:not([data-ui-layout="workspace"]) .dl-group__header,
+html:not([data-ui-layout="workspace"]) .dl-item {
+  font-size: 0.82rem;
+  gap: 0.5rem;
+  padding: 0.4rem 0.65rem;
+}
+html:not([data-ui-layout="workspace"]) .dl-subitem {
+  font-size: 0.79rem;
+  padding: 0.35rem 0.65rem 0.35rem 1.65rem;
+}
+html:not([data-ui-layout="workspace"]) .dl-sidebar {
+  box-shadow: 2px 0 12px rgba(13, 71, 161, 0.12);
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui button {
+  box-shadow: none;
+}
+body.admin-ui button:hover {
+  transform: none;
+}
+html:not([data-ui-layout="workspace"])
+  body.admin-ui
+  :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]),
+    select,
+    textarea
+  ) {
   font-size: var(--admin-input-font) !important;
   max-width: 100%;
 }
-html:not([data-ui-layout="workspace"]) .dl-main :is(table th, table td) { font-size: 0.8rem; }
-html:not([data-ui-layout="workspace"]) .dl-main table th { padding-block: 0.5rem !important; }
-html:not([data-ui-layout="workspace"]) .dl-main table td { padding-block: 0.4rem !important; }
-html:not([data-ui-layout="workspace"]) .dl-main .card { padding: 1rem; box-shadow: 0 1px 4px rgba(30, 50, 80, 0.04); }
-html:not([data-ui-layout="workspace"]) .dl-main :is(.btn, .form-control, .form-select) { font-size: 0.85rem; border-radius: 7px; }
-html:not([data-ui-layout="workspace"]) .dl-main :is(.p-4, .p-5) { padding: 1rem !important; }
-.dl-main :is(.gap-4, .gap-5) { gap: 0.85rem !important; }
-.dl-main :is(.mb-4, .mb-5) { margin-bottom: 1rem !important; }
+html:not([data-ui-layout="workspace"]) .dl-main :is(table th, table td) {
+  font-size: 0.8rem;
+}
+html:not([data-ui-layout="workspace"]) .dl-main table th {
+  padding-block: 0.5rem !important;
+}
+html:not([data-ui-layout="workspace"]) .dl-main table td {
+  padding-block: 0.4rem !important;
+}
+html:not([data-ui-layout="workspace"]) .dl-main .card {
+  padding: 1rem;
+  box-shadow: 0 1px 4px rgba(30, 50, 80, 0.04);
+}
+html:not([data-ui-layout="workspace"]) .dl-main :is(.btn, .form-control, .form-select) {
+  font-size: 0.85rem;
+  border-radius: 7px;
+}
+html:not([data-ui-layout="workspace"]) .dl-main :is(.p-4, .p-5) {
+  padding: 1rem !important;
+}
+.dl-main :is(.gap-4, .gap-5) {
+  gap: 0.85rem !important;
+}
+.dl-main :is(.mb-4, .mb-5) {
+  margin-bottom: 1rem !important;
+}
 @media (max-width: 991.98px) {
-  html:not([data-ui-layout="workspace"]) .dl-main { padding: 0.85rem; }
-  html:not([data-ui-layout="workspace"]) .dl-topbar { min-height: 52px; padding: 0 0.75rem; gap: 0.5rem; }
-  html:not([data-ui-layout="workspace"]) .dl-topbar__breadcrumb { min-width: 0; overflow-wrap: anywhere; font-size: 12px; }
-  .dl-group__header, .dl-item, .dl-subitem { min-height: 44px; }
-  .dl-topbar__hamburger, .dl-brand__close { min-width: 44px; min-height: 44px; }
+  html:not([data-ui-layout="workspace"]) .dl-main {
+    padding: 0.85rem;
+  }
+  html:not([data-ui-layout="workspace"]) .dl-topbar {
+    min-height: 52px;
+    padding: 0 0.75rem;
+    gap: 0.5rem;
+  }
+  html:not([data-ui-layout="workspace"]) .dl-topbar__breadcrumb {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+  }
+  .dl-group__header,
+  .dl-item,
+  .dl-subitem {
+    min-height: 44px;
+  }
+  .dl-topbar__hamburger,
+  .dl-brand__close {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 @media (max-width: 599.98px) {
-  html:not([data-ui-layout="workspace"]) body.admin-ui { --admin-input-font: 16px; --admin-card-padding: 0.85rem; }
-  html:not([data-ui-layout="workspace"]) .dl-main { padding: 0.65rem; }
-  body.admin-ui :is(button, select, input:not([type=checkbox]):not([type=radio]):not([type=range])) { min-height: 44px !important; }
-  body.admin-ui button { min-width: 44px; }
+  html:not([data-ui-layout="workspace"]) body.admin-ui {
+    --admin-input-font: 16px;
+    --admin-card-padding: 0.85rem;
+  }
+  html:not([data-ui-layout="workspace"]) .dl-main {
+    padding: 0.65rem;
+  }
+  body.admin-ui
+    :is(button, select, input:not([type="checkbox"]):not([type="radio"]):not([type="range"])) {
+    min-height: 44px !important;
+  }
+  body.admin-ui button {
+    min-width: 44px;
+  }
 }
 
 /* Consistent control geometry, without replacing edition-specific colors. */
@@ -57,230 +148,757 @@ html:not([data-ui-layout="workspace"]) body.admin-ui {
   --admin-input-padding: 7px 10px;
   --admin-button-padding: 7px 14px;
 }
-body.admin-ui .dl-main, body.admin-ui .dl-content-wrapper { min-width: 0; }
-body.admin-ui .dl-main > div { min-width: 0; }
-html:not([data-ui-layout="workspace"]) body.admin-ui :is(.dl-main, [data-admin-dialog]) :is(button, input, select, textarea) { font-family: inherit; }
-html:not([data-ui-layout="workspace"]) body.admin-ui :is(.dl-main, [data-admin-dialog]) button { font-size: 13px !important; min-height: var(--admin-control-height); line-height: 1.35; }
-body.admin-ui :is(.dl-main, [data-admin-dialog]) :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]), select) { min-height: var(--admin-control-height); box-sizing: border-box; }
-body.admin-ui :is(.dl-main, [data-admin-dialog]) textarea { min-height: 72px; }
-body.admin-ui :is(button, a, input, select, textarea, [tabindex]):focus-visible { outline: 2px solid #0d47a1 !important; outline-offset: 3px; }
-body.admin-ui .dl-sidebar :is(button,a):focus-visible, body.admin-ui [data-admin-dialog] > div:first-child button:focus-visible { outline-color: currentColor !important; }
-html:not([data-ui-layout="workspace"]) body.admin-ui button:not(:disabled):hover { box-shadow: 0 2px 6px rgba(13,71,161,.12); }
-body.admin-ui button:disabled { cursor: not-allowed; }
-body.admin-ui button svg { flex-shrink: 0; }
-body.admin-ui [data-admin-table-region] { max-width: 100%; min-width: 0; overflow: auto; overscroll-behavior-inline: contain; }
-body.admin-ui [data-admin-backdrop] { padding: 12px !important; overflow-y: auto !important; }
-body.admin-ui [data-admin-dialog] { max-height: calc(100dvh - 24px) !important; min-height: 0; }
-body.admin-ui [data-admin-dialog] > form { min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] :is(h1,h2,h3,h4,h5,h6) { line-height: 1.35; overflow-wrap: anywhere; }
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] :is(h2,h3,h4,h5) { font-size: 18px !important; }
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] label { font-size: 12px !important; }
-body.admin-ui [data-admin-dialog] [data-admin-close]:has(svg), body.admin-ui [data-admin-dialog] [data-admin-close][aria-label] { min-width: 36px; min-height: 36px; max-height: none; max-width: none; padding: 0; }
-body.admin-ui [data-admin-popup] { max-width: calc(100vw - 16px); }
-body.admin-ui .dl-user-menu { max-width: calc(100vw - 24px); }
-body.admin-ui .dl-group__body[inert] { visibility: hidden; }
-body.admin-ui .dl-main [role=tablist]:not([data-scroll-tabs]) { flex-wrap: wrap; }
-body.admin-ui .dl-main :is(.form-grid-2col,.form-grid-3col,.responsive-grid-3col) > * { min-width: 0; }
+body.admin-ui .dl-main,
+body.admin-ui .dl-content-wrapper {
+  min-width: 0;
+}
+body.admin-ui .dl-main > div {
+  min-width: 0;
+}
+html:not([data-ui-layout="workspace"])
+  body.admin-ui
+  :is(.dl-main, [data-admin-dialog])
+  :is(button, input, select, textarea) {
+  font-family: inherit;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui :is(.dl-main, [data-admin-dialog]) button {
+  font-size: 13px !important;
+  min-height: var(--admin-control-height);
+  line-height: 1.35;
+}
+body.admin-ui
+  :is(.dl-main, [data-admin-dialog])
+  :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+    select
+  ) {
+  min-height: var(--admin-control-height);
+  box-sizing: border-box;
+}
+body.admin-ui :is(.dl-main, [data-admin-dialog]) textarea {
+  min-height: 72px;
+}
+body.admin-ui :is(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid #0d47a1 !important;
+  outline-offset: 3px;
+}
+body.admin-ui .dl-sidebar :is(button, a):focus-visible,
+body.admin-ui [data-admin-dialog] > div:first-child button:focus-visible {
+  outline-color: currentColor !important;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui button:not(:disabled):hover {
+  box-shadow: 0 2px 6px rgba(13, 71, 161, 0.12);
+}
+body.admin-ui button:disabled {
+  cursor: not-allowed;
+}
+body.admin-ui button svg {
+  flex-shrink: 0;
+}
+body.admin-ui [data-admin-table-region] {
+  max-width: 100%;
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior-inline: contain;
+}
+body.admin-ui [data-admin-backdrop] {
+  padding: 12px !important;
+  overflow-y: auto !important;
+}
+body.admin-ui [data-admin-dialog] {
+  max-height: calc(100dvh - 24px) !important;
+  min-height: 0;
+}
+body.admin-ui [data-admin-dialog] > form {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+html:not([data-ui-layout="workspace"])
+  body.admin-ui
+  [data-admin-dialog]
+  :is(h1, h2, h3, h4, h5, h6) {
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] :is(h2, h3, h4, h5) {
+  font-size: 18px !important;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] label {
+  font-size: 12px !important;
+}
+body.admin-ui [data-admin-dialog] [data-admin-close]:has(svg),
+body.admin-ui [data-admin-dialog] [data-admin-close][aria-label] {
+  min-width: 36px;
+  min-height: 36px;
+  max-height: none;
+  max-width: none;
+  padding: 0;
+}
+body.admin-ui [data-admin-popup] {
+  max-width: calc(100vw - 16px);
+}
+body.admin-ui .dl-user-menu {
+  max-width: calc(100vw - 24px);
+}
+body.admin-ui .dl-group__body[inert] {
+  visibility: hidden;
+}
+body.admin-ui .dl-main [role="tablist"]:not([data-scroll-tabs]) {
+  flex-wrap: wrap;
+}
+body.admin-ui .dl-main :is(.form-grid-2col, .form-grid-3col, .responsive-grid-3col) > * {
+  min-width: 0;
+}
 @media (max-width: 991.98px) {
- body.admin-ui .dl-topbar { min-height: 56px; }
- body.admin-ui .dl-sidebar:not(.dl-sidebar--open) { visibility: hidden; }
- body.admin-ui .dl-sidebar--open { visibility: visible; }
+  body.admin-ui .dl-topbar {
+    min-height: 56px;
+  }
+  body.admin-ui .dl-sidebar:not(.dl-sidebar--open) {
+    visibility: hidden;
+  }
+  body.admin-ui .dl-sidebar--open {
+    visibility: visible;
+  }
 }
 @media (max-width: 767.98px) {
- html:not([data-ui-layout="workspace"]) body.admin-ui { --admin-control-height: 44px; --admin-input-font: 16px; --admin-form-padding: 12px; }
- body.admin-ui :is(.dl-main,[data-admin-dialog]) button { min-width: 44px; min-height: 44px !important; }
- body.admin-ui :is(.dl-main,[data-admin-dialog]) :is(input:not([type=checkbox]):not([type=radio]):not([type=range]),select) { min-height: 44px !important; }
- body.admin-ui [data-admin-dialog] [data-admin-close] { min-width: 44px; }
- body.admin-ui .dl-main :is(.form-grid-2col,.form-grid-3col,.responsive-grid-3col) { grid-template-columns: minmax(0,1fr) !important; }
+  html:not([data-ui-layout="workspace"]) body.admin-ui {
+    --admin-control-height: 44px;
+    --admin-input-font: 16px;
+    --admin-form-padding: 12px;
+  }
+  body.admin-ui :is(.dl-main, [data-admin-dialog]) button {
+    min-width: 44px;
+    min-height: 44px !important;
+  }
+  body.admin-ui
+    :is(.dl-main, [data-admin-dialog])
+    :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select) {
+    min-height: 44px !important;
+  }
+  body.admin-ui [data-admin-dialog] [data-admin-close] {
+    min-width: 44px;
+  }
+  body.admin-ui .dl-main :is(.form-grid-2col, .form-grid-3col, .responsive-grid-3col) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
- body.admin-ui *, body.admin-ui *::before, body.admin-ui *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+  body.admin-ui *,
+  body.admin-ui *::before,
+  body.admin-ui *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 @media print {
- body.admin-ui [data-admin-table-region] { overflow: visible; max-height: none; }
- body.admin-ui [data-admin-dialog] { max-height: none !important; }
+  body.admin-ui [data-admin-table-region] {
+    overflow: visible;
+    max-height: none;
+  }
+  body.admin-ui [data-admin-dialog] {
+    max-height: none !important;
+  }
 }
 
-body.admin-ui .admin-skip-link { position: fixed; top: 8px; left: 12px; z-index: 12000; transform: translateY(-160%); padding: 10px 14px; background: #fff; color: #0d47a1; border: 2px solid #0d47a1; border-radius: 8px; }
-body.admin-ui .admin-skip-link:focus { transform: translateY(0); }
+body.admin-ui .admin-skip-link {
+  position: fixed;
+  top: 8px;
+  left: 12px;
+  z-index: 12000;
+  transform: translateY(-160%);
+  padding: 10px 14px;
+  background: #fff;
+  color: #0d47a1;
+  border: 2px solid #0d47a1;
+  border-radius: 8px;
+}
+body.admin-ui .admin-skip-link:focus {
+  transform: translateY(0);
+}
 
-body.admin-ui [data-admin-dialog]:not([data-admin-backdrop]) { display: flex; flex-direction: column; overflow: hidden; }
+body.admin-ui [data-admin-dialog]:not([data-admin-backdrop]) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 
 /* Dense admin forms: section geometry is independent from control geometry. */
 html:not([data-ui-layout="workspace"]) body.admin-ui {
- --admin-control-height: 34px;
- --admin-input-padding: 6px 10px;
- --admin-button-padding: 6px 12px;
- --admin-dialog-header-padding: 8px 16px;
- --admin-dialog-body-padding: 14px 16px;
- --admin-dialog-footer-padding: 9px 16px;
- --admin-dialog-body-max: none;
- --admin-card-padding: 14px;
- --admin-card-gap: 12px;
+  --admin-control-height: 34px;
+  --admin-input-padding: 6px 10px;
+  --admin-button-padding: 6px 12px;
+  --admin-dialog-header-padding: 8px 16px;
+  --admin-dialog-body-padding: 14px 16px;
+  --admin-dialog-footer-padding: 9px 16px;
+  --admin-dialog-body-max: none;
+  --admin-card-padding: 14px;
+  --admin-card-gap: 12px;
 }
-html:not([data-ui-layout="workspace"]) body.admin-ui :is(.dl-main,[data-admin-dialog]) { font-size: 13px; line-height: 1.45; }
-html:not([data-ui-layout="workspace"]) body.admin-ui :is(.dl-main,[data-admin-dialog]) button {
- min-height: var(--admin-control-height) !important;
- padding-block: 6px !important;
- line-height: 1.3;
+html:not([data-ui-layout="workspace"]) body.admin-ui :is(.dl-main, [data-admin-dialog]) {
+  font-size: 13px;
+  line-height: 1.45;
 }
-html:not([data-ui-layout="workspace"]) body.admin-ui :is(.dl-main,[data-admin-dialog]) :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),select) {
- min-height: var(--admin-control-height) !important;
- padding-block: 6px !important;
- line-height: 1.35;
+html:not([data-ui-layout="workspace"]) body.admin-ui :is(.dl-main, [data-admin-dialog]) button {
+  min-height: var(--admin-control-height) !important;
+  padding-block: 6px !important;
+  line-height: 1.3;
 }
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] { border-radius: 12px !important; }
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-header] { padding: var(--admin-dialog-header-padding) !important; gap: 12px; }
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-header] :is(h1,h2,h3,h4,h5,h6) { margin: 0 !important; font-size: 16px !important; }
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-header] [data-admin-close] { padding: 0 !important; min-width: 34px !important; min-height: 34px !important; height: 34px !important; line-height: 1; }
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] > form:has(> [data-admin-body]) { overflow: hidden; flex: 1 1 auto; }
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-body] { padding: var(--admin-dialog-body-padding) !important; max-height: none !important; min-width: 0; overflow-y: auto; flex: 1 1 auto; }
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-footer] { padding: var(--admin-dialog-footer-padding) !important; gap: 8px !important; }
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-footer] button { margin: 0; }
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-form-row] { gap: 12px !important; margin-bottom: 12px !important; }
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-form-row] > * { min-width: 0 !important; }
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] label { line-height: 1.4; margin-bottom: 4px; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-copy { padding: 8px 10px !important; margin-bottom: 12px !important; }
+html:not([data-ui-layout="workspace"])
+  body.admin-ui
+  :is(.dl-main, [data-admin-dialog])
+  :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+    select
+  ) {
+  min-height: var(--admin-control-height) !important;
+  padding-block: 6px !important;
+  line-height: 1.35;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] {
+  border-radius: 12px !important;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-header] {
+  padding: var(--admin-dialog-header-padding) !important;
+  gap: 12px;
+}
+html:not([data-ui-layout="workspace"])
+  body.admin-ui
+  [data-admin-header]
+  :is(h1, h2, h3, h4, h5, h6) {
+  margin: 0 !important;
+  font-size: 16px !important;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-header] [data-admin-close] {
+  padding: 0 !important;
+  min-width: 34px !important;
+  min-height: 34px !important;
+  height: 34px !important;
+  line-height: 1;
+}
+html:not([data-ui-layout="workspace"])
+  body.admin-ui
+  [data-admin-dialog]
+  > form:has(> [data-admin-body]) {
+  overflow: hidden;
+  flex: 1 1 auto;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-body] {
+  padding: var(--admin-dialog-body-padding) !important;
+  max-height: none !important;
+  min-width: 0;
+  overflow-y: auto;
+  flex: 1 1 auto;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-footer] {
+  padding: var(--admin-dialog-footer-padding) !important;
+  gap: 8px !important;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-footer] button {
+  margin: 0;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-form-row] {
+  gap: 12px !important;
+  margin-bottom: 12px !important;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-form-row] > * {
+  min-width: 0 !important;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] label {
+  line-height: 1.4;
+  margin-bottom: 4px;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-copy {
+  padding: 8px 10px !important;
+  margin-bottom: 12px !important;
+}
 /* Auto/Custom beside the number only when the cell has room for both; a narrow
    cell (the bill forms' six-column detail row) stacks them instead of spilling
    the number under the next field. */
-html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-number { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(130px, 100%), 1fr)); gap: 6px 8px; align-items: start; min-width: 0; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-number > label { grid-column: 1 / -1; margin: 0 !important; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-number > div:has(> button[title*="sequence"]) { margin: 0 !important; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-number > div:not(:has(> button[title*="sequence"])):not(:has(> input)) { grid-column: 1 / -1; margin-top: 0 !important; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-number > input { min-width: 0; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-number > div:has(> input) { min-width: 0; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-number button { padding-inline: 8px !important; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-number {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(130px, 100%), 1fr));
+  gap: 6px 8px;
+  align-items: start;
+  min-width: 0;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-number > label {
+  grid-column: 1 / -1;
+  margin: 0 !important;
+}
+html:not([data-ui-layout="workspace"])
+  body.admin-ui
+  .admin-document-number
+  > div:has(> button[title*="sequence"]) {
+  margin: 0 !important;
+}
+html:not([data-ui-layout="workspace"])
+  body.admin-ui
+  .admin-document-number
+  > div:not(:has(> button[title*="sequence"])):not(:has(> input)) {
+  grid-column: 1 / -1;
+  margin-top: 0 !important;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-number > input {
+  min-width: 0;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-number > div:has(> input) {
+  min-width: 0;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-number button {
+  padding-inline: 8px !important;
+}
 @media (max-width: 767.98px) {
- html:not([data-ui-layout="workspace"]) body.admin-ui { --admin-control-height: 44px; --admin-dialog-header-padding: 8px 12px; --admin-dialog-body-padding: 12px; --admin-dialog-footer-padding: 8px 12px; }
- html:not([data-ui-layout="workspace"]) body.admin-ui :is(.dl-main,[data-admin-dialog]) button { padding-block: 8px !important; }
- html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-header] [data-admin-close] { min-width: 44px !important; min-height: 44px !important; height: 44px !important; padding: 0 !important; }
- html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-form-row] { flex-direction: column; gap: 10px !important; }
- html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-form-row] > * { width: 100%; flex: auto !important; }
+  html:not([data-ui-layout="workspace"]) body.admin-ui {
+    --admin-control-height: 44px;
+    --admin-dialog-header-padding: 8px 12px;
+    --admin-dialog-body-padding: 12px;
+    --admin-dialog-footer-padding: 8px 12px;
+  }
+  html:not([data-ui-layout="workspace"]) body.admin-ui :is(.dl-main, [data-admin-dialog]) button {
+    padding-block: 8px !important;
+  }
+  html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-header] [data-admin-close] {
+    min-width: 44px !important;
+    min-height: 44px !important;
+    height: 44px !important;
+    padding: 0 !important;
+  }
+  html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-form-row] {
+    flex-direction: column;
+    gap: 10px !important;
+  }
+  html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-form-row] > * {
+    width: 100%;
+    flex: auto !important;
+  }
 }
 @media (max-height: 500px) and (min-width: 768px) {
- html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-backdrop] { padding: 6px !important; }
- html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] { max-height: calc(100dvh - 12px) !important; }
+  html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-backdrop] {
+    padding: 6px !important;
+  }
+  html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] {
+    max-height: calc(100dvh - 12px) !important;
+  }
 }
 
-html:not([data-ui-layout="workspace"]) body.admin-ui { --admin-field-gap: 12px; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-page-header] { margin-bottom: 16px !important; gap: 12px !important; flex-wrap: wrap; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-page-icon] { width: 38px !important; height: 38px !important; border-radius: 10px !important; flex-shrink: 0; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-page-icon] svg { width: 22px; height: 22px; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-toolbar] { gap: 12px !important; margin-bottom: 16px !important; min-width: 0; }
-@media(max-width:767.98px) {
- html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-toolbar] { flex-wrap: wrap; }
- html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-toolbar] > * { min-width: 0 !important; max-width: 100%; }
+html:not([data-ui-layout="workspace"]) body.admin-ui {
+  --admin-field-gap: 12px;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-page-header] {
+  margin-bottom: 16px !important;
+  gap: 12px !important;
+  flex-wrap: wrap;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-page-icon] {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 10px !important;
+  flex-shrink: 0;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-page-icon] svg {
+  width: 22px;
+  height: 22px;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-toolbar] {
+  gap: 12px !important;
+  margin-bottom: 16px !important;
+  min-width: 0;
+}
+@media (max-width: 767.98px) {
+  html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-toolbar] {
+    flex-wrap: wrap;
+  }
+  html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-toolbar] > * {
+    min-width: 0 !important;
+    max-width: 100%;
+  }
 }
 
-@media(min-width:768px) {
- html:not([data-ui-layout="workspace"]) body.admin-ui .admin-quote-body:has(> .admin-document-copy) { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 12px; align-content: start; }
- html:not([data-ui-layout="workspace"]) body.admin-ui .admin-quote-body:has(> .admin-document-copy) > * { grid-column: 1 / -1; }
- /* Number on the left, copy on the right with its inputs, as on every other document dialog. */
- html:not([data-ui-layout="workspace"]) body.admin-ui .admin-quote-body > .admin-document-copy { grid-column: 2 !important; grid-row: 1; align-self: start; justify-self: end; margin-top: 1.35rem; margin-bottom: 0 !important; }
- html:not([data-ui-layout="workspace"]) body.admin-ui .admin-quote-body:has(> .admin-document-copy) > div:has(> .admin-document-number) { grid-column: 1; grid-row: 1; max-width: none !important; margin-bottom: 0 !important; }
+@media (min-width: 768px) {
+  html:not([data-ui-layout="workspace"])
+    body.admin-ui
+    .admin-quote-body:has(> .admin-document-copy) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
+    align-content: start;
+  }
+  html:not([data-ui-layout="workspace"])
+    body.admin-ui
+    .admin-quote-body:has(> .admin-document-copy)
+    > * {
+    grid-column: 1 / -1;
+  }
+  /* Number on the left, copy on the right with its inputs, as on every other document dialog. */
+  html:not([data-ui-layout="workspace"]) body.admin-ui .admin-quote-body > .admin-document-copy {
+    grid-column: 2 !important;
+    grid-row: 1;
+    align-self: start;
+    justify-self: end;
+    margin-top: 1.35rem;
+    margin-bottom: 0 !important;
+  }
+  html:not([data-ui-layout="workspace"])
+    body.admin-ui
+    .admin-quote-body:has(> .admin-document-copy)
+    > div:has(> .admin-document-number) {
+    grid-column: 1;
+    grid-row: 1;
+    max-width: none !important;
+    margin-bottom: 0 !important;
+  }
 }
 
 /* Consistent visual grouping for create and edit workflows. */
-html:not([data-ui-layout="workspace"]) body.admin-ui :is(.admin-details-panel,.admin-items-panel) { min-width: 0; border: 1px solid #e8edf3; border-radius: 10px; padding: 14px; margin-bottom: 16px; background: #fff; }
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] .admin-section-heading { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; padding: 0 0 10px; border-bottom: 1px solid #e8edf3; font-size: 13px !important; font-weight: 700; line-height: 1.4; color: #0d47a1; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .admin-section-heading::before { content: ''; width: 3px; height: 15px; border-radius: 3px; background: #00897b; flex-shrink: 0; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .admin-details-panel > [data-admin-form-row]:last-child { margin-bottom: 0 !important; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .admin-items-panel > div:first-child { margin-bottom: 12px; gap: 12px; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .admin-items-panel > div:first-child > label { font-weight: 700; color: #0d47a1; }
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-field] { min-width: 0; }
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] :is(input,select,textarea):not(:disabled):hover { border-color: #00897b; }
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] :is(input,select,textarea):focus-visible { outline-offset: 2px; }
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] textarea { padding: 8px 10px; line-height: 1.5; }
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-footer] { align-items: center; }
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-footer] button[type=submit] { min-width: 112px; }
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-footer] button:not(:disabled):hover { filter: brightness(1.05); }
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-header] [data-admin-close]:hover { background-color: rgba(255,255,255,.3) !important; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-toolbar] { align-items: end; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-page-header] > div:first-child { gap: 12px !important; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-table-region] { border-radius: 10px; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main table :is(th,td) { vertical-align: middle; }
-html:not([data-ui-layout="workspace"]) body.admin-ui :is(.dl-main,[data-admin-dialog]) button { transition: background-color .16s ease,border-color .16s ease,box-shadow .16s ease,filter .16s ease; }
-@media(min-width:992px) {
- html:not([data-ui-layout="workspace"]) body.admin-ui .admin-order-party-row { display: grid !important; grid-template-columns: minmax(0,1.15fr) minmax(0,1.5fr) minmax(0,1fr); align-items: start; }
+html:not([data-ui-layout="workspace"]) body.admin-ui :is(.admin-details-panel, .admin-items-panel) {
+  min-width: 0;
+  border: 1px solid #e8edf3;
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 16px;
+  background: #fff;
 }
-@media(min-width:768px) and (max-width:991.98px) {
- html:not([data-ui-layout="workspace"]) body.admin-ui .admin-order-party-row { display: grid !important; grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
- html:not([data-ui-layout="workspace"]) body.admin-ui .admin-order-party-row > :last-child { grid-column: 1 / -1; }
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] .admin-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 0 0 10px;
+  border-bottom: 1px solid #e8edf3;
+  font-size: 13px !important;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #0d47a1;
 }
-@media(max-width:767.98px) {
- html:not([data-ui-layout="workspace"]) body.admin-ui :is(.admin-details-panel,.admin-items-panel) { padding: 12px; margin-bottom: 12px; }
- html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] .admin-section-heading { margin-bottom: 12px; }
- html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-footer] button[type=submit] { flex: 1 1 auto; }
- html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-footer] button { min-width: 88px; }
- html:not([data-ui-layout="workspace"]) body.admin-ui .admin-items-panel > div:first-child { align-items: flex-start; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-section-heading::before {
+  content: "";
+  width: 3px;
+  height: 15px;
+  border-radius: 3px;
+  background: #00897b;
+  flex-shrink: 0;
 }
-@media(prefers-reduced-motion:reduce) {
- html:not([data-ui-layout="workspace"]) body.admin-ui :is(.dl-main,[data-admin-dialog]) button { transition: none; }
+html:not([data-ui-layout="workspace"])
+  body.admin-ui
+  .admin-details-panel
+  > [data-admin-form-row]:last-child {
+  margin-bottom: 0 !important;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-items-panel > div:first-child {
+  margin-bottom: 12px;
+  gap: 12px;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-items-panel > div:first-child > label {
+  font-weight: 700;
+  color: #0d47a1;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-field] {
+  min-width: 0;
+}
+html:not([data-ui-layout="workspace"])
+  body.admin-ui
+  [data-admin-dialog]
+  :is(input, select, textarea):not(:disabled):hover {
+  border-color: #00897b;
+}
+html:not([data-ui-layout="workspace"])
+  body.admin-ui
+  [data-admin-dialog]
+  :is(input, select, textarea):focus-visible {
+  outline-offset: 2px;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] textarea {
+  padding: 8px 10px;
+  line-height: 1.5;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-footer] {
+  align-items: center;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-footer] button[type="submit"] {
+  min-width: 112px;
+}
+html:not([data-ui-layout="workspace"])
+  body.admin-ui
+  [data-admin-footer]
+  button:not(:disabled):hover {
+  filter: brightness(1.05);
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-header] [data-admin-close]:hover {
+  background-color: rgba(255, 255, 255, 0.3) !important;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-toolbar] {
+  align-items: end;
+}
+html:not([data-ui-layout="workspace"])
+  body.admin-ui
+  .dl-main
+  [data-admin-page-header]
+  > div:first-child {
+  gap: 12px !important;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-table-region] {
+  border-radius: 10px;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main table :is(th, td) {
+  vertical-align: middle;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui :is(.dl-main, [data-admin-dialog]) button {
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    filter 0.16s ease;
+}
+@media (min-width: 992px) {
+  html:not([data-ui-layout="workspace"]) body.admin-ui .admin-order-party-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.5fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+@media (min-width: 768px) and (max-width: 991.98px) {
+  html:not([data-ui-layout="workspace"]) body.admin-ui .admin-order-party-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  html:not([data-ui-layout="workspace"]) body.admin-ui .admin-order-party-row > :last-child {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 767.98px) {
+  html:not([data-ui-layout="workspace"])
+    body.admin-ui
+    :is(.admin-details-panel, .admin-items-panel) {
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] .admin-section-heading {
+    margin-bottom: 12px;
+  }
+  html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-footer] button[type="submit"] {
+    flex: 1 1 auto;
+  }
+  html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-footer] button {
+    min-width: 88px;
+  }
+  html:not([data-ui-layout="workspace"]) body.admin-ui .admin-items-panel > div:first-child {
+    align-items: flex-start;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-ui-layout="workspace"]) body.admin-ui :is(.dl-main, [data-admin-dialog]) button {
+    transition: none;
+  }
 }
 
-html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] label:has(> input[type=checkbox]) { align-items: center; gap: 8px; }
-@media(min-width:768px) {
- html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] label:has(> input[type=checkbox]) { min-height: 34px !important; }
+html:not([data-ui-layout="workspace"])
+  body.admin-ui
+  [data-admin-dialog]
+  label:has(> input[type="checkbox"]) {
+  align-items: center;
+  gap: 8px;
 }
-@media(max-width:767.98px) {
- html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] label:has(> input[type=checkbox]) { min-height: 44px; }
+@media (min-width: 768px) {
+  html:not([data-ui-layout="workspace"])
+    body.admin-ui
+    [data-admin-dialog]
+    label:has(> input[type="checkbox"]) {
+    min-height: 34px !important;
+  }
+}
+@media (max-width: 767.98px) {
+  html:not([data-ui-layout="workspace"])
+    body.admin-ui
+    [data-admin-dialog]
+    label:has(> input[type="checkbox"]) {
+    min-height: 44px;
+  }
 }
 
 /* A collapsed secondary action should not reserve a full bordered panel. */
-html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-copy[data-open=false] { display: inline-block; width: fit-content; max-width: 100%; padding: 0 !important; border: 0 !important; border-radius: 0 !important; margin-bottom: 8px !important; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-copy[data-open=true] { width: 100%; padding: 12px !important; margin-bottom: 12px !important; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-copy > button:first-child { padding-inline: 10px; }
-@media(min-width:768px) {
- html:not([data-ui-layout="workspace"]) body.admin-ui .admin-quote-body > .admin-document-copy[data-open=true] { grid-column: 1 / -1 !important; grid-row: auto; justify-self: stretch; margin-top: 0; }
- html:not([data-ui-layout="workspace"]) body.admin-ui .admin-quote-body:has(> .admin-document-copy[data-open=true]) > div:has(> .admin-document-number) { grid-column: 1 / -1; grid-row: auto; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-copy[data-open="false"] {
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  margin-bottom: 8px !important;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-copy[data-open="true"] {
+  width: 100%;
+  padding: 12px !important;
+  margin-bottom: 12px !important;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-document-copy > button:first-child {
+  padding-inline: 10px;
+}
+@media (min-width: 768px) {
+  html:not([data-ui-layout="workspace"])
+    body.admin-ui
+    .admin-quote-body
+    > .admin-document-copy[data-open="true"] {
+    grid-column: 1 / -1 !important;
+    grid-row: auto;
+    justify-self: stretch;
+    margin-top: 0;
+  }
+  html:not([data-ui-layout="workspace"])
+    body.admin-ui
+    .admin-quote-body:has(> .admin-document-copy[data-open="true"])
+    > div:has(> .admin-document-number) {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
 }
 
-html:not([data-ui-layout="workspace"]) body.admin-ui .pof-header__title { text-align: left; }
-
-html:not([data-ui-layout="workspace"]) body.admin-ui .tenant-page [data-admin-page-header] h1 { text-align: left; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .admin-view-mode { flex-wrap: nowrap !important; flex-shrink: 0; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .admin-view-mode > button { flex: 1 0 auto; white-space: nowrap; }
-@media(max-width:767.98px) {
- html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-toolbar] > div:has(> input) { flex-basis: 100% !important; width: 100%; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .pof-header__title {
+  text-align: left;
 }
 
-html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-page-header] :is(h1,h2,h3) { text-align: left; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .tenant-page [data-admin-page-header] h1 {
+  text-align: left;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-view-mode {
+  flex-wrap: nowrap !important;
+  flex-shrink: 0;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-view-mode > button {
+  flex: 1 0 auto;
+  white-space: nowrap;
+}
+@media (max-width: 767.98px) {
+  html:not([data-ui-layout="workspace"])
+    body.admin-ui
+    .dl-main
+    [data-admin-toolbar]
+    > div:has(> input) {
+    flex-basis: 100% !important;
+    width: 100%;
+  }
+}
 
-html:not([data-ui-layout="workspace"]) body.admin-ui .admin-stock-modal { padding: 0 !important; overflow: hidden !important; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .admin-stock-modal > form { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+html:not([data-ui-layout="workspace"])
+  body.admin-ui
+  .dl-main
+  [data-admin-page-header]
+  :is(h1, h2, h3) {
+  text-align: left;
+}
 
-html:not([data-ui-layout="workspace"]) body.admin-ui .dash-kpi-card__label { align-items: flex-start !important; min-height: 30px; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .dash-kpi-card__label > span:last-child { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }
-html:not([data-ui-layout="workspace"]) body.admin-ui .dash-mov-row__name { white-space: normal !important; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-stock-modal {
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui .admin-stock-modal > form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+html:not([data-ui-layout="workspace"]) body.admin-ui .dash-kpi-card__label {
+  align-items: flex-start !important;
+  min-height: 30px;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui .dash-kpi-card__label > span:last-child {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+html:not([data-ui-layout="workspace"]) body.admin-ui .dash-mov-row__name {
+  white-space: normal !important;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
 
 /* The Vite starter's global h1 is centred. Every admin page title reads
    left-aligned, with its label and subtitle (report headers, the dashboard
    hero, FBR Monitor all inherited the centring). */
-body.admin-ui .dl-main h1 { text-align: left; }
+body.admin-ui .dl-main h1 {
+  text-align: left;
+}
 
 /* Phones: a <select> is as wide as its longest option, so one long company
    name pushed the page sideways. Full-width pickers are the house rule on a
    phone; a percentage width also makes the select compressible. */
 @media (max-width: 599.98px) {
-  body.admin-ui .dl-main select { width: 100% !important; min-width: 0 !important; max-width: 100%; }
+  body.admin-ui .dl-main select {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100%;
+  }
 }
 
 /* A document dialog's header row: number, a source picker, the copy shortcut.
    Labels share a top line; the label-less copy button drops by one label
    height so it lines up with the inputs. Opened, the copy panel takes the row. */
-body.admin-ui .doc-header-row { display: flex; flex-wrap: wrap; gap: 0.6rem 1rem; align-items: flex-start; margin-bottom: 0.85rem; }
-body.admin-ui .doc-header-row__number { flex: 0 1 340px; min-width: min(260px, 100%); }
-body.admin-ui .doc-header-row__number > div { max-width: none !important; margin-bottom: 0 !important; }
-body.admin-ui .doc-header-row__grow { flex: 1 1 280px; min-width: 0; }
-body.admin-ui .doc-header-row__copy { flex: 0 0 auto; margin-left: auto; padding-top: 1.35rem; }
-body.admin-ui .doc-header-row__copy > .admin-document-copy[data-open=false] { margin-bottom: 0 !important; }
-body.admin-ui .doc-header-row__copy:has(> .admin-document-copy[data-open=true]) { flex-basis: 100%; padding-top: 0; margin-left: 0; order: 10; }
+body.admin-ui .doc-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+  align-items: flex-start;
+  margin-bottom: 0.85rem;
+}
+body.admin-ui .doc-header-row__number {
+  flex: 0 1 340px;
+  min-width: min(260px, 100%);
+}
+body.admin-ui .doc-header-row__number > div {
+  max-width: none !important;
+  margin-bottom: 0 !important;
+}
+body.admin-ui .doc-header-row__grow {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+body.admin-ui .doc-header-row__copy {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding-top: 1.35rem;
+}
+body.admin-ui .doc-header-row__copy > .admin-document-copy[data-open="false"] {
+  margin-bottom: 0 !important;
+}
+body.admin-ui .doc-header-row__copy:has(> .admin-document-copy[data-open="true"]) {
+  flex-basis: 100%;
+  padding-top: 0;
+  margin-left: 0;
+  order: 10;
+}
 
 /* A dialog section heading that also carries a shortcut (the copy picker):
    the row owns the underline, the button sits at the right, and an opened
    copy panel takes the full width under the heading. */
-body.admin-ui [data-admin-dialog] .admin-section-heading-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 14px; padding: 0 0 8px; border-bottom: 1px solid #e8edf3; }
-body.admin-ui [data-admin-dialog] .admin-section-heading-row > .admin-section-heading { margin: 0; padding: 0; border-bottom: 0; }
-body.admin-ui [data-admin-dialog] .admin-section-heading-row > .admin-document-copy[data-open=false] { margin-bottom: 0 !important; }
-body.admin-ui [data-admin-dialog] .admin-section-heading-row > .admin-document-copy[data-open=true] { flex-basis: 100%; margin-bottom: 0 !important; }
+body.admin-ui [data-admin-dialog] .admin-section-heading-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 0 0 8px;
+  border-bottom: 1px solid #e8edf3;
+}
+body.admin-ui [data-admin-dialog] .admin-section-heading-row > .admin-section-heading {
+  margin: 0;
+  padding: 0;
+  border-bottom: 0;
+}
+body.admin-ui
+  [data-admin-dialog]
+  .admin-section-heading-row
+  > .admin-document-copy[data-open="false"] {
+  margin-bottom: 0 !important;
+}
+body.admin-ui
+  [data-admin-dialog]
+  .admin-section-heading-row
+  > .admin-document-copy[data-open="true"] {
+  flex-basis: 100%;
+  margin-bottom: 0 !important;
+}

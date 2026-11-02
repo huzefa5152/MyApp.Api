@@ -64,7 +64,8 @@ const styles = {
     border: "1px solid var(--k-line, #e8edf3)",
     borderRadius: 16,
     padding: "var(--sc-panel-pad, clamp(1.5rem, 4vw, 2.5rem))",
-    boxShadow: "var(--k-card-shadow, 0 1px 3px rgba(16,32,64,0.04), 0 6px 18px rgba(16,32,64,0.06))",
+    boxShadow:
+      "var(--k-card-shadow, 0 1px 3px rgba(16,32,64,0.04), 0 6px 18px rgba(16,32,64,0.06))",
   },
   iconWrap: {
     width: "var(--sc-hero-icon, 72px)",

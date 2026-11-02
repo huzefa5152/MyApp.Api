@@ -49,7 +49,10 @@ export default function ParserFeedback({ value, onChange, disabled = false }) {
         {option("Correct", "Yes, everything looks correct.")}
         {option("Incorrect", "No, I had to fix parser mistakes.")}
       </div>
-      <div style={styles.hint}>Optional — your answer helps us improve the parser. It won&apos;t block creating the document.</div>
+      <div style={styles.hint}>
+        Optional — your answer helps us improve the parser. It won&apos;t block creating the
+        document.
+      </div>
     </div>
   );
 }
@@ -67,7 +70,11 @@ const styles = {
   },
   header: { display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.3rem" },
   title: { fontWeight: 700, fontSize: "var(--sc-text, 0.9rem)", color: "var(--k-ink, #1a2332)" },
-  question: { fontSize: "var(--sc-text, 0.88rem)", color: "var(--k-ink, #1a2332)", marginBottom: "0.6rem" },
+  question: {
+    fontSize: "var(--sc-text, 0.88rem)",
+    color: "var(--k-ink, #1a2332)",
+    marginBottom: "0.6rem",
+  },
   options: { display: "flex", flexDirection: "column", gap: "0.5rem" },
   option: {
     display: "flex",
@@ -81,8 +88,17 @@ const styles = {
     color: "var(--k-ink, #1a2332)",
     cursor: "pointer",
   },
-  optionActive: { borderColor: "var(--k-blue, #0d47a1)", backgroundColor: "#e3f2fd", fontWeight: 600 },
+  optionActive: {
+    borderColor: "var(--k-blue, #0d47a1)",
+    backgroundColor: "#e3f2fd",
+    fontWeight: 600,
+  },
   optionDisabled: { opacity: 0.6, cursor: "not-allowed" },
   radio: { width: 16, height: 16, accentColor: "#0d47a1", cursor: "inherit" },
-  hint: { marginTop: "0.5rem", fontSize: "0.76rem", color: "var(--k-muted, #5f6d7e)", fontStyle: "italic" },
+  hint: {
+    marginTop: "0.5rem",
+    fontSize: "0.76rem",
+    color: "var(--k-muted, #5f6d7e)",
+    fontStyle: "italic",
+  },
 };

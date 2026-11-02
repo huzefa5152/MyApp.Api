@@ -135,7 +135,8 @@ export function permissionForPath(pathname) {
     if (!pattern.includes("/:")) continue;
     const want = pattern.split("/");
     if (want.length !== parts.length) continue;
-    if (want.every((seg, i) => seg.startsWith(":") ? parts[i] !== "" : seg === parts[i])) return key;
+    if (want.every((seg, i) => (seg.startsWith(":") ? parts[i] !== "" : seg === parts[i])))
+      return key;
   }
   // Wildcard entries ("/companies/*"). Longest prefix wins so a more specific
   // pattern can be added later without reordering the object.
@@ -145,7 +146,10 @@ export function permissionForPath(pathname) {
     if (!pattern.endsWith("/*")) continue;
     const prefix = pattern.slice(0, -2);
     if (pathname === prefix || pathname.startsWith(prefix + "/")) {
-      if (prefix.length > bestLength) { bestLength = prefix.length; best = key; }
+      if (prefix.length > bestLength) {
+        bestLength = prefix.length;
+        best = key;
+      }
     }
   }
   return bestLength >= 0 ? best : undefined;

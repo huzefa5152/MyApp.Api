@@ -22,7 +22,9 @@ const money = (n) => "Rs " + Number(n || 0).toLocaleString();
 // and cuts the amount, so each line becomes a card.
 const NARROW = 640;
 export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPrint, onClose }) {
-  const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < NARROW);
+  const [isNarrow, setIsNarrow] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < NARROW,
+  );
   useEffect(() => {
     const onResize = () => setIsNarrow(window.innerWidth < NARROW);
     window.addEventListener("resize", onResize);
@@ -32,13 +34,35 @@ export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPr
   const items = quote.items || [];
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
-          <h5 style={{ ...formStyles.title, display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <h5
+            style={{
+              ...formStyles.title,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+            }}
+          >
             <MdRequestQuote size={20} /> Quote #{quote.quoteNumber}
-            <span style={{ ...st.badge, background: `${STATUS_COLORS[quote.status] || "#5f6d7e"}18`, color: STATUS_COLORS[quote.status] || "#5f6d7e" }}>{quote.status}</span>
+            <span
+              style={{
+                ...st.badge,
+                background: `${STATUS_COLORS[quote.status] || "#5f6d7e"}18`,
+                color: STATUS_COLORS[quote.status] || "#5f6d7e",
+              }}
+            >
+              {quote.status}
+            </span>
           </h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}><MdClose size={18} /></button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            <MdClose size={18} />
+          </button>
         </div>
 
         <div data-admin-body="" style={formStyles.body}>
@@ -56,7 +80,9 @@ export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPr
           />
 
           {quote.convertedToSalesOrderNumber && (
-            <div style={st.converted}>→ Converted to Sales Order #{quote.convertedToSalesOrderNumber}</div>
+            <div style={st.converted}>
+              → Converted to Sales Order #{quote.convertedToSalesOrderNumber}
+            </div>
           )}
 
           <div style={st.sectionTitle}>Items ({items.length})</div>
@@ -67,80 +93,172 @@ export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPr
                   <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                     <span style={st.cardNum}>{idx + 1}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      {i.imagePath && <img src={i.imagePath} alt={`Photo for line ${idx + 1}`} style={{ display: "block", maxWidth: 72, maxHeight: 72, objectFit: "contain", marginBottom: 6 }} />}
-                      <span style={st.desc}><RichText text={i.description} /></span>
-                      {i.discountAmount > 0 && <div style={st.discNote}>{discountNote(i.discountValue, i.discountIsPercent, i.discountAmount, i.discountReason)}</div>}
+                      {i.imagePath && (
+                        <img
+                          src={i.imagePath}
+                          alt={`Photo for line ${idx + 1}`}
+                          style={{
+                            display: "block",
+                            maxWidth: 72,
+                            maxHeight: 72,
+                            objectFit: "contain",
+                            marginBottom: 6,
+                          }}
+                        />
+                      )}
+                      <span style={st.desc}>
+                        <RichText text={i.description} />
+                      </span>
+                      {i.discountAmount > 0 && (
+                        <div style={st.discNote}>
+                          {discountNote(
+                            i.discountValue,
+                            i.discountIsPercent,
+                            i.discountAmount,
+                            i.discountReason,
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div style={st.cardFoot}>
-                    <span>{Number(i.quantity).toLocaleString()} {i.unit} × {money(i.unitPrice)}</span>
-                    <b style={{ whiteSpace: "nowrap", color: "var(--k-ink)" }}>{money(i.lineTotal)}</b>
+                    <span>
+                      {Number(i.quantity).toLocaleString()} {i.unit} × {money(i.unitPrice)}
+                    </span>
+                    <b style={{ whiteSpace: "nowrap", color: "var(--k-ink)" }}>
+                      {money(i.lineTotal)}
+                    </b>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-          <TableWrap data-admin-table-region="" style={st.tableWrap}>
-            <table className="k-table k-table--compact">
-              <thead>
-                <tr>
-                  <th className="is-center" style={{ width: 28 }}>#</th>
-                  <th>Description</th>
-                  <th className="k-num">Qty</th>
-                  <th>Unit</th>
-                  <th className="k-num">Unit Price</th>
-                  <th className="k-num">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((i, idx) => (
-                  <tr key={i.id ?? idx}>
-                    <td className="is-center k-muted">{idx + 1}</td>
-                    <td>{i.imagePath && <img src={i.imagePath} alt={`Photo for line ${idx + 1}`} style={{ display: "block", maxWidth: 72, maxHeight: 72, objectFit: "contain", marginBottom: 6 }} />}<span style={st.desc}><RichText text={i.description} /></span>{i.discountAmount > 0 && <div style={st.discNote}>{discountNote(i.discountValue, i.discountIsPercent, i.discountAmount, i.discountReason)}</div>}</td>
-                    <td className="k-num">{Number(i.quantity).toLocaleString()}</td>
-                    <td>{i.unit}</td>
-                    <td className="k-num">{money(i.unitPrice)}</td>
-                    <td className="k-num" style={{ fontWeight: 700 }}>{money(i.lineTotal)}</td>
+            <TableWrap data-admin-table-region="" style={st.tableWrap}>
+              <table className="k-table k-table--compact">
+                <thead>
+                  <tr>
+                    <th className="is-center" style={{ width: 28 }}>
+                      #
+                    </th>
+                    <th>Description</th>
+                    <th className="k-num">Qty</th>
+                    <th>Unit</th>
+                    <th className="k-num">Unit Price</th>
+                    <th className="k-num">Amount</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableWrap>
+                </thead>
+                <tbody>
+                  {items.map((i, idx) => (
+                    <tr key={i.id ?? idx}>
+                      <td className="is-center k-muted">{idx + 1}</td>
+                      <td>
+                        {i.imagePath && (
+                          <img
+                            src={i.imagePath}
+                            alt={`Photo for line ${idx + 1}`}
+                            style={{
+                              display: "block",
+                              maxWidth: 72,
+                              maxHeight: 72,
+                              objectFit: "contain",
+                              marginBottom: 6,
+                            }}
+                          />
+                        )}
+                        <span style={st.desc}>
+                          <RichText text={i.description} />
+                        </span>
+                        {i.discountAmount > 0 && (
+                          <div style={st.discNote}>
+                            {discountNote(
+                              i.discountValue,
+                              i.discountIsPercent,
+                              i.discountAmount,
+                              i.discountReason,
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="k-num">{Number(i.quantity).toLocaleString()}</td>
+                      <td>{i.unit}</td>
+                      <td className="k-num">{money(i.unitPrice)}</td>
+                      <td className="k-num" style={{ fontWeight: 700 }}>
+                        {money(i.lineTotal)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableWrap>
           )}
 
           <div style={st.totals}>
-            <div style={st.tRow}><span>Subtotal</span><span>{money(quote.subtotal)}</span></div>
+            <div style={st.tRow}>
+              <span>Subtotal</span>
+              <span>{money(quote.subtotal)}</span>
+            </div>
             {quote.discountAmount > 0 && (
               <div style={st.tRow}>
-                <span>Discount{quote.discountIsPercent ? ` (${quote.discountValue}%)` : ""}{quote.discountReason ? ` — ${quote.discountReason}` : ""}</span>
+                <span>
+                  Discount{quote.discountIsPercent ? ` (${quote.discountValue}%)` : ""}
+                  {quote.discountReason ? ` — ${quote.discountReason}` : ""}
+                </span>
                 <span style={{ whiteSpace: "nowrap" }}>− {money(quote.discountAmount)}</span>
               </div>
             )}
-            <div style={st.tRow}><span>GST @ {quote.gstRate}%</span><span>{money(quote.gstAmount)}</span></div>
-            <div style={{ ...st.tRow, ...st.grand }}><span>Grand Total</span><span>{money(quote.grandTotal)}</span></div>
+            <div style={st.tRow}>
+              <span>GST @ {quote.gstRate}%</span>
+              <span>{money(quote.gstAmount)}</span>
+            </div>
+            <div style={{ ...st.tRow, ...st.grand }}>
+              <span>Grand Total</span>
+              <span>{money(quote.grandTotal)}</span>
+            </div>
           </div>
 
           {quote.notes && (
             <>
               <div style={st.sectionTitle}>Notes</div>
-              <div style={st.notes}><RichText text={quote.notes} /></div>
+              <div style={st.notes}>
+                <RichText text={quote.notes} />
+              </div>
             </>
           )}
 
           {companyId && (
             <div style={{ marginTop: "1rem" }}>
-              <AttachmentManager companyId={companyId} entityType="SalesQuote" entityId={quote.id} mode="view" />
+              <AttachmentManager
+                companyId={companyId}
+                entityType="SalesQuote"
+                entityId={quote.id}
+                mode="view"
+              />
             </div>
           )}
         </div>
 
         <div data-admin-footer="" style={formStyles.footer}>
           {canPrint && (
-            <button style={{ ...formStyles.button, ...formStyles.cancel, display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => onPrint?.(quote)}>
+            <button
+              style={{
+                ...formStyles.button,
+                ...formStyles.cancel,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+              onClick={() => onPrint?.(quote)}
+            >
               <MdPrint size={16} /> Print
             </button>
           )}
-          <button data-admin-close="" style={{ ...formStyles.button, ...formStyles.submit }} onClick={onClose}>Close</button>
+          <button
+            data-admin-close=""
+            style={{ ...formStyles.button, ...formStyles.submit }}
+            onClick={onClose}
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>
@@ -148,19 +266,95 @@ export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPr
 }
 
 const st = {
-  badge: { fontSize: "0.7rem", fontWeight: 700, padding: "0.1rem 0.5rem", borderRadius: 20, background: "rgba(255,255,255,0.22)", color: "#fff", border: "1px solid rgba(255,255,255,0.4)" },
-  clientName: { fontSize: "calc(var(--k-font) + 0.15rem)", fontWeight: 700, color: "var(--k-ink)", marginBottom: "0.75rem" },
-  converted: { fontSize: "var(--k-font-sm)", color: "var(--k-teal)", fontWeight: 600, margin: "0.75rem 0" },
-  sectionTitle: { display: "flex", alignItems: "center", gap: 6, marginTop: "1.25rem", marginBottom: "0.5rem", fontSize: "var(--k-font)", fontWeight: 700, color: "var(--k-blue)" },
+  badge: {
+    fontSize: "0.7rem",
+    fontWeight: 700,
+    padding: "0.1rem 0.5rem",
+    borderRadius: 20,
+    background: "rgba(255,255,255,0.22)",
+    color: "#fff",
+    border: "1px solid rgba(255,255,255,0.4)",
+  },
+  clientName: {
+    fontSize: "calc(var(--k-font) + 0.15rem)",
+    fontWeight: 700,
+    color: "var(--k-ink)",
+    marginBottom: "0.75rem",
+  },
+  converted: {
+    fontSize: "var(--k-font-sm)",
+    color: "var(--k-teal)",
+    fontWeight: 600,
+    margin: "0.75rem 0",
+  },
+  sectionTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    marginTop: "1.25rem",
+    marginBottom: "0.5rem",
+    fontSize: "var(--k-font)",
+    fontWeight: 700,
+    color: "var(--k-blue)",
+  },
   tableWrap: { maxHeight: 320, overflowY: "auto" },
   desc: { whiteSpace: "pre-wrap" },
   cards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
-  card: { border: "1px solid var(--k-line)", borderRadius: "var(--k-radius)", padding: "0.65rem 0.75rem", background: "var(--k-surface)" },
-  cardNum: { flex: "0 0 auto", width: 24, height: 24, borderRadius: 7, background: "var(--k-surface-3)", color: "var(--k-muted)", display: "grid", placeItems: "center", fontSize: "var(--k-font-sm)", fontWeight: 700 },
-  cardFoot: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginTop: "0.5rem", paddingTop: "0.45rem", borderTop: "1px dashed var(--k-line)", fontSize: "var(--k-font-sm)", color: "var(--k-muted)" },
+  card: {
+    border: "1px solid var(--k-line)",
+    borderRadius: "var(--k-radius)",
+    padding: "0.65rem 0.75rem",
+    background: "var(--k-surface)",
+  },
+  cardNum: {
+    flex: "0 0 auto",
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    background: "var(--k-surface-3)",
+    color: "var(--k-muted)",
+    display: "grid",
+    placeItems: "center",
+    fontSize: "var(--k-font-sm)",
+    fontWeight: 700,
+  },
+  cardFoot: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "0.75rem",
+    flexWrap: "wrap",
+    marginTop: "0.5rem",
+    paddingTop: "0.45rem",
+    borderTop: "1px dashed var(--k-line)",
+    fontSize: "var(--k-font-sm)",
+    color: "var(--k-muted)",
+  },
   discNote: { marginTop: 4, fontSize: "var(--k-font-sm)", fontWeight: 600, color: "var(--k-teal)" },
   totals: { marginTop: "1rem", marginLeft: "auto", width: 280, maxWidth: "100%" },
-  tRow: { display: "flex", justifyContent: "space-between", gap: "0.75rem", padding: "0.25rem 0", fontSize: "var(--k-font)", color: "var(--k-muted)" },
-  grand: { borderTop: "2px solid var(--k-blue)", marginTop: 4, paddingTop: 8, fontWeight: 800, fontSize: "calc(var(--k-font) + 0.1rem)", color: "var(--k-blue)" },
-  notes: { fontSize: "var(--k-font)", color: "var(--k-ink)", whiteSpace: "pre-wrap", background: "var(--k-surface-2)", border: "1px solid var(--k-line)", borderRadius: 8, padding: "0.6rem 0.8rem" },
+  tRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "0.75rem",
+    padding: "0.25rem 0",
+    fontSize: "var(--k-font)",
+    color: "var(--k-muted)",
+  },
+  grand: {
+    borderTop: "2px solid var(--k-blue)",
+    marginTop: 4,
+    paddingTop: 8,
+    fontWeight: 800,
+    fontSize: "calc(var(--k-font) + 0.1rem)",
+    color: "var(--k-blue)",
+  },
+  notes: {
+    fontSize: "var(--k-font)",
+    color: "var(--k-ink)",
+    whiteSpace: "pre-wrap",
+    background: "var(--k-surface-2)",
+    border: "1px solid var(--k-line)",
+    borderRadius: 8,
+    padding: "0.6rem 0.8rem",
+  },
 };

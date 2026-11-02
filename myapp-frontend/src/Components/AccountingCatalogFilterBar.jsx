@@ -24,7 +24,7 @@ export default function AccountingCatalogFilterBar({
   value,
   onApply,
   loading = false,
-  accountKind = null,   // "cash" | "bank" — narrows the account picker for the books
+  accountKind = null, // "cash" | "bank" — narrows the account picker for the books
 }) {
   const [draft, setDraft] = useState(value);
   const [open, setOpen] = useState(false);
@@ -60,20 +60,30 @@ export default function AccountingCatalogFilterBar({
       try {
         const jobs = [];
         if (need(FILTERS.account) || need(FILTERS.accountGroup))
-          jobs.push(getAccountsFlat(companyId).then(({ data }) => alive && setAccounts(data || [])));
+          jobs.push(
+            getAccountsFlat(companyId).then(({ data }) => alive && setAccounts(data || [])),
+          );
         if (need(FILTERS.paymentAccount))
-          jobs.push(getBankCashAccounts(companyId).then(({ data }) => alive && setBankAccounts(data || [])));
+          jobs.push(
+            getBankCashAccounts(companyId).then(({ data }) => alive && setBankAccounts(data || [])),
+          );
         if (need(FILTERS.payee) || need(FILTERS.client))
-          jobs.push(getClientsByCompany(companyId).then(({ data }) => alive && setClients(data || [])));
+          jobs.push(
+            getClientsByCompany(companyId).then(({ data }) => alive && setClients(data || [])),
+          );
         if (need(FILTERS.payee) || need(FILTERS.supplier))
-          jobs.push(getSuppliersByCompany(companyId).then(({ data }) => alive && setSuppliers(data || [])));
+          jobs.push(
+            getSuppliersByCompany(companyId).then(({ data }) => alive && setSuppliers(data || [])),
+          );
         await Promise.allSettled(jobs);
       } catch {
         // A lookup that fails leaves its picker empty rather than blocking the
         // report — the operator can still run it unfiltered.
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [companyId, wants]);
 
   const publish = (next) => {
@@ -93,7 +103,10 @@ export default function AccountingCatalogFilterBar({
 
   const reset = () => {
     const cleared = { period: draft.period || "thisMonth", page: 1, pageSize: draft.pageSize };
-    if (cleared.period === "custom") { cleared.from = draft.from; cleared.to = draft.to; }
+    if (cleared.period === "custom") {
+      cleared.from = draft.from;
+      cleared.to = draft.to;
+    }
     clearTimeout(searchTimer.current);
     currentDraft.current = cleared;
     setDraft(cleared);
@@ -140,7 +153,7 @@ export default function AccountingCatalogFilterBar({
   // Chips describe the APPLIED filters, not the draft.
   const chips = useMemo(
     () => describeChips(value, { accounts, bankAccounts, clients, suppliers, accountGroups }),
-    [value, accounts, bankAccounts, clients, suppliers, accountGroups]
+    [value, accounts, bankAccounts, clients, suppliers, accountGroups],
   );
 
   const clearOne = (key) => {
@@ -164,7 +177,9 @@ export default function AccountingCatalogFilterBar({
             onChange={(e) => set({ period: e.target.value })}
           >
             {PERIOD_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
             ))}
           </select>
         </label>
@@ -195,7 +210,12 @@ export default function AccountingCatalogFilterBar({
         {wants.has(FILTERS.client) && (
           <Field label="Customer">
             <SearchableSelect
-              items={clients.map((c) => ({ id: c.id, name: c.name, ntn: c.ntn || "", phone: c.phone || "" }))}
+              items={clients.map((c) => ({
+                id: c.id,
+                name: c.name,
+                ntn: c.ntn || "",
+                phone: c.phone || "",
+              }))}
               value={draft.clientId ?? ""}
               onChange={(id) => set({ clientId: id === "" ? undefined : id })}
               searchKeys={["name", "ntn", "phone"]}
@@ -216,7 +236,10 @@ export default function AccountingCatalogFilterBar({
                 value={draft.search || ""}
                 onChange={(e) => set({ search: e.target.value })}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") { clearTimeout(searchTimer.current); publish(currentDraft.current); }
+                  if (e.key === "Enter") {
+                    clearTimeout(searchTimer.current);
+                    publish(currentDraft.current);
+                  }
                 }}
               />
             </div>
@@ -235,12 +258,16 @@ export default function AccountingCatalogFilterBar({
               <span>Filters</span>
             </button>
           )}
-          <span className="report-filter-status" role="status">{loading ? "Updating…" : "Auto-updates"}</span>
+          <span className="report-filter-status" role="status">
+            {loading ? "Updating…" : "Auto-updates"}
+          </span>
         </div>
       </div>
       {isCustom && (!draft.from || !draft.to || draft.from > draft.to) && (
         <p className="report-date-hint" role="status">
-          {draft.from && draft.to ? "From date must be on or before To date." : "Choose both dates to update the report."}
+          {draft.from && draft.to
+            ? "From date must be on or before To date."
+            : "Choose both dates to update the report."}
         </p>
       )}
 
@@ -320,7 +347,12 @@ export default function AccountingCatalogFilterBar({
             {wants.has(FILTERS.supplier) && (
               <Field label="Supplier">
                 <SearchableSelect
-                  items={suppliers.map((x) => ({ id: x.id, name: x.name, ntn: x.ntn || "", phone: x.phone || "" }))}
+                  items={suppliers.map((x) => ({
+                    id: x.id,
+                    name: x.name,
+                    ntn: x.ntn || "",
+                    phone: x.phone || "",
+                  }))}
                   value={draft.supplierId ?? ""}
                   onChange={(id) => set({ supplierId: id === "" ? undefined : id })}
                   searchKeys={["name", "ntn", "phone"]}
@@ -378,7 +410,9 @@ export default function AccountingCatalogFilterBar({
               title={`Remove: ${c.text}`}
             >
               <span style={st.chipText}>{c.text}</span>
-              <span style={st.chipX} aria-hidden="true">×</span>
+              <span style={st.chipX} aria-hidden="true">
+                ×
+              </span>
             </button>
           ))}
         </div>
@@ -390,9 +424,15 @@ export default function AccountingCatalogFilterBar({
 // ── Small building blocks ───────────────────────────────────────────────────
 
 function filterSignature(filters) {
-  return JSON.stringify(Object.entries(filters).filter(([key, value]) =>
-    key !== "pageSize" && value !== undefined && value !== null && value !== "")
-    .sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => [key, String(value)]));
+  return JSON.stringify(
+    Object.entries(filters)
+      .filter(
+        ([key, value]) =>
+          key !== "pageSize" && value !== undefined && value !== null && value !== "",
+      )
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => [key, String(value)]),
+  );
 }
 
 function Field({ label, children }) {
@@ -421,7 +461,9 @@ function SelectPlain({ value, onChange, placeholder, options, numeric = true }) 
     >
       <option value="">{placeholder}</option>
       {options.map((o) => (
-        <option key={o.id} value={o.id}>{o.name}</option>
+        <option key={o.id} value={o.id}>
+          {o.name}
+        </option>
       ))}
     </select>
   );
@@ -448,9 +490,16 @@ const STATUS_OPTIONS = [
 ];
 
 const hasMoreFilters = (wants) =>
-  [FILTERS.account, FILTERS.accountGroup, FILTERS.paymentAccount,
-   FILTERS.payeeType, FILTERS.payee, FILTERS.supplier,
-   FILTERS.tax, FILTERS.status].some((k) => wants.has(k));
+  [
+    FILTERS.account,
+    FILTERS.accountGroup,
+    FILTERS.paymentAccount,
+    FILTERS.payeeType,
+    FILTERS.payee,
+    FILTERS.supplier,
+    FILTERS.tax,
+    FILTERS.status,
+  ].some((k) => wants.has(k));
 
 /** Bank/cash split follows the account NAME, matching the server's resolution. */
 function isMoneyAccount(a, kind) {
@@ -471,33 +520,53 @@ function describeChips(applied, lookups) {
   const name = (list, id, key = "name") => list.find((x) => x.id === id)?.[key];
 
   if (applied.accountId)
-    out.push({ key: "accountId", text: `Account: ${name(lookups.accounts, applied.accountId) || applied.accountId}` });
+    out.push({
+      key: "accountId",
+      text: `Account: ${name(lookups.accounts, applied.accountId) || applied.accountId}`,
+    });
   if (applied.accountGroupId)
-    out.push({ key: "accountGroupId", text: `Category: ${name(lookups.accountGroups, applied.accountGroupId) || applied.accountGroupId}` });
+    out.push({
+      key: "accountGroupId",
+      text: `Category: ${name(lookups.accountGroups, applied.accountGroupId) || applied.accountGroupId}`,
+    });
   if (applied.paymentAccountId)
-    out.push({ key: "paymentAccountId", text: `Paid from: ${name(lookups.bankAccounts, applied.paymentAccountId) || applied.paymentAccountId}` });
+    out.push({
+      key: "paymentAccountId",
+      text: `Paid from: ${name(lookups.bankAccounts, applied.paymentAccountId) || applied.paymentAccountId}`,
+    });
   if (applied.payeeType)
-    out.push({ key: "payeeType", text: `Payee type: ${applied.payeeType === "Client" ? "Customer" : applied.payeeType}` });
+    out.push({
+      key: "payeeType",
+      text: `Payee type: ${applied.payeeType === "Client" ? "Customer" : applied.payeeType}`,
+    });
   if (applied.payeeId) {
     const who = name(lookups.clients, applied.payeeId) || name(lookups.suppliers, applied.payeeId);
     out.push({ key: "payeeId", text: `Payee: ${who || applied.payeeId}` });
   }
   if (applied.tax)
-    out.push({ key: "tax", text: `Tax: ${applied.tax === "taxed" ? "with tax" : applied.tax === "untaxed" ? "without tax" : `${applied.tax}%`}` });
+    out.push({
+      key: "tax",
+      text: `Tax: ${applied.tax === "taxed" ? "with tax" : applied.tax === "untaxed" ? "without tax" : `${applied.tax}%`}`,
+    });
   if (applied.status) {
-    const label = STATUS_OPTIONS.find((s) => s.id === applied.status)?.name
-      || PARTY_STATUS_OPTIONS.find((s) => s.id === applied.status)?.name
-      || applied.status;
+    const label =
+      STATUS_OPTIONS.find((s) => s.id === applied.status)?.name ||
+      PARTY_STATUS_OPTIONS.find((s) => s.id === applied.status)?.name ||
+      applied.status;
     out.push({ key: "status", text: label });
   }
   if (applied.clientId)
-    out.push({ key: "clientId", text: `Customer: ${name(lookups.clients, applied.clientId) || applied.clientId}` });
+    out.push({
+      key: "clientId",
+      text: `Customer: ${name(lookups.clients, applied.clientId) || applied.clientId}`,
+    });
   if (applied.supplierId)
-    out.push({ key: "supplierId", text: `Supplier: ${name(lookups.suppliers, applied.supplierId) || applied.supplierId}` });
-  if (applied.itemTypeId)
-    out.push({ key: "itemTypeId", text: `Item type: ${applied.itemTypeId}` });
-  if (applied.search)
-    out.push({ key: "search", text: `Search: "${applied.search}"` });
+    out.push({
+      key: "supplierId",
+      text: `Supplier: ${name(lookups.suppliers, applied.supplierId) || applied.supplierId}`,
+    });
+  if (applied.itemTypeId) out.push({ key: "itemTypeId", text: `Item type: ${applied.itemTypeId}` });
+  if (applied.search) out.push({ key: "search", text: `Search: "${applied.search}"` });
 
   return out;
 }
@@ -521,14 +590,20 @@ const st = {
   },
   panel: { marginTop: 8, paddingTop: 8, borderTop: `1px solid ${colors.cardBorder}` },
   panelFooter: {
-    display: "flex", justifyContent: "flex-end", gap: "0.6rem",
-    marginTop: 8, flexWrap: "wrap",
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: "0.6rem",
+    marginTop: 8,
+    flexWrap: "wrap",
   },
 
   field: { display: "flex", flexDirection: "column", gap: 3, flex: "1 1 170px", minWidth: 0 },
   label: {
-    fontSize: "0.64rem", fontWeight: 700, textTransform: "uppercase",
-    letterSpacing: "0.05em", color: colors.textSecondary,
+    fontSize: "0.64rem",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: colors.textSecondary,
   },
   // 38px on a desktop; ReportWorkspace.css lifts every control to 44px on a phone.
   control: { minHeight: 38, width: "100%", minWidth: 0, fontSize: "0.86rem" },
@@ -538,36 +613,73 @@ const st = {
 
   actions: { display: "flex", gap: "0.5rem", alignItems: "flex-end", marginLeft: "auto" },
   applyBtn: {
-    display: "inline-flex", alignItems: "center", gap: 6,
-    minHeight: 44, padding: "0 1.3rem", borderRadius: 10, border: "none",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    minHeight: 44,
+    padding: "0 1.3rem",
+    borderRadius: 10,
+    border: "none",
     background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
-    color: "#fff", fontWeight: 700, fontSize: "0.88rem", cursor: "pointer",
+    color: "#fff",
+    fontWeight: 700,
+    fontSize: "0.88rem",
+    cursor: "pointer",
     boxShadow: "0 2px 8px rgba(13,71,161,0.22)",
   },
   ghostBtn: {
-    display: "inline-flex", alignItems: "center", gap: 6,
-    minHeight: 38, padding: "0 0.85rem", borderRadius: 9,
-    border: `1px solid ${colors.inputBorder}`, background: colors.inputBg,
-    color: colors.textSecondary, fontWeight: 700, fontSize: "0.85rem", cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    minHeight: 38,
+    padding: "0 0.85rem",
+    borderRadius: 9,
+    border: `1px solid ${colors.inputBorder}`,
+    background: colors.inputBg,
+    color: colors.textSecondary,
+    fontWeight: 700,
+    fontSize: "0.85rem",
+    cursor: "pointer",
   },
   ghostBtnActive: { borderColor: colors.blue, color: colors.blue, background: "#eef4fd" },
   resetBtn: {
-    display: "inline-flex", alignItems: "center", gap: 6,
-    minHeight: 44, padding: "0 0.95rem", borderRadius: 10,
-    border: `1px solid ${colors.inputBorder}`, background: "transparent",
-    color: colors.textSecondary, fontWeight: 600, fontSize: "0.85rem", cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    minHeight: 44,
+    padding: "0 0.95rem",
+    borderRadius: 10,
+    border: `1px solid ${colors.inputBorder}`,
+    background: "transparent",
+    color: colors.textSecondary,
+    fontWeight: 600,
+    fontSize: "0.85rem",
+    cursor: "pointer",
   },
 
   chipRow: { display: "flex", flexWrap: "wrap", gap: "0.35rem", marginTop: 8 },
   chip: {
-    display: "inline-flex", alignItems: "center", gap: 6,
-    padding: "0.2rem 0.6rem", borderRadius: 20,
-    background: "#eef4fd", border: `1px solid #d6e4f7`,
-    color: colors.blue, fontSize: "0.76rem", fontWeight: 600,
-    cursor: "pointer", maxWidth: "100%",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "0.2rem 0.6rem",
+    borderRadius: 20,
+    background: "#eef4fd",
+    border: `1px solid #d6e4f7`,
+    color: colors.blue,
+    fontSize: "0.76rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    maxWidth: "100%",
   },
   // Never nowrap-ellipsis a filter value — similar-prefix names must stay
   // distinguishable (the MEKO FABRICS / MEKO DENIM lesson).
-  chipText: { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", textAlign: "left" },
+  chipText: {
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+    textAlign: "left",
+  },
   chipX: { fontSize: "1rem", lineHeight: 1, opacity: 0.7 },
 };

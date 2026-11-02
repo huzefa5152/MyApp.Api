@@ -21,9 +21,7 @@
 
 export function isDecimalUnit(unitName, units) {
   if (!unitName) return false;
-  const cfg = units?.find(
-    (u) => (u.name || "").toLowerCase() === unitName.toLowerCase()
-  );
+  const cfg = units?.find((u) => (u.name || "").toLowerCase() === unitName.toLowerCase());
   return !!cfg?.allowsDecimalQuantity;
 }
 
@@ -35,9 +33,7 @@ export function formatQuantity(qty, unitName, units) {
   // We still allow decimal representation through if the unit isn't in
   // the table at all — that's an "unknown territory" fallback so we
   // don't lie about the stored value.
-  const known = units?.some(
-    (u) => (u.name || "").toLowerCase() === (unitName || "").toLowerCase()
-  );
+  const known = units?.some((u) => (u.name || "").toLowerCase() === (unitName || "").toLowerCase());
   const allowsDecimal = isDecimalUnit(unitName, units);
 
   if (known && !allowsDecimal) {

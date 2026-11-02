@@ -34,12 +34,26 @@ export default function SearchableSelect({
   ariaLabel,
 }) {
   const [query, setQuery] = useState("");
-  const keys = useMemo(() => (searchKeys && searchKeys.length ? searchKeys : [labelKey]), [searchKeys, labelKey]);
-  const selected = useMemo(() => (items || []).find((it) => String(it[valueKey]) === String(value)), [items, value, valueKey]);
+  const keys = useMemo(
+    () => (searchKeys && searchKeys.length ? searchKeys : [labelKey]),
+    [searchKeys, labelKey],
+  );
+  const selected = useMemo(
+    () => (items || []).find((it) => String(it[valueKey]) === String(value)),
+    [items, value, valueKey],
+  );
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
     const arr = items || [];
-    return term ? arr.filter((it) => keys.some((k) => String(it[k] ?? "").toLowerCase().includes(term))) : arr;
+    return term
+      ? arr.filter((it) =>
+          keys.some((k) =>
+            String(it[k] ?? "")
+              .toLowerCase()
+              .includes(term),
+          ),
+        )
+      : arr;
   }, [items, query, keys]);
 
   return (
@@ -52,12 +66,16 @@ export default function SearchableSelect({
       renderOption={(it) => (
         <>
           {it[labelKey]}
-          {subLabel && subLabel(it) ? <span className="k-combo__opt-sub">{subLabel(it)}</span> : null}
+          {subLabel && subLabel(it) ? (
+            <span className="k-combo__opt-sub">{subLabel(it)}</span>
+          ) : null}
         </>
       )}
       renderExpand={renderExpand}
       onPick={(it) => onChange?.(it ? it[valueKey] : "", it || null)}
-      triggerContent={selected ? selected[labelKey] : <span className="k-combo__placeholder">{placeholder}</span>}
+      triggerContent={
+        selected ? selected[labelKey] : <span className="k-combo__placeholder">{placeholder}</span>
+      }
       triggerTitle={selected ? String(selected[labelKey] ?? "") : undefined}
       onClear={allowClear && selected && !disabled ? () => onChange?.("", null) : undefined}
       disabled={disabled}

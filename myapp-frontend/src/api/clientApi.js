@@ -33,8 +33,7 @@ export const getCommonClients = (companyId) =>
 // entity" rather than per tenant. Each item carries CompanyCount
 // so the picker can hint which entries are cross-tenant.
 export const getAllClientGroups = () => http.get("/clients/groups");
-export const getCommonClientById = (groupId) =>
-  http.get(`/clients/common/${groupId}`);
+export const getCommonClientById = (groupId) => http.get(`/clients/common/${groupId}`);
 export const updateCommonClient = (groupId, payload) =>
   http.put(`/clients/common/${groupId}`, payload);
 
@@ -42,5 +41,4 @@ export const updateCommonClient = (groupId, payload) =>
 // company Client row in each company plus their cascading data
 // (invoices, items, delivery challans). Same destructive shape as
 // the per-tenant DELETE, just N tenants in one operator action.
-export const deleteCommonClient = (groupId) =>
-  http.delete(`/clients/common/${groupId}`);
+export const deleteCommonClient = (groupId) => http.delete(`/clients/common/${groupId}`);

@@ -26,7 +26,11 @@ export default function useScrollToError(error) {
       ref.current.scrollIntoView({ behavior: "smooth", block: "center" });
     } catch {
       // Older engines: fall back to a plain (no-options) scroll.
-      try { ref.current.scrollIntoView(); } catch { /* no-op */ }
+      try {
+        ref.current.scrollIntoView();
+      } catch {
+        /* no-op */
+      }
     }
   }, [error]);
   return ref;

@@ -13,7 +13,10 @@ export default function AttachmentBadge({ count, onClick, title }) {
   return (
     <button
       type="button"
-      onClick={(e) => { e.stopPropagation(); onClick?.(e); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.(e);
+      }}
       title={label}
       aria-label={label}
       style={st.hit}
@@ -31,14 +34,30 @@ export default function AttachmentBadge({ count, onClick, title }) {
 const st = {
   // padding:0 / boxShadow:none override the global `button` rule in index.css.
   hit: {
-    display: "inline-grid", placeItems: "center", padding: 0, margin: "-7px 0",
-    minWidth: 44, minHeight: 44, border: "none", background: "transparent",
-    boxShadow: "none", cursor: "pointer", flexShrink: 0, verticalAlign: "middle",
+    display: "inline-grid",
+    placeItems: "center",
+    padding: 0,
+    margin: "-7px 0",
+    minWidth: 44,
+    minHeight: 44,
+    border: "none",
+    background: "transparent",
+    boxShadow: "none",
+    cursor: "pointer",
+    flexShrink: 0,
+    verticalAlign: "middle",
   },
   pill: {
-    display: "inline-flex", alignItems: "center", gap: 3,
-    padding: "0.2rem 0.55rem", borderRadius: 20, border: "1px solid #b9d4ff",
-    background: "#e3f0ff", color: "var(--k-blue, #0d47a1)", fontSize: "var(--sc-badge-font, 0.74rem)", fontWeight: 700,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 3,
+    padding: "0.2rem 0.55rem",
+    borderRadius: 20,
+    border: "1px solid #b9d4ff",
+    background: "#e3f0ff",
+    color: "var(--k-blue, #0d47a1)",
+    fontSize: "var(--sc-badge-font, 0.74rem)",
+    fontWeight: 700,
     lineHeight: 1,
   },
 };

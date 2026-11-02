@@ -18,7 +18,15 @@ import ComboBox from "./ComboBox";
  *   noun         "clients" (default) / "suppliers" — used in the empty message
  */
 export default function SearchableClientSelect({
-  clients, value, onChange, placeholder = "Select client…", allowClear = true, disabled = false, style, noun = "clients", ariaLabel,
+  clients,
+  value,
+  onChange,
+  placeholder = "Select client…",
+  allowClear = true,
+  disabled = false,
+  style,
+  noun = "clients",
+  ariaLabel,
 }) {
   const [query, setQuery] = useState("");
   const list = useMemo(() => clients || [], [clients]);
@@ -29,7 +37,12 @@ export default function SearchableClientSelect({
     const term = query.trim().toLowerCase();
     if (!term) return sorted;
     return sorted.filter((c) =>
-      ["name", "ntn", "strn", "phone", "city"].some((k) => String(c[k] || "").toLowerCase().includes(term)));
+      ["name", "ntn", "strn", "phone", "city"].some((k) =>
+        String(c[k] || "")
+          .toLowerCase()
+          .includes(term),
+      ),
+    );
   }, [list, query]);
 
   const meta = (c) => [c.ntn, c.phone, c.city].filter(Boolean).join(" · ");
@@ -50,7 +63,9 @@ export default function SearchableClientSelect({
       )}
       onPick={pick}
       noneLabel={allowClear ? placeholder : undefined}
-      triggerContent={selected ? selected.name : <span className="k-combo__placeholder">{placeholder}</span>}
+      triggerContent={
+        selected ? selected.name : <span className="k-combo__placeholder">{placeholder}</span>
+      }
       triggerTitle={selected?.name}
       onClear={selected && allowClear && !disabled ? () => pick(null) : undefined}
       disabled={disabled}

@@ -16,7 +16,9 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
   const [site, setSite] = useState(order?.site || "");
   const [qtys, setQtys] = useState(() => {
     const m = {};
-    (order?.items || []).forEach((i) => { m[i.id] = i.remainingQuantity > 0 ? i.remainingQuantity : 0; });
+    (order?.items || []).forEach((i) => {
+      m[i.id] = i.remainingQuantity > 0 ? i.remainingQuantity : 0;
+    });
     return m;
   });
   const [clients, setClients] = useState([]);
@@ -25,7 +27,9 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
   const [saving, setSaving] = useState(false);
   // Responsive: the 5-col deliver grid clips the "Deliver now" input on a
   // phone, so below 760px each order line renders as a stacked card instead.
-  const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 760);
+  const [isNarrow, setIsNarrow] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < 760,
+  );
   useEffect(() => {
     const onResize = () => setIsNarrow(window.innerWidth < 760);
     window.addEventListener("resize", onResize);
@@ -36,11 +40,18 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
   // client's configured sites (";"-separated) as a dropdown — same UX as
   // the Delivery Challan form. Falls back to free text when none configured.
   useEffect(() => {
-    getClientsByCompany(companyId).then(({ data }) => setClients(data || [])).catch(() => {});
+    getClientsByCompany(companyId)
+      .then(({ data }) => setClients(data || []))
+      .catch(() => {});
   }, [companyId]);
 
   const client = clients.find((c) => String(c.id) === String(order?.clientId));
-  const sites = client?.site ? client.site.split(";").map((x) => x.trim()).filter(Boolean) : [];
+  const sites = client?.site
+    ? client.site
+        .split(";")
+        .map((x) => x.trim())
+        .filter(Boolean)
+    : [];
 
   const setQty = (id, val) => setQtys((p) => ({ ...p, [id]: val }));
   const anyToDeliver = Object.values(qtys).some((q) => Number(q) > 0);
@@ -67,26 +78,60 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>Deliver Sales Order #{order.salesOrderNumber}</h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            &times;
+          </button>
         </div>
         <div data-admin-body="" style={formStyles.body}>
-          {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
-          <p style={s.sub}>Quantities default to what's still remaining. Adjust to deliver a partial amount; a challan will be created and linked to this order.</p>
+          {error && (
+            <div ref={errRef} style={formStyles.error}>
+              {error}
+            </div>
+          )}
+          <p style={s.sub}>
+            Quantities default to what's still remaining. Adjust to deliver a partial amount; a
+            challan will be created and linked to this order.
+          </p>
           <div data-admin-form-row="" className="k-form-grid" style={s.grid}>
             <Field label="Delivery Date">
-              <input type="date" className="k-input" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
+              <input
+                type="date"
+                className="k-input"
+                value={deliveryDate}
+                onChange={(e) => setDeliveryDate(e.target.value)}
+              />
             </Field>
-            <Field label={<>Site / Department <span style={{ fontWeight: 400 }}>(optional)</span></>}>
+            <Field
+              label={
+                <>
+                  Site / Department <span style={{ fontWeight: 400 }}>(optional)</span>
+                </>
+              }
+            >
               {sites.length > 0 ? (
                 <select className="k-select" value={site} onChange={(e) => setSite(e.target.value)}>
                   <option value="">(none)</option>
-                  {sites.map((x) => <option key={x} value={x}>{x}</option>)}
+                  {sites.map((x) => (
+                    <option key={x} value={x}>
+                      {x}
+                    </option>
+                  ))}
                 </select>
               ) : (
-                <input type="text" className="k-input" value={site} onChange={(e) => setSite(e.target.value)} placeholder="Optional" />
+                <input
+                  type="text"
+                  className="k-input"
+                  value={site}
+                  onChange={(e) => setSite(e.target.value)}
+                  placeholder="Optional"
+                />
               )}
             </Field>
           </div>
@@ -95,16 +140,42 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
             <div style={s.mcards}>
               {(order.items || []).map((i) => (
                 <div key={i.id} style={s.mcard}>
-                  <div style={s.desc}><RichText text={i.description} /></div>
+                  <div style={s.desc}>
+                    <RichText text={i.description} />
+                  </div>
                   {i.unit && <div style={s.unit}>{i.unit}</div>}
                   <div style={s.mgrid3}>
-                    <div><div style={s.mlabel}>Ordered</div><div>{i.quantity}</div></div>
-                    <div><div style={s.mlabel}>Delivered</div><div>{i.deliveredQuantity}</div></div>
-                    <div><div style={s.mlabel}>Remaining</div><div style={{ fontWeight: 700, color: i.remainingQuantity > 0 ? "var(--k-blue)" : "var(--k-teal)" }}>{i.remainingQuantity}</div></div>
+                    <div>
+                      <div style={s.mlabel}>Ordered</div>
+                      <div>{i.quantity}</div>
+                    </div>
+                    <div>
+                      <div style={s.mlabel}>Delivered</div>
+                      <div>{i.deliveredQuantity}</div>
+                    </div>
+                    <div>
+                      <div style={s.mlabel}>Remaining</div>
+                      <div
+                        style={{
+                          fontWeight: 700,
+                          color: i.remainingQuantity > 0 ? "var(--k-blue)" : "var(--k-teal)",
+                        }}
+                      >
+                        {i.remainingQuantity}
+                      </div>
+                    </div>
                   </div>
                   <div style={{ marginTop: "0.6rem" }}>
                     <label style={s.mlabel}>Deliver now</label>
-                    <input type="number" min="0" step="0.0001" className="k-input" style={{ textAlign: "right" }} value={qtys[i.id] ?? 0} onChange={(e) => setQty(i.id, e.target.value)} />
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.0001"
+                      className="k-input"
+                      style={{ textAlign: "right" }}
+                      value={qtys[i.id] ?? 0}
+                      onChange={(e) => setQty(i.id, e.target.value)}
+                    />
                   </div>
                 </div>
               ))}
@@ -115,24 +186,51 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
                 <thead>
                   <tr>
                     <th>Item</th>
-                    <th className="is-center" style={s.col}>Ordered</th>
-                    <th className="is-center" style={s.col}>Delivered</th>
-                    <th className="is-center" style={s.col}>Remaining</th>
-                    <th className="is-center" style={s.col}>Deliver now</th>
+                    <th className="is-center" style={s.col}>
+                      Ordered
+                    </th>
+                    <th className="is-center" style={s.col}>
+                      Delivered
+                    </th>
+                    <th className="is-center" style={s.col}>
+                      Remaining
+                    </th>
+                    <th className="is-center" style={s.col}>
+                      Deliver now
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {(order.items || []).map((i) => (
                     <tr key={i.id}>
                       <td>
-                        <div style={s.desc}><RichText text={i.description} /></div>
+                        <div style={s.desc}>
+                          <RichText text={i.description} />
+                        </div>
                         <div style={s.unit}>{i.unit}</div>
                       </td>
                       <td className="is-center">{i.quantity}</td>
                       <td className="is-center">{i.deliveredQuantity}</td>
-                      <td className="is-center" style={{ fontWeight: 700, color: i.remainingQuantity > 0 ? "var(--k-blue)" : "var(--k-teal)" }}>{i.remainingQuantity}</td>
+                      <td
+                        className="is-center"
+                        style={{
+                          fontWeight: 700,
+                          color: i.remainingQuantity > 0 ? "var(--k-blue)" : "var(--k-teal)",
+                        }}
+                      >
+                        {i.remainingQuantity}
+                      </td>
                       <td>
-                        <input type="number" min="0" step="0.0001" className="k-input" style={{ textAlign: "right" }} value={qtys[i.id] ?? 0} onChange={(e) => setQty(i.id, e.target.value)} aria-label="Deliver now" />
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.0001"
+                          className="k-input"
+                          style={{ textAlign: "right" }}
+                          value={qtys[i.id] ?? 0}
+                          onChange={(e) => setQty(i.id, e.target.value)}
+                          aria-label="Deliver now"
+                        />
                       </td>
                     </tr>
                   ))}
@@ -142,8 +240,26 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
           )}
         </div>
         <div data-admin-footer="" style={formStyles.footer}>
-          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
-          <button type="button" style={{ ...formStyles.button, ...formStyles.submit, opacity: anyToDeliver && !saving ? 1 : 0.6 }} disabled={!anyToDeliver || saving} onClick={submit}>{saving ? "Creating..." : "Create Challan"}</button>
+          <button
+            data-admin-close=""
+            type="button"
+            style={{ ...formStyles.button, ...formStyles.cancel }}
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            style={{
+              ...formStyles.button,
+              ...formStyles.submit,
+              opacity: anyToDeliver && !saving ? 1 : 0.6,
+            }}
+            disabled={!anyToDeliver || saving}
+            onClick={submit}
+          >
+            {saving ? "Creating..." : "Create Challan"}
+          </button>
         </div>
       </div>
     </div>
@@ -154,10 +270,34 @@ const s = {
   sub: { fontSize: "var(--k-font)", color: "var(--k-muted)", marginBottom: "1rem" },
   grid: { gap: "var(--k-gap)", marginBottom: "1rem" },
   col: { width: 100 },
-  desc: { fontSize: "var(--k-font)", fontWeight: 600, color: "var(--k-ink)", whiteSpace: "pre-wrap" },
+  desc: {
+    fontSize: "var(--k-font)",
+    fontWeight: 600,
+    color: "var(--k-ink)",
+    whiteSpace: "pre-wrap",
+  },
   unit: { fontSize: "0.75rem", color: "var(--k-muted)" },
   mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
-  mcard: { border: "1px solid var(--k-line)", borderRadius: "var(--k-radius)", padding: "0.7rem 0.75rem", background: "var(--k-surface)" },
-  mgrid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem", marginTop: "0.5rem", textAlign: "center", fontSize: "var(--k-font)" },
-  mlabel: { fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.03em", color: "var(--k-muted)", fontWeight: 700, marginBottom: "0.15rem" },
+  mcard: {
+    border: "1px solid var(--k-line)",
+    borderRadius: "var(--k-radius)",
+    padding: "0.7rem 0.75rem",
+    background: "var(--k-surface)",
+  },
+  mgrid3: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr",
+    gap: "0.5rem",
+    marginTop: "0.5rem",
+    textAlign: "center",
+    fontSize: "var(--k-font)",
+  },
+  mlabel: {
+    fontSize: "0.66rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+    color: "var(--k-muted)",
+    fontWeight: 700,
+    marginBottom: "0.15rem",
+  },
 };

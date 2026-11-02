@@ -40,7 +40,9 @@ export default function SmartItemAutocomplete({
   const debounceRef = useRef(null);
 
   // Sync with external changes
-  useEffect(() => { setQuery(value || ""); }, [value]);
+  useEffect(() => {
+    setQuery(value || "");
+  }, [value]);
 
   // Close on outside click
   useEffect(() => {
@@ -70,31 +72,34 @@ export default function SmartItemAutocomplete({
     };
   }, [showDropdown]);
 
-  const fetchBoth = useCallback((q) => {
-    clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      const term = (q || "").trim();
-      if (!term) {
-        setLocalResults([]);
-        setFbrResults([]);
-        return;
-      }
-      setLoading(true);
-      try {
-        const [localRes, fbrRes] = await Promise.allSettled([
-          searchItemDescriptions(term, companyId),
-          companyId ? getFbrHSCodes(companyId, term) : Promise.resolve({ data: [] }),
-        ]);
-        setLocalResults(localRes.status === "fulfilled" ? localRes.value.data : []);
-        setFbrResults(fbrRes.status === "fulfilled" ? fbrRes.value.data : []);
-      } catch {
-        setLocalResults([]);
-        setFbrResults([]);
-      } finally {
-        setLoading(false);
-      }
-    }, 350);
-  }, [companyId]);
+  const fetchBoth = useCallback(
+    (q) => {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(async () => {
+        const term = (q || "").trim();
+        if (!term) {
+          setLocalResults([]);
+          setFbrResults([]);
+          return;
+        }
+        setLoading(true);
+        try {
+          const [localRes, fbrRes] = await Promise.allSettled([
+            searchItemDescriptions(term, companyId),
+            companyId ? getFbrHSCodes(companyId, term) : Promise.resolve({ data: [] }),
+          ]);
+          setLocalResults(localRes.status === "fulfilled" ? localRes.value.data : []);
+          setFbrResults(fbrRes.status === "fulfilled" ? fbrRes.value.data : []);
+        } catch {
+          setLocalResults([]);
+          setFbrResults([]);
+        } finally {
+          setLoading(false);
+        }
+      }, 350);
+    },
+    [companyId],
+  );
 
   const handleInputChange = (e) => {
     const v = e.target.value;
@@ -137,7 +142,9 @@ export default function SmartItemAutocomplete({
           uom = data[0].description || "";
           fbrUOMId = data[0].uoM_ID ?? null;
         }
-      } catch { /* ignore, user can set UOM manually */ }
+      } catch {
+        /* ignore, user can set UOM manually */
+      }
     }
 
     onPick?.({
@@ -186,18 +193,25 @@ export default function SmartItemAutocomplete({
         value={query}
         placeholder={placeholder || "Search items or FBR catalog…"}
         onChange={handleInputChange}
-        onFocus={() => { if (query) { setShowDropdown(true); fetchBoth(query); } }}
+        onFocus={() => {
+          if (query) {
+            setShowDropdown(true);
+            fetchBoth(query);
+          }
+        }}
         onKeyDown={handleKeyDown}
         autoComplete="off"
       />
-      {showDropdown && (
+      {showDropdown &&
         createPortal(
           <ul className="sc-suggest" role="listbox" style={styles.dropdown(wrapperRef.current)}>
             {loading && <li className="sc-suggest__note sc-suggest__note--loading">Searching…</li>}
 
             {!loading && localResults.length > 0 && (
               <>
-                <li className="k-combo__group" style={styles.sectionHeader}>SAVED ITEMS</li>
+                <li className="k-combo__group" style={styles.sectionHeader}>
+                  SAVED ITEMS
+                </li>
                 {localResults.map((item, idx) => (
                   <li
                     key={`local-${item.id}`}
@@ -213,9 +227,24 @@ export default function SmartItemAutocomplete({
                     </div>
                     {(item.hsCode || item.uom) && (
                       <div className="sc-opt-meta" style={{ display: "block" }}>
-                        {item.hsCode && <span><b>HS:</b> {item.hsCode}</span>}
-                        {item.uom && <span> · <b>UOM:</b> {item.uom}</span>}
-                        {item.saleType && <span> · <b>Sale:</b> {item.saleType.substring(0, 30)}{item.saleType.length > 30 ? "…" : ""}</span>}
+                        {item.hsCode && (
+                          <span>
+                            <b>HS:</b> {item.hsCode}
+                          </span>
+                        )}
+                        {item.uom && (
+                          <span>
+                            {" "}
+                            · <b>UOM:</b> {item.uom}
+                          </span>
+                        )}
+                        {item.saleType && (
+                          <span>
+                            {" "}
+                            · <b>Sale:</b> {item.saleType.substring(0, 30)}
+                            {item.saleType.length > 30 ? "…" : ""}
+                          </span>
+                        )}
                       </div>
                     )}
                   </li>
@@ -225,7 +254,9 @@ export default function SmartItemAutocomplete({
 
             {!loading && fbrResults.length > 0 && (
               <>
-                <li className="k-combo__group" style={styles.sectionHeader}>FBR CATALOG (HS Code)</li>
+                <li className="k-combo__group" style={styles.sectionHeader}>
+                  FBR CATALOG (HS Code)
+                </li>
                 {fbrResults.map((f, idx) => {
                   const realIdx = localResults.length + idx;
                   return (
@@ -241,7 +272,11 @@ export default function SmartItemAutocomplete({
                         <span className="sc-opt-code">{f.hS_CODE}</span>
                         <span className="sc-chip sc-chip--fbr">FBR</span>
                       </div>
-                      {f.shortName && <div className="sc-opt-desc" style={{ fontWeight: 600 }}>{f.shortName}</div>}
+                      {f.shortName && (
+                        <div className="sc-opt-desc" style={{ fontWeight: 600 }}>
+                          {f.shortName}
+                        </div>
+                      )}
                       <div className="sc-opt-desc">{f.description}</div>
                     </li>
                   );
@@ -251,13 +286,13 @@ export default function SmartItemAutocomplete({
 
             {!loading && !hasAnyResults && query && (
               <li className="sc-suggest__note">
-                No matches. Keep typing or just use your own description — we'll save it for next time.
+                No matches. Keep typing or just use your own description — we'll save it for next
+                time.
               </li>
             )}
           </ul>,
-          document.body
-        )
-      )}
+          document.body,
+        )}
     </div>
   );
 }
@@ -280,6 +315,12 @@ const styles = {
   },
   // Section header keeps its blue tint (same as the ComboBox's toned group rows).
   sectionHeader: { color: "var(--k-blue, #0d47a1)", backgroundColor: "#eff6ff", borderRadius: 4 },
-  itemName: { fontWeight: 600, color: "var(--k-ink, #1a2332)", display: "flex", alignItems: "center", gap: "0.4rem" },
+  itemName: {
+    fontWeight: 600,
+    color: "var(--k-ink, #1a2332)",
+    display: "flex",
+    alignItems: "center",
+    gap: "0.4rem",
+  },
   itemCodeRow: { display: "flex", alignItems: "center", gap: "0.4rem" },
 };

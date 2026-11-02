@@ -47,7 +47,8 @@ export const cardStyles = {
     borderRadius: "var(--ui-card-radius, 14px)",
     border: `1px solid ${colors.cardBorder}`,
     // Layered soft shadow reads cleaner than a single flat blur.
-    boxShadow: "var(--ui-card-shadow, 0 1px 3px rgba(16,32,64,0.04), 0 6px 18px rgba(16,32,64,0.06))",
+    boxShadow:
+      "var(--ui-card-shadow, 0 1px 3px rgba(16,32,64,0.04), 0 6px 18px rgba(16,32,64,0.06))",
     transition: "transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
     cursor: "default",
     overflow: "hidden",
@@ -74,16 +75,74 @@ export const cardStyles = {
   },
   // ── Richer card building blocks (adopted by the invoice/bill cards; any
   // card can use them for a stronger visual hierarchy) ──────────────────
-  cardHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: "0.55rem" },
-  cardLead: { fontSize: "0.98rem", fontWeight: 700, color: colors.textPrimary, margin: "0 0 0.65rem", lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
-  metaGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(120px, 100%), 1fr))", gap: "0.5rem 1rem", marginBottom: "0.7rem" },
-  metaLabel: { display: "block", fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary, marginBottom: 1 },
-  metaValue: { fontSize: "0.85rem", fontWeight: 600, color: colors.textPrimary, lineHeight: 1.3, wordBreak: "break-word" },
+  cardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    marginBottom: "0.55rem",
+  },
+  cardLead: {
+    fontSize: "0.98rem",
+    fontWeight: 700,
+    color: colors.textPrimary,
+    margin: "0 0 0.65rem",
+    lineHeight: 1.3,
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+  },
+  metaGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(120px, 100%), 1fr))",
+    gap: "0.5rem 1rem",
+    marginBottom: "0.7rem",
+  },
+  metaLabel: {
+    display: "block",
+    fontSize: "0.62rem",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: colors.textSecondary,
+    marginBottom: 1,
+  },
+  metaValue: {
+    fontSize: "0.85rem",
+    fontWeight: 600,
+    color: colors.textPrimary,
+    lineHeight: 1.3,
+    wordBreak: "break-word",
+  },
   // flexWrap: when a status badge shares the row, the badge drops below
   // rather than the amount breaking "Rs." away from its figure.
-  amountBox: { display: "flex", flexWrap: "wrap", alignItems: "baseline", justifyContent: "space-between", gap: 8, padding: "0.5rem 0.7rem", background: "linear-gradient(135deg, rgba(13,71,161,0.06), rgba(0,137,123,0.07))", borderRadius: 10, marginBottom: "0.6rem" },
-  amountLabel: { fontSize: "0.66rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary },
-  amount: { fontSize: "1.2rem", fontWeight: 800, color: colors.blue, letterSpacing: "-0.01em", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" },
+  amountBox: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    gap: 8,
+    padding: "0.5rem 0.7rem",
+    background: "linear-gradient(135deg, rgba(13,71,161,0.06), rgba(0,137,123,0.07))",
+    borderRadius: 10,
+    marginBottom: "0.6rem",
+  },
+  amountLabel: {
+    fontSize: "0.66rem",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: colors.textSecondary,
+  },
+  amount: {
+    fontSize: "1.2rem",
+    fontWeight: 800,
+    color: colors.blue,
+    letterSpacing: "-0.01em",
+    whiteSpace: "nowrap",
+    fontVariantNumeric: "tabular-nums",
+  },
   statusRow: { display: "flex", flexWrap: "wrap", gap: "0.4rem", margin: "0.1rem 0 0.2rem" },
   buttonGroup: {
     display: "flex",
@@ -148,10 +207,10 @@ export const dropdownStyles = {
 //   xxl — wide tabular workflows (invoice form, bulk FBR results)
 // ────────────────────────────────────────────────────────────────────
 export const modalSizes = {
-  sm: 420,   // confirm dialogs, single-question prompts, delete-confirm
-  md: 560,   // short forms (login, simple create/edit, role assignment)
-  lg: 820,   // detail viewers + medium forms (ChallanModal, POFormat, BulkFbrResults, SyncWarning)
-  xl: 1100,  // multi-row forms with full item-line table (ChallanForm/Edit, POImport)
+  sm: 420, // confirm dialogs, single-question prompts, delete-confirm
+  md: 560, // short forms (login, simple create/edit, role assignment)
+  lg: 820, // detail viewers + medium forms (ChallanModal, POFormat, BulkFbrResults, SyncWarning)
+  xl: 1100, // multi-row forms with full item-line table (ChallanForm/Edit, POImport)
   xxl: 1280, // wide tabular workflows (InvoiceForm, EditBillForm)
 };
 
@@ -201,7 +260,8 @@ export const formStyles = {
     borderBottom: "var(--ui-modal-head-border, none)",
     // clamp keeps the header tidy on phones (~0.9rem horizontal) while
     // restoring the comfortable 1.5rem on tablet/desktop.
-    padding: "var(--ui-modal-head-pad, var(--admin-dialog-header-padding, 1.1rem clamp(0.9rem, 2vw, 1.5rem)))",
+    padding:
+      "var(--ui-modal-head-pad, var(--admin-dialog-header-padding, 1.1rem clamp(0.9rem, 2vw, 1.5rem)))",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
@@ -230,13 +290,13 @@ export const formStyles = {
     height: "var(--ui-close-size, 44px)",
     minHeight: "var(--ui-close-size, 44px)",
     maxHeight: "var(--ui-close-size, 44px)",
-    padding: 0,                 // kills the global 0.8em 1.6em padding
+    padding: 0, // kills the global 0.8em 1.6em padding
     margin: 0,
     borderRadius: "8px",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    boxShadow: "none",          // kills the global drop-shadow
+    boxShadow: "none", // kills the global drop-shadow
     transition: "background 0.2s",
     flexShrink: 0,
     flexGrow: 0,
@@ -296,7 +356,8 @@ export const formStyles = {
     // flexWrap lets long button rows (e.g. Save / Cancel / Delete) wrap
     // to a second line on narrow phones instead of overflowing.
     flexWrap: "wrap",
-    padding: "var(--ui-foot-pad, var(--admin-dialog-footer-padding, 1rem clamp(0.9rem, 2vw, 1.5rem)))",
+    padding:
+      "var(--ui-foot-pad, var(--admin-dialog-footer-padding, 1rem clamp(0.9rem, 2vw, 1.5rem)))",
     gap: "0.6rem",
     backgroundColor: "var(--ui-foot-bg, #f5f7fa)",
     borderTop: `1px solid ${colors.cardBorder}`,

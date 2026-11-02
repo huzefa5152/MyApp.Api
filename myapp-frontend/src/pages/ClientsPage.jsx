@@ -15,7 +15,12 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import ImportFromExcelButton from "../Components/onboarding/ImportFromExcelButton";
 
 export default function ClientsPage() {
-  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const {
+    companies,
+    selectedCompany,
+    setSelectedCompany,
+    loading: loadingCompanies,
+  } = useCompany();
   const { has } = usePermissions();
   const canCreate = has("clients.manage.create");
   const [clients, setClients] = useState([]);
@@ -56,7 +61,9 @@ export default function ClientsPage() {
         if (!cancelled) setCommonGroups(new Map());
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [selectedCompany, commonRefreshKey]);
 
   const fetchClients = async (companyId) => {
@@ -93,9 +100,12 @@ export default function ClientsPage() {
 
   const searched = clients.filter((c) => matchesSearch(c, search));
   const counts = { ...countByType(searched), common: searched.filter(isCommon).length };
-  const filtered = typeFilter === "all" ? searched
-    : typeFilter === "common" ? searched.filter(isCommon)
-    : searched.filter((c) => (c.registrationType || "None") === typeFilter);
+  const filtered =
+    typeFilter === "all"
+      ? searched
+      : typeFilter === "common"
+        ? searched.filter(isCommon)
+        : searched.filter((c) => (c.registrationType || "None") === typeFilter);
 
   return (
     <div>
@@ -103,16 +113,22 @@ export default function ClientsPage() {
         icon={MdPeople}
         tone="teal"
         title="Clients"
-        subtitle={selectedCompany
-          ? `${clients.length} client${clients.length !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}` +
-            (commonCount > 0 ? ` · ${commonCount} shared with other companies` : "")
-          : "Select a company to view clients"}
-        actions={(
+        subtitle={
+          selectedCompany
+            ? `${clients.length} client${clients.length !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}` +
+              (commonCount > 0 ? ` · ${commonCount} shared with other companies` : "")
+            : "Select a company to view clients"
+        }
+        actions={
           <>
             <ImportFromExcelButton sheet="customers" />
-            {companies.length > 0 && canCreate && <Button variant="primary" icon={MdAdd} onClick={handleAdd}>New Client</Button>}
+            {companies.length > 0 && canCreate && (
+              <Button variant="primary" icon={MdAdd} onClick={handleAdd}>
+                New Client
+              </Button>
+            )}
           </>
-        )}
+        }
       />
 
       {/* Company picker (hidden in Workspace: the topbar switches company),
@@ -132,34 +148,42 @@ export default function ClientsPage() {
           counts={counts}
         />
       ) : (
-        <EmptyState icon={MdBusiness} title="No companies yet">Add a company first, then its clients will appear here.</EmptyState>
+        <EmptyState icon={MdBusiness} title="No companies yet">
+          Add a company first, then its clients will appear here.
+        </EmptyState>
       )}
 
       {/* Client List */}
-      <RecordsViewport label="Clients records">{loadingClients ? (
-        <Loading>Loading clients...</Loading>
-      ) : filtered.length === 0 && selectedCompany ? (
-        <EmptyState
-          icon={clients.length === 0 ? MdPeople : MdSearchOff}
-          title={clients.length === 0 ? "No clients yet" : "No matching clients"}
-          action={clients.length === 0 && canCreate
-            ? <Button variant="primary" icon={MdAdd} onClick={handleAdd}>New Client</Button>
-            : null}
-        >
-          {clients.length === 0
-            ? "Add your first client, or bring them in from an Excel file."
-            : "Try a different search or registration type."}
-        </EmptyState>
-      ) : (
-        <ClientList
-          clients={filtered}
-          commonGroups={commonGroups}
-          onEdit={handleEdit}
-          onEditCommon={(groupId) => setEditingGroupId(groupId)}
-          onCopy={(client) => setCopyingClient(client)}
-          fetchClients={() => fetchClients(selectedCompany?.id)}
-        />
-      )}</RecordsViewport>
+      <RecordsViewport label="Clients records">
+        {loadingClients ? (
+          <Loading>Loading clients...</Loading>
+        ) : filtered.length === 0 && selectedCompany ? (
+          <EmptyState
+            icon={clients.length === 0 ? MdPeople : MdSearchOff}
+            title={clients.length === 0 ? "No clients yet" : "No matching clients"}
+            action={
+              clients.length === 0 && canCreate ? (
+                <Button variant="primary" icon={MdAdd} onClick={handleAdd}>
+                  New Client
+                </Button>
+              ) : null
+            }
+          >
+            {clients.length === 0
+              ? "Add your first client, or bring them in from an Excel file."
+              : "Try a different search or registration type."}
+          </EmptyState>
+        ) : (
+          <ClientList
+            clients={filtered}
+            commonGroups={commonGroups}
+            onEdit={handleEdit}
+            onEditCommon={(groupId) => setEditingGroupId(groupId)}
+            onCopy={(client) => setCopyingClient(client)}
+            fetchClients={() => fetchClients(selectedCompany?.id)}
+          />
+        )}
+      </RecordsViewport>
 
       {/* Copy client into other companies — shared dialog used by both
           the per-company list (this screen) and the Common Client edit
@@ -181,8 +205,8 @@ export default function ClientsPage() {
             if (createdCount > 0) {
               notify(
                 `Copied "${copyingClient.name}" into ${createdCount} ${createdCount === 1 ? "company" : "companies"}` +
-                (skipped.length > 0 ? ` (${skipped.length} skipped)` : "."),
-                "success"
+                  (skipped.length > 0 ? ` (${skipped.length} skipped)` : "."),
+                "success",
               );
             } else if (skipped.length > 0) {
               notify(`No copies made — ${skipped[0]}`, "warning");

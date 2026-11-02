@@ -1,5 +1,13 @@
 // src/contexts/AuthContext.jsx
-import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { sameSession } from "../utils/sessionIdentity";
 import { loginApi, getCurrentUser, logoutApi } from "../api/authApi";
@@ -37,61 +45,80 @@ export function AuthProvider({ children }) {
 
     let cancelled = false;
     let retryTimer;
-    const probe = () => { retryTimer = null; return getCurrentUser({ silent: true })
-      .then((res) => {
-        if (cancelled) return;
-        setUser(res.data);
-        setToken(localStorage.getItem("token"));
-        setAvatarVersion(Date.now());
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        if (error.response?.status !== 401 || (error.config?.headers?.Authorization && error.config.headers.Authorization !== `Bearer ${localStorage.getItem("token")}`)) {
-          if (!cancelled) retryTimer = setTimeout(probe, 5000);
-          return;
-        }
-        setUser(null);
-        setToken(null);
-        localStorage.removeItem("token");
-        // UX continuity: if the silent probe failed while the operator
-        // is parked on a PROTECTED route, hand off context to LoginPage
-        // so the "session expired" banner + return-to URL still work
-        // after ProtectedRoute soft-navigates them to /login. We
-        // intentionally skip the flags on public routes (`/`, `/login`,
-        // anything else not starting with `/`) — landing-page visitors
-        // with a stale token shouldn't see the banner or be redirected.
-        try {
-          // Store ROUTER-relative paths (strip the /admin base) so
-          // navigate(returnTo) works under the router basename —
-          // mirrors the same logic in httpClient's 401 interceptor.
-          const appBase = (import.meta.env.BASE_URL || "/").replace(/\/+$/, "");
-          let here = window.location.pathname + window.location.search + window.location.hash;
-          if (appBase && here.startsWith(appBase)) here = here.slice(appBase.length) || "/";
-          const isProtected = here.startsWith("/") && here !== "/" && !here.startsWith("/login");
-          if (isProtected) {
-            sessionStorage.setItem("postLoginReturnTo", here);
-            sessionStorage.setItem("loginReason", "expired");
+    const probe = () => {
+      retryTimer = null;
+      return getCurrentUser({ silent: true })
+        .then((res) => {
+          if (cancelled) return;
+          setUser(res.data);
+          setToken(localStorage.getItem("token"));
+          setAvatarVersion(Date.now());
+        })
+        .catch((error) => {
+          if (cancelled) return;
+          if (
+            error.response?.status !== 401 ||
+            (error.config?.headers?.Authorization &&
+              error.config.headers.Authorization !== `Bearer ${localStorage.getItem("token")}`)
+          ) {
+            if (!cancelled) retryTimer = setTimeout(probe, 5000);
+            return;
           }
-        } catch { /* private mode — non-fatal */ }
-      })
-      .finally(() => {
-        if (!retryTimer && !cancelled) setLoading(false);
-      }); };
+          setUser(null);
+          setToken(null);
+          localStorage.removeItem("token");
+          // UX continuity: if the silent probe failed while the operator
+          // is parked on a PROTECTED route, hand off context to LoginPage
+          // so the "session expired" banner + return-to URL still work
+          // after ProtectedRoute soft-navigates them to /login. We
+          // intentionally skip the flags on public routes (`/`, `/login`,
+          // anything else not starting with `/`) — landing-page visitors
+          // with a stale token shouldn't see the banner or be redirected.
+          try {
+            // Store ROUTER-relative paths (strip the /admin base) so
+            // navigate(returnTo) works under the router basename —
+            // mirrors the same logic in httpClient's 401 interceptor.
+            const appBase = (import.meta.env.BASE_URL || "/").replace(/\/+$/, "");
+            let here = window.location.pathname + window.location.search + window.location.hash;
+            if (appBase && here.startsWith(appBase)) here = here.slice(appBase.length) || "/";
+            const isProtected = here.startsWith("/") && here !== "/" && !here.startsWith("/login");
+            if (isProtected) {
+              sessionStorage.setItem("postLoginReturnTo", here);
+              sessionStorage.setItem("loginReason", "expired");
+            }
+          } catch {
+            /* private mode — non-fatal */
+          }
+        })
+        .finally(() => {
+          if (!retryTimer && !cancelled) setLoading(false);
+        });
+    };
     probe();
-    return () => { cancelled = true; clearTimeout(retryTimer); };
+    return () => {
+      cancelled = true;
+      clearTimeout(retryTimer);
+    };
   }, []);
 
   useEffect(() => {
     if (!token) return;
-    const keepAlive = () => { if (document.visibilityState === "visible" && navigator.onLine !== false) getCurrentUser().catch(() => {}); };
+    const keepAlive = () => {
+      if (document.visibilityState === "visible" && navigator.onLine !== false)
+        getCurrentUser().catch(() => {});
+    };
     const timer = setInterval(keepAlive, 60 * 1000);
     window.addEventListener("focus", keepAlive);
-    return () => { clearInterval(timer); window.removeEventListener("focus", keepAlive); };
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", keepAlive);
+    };
   }, [token]);
 
   useEffect(() => {
-    const storageChanged = event => {
-      if (event.key === "token" && !sameSession(event.oldValue, event.newValue)) window.location.reload();
+    const storageChanged = (event) => {
+      if (event.key === "token" && !sameSession(event.oldValue, event.newValue))
+        window.location.reload();
     };
     window.addEventListener("storage", storageChanged);
     return () => window.removeEventListener("storage", storageChanged);
@@ -104,12 +131,21 @@ export function AuthProvider({ children }) {
     if (attempt !== loginAttempt.current) return;
     const { token: newToken, ...userData } = res.data;
 
-    try { sessionStorage.removeItem("postLoginReturnTo"); } catch { /* non-fatal */ }
+    try {
+      sessionStorage.removeItem("postLoginReturnTo");
+    } catch {
+      /* non-fatal */
+    }
     localStorage.setItem("token", newToken);
     if (previousToken && !sameSession(previousToken, newToken)) {
       localStorage.removeItem("selectedCompanyId");
-      const destination = returnTo.startsWith("/") && !returnTo.startsWith("//")
-        && returnTo !== "/" && !returnTo.startsWith("/login") ? returnTo : "/dashboard";
+      const destination =
+        returnTo.startsWith("/") &&
+        !returnTo.startsWith("//") &&
+        returnTo !== "/" &&
+        !returnTo.startsWith("/login")
+          ? returnTo
+          : "/dashboard";
       const appBase = (import.meta.env.BASE_URL || "/").replace(/\/+$/, "");
       window.location.replace(appBase + destination);
       return false;
@@ -157,17 +193,20 @@ export function AuthProvider({ children }) {
     setAvatarVersion(Date.now());
   }, []);
 
-  const value = useMemo(() => ({
-    user,
-    token,
-    setToken,
-    login,
-    logout,
-    refreshUser,
-    avatarVersion,
-    isAuthenticated: !!token && !!user,
-    loading,
-  }), [user, token, login, logout, refreshUser, avatarVersion, loading]);
+  const value = useMemo(
+    () => ({
+      user,
+      token,
+      setToken,
+      login,
+      logout,
+      refreshUser,
+      avatarVersion,
+      isAuthenticated: !!token && !!user,
+      loading,
+    }),
+    [user, token, login, logout, refreshUser, avatarVersion, loading],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

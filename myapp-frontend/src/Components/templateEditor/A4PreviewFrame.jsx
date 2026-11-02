@@ -20,7 +20,7 @@ export default function A4PreviewFrame({ html, title = "Preview" }) {
     const measure = () => {
       const el = stageRef.current;
       if (!el) return;
-      const w = el.clientWidth - 24;   // minus stage padding
+      const w = el.clientWidth - 24; // minus stage padding
       const h = el.clientHeight - 24;
       if (w <= 0 || h <= 0) return;
       setZoom(Math.max(0.15, Math.min(w / A4_W, h / A4_H, 1)));
@@ -28,28 +28,69 @@ export default function A4PreviewFrame({ html, title = "Preview" }) {
     measure();
     const t = setTimeout(measure, 80); // re-measure after the modal has laid out
     window.addEventListener("resize", measure);
-    return () => { clearTimeout(t); window.removeEventListener("resize", measure); };
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("resize", measure);
+    };
   }, []);
 
   const doc = useMemo(() => {
     const tag = `<style>html{zoom:${zoom};}body{margin:0;}</style>`;
-    return (html || "").includes("</head>") ? html.replace("</head>", tag + "</head>") : tag + (html || "");
+    return (html || "").includes("</head>")
+      ? html.replace("</head>", tag + "</head>")
+      : tag + (html || "");
   }, [html, zoom]);
 
   // Cover the blank gap while the iframe renders — a template with a large
   // embedded image takes seconds, and an empty grey stage reads as "broken".
   const [loaded, setLoaded] = useState(false);
-  useEffect(() => { setLoaded(false); }, [html]);
+  useEffect(() => {
+    setLoaded(false);
+  }, [html]);
 
   return (
     <div
       ref={stageRef}
-      style={{ position: "relative", flex: 1, minHeight: 0, overflow: "auto", display: "flex", justifyContent: "center", alignItems: "flex-start", background: "#e8e8e8", padding: 12 }}
+      style={{
+        position: "relative",
+        flex: 1,
+        minHeight: 0,
+        overflow: "auto",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "flex-start",
+        background: "#e8e8e8",
+        padding: 12,
+      }}
     >
       {!loaded && (
-        <div role="status" style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: "0.6rem", background: "#e8e8e8", zIndex: 2 }}>
-          <span style={{ width: 22, height: 22, border: "3px solid #d0d7e2", borderTopColor: "#0d47a1", borderRadius: "50%", animation: "spin 0.8s linear infinite", display: "inline-block" }} />
-          <span style={{ color: "#5f6d7e", fontSize: "0.9rem", fontWeight: 600 }}>Rendering preview…</span>
+        <div
+          role="status"
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "0.6rem",
+            background: "#e8e8e8",
+            zIndex: 2,
+          }}
+        >
+          <span
+            style={{
+              width: 22,
+              height: 22,
+              border: "3px solid #d0d7e2",
+              borderTopColor: "#0d47a1",
+              borderRadius: "50%",
+              animation: "spin 0.8s linear infinite",
+              display: "inline-block",
+            }}
+          />
+          <span style={{ color: "#5f6d7e", fontSize: "0.9rem", fontWeight: 600 }}>
+            Rendering preview…
+          </span>
         </div>
       )}
       <iframe
@@ -57,7 +98,14 @@ export default function A4PreviewFrame({ html, title = "Preview" }) {
         title={title}
         onLoad={() => setLoaded(true)}
         sandbox="allow-same-origin"
-        style={{ width: Math.round(A4_W * zoom), height: Math.round(A4_H * zoom), border: "none", background: "#fff", boxShadow: "0 2px 24px rgba(0,0,0,0.25)", display: "block" }}
+        style={{
+          width: Math.round(A4_W * zoom),
+          height: Math.round(A4_H * zoom),
+          border: "none",
+          background: "#fff",
+          boxShadow: "0 2px 24px rgba(0,0,0,0.25)",
+          display: "block",
+        }}
       />
     </div>
   );

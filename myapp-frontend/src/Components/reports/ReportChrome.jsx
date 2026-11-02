@@ -51,7 +51,11 @@ export function CompanyPicker({ icon, companies, selectedCompany, onChange }) {
         value={selectedCompany?.id || ""}
         onChange={(e) => onChange(companies.find((c) => String(c.id) === e.target.value))}
       >
-        {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
+        {companies.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.brandName || c.name}
+          </option>
+        ))}
       </select>
     </label>
   );
@@ -61,10 +65,21 @@ export function CompanyPicker({ icon, companies, selectedCompany, onChange }) {
 export function PrintPdfButtons({ onPrint, onPdf, busy, disabled }) {
   return (
     <>
-      <Button icon={MdPrint} onClick={onPrint} disabled={disabled || !!busy} title="Print this report on the company letterhead">
+      <Button
+        icon={MdPrint}
+        onClick={onPrint}
+        disabled={disabled || !!busy}
+        title="Print this report on the company letterhead"
+      >
         <span>Print</span>
       </Button>
-      <Button variant="primary" icon={MdPictureAsPdf} onClick={onPdf} disabled={disabled || !!busy} title="Save this report as a PDF on the company letterhead">
+      <Button
+        variant="primary"
+        icon={MdPictureAsPdf}
+        onClick={onPdf}
+        disabled={disabled || !!busy}
+        title="Save this report as a PDF on the company letterhead"
+      >
         <span>{busy === "pdf" ? "Building…" : "PDF"}</span>
       </Button>
     </>
@@ -73,7 +88,9 @@ export function PrintPdfButtons({ onPrint, onPdf, busy, disabled }) {
 
 export const Dot = ({ children }) => (
   <>
-    <span className="rw-meta__dot" aria-hidden="true">·</span>
+    <span className="rw-meta__dot" aria-hidden="true">
+      ·
+    </span>
     <span>{children}</span>
   </>
 );

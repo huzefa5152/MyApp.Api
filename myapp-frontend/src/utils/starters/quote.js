@@ -3,7 +3,8 @@ export const quoteStarters = [
     id: "quote-classic-serif",
     name: "Classic Serif",
     type: "SalesQuote",
-    description: "Traditional serif typography with double-rule borders, formal Pakistani business style.",
+    description:
+      "Traditional serif typography with double-rule borders, formal Pakistani business style.",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quotation #{{quoteNumber}}</title><style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
 body{font-family:Georgia,"Times New Roman",serif;font-size:12px;color:#1a1a1a;padding:6px;}
@@ -111,7 +112,7 @@ td.qpic{text-align:center;vertical-align:top;}
     <div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div>
   </div>
 </div></div>
-</body></html>`
+</body></html>`,
   },
   {
     id: "quote-modern-minimal",
@@ -215,13 +216,14 @@ td.qpic{text-align:center;vertical-align:top;}
   <div class="words">Amount in words: {{amountInWords}}</div>
   {{#if notes}}<div class="notes"><strong>Notes / Terms:</strong><br>{{{nl2br notes}}}</div>{{/if}}
   <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div></div>
-</body></html>`
+</body></html>`,
   },
   {
     id: "quote-corporate-navy",
     name: "Corporate Navy Band",
     type: "SalesQuote",
-    description: "Full-width navy header band with white logo/name, professional corporate identity.",
+    description:
+      "Full-width navy header band with white logo/name, professional corporate identity.",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quotation #{{quoteNumber}}</title><style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
 body{font-family:"Segoe UI",Arial,sans-serif;font-size:12px;color:#1a2332;padding:0;}
@@ -323,13 +325,14 @@ td.qpic{text-align:center;vertical-align:top;}
       <div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div>
     </div>
   </div>
-</body></html>`
+</body></html>`,
   },
   {
     id: "quote-bold-banner",
     name: "Bold Colored Banner",
     type: "SalesQuote",
-    description: "Vibrant teal-to-blue gradient banner, bold document title, eye-catching modern design.",
+    description:
+      "Vibrant teal-to-blue gradient banner, bold document title, eye-catching modern design.",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quotation #{{quoteNumber}}</title><style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
 body{font-family:"Segoe UI",Arial,sans-serif;font-size:12px;color:#1a2332;}
@@ -426,13 +429,14 @@ td.qpic{text-align:center;vertical-align:top;}
     {{#if notes}}<div class="notes"><strong>Notes / Terms:</strong><br>{{{nl2br notes}}}</div>{{/if}}
     <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div></div>
   </div>
-</body></html>`
+</body></html>`,
   },
   {
     id: "quote-monochrome-ink",
     name: "Monochrome Ink-Saver",
     type: "SalesQuote",
-    description: "Pure black and white, no background fills, minimal ink usage for high-volume printing.",
+    description:
+      "Pure black and white, no background fills, minimal ink usage for high-volume printing.",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quotation #{{quoteNumber}}</title><style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
 body{font-family:Arial,sans-serif;font-size:11.5px;color:#000;padding:6px;}
@@ -534,13 +538,14 @@ td.qpic{text-align:center;vertical-align:top;}
     <div class="b"><div class="line"></div><div class="l">Prepared By</div></div>
     <div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div>
   </div>
-</body></html>`
+</body></html>`,
   },
   {
     id: "quote-elegant-premium",
     name: "Elegant Premium (Charcoal & Gold)",
     type: "SalesQuote",
-    description: "Charcoal and gold luxury aesthetic, premium wholesale and high-value goods quotations.",
+    description:
+      "Charcoal and gold luxury aesthetic, premium wholesale and high-value goods quotations.",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quotation #{{quoteNumber}}</title><style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
 body{font-family:"Segoe UI",Arial,sans-serif;font-size:12px;color:#1a1a1a;background:#fff;padding:4px;}
@@ -643,7 +648,7 @@ td.qpic{text-align:center;vertical-align:top;}
     {{#if notes}}<div class="notes"><strong>Notes / Terms:</strong><br>{{{nl2br notes}}}</div>{{/if}}
     <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div></div>
   </div>
-</body></html>`
+</body></html>`,
   },
   {
     id: "quote-compact-dense",
@@ -743,13 +748,14 @@ td.qpic{text-align:center;vertical-align:top;}
   <div class="words"><strong>Amount in Words:</strong> {{amountInWords}}</div>
   {{#if notes}}<div class="notes"><strong>Notes:</strong> {{{nl2br notes}}}</div>{{/if}}
   <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div></div>
-</body></html>`
+</body></html>`,
   },
   {
     id: "quote-left-sidebar",
     name: "Left Sidebar Strip",
     type: "SalesQuote",
-    description: "Vertical navy sidebar on left carries company identity, main content on white right.",
+    description:
+      "Vertical navy sidebar on left carries company identity, main content on white right.",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quotation #{{quoteNumber}}</title><style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
 body{font-family:"Segoe UI",Arial,sans-serif;font-size:12px;color:#1a2332;padding:0;}
@@ -861,13 +867,14 @@ td.qpic{text-align:center;vertical-align:top;}
       <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div></div>
     </div>
   </div>
-</body></html>`
+</body></html>`,
   },
   {
     id: "quote-boxed-traditional",
     name: "Boxed Traditional",
     type: "SalesQuote",
-    description: "Bordered box layout with distinct ruled sections, traditional Pakistani trade document style.",
+    description:
+      "Bordered box layout with distinct ruled sections, traditional Pakistani trade document style.",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quotation #{{quoteNumber}}</title><style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
 body{font-family:Arial,sans-serif;font-size:11.5px;color:#111;padding:6px;}
@@ -980,13 +987,14 @@ td.qpic{text-align:center;vertical-align:top;}
       </div>
     </div>
   </div>
-</body></html>`
+</body></html>`,
   },
   {
     id: "quote-bismillah-header",
     name: "Bismillah Header",
     type: "SalesQuote",
-    description: "Opens with Bismillah in Arabic calligraphy, combining Islamic tradition with formal business layout.",
+    description:
+      "Opens with Bismillah in Arabic calligraphy, combining Islamic tradition with formal business layout.",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quotation #{{quoteNumber}}</title><style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
 body{font-family:"Segoe UI",Arial,sans-serif;font-size:12px;color:#1a2332;padding:6px;}
@@ -1092,13 +1100,14 @@ td.qpic{text-align:center;vertical-align:top;}
     <div class="b"><div class="line"></div><div class="l">Prepared By</div></div>
     <div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div>
   </div>
-</body></html>`
+</body></html>`,
   },
   {
     id: "quote-green-gold",
     name: "Green & Gold",
     type: "SalesQuote",
-    description: "Forest green and gold palette evoking prosperity, popular in Pakistani textile and commodity trade.",
+    description:
+      "Forest green and gold palette evoking prosperity, popular in Pakistani textile and commodity trade.",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quotation #{{quoteNumber}}</title><style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
 body{font-family:"Segoe UI",Arial,sans-serif;font-size:12px;color:#1a2332;padding:0;}
@@ -1200,7 +1209,7 @@ td.qpic{text-align:center;vertical-align:top;}
     <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div></div>
   </div>
   <div class="bottom-strip"></div>
-</body></html>`
+</body></html>`,
   },
   {
     id: "quote-teal-slate",
@@ -1309,13 +1318,14 @@ td.qpic{text-align:center;vertical-align:top;}
       <div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div>
     </div>
   </div>
-</body></html>`
+</body></html>`,
   },
   {
     id: "quote-big-letterhead",
     name: "Big Letterhead",
     type: "SalesQuote",
-    description: "Oversized company name as decorative letterhead backdrop, large bold identity at the top.",
+    description:
+      "Oversized company name as decorative letterhead backdrop, large bold identity at the top.",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quotation #{{quoteNumber}}</title><style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
 body{font-family:"Segoe UI",Arial,sans-serif;font-size:12px;color:#1a2332;padding:6px;}
@@ -1412,13 +1422,14 @@ td.qpic{text-align:center;vertical-align:top;}
     <div class="b"><div class="line"></div><div class="l">Prepared By</div></div>
     <div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div>
   </div>
-</body></html>`
+</body></html>`,
   },
   {
     id: "quote-centered-watermark",
     name: "Centered / Watermark Title",
     type: "SalesQuote",
-    description: "Centered layout with large faded watermark QUOTATION behind the content for a dramatic print effect.",
+    description:
+      "Centered layout with large faded watermark QUOTATION behind the content for a dramatic print effect.",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quotation #{{quoteNumber}}</title><style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
 body{font-family:"Segoe UI",Arial,sans-serif;font-size:12px;color:#1a2332;padding:6px;position:relative;}
@@ -1518,13 +1529,14 @@ td.qpic{text-align:center;vertical-align:top;}
       <div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div>
     </div>
   </div>
-</body></html>`
+</body></html>`,
   },
   {
     id: "quote-govt-form-grid",
     name: "Government-Form Grid",
     type: "SalesQuote",
-    description: "Rigid grid layout with labeled cells mimicking official Pakistani government procurement form style.",
+    description:
+      "Rigid grid layout with labeled cells mimicking official Pakistani government procurement form style.",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quotation #{{quoteNumber}}</title><style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
 body{font-family:Arial,"Courier New",monospace;font-size:11px;color:#000;padding:6px;}
@@ -1650,8 +1662,6 @@ td.qpic{text-align:center;vertical-align:top;}
       <div class="sig-cell"><div class="sig-line"></div><div class="sig-label">For {{companyBrandName}}</div></div>
     </div>
   </div>
-</body></html>`
+</body></html>`,
   },
 ];
-
-

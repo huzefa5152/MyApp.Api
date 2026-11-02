@@ -6,7 +6,7 @@ import { useState, useEffect } from "react";
 // across the line-item forms and report screens.
 export default function useIsNarrow(breakpoint = 768) {
   const [narrow, setNarrow] = useState(
-    () => typeof window !== "undefined" && window.innerWidth < breakpoint
+    () => typeof window !== "undefined" && window.innerWidth < breakpoint,
   );
   useEffect(() => {
     const onResize = () => setNarrow(window.innerWidth < breakpoint);

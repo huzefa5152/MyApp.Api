@@ -6,11 +6,8 @@ import { formStyles } from "../theme";
 import { MdStorefront, MdVerifiedUser, MdApartment } from "react-icons/md";
 import { PartyFormHeader, FormSection } from "./party/PartyFormKit";
 
-const {
-  backdrop, modal,
-  body, formGroup, label, input,
-  footer, button, cancel, submit,
-} = formStyles;
+const { backdrop, modal, body, formGroup, label, input, footer, button, cancel, submit } =
+  formStyles;
 
 /**
  * Mirror of the per-company ClientForm with the same multi-company
@@ -23,8 +20,16 @@ const {
  */
 export default function SupplierForm({ supplier, companyId, companies = [], onClose, onSaved }) {
   const empty = {
-    id: null, name: "", address: "", email: "", phone: "",
-    ntn: "", strn: "", site: "", registrationType: "", cnic: "",
+    id: null,
+    name: "",
+    address: "",
+    email: "",
+    phone: "",
+    ntn: "",
+    strn: "",
+    site: "",
+    registrationType: "",
+    cnic: "",
     fbrProvinceCode: "",
   };
   const init = supplier
@@ -47,32 +52,31 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
   const isCreate = !supplier;
   const showCompanyPicker = isCreate && Array.isArray(companies) && companies.length > 1;
   const [selectedCompanyIds, setSelectedCompanyIds] = useState(() =>
-    companyId ? [Number(companyId)] : []
+    companyId ? [Number(companyId)] : [],
   );
   useEffect(() => {
     if (isCreate && companyId) {
-      setSelectedCompanyIds((prev) =>
-        prev.length === 0 ? [Number(companyId)] : prev
-      );
+      setSelectedCompanyIds((prev) => (prev.length === 0 ? [Number(companyId)] : prev));
     }
   }, [companyId, isCreate]);
   const toggleCompany = (id) => {
     const n = Number(id);
     setSelectedCompanyIds((prev) =>
-      prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]
+      prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n],
     );
   };
 
   useEffect(() => {
-    if (supplier) setFormData({
-      ...supplier,
-      ntn: supplier.ntn || "",
-      strn: supplier.strn || "",
-      site: supplier.site || "",
-      registrationType: supplier.registrationType || "",
-      cnic: supplier.cnic || "",
-      fbrProvinceCode: supplier.fbrProvinceCode ?? "",
-    });
+    if (supplier)
+      setFormData({
+        ...supplier,
+        ntn: supplier.ntn || "",
+        strn: supplier.strn || "",
+        site: supplier.site || "",
+        registrationType: supplier.registrationType || "",
+        cnic: supplier.cnic || "",
+        fbrProvinceCode: supplier.fbrProvinceCode ?? "",
+      });
   }, [supplier]);
 
   useEffect(() => {
@@ -84,7 +88,9 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
         ]);
         setProvinces(provRes.data);
         setRegTypes(regRes.data);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     };
     load();
   }, []);
@@ -94,7 +100,7 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
   // NTN+STRN; FTN entities have NTN only; Unregistered/CNIC vendors have
   // CNIC only.
   const regType = formData.registrationType;
-  const showNtn  = regType === "Registered" || regType === "FTN";
+  const showNtn = regType === "Registered" || regType === "FTN";
   const showStrn = regType === "Registered";
   const showCnic = regType === "Unregistered" || regType === "CNIC";
   const ntnLabel = regType === "FTN" ? "FTN *" : "NTN *";
@@ -102,9 +108,11 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
   const validate = () => {
     const next = {};
     if (!formData.name.trim()) next.name = "Name is required";
-    if (showNtn && !formData.ntn.trim()) next.ntn = regType === "FTN" ? "FTN is required" : "NTN is required";
+    if (showNtn && !formData.ntn.trim())
+      next.ntn = regType === "FTN" ? "FTN is required" : "NTN is required";
     // STRN optional (2026-09-11): not part of any FBR payload; see ClientForm.
-    if (showCnic && !formData.cnic.trim()) next.cnic = "CNIC is required for this registration type";
+    if (showCnic && !formData.cnic.trim())
+      next.cnic = "CNIC is required for this registration type";
     if (showCnic && formData.cnic.trim() && formData.cnic.replace(/\D/g, "").length !== 13) {
       next.cnic = "CNIC must be 13 digits";
     }
@@ -121,10 +129,10 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
       // Clear identity fields that no longer apply on type switch — see
       // ClientForm.handleChange for the rationale.
       const nextForm = { ...formData, registrationType: value };
-      const willShowNtn  = value === "Registered" || value === "FTN";
+      const willShowNtn = value === "Registered" || value === "FTN";
       const willShowStrn = value === "Registered";
       const willShowCnic = value === "Unregistered" || value === "CNIC";
-      if (!willShowNtn)  nextForm.ntn  = "";
+      if (!willShowNtn) nextForm.ntn = "";
       if (!willShowStrn) nextForm.strn = "";
       if (!willShowCnic) nextForm.cnic = "";
       setFormData(nextForm);
@@ -164,7 +172,7 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
           notify(
             `Created ${created.length} supplier record${created.length !== 1 ? "s" : ""}` +
               (data.supplierGroupId ? " (linked as a Common Supplier)" : ""),
-            "success"
+            "success",
           );
         }
         onSaved(created[0] || null);
@@ -178,11 +186,21 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
     }
   };
 
-  const fieldError = (name) =>
-    errors[name] ? { border: "1px solid var(--k-danger)" } : {};
+  const fieldError = (name) => (errors[name] ? { border: "1px solid var(--k-danger)" } : {});
 
   const errorMsg = (name) =>
-    errors[name] ? <span style={{ color: "var(--k-danger)", fontSize: "var(--k-font-sm)", marginTop: "0.2rem", display: "block" }}>{errors[name]}</span> : null;
+    errors[name] ? (
+      <span
+        style={{
+          color: "var(--k-danger)",
+          fontSize: "var(--k-font-sm)",
+          marginTop: "0.2rem",
+          display: "block",
+        }}
+      >
+        {errors[name]}
+      </span>
+    ) : null;
 
   return (
     <div data-admin-backdrop="" style={backdrop}>
@@ -193,8 +211,16 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
           name={formData.name}
           onClose={onClose}
         />
-        <form onSubmit={handleSubmit} noValidate style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
-          <div data-admin-body="" className="pf-body" style={{ ...body, background: "var(--k-surface-3)" }}>
+        <form
+          onSubmit={handleSubmit}
+          noValidate
+          style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}
+        >
+          <div
+            data-admin-body=""
+            className="pf-body"
+            style={{ ...body, background: "var(--k-surface-3)" }}
+          >
             {/* Multi-company picker — CREATE mode + parent supplied
                 companies. Default-checked is the currently-active
                 company so single-company creates stay one click;
@@ -221,7 +247,8 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
                         }}
                         title={checked ? `Tap to remove ${lbl}` : `Tap to include ${lbl}`}
                       >
-                        {checked ? "✓ " : ""}{lbl}
+                        {checked ? "✓ " : ""}
+                        {lbl}
                       </button>
                     );
                   })}
@@ -230,57 +257,110 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
               </FormSection>
             )}
 
-            <FormSection icon={<MdStorefront size={18} />} title="Business details" hint="As it should print on purchase documents">
-            <div data-admin-field="" style={formGroup}>
-              <label style={label}>Name *</label>
-              <input type="text" name="name" value={formData.name} onChange={handleChange} style={{ ...input, ...fieldError("name") }} />
-              {errorMsg("name")}
-            </div>
-
-            <div data-admin-field="" style={formGroup}>
-              <label style={label}>Address</label>
-              <input type="text" name="address" value={formData.address} onChange={handleChange} style={input} />
-            </div>
-
-            <div className="form-grid-2col">
+            <FormSection
+              icon={<MdStorefront size={18} />}
+              title="Business details"
+              hint="As it should print on purchase documents"
+            >
               <div data-admin-field="" style={formGroup}>
-                <label style={label}>Email</label>
-                <input type="email" name="email" value={formData.email} onChange={handleChange} style={input} />
+                <label style={label}>Name *</label>
+                <input
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  style={{ ...input, ...fieldError("name") }}
+                />
+                {errorMsg("name")}
               </div>
+
               <div data-admin-field="" style={formGroup}>
-                <label style={label}>Phone</label>
-                <input type="text" name="phone" value={formData.phone} onChange={handleChange} style={input} />
+                <label style={label}>Address</label>
+                <input
+                  type="text"
+                  name="address"
+                  value={formData.address}
+                  onChange={handleChange}
+                  style={input}
+                />
               </div>
-            </div>
+
+              <div className="form-grid-2col">
+                <div data-admin-field="" style={formGroup}>
+                  <label style={label}>Email</label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    style={input}
+                  />
+                </div>
+                <div data-admin-field="" style={formGroup}>
+                  <label style={label}>Phone</label>
+                  <input
+                    type="text"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleChange}
+                    style={input}
+                  />
+                </div>
+              </div>
             </FormSection>
 
             {/* FBR identity — pick Registration Type first; identity
                 fields render below conditionally. Same model as
                 ClientForm.  */}
-            <FormSection tone="fbr" icon={<MdVerifiedUser size={18} />} title="FBR identity" hint="Used when this supplier's invoices are imported or claimed">
+            <FormSection
+              tone="fbr"
+              icon={<MdVerifiedUser size={18} />}
+              title="FBR identity"
+              hint="Used when this supplier's invoices are imported or claimed"
+            >
               <div className="form-grid-2col">
                 <div data-admin-field="" style={formGroup}>
                   <label style={label}>Registration Type</label>
-                  <select name="registrationType" value={formData.registrationType} onChange={handleChange} style={input}>
+                  <select
+                    name="registrationType"
+                    value={formData.registrationType}
+                    onChange={handleChange}
+                    style={input}
+                  >
                     <option value="">Select...</option>
                     {regTypes.map((rt) => (
-                      <option key={rt.id} value={rt.code}>{rt.label}</option>
+                      <option key={rt.id} value={rt.code}>
+                        {rt.label}
+                      </option>
                     ))}
                   </select>
                 </div>
                 <div data-admin-field="" style={formGroup}>
                   <label style={label}>Province</label>
-                  <select name="fbrProvinceCode" value={formData.fbrProvinceCode} onChange={handleChange} style={input}>
+                  <select
+                    name="fbrProvinceCode"
+                    value={formData.fbrProvinceCode}
+                    onChange={handleChange}
+                    style={input}
+                  >
                     <option value="">Select...</option>
                     {provinces.map((p) => (
-                      <option key={p.id} value={p.code}>{p.label}</option>
+                      <option key={p.id} value={p.code}>
+                        {p.label}
+                      </option>
                     ))}
                   </select>
                 </div>
               </div>
 
               {!regType && (
-                <p style={{ margin: "0.5rem 0 0", fontSize: "var(--k-font-sm)", color: "var(--k-muted)" }}>
+                <p
+                  style={{
+                    margin: "0.5rem 0 0",
+                    fontSize: "var(--k-font-sm)",
+                    color: "var(--k-muted)",
+                  }}
+                >
                   Pick a registration type to see the right identity fields.
                 </p>
               )}
@@ -303,7 +383,10 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
                   )}
                   {showStrn && (
                     <div style={formGroup}>
-                      <label style={label}>STRN <span style={{ fontWeight: 400, color: "var(--k-muted)" }}>(optional)</span></label>
+                      <label style={label}>
+                        STRN{" "}
+                        <span style={{ fontWeight: 400, color: "var(--k-muted)" }}>(optional)</span>
+                      </label>
                       <input
                         type="text"
                         name="strn"
@@ -321,10 +404,26 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
               {showCnic && (
                 <div style={{ ...formGroup, marginTop: "0.5rem" }}>
                   <label style={label}>CNIC (13 digits) *</label>
-                  <input type="text" name="cnic" value={formData.cnic} onChange={handleChange} style={{ ...input, ...fieldError("cnic") }} placeholder="3520112345678" maxLength={13} />
+                  <input
+                    type="text"
+                    name="cnic"
+                    value={formData.cnic}
+                    onChange={handleChange}
+                    style={{ ...input, ...fieldError("cnic") }}
+                    placeholder="3520112345678"
+                    maxLength={13}
+                  />
                   {errorMsg("cnic")}
-                  <span style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", marginTop: "0.2rem", display: "block" }}>
-                    Unregistered vendors don't have NTN/STRN — CNIC is the FBR identity for individuals.
+                  <span
+                    style={{
+                      fontSize: "var(--k-font-sm)",
+                      color: "var(--k-muted)",
+                      marginTop: "0.2rem",
+                      display: "block",
+                    }}
+                  >
+                    Unregistered vendors don't have NTN/STRN — CNIC is the FBR identity for
+                    individuals.
                   </span>
                 </div>
               )}
@@ -333,15 +432,23 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
           </div>
 
           <div data-admin-footer="" style={footer}>
-            <button data-admin-close="" type="button" style={{ ...button, ...cancel }} onClick={onClose}>Cancel</button>
-            <button type="submit" style={{ ...button, ...submit }}>{supplier ? "Update" : "Create"}</button>
+            <button
+              data-admin-close=""
+              type="button"
+              style={{ ...button, ...cancel }}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button type="submit" style={{ ...button, ...submit }}>
+              {supplier ? "Update" : "Create"}
+            </button>
           </div>
         </form>
       </div>
     </div>
   );
 }
-
 
 const pickerStyles = {
   chips: { display: "flex", flexWrap: "wrap", gap: "0.4rem" },
@@ -358,5 +465,9 @@ const pickerStyles = {
     margin: 0,
   },
   chipOn: { background: "var(--k-primary-bg)", color: "#fff", border: "1px solid transparent" },
-  chipOff: { background: "var(--k-surface-3)", color: "var(--k-blue)", border: "1px solid var(--k-line-strong)" },
+  chipOff: {
+    background: "var(--k-surface-3)",
+    color: "var(--k-blue)",
+    border: "1px solid var(--k-line-strong)",
+  },
 };

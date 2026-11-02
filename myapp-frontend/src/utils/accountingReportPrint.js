@@ -21,8 +21,10 @@ export async function brandAccountingReport(html, company, template) {
   for (const style of doc.querySelectorAll("style")) {
     style.textContent = style.textContent.replace(/(^|})([^{}]+)\{/g, (match, end, selectors) => {
       if (selectors.trim().startsWith("@")) return match;
-      return `${end}${selectors.split(",").map((s) => s.trim() === "body"
-        ? ".accounting-print" : `.accounting-print ${s.trim()}`).join(",")} {`;
+      return `${end}${selectors
+        .split(",")
+        .map((s) => (s.trim() === "body" ? ".accounting-print" : `.accounting-print ${s.trim()}`))
+        .join(",")} {`;
     });
   }
   const theme = doc.createElement("style");

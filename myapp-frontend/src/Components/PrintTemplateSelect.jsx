@@ -25,10 +25,24 @@ export default function PrintTemplateSelect({ picker, style }) {
       <div
         className="print-template-picker"
         title={picker.noTemplateReason}
-        style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", minWidth: 0, opacity: 0.75, cursor: "not-allowed", ...style }}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "0.35rem",
+          minWidth: 0,
+          opacity: 0.75,
+          cursor: "not-allowed",
+          ...style,
+        }}
       >
         <MdErrorOutline size={15} color="#c62828" aria-hidden="true" />
-        <select className="filter-select" aria-label="Print template" disabled value="" style={{ flex: 1, minWidth: 0, maxWidth: 260, cursor: "not-allowed" }}>
+        <select
+          className="filter-select"
+          aria-label="Print template"
+          disabled
+          value=""
+          style={{ flex: 1, minWidth: 0, maxWidth: 260, cursor: "not-allowed" }}
+        >
           <option value="">No print template configured</option>
         </select>
       </div>
@@ -37,7 +51,7 @@ export default function PrintTemplateSelect({ picker, style }) {
 
   if (!picker.canChoose) return null; // print-only role — keeps built-in fallback
 
-  const autoDefault = picker.resolveAuto();       // the default (or oldest) template
+  const autoDefault = picker.resolveAuto(); // the default (or oldest) template
   const templates = picker.templates;
 
   // Single template → there is no choice to make. Show the default's name as a
@@ -48,12 +62,25 @@ export default function PrintTemplateSelect({ picker, style }) {
     return (
       <div
         className="print-template-picker"
-        style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", minWidth: 0, ...style }}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "0.35rem",
+          minWidth: 0,
+          ...style,
+        }}
         title="Default print template used by Print / PDF"
       >
         <MdPrint size={15} color="#5f6d7e" aria-hidden="true" />
         <span
-          style={{ fontSize: "0.85rem", color: "#334e68", maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+          style={{
+            fontSize: "0.85rem",
+            color: "#334e68",
+            maxWidth: 240,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
         >
           {only ? only.name : "Default"}
         </span>
@@ -69,7 +96,17 @@ export default function PrintTemplateSelect({ picker, style }) {
     autoDefault && picker.selectedId === String(autoDefault.id) ? "" : picker.selectedId;
 
   return (
-    <div className="print-template-picker" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", minWidth: 0, ...style }} title="Print template used by Print / PDF — override per document type here">
+    <div
+      className="print-template-picker"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.35rem",
+        minWidth: 0,
+        ...style,
+      }}
+      title="Print template used by Print / PDF — override per document type here"
+    >
       <MdPrint size={15} color="#5f6d7e" aria-hidden="true" />
       <select
         className="filter-select"
@@ -80,7 +117,9 @@ export default function PrintTemplateSelect({ picker, style }) {
       >
         <option value="">{`★ Default — ${autoDefault ? autoDefault.name : ""}`}</option>
         {others.map((t) => (
-          <option key={t.id} value={String(t.id)}>{t.name}</option>
+          <option key={t.id} value={String(t.id)}>
+            {t.name}
+          </option>
         ))}
       </select>
     </div>

@@ -29,7 +29,8 @@ export function fileIconFor(nameOrExt = "") {
   if (IMAGE_EXTS.includes(ext)) return { Icon: MdImage, color: "#00897b" };
   if (ext === ".pdf") return { Icon: MdPictureAsPdf, color: "#d32f2f" };
   if (ext === ".doc" || ext === ".docx") return { Icon: MdDescription, color: "#1565c0" };
-  if (ext === ".xls" || ext === ".xlsx" || ext === ".csv") return { Icon: MdTableChart, color: "#2e7d32" };
+  if (ext === ".xls" || ext === ".xlsx" || ext === ".csv")
+    return { Icon: MdTableChart, color: "#2e7d32" };
   if (ext === ".ppt" || ext === ".pptx") return { Icon: MdSlideshow, color: "#e64a19" };
   if (ext === ".zip") return { Icon: MdFolderZip, color: "#6a1b9a" };
   if (ext === ".txt") return { Icon: MdArticle, color: "#5f6d7e" };

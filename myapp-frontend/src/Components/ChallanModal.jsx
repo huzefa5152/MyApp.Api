@@ -1,4 +1,11 @@
-import { MdPerson, MdReceipt, MdCalendarToday, MdLocationOn, MdAssignmentTurnedIn, MdEventNote } from "react-icons/md";
+import {
+  MdPerson,
+  MdReceipt,
+  MdCalendarToday,
+  MdLocationOn,
+  MdAssignmentTurnedIn,
+  MdEventNote,
+} from "react-icons/md";
 import RichText from "./RichText";
 import { formStyles, modalSizes } from "../theme";
 import AttachmentManager from "./AttachmentManager";
@@ -20,7 +27,8 @@ export default function ChallanModal({ challan, onClose }) {
   // every popup dismisses via the X / Close button only.
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
-      <div data-admin-dialog=""
+      <div
+        data-admin-dialog=""
         style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -30,7 +38,9 @@ export default function ChallanModal({ challan, onClose }) {
             <MdReceipt size={18} style={{ marginRight: 6, verticalAlign: "middle" }} />
             Challan #{challan.challanNumber} Details
           </h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            &times;
+          </button>
         </div>
 
         {/* Body */}
@@ -94,7 +104,7 @@ export default function ChallanModal({ challan, onClose }) {
               <div>
                 <span style={styles.infoLabel}>Status</span>
                 <span style={styles.infoValue}>
-                  {challan.status === "Invoiced" ? "Billed" : (challan.status || "—")}
+                  {challan.status === "Invoiced" ? "Billed" : challan.status || "—"}
                 </span>
               </div>
             </div>
@@ -102,18 +112,31 @@ export default function ChallanModal({ challan, onClose }) {
 
           {/* Items table */}
           <div style={{ marginTop: "1.25rem" }}>
-            <h6 style={{ fontWeight: 700, fontSize: "var(--k-font)", color: "var(--k-ink)", marginBottom: "0.6rem" }}>
+            <h6
+              style={{
+                fontWeight: 700,
+                fontSize: "var(--k-font)",
+                color: "var(--k-ink)",
+                marginBottom: "0.6rem",
+              }}
+            >
               Items ({challan.items.length})
             </h6>
             <TableWrap data-admin-table-region="" style={styles.tableWrapper}>
               <table className="k-table k-table--compact">
                 <thead>
                   <tr>
-                    <th className="is-center" style={{ width: 40 }}>#</th>
+                    <th className="is-center" style={{ width: 40 }}>
+                      #
+                    </th>
                     <th style={{ width: 110 }}>Item Type</th>
                     <th>Description</th>
-                    <th className="is-center" style={{ width: 70 }}>Qty</th>
-                    <th className="is-center" style={{ width: 90 }}>Unit</th>
+                    <th className="is-center" style={{ width: 70 }}>
+                      Qty
+                    </th>
+                    <th className="is-center" style={{ width: 90 }}>
+                      Unit
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -121,8 +144,12 @@ export default function ChallanModal({ challan, onClose }) {
                     <tr key={idx}>
                       <td className="is-center k-muted">{idx + 1}</td>
                       <td>{item.itemTypeName || "—"}</td>
-                      <td><RichText text={item.description} /></td>
-                      <td className="is-center" style={{ fontWeight: 600 }}>{item.quantity}</td>
+                      <td>
+                        <RichText text={item.description} />
+                      </td>
+                      <td className="is-center" style={{ fontWeight: 600 }}>
+                        {item.quantity}
+                      </td>
                       <td className="is-center">{item.unit}</td>
                     </tr>
                   ))}
@@ -132,18 +159,38 @@ export default function ChallanModal({ challan, onClose }) {
           </div>
 
           <ChallanPrivateCosts items={challan.items} readOnly />
-          {challan.notes && <div style={{ marginTop: 16 }}><strong>Notes</strong><div style={{ marginTop: 6, padding: 10, border: "1px solid var(--k-line)", borderRadius: 8 }}><RichText text={challan.notes} /></div></div>}
+          {challan.notes && (
+            <div style={{ marginTop: 16 }}>
+              <strong>Notes</strong>
+              <div
+                style={{
+                  marginTop: 6,
+                  padding: 10,
+                  border: "1px solid var(--k-line)",
+                  borderRadius: 8,
+                }}
+              >
+                <RichText text={challan.notes} />
+              </div>
+            </div>
+          )}
 
           {/* Attachments — read-only (preview / download only). INSIDE the
               scrollable body so it never pushes the footer off-screen. */}
           <div style={{ marginTop: "1.25rem" }}>
-            <AttachmentManager companyId={challan.companyId} entityType="DeliveryChallan" entityId={challan.id} mode="view" />
+            <AttachmentManager
+              companyId={challan.companyId}
+              entityType="DeliveryChallan"
+              entityId={challan.id}
+              mode="view"
+            />
           </div>
         </div>
 
         {/* Footer */}
         <div data-admin-footer="" style={formStyles.footer}>
-          <button data-admin-close=""
+          <button
+            data-admin-close=""
             type="button"
             style={{ ...formStyles.button, ...formStyles.cancel }}
             onClick={onClose}

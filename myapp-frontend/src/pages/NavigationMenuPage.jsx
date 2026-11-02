@@ -7,9 +7,7 @@ import { PageHeader, Tabs, EmptyState } from "../ui/Kit";
 // Configuration → Navigation Menu. A tabbed config surface; the first tab is
 // the Folders document library. Built as a tab strip so future navigation /
 // menu configuration tabs slot in alongside Folders without a new route.
-const TABS = [
-  { key: "folders", label: "Folders", icon: MdFolder, perm: "folders.list.view" },
-];
+const TABS = [{ key: "folders", label: "Folders", icon: MdFolder, perm: "folders.list.view" }];
 
 export default function NavigationMenuPage() {
   const { has } = usePermissions();

@@ -10,12 +10,18 @@ import AttachmentManager from "./AttachmentManager";
 export default function AttachmentQuickModal({ companyId, entityType, entityId, title, onClose }) {
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px` }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px` }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={{ ...formStyles.title, display: "inline-flex", alignItems: "center", gap: 8 }}>
             <MdAttachFile size={18} /> {title || "Attachments"}
           </h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}><MdClose size={18} /></button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            <MdClose size={18} />
+          </button>
         </div>
         <div data-admin-body="" style={formStyles.body}>
           <AttachmentManager
@@ -27,7 +33,14 @@ export default function AttachmentQuickModal({ companyId, entityType, entityId, 
           />
         </div>
         <div data-admin-footer="" style={formStyles.footer}>
-          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
+          <button
+            data-admin-close=""
+            type="button"
+            style={{ ...formStyles.button, ...formStyles.cancel }}
+            onClick={onClose}
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>

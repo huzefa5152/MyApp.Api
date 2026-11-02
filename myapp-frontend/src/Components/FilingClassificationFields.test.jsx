@@ -5,33 +5,100 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import FilingClassificationFields from "./FilingClassificationFields";
 import { getItemTypeFbrHints } from "../api/itemTypeApi";
 vi.mock("../api/itemTypeApi", () => ({ getItemTypeFbrHints: vi.fn() }));
-vi.mock("./HsCodeAutocomplete", () => ({ default: ({ value, onChange, onSelect, ariaLabel }) => <>
-  <input aria-label={ariaLabel} value={value} onChange={e => onChange(e.target.value)} />
-  <button type="button" onClick={() => onSelect({ hS_CODE: "8301.1000", description: "MISCELLANEOUS ARTICLES OF BASE METAL. - PADLOCKS AND LOCKS (KEY)", shortName: "Padlocks and locks" })}>Pick offline code</button>
-</> }));
+vi.mock("./HsCodeAutocomplete", () => ({
+  default: ({ value, onChange, onSelect, ariaLabel }) => (
+    <>
+      <input aria-label={ariaLabel} value={value} onChange={(e) => onChange(e.target.value)} />
+      <button
+        type="button"
+        onClick={() =>
+          onSelect({
+            hS_CODE: "8301.1000",
+            description: "MISCELLANEOUS ARTICLES OF BASE METAL. - PADLOCKS AND LOCKS (KEY)",
+            shortName: "Padlocks and locks",
+          })
+        }
+      >
+        Pick offline code
+      </button>
+    </>
+  ),
+}));
 vi.mock("./SearchableItemTypeSelect", () => ({ default: () => null }));
-const initial = { sourceLineIds: [4], quantity: 3, valueExclTax: 100, itemTypeId: null, hsCode: "", uom: "Nos", description: "Commercial name" };
-const hints = { uoms: [{ uoM_ID: 13, description: "Numbers" }], defaultSaleType: "Goods at standard rate (default)" };
+const initial = {
+  sourceLineIds: [4],
+  quantity: 3,
+  valueExclTax: 100,
+  itemTypeId: null,
+  hsCode: "",
+  uom: "Nos",
+  description: "Commercial name",
+};
+const hints = {
+  uoms: [{ uoM_ID: 13, description: "Numbers" }],
+  defaultSaleType: "Goods at standard rate (default)",
+};
 function Harness({ types = [], omitDescription = false, lineDescriptions = false }) {
   const [row, setRow] = useState(initial);
-  return <><FilingClassificationFields row={row} index={0} companyId={7} types={types} onChange={setRow} omitDescription={omitDescription} lineDescriptions={lineDescriptions} /><output data-testid="row">{JSON.stringify(row)}</output></>;
+  return (
+    <>
+      <FilingClassificationFields
+        row={row}
+        index={0}
+        companyId={7}
+        types={types}
+        onChange={setRow}
+        omitDescription={omitDescription}
+        lineDescriptions={lineDescriptions}
+      />
+      <output data-testid="row">{JSON.stringify(row)}</output>
+    </>
+  );
 }
-beforeEach(() => { vi.clearAllMocks(); getItemTypeFbrHints.mockResolvedValue({ data: hints }); });
+beforeEach(() => {
+  vi.clearAllMocks();
+  getItemTypeFbrHints.mockResolvedValue({ data: hints });
+});
 afterEach(cleanup);
 it("new FBR codes collect a company item name and FBR unit while preserving amounts", async () => {
   render(<Harness />);
   fireEvent.change(screen.getByLabelText("Row 1 FBR HS code"), { target: { value: "9403.6000" } });
   expect(screen.getByLabelText("Row 1 new item name").value).toBe("");
-  fireEvent.change(screen.getByLabelText("Row 1 new item name"), { target: { value: "Office furniture" } });
+  fireEvent.change(screen.getByLabelText("Row 1 new item name"), {
+    target: { value: "Office furniture" },
+  });
   fireEvent.change(await screen.findByLabelText("Row 1 filing unit"), { target: { value: "13" } });
   const row = JSON.parse(screen.getByTestId("row").textContent);
-  expect(row).toMatchObject({ itemTypeId: null, hsCode: "9403.6000", description: "Office furniture", uom: "Numbers", fbrUOMId: 13, quantity: 3, valueExclTax: 100 });
+  expect(row).toMatchObject({
+    itemTypeId: null,
+    hsCode: "9403.6000",
+    description: "Office furniture",
+    uom: "Numbers",
+    fbrUOMId: 13,
+    quantity: 3,
+    valueExclTax: 100,
+  });
   expect(getItemTypeFbrHints).toHaveBeenCalledWith(7, "9403.6000");
 });
 it("a matching company item is reused without new-name entry", () => {
-  render(<Harness types={[{ id: 22, name: "Saved furniture", hsCode: "9403.6000", uom: "Nos", saleType: hints.defaultSaleType }]} />);
+  render(
+    <Harness
+      types={[
+        {
+          id: 22,
+          name: "Saved furniture",
+          hsCode: "9403.6000",
+          uom: "Nos",
+          saleType: hints.defaultSaleType,
+        },
+      ]}
+    />,
+  );
   fireEvent.change(screen.getByLabelText("Row 1 FBR HS code"), { target: { value: "9403.6000" } });
-  expect(JSON.parse(screen.getByTestId("row").textContent)).toMatchObject({ itemTypeId: 22, description: "Saved furniture" });
+  expect(JSON.parse(screen.getByTestId("row").textContent)).toMatchObject({
+    itemTypeId: 22,
+    description: "Saved furniture",
+  });
   expect(screen.queryByLabelText("Row 1 new item name")).toBeNull();
 });
 it("lookup failure keeps the draft and offers retry", async () => {
@@ -45,7 +112,12 @@ it("lookup failure keeps the draft and offers retry", async () => {
 });
 it("a late lookup for the previous code cannot replace the current unit choices", async () => {
   let complete;
-  getItemTypeFbrHints.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+  getItemTypeFbrHints.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        complete = resolve;
+      }),
+  );
   render(<Harness />);
   fireEvent.change(screen.getByLabelText("Row 1 FBR HS code"), { target: { value: "9403.6000" } });
   await waitFor(() => expect(getItemTypeFbrHints).toHaveBeenCalledOnce());
@@ -59,8 +131,13 @@ it("an offline catalog pick names the new item with its one-line short name, edi
   fireEvent.click(screen.getByRole("button", { name: "Pick offline code" }));
   expect(screen.getByLabelText("Row 1 new item name").value).toBe("Padlocks and locks");
   expect(screen.getByText(/FBR receives this name as the item description/)).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("Row 1 new item name"), { target: { value: "Door locks" } });
-  expect(JSON.parse(screen.getByTestId("row").textContent)).toMatchObject({ hsCode: "8301.1000", description: "Door locks" });
+  fireEvent.change(screen.getByLabelText("Row 1 new item name"), {
+    target: { value: "Door locks" },
+  });
+  expect(JSON.parse(screen.getByTestId("row").textContent)).toMatchObject({
+    hsCode: "8301.1000",
+    description: "Door locks",
+  });
 });
 it("a company that omits descriptions is told FBR receives a blank one", () => {
   render(<Harness omitDescription />);

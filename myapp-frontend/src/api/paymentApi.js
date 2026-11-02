@@ -7,12 +7,10 @@ import httpClient from "./httpClient";
 export const getPagedPayments = (dir, companyId, params = {}) =>
   httpClient.get(`/payments/${dir}/company/${companyId}/paged`, { params });
 
-export const getPaymentById = (dir, id) =>
-  httpClient.get(`/payments/${dir}/${id}`);
+export const getPaymentById = (dir, id) => httpClient.get(`/payments/${dir}/${id}`);
 
 // Print-ready voucher DTO (branding + contact + allocations + amount-in-words).
-export const getPaymentPrintData = (dir, id) =>
-  httpClient.get(`/payments/${dir}/${id}/print`);
+export const getPaymentPrintData = (dir, id) => httpClient.get(`/payments/${dir}/${id}/print`);
 
 export const createPayment = (dir, companyId, payload) =>
   httpClient.post(`/payments/${dir}/company/${companyId}`, payload);
@@ -20,8 +18,7 @@ export const createPayment = (dir, companyId, payload) =>
 export const updatePayment = (dir, id, payload) =>
   httpClient.put(`/payments/${dir}/${id}`, payload);
 
-export const deletePayment = (dir, id) =>
-  httpClient.delete(`/payments/${dir}/${id}`);
+export const deletePayment = (dir, id) => httpClient.delete(`/payments/${dir}/${id}`);
 
 // Settled-payments panel for a single document.
 export const getPaymentsForInvoice = (companyId, invoiceId) =>

@@ -1,8 +1,11 @@
 import httpClient from "./httpClient";
 
 export const uploadQuoteLineImage = (companyId, file) => {
-  const body = new FormData(); body.append("file", file);
-  return httpClient.post(`/companies/${companyId}/quote-images`, body, { headers: { "Content-Type": "multipart/form-data" } });
+  const body = new FormData();
+  body.append("file", file);
+  return httpClient.post(`/companies/${companyId}/quote-images`, body, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
 };
 
 export const getPagedSalesQuotesByCompany = (companyId, params = {}) =>
@@ -14,7 +17,11 @@ export const getPagedSalesQuotesByCompany = (companyId, params = {}) =>
 export const getSalesQuotesForPicker = async (companyId, params = {}, maxPages = 5) => {
   const items = [];
   for (let page = 1; page <= maxPages; page++) {
-    const { data } = await getPagedSalesQuotesByCompany(companyId, { ...params, page, pageSize: 100 });
+    const { data } = await getPagedSalesQuotesByCompany(companyId, {
+      ...params,
+      page,
+      pageSize: 100,
+    });
     items.push(...(data?.items || []));
     const total = data?.totalCount ?? items.length;
     if (!data?.items?.length || items.length >= total) break;
@@ -22,27 +29,22 @@ export const getSalesQuotesForPicker = async (companyId, params = {}, maxPages =
   return items;
 };
 
-export const getSalesQuoteById = (id) =>
-  httpClient.get(`/salesquotes/${id}`);
+export const getSalesQuoteById = (id) => httpClient.get(`/salesquotes/${id}`);
 
 export const createSalesQuote = (companyId, payload) =>
   httpClient.post(`/salesquotes/company/${companyId}`, payload);
 
-export const updateSalesQuote = (id, payload) =>
-  httpClient.put(`/salesquotes/${id}`, payload);
+export const updateSalesQuote = (id, payload) => httpClient.put(`/salesquotes/${id}`, payload);
 
 export const setSalesQuoteStatus = (id, status) =>
   httpClient.put(`/salesquotes/${id}/status`, { status });
 
 // Convert an accepted quote into a (quantity-only) Sales Order.
-export const convertQuoteToOrder = (id) =>
-  httpClient.post(`/salesquotes/${id}/convert-to-order`);
+export const convertQuoteToOrder = (id) => httpClient.post(`/salesquotes/${id}/convert-to-order`);
 
-export const deleteSalesQuote = (id) =>
-  httpClient.delete(`/salesquotes/${id}`);
+export const deleteSalesQuote = (id) => httpClient.delete(`/salesquotes/${id}`);
 
-export const getSalesQuotePrintData = (id) =>
-  httpClient.get(`/salesquotes/${id}/print`);
+export const getSalesQuotePrintData = (id) => httpClient.get(`/salesquotes/${id}/print`);
 
 // Last billed unit price for an item — used to pre-fill the quote line price
 // when the item already exists in the system.

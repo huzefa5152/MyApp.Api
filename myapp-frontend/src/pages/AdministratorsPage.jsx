@@ -91,17 +91,22 @@ export default function AdministratorsPage() {
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
     if (!s) return tree;
-    return tree.filter((a) =>
-      a.fullName?.toLowerCase().includes(s)
-      || a.username?.toLowerCase().includes(s)
-      || a.users?.some((u) => u.fullName?.toLowerCase().includes(s) || u.username?.toLowerCase().includes(s))
-      || a.companies?.some((c) => c.name?.toLowerCase().includes(s)));
+    return tree.filter(
+      (a) =>
+        a.fullName?.toLowerCase().includes(s) ||
+        a.username?.toLowerCase().includes(s) ||
+        a.users?.some(
+          (u) => u.fullName?.toLowerCase().includes(s) || u.username?.toLowerCase().includes(s),
+        ) ||
+        a.companies?.some((c) => c.name?.toLowerCase().includes(s)),
+    );
   }, [tree, search]);
 
   const toggle = (id) =>
     setExpanded((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
 
@@ -113,8 +118,9 @@ export default function AdministratorsPage() {
     }
     setSaving(true);
     try {
-      const adminRole = roles.find((r) => r.isSystemRole && r.name === "Administrator")
-        || roles.find((r) => r.name === "Administrator");
+      const adminRole =
+        roles.find((r) => r.isSystemRole && r.name === "Administrator") ||
+        roles.find((r) => r.name === "Administrator");
       const { data: created } = await createUser({
         username: form.username.trim(),
         fullName: form.fullName.trim(),
@@ -125,7 +131,10 @@ export default function AdministratorsPage() {
         try {
           await assignUserRoles(created.id, [adminRole.id]);
         } catch {
-          notify("Administrator created, but the Administrator role could not be applied. Set it from Users → Roles.", "warning");
+          notify(
+            "Administrator created, but the Administrator role could not be applied. Set it from Users → Roles.",
+            "warning",
+          );
         }
       }
       notify(`Administrator "${created?.fullName || form.fullName}" created.`, "success");
@@ -147,7 +156,8 @@ export default function AdministratorsPage() {
   const toggleAccess = (companyId) =>
     setAccessSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(companyId)) next.delete(companyId); else next.add(companyId);
+      if (next.has(companyId)) next.delete(companyId);
+      else next.add(companyId);
       return next;
     });
   const submitAccess = async () => {
@@ -155,7 +165,10 @@ export default function AdministratorsPage() {
     setSaving(true);
     try {
       const { data } = await setUserCompanies(accessTarget.userId, Array.from(accessSelected));
-      notify(`Saved: ${data.added} added, ${data.removed} removed (total ${data.total}).`, "success");
+      notify(
+        `Saved: ${data.added} added, ${data.removed} removed (total ${data.total}).`,
+        "success",
+      );
       setAccessTarget(null);
       await load();
     } catch (err) {
@@ -198,12 +211,16 @@ export default function AdministratorsPage() {
         tone="brand"
         title="Administrators"
         subtitle="Every Administrator you created, with their users, companies and company access."
-        actions={(
+        actions={
           <>
-            <Button icon={MdRefresh} onClick={load} title="Reload">Refresh</Button>
-            <Button variant="primary" icon={MdAdd} onClick={() => setShowCreate(true)}>New Administrator</Button>
+            <Button icon={MdRefresh} onClick={load} title="Reload">
+              Refresh
+            </Button>
+            <Button variant="primary" icon={MdAdd} onClick={() => setShowCreate(true)}>
+              New Administrator
+            </Button>
           </>
-        )}
+        }
       />
 
       <Toolbar>
@@ -214,151 +231,290 @@ export default function AdministratorsPage() {
         />
       </Toolbar>
 
-      <RecordsViewport label="Administrators records">{loading ? (
-        <Loading>Loading administrators...</Loading>
-      ) : filtered.length === 0 ? (
-        <EmptyState icon={MdAdminPanelSettings}>
-          {search ? "Nothing matches your search." : "No administrators yet. Create the first one to start delegating."}
-        </EmptyState>
-      ) : (
-        <div style={styles.list}>
-          {filtered.map((a) => {
-            const open = expanded.has(a.userId);
-            return (
-              <div key={a.userId} className="k-card" style={styles.card}>
-                {/* Card header */}
-                <button type="button" style={styles.cardHead} onClick={() => toggle(a.userId)} aria-expanded={open}>
-                  <div style={styles.avatar}>{initials(a.fullName)}</div>
-                  <div style={styles.headText}>
-                    <div style={styles.name}>{a.fullName}</div>
-                    <div style={styles.username}>
-                      @{a.username}
-                      {a.roles?.length ? ` · ${a.roles.join(", ")}` : ` · ${a.role}`}
-                      {a.isLegacyRoot ? " · legacy (no creator recorded)" : ""}
+      <RecordsViewport label="Administrators records">
+        {loading ? (
+          <Loading>Loading administrators...</Loading>
+        ) : filtered.length === 0 ? (
+          <EmptyState icon={MdAdminPanelSettings}>
+            {search
+              ? "Nothing matches your search."
+              : "No administrators yet. Create the first one to start delegating."}
+          </EmptyState>
+        ) : (
+          <div style={styles.list}>
+            {filtered.map((a) => {
+              const open = expanded.has(a.userId);
+              return (
+                <div key={a.userId} className="k-card" style={styles.card}>
+                  {/* Card header */}
+                  <button
+                    type="button"
+                    style={styles.cardHead}
+                    onClick={() => toggle(a.userId)}
+                    aria-expanded={open}
+                  >
+                    <div style={styles.avatar}>{initials(a.fullName)}</div>
+                    <div style={styles.headText}>
+                      <div style={styles.name}>{a.fullName}</div>
+                      <div style={styles.username}>
+                        @{a.username}
+                        {a.roles?.length ? ` · ${a.roles.join(", ")}` : ` · ${a.role}`}
+                        {a.isLegacyRoot ? " · legacy (no creator recorded)" : ""}
+                      </div>
                     </div>
-                  </div>
-                  <div style={styles.counts}>
-                    <span style={styles.pill}><MdPeople size={14} /> {a.users?.length || 0}</span>
-                    <span style={styles.pill}><MdBusiness size={14} /> {a.companies?.length || 0}</span>
-                    <span style={styles.pill}>{a.companyIds?.length || 0} access</span>
-                  </div>
-                  {open ? <MdExpandLess size={22} /> : <MdExpandMore size={22} />}
-                </button>
+                    <div style={styles.counts}>
+                      <span style={styles.pill}>
+                        <MdPeople size={14} /> {a.users?.length || 0}
+                      </span>
+                      <span style={styles.pill}>
+                        <MdBusiness size={14} /> {a.companies?.length || 0}
+                      </span>
+                      <span style={styles.pill}>{a.companyIds?.length || 0} access</span>
+                    </div>
+                    {open ? <MdExpandLess size={22} /> : <MdExpandMore size={22} />}
+                  </button>
 
-                {open && (
-                  <div style={styles.cardBody}>
-                    {/* Admin's own access */}
-                    <Section title="Administrator's company access">
-                      <div style={styles.chipRow}>
-                        {(a.companyIds || []).length === 0
-                          ? <span style={styles.mutedInline}>No company access — this administrator sees "No Company Configured".</span>
-                          : a.companyIds.map((id) => <span key={id} style={styles.chip}>{companyName(id)}</span>)}
-                      </div>
-                      <div style={styles.actions}>
-                        <Button size="sm" icon={MdLockOpen}
-                          onClick={() => openAccess({ userId: a.userId, fullName: a.fullName, username: a.username }, a.companyIds)}>
-                          Edit access
-                        </Button>
-                        <Button size="sm" variant="danger" icon={MdDelete}
-                          onClick={() => handleDelete({ userId: a.userId, fullName: a.fullName })}>
-                          Delete administrator
-                        </Button>
-                      </div>
-                    </Section>
+                  {open && (
+                    <div style={styles.cardBody}>
+                      {/* Admin's own access */}
+                      <Section title="Administrator's company access">
+                        <div style={styles.chipRow}>
+                          {(a.companyIds || []).length === 0 ? (
+                            <span style={styles.mutedInline}>
+                              No company access — this administrator sees "No Company Configured".
+                            </span>
+                          ) : (
+                            a.companyIds.map((id) => (
+                              <span key={id} style={styles.chip}>
+                                {companyName(id)}
+                              </span>
+                            ))
+                          )}
+                        </div>
+                        <div style={styles.actions}>
+                          <Button
+                            size="sm"
+                            icon={MdLockOpen}
+                            onClick={() =>
+                              openAccess(
+                                { userId: a.userId, fullName: a.fullName, username: a.username },
+                                a.companyIds,
+                              )
+                            }
+                          >
+                            Edit access
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            icon={MdDelete}
+                            onClick={() => handleDelete({ userId: a.userId, fullName: a.fullName })}
+                          >
+                            Delete administrator
+                          </Button>
+                        </div>
+                      </Section>
 
-                    {/* Users beneath */}
-                    <Section title={`Users (${a.users?.length || 0})`}>
-                      {(a.users || []).length === 0 ? (
-                        <span style={styles.mutedInline}>This administrator has not created any users.</span>
-                      ) : (
-                        <div style={styles.subGrid}>
-                          {a.users.map((u) => (
-                            <div key={u.userId} style={styles.subCard}>
-                              <div style={{ display: "flex", gap: "0.6rem", alignItems: "center" }}>
-                                <div style={{ ...styles.avatar, width: 34, height: 34, fontSize: "0.8rem" }}>{initials(u.fullName)}</div>
-                                <div style={{ minWidth: 0, flex: 1 }}>
-                                  <div style={styles.name}>{u.fullName}</div>
-                                  <div style={styles.username}>@{u.username}{u.roles?.length ? ` · ${u.roles.join(", ")}` : ""}</div>
+                      {/* Users beneath */}
+                      <Section title={`Users (${a.users?.length || 0})`}>
+                        {(a.users || []).length === 0 ? (
+                          <span style={styles.mutedInline}>
+                            This administrator has not created any users.
+                          </span>
+                        ) : (
+                          <div style={styles.subGrid}>
+                            {a.users.map((u) => (
+                              <div key={u.userId} style={styles.subCard}>
+                                <div
+                                  style={{ display: "flex", gap: "0.6rem", alignItems: "center" }}
+                                >
+                                  <div
+                                    style={{
+                                      ...styles.avatar,
+                                      width: 34,
+                                      height: 34,
+                                      fontSize: "0.8rem",
+                                    }}
+                                  >
+                                    {initials(u.fullName)}
+                                  </div>
+                                  <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div style={styles.name}>{u.fullName}</div>
+                                    <div style={styles.username}>
+                                      @{u.username}
+                                      {u.roles?.length ? ` · ${u.roles.join(", ")}` : ""}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div style={styles.chipRow}>
+                                  {(u.companyIds || []).length === 0 ? (
+                                    <span style={styles.mutedInline}>No company access</span>
+                                  ) : (
+                                    u.companyIds.map((id) => (
+                                      <span key={id} style={styles.chip}>
+                                        {companyName(id)}
+                                      </span>
+                                    ))
+                                  )}
+                                </div>
+                                <div style={styles.actions}>
+                                  <Button
+                                    size="sm"
+                                    icon={MdLockOpen}
+                                    onClick={() =>
+                                      openAccess(
+                                        {
+                                          userId: u.userId,
+                                          fullName: u.fullName,
+                                          username: u.username,
+                                        },
+                                        u.companyIds,
+                                      )
+                                    }
+                                  >
+                                    Edit access
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="danger"
+                                    icon={MdDelete}
+                                    onClick={() =>
+                                      handleDelete({ userId: u.userId, fullName: u.fullName })
+                                    }
+                                  >
+                                    Delete
+                                  </Button>
                                 </div>
                               </div>
-                              <div style={styles.chipRow}>
-                                {(u.companyIds || []).length === 0
-                                  ? <span style={styles.mutedInline}>No company access</span>
-                                  : u.companyIds.map((id) => <span key={id} style={styles.chip}>{companyName(id)}</span>)}
-                              </div>
-                              <div style={styles.actions}>
-                                <Button size="sm" icon={MdLockOpen}
-                                  onClick={() => openAccess({ userId: u.userId, fullName: u.fullName, username: u.username }, u.companyIds)}>
-                                  Edit access
-                                </Button>
-                                <Button size="sm" variant="danger" icon={MdDelete}
-                                  onClick={() => handleDelete({ userId: u.userId, fullName: u.fullName })}>
-                                  Delete
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </Section>
+                            ))}
+                          </div>
+                        )}
+                      </Section>
 
-                    {/* Companies in this tree */}
-                    <Section title={`Companies (${a.companies?.length || 0})`}>
-                      {(a.companies || []).length === 0 ? (
-                        <span style={styles.mutedInline}>No companies created by or granted to this tree.</span>
-                      ) : (
-                        <div style={styles.chipRow}>
-                          {a.companies.map((c) => (
-                            <span key={c.companyId} style={styles.chip} title={c.isTenantIsolated ? "Tenant-isolated" : "Open"}>
-                              <MdBusiness size={13} /> {c.name}
-                            </span>
-                          ))}
+                      {/* Companies in this tree */}
+                      <Section title={`Companies (${a.companies?.length || 0})`}>
+                        {(a.companies || []).length === 0 ? (
+                          <span style={styles.mutedInline}>
+                            No companies created by or granted to this tree.
+                          </span>
+                        ) : (
+                          <div style={styles.chipRow}>
+                            {a.companies.map((c) => (
+                              <span
+                                key={c.companyId}
+                                style={styles.chip}
+                                title={c.isTenantIsolated ? "Tenant-isolated" : "Open"}
+                              >
+                                <MdBusiness size={13} /> {c.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <div style={styles.actions}>
+                          <Link to="/companies/list" className="k-btn k-btn--secondary k-btn--sm">
+                            Open Companies
+                          </Link>
+                          <Link to="/users" className="k-btn k-btn--secondary k-btn--sm">
+                            Open Users
+                          </Link>
+                          <Link to="/tenant-access" className="k-btn k-btn--secondary k-btn--sm">
+                            Open Tenant Access
+                          </Link>
                         </div>
-                      )}
-                      <div style={styles.actions}>
-                        <Link to="/companies/list" className="k-btn k-btn--secondary k-btn--sm">Open Companies</Link>
-                        <Link to="/users" className="k-btn k-btn--secondary k-btn--sm">Open Users</Link>
-                        <Link to="/tenant-access" className="k-btn k-btn--secondary k-btn--sm">Open Tenant Access</Link>
-                      </div>
-                    </Section>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}</RecordsViewport>
+                      </Section>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </RecordsViewport>
 
       {/* ── Create administrator modal ── */}
       {showCreate && (
-        <div data-admin-backdrop="" style={formStyles.backdrop} onClick={() => !saving && setShowCreate(false)}>
-          <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onClick={(e) => e.stopPropagation()}>
+        <div
+          data-admin-backdrop=""
+          style={formStyles.backdrop}
+          onClick={() => !saving && setShowCreate(false)}
+        >
+          <div
+            data-admin-dialog=""
+            style={{ ...formStyles.modal, maxWidth: modalSizes.md }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div data-admin-header="" style={formStyles.header}>
               <h3 style={formStyles.title}>New Administrator</h3>
-              <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={() => setShowCreate(false)} aria-label="Close"><MdClose /></button>
+              <button
+                data-admin-close=""
+                type="button"
+                style={formStyles.closeButton}
+                onClick={() => setShowCreate(false)}
+                aria-label="Close"
+              >
+                <MdClose />
+              </button>
             </div>
             <div data-admin-body="" style={formStyles.body}>
               <p style={{ ...styles.mutedInline, marginBottom: "1rem" }}>
-                The account is created under you, receives the Administrator role, and starts with no company
-                access. Grant companies afterwards with "Edit access".
+                The account is created under you, receives the Administrator role, and starts with
+                no company access. Grant companies afterwards with "Edit access".
               </p>
               <div style={formStyles.formGroup}>
-                <label style={formStyles.label} htmlFor="adm-fullname">Full name</label>
-                <input id="adm-fullname" style={formStyles.input} value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} autoFocus />
+                <label style={formStyles.label} htmlFor="adm-fullname">
+                  Full name
+                </label>
+                <input
+                  id="adm-fullname"
+                  style={formStyles.input}
+                  value={form.fullName}
+                  onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+                  autoFocus
+                />
               </div>
               <div style={formStyles.formGroup}>
-                <label style={formStyles.label} htmlFor="adm-username">Username</label>
-                <input id="adm-username" style={formStyles.input} value={form.username} autoComplete="off" onChange={(e) => setForm({ ...form, username: e.target.value })} />
+                <label style={formStyles.label} htmlFor="adm-username">
+                  Username
+                </label>
+                <input
+                  id="adm-username"
+                  style={formStyles.input}
+                  value={form.username}
+                  autoComplete="off"
+                  onChange={(e) => setForm({ ...form, username: e.target.value })}
+                />
               </div>
               <div>
-                <label style={formStyles.label} htmlFor="adm-password">Password</label>
-                <input id="adm-password" style={formStyles.input} type="password" value={form.password} autoComplete="new-password" onChange={(e) => setForm({ ...form, password: e.target.value })} />
+                <label style={formStyles.label} htmlFor="adm-password">
+                  Password
+                </label>
+                <input
+                  id="adm-password"
+                  style={formStyles.input}
+                  type="password"
+                  value={form.password}
+                  autoComplete="new-password"
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                />
                 <div style={styles.hint}>At least 8 characters with a letter and a digit.</div>
               </div>
             </div>
             <div data-admin-footer="" style={formStyles.footer}>
-              <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setShowCreate(false)} disabled={saving}>Cancel</button>
-              <button type="button" style={{ ...formStyles.button, ...formStyles.submit, ...styles.iconLabel }} onClick={submitCreate} disabled={saving}>
+              <button
+                data-admin-close=""
+                type="button"
+                style={{ ...formStyles.button, ...formStyles.cancel }}
+                onClick={() => setShowCreate(false)}
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                style={{ ...formStyles.button, ...formStyles.submit, ...styles.iconLabel }}
+                onClick={submitCreate}
+                disabled={saving}
+              >
                 <MdSave size={18} /> {saving ? "Creating..." : "Create"}
               </button>
             </div>
@@ -368,11 +524,27 @@ export default function AdministratorsPage() {
 
       {/* ── Company access modal ── */}
       {accessTarget && (
-        <div data-admin-backdrop="" style={formStyles.backdrop} onClick={() => !saving && setAccessTarget(null)}>
-          <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onClick={(e) => e.stopPropagation()}>
+        <div
+          data-admin-backdrop=""
+          style={formStyles.backdrop}
+          onClick={() => !saving && setAccessTarget(null)}
+        >
+          <div
+            data-admin-dialog=""
+            style={{ ...formStyles.modal, maxWidth: modalSizes.md }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div data-admin-header="" style={formStyles.header}>
               <h3 style={formStyles.title}>Company access — {accessTarget.fullName}</h3>
-              <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={() => setAccessTarget(null)} aria-label="Close"><MdClose /></button>
+              <button
+                data-admin-close=""
+                type="button"
+                style={formStyles.closeButton}
+                onClick={() => setAccessTarget(null)}
+                aria-label="Close"
+              >
+                <MdClose />
+              </button>
             </div>
             <div data-admin-body="" style={formStyles.body}>
               {allCompanies.length === 0 ? (
@@ -382,29 +554,62 @@ export default function AdministratorsPage() {
                   {allCompanies.map((c) => {
                     const on = accessSelected.has(c.id);
                     return (
-                      <button key={c.id} type="button" style={{ ...styles.checkRow, ...(on ? styles.checkRowOn : null) }} onClick={() => toggleAccess(c.id)}>
-                        {on ? <MdCheckBox size={22} color={colors.blue} /> : <MdCheckBoxOutlineBlank size={22} color={colors.textSecondary} />}
-                        <span style={{ flex: 1, minWidth: 0, textAlign: "left", overflowWrap: "anywhere" }}>{c.name}</span>
-                        {c.isTenantIsolated ? <MdLock size={16} color={colors.textSecondary} title="Tenant-isolated" /> : null}
+                      <button
+                        key={c.id}
+                        type="button"
+                        style={{ ...styles.checkRow, ...(on ? styles.checkRowOn : null) }}
+                        onClick={() => toggleAccess(c.id)}
+                      >
+                        {on ? (
+                          <MdCheckBox size={22} color={colors.blue} />
+                        ) : (
+                          <MdCheckBoxOutlineBlank size={22} color={colors.textSecondary} />
+                        )}
+                        <span
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            textAlign: "left",
+                            overflowWrap: "anywhere",
+                          }}
+                        >
+                          {c.name}
+                        </span>
+                        {c.isTenantIsolated ? (
+                          <MdLock size={16} color={colors.textSecondary} title="Tenant-isolated" />
+                        ) : null}
                       </button>
                     );
                   })}
                 </div>
               )}
               <p style={{ ...styles.hint, marginTop: "0.75rem" }}>
-                Unticking every company leaves the account signed-in but on the "No Company Configured" screen.
+                Unticking every company leaves the account signed-in but on the "No Company
+                Configured" screen.
               </p>
             </div>
             <div data-admin-footer="" style={formStyles.footer}>
-              <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setAccessTarget(null)} disabled={saving}>Cancel</button>
-              <button type="button" style={{ ...formStyles.button, ...formStyles.submit, ...styles.iconLabel }} onClick={submitAccess} disabled={saving}>
+              <button
+                data-admin-close=""
+                type="button"
+                style={{ ...formStyles.button, ...formStyles.cancel }}
+                onClick={() => setAccessTarget(null)}
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                style={{ ...formStyles.button, ...formStyles.submit, ...styles.iconLabel }}
+                onClick={submitAccess}
+                disabled={saving}
+              >
                 <MdSave size={18} /> {saving ? "Saving..." : "Save access"}
               </button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }
@@ -419,12 +624,14 @@ function Section({ title, children }) {
 }
 
 function initials(name) {
-  return (name || "?")
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join("") || "?";
+  return (
+    (name || "?")
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]?.toUpperCase())
+      .join("") || "?"
+  );
 }
 
 const styles = {
@@ -433,10 +640,22 @@ const styles = {
   list: { display: "flex", flexDirection: "column", gap: "var(--k-gap)" },
   card: { overflow: "hidden", marginTop: 0 }, // the list gap spaces cards; cancel the kit adjacent-card margin
   cardHead: {
-    width: "100%", display: "flex", alignItems: "center", gap: "0.85rem", padding: "var(--k-card-pad)",
-    margin: 0, borderRadius: 0,
-    background: "transparent", border: "none", boxShadow: "none", cursor: "pointer", textAlign: "left",
-    color: "var(--k-ink)", fontFamily: "inherit", fontSize: "var(--k-font)", fontWeight: 400,
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    gap: "0.85rem",
+    padding: "var(--k-card-pad)",
+    margin: 0,
+    borderRadius: 0,
+    background: "transparent",
+    border: "none",
+    boxShadow: "none",
+    cursor: "pointer",
+    textAlign: "left",
+    color: "var(--k-ink)",
+    fontFamily: "inherit",
+    fontSize: "var(--k-font)",
+    fontWeight: 400,
     // Wrap on phones: the count pills drop under the name instead of
     // squeezing the name column to zero width.
     flexWrap: "wrap",
@@ -445,42 +664,104 @@ const styles = {
   // keeps it from collapsing when the pills sit on the same line.
   headText: { flex: "1 1 180px", minWidth: 0 },
   avatar: {
-    width: "var(--k-icon-tile)", height: "var(--k-icon-tile)", maxWidth: 42, maxHeight: 42, borderRadius: "50%", display: "grid", placeItems: "center", flexShrink: 0,
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, color: "#fff", fontWeight: 700, fontSize: "0.9rem",
+    width: "var(--k-icon-tile)",
+    height: "var(--k-icon-tile)",
+    maxWidth: 42,
+    maxHeight: 42,
+    borderRadius: "50%",
+    display: "grid",
+    placeItems: "center",
+    flexShrink: 0,
+    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
+    color: "#fff",
+    fontWeight: 700,
+    fontSize: "0.9rem",
   },
   name: {
-    fontWeight: 600, fontSize: "var(--k-font)", color: "var(--k-ink)",
-    display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+    fontWeight: 600,
+    fontSize: "var(--k-font)",
+    color: "var(--k-ink)",
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
   },
   username: { color: "var(--k-muted)", fontSize: "var(--k-font-sm)", overflowWrap: "break-word" },
-  counts: { display: "flex", gap: "0.4rem", flexWrap: "wrap", justifyContent: "flex-end", marginLeft: "auto" },
+  counts: {
+    display: "flex",
+    gap: "0.4rem",
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    marginLeft: "auto",
+  },
   pill: {
-    display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.2rem 0.55rem",
-    borderRadius: 999, background: "#eef3fb", color: "var(--k-blue)", fontSize: "0.78rem", fontWeight: 600, whiteSpace: "nowrap",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    padding: "0.2rem 0.55rem",
+    borderRadius: 999,
+    background: "#eef3fb",
+    color: "var(--k-blue)",
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    whiteSpace: "nowrap",
   },
   cardBody: { borderTop: "1px solid var(--k-line)", padding: "0.5rem 1rem 1rem" },
   section: { padding: "0.75rem 0" },
   sectionTitle: {
-    fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
-    color: "var(--k-muted)", marginBottom: "0.5rem",
+    fontSize: "0.72rem",
+    fontWeight: 700,
+    letterSpacing: "0.05em",
+    textTransform: "uppercase",
+    color: "var(--k-muted)",
+    marginBottom: "0.5rem",
   },
   chipRow: { display: "flex", flexWrap: "wrap", gap: "0.4rem", marginBottom: "0.6rem" },
   chip: {
-    display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.25rem 0.6rem", borderRadius: 8,
-    background: "var(--k-surface-3)", border: "1px solid var(--k-line)", fontSize: "var(--k-font-sm)", color: "var(--k-ink)",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    padding: "0.25rem 0.6rem",
+    borderRadius: 8,
+    background: "var(--k-surface-3)",
+    border: "1px solid var(--k-line)",
+    fontSize: "var(--k-font-sm)",
+    color: "var(--k-ink)",
   },
   actions: { display: "flex", gap: "0.5rem", flexWrap: "wrap" },
-  subGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(260px, 100%), 1fr))", gap: "0.75rem" },
+  subGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(260px, 100%), 1fr))",
+    gap: "0.75rem",
+  },
   subCard: {
-    border: "1px solid var(--k-line)", borderRadius: "var(--k-radius)", padding: "0.75rem",
-    display: "flex", flexDirection: "column", gap: "0.6rem", background: "var(--k-surface-2)",
+    border: "1px solid var(--k-line)",
+    borderRadius: "var(--k-radius)",
+    padding: "0.75rem",
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.6rem",
+    background: "var(--k-surface-2)",
   },
   iconLabel: { display: "inline-flex", alignItems: "center", gap: "0.4rem" },
   hint: { color: "var(--k-muted)", fontSize: "var(--k-font-sm)", marginTop: "0.35rem" },
   checkRow: {
-    display: "flex", alignItems: "center", gap: "0.6rem", width: "100%", minHeight: "var(--k-btn-h)", padding: "0.4rem 0.75rem", margin: 0,
-    border: "1px solid var(--k-line)", borderRadius: "var(--k-radius)", background: "var(--k-surface)", cursor: "pointer",
-    color: "var(--k-ink)", fontFamily: "inherit", fontSize: "var(--k-font)", fontWeight: 400, boxShadow: "none",
+    display: "flex",
+    alignItems: "center",
+    gap: "0.6rem",
+    width: "100%",
+    minHeight: "var(--k-btn-h)",
+    padding: "0.4rem 0.75rem",
+    margin: 0,
+    border: "1px solid var(--k-line)",
+    borderRadius: "var(--k-radius)",
+    background: "var(--k-surface)",
+    cursor: "pointer",
+    color: "var(--k-ink)",
+    fontFamily: "inherit",
+    fontSize: "var(--k-font)",
+    fontWeight: 400,
+    boxShadow: "none",
   },
   checkRowOn: { borderColor: "var(--k-blue)", background: "#eef3fb" },
 };

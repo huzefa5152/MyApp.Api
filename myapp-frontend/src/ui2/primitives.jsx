@@ -14,7 +14,16 @@ export function Btn({ variant = "secondary", icon: Icon, children, className = "
 }
 
 /** Icon-only button. `label` is mandatory: it is the accessible name and the tooltip. */
-export function IconBtn({ label, icon: Icon, active, size = 16, large, className = "", children, ...rest }) {
+export function IconBtn({
+  label,
+  icon: Icon,
+  active,
+  size = 16,
+  large,
+  className = "",
+  children,
+  ...rest
+}) {
   return (
     <button
       type="button"
@@ -37,7 +46,9 @@ export function PageHeader({ crumbs = [], title, subtitle, actions }) {
           <nav aria-label="Breadcrumb">
             <ol className="u2-crumbs">
               {crumbs.map((c, i) => (
-                <li key={c} aria-current={i === crumbs.length - 1 ? "page" : undefined}>{c}</li>
+                <li key={c} aria-current={i === crumbs.length - 1 ? "page" : undefined}>
+                  {c}
+                </li>
               ))}
             </ol>
           </nav>
@@ -80,7 +91,9 @@ export function TableSkeleton({ columns = 7, rows = 6 }) {
           {Array.from({ length: rows }).map((_, r) => (
             <tr key={r}>
               {Array.from({ length: columns }).map((__, c) => (
-                <td key={c}><span className="u2-skel" style={{ width: `${55 + ((r * 7 + c * 13) % 40)}%` }} /></td>
+                <td key={c}>
+                  <span className="u2-skel" style={{ width: `${55 + ((r * 7 + c * 13) % 40)}%` }} />
+                </td>
               ))}
             </tr>
           ))}
@@ -134,7 +147,11 @@ export function RowMenu({ items, label = "More actions" }) {
   }, [open, pos]);
 
   const onKeyDown = (e) => {
-    if (e.key === "Escape") { setOpen(false); triggerRef.current?.focus(); return; }
+    if (e.key === "Escape") {
+      setOpen(false);
+      triggerRef.current?.focus();
+      return;
+    }
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     e.preventDefault();
     const btns = [...menuRef.current.querySelectorAll("button:not(:disabled)")];
@@ -158,7 +175,13 @@ export function RowMenu({ items, label = "More actions" }) {
         <MdMoreHoriz size={18} aria-hidden="true" />
       </button>
       {open && pos && (
-        <ul ref={menuRef} className="u2-menu" role="menu" style={{ top: pos.top, left: pos.left }} onKeyDown={onKeyDown}>
+        <ul
+          ref={menuRef}
+          className="u2-menu"
+          role="menu"
+          style={{ top: pos.top, left: pos.left }}
+          onKeyDown={onKeyDown}
+        >
           {items.map((it) => (
             <li key={it.key} role="none">
               {it.separatorBefore && <div className="u2-menu__sep" role="separator" />}
@@ -168,9 +191,16 @@ export function RowMenu({ items, label = "More actions" }) {
                 disabled={it.disabled}
                 title={it.title}
                 className={`u2-menu__item${it.danger ? " u2-menu__item--danger" : ""}`}
-                onClick={() => { setOpen(false); it.onClick?.(); }}
+                onClick={() => {
+                  setOpen(false);
+                  it.onClick?.();
+                }}
               >
-                {it.loading ? <span className="u2-spinner" aria-hidden="true" /> : it.icon && <it.icon size={15} aria-hidden="true" />}
+                {it.loading ? (
+                  <span className="u2-spinner" aria-hidden="true" />
+                ) : (
+                  it.icon && <it.icon size={15} aria-hidden="true" />
+                )}
                 {it.label}
               </button>
             </li>

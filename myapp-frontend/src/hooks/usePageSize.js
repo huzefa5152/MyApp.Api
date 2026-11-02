@@ -27,7 +27,7 @@ export default function usePageSize(storageKey) {
       if (!PAGE_SIZE_OPTIONS.includes(n)) return;
       setRaw(String(n));
     },
-    [setRaw]
+    [setRaw],
   );
 
   return [pageSize, setPageSize];

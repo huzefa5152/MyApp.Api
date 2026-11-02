@@ -15,13 +15,14 @@ export const searchUnits = (query, companyId) =>
 // created to remember what HS Code / Sale Type / UOM the user picked, so next
 // time they invoice the same item those values are pre-filled.
 export const saveItemFbrDefaults = (payload) =>
-  httpClient.post("/lookup/items/fbr-defaults", payload, { params: { companyId: payload.companyId } });
+  httpClient.post("/lookup/items/fbr-defaults", payload, {
+    params: { companyId: payload.companyId },
+  });
 
 // Top items — favorites + most-used — with FBR defaults. Used to populate the
 // SmartItemAutocomplete dropdown when there's no search term (so users see a
 // short curated list instead of having to search 15k+ FBR catalog entries).
-export const getTopItems = (take = 15) =>
-  httpClient.get("/lookup/items/top", { params: { take } });
+export const getTopItems = (take = 15) => httpClient.get("/lookup/items/top", { params: { take } });
 
 // Mark/unmark an item description as a favorite.
 export const toggleItemFavorite = (id, isFavorite) =>

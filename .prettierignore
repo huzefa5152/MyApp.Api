@@ -1,0 +1,15 @@
+# Dependencies and build output
+**/node_modules/
+**/dist/
+**/bin/
+**/obj/
+wwwroot/
+
+# Generated or vendored
+myapp-frontend/src/generated/
+myapp-frontend/public/
+**/package-lock.json
+
+# HTML is printed or served verbatim; its whitespace is part of the output
+**/*.html
+scripts/print_templates/

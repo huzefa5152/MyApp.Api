@@ -79,14 +79,31 @@ export default function CopyToCompaniesDialog({
   };
 
   return (
-    <div data-admin-backdrop="" style={formStyles.backdrop} onClick={() => !submitting && onCancel?.()}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: 520, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+    <div
+      data-admin-backdrop=""
+      style={formStyles.backdrop}
+      onClick={() => !submitting && onCancel?.()}
+    >
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: 520, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
-          <h3 style={{ ...formStyles.title, display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
+          <h3
+            style={{
+              ...formStyles.title,
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              minWidth: 0,
+            }}
+          >
             <MdContentCopy size={20} aria-hidden="true" style={{ flexShrink: 0 }} />
             {title}
           </h3>
-          <button data-admin-close=""
+          <button
+            data-admin-close=""
             type="button"
             aria-label="Close"
             style={formStyles.closeButton}
@@ -140,7 +157,7 @@ export default function CopyToCompaniesDialog({
                       <span style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
                         <strong>{c.brandName || c.name}</strong>
                         {c.brandName && c.name && c.brandName !== c.name && (
-                          <span style={styles.muted}>  ·  {c.name}</span>
+                          <span style={styles.muted}> · {c.name}</span>
                         )}
                       </span>
                       {checked && <MdCheckCircle size={16} color="#0d47a1" />}
@@ -151,11 +168,16 @@ export default function CopyToCompaniesDialog({
             </>
           )}
 
-          {errorMsg && <div style={{ ...formStyles.error, marginTop: "0.75rem", marginBottom: 0 }}>{errorMsg}</div>}
+          {errorMsg && (
+            <div style={{ ...formStyles.error, marginTop: "0.75rem", marginBottom: 0 }}>
+              {errorMsg}
+            </div>
+          )}
         </div>
 
         <div data-admin-footer="" style={formStyles.footer}>
-          <button data-admin-close=""
+          <button
+            data-admin-close=""
             type="button"
             style={{ ...formStyles.button, ...formStyles.cancel }}
             onClick={() => onCancel?.()}
@@ -166,15 +188,20 @@ export default function CopyToCompaniesDialog({
           <button
             type="button"
             style={{
-              ...formStyles.button, ...formStyles.submit,
-              display: "inline-flex", alignItems: "center", gap: 6,
-              opacity: (submitting || busy || selected.size === 0) ? 0.6 : 1,
+              ...formStyles.button,
+              ...formStyles.submit,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              opacity: submitting || busy || selected.size === 0 ? 0.6 : 1,
             }}
             onClick={handleConfirm}
             disabled={submitting || busy || selected.size === 0}
           >
             <MdContentCopy size={15} />
-            {submitting ? "Copying..." : `Copy to ${selected.size || ""} ${selected.size === 1 ? "company" : "companies"}`}
+            {submitting
+              ? "Copying..."
+              : `Copy to ${selected.size || ""} ${selected.size === 1 ? "company" : "companies"}`}
           </button>
         </div>
       </div>
@@ -184,17 +211,31 @@ export default function CopyToCompaniesDialog({
 
 // Dialog chrome comes from the themed formStyles; only the picker list is local.
 const styles = {
-  subjectLine: { margin: "0 0 0.75rem", fontSize: "var(--k-font)", color: "#1a2332", overflowWrap: "anywhere" },
+  subjectLine: {
+    margin: "0 0 0.75rem",
+    fontSize: "var(--k-font)",
+    color: "#1a2332",
+    overflowWrap: "anywhere",
+  },
   toolbar: {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: "0.5rem",
   },
   list: { display: "flex", flexDirection: "column", gap: "0.35rem" },
   row: {
-    display: "flex", alignItems: "center", gap: "0.6rem",
-    minHeight: "var(--k-h)", padding: "0.4rem 0.75rem", borderRadius: 8,
-    border: "1px solid #e8edf3", cursor: "pointer",
-    fontSize: "var(--k-font)", color: "#1a2332", userSelect: "none",
+    display: "flex",
+    alignItems: "center",
+    gap: "0.6rem",
+    minHeight: "var(--k-h)",
+    padding: "0.4rem 0.75rem",
+    borderRadius: 8,
+    border: "1px solid #e8edf3",
+    cursor: "pointer",
+    fontSize: "var(--k-font)",
+    color: "#1a2332",
+    userSelect: "none",
     transition: "background-color 0.15s, border-color 0.15s",
   },
   rowActive: { borderColor: "#0d47a1", backgroundColor: "#e3f2fd" },

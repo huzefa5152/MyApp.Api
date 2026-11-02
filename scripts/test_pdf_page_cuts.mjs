@@ -35,11 +35,14 @@ function check(label, fn) {
 
 // A 40-row invoice: a header block, then 40 rows of 52 px, then totals.
 const rows = [];
-for (let i = 0, y = 300; i < 40; i++) { y += 52; rows.push(y); }
+for (let i = 0, y = 300; i < 40; i++) {
+  y += 52;
+  rows.push(y);
+}
 const totals = rows[rows.length - 1] + 180;
 const CUTS = [300, ...rows, totals];
 const TOTAL = totals + 40;
-const PAGE = 2130;   // the real slice height for A4 at 796px render width
+const PAGE = 2130; // the real slice height for A4 at 796px render width
 
 check("every page ends on a safe boundary, never mid-row", () => {
   const ends = choosePageCuts(CUTS, PAGE, TOTAL);
@@ -56,14 +59,21 @@ check("the last page ends at the end of the document", () => {
 check("no page exceeds the printable height", () => {
   const ends = choosePageCuts(CUTS, PAGE, TOTAL);
   let y = 0;
-  for (const e of ends) { assert.ok(e - y <= PAGE + 1, `page of ${e - y}px`); y = e; }
+  for (const e of ends) {
+    assert.ok(e - y <= PAGE + 1, `page of ${e - y}px`);
+    y = e;
+  }
 });
 
 check("the pages cover the document exactly once, with no gap or overlap", () => {
   const ends = choosePageCuts(CUTS, PAGE, TOTAL);
   let y = 0;
   let covered = 0;
-  for (const e of ends) { assert.ok(e > y); covered += e - y; y = e; }
+  for (const e of ends) {
+    assert.ok(e > y);
+    covered += e - y;
+    y = e;
+  }
   assert.strictEqual(covered, TOTAL);
 });
 
@@ -93,7 +103,10 @@ check("a page is never left almost empty by an early boundary", () => {
 check("no zero-height page, whatever the boundaries say", () => {
   const ends = choosePageCuts([0, 0, 0, TOTAL], PAGE, TOTAL);
   let y = 0;
-  for (const e of ends) { assert.ok(e > y, `zero-height page at ${e}`); y = e; }
+  for (const e of ends) {
+    assert.ok(e > y, `zero-height page at ${e}`);
+    y = e;
+  }
 });
 
 check("the 40-row case cuts EARLIER than the blind fixed cut", () => {

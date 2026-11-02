@@ -3,7 +3,22 @@ import { createPortal } from "react-dom";
 import { MdArrowDropDown, MdSearch } from "react-icons/md";
 import "../ui/kit.css";
 
-const LAYOUT_KEYS = new Set(["width", "minWidth", "maxWidth", "flex", "flexBasis", "flexGrow", "flexShrink", "margin", "marginTop", "marginBottom", "marginLeft", "marginRight", "alignSelf", "gridColumn"]);
+const LAYOUT_KEYS = new Set([
+  "width",
+  "minWidth",
+  "maxWidth",
+  "flex",
+  "flexBasis",
+  "flexGrow",
+  "flexShrink",
+  "margin",
+  "marginTop",
+  "marginBottom",
+  "marginLeft",
+  "marginRight",
+  "alignSelf",
+  "gridColumn",
+]);
 
 /**
  * The one searchable dropdown engine behind every picker in the app (SearchableSelect,
@@ -72,7 +87,9 @@ export default function ComboBox({
     onQuery("");
     setHi(-1);
     requestAnimationFrame(() => searchRef.current?.focus());
-    const recompute = () => { if (triggerRef.current) setRect(triggerRef.current.getBoundingClientRect()); };
+    const recompute = () => {
+      if (triggerRef.current) setRect(triggerRef.current.getBoundingClientRect());
+    };
     recompute();
     window.addEventListener("scroll", recompute, true);
     window.addEventListener("resize", recompute);
@@ -90,19 +107,38 @@ export default function ComboBox({
     listRef.current?.querySelector(`[data-idx="${hi}"]`)?.scrollIntoView?.({ block: "nearest" });
   }, [hi]);
 
-  const close = (refocus) => { setOpen(false); if (refocus) triggerRef.current?.focus(); };
-  const pick = (o) => { onPick(o); close(true); };
+  const close = (refocus) => {
+    setOpen(false);
+    if (refocus) triggerRef.current?.focus();
+  };
+  const pick = (o) => {
+    onPick(o);
+    close(true);
+  };
 
   const onKeyDown = (e) => {
-    if (e.key === "ArrowDown") { e.preventDefault(); setHi((i) => Math.min(flat.length - 1, i + 1)); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); setHi((i) => Math.max(0, i - 1)); }
-    else if (e.key === "Enter") { e.preventDefault(); if (hi >= 0 && hi < flat.length) pick(flat[hi]); }
-    else if (e.key === "Escape") { e.preventDefault(); close(true); }
-    else if (e.key === "Tab") { close(false); }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHi((i) => Math.min(flat.length - 1, i + 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHi((i) => Math.max(0, i - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (hi >= 0 && hi < flat.length) pick(flat[hi]);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      close(true);
+    } else if (e.key === "Tab") {
+      close(false);
+    }
   };
 
   const onTriggerKey = (e) => {
-    if (!open && (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ")) { e.preventDefault(); setOpen(true); }
+    if (!open && (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ")) {
+      e.preventDefault();
+      setOpen(true);
+    }
   };
 
   const popStyle = (() => {
@@ -124,7 +160,9 @@ export default function ComboBox({
   let idx = -1;
   const busy = disabled || loading;
   // Callers may size the control (width / flex / margin) but not restyle it: every picker looks the same.
-  const layoutStyle = style ? Object.fromEntries(Object.entries(style).filter(([k]) => LAYOUT_KEYS.has(k))) : undefined;
+  const layoutStyle = style
+    ? Object.fromEntries(Object.entries(style).filter(([k]) => LAYOUT_KEYS.has(k)))
+    : undefined;
   return (
     <div className="k-combo" style={layoutStyle}>
       <button
@@ -139,68 +177,134 @@ export default function ComboBox({
         onClick={() => !busy && setOpen((v) => !v)}
         onKeyDown={onTriggerKey}
       >
-        <span className="k-combo__label">{loading ? <span className="k-combo__placeholder">Loading…</span> : triggerContent}</span>
+        <span className="k-combo__label">
+          {loading ? <span className="k-combo__placeholder">Loading…</span> : triggerContent}
+        </span>
         {onClear && !busy && (
-          <span className="k-combo__clear" role="button" aria-label="Clear selection" title="Clear"
-            onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onClear(); }}>×</span>
+          <span
+            className="k-combo__clear"
+            role="button"
+            aria-label="Clear selection"
+            title="Clear"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClear();
+            }}
+          >
+            ×
+          </span>
         )}
         <MdArrowDropDown size={18} className="k-combo__caret" aria-hidden="true" />
       </button>
 
-      {open && rect && createPortal(
-        <div data-admin-popup="" ref={popRef} className="k-combo__pop" style={popStyle} onKeyDown={onKeyDown}>
-          <div className="k-combo__search">
-            <MdSearch size={16} aria-hidden="true" />
-            <input ref={searchRef} type="text" placeholder={searchPlaceholder} aria-label={searchPlaceholder} value={query}
-              onChange={(e) => { onQuery(e.target.value); setHi(0); }} />
-          </div>
-          <div className="k-combo__list" role="listbox" ref={listRef}>
-            {noneLabel != null && (
-              <div role="option" aria-selected={false} className="k-combo__opt" style={{ color: "var(--k-muted)", fontStyle: "italic" }}
-                onMouseDown={(e) => { e.preventDefault(); pick(null); }} onMouseEnter={() => setHi(-1)}>
-                {noneLabel}
-              </div>
-            )}
-            {flat.length === 0 && <div className="k-combo__empty">{emptyText}</div>}
-            {sections.map((s) => (
-              <div key={s.key ?? "all"} role="group" aria-label={s.label}>
-                {s.label && s.options.length > 0 && (
-                  <div className="k-combo__group" style={s.tone ? { color: s.tone.fg, background: s.tone.bg, borderRadius: 4 } : undefined}>{s.label}</div>
-                )}
-                {s.options.map((o) => {
-                  idx += 1;
-                  const i = idx;
-                  const k = getKey(o);
-                  const cur = isCurrent(o);
-                  const isExp = renderExpand && expanded === k;
-                  return (
-                    <div key={k}>
-                      <div
-                        role="option"
-                        data-idx={i}
-                        aria-selected={i === hi}
-                        className={`k-combo__opt${cur ? " k-combo__opt--current" : ""}`}
-                        onMouseDown={(e) => { e.preventDefault(); pick(o); }}
-                        onMouseEnter={() => setHi(i)}
-                      >
-                        {renderExpand && (
-                          <button type="button" className="k-combo__expand" title={isExp ? "Hide items" : "Show items"}
-                            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setExpanded(isExp ? null : k); }}>
-                            {isExp ? "▾" : "▸"}
-                          </button>
-                        )}
-                        <span className="k-combo__opt-main">{renderOption(o)}</span>
-                      </div>
-                      {isExp && <div className="k-combo__expand-body" onMouseDown={(e) => e.stopPropagation()}>{renderExpand(o)}</div>}
+      {open &&
+        rect &&
+        createPortal(
+          <div
+            data-admin-popup=""
+            ref={popRef}
+            className="k-combo__pop"
+            style={popStyle}
+            onKeyDown={onKeyDown}
+          >
+            <div className="k-combo__search">
+              <MdSearch size={16} aria-hidden="true" />
+              <input
+                ref={searchRef}
+                type="text"
+                placeholder={searchPlaceholder}
+                aria-label={searchPlaceholder}
+                value={query}
+                onChange={(e) => {
+                  onQuery(e.target.value);
+                  setHi(0);
+                }}
+              />
+            </div>
+            <div className="k-combo__list" role="listbox" ref={listRef}>
+              {noneLabel != null && (
+                <div
+                  role="option"
+                  aria-selected={false}
+                  className="k-combo__opt"
+                  style={{ color: "var(--k-muted)", fontStyle: "italic" }}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    pick(null);
+                  }}
+                  onMouseEnter={() => setHi(-1)}
+                >
+                  {noneLabel}
+                </div>
+              )}
+              {flat.length === 0 && <div className="k-combo__empty">{emptyText}</div>}
+              {sections.map((s) => (
+                <div key={s.key ?? "all"} role="group" aria-label={s.label}>
+                  {s.label && s.options.length > 0 && (
+                    <div
+                      className="k-combo__group"
+                      style={
+                        s.tone
+                          ? { color: s.tone.fg, background: s.tone.bg, borderRadius: 4 }
+                          : undefined
+                      }
+                    >
+                      {s.label}
                     </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        </div>,
-        document.body
-      )}
+                  )}
+                  {s.options.map((o) => {
+                    idx += 1;
+                    const i = idx;
+                    const k = getKey(o);
+                    const cur = isCurrent(o);
+                    const isExp = renderExpand && expanded === k;
+                    return (
+                      <div key={k}>
+                        <div
+                          role="option"
+                          data-idx={i}
+                          aria-selected={i === hi}
+                          className={`k-combo__opt${cur ? " k-combo__opt--current" : ""}`}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            pick(o);
+                          }}
+                          onMouseEnter={() => setHi(i)}
+                        >
+                          {renderExpand && (
+                            <button
+                              type="button"
+                              className="k-combo__expand"
+                              title={isExp ? "Hide items" : "Show items"}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setExpanded(isExp ? null : k);
+                              }}
+                            >
+                              {isExp ? "▾" : "▸"}
+                            </button>
+                          )}
+                          <span className="k-combo__opt-main">{renderOption(o)}</span>
+                        </div>
+                        {isExp && (
+                          <div
+                            className="k-combo__expand-body"
+                            onMouseDown={(e) => e.stopPropagation()}
+                          >
+                            {renderExpand(o)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

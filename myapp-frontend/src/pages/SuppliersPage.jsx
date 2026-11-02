@@ -7,7 +7,11 @@ import SupplierList from "../Components/SupplierList";
 import SupplierForm from "../Components/SupplierForm";
 import CommonSupplierForm from "../Components/CommonSupplierForm";
 import CopyToCompaniesDialog from "../Components/CopyToCompaniesDialog";
-import { getSuppliersByCompany, getCommonSuppliers, copySupplierToCompanies } from "../api/supplierApi";
+import {
+  getSuppliersByCompany,
+  getCommonSuppliers,
+  copySupplierToCompanies,
+} from "../api/supplierApi";
 import { notify } from "../utils/notify";
 import { PageHeader, Button, EmptyState, Loading } from "../ui/Kit";
 import PartyToolbar from "../Components/party/PartyToolbar";
@@ -17,7 +21,12 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import ImportFromExcelButton from "../Components/onboarding/ImportFromExcelButton";
 
 export default function SuppliersPage() {
-  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const {
+    companies,
+    selectedCompany,
+    setSelectedCompany,
+    loading: loadingCompanies,
+  } = useCompany();
   const { has } = usePermissions();
   const canCreate = has("suppliers.manage.create");
   const [suppliers, setSuppliers] = useState([]);
@@ -45,11 +54,20 @@ export default function SuppliersPage() {
     if (!canSeePayables || !selectedCompany?.id) return;
     let active = true;
     supplierSummary(selectedCompany.id)
-      .then(({ data }) => { if (active) setPayables(new Map((data || []).map((r) => [r.supplierId, Number(r.netBalance) || 0]))); })
-      .catch(() => { if (active) setPayables(null); });
-    return () => { active = false; };
+      .then(({ data }) => {
+        if (active)
+          setPayables(new Map((data || []).map((r) => [r.supplierId, Number(r.netBalance) || 0])));
+      })
+      .catch(() => {
+        if (active) setPayables(null);
+      });
+    return () => {
+      active = false;
+    };
   }, [canSeePayables, selectedCompany?.id, suppliers]);
-  const totalPayable = payables ? [...payables.values()].reduce((sum, v) => sum + Math.max(0, v), 0) : 0;
+  const totalPayable = payables
+    ? [...payables.values()].reduce((sum, v) => sum + Math.max(0, v), 0)
+    : 0;
 
   // Common Supplier groups this company shares with others, by group id.
   // Every supplier is listed once; one whose group is here carries a
@@ -71,7 +89,9 @@ export default function SuppliersPage() {
         if (!cancelled) setCommonGroups(new Map());
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [selectedCompany, commonRefreshKey]);
 
   const fetchSuppliers = async (companyId) => {
@@ -93,17 +113,26 @@ export default function SuppliersPage() {
     else setSuppliers([]);
   }, [selectedCompany]);
 
-  const handleEdit = (s) => { setSelectedSupplier(s); setShowModal(true); };
-  const handleAdd = () => { setSelectedSupplier(null); setShowModal(true); };
+  const handleEdit = (s) => {
+    setSelectedSupplier(s);
+    setShowModal(true);
+  };
+  const handleAdd = () => {
+    setSelectedSupplier(null);
+    setShowModal(true);
+  };
 
   const isCommon = (s) => s.supplierGroupId != null && commonGroups.has(s.supplierGroupId);
   const commonCount = useMemo(() => suppliers.filter(isCommon).length, [suppliers, commonGroups]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const searched = suppliers.filter((s) => matchesSearch(s, search));
   const counts = { ...countByType(searched), common: searched.filter(isCommon).length };
-  const filtered = typeFilter === "all" ? searched
-    : typeFilter === "common" ? searched.filter(isCommon)
-    : searched.filter((s) => (s.registrationType || "None") === typeFilter);
+  const filtered =
+    typeFilter === "all"
+      ? searched
+      : typeFilter === "common"
+        ? searched.filter(isCommon)
+        : searched.filter((s) => (s.registrationType || "None") === typeFilter);
 
   return (
     <div>
@@ -111,22 +140,40 @@ export default function SuppliersPage() {
         icon={MdLocalShipping}
         tone="teal"
         title="Suppliers"
-        subtitle={selectedCompany
-          ? `${suppliers.length} supplier${suppliers.length !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}` +
-            (commonCount > 0 ? ` · ${commonCount} shared with other companies` : "")
-          : "Select a company to view suppliers"}
-        actions={(
+        subtitle={
+          selectedCompany
+            ? `${suppliers.length} supplier${suppliers.length !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}` +
+              (commonCount > 0 ? ` · ${commonCount} shared with other companies` : "")
+            : "Select a company to view suppliers"
+        }
+        actions={
           <>
             {payables && (
-              <Button icon={MdPayments} onClick={() => navigate("/supplier-payables")}
-                title="Open Supplier Payables to see and pay what each supplier is owed">
-                <span>Total payable <strong>Rs. {totalPayable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+              <Button
+                icon={MdPayments}
+                onClick={() => navigate("/supplier-payables")}
+                title="Open Supplier Payables to see and pay what each supplier is owed"
+              >
+                <span>
+                  Total payable{" "}
+                  <strong>
+                    Rs.{" "}
+                    {totalPayable.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </strong>
+                </span>
               </Button>
             )}
             <ImportFromExcelButton sheet="suppliers" />
-            {companies.length > 0 && canCreate && <Button variant="primary" icon={MdAdd} onClick={handleAdd}>New Supplier</Button>}
+            {companies.length > 0 && canCreate && (
+              <Button variant="primary" icon={MdAdd} onClick={handleAdd}>
+                New Supplier
+              </Button>
+            )}
           </>
-        )}
+        }
       />
 
       {loadingCompanies ? (
@@ -144,34 +191,42 @@ export default function SuppliersPage() {
           counts={counts}
         />
       ) : (
-        <EmptyState icon={MdBusiness} title="No companies yet">Add a company first, then its suppliers will appear here.</EmptyState>
+        <EmptyState icon={MdBusiness} title="No companies yet">
+          Add a company first, then its suppliers will appear here.
+        </EmptyState>
       )}
 
-      <RecordsViewport label="Suppliers records">{loadingSuppliers ? (
-        <Loading>Loading suppliers…</Loading>
-      ) : filtered.length === 0 && selectedCompany ? (
-        <EmptyState
-          icon={suppliers.length === 0 ? MdLocalShipping : MdSearchOff}
-          title={suppliers.length === 0 ? "No suppliers yet" : "No matching suppliers"}
-          action={suppliers.length === 0 && canCreate
-            ? <Button variant="primary" icon={MdAdd} onClick={handleAdd}>New Supplier</Button>
-            : null}
-        >
-          {suppliers.length === 0
-            ? "Add your first supplier, or bring them in from an Excel file."
-            : "Try a different search or registration type."}
-        </EmptyState>
-      ) : (
-        <SupplierList
-          suppliers={filtered}
-          commonGroups={commonGroups}
-          onEdit={handleEdit}
-          onEditCommon={(groupId) => setEditingGroupId(groupId)}
-          onCopy={(s) => setCopyingSupplier(s)}
-          fetchSuppliers={() => fetchSuppliers(selectedCompany?.id)}
-          payables={payables}
-        />
-      )}</RecordsViewport>
+      <RecordsViewport label="Suppliers records">
+        {loadingSuppliers ? (
+          <Loading>Loading suppliers…</Loading>
+        ) : filtered.length === 0 && selectedCompany ? (
+          <EmptyState
+            icon={suppliers.length === 0 ? MdLocalShipping : MdSearchOff}
+            title={suppliers.length === 0 ? "No suppliers yet" : "No matching suppliers"}
+            action={
+              suppliers.length === 0 && canCreate ? (
+                <Button variant="primary" icon={MdAdd} onClick={handleAdd}>
+                  New Supplier
+                </Button>
+              ) : null
+            }
+          >
+            {suppliers.length === 0
+              ? "Add your first supplier, or bring them in from an Excel file."
+              : "Try a different search or registration type."}
+          </EmptyState>
+        ) : (
+          <SupplierList
+            suppliers={filtered}
+            commonGroups={commonGroups}
+            onEdit={handleEdit}
+            onEditCommon={(groupId) => setEditingGroupId(groupId)}
+            onCopy={(s) => setCopyingSupplier(s)}
+            fetchSuppliers={() => fetchSuppliers(selectedCompany?.id)}
+            payables={payables}
+          />
+        )}
+      </RecordsViewport>
 
       {copyingSupplier && (
         <CopyToCompaniesDialog
@@ -188,8 +243,8 @@ export default function SuppliersPage() {
             if (createdCount > 0) {
               notify(
                 `Copied "${copyingSupplier.name}" into ${createdCount} ${createdCount === 1 ? "company" : "companies"}` +
-                (skipped.length > 0 ? ` (${skipped.length} skipped)` : "."),
-                "success"
+                  (skipped.length > 0 ? ` (${skipped.length} skipped)` : "."),
+                "success",
               );
             } else if (skipped.length > 0) {
               notify(`No copies made — ${skipped[0]}`, "warning");

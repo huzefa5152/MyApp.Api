@@ -225,7 +225,8 @@ table.items th.c { text-align: center; }
     id: "bill-corporate-navy",
     name: "Corporate Navy Band",
     type: "Bill",
-    description: "Solid navy header band with white company name and contrasting yellow accent line",
+    description:
+      "Solid navy header band with white company name and contrasting yellow accent line",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @media print { @page { size: A4; margin: 0; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -419,7 +420,8 @@ table.items tbody tr:nth-child(even) td { background: #f0fdf4 !important; }
     id: "bill-monochrome-ink",
     name: "Monochrome Ink-Saver",
     type: "Bill",
-    description: "Pure black and white, no background fills — optimized for laser printing on plain paper",
+    description:
+      "Pure black and white, no background fills — optimized for laser printing on plain paper",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @media print { @page { size: A4; margin: 10mm 12mm; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -520,7 +522,8 @@ table.items th.l { text-align: left; }
     id: "bill-elegant-premium",
     name: "Elegant Premium",
     type: "Bill",
-    description: "Charcoal and gold palette with fine rules and italic serif accents for high-end stationery",
+    description:
+      "Charcoal and gold palette with fine rules and italic serif accents for high-end stationery",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @media print { @page { size: A4; margin: 10mm; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -634,7 +637,8 @@ table.items tbody tr:nth-child(even) td { background: #f9f6ef !important; }
     id: "bill-compact-dense",
     name: "Compact Dense",
     type: "Bill",
-    description: "Tight row heights and small font for high line-count bills that must fit on one A4 sheet",
+    description:
+      "Tight row heights and small font for high line-count bills that must fit on one A4 sheet",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @media print { @page { size: A4; margin: 6mm 8mm; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -724,7 +728,8 @@ table.items tbody tr:nth-child(even) td { background: #eef2fa !important; }
     id: "bill-left-sidebar",
     name: "Left Sidebar Strip",
     type: "Bill",
-    description: "Vertical navy sidebar on the left carries company identity; content flows to the right",
+    description:
+      "Vertical navy sidebar on the left carries company identity; content flows to the right",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @media print { @page { size: A4; margin: 0; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -946,7 +951,8 @@ table.items tbody tr:nth-child(even) td { background: #f4f4f4 !important; }
     id: "bill-bismillah",
     name: "Bismillah Header",
     type: "Bill",
-    description: "Opens with centered Arabic Bismillah calligraphy above the company header — traditional Islamic business stationery",
+    description:
+      "Opens with centered Arabic Bismillah calligraphy above the company header — traditional Islamic business stationery",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @media print { @page { size: A4; margin: 8mm 10mm; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -1057,7 +1063,8 @@ table.items tbody tr:nth-child(even) td { background: #f0fdf4 !important; }
     id: "bill-green-gold",
     name: "Green & Gold",
     type: "Bill",
-    description: "Forest green header with gold accents — popular palette for Pakistani textile traders",
+    description:
+      "Forest green header with gold accents — popular palette for Pakistani textile traders",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @media print { @page { size: A4; margin: 0; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -1277,7 +1284,8 @@ table.items tbody tr:nth-child(even) td { background: #f0fdfa !important; }
     id: "bill-big-letterhead",
     name: "Big Letterhead",
     type: "Bill",
-    description: "Large centred logo + company name letterhead at top, then bill content below — for branded stationery",
+    description:
+      "Large centred logo + company name letterhead at top, then bill content below — for branded stationery",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @media print { @page { size: A4; margin: 8mm 10mm; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -1479,7 +1487,8 @@ table.items tbody tr:nth-child(even) td { background: #eff6ff !important; }
     id: "bill-govt-form-grid",
     name: "Government-Form Grid",
     type: "Bill",
-    description: "Heavy grid with labelled cell blocks mimicking official Pakistani government printed forms",
+    description:
+      "Heavy grid with labelled cell blocks mimicking official Pakistani government printed forms",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @media print { @page { size: A4; margin: 8mm 10mm; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }

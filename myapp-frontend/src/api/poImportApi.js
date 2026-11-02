@@ -7,7 +7,9 @@ import httpClient from "./httpClient";
 export const parsePdf = (file, companyId, clientId) => {
   const formData = new FormData();
   formData.append("file", file);
-  const url = companyId ? `/poimport/parse-pdf?companyId=${companyId}${clientId ? `&clientId=${clientId}` : ""}` : "/poimport/parse-pdf";
+  const url = companyId
+    ? `/poimport/parse-pdf?companyId=${companyId}${clientId ? `&clientId=${clientId}` : ""}`
+    : "/poimport/parse-pdf";
   return httpClient.post(url, formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
@@ -21,14 +23,21 @@ export const parseImage = (file, pages, companyId, clientId) => {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("words", JSON.stringify({ pages }));
-  return httpClient.post(`/poimport/parse-image?companyId=${companyId}${clientId ? `&clientId=${clientId}` : ""}`, formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-    timeout: 120000,
-  });
+  return httpClient.post(
+    `/poimport/parse-image?companyId=${companyId}${clientId ? `&clientId=${clientId}` : ""}`,
+    formData,
+    {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 120000,
+    },
+  );
 };
 
 export const parseText = (text, companyId, clientId) =>
-  httpClient.post(`/poimport/parse-text${companyId ? `?companyId=${companyId}${clientId ? `&clientId=${clientId}` : ""}` : ""}`, { text });
+  httpClient.post(
+    `/poimport/parse-text${companyId ? `?companyId=${companyId}${clientId ? `&clientId=${clientId}` : ""}` : ""}`,
+    { text },
+  );
 
 export const ensureLookups = (descriptions, units, companyId) =>
   httpClient.post("/poimport/ensure-lookups", { descriptions, units }, { params: { companyId } });
@@ -37,13 +46,23 @@ export const readWorkbook = (file, companyId, clientId, mapping) => {
   const body = new FormData();
   body.append("file", file);
   if (mapping) body.append("mapping", JSON.stringify(mapping));
-  return httpClient.post("/poimport/workbook", body, { params: { companyId, clientId },
-    headers: { "Content-Type": "multipart/form-data" } });
+  return httpClient.post("/poimport/workbook", body, {
+    params: { companyId, clientId },
+    headers: { "Content-Type": "multipart/form-data" },
+  });
 };
 
-export const getWorkbookFormats = (companyId, clientId) => httpClient.get("/poimport/workbook-formats", { params: { companyId, clientId } });
-export const saveWorkbookFormat = (companyId, clientId, name, mapping) => httpClient.post("/poimport/workbook-format", { name, mapping }, { params: { companyId, clientId } });
+export const getWorkbookFormats = (companyId, clientId) =>
+  httpClient.get("/poimport/workbook-formats", { params: { companyId, clientId } });
+export const saveWorkbookFormat = (companyId, clientId, name, mapping) =>
+  httpClient.post(
+    "/poimport/workbook-format",
+    { name, mapping },
+    { params: { companyId, clientId } },
+  );
 
-export const linkImportSource = (archiveId, documentKind, documentId) => httpClient.post(`/poimport/archives/${archiveId}/link`, { documentKind, documentId });
+export const linkImportSource = (archiveId, documentKind, documentId) =>
+  httpClient.post(`/poimport/archives/${archiveId}/link`, { documentKind, documentId });
 
-export const checkImportDuplicate = (archiveId, documentKind) => httpClient.get(`/poimport/archives/${archiveId}/duplicate`, { params: { documentKind } });
+export const checkImportDuplicate = (archiveId, documentKind) =>
+  httpClient.get(`/poimport/archives/${archiveId}/duplicate`, { params: { documentKind } });

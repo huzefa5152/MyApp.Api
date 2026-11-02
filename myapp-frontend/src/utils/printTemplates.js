@@ -1,12 +1,27 @@
 import { renderRichTextHtml } from "./richText";
 
-const fmt = (n) => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-const fmtDec = (n) => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt = (n) =>
+  Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const fmtDec = (n) =>
+  Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const fmtDate = (d) => {
   if (!d) return "";
   const dt = new Date(d);
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
   const dd = String(dt.getDate()).padStart(2, "0");
   const mmm = months[dt.getMonth()];
   const yy = String(dt.getFullYear()).slice(-2);
@@ -17,15 +32,18 @@ export function buildBillPrintHtml(d) {
   const MIN_ROWS = 18;
 
   // Build item rows
-  let itemRows = d.items.map(i =>
-    `<tr>
+  let itemRows = d.items
+    .map(
+      (i) =>
+        `<tr>
       <td class="cell c">${i.sNo}</td>
       <td class="cell c">${i.quantity}</td>
       <td class="cell">${renderRichTextHtml(i.description)}</td>
       <td class="cell r">Rs${fmt(i.unitPrice)}</td>
       <td class="cell r">Rs &nbsp; ${fmt(i.lineTotal)}</td>
-    </tr>`
-  ).join("");
+    </tr>`,
+    )
+    .join("");
 
   // Pad with empty rows
   const emptyCount = Math.max(0, MIN_ROWS - d.items.length);
@@ -34,10 +52,14 @@ export function buildBillPrintHtml(d) {
   }
 
   const dcNos = d.challanNumbers?.join(", ") || "";
-  const dcDates = d.challanDates?.map(dt => fmtDate(dt)).filter(Boolean).join(", ") || "";
+  const dcDates =
+    d.challanDates
+      ?.map((dt) => fmtDate(dt))
+      .filter(Boolean)
+      .join(", ") || "";
 
   // Collect unique item type names for the footer
-  const typeNames = [...new Set(d.items.map(i => i.itemTypeName).filter(Boolean))];
+  const typeNames = [...new Set(d.items.map((i) => i.itemTypeName).filter(Boolean))];
   const typesLine = typeNames.length > 0 ? typeNames.join(" | ") + " |" : "";
 
   return `<!DOCTYPE html><html><head><title>Bill #${d.invoiceNumber}</title>
@@ -210,7 +232,7 @@ export function buildTaxInvoicePrintHtml(d) {
 
   // Group items by ItemTypeName
   const groups = {};
-  d.items.forEach(i => {
+  d.items.forEach((i) => {
     const type = i.itemTypeName || "Other";
     if (!groups[type]) groups[type] = [];
     groups[type].push(i);
@@ -225,7 +247,7 @@ export function buildTaxInvoicePrintHtml(d) {
     // Type header row
     itemRows += `<tr><td colspan="8" style="background:#e8e8e8;font-weight:700;font-size:10.5px;padding:4px 6px">${typeName}</td></tr>`;
     totalItemRows++;
-    groups[typeName].forEach(i => {
+    groups[typeName].forEach((i) => {
       sNo++;
       totalItemRows++;
       itemRows += `<tr>
@@ -327,7 +349,9 @@ export function buildTaxInvoicePrintHtml(d) {
 </table>
 <div class="footer-section">
   <div class="words"><strong>Amount in Words:</strong> ${d.amountInWords}</div>
-  ${d.fbrIRN ? `<div style="margin-top:10px;border:2px solid #2c3e50;padding:8px 12px;display:flex;align-items:center;justify-content:space-between">
+  ${
+    d.fbrIRN
+      ? `<div style="margin-top:10px;border:2px solid #2c3e50;padding:8px 12px;display:flex;align-items:center;justify-content:space-between">
     <div style="flex:1">
       <div style="font-size:12px;font-weight:700;color:#2c3e50;text-transform:uppercase;margin-bottom:4px">FBR Digital Invoice</div>
       <div style="font-size:10.5px"><strong>IRN:</strong> ${d.fbrIRN}</div>
@@ -335,7 +359,9 @@ export function buildTaxInvoicePrintHtml(d) {
       <div style="font-size:9px;color:#555;margin-top:3px">This invoice has been reported to FBR under the Sales Tax Act, 1990</div>
     </div>
     <div style="margin-left:12px"><img src="https://api.qrserver.com/v1/create-qr-code/?size=96x96&data=${encodeURIComponent(d.fbrIRN)}" width="96" height="96" style="display:block" /></div>
-  </div>` : ""}
+  </div>`
+      : ""
+  }
   <div class="sig-row">
     <div class="sig-block"><div class="line"></div><div class="label">Signature and Stamp</div></div>
     <div class="sig-block"><div class="line"></div><div class="label">Receiver Signature and Stamp</div></div>

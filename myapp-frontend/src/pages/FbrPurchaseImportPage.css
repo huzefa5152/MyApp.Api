@@ -1,11 +1,17 @@
 /* FbrPurchaseImportPage — responsive overrides on top of inline styles. */
 
 /* ---------- Mobile cards vs desktop table toggle ---------- */
-.fbr-imp-table-wrap { display: block; }
-.fbr-imp-line-cards { display: none; }
+.fbr-imp-table-wrap {
+  display: block;
+}
+.fbr-imp-line-cards {
+  display: none;
+}
 
 @media (max-width: 767.98px) {
-  .fbr-imp-table-wrap { display: none; }
+  .fbr-imp-table-wrap {
+    display: none;
+  }
   .fbr-imp-line-cards {
     display: flex;
     flex-direction: column;

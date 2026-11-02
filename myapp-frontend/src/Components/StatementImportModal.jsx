@@ -13,10 +13,13 @@ import { getAccountsFlat } from "../api/accountApi";
 
 // "PKR 1,234.00" — negatives keep their sign (styled red at the call site).
 const pkr = (x) =>
-  "PKR " + Number(x || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  "PKR " +
+  Number(x || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const fmtDate = (d) =>
-  d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+  d
+    ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+    : "—";
 
 /**
  * Bank statement import + categorization (Phase 2). Two steps in one modal:
@@ -35,7 +38,7 @@ export default function StatementImportModal({ companyId, account, onClose, onDo
   const [lines, setLines] = useState([]);
   const [loadingLines, setLoadingLines] = useState(true);
   const [selections, setSelections] = useState({}); // { [lineId]: contraAccountId }
-  const [busyId, setBusyId] = useState(null);        // line currently posting
+  const [busyId, setBusyId] = useState(null); // line currently posting
 
   const [contraAccounts, setContraAccounts] = useState([]);
   const [accountsLoaded, setAccountsLoaded] = useState(false);
@@ -55,7 +58,9 @@ export default function StatementImportModal({ companyId, account, onClose, onDo
         if (alive) setAccountsLoaded(true);
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [companyId]);
 
   const loadLines = useCallback(async () => {
@@ -71,7 +76,9 @@ export default function StatementImportModal({ companyId, account, onClose, onDo
     }
   }, [account?.id]);
 
-  useEffect(() => { loadLines(); }, [loadLines]);
+  useEffect(() => {
+    loadLines();
+  }, [loadLines]);
 
   const onPickFile = async (e) => {
     const file = e.target.files?.[0];
@@ -95,7 +102,10 @@ export default function StatementImportModal({ companyId, account, onClose, onDo
         csvText,
       });
       const { total = 0, autoMatched = 0, uncategorized = 0 } = res.data || {};
-      notify(`Imported ${total} lines — ${autoMatched} auto-matched, ${uncategorized} to review.`, "success");
+      notify(
+        `Imported ${total} lines — ${autoMatched} auto-matched, ${uncategorized} to review.`,
+        "success",
+      );
       setCsvText("");
       setFileName("");
       await loadLines();
@@ -142,16 +152,30 @@ export default function StatementImportModal({ companyId, account, onClose, onDo
     }
   };
 
-  const done = () => { onClose?.(); onDone?.(); };
+  const done = () => {
+    onClose?.();
+    onDone?.();
+  };
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.lg }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: modalSizes.lg }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
           <h3 style={{ ...formStyles.title, display: "flex", alignItems: "center", gap: 8 }}>
             <MdUploadFile size={20} /> Import Statement — {account.name}
           </h3>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} title="Close"><MdClose size={18} /></button>
+          <button
+            data-admin-close=""
+            style={formStyles.closeButton}
+            onClick={onClose}
+            title="Close"
+          >
+            <MdClose size={18} />
+          </button>
         </div>
 
         <div data-admin-body="" style={formStyles.body}>
@@ -159,8 +183,8 @@ export default function StatementImportModal({ companyId, account, onClose, onDo
           <div style={st.section}>
             <div style={st.sectionHeading}>1 · Import a CSV</div>
             <p style={st.help}>
-              CSV with a header row and columns: Date, Description, and either a signed Amount
-              (+ deposit / − withdrawal) or Debit/Credit columns.
+              CSV with a header row and columns: Date, Description, and either a signed Amount (+
+              deposit / − withdrawal) or Debit/Credit columns.
             </p>
 
             <div style={st.uploadRow}>
@@ -179,7 +203,10 @@ export default function StatementImportModal({ companyId, account, onClose, onDo
             <textarea
               style={st.textarea}
               value={csvText}
-              onChange={(e) => { setCsvText(e.target.value); if (fileName) setFileName(""); }}
+              onChange={(e) => {
+                setCsvText(e.target.value);
+                if (fileName) setFileName("");
+              }}
               placeholder="…or paste CSV rows here"
               rows={5}
             />
@@ -187,7 +214,13 @@ export default function StatementImportModal({ companyId, account, onClose, onDo
             <div style={st.importBtnRow}>
               <button
                 type="button"
-                style={{ ...formStyles.button, ...formStyles.submit, ...st.importBtn, opacity: csvText.trim() && !importing ? 1 : 0.55, cursor: csvText.trim() && !importing ? "pointer" : "not-allowed" }}
+                style={{
+                  ...formStyles.button,
+                  ...formStyles.submit,
+                  ...st.importBtn,
+                  opacity: csvText.trim() && !importing ? 1 : 0.55,
+                  cursor: csvText.trim() && !importing ? "pointer" : "not-allowed",
+                }}
                 disabled={!csvText.trim() || importing}
                 onClick={doImport}
               >
@@ -204,7 +237,11 @@ export default function StatementImportModal({ companyId, account, onClose, onDo
             ) : lines.length === 0 ? (
               <div style={st.empty}>Nothing to categorize — all lines matched.</div>
             ) : (
-              <div className="accounting-modal-cards" data-admin-table-region="" style={st.tableWrap}>
+              <div
+                className="accounting-modal-cards"
+                data-admin-table-region=""
+                style={st.tableWrap}
+              >
                 <table style={st.table}>
                   <thead>
                     <tr>
@@ -220,9 +257,21 @@ export default function StatementImportModal({ companyId, account, onClose, onDo
                       const busy = busyId === line.id;
                       return (
                         <tr key={line.id} style={st.tr}>
-                          <td data-label="Date" style={{ ...st.td, whiteSpace: "nowrap" }}>{fmtDate(line.date)}</td>
-                          <td data-label="Description" style={st.td}>{line.description || "—"}</td>
-                          <td data-label="Amount" style={{ ...st.td, textAlign: "right", whiteSpace: "nowrap", color: neg ? colors.danger : colors.textPrimary }}>
+                          <td data-label="Date" style={{ ...st.td, whiteSpace: "nowrap" }}>
+                            {fmtDate(line.date)}
+                          </td>
+                          <td data-label="Description" style={st.td}>
+                            {line.description || "—"}
+                          </td>
+                          <td
+                            data-label="Amount"
+                            style={{
+                              ...st.td,
+                              textAlign: "right",
+                              whiteSpace: "nowrap",
+                              color: neg ? colors.danger : colors.textPrimary,
+                            }}
+                          >
                             {pkr(line.amount)}
                           </td>
                           <td data-label="Actions" style={st.td}>
@@ -231,14 +280,17 @@ export default function StatementImportModal({ companyId, account, onClose, onDo
                                 style={{ ...dropdownStyles.base, flex: 1, minWidth: 160 }}
                                 value={selections[line.id] || ""}
                                 disabled={busy || !accountsLoaded}
-                                onChange={(e) => setSelections((prev) => ({ ...prev, [line.id]: e.target.value }))}
+                                onChange={(e) =>
+                                  setSelections((prev) => ({ ...prev, [line.id]: e.target.value }))
+                                }
                               >
                                 <option value="">
                                   {accountsLoaded ? "Category account…" : "Loading accounts…"}
                                 </option>
                                 {contraAccounts.map((a) => (
                                   <option key={a.id} value={a.id}>
-                                    {a.name}{a.code ? ` (${a.code})` : ""}
+                                    {a.name}
+                                    {a.code ? ` (${a.code})` : ""}
                                   </option>
                                 ))}
                               </select>
@@ -273,7 +325,11 @@ export default function StatementImportModal({ companyId, account, onClose, onDo
         </div>
 
         <div data-admin-footer="" style={formStyles.footer}>
-          <button type="button" style={{ ...formStyles.button, ...formStyles.submit }} onClick={done}>
+          <button
+            type="button"
+            style={{ ...formStyles.button, ...formStyles.submit }}
+            onClick={done}
+          >
             Done
           </button>
         </div>
@@ -284,28 +340,104 @@ export default function StatementImportModal({ companyId, account, onClose, onDo
 
 const st = {
   section: { marginBottom: "1.25rem" },
-  sectionHeading: { fontSize: "0.72rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em", color: colors.textSecondary, marginBottom: 8 },
+  sectionHeading: {
+    fontSize: "0.72rem",
+    fontWeight: 800,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    color: colors.textSecondary,
+    marginBottom: 8,
+  },
   help: { fontSize: "0.8rem", color: colors.textSecondary, margin: "0 0 0.75rem" },
 
-  uploadRow: { display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "0.75rem" },
-  fileBtn: { display: "inline-flex", alignItems: "center", gap: 6, padding: "0.5rem 0.9rem", minHeight: 44, borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, fontWeight: 700, cursor: "pointer" },
+  uploadRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.75rem",
+    flexWrap: "wrap",
+    marginBottom: "0.75rem",
+  },
+  fileBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "0.5rem 0.9rem",
+    minHeight: 44,
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    background: "#fff",
+    color: colors.blue,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
   fileName: { fontSize: "0.82rem", color: colors.textPrimary, wordBreak: "break-all" },
 
-  textarea: { width: "100%", boxSizing: "border-box", border: `1px solid ${colors.inputBorder}`, borderRadius: 8, padding: "10px 12px", fontSize: "0.82rem", fontFamily: "monospace", background: colors.inputBg, color: colors.textPrimary, resize: "vertical", minHeight: 96 },
+  textarea: {
+    width: "100%",
+    boxSizing: "border-box",
+    border: `1px solid ${colors.inputBorder}`,
+    borderRadius: 8,
+    padding: "10px 12px",
+    fontSize: "0.82rem",
+    fontFamily: "monospace",
+    background: colors.inputBg,
+    color: colors.textPrimary,
+    resize: "vertical",
+    minHeight: 96,
+  },
 
   importBtnRow: { display: "flex", justifyContent: "flex-end", marginTop: "0.75rem" },
   importBtn: { display: "inline-flex", alignItems: "center", gap: 6, minHeight: 40 },
 
   tableWrap: { overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 12 },
   table: { width: "100%", borderCollapse: "collapse", minWidth: 640 },
-  th: { textAlign: "left", fontSize: "0.7rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em", color: colors.textSecondary, padding: "10px 12px", borderBottom: `2px solid ${colors.cardBorder}`, whiteSpace: "nowrap", background: colors.inputBg },
+  th: {
+    textAlign: "left",
+    fontSize: "0.7rem",
+    fontWeight: 800,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    color: colors.textSecondary,
+    padding: "10px 12px",
+    borderBottom: `2px solid ${colors.cardBorder}`,
+    whiteSpace: "nowrap",
+    background: colors.inputBg,
+  },
   tr: { borderBottom: `1px solid ${colors.cardBorder}` },
-  td: { padding: "10px 12px", fontSize: "0.86rem", color: colors.textPrimary, verticalAlign: "middle" },
+  td: {
+    padding: "10px 12px",
+    fontSize: "0.86rem",
+    color: colors.textPrimary,
+    verticalAlign: "middle",
+  },
 
   actionCell: { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" },
-  rowBtn: { display: "inline-flex", alignItems: "center", gap: 4, padding: "0.4rem 0.7rem", minHeight: 38, borderRadius: 8, border: "none", fontSize: "0.8rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" },
+  rowBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    padding: "0.4rem 0.7rem",
+    minHeight: 38,
+    borderRadius: 8,
+    border: "none",
+    fontSize: "0.8rem",
+    fontWeight: 700,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
   catBtn: { background: colors.blue, color: "#fff" },
-  ignoreBtn: { background: "transparent", color: colors.textSecondary, border: `1px solid ${colors.inputBorder}` },
+  ignoreBtn: {
+    background: "transparent",
+    color: colors.textSecondary,
+    border: `1px solid ${colors.inputBorder}`,
+  },
 
-  empty: { padding: "2rem 1rem", textAlign: "center", color: colors.textSecondary, background: colors.inputBg, border: `1px dashed ${colors.inputBorder}`, borderRadius: 12 },
+  empty: {
+    padding: "2rem 1rem",
+    textAlign: "center",
+    color: colors.textSecondary,
+    background: colors.inputBg,
+    border: `1px dashed ${colors.inputBorder}`,
+    borderRadius: 12,
+  },
 };

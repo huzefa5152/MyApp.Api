@@ -66,7 +66,12 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div data-admin-header="" style={formStyles.header}>
           <h3 style={formStyles.title}>{title}</h3>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} aria-label="Close">
+          <button
+            data-admin-close=""
+            style={formStyles.closeButton}
+            onClick={onClose}
+            aria-label="Close"
+          >
             <MdClose size={20} />
           </button>
         </div>
@@ -121,9 +126,18 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
                 </tr>
               )}
               {sortedItems.map((it, idx) => (
-                <tr key={(it.invoiceId ?? idx) + "-" + idx}
-                    style={{ backgroundColor: idx % 2 === 0 ? "#fff" : "#fafbfd" }}>
-                  <td style={{ ...styles.td, fontWeight: 600, color: colors.blue, whiteSpace: "nowrap" }}>
+                <tr
+                  key={(it.invoiceId ?? idx) + "-" + idx}
+                  style={{ backgroundColor: idx % 2 === 0 ? "#fff" : "#fafbfd" }}
+                >
+                  <td
+                    style={{
+                      ...styles.td,
+                      fontWeight: 600,
+                      color: colors.blue,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     #{it.invoiceNumber}
                   </td>
                   <td style={{ ...styles.td, whiteSpace: "nowrap" }}>
@@ -131,11 +145,23 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
                   </td>
                   <td style={styles.td}>
                     {it.status === "submitted" && it.irn ? (
-                      <span style={{ fontFamily: "monospace", fontSize: "0.78rem", color: colors.textSecondary, wordBreak: "break-all" }}>
+                      <span
+                        style={{
+                          fontFamily: "monospace",
+                          fontSize: "0.78rem",
+                          color: colors.textSecondary,
+                          wordBreak: "break-all",
+                        }}
+                      >
                         IRN: {it.irn}
                       </span>
                     ) : it.message ? (
-                      <span style={{ fontSize: "0.82rem", color: it.status === "failed" ? colors.failFg : colors.textPrimary }}>
+                      <span
+                        style={{
+                          fontSize: "0.82rem",
+                          color: it.status === "failed" ? colors.failFg : colors.textPrimary,
+                        }}
+                      >
                         {it.message}
                       </span>
                     ) : (
@@ -149,7 +175,13 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
         </div>
 
         <div data-admin-footer="" style={formStyles.footer}>
-          <button data-admin-close="" style={{ ...formStyles.button, ...formStyles.submit }} onClick={onClose}>Close</button>
+          <button
+            data-admin-close=""
+            style={{ ...formStyles.button, ...formStyles.submit }}
+            onClick={onClose}
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>
@@ -158,11 +190,19 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
 
 function Pill({ color, bg, icon, children }) {
   return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", gap: "0.3rem",
-      padding: "0.25rem 0.65rem", borderRadius: 999,
-      backgroundColor: bg, color, fontSize: "0.78rem", fontWeight: 700,
-    }}>
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.3rem",
+        padding: "0.25rem 0.65rem",
+        borderRadius: 999,
+        backgroundColor: bg,
+        color,
+        fontSize: "0.78rem",
+        fontWeight: 700,
+      }}
+    >
       {icon}
       {children}
     </span>
@@ -171,19 +211,48 @@ function Pill({ color, bg, icon, children }) {
 
 function StatusBadge({ status }) {
   const cfg = {
-    passed:    { fg: colors.successFg, bg: colors.successBg, label: "Passed",          icon: <MdCheckCircle size={13} /> },
-    submitted: { fg: colors.successFg, bg: colors.successBg, label: "Submitted",       icon: <MdCheckCircle size={13} /> },
-    already:   { fg: colors.skipFg,    bg: colors.skipBg,    label: "Already valid",   icon: <MdInfo size={13} /> },
-    failed:    { fg: colors.failFg,    bg: colors.failBg,    label: "Failed",          icon: <MdError size={13} /> },
-    skipped:   { fg: colors.warnFg,    bg: colors.warnBg,    label: "Not attempted",   icon: <MdBlock size={13} /> },
+    passed: {
+      fg: colors.successFg,
+      bg: colors.successBg,
+      label: "Passed",
+      icon: <MdCheckCircle size={13} />,
+    },
+    submitted: {
+      fg: colors.successFg,
+      bg: colors.successBg,
+      label: "Submitted",
+      icon: <MdCheckCircle size={13} />,
+    },
+    already: {
+      fg: colors.skipFg,
+      bg: colors.skipBg,
+      label: "Already valid",
+      icon: <MdInfo size={13} />,
+    },
+    failed: { fg: colors.failFg, bg: colors.failBg, label: "Failed", icon: <MdError size={13} /> },
+    skipped: {
+      fg: colors.warnFg,
+      bg: colors.warnBg,
+      label: "Not attempted",
+      icon: <MdBlock size={13} />,
+    },
   }[status] || { fg: colors.textSecondary, bg: "#f0f0f0", label: status || "—", icon: null };
   return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", gap: "0.3rem",
-      padding: "0.2rem 0.55rem", borderRadius: 6,
-      backgroundColor: cfg.bg, color: cfg.fg,
-      fontSize: "0.74rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em",
-    }}>
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.3rem",
+        padding: "0.2rem 0.55rem",
+        borderRadius: 6,
+        backgroundColor: cfg.bg,
+        color: cfg.fg,
+        fontSize: "0.74rem",
+        fontWeight: 700,
+        textTransform: "uppercase",
+        letterSpacing: "0.04em",
+      }}
+    >
       {cfg.icon}
       {cfg.label}
     </span>
@@ -199,16 +268,38 @@ const styles = {
   backdrop: formStyles.backdrop,
   modal: { ...formStyles.modal, maxWidth: `${modalSizes.lg}px` },
   summaryBar: {
-    display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap",
-    padding: "var(--k-card-pad)", borderBottom: "1px solid var(--k-line)",
-    backgroundColor: "var(--k-surface-2)", flexShrink: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: "0.75rem",
+    flexWrap: "wrap",
+    padding: "var(--k-card-pad)",
+    borderBottom: "1px solid var(--k-line)",
+    backgroundColor: "var(--k-surface-2)",
+    flexShrink: 0,
   },
   summaryItem: { display: "flex", alignItems: "center", gap: "0.4rem" },
-  summaryLabel: { fontSize: "var(--k-font-sm)", color: "var(--k-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" },
-  summaryValue: { fontSize: "calc(var(--k-font) + 0.1rem)", fontWeight: 800, color: "var(--k-ink)" },
+  summaryLabel: {
+    fontSize: "var(--k-font-sm)",
+    color: "var(--k-muted)",
+    fontWeight: 600,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
+  summaryValue: {
+    fontSize: "calc(var(--k-font) + 0.1rem)",
+    fontWeight: 800,
+    color: "var(--k-ink)",
+  },
   // The results region is the dialog's scroll area — overflowX:auto lets the
   // 3-col table scroll on phones; overflowY keeps the sticky k-table header.
-  tableWrap: { overflowX: "auto", overflowY: "auto", flex: "1 1 auto", minHeight: 0, maxHeight: "calc(92vh - 200px)", WebkitOverflowScrolling: "touch" },
+  tableWrap: {
+    overflowX: "auto",
+    overflowY: "auto",
+    flex: "1 1 auto",
+    minHeight: 0,
+    maxHeight: "calc(92vh - 200px)",
+    WebkitOverflowScrolling: "touch",
+  },
   // Details wrap and top-align (long FBR messages); the k-table supplies padding/borders.
   td: { verticalAlign: "top" },
 };

@@ -21,9 +21,14 @@ export default function ChallanDetailV2({ challan, onClose }) {
     if (!challan) return undefined;
     const prev = document.activeElement;
     closeRef.current?.focus();
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose();
+    };
     document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("keydown", onKey); prev?.focus?.(); };
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      prev?.focus?.();
+    };
   }, [challan, onClose]);
 
   if (!challan) return null;
@@ -41,7 +46,14 @@ export default function ChallanDetailV2({ challan, onClose }) {
   // Backdrop click does nothing, like every popup in the app: it closes with the X, Close or Escape.
   return (
     <div className="u2-dialog-backdrop">
-      <div className="u2-dialog" ref={closeRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="u2-challan-title">
+      <div
+        className="u2-dialog"
+        ref={closeRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="u2-challan-title"
+      >
         <header className="u2-dialog__head">
           <h2 id="u2-challan-title" className="u2-dialog__title">
             Challan <span className="u2-dc u2-dc--static">{challan.challanNumber}</span>
@@ -53,22 +65,35 @@ export default function ChallanDetailV2({ challan, onClose }) {
         <div className="u2-dialog__body">
           <dl className="u2-facts">
             {facts.map(([k, v]) => (
-              <div key={k}><dt>{k}</dt><dd>{v}</dd></div>
+              <div key={k}>
+                <dt>{k}</dt>
+                <dd>{v}</dd>
+              </div>
             ))}
           </dl>
 
           <section aria-label="Items">
-            <h3 className="u2-dialog__h">Items <span className="u2-bar__count">{items.length}</span></h3>
+            <h3 className="u2-dialog__h">
+              Items <span className="u2-bar__count">{items.length}</span>
+            </h3>
             <div className="u2-grid u2-grid--standalone">
               <div className="u2-grid__scroll" style={{ maxHeight: 300 }}>
                 <table className="u2-table u2-table--compact">
                   <thead>
                     <tr>
-                      <th scope="col" style={{ width: 40 }}>#</th>
-                      <th scope="col" style={{ width: 130 }}>Item type</th>
+                      <th scope="col" style={{ width: 40 }}>
+                        #
+                      </th>
+                      <th scope="col" style={{ width: 130 }}>
+                        Item type
+                      </th>
                       <th scope="col">Description</th>
-                      <th scope="col" className="is-right" style={{ width: 80 }}>Qty</th>
-                      <th scope="col" style={{ width: 90 }}>Unit</th>
+                      <th scope="col" className="is-right" style={{ width: 80 }}>
+                        Qty
+                      </th>
+                      <th scope="col" style={{ width: 90 }}>
+                        Unit
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -76,8 +101,12 @@ export default function ChallanDetailV2({ challan, onClose }) {
                       <tr key={idx}>
                         <td className="u2-cell-muted">{idx + 1}</td>
                         <td>{item.itemTypeName || "—"}</td>
-                        <td style={{ height: "auto", padding: "0.5rem 0.75rem" }}><RichText text={item.description} /></td>
-                        <td className="is-right" style={{ fontWeight: 700 }}>{item.quantity}</td>
+                        <td style={{ height: "auto", padding: "0.5rem 0.75rem" }}>
+                          <RichText text={item.description} />
+                        </td>
+                        <td className="is-right" style={{ fontWeight: 700 }}>
+                          {item.quantity}
+                        </td>
                         <td>{item.unit}</td>
                       </tr>
                     ))}
@@ -92,15 +121,24 @@ export default function ChallanDetailV2({ challan, onClose }) {
           {challan.notes && (
             <section aria-label="Notes">
               <h3 className="u2-dialog__h">Notes</h3>
-              <div className="u2-notes"><RichText text={challan.notes} /></div>
+              <div className="u2-notes">
+                <RichText text={challan.notes} />
+              </div>
             </section>
           )}
 
-          <AttachmentManager companyId={challan.companyId} entityType="DeliveryChallan" entityId={challan.id} mode="view" />
+          <AttachmentManager
+            companyId={challan.companyId}
+            entityType="DeliveryChallan"
+            entityId={challan.id}
+            mode="view"
+          />
         </div>
 
         <footer className="u2-dialog__foot">
-          <Btn variant="secondary" onClick={onClose}>Close</Btn>
+          <Btn variant="secondary" onClick={onClose}>
+            Close
+          </Btn>
         </footer>
       </div>
     </div>

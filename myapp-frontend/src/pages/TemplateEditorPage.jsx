@@ -2,18 +2,37 @@ import useIsNarrow from "../hooks/useIsNarrow";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  MdCode, MdBusiness, MdSave, MdRefresh, MdContentCopy,
-  MdVisibility, MdEdit as MdEditIcon, MdBrush,
-  MdUploadFile, MdArrowBack, MdLock, MdAutoAwesome, MdStar, MdViewList,
+  MdCode,
+  MdBusiness,
+  MdSave,
+  MdRefresh,
+  MdContentCopy,
+  MdVisibility,
+  MdEdit as MdEditIcon,
+  MdBrush,
+  MdUploadFile,
+  MdArrowBack,
+  MdLock,
+  MdAutoAwesome,
+  MdStar,
+  MdViewList,
 } from "react-icons/md";
 import {
-  getTemplateById, createTemplate, updateTemplateById, getMergeFields,
-  getTemplatesByCompany, setDefaultTemplate, deleteTemplate,
+  getTemplateById,
+  createTemplate,
+  updateTemplateById,
+  getMergeFields,
+  getTemplatesByCompany,
+  setDefaultTemplate,
+  deleteTemplate,
 } from "../api/printTemplateApi";
 import { useCompany } from "../contexts/CompanyContext";
 import { mergeTemplate, MERGE_FIELDS } from "../utils/templateEngine";
 import {
-  TEMPLATE_TYPES, TEMPLATE_TYPE_LABEL, SAMPLE_DATA, DEFAULT_TEMPLATES,
+  TEMPLATE_TYPES,
+  TEMPLATE_TYPE_LABEL,
+  SAMPLE_DATA,
+  DEFAULT_TEMPLATES,
 } from "../utils/templateSampleData";
 import { Button, EmptyState, Loading } from "../ui/Kit";
 import CodeEditor from "../Components/templateEditor/CodeEditor";
@@ -21,8 +40,14 @@ import MergeFieldSidebar from "../Components/templateEditor/MergeFieldSidebar";
 import StampPicker from "../Components/templateEditor/StampPicker";
 import { signatureAreas, currentStampArea, positionStamp } from "../utils/stampPlacement";
 import {
-  STAMP_STATE, detectStampState, injectSignatureBlock, convertPinnedToSlot, pinnedSlugs,
-  firstEmbeddedImage, replaceEmbeddedImageWithSlot, materializeStamp,
+  STAMP_STATE,
+  detectStampState,
+  injectSignatureBlock,
+  convertPinnedToSlot,
+  pinnedSlugs,
+  firstEmbeddedImage,
+  replaceEmbeddedImageWithSlot,
+  materializeStamp,
 } from "../utils/stampSlot";
 import { setTemplateStamp } from "../api/printTemplateApi";
 import PreviewPane from "../Components/templateEditor/PreviewPane";
@@ -30,7 +55,9 @@ import SyncWarningModal from "../Components/templateEditor/SyncWarningModal";
 import VisualEditor from "../Components/templateEditor/VisualEditor";
 import StarterGallery from "../Components/templateEditor/StarterGallery";
 import SavedTemplatesManager from "../Components/templateEditor/SavedTemplatesManager";
-import NewTemplateDialog, { uniqueTemplateName } from "../Components/templateEditor/NewTemplateDialog";
+import NewTemplateDialog, {
+  uniqueTemplateName,
+} from "../Components/templateEditor/NewTemplateDialog";
 import { markRecentTemplate } from "../utils/templateEditorNav";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -123,7 +150,7 @@ export default function TemplateEditorPage() {
     (async () => {
       try {
         const { data } = await getMergeFields(templateType);
-        const catalog = data.map(f => ({
+        const catalog = data.map((f) => ({
           field: f.fieldExpression,
           label: f.label,
           category: f.category,
@@ -132,9 +159,10 @@ export default function TemplateEditorPage() {
         // fields that ship with the print DTO appear even when the seeded
         // catalog predates them, and a type with no seeded fields at all
         // (Transfer, JournalEntry, the vouchers) still gets a full sidebar.
-        const known = new Set(catalog.map(f => f.field));
+        const known = new Set(catalog.map((f) => f.field));
         for (const field of MERGE_FIELDS[templateType] || []) {
-          if (!known.has(field.field)) catalog.push({ ...field, category: /fbr/i.test(field.field) ? "FBR" : templateType });
+          if (!known.has(field.field))
+            catalog.push({ ...field, category: /fbr/i.test(field.field) ? "FBR" : templateType });
         }
         setFields(catalog);
       } catch {
@@ -160,7 +188,9 @@ export default function TemplateEditorPage() {
     try {
       localStorage.setItem("te.type", dto.templateType || templateType);
       localStorage.setItem("te.templateId", String(dto.id));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     // The list page lands on this card when the operator goes back.
     markRecentTemplate(dto.id);
     if (!keepTab) setActiveTab("editor");
@@ -181,16 +211,23 @@ export default function TemplateEditorPage() {
     setOriginalJson(null);
     setEditorMode("code");
     setStampId(null);
-    try { localStorage.setItem("te.type", type); localStorage.removeItem("te.templateId"); } catch { /* ignore */ }
+    try {
+      localStorage.setItem("te.type", type);
+      localStorage.removeItem("te.templateId");
+    } catch {
+      /* ignore */
+    }
     setActiveTab("editor");
   };
 
   // Open whatever a type should show: a specific template if asked, else its
   // default, else a draft.
   const openType = (list, type, preferId = null) => {
-    const wanted = preferId != null ? list.find((t) => t.id === preferId && t.templateType === type) : null;
+    const wanted =
+      preferId != null ? list.find((t) => t.id === preferId && t.templateType === type) : null;
     const pick = wanted || pickForType(list, type);
-    if (pick) loadIntoEditor(pick); else seedDraft(type);
+    if (pick) loadIntoEditor(pick);
+    else seedDraft(type);
   };
 
   // The company's templates, loaded once per company. The first load also
@@ -216,13 +253,18 @@ export default function TemplateEditorPage() {
       } catch {
         if (cancelled) return;
         setAllTemplates([]);
-        if (!initedRef.current) { initedRef.current = true; seedDraft(entry.type); }
+        if (!initedRef.current) {
+          initedRef.current = true;
+          seedDraft(entry.type);
+        }
         showToast("Failed to load templates", "error");
       } finally {
         if (!cancelled) setListLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCompany?.id, companies.length]);
 
@@ -247,7 +289,12 @@ export default function TemplateEditorPage() {
   // Every path that replaces the buffer asks first when it holds unsaved work.
   const confirmDiscard = async () => {
     if (!hasChanges) return true;
-    return confirm({ title: "Discard changes?", message: "You have unsaved changes. Leave this template and discard them?", variant: "danger", confirmText: "Discard" });
+    return confirm({
+      title: "Discard changes?",
+      message: "You have unsaved changes. Leave this template and discard them?",
+      variant: "danger",
+      confirmText: "Discard",
+    });
   };
 
   // Switch document type. The dropdown is a navigator: it opens that type's
@@ -265,7 +312,10 @@ export default function TemplateEditorPage() {
   const handleSwitchTemplate = async (v) => {
     const current = currentTemplateId ? String(currentTemplateId) : "__draft__";
     if (v === current) return;
-    if (v === "__new__") { openNew(); return; }
+    if (v === "__new__") {
+      openNew();
+      return;
+    }
     if (!(await confirmDiscard())) return;
     const t = allTemplates.find((x) => String(x.id) === v);
     if (t) loadIntoEditor(t, { keepTab: true });
@@ -285,79 +335,138 @@ export default function TemplateEditorPage() {
 
   // ── Manager actions ──
   const handleManagerSelect = async (id) => {
-    if (id === currentTemplateId) { setShowManager(false); return; }
+    if (id === currentTemplateId) {
+      setShowManager(false);
+      return;
+    }
     if (!(await confirmDiscard())) return;
     const t = allTemplates.find((x) => x.id === id);
-    if (t) { loadIntoEditor(t, { keepTab: true }); setShowManager(false); }
+    if (t) {
+      loadIntoEditor(t, { keepTab: true });
+      setShowManager(false);
+    }
   };
 
   const runManager = async (id, work, okMsg, failMsg) => {
     setManagerBusyId(id);
     setManagerBusy(true);
-    try { await work(); if (okMsg) showToast(okMsg); }
-    catch (err) { showToast(err?.response?.data?.error || failMsg, "error"); }
-    finally { setManagerBusy(false); setManagerBusyId(null); }
+    try {
+      await work();
+      if (okMsg) showToast(okMsg);
+    } catch (err) {
+      showToast(err?.response?.data?.error || failMsg, "error");
+    } finally {
+      setManagerBusy(false);
+      setManagerBusyId(null);
+    }
   };
 
-  const handleSetDefault = (id) => runManager(id, async () => {
-    await setDefaultTemplate(id);
-    await refreshTemplates();
-  }, "Default template updated", "Failed to set default");
+  const handleSetDefault = (id) =>
+    runManager(
+      id,
+      async () => {
+        await setDefaultTemplate(id);
+        await refreshTemplates();
+      },
+      "Default template updated",
+      "Failed to set default",
+    );
 
-  const handleDuplicate = (t) => runManager(t.id, async () => {
-    if (!(await confirmDiscard())) return;
-    const { data } = await createTemplate(selectedCompany.id, {
-      templateType: t.templateType, name: uniqueTemplateName(`${t.name} (copy)`, allTemplates),
-      htmlContent: t.htmlContent, templateJson: t.templateJson, editorMode: t.editorMode,
-      isDefault: false, stampId: t.stampId ?? null,
-    });
-    await refreshTemplates();
-    loadIntoEditor(data);
-    setShowManager(false);
-    showToast(`Duplicated as "${data.name}"`);
-  }, null, "Failed to duplicate template");
+  const handleDuplicate = (t) =>
+    runManager(
+      t.id,
+      async () => {
+        if (!(await confirmDiscard())) return;
+        const { data } = await createTemplate(selectedCompany.id, {
+          templateType: t.templateType,
+          name: uniqueTemplateName(`${t.name} (copy)`, allTemplates),
+          htmlContent: t.htmlContent,
+          templateJson: t.templateJson,
+          editorMode: t.editorMode,
+          isDefault: false,
+          stampId: t.stampId ?? null,
+        });
+        await refreshTemplates();
+        loadIntoEditor(data);
+        setShowManager(false);
+        showToast(`Duplicated as "${data.name}"`);
+      },
+      null,
+      "Failed to duplicate template",
+    );
 
   // Rename writes name + the SAVED body back together (the update endpoint
   // takes both), read fresh by id so a rename can never blank the HTML or
   // save the editor's half-finished edits by accident.
-  const handleRename = (id, name) => runManager(id, async () => {
-    const { data: full } = await getTemplateById(id);
-    await updateTemplateById(id, { name, htmlContent: full.htmlContent, templateJson: full.templateJson, editorMode: full.editorMode });
-    setAllTemplates((list) => list.map((t) => (t.id === id ? { ...t, name } : t)));
-    if (id === currentIdRef.current) { setTemplateName(name); setOriginalName(name); }
-  }, "Template renamed", "Failed to rename template");
+  const handleRename = (id, name) =>
+    runManager(
+      id,
+      async () => {
+        const { data: full } = await getTemplateById(id);
+        await updateTemplateById(id, {
+          name,
+          htmlContent: full.htmlContent,
+          templateJson: full.templateJson,
+          editorMode: full.editorMode,
+        });
+        setAllTemplates((list) => list.map((t) => (t.id === id ? { ...t, name } : t)));
+        if (id === currentIdRef.current) {
+          setTemplateName(name);
+          setOriginalName(name);
+        }
+      },
+      "Template renamed",
+      "Failed to rename template",
+    );
 
-  const handleCopyToType = (t, targetType) => runManager(t.id, async () => {
-    if (!(await confirmDiscard())) return;
-    const { data } = await createTemplate(selectedCompany.id, {
-      templateType: targetType,
-      name: uniqueTemplateName(`${t.name} → ${TEMPLATE_TYPE_LABEL[targetType]}`, allTemplates),
-      htmlContent: t.htmlContent, templateJson: t.templateJson, editorMode: t.editorMode,
-      isDefault: false, stampId: t.stampId ?? null,
-    });
-    await refreshTemplates();
-    loadIntoEditor(data);
-    setShowManager(false);
-    showToast(`Copied to ${TEMPLATE_TYPE_LABEL[targetType]} — adjust the merge fields for the new document type`);
-  }, null, "Failed to copy template");
+  const handleCopyToType = (t, targetType) =>
+    runManager(
+      t.id,
+      async () => {
+        if (!(await confirmDiscard())) return;
+        const { data } = await createTemplate(selectedCompany.id, {
+          templateType: targetType,
+          name: uniqueTemplateName(`${t.name} → ${TEMPLATE_TYPE_LABEL[targetType]}`, allTemplates),
+          htmlContent: t.htmlContent,
+          templateJson: t.templateJson,
+          editorMode: t.editorMode,
+          isDefault: false,
+          stampId: t.stampId ?? null,
+        });
+        await refreshTemplates();
+        loadIntoEditor(data);
+        setShowManager(false);
+        showToast(
+          `Copied to ${TEMPLATE_TYPE_LABEL[targetType]} — adjust the merge fields for the new document type`,
+        );
+      },
+      null,
+      "Failed to copy template",
+    );
 
   const handleManagerDelete = async (t) => {
     const ok = await confirm({
       title: "Delete Template?",
       message: `Delete "${t.name}" (${TEMPLATE_TYPE_LABEL[t.templateType]})? This cannot be undone.`,
-      variant: "danger", confirmText: "Delete",
+      variant: "danger",
+      confirmText: "Delete",
     });
     if (!ok) return;
-    await runManager(t.id, async () => {
-      await deleteTemplate(t.id);
-      const list = await refreshTemplates();
-      // Deleted the open one: fall to the type's default, or a draft.
-      if (t.id === currentIdRef.current) openType(list, templateType);
-    }, "Template deleted", "Failed to delete template");
+    await runManager(
+      t.id,
+      async () => {
+        await deleteTemplate(t.id);
+        const list = await refreshTemplates();
+        // Deleted the open one: fall to the type's default, or a draft.
+        if (t.id === currentIdRef.current) openType(list, templateType);
+      },
+      "Template deleted",
+      "Failed to delete template",
+    );
   };
 
   const handleSave = async () => {
-    const name = templateName.trim() || (TEMPLATE_TYPE_LABEL[templateType] || templateType);
+    const name = templateName.trim() || TEMPLATE_TYPE_LABEL[templateType] || templateType;
     setSaving(true);
     try {
       let saveHtml = htmlContent;
@@ -371,7 +480,10 @@ export default function TemplateEditorPage() {
 
       if (currentTemplateId) {
         await updateTemplateById(currentTemplateId, {
-          name, htmlContent: saveHtml, templateJson: saveJson, editorMode,
+          name,
+          htmlContent: saveHtml,
+          templateJson: saveJson,
+          editorMode,
         });
         // The content update deliberately leaves the assignment alone; push it
         // here so an "Add signature block" / "Make changeable" edit that was
@@ -385,13 +497,22 @@ export default function TemplateEditorPage() {
           return;
         }
         const { data } = await createTemplate(companyId, {
-          templateType, name, htmlContent: saveHtml, templateJson: saveJson,
-          editorMode, isDefault: false, stampId,
+          templateType,
+          name,
+          htmlContent: saveHtml,
+          templateJson: saveJson,
+          editorMode,
+          isDefault: false,
+          stampId,
         });
         // Switch into "editing that id" mode so subsequent saves update it.
         currentIdRef.current = data.id;
         setCurrentTemplateId(data.id);
-        try { localStorage.setItem("te.templateId", String(data.id)); } catch { /* ignore */ }
+        try {
+          localStorage.setItem("te.templateId", String(data.id));
+        } catch {
+          /* ignore */
+        }
         markRecentTemplate(data.id);
       }
 
@@ -401,7 +522,7 @@ export default function TemplateEditorPage() {
       setTemplateJson(saveJson);
       setOriginalContent(saveHtml);
       setOriginalJson(saveJson);
-      await refreshTemplates();   // keep the switch dropdown + manager in sync
+      await refreshTemplates(); // keep the switch dropdown + manager in sync
       showToast("Template saved successfully!");
     } catch {
       showToast("Failed to save template", "error");
@@ -448,7 +569,12 @@ export default function TemplateEditorPage() {
 
   const handleSelectStarter = async (template) => {
     if (htmlContent && htmlContent !== DEFAULT_TEMPLATES[templateType]) {
-      const ok = await confirm({ title: "Replace Template?", message: "This will replace your current template. Any unsaved changes will be lost.", variant: "warning", confirmText: "Replace" });
+      const ok = await confirm({
+        title: "Replace Template?",
+        message: "This will replace your current template. Any unsaved changes will be lost.",
+        variant: "warning",
+        confirmText: "Replace",
+      });
       if (!ok) return;
     }
     setHtmlContent(template.html);
@@ -465,10 +591,15 @@ export default function TemplateEditorPage() {
   const stampAreas = signatureAreas(htmlContent);
 
   const handleStampPosition = (areaId) => {
-    const source = editorMode === "visual" && visualEditorRef.current
-      ? visualEditorRef.current.getHtml() : htmlContent;
+    const source =
+      editorMode === "visual" && visualEditorRef.current
+        ? visualEditorRef.current.getHtml()
+        : htmlContent;
     const result = positionStamp(source, areaId);
-    if (!result.changed) { showToast("Choose a signature label in this template", "error"); return; }
+    if (!result.changed) {
+      showToast("Choose a signature label in this template", "error");
+      return;
+    }
     setHtmlContent(result.html);
     if (editorMode === "visual" && visualEditorRef.current) {
       visualEditorRef.current.replaceHtml(result.html);
@@ -484,20 +615,30 @@ export default function TemplateEditorPage() {
     setStampId(id);
     if (!currentTemplateId) return;
     setStampSaving(true);
-    try { await setTemplateStamp(currentTemplateId, id); }
-    catch { setStampId(previousId); showToast("Failed to update signature", "error"); }
-    finally { setStampSaving(false); }
+    try {
+      await setTemplateStamp(currentTemplateId, id);
+    } catch {
+      setStampId(previousId);
+      showToast("Failed to update signature", "error");
+    } finally {
+      setStampSaving(false);
+    }
   };
 
   const handleEditorAddBlock = () => {
     const { html, anchor, changed } = injectSignatureBlock(htmlContent);
-    if (!changed) { showToast("Template already has a signature block"); return; }
+    if (!changed) {
+      showToast("Template already has a signature block");
+      return;
+    }
     setHtmlContent(html);
     setEditorMode("code");
     setActiveTab("editor");
-    showToast(anchor === "appended"
-      ? "No signature row found — block added at the end"
-      : "Signature block added");
+    showToast(
+      anchor === "appended"
+        ? "No signature row found — block added at the end"
+        : "Signature block added",
+    );
   };
 
   const handleEditorConvert = () => {
@@ -518,7 +659,12 @@ export default function TemplateEditorPage() {
     reader.onload = async (ev) => {
       const content = ev.target.result;
       if (htmlContent && htmlContent !== DEFAULT_TEMPLATES[templateType]) {
-        const ok = await confirm({ title: "Replace Template?", message: "This will replace your current template. Any unsaved changes will be lost.", variant: "warning", confirmText: "Replace" });
+        const ok = await confirm({
+          title: "Replace Template?",
+          message: "This will replace your current template. Any unsaved changes will be lost.",
+          variant: "warning",
+          confirmText: "Replace",
+        });
         if (!ok) return;
       }
       let imported = content;
@@ -531,8 +677,9 @@ export default function TemplateEditorPage() {
       if (embedded && companyStamps.length > 0) {
         const useStamp = await confirm({
           title: "Replace embedded image with a stamp?",
-          message: "This file embeds an image directly in its HTML, which makes the template "
-            + "very large and impossible to reuse. Swap it for one of your uploaded stamps?",
+          message:
+            "This file embeds an image directly in its HTML, which makes the template " +
+            "very large and impossible to reuse. Swap it for one of your uploaded stamps?",
           confirmText: "Use a stamp",
         });
         if (useStamp) imported = replaceEmbeddedImageWithSlot(imported);
@@ -540,7 +687,8 @@ export default function TemplateEditorPage() {
       if (detectStampState(imported) === STAMP_STATE.NONE) {
         const addBlock = await confirm({
           title: "Add a signature block?",
-          message: "This template has no signature slot. Add one so you can pick which stamp it shows?",
+          message:
+            "This template has no signature slot. Add one so you can pick which stamp it shows?",
           confirmText: "Add block",
         });
         if (addBlock) {
@@ -578,20 +726,21 @@ export default function TemplateEditorPage() {
         el.selectionStart = el.selectionEnd = start + field.length;
       }, 0);
     },
-    [htmlContent, editorMode]
+    [htmlContent, editorMode],
   );
 
   const previewHtml = (() => {
     try {
-      const src = editorMode === "visual" && visualEditorRef.current
-        ? visualEditorRef.current.getHtml()
-        : htmlContent;
+      const src =
+        editorMode === "visual" && visualEditorRef.current
+          ? visualEditorRef.current.getHtml()
+          : htmlContent;
       // Resolve {{stamp}} exactly the way printing does, so the preview shows
       // the signature the document will actually carry — a preview that
       // renders through a different path is a preview you cannot trust.
       const stamped = materializeStamp(
         src,
-        companyStamps.find((s) => s.id === stampId)?.url || null
+        companyStamps.find((s) => s.id === stampId)?.url || null,
       );
       return mergeTemplate(stamped, SAMPLE_DATA[templateType]);
     } catch (e) {
@@ -600,7 +749,9 @@ export default function TemplateEditorPage() {
   })();
 
   const typeLabel = TEMPLATE_TYPE_LABEL[templateType] || templateType;
-  const ofType = allTemplates.filter((t) => t.templateType === templateType).sort((a, b) => (b.isDefault - a.isDefault) || a.id - b.id);
+  const ofType = allTemplates
+    .filter((t) => t.templateType === templateType)
+    .sort((a, b) => b.isDefault - a.isDefault || a.id - b.id);
   // Is the template currently open already the default for its type?
   const currentIsDefault = !!ofType.find((t) => t.id === currentTemplateId)?.isDefault;
   const isDraft = !currentTemplateId;
@@ -618,10 +769,12 @@ export default function TemplateEditorPage() {
   }
 
   if (companies.length === 0) {
-    return <EmptyState icon={MdBusiness} boxed={false}>No companies available. Add a company first.</EmptyState>;
+    return (
+      <EmptyState icon={MdBusiness} boxed={false}>
+        No companies available. Add a company first.
+      </EmptyState>
+    );
   }
-
-
 
   // Toolbar pieces shared by the phone and desktop layouts.
   const typeSelect = (style) => (
@@ -636,7 +789,12 @@ export default function TemplateEditorPage() {
     >
       {TEMPLATE_TYPES.map((t) => {
         const n = allTemplates.filter((x) => x.templateType === t.value).length;
-        return <option key={t.value} value={t.value}>{t.label}{n ? ` (${n})` : ""}</option>;
+        return (
+          <option key={t.value} value={t.value}>
+            {t.label}
+            {n ? ` (${n})` : ""}
+          </option>
+        );
       })}
     </select>
   );
@@ -652,23 +810,36 @@ export default function TemplateEditorPage() {
     >
       {isDraft && <option value="__draft__">Built-in default (unsaved)</option>}
       {ofType.map((t) => (
-        <option key={t.id} value={String(t.id)}>{t.isDefault ? `★ ${t.name}` : t.name}</option>
+        <option key={t.id} value={String(t.id)}>
+          {t.isDefault ? `★ ${t.name}` : t.name}
+        </option>
       ))}
       <option value="__new__">➕ New template…</option>
     </select>
   );
 
   return (
-    <div style={{ height: "calc(100vh - 80px)", display: "flex", flexDirection: "column", gap: "0" }}>
+    <div
+      style={{ height: "calc(100vh - 80px)", display: "flex", flexDirection: "column", gap: "0" }}
+    >
       {/* Toast */}
       {toast && (
-        <div style={{
-          position: "fixed", top: 20, right: 20, zIndex: 9999,
-          padding: "0.75rem 1.25rem", borderRadius: 10,
-          background: toast.type === "error" ? "#dc3545" : "#28a745",
-          color: "#fff", fontWeight: 600, fontSize: "0.9rem",
-          boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
-        }} role="status">
+        <div
+          style={{
+            position: "fixed",
+            top: 20,
+            right: 20,
+            zIndex: 9999,
+            padding: "0.75rem 1.25rem",
+            borderRadius: 10,
+            background: toast.type === "error" ? "#dc3545" : "#28a745",
+            color: "#fff",
+            fontWeight: 600,
+            fontSize: "0.9rem",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
+          }}
+          role="status"
+        >
           {toast.msg}
         </div>
       )}
@@ -734,9 +905,14 @@ export default function TemplateEditorPage() {
           >
             {isMobile ? "" : "Print Templates"}
           </Button>
-          <span className="k-header__icon k-tone-brand" aria-hidden="true"><MdCode /></span>
+          <span className="k-header__icon k-tone-brand" aria-hidden="true">
+            <MdCode />
+          </span>
           <div style={{ minWidth: 0 }}>
-            <h2 className="k-header__title" style={{ fontSize: isMobile ? "1rem" : "calc(var(--k-title) * 0.87)" }}>
+            <h2
+              className="k-header__title"
+              style={{ fontSize: isMobile ? "1rem" : "calc(var(--k-title) * 0.87)" }}
+            >
               {isDraft ? `New ${typeLabel}` : "Edit Template"}
             </h2>
             {!isMobile && (
@@ -778,14 +954,32 @@ export default function TemplateEditorPage() {
               />
             </div>
             <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-              <Button size="sm" icon={MdViewList} style={{ flex: 1 }} onClick={() => setShowManager(true)} title="Manage this document type's templates">
+              <Button
+                size="sm"
+                icon={MdViewList}
+                style={{ flex: 1 }}
+                onClick={() => setShowManager(true)}
+                title="Manage this document type's templates"
+              >
                 Templates
               </Button>
-              <Button size="sm" icon={MdAutoAwesome} style={{ flex: 1 }} onClick={() => setShowTemplatePicker(true)} title="Browse designed layouts and apply one">
+              <Button
+                size="sm"
+                icon={MdAutoAwesome}
+                style={{ flex: 1 }}
+                onClick={() => setShowTemplatePicker(true)}
+                title="Browse designed layouts and apply one"
+              >
                 Designs
               </Button>
               {currentTemplateId && !currentIsDefault && (
-                <Button size="sm" icon={MdStar} onClick={() => handleSetDefault(currentTemplateId)} disabled={managerBusy} title="Make this the default template used for printing this document type">
+                <Button
+                  size="sm"
+                  icon={MdStar}
+                  onClick={() => handleSetDefault(currentTemplateId)}
+                  disabled={managerBusy}
+                  title="Make this the default template used for printing this document type"
+                >
                   Set default
                 </Button>
               )}
@@ -805,7 +999,9 @@ export default function TemplateEditorPage() {
             {hasChanges && <span style={styles.unsaved}>Unsaved changes</span>}
           </div>
         ) : (
-          <div style={{ display: "flex", alignItems: "flex-end", gap: "0.75rem", flexWrap: "wrap" }}>
+          <div
+            style={{ display: "flex", alignItems: "flex-end", gap: "0.75rem", flexWrap: "wrap" }}
+          >
             <div style={styles.fieldGroup}>
               <label style={styles.fieldLabel}>Company</label>
               <div style={styles.readonlyValue}>
@@ -840,7 +1036,10 @@ export default function TemplateEditorPage() {
             <div style={styles.modeToggle} role="group" aria-label="Editor mode">
               <button
                 type="button"
-                style={{ ...styles.modeBtn, ...(editorMode === "code" ? styles.modeBtnActive : {}) }}
+                style={{
+                  ...styles.modeBtn,
+                  ...(editorMode === "code" ? styles.modeBtnActive : {}),
+                }}
                 onClick={() => handleModeSwitch("code")}
                 title="Code Editor"
                 aria-pressed={editorMode === "code"}
@@ -849,7 +1048,10 @@ export default function TemplateEditorPage() {
               </button>
               <button
                 type="button"
-                style={{ ...styles.modeBtn, ...(editorMode === "visual" ? styles.modeBtnActive : {}) }}
+                style={{
+                  ...styles.modeBtn,
+                  ...(editorMode === "visual" ? styles.modeBtnActive : {}),
+                }}
                 onClick={() => handleModeSwitch("visual")}
                 title="Visual Builder"
                 aria-pressed={editorMode === "visual"}
@@ -858,18 +1060,35 @@ export default function TemplateEditorPage() {
               </button>
             </div>
 
-            <Button icon={MdViewList} onClick={() => setShowManager(true)} title="Open, rename, duplicate, copy, delete or create this document type's templates">
+            <Button
+              icon={MdViewList}
+              onClick={() => setShowManager(true)}
+              title="Open, rename, duplicate, copy, delete or create this document type's templates"
+            >
               Templates{ofType.length ? ` (${ofType.length})` : ""}
             </Button>
-            <Button icon={MdAutoAwesome} onClick={() => setShowTemplatePicker(true)} title="Browse designed layouts and apply one">
+            <Button
+              icon={MdAutoAwesome}
+              onClick={() => setShowTemplatePicker(true)}
+              title="Browse designed layouts and apply one"
+            >
               Design Gallery
             </Button>
             {currentTemplateId && !currentIsDefault && (
-              <Button icon={MdStar} onClick={() => handleSetDefault(currentTemplateId)} disabled={managerBusy} title="Make this the default template used for printing this document type">
+              <Button
+                icon={MdStar}
+                onClick={() => handleSetDefault(currentTemplateId)}
+                disabled={managerBusy}
+                title="Make this the default template used for printing this document type"
+              >
                 Set as default
               </Button>
             )}
-            <Button icon={MdUploadFile} onClick={() => htmlImportRef.current?.click()} title="Import HTML file">
+            <Button
+              icon={MdUploadFile}
+              onClick={() => htmlImportRef.current?.click()}
+              title="Import HTML file"
+            >
               Import HTML
             </Button>
             <input
@@ -896,29 +1115,76 @@ export default function TemplateEditorPage() {
       </div>
 
       <div style={styles.stampBar}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", minWidth: 0 }}>
-          <span style={{ fontSize: "var(--k-font-sm)", fontWeight: 600, color: "var(--k-ink)" }}>Signature stamp</span>
-          <StampPicker stamps={companyStamps} value={stampId} state={stampState}
-            pinnedSlug={pinnedSlugs(htmlContent)[0]} busy={stampSaving || saving}
-            onChange={handleEditorStampChange} onAddBlock={handleEditorAddBlock} onConvert={handleEditorConvert} />
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            flexWrap: "wrap",
+            minWidth: 0,
+          }}
+        >
+          <span style={{ fontSize: "var(--k-font-sm)", fontWeight: 600, color: "var(--k-ink)" }}>
+            Signature stamp
+          </span>
+          <StampPicker
+            stamps={companyStamps}
+            value={stampId}
+            state={stampState}
+            pinnedSlug={pinnedSlugs(htmlContent)[0]}
+            busy={stampSaving || saving}
+            onChange={handleEditorStampChange}
+            onAddBlock={handleEditorAddBlock}
+            onConvert={handleEditorConvert}
+          />
         </div>
         {stampAreas.length > 0 && stampState !== STAMP_STATE.PINNED && (
-          <label style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", fontSize: "var(--k-font-sm)", color: "var(--k-ink)" }}>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "0.5rem",
+              fontSize: "var(--k-font-sm)",
+              color: "var(--k-ink)",
+            }}
+          >
             Stamp position
-            <select className="k-select" aria-label="Stamp position" value={currentStampArea(htmlContent)}
-              disabled={saving || stampSaving} onChange={e => handleStampPosition(e.target.value)}
-              style={{ flex: 1, width: "auto", maxWidth: 260 }}>
-              <option value="" disabled>Choose signature area…</option>
-              {stampAreas.map(area => <option key={area.id} value={area.id}>Above {area.label}</option>)}
+            <select
+              className="k-select"
+              aria-label="Stamp position"
+              value={currentStampArea(htmlContent)}
+              disabled={saving || stampSaving}
+              onChange={(e) => handleStampPosition(e.target.value)}
+              style={{ flex: 1, width: "auto", maxWidth: 260 }}
+            >
+              <option value="" disabled>
+                Choose signature area…
+              </option>
+              {stampAreas.map((area) => (
+                <option key={area.id} value={area.id}>
+                  Above {area.label}
+                </option>
+              ))}
             </select>
           </label>
         )}
-        <span style={{ fontSize: "0.75rem", color: "var(--k-muted)" }}>Duplicate a template to keep signed and unsigned versions. “No signature” leaves the stamp blank.</span>
+        <span style={{ fontSize: "0.75rem", color: "var(--k-muted)" }}>
+          Duplicate a template to keep signed and unsigned versions. “No signature” leaves the stamp
+          blank.
+        </span>
       </div>
 
       {/* Main Content */}
-      <div style={{ flex: 1, display: "flex", gap: "0", overflow: "hidden", borderTop: "1px solid var(--k-line)" }}>
-
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          gap: "0",
+          overflow: "hidden",
+          borderTop: "1px solid var(--k-line)",
+        }}
+      >
         {listLoading ? (
           // Never paint an empty code box before the template has arrived —
           // an operator who starts typing into it would be editing nothing.
@@ -950,7 +1216,13 @@ export default function TemplateEditorPage() {
             </div>
 
             {/* Keep VisualEditor mounted (hidden during preview) to preserve GrapesJS state */}
-            <div style={{ flex: 1, display: activeTab === "editor" ? "flex" : "none", overflow: "hidden" }}>
+            <div
+              style={{
+                flex: 1,
+                display: activeTab === "editor" ? "flex" : "none",
+                overflow: "hidden",
+              }}
+            >
               <VisualEditor
                 ref={visualEditorRef}
                 htmlContent={htmlContent}
@@ -958,9 +1230,7 @@ export default function TemplateEditorPage() {
                 fields={fields}
               />
             </div>
-            {activeTab === "preview" && (
-              <PreviewPane html={previewHtml} isMobile={isMobile} />
-            )}
+            {activeTab === "preview" && <PreviewPane html={previewHtml} isMobile={isMobile} />}
           </div>
         ) : (
           <>
@@ -977,7 +1247,11 @@ export default function TemplateEditorPage() {
                   type="button"
                   role="tab"
                   aria-selected={activeTab === "editor"}
-                  style={{ ...styles.tab, ...(activeTab === "editor" ? styles.tabActive : {}), padding: isMobile ? "0 0.75rem" : undefined }}
+                  style={{
+                    ...styles.tab,
+                    ...(activeTab === "editor" ? styles.tabActive : {}),
+                    padding: isMobile ? "0 0.75rem" : undefined,
+                  }}
                   onClick={() => setActiveTab("editor")}
                 >
                   <MdEditIcon size={15} /> Editor
@@ -986,15 +1260,26 @@ export default function TemplateEditorPage() {
                   type="button"
                   role="tab"
                   aria-selected={activeTab === "preview"}
-                  style={{ ...styles.tab, ...(activeTab === "preview" ? styles.tabActive : {}), padding: isMobile ? "0 0.75rem" : undefined }}
+                  style={{
+                    ...styles.tab,
+                    ...(activeTab === "preview" ? styles.tabActive : {}),
+                    padding: isMobile ? "0 0.75rem" : undefined,
+                  }}
                   onClick={() => setActiveTab("preview")}
                 >
                   <MdVisibility size={15} /> Preview
                 </button>
                 <button
                   type="button"
-                  style={{ ...styles.tab, ...styles.tabCopy, padding: isMobile ? "0 0.6rem" : undefined }}
-                  onClick={() => { navigator.clipboard.writeText(htmlContent); showToast("Copied to clipboard!"); }}
+                  style={{
+                    ...styles.tab,
+                    ...styles.tabCopy,
+                    padding: isMobile ? "0 0.6rem" : undefined,
+                  }}
+                  onClick={() => {
+                    navigator.clipboard.writeText(htmlContent);
+                    showToast("Copied to clipboard!");
+                  }}
                   title="Copy HTML"
                 >
                   <MdContentCopy size={14} /> Copy
@@ -1010,14 +1295,11 @@ export default function TemplateEditorPage() {
                 />
               )}
 
-              {activeTab === "preview" && (
-                <PreviewPane html={previewHtml} isMobile={isMobile} />
-              )}
+              {activeTab === "preview" && <PreviewPane html={previewHtml} isMobile={isMobile} />}
             </div>
           </>
         )}
       </div>
-
     </div>
   );
 }
@@ -1027,8 +1309,12 @@ const styles = {
   // control so it's obvious what each one selects.
   fieldGroup: { display: "flex", flexDirection: "column", gap: "0.18rem" },
   fieldLabel: {
-    fontSize: "0.64rem", fontWeight: 700, textTransform: "uppercase",
-    letterSpacing: "0.05em", color: "var(--k-faint)", paddingLeft: "0.15rem",
+    fontSize: "0.64rem",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: "var(--k-faint)",
+    paddingLeft: "0.15rem",
   },
   readonlyValue: {
     display: "inline-flex",

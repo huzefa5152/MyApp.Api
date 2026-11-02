@@ -15,7 +15,8 @@
  *
  * Kept dependency-free so the node test harnesses can load it.
  */
-export const PRINT_CSP = "script-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'";
+export const PRINT_CSP =
+  "script-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'";
 export const PRINT_CSP_META = `<meta http-equiv="Content-Security-Policy" content="${PRINT_CSP}">`;
 
 const SCRIPT_BLOCK = /<script\b[\s\S]*?<\/script\s*>/gi;
@@ -24,11 +25,17 @@ const ACTIVE_TAG = /<\/?(?:script|iframe|frame|frameset|object|embed|applet|port
 // as whitespace (<img/onerror=…>). Applied until nothing changes, so stacked
 // handlers on one tag all go.
 const EVENT_ATTR = /(<[a-z][^>]*?)[\s/]+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
-const SCRIPT_URL = /((?:href|src|xlink:href|action|formaction|data)\s*=\s*["']?)\s*(?:javascript|vbscript)\s*:/gi;
+const SCRIPT_URL =
+  /((?:href|src|xlink:href|action|formaction|data)\s*=\s*["']?)\s*(?:javascript|vbscript)\s*:/gi;
 
 export function stripActiveContent(html) {
-  let out = String(html ?? "").replace(SCRIPT_BLOCK, "").replace(ACTIVE_TAG, "");
-  for (let prev = null; prev !== out;) { prev = out; out = out.replace(EVENT_ATTR, "$1"); }
+  let out = String(html ?? "")
+    .replace(SCRIPT_BLOCK, "")
+    .replace(ACTIVE_TAG, "");
+  for (let prev = null; prev !== out; ) {
+    prev = out;
+    out = out.replace(EVENT_ATTR, "$1");
+  }
   return out.replace(SCRIPT_URL, "$1about:blank#");
 }
 
@@ -43,9 +50,7 @@ export function withPrintCsp(html) {
   // is used as text by some callers, so it is returned exactly as merged.
   if (!s.includes("<") || s.includes(PRINT_CSP_META)) return s;
   const doctype = s.match(/^\s*<!doctype[^>]*>/i);
-  return doctype
-    ? doctype[0] + PRINT_CSP_META + s.slice(doctype[0].length)
-    : PRINT_CSP_META + s;
+  return doctype ? doctype[0] + PRINT_CSP_META + s.slice(doctype[0].length) : PRINT_CSP_META + s;
 }
 
 /** Both layers, in the order a merged document needs them. */

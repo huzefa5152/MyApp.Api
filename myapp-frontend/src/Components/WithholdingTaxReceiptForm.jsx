@@ -12,7 +12,9 @@ import { Field } from "../ui/Kit";
 // the saved record so staged attachments can flush against the new id.
 export default function WithholdingTaxReceiptForm({ onClose, onSaved, companyId, receipt }) {
   const isEdit = !!receipt;
-  const [client, setClient] = useState(receipt ? { id: receipt.clientId, label: receipt.clientName } : null);
+  const [client, setClient] = useState(
+    receipt ? { id: receipt.clientId, label: receipt.clientName } : null,
+  );
   const [date, setDate] = useState(receipt?.date ? toLocalYmd(receipt.date) : todayYmd());
   const [amount, setAmount] = useState(receipt?.amount != null ? String(receipt.amount) : "");
   const [description, setDescription] = useState(receipt?.description || "");
@@ -25,9 +27,15 @@ export default function WithholdingTaxReceiptForm({ onClose, onSaved, companyId,
     e.preventDefault();
     if (saving) return;
     setError("");
-    if (!client) { setError("Please select a customer."); return; }
+    if (!client) {
+      setError("Please select a customer.");
+      return;
+    }
     const amt = parseFloat(amount);
-    if (!(amt > 0)) { setError("Enter an amount greater than zero."); return; }
+    if (!(amt > 0)) {
+      setError("Enter an amount greater than zero.");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -42,11 +50,15 @@ export default function WithholdingTaxReceiptForm({ onClose, onSaved, companyId,
       try {
         const savedId = saved?.id ?? receipt?.id;
         if (savedId) await attachmentRef.current?.flush(savedId);
-      } catch { /* attachments are best-effort — the receipt is already saved */ }
+      } catch {
+        /* attachments are best-effort — the receipt is already saved */
+      }
       onClose();
     } catch (err) {
       const msg = err.response?.data?.error || err.response?.data?.message;
-      setError(msg || (!err.response ? "Could not reach the server." : "Could not save the receipt."));
+      setError(
+        msg || (!err.response ? "Could not reach the server." : "Could not save the receipt."),
+      );
       setSaving(false);
     }
   };
@@ -55,16 +67,34 @@ export default function WithholdingTaxReceiptForm({ onClose, onSaved, companyId,
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>
-            {isEdit ? `Edit Withholding Tax Receipt #${receipt.receiptNumber}` : "New Withholding Tax Receipt"}
+            {isEdit
+              ? `Edit Withholding Tax Receipt #${receipt.receiptNumber}`
+              : "New Withholding Tax Receipt"}
           </h5>
-          <button data-admin-close="" aria-label="Close" type="button" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button
+            data-admin-close=""
+            aria-label="Close"
+            type="button"
+            style={formStyles.closeButton}
+            onClick={onClose}
+          >
+            &times;
+          </button>
         </div>
         <form onSubmit={handleSubmit}>
           <div data-admin-body="" style={formStyles.body}>
-            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
+            {error && (
+              <div ref={errRef} style={formStyles.error}>
+                {error}
+              </div>
+            )}
             <div style={{ marginBottom: "1rem" }}>
               <SelectDropdown
                 label="Customer"
@@ -74,13 +104,25 @@ export default function WithholdingTaxReceiptForm({ onClose, onSaved, companyId,
                 placeholder="Choose customer"
               />
             </div>
-            <div data-admin-form-row="" className="k-form-grid" style={{ marginBottom: "1rem", alignItems: "end" }}>
+            <div
+              data-admin-form-row=""
+              className="k-form-grid"
+              style={{ marginBottom: "1rem", alignItems: "end" }}
+            >
               <Field label="Date">
-                <input type="date" className="k-input" value={date} onChange={(e) => setDate(e.target.value)} />
+                <input
+                  type="date"
+                  className="k-input"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                />
               </Field>
               <Field label="Amount (PKR)">
                 <input
-                  type="number" min="0" step="0.01" inputMode="decimal"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
                   className="k-input"
                   style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}
                   value={amount}
@@ -90,7 +132,16 @@ export default function WithholdingTaxReceiptForm({ onClose, onSaved, companyId,
               </Field>
             </div>
             <div style={{ marginBottom: "1rem" }}>
-              <Field label={<>Description <span style={{ fontWeight: 400 }}>(optional — certificate ref, section, period…)</span></>}>
+              <Field
+                label={
+                  <>
+                    Description{" "}
+                    <span style={{ fontWeight: 400 }}>
+                      (optional — certificate ref, section, period…)
+                    </span>
+                  </>
+                }
+              >
                 <textarea
                   className="k-textarea"
                   value={description}
@@ -110,8 +161,19 @@ export default function WithholdingTaxReceiptForm({ onClose, onSaved, companyId,
             />
           </div>
           <div data-admin-footer="" style={formStyles.footer}>
-            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
-            <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.6 : 1 }} disabled={disabled}>
+            <button
+              data-admin-close=""
+              type="button"
+              style={{ ...formStyles.button, ...formStyles.cancel }}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.6 : 1 }}
+              disabled={disabled}
+            >
               {saving ? "Saving..." : isEdit ? "Update Receipt" : "Save Receipt"}
             </button>
           </div>

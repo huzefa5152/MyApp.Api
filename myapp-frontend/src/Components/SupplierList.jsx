@@ -1,4 +1,11 @@
-import { MdEdit, MdDelete, MdContentCopy, MdReceiptLong, MdInventory2, MdPayments } from "react-icons/md";
+import {
+  MdEdit,
+  MdDelete,
+  MdContentCopy,
+  MdReceiptLong,
+  MdInventory2,
+  MdPayments,
+} from "react-icons/md";
 import { useNavigate } from "react-router-dom";
 import { deleteSupplier } from "../api/supplierApi";
 import { useConfirm } from "./ConfirmDialog";
@@ -6,7 +13,15 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import PartyCard from "./party/PartyCard";
 
-export default function SupplierList({ suppliers, commonGroups, onEdit, onEditCommon, onCopy, fetchSuppliers, payables }) {
+export default function SupplierList({
+  suppliers,
+  commonGroups,
+  onEdit,
+  onEditCommon,
+  onCopy,
+  fetchSuppliers,
+  payables,
+}) {
   const confirm = useConfirm();
   const { has } = usePermissions();
   const canUpdate = has("suppliers.manage.update");
@@ -19,16 +34,26 @@ export default function SupplierList({ suppliers, commonGroups, onEdit, onEditCo
   const canStatement = has("accounting.reports.view");
   const navigate = useNavigate();
   const openStatement = (s) =>
-    navigate(`/accounting/reports/catalog/supplier-statement?${new URLSearchParams({ period: "allPeriods", supplierId: String(s.id) })}`,
-      { state: { backTo: "/Suppliers", backLabel: "Suppliers" } });
+    navigate(
+      `/accounting/reports/catalog/supplier-statement?${new URLSearchParams({ period: "allPeriods", supplierId: String(s.id) })}`,
+      { state: { backTo: "/Suppliers", backLabel: "Suppliers" } },
+    );
   // Pay opens the supplier's payables, where each unpaid purchase has its own
   // Pay button; that screen needs both keys, so the shortcut does too.
-  const canPay = !!payables && has("purchasebills.payables.view") && has("accounting.payments.create");
-  const money = (n) => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const canPay =
+    !!payables && has("purchasebills.payables.view") && has("accounting.payments.create");
+  const money = (n) =>
+    Number(n || 0).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
 
   const handleDelete = async (s) => {
     if (s.hasPurchaseBills) {
-      notify("Cannot delete — purchase bills exist for this supplier. Delete those first.", "error");
+      notify(
+        "Cannot delete — purchase bills exist for this supplier. Delete those first.",
+        "error",
+      );
       return;
     }
     const ok = await confirm({
@@ -51,39 +76,88 @@ export default function SupplierList({ suppliers, commonGroups, onEdit, onEditCo
       {suppliers.map((supplier, i) => {
         // A supplier shared with other companies edits through the Common
         // Supplier form, so the change reaches every company's copy.
-        const shared = supplier.supplierGroupId != null ? commonGroups?.get(supplier.supplierGroupId) : null;
+        const shared =
+          supplier.supplierGroupId != null ? commonGroups?.get(supplier.supplierGroupId) : null;
         return (
-        <PartyCard
-          key={supplier.id}
-          party={supplier}
-          shared={shared}
-          style={{ animationDelay: `${Math.min(i, 12) * 0.03}s` }}
-          footnote={<>
-            {payables && (payables.get(supplier.id) || 0) > 0 && (
-              <span className="pd-contact__row" style={{ color: "#b45309", fontWeight: 700 }}>
-                <MdPayments style={{ color: "inherit" }} /><span>Payable Rs. {money(payables.get(supplier.id))}</span>
-              </span>
-            )}
-            {supplier.hasPurchaseBills && (
-              <span className="pd-contact__row" style={{ color: "var(--k-teal)", fontWeight: 600 }}>
-                <MdInventory2 style={{ color: "inherit" }} /><span>Has purchase bills</span>
-              </span>
-            )}
-          </>}
-          actions={[
-            canUpdate && (shared && onEditCommon
-              ? { key: "edit", label: "Edit", icon: <MdEdit size={16} />, variant: "primary", onClick: () => onEditCommon(shared.groupId), title: "Edit for every company that has this supplier" }
-              : { key: "edit", label: "Edit", icon: <MdEdit size={16} />, variant: "primary", onClick: () => onEdit(supplier) }),
-            canPay && (payables.get(supplier.id) || 0) > 0 && { key: "pay", label: "Pay", icon: <MdPayments size={16} />, onClick: () => navigate(`/supplier-payables?supplierId=${supplier.id}`), title: "Open this supplier's unpaid purchases and pay them" },
-            canStatement && { key: "statement", label: "Statement", icon: <MdReceiptLong size={16} />, onClick: () => openStatement(supplier), title: "Open this supplier's statement" },
-            canCopy && onCopy && { key: "copy", label: "Copy", icon: <MdContentCopy size={16} />, iconOnly: true, onClick: () => onCopy(supplier), title: "Copy this supplier into another company" },
-            canDelete && {
-              key: "delete", label: "Delete", icon: <MdDelete size={17} />, iconOnly: true, variant: "danger",
-              onClick: () => handleDelete(supplier),
-              title: supplier.hasPurchaseBills ? "Has purchase bills — delete those first" : "Delete supplier",
-            },
-          ].filter(Boolean)}
-        />
+          <PartyCard
+            key={supplier.id}
+            party={supplier}
+            shared={shared}
+            style={{ animationDelay: `${Math.min(i, 12) * 0.03}s` }}
+            footnote={
+              <>
+                {payables && (payables.get(supplier.id) || 0) > 0 && (
+                  <span className="pd-contact__row" style={{ color: "#b45309", fontWeight: 700 }}>
+                    <MdPayments style={{ color: "inherit" }} />
+                    <span>Payable Rs. {money(payables.get(supplier.id))}</span>
+                  </span>
+                )}
+                {supplier.hasPurchaseBills && (
+                  <span
+                    className="pd-contact__row"
+                    style={{ color: "var(--k-teal)", fontWeight: 600 }}
+                  >
+                    <MdInventory2 style={{ color: "inherit" }} />
+                    <span>Has purchase bills</span>
+                  </span>
+                )}
+              </>
+            }
+            actions={[
+              canUpdate &&
+                (shared && onEditCommon
+                  ? {
+                      key: "edit",
+                      label: "Edit",
+                      icon: <MdEdit size={16} />,
+                      variant: "primary",
+                      onClick: () => onEditCommon(shared.groupId),
+                      title: "Edit for every company that has this supplier",
+                    }
+                  : {
+                      key: "edit",
+                      label: "Edit",
+                      icon: <MdEdit size={16} />,
+                      variant: "primary",
+                      onClick: () => onEdit(supplier),
+                    }),
+              canPay &&
+                (payables.get(supplier.id) || 0) > 0 && {
+                  key: "pay",
+                  label: "Pay",
+                  icon: <MdPayments size={16} />,
+                  onClick: () => navigate(`/supplier-payables?supplierId=${supplier.id}`),
+                  title: "Open this supplier's unpaid purchases and pay them",
+                },
+              canStatement && {
+                key: "statement",
+                label: "Statement",
+                icon: <MdReceiptLong size={16} />,
+                onClick: () => openStatement(supplier),
+                title: "Open this supplier's statement",
+              },
+              canCopy &&
+                onCopy && {
+                  key: "copy",
+                  label: "Copy",
+                  icon: <MdContentCopy size={16} />,
+                  iconOnly: true,
+                  onClick: () => onCopy(supplier),
+                  title: "Copy this supplier into another company",
+                },
+              canDelete && {
+                key: "delete",
+                label: "Delete",
+                icon: <MdDelete size={17} />,
+                iconOnly: true,
+                variant: "danger",
+                onClick: () => handleDelete(supplier),
+                title: supplier.hasPurchaseBills
+                  ? "Has purchase bills — delete those first"
+                  : "Delete supplier",
+              },
+            ].filter(Boolean)}
+          />
         );
       })}
     </div>

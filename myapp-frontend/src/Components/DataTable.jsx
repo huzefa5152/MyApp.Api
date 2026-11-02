@@ -51,18 +51,20 @@ export default function DataTable({
   // preference survives reloads.
   const [hiddenSerialized, setHiddenSerialized] = useUiPreference(
     storageKey ? `dataTable.hidden:${storageKey}` : "dataTable.hidden:__transient__",
-    JSON.stringify(
-      columns.filter((c) => c.defaultHidden).map((c) => c.key)
-    )
+    JSON.stringify(columns.filter((c) => c.defaultHidden).map((c) => c.key)),
   );
 
   let hidden;
-  try { hidden = new Set(JSON.parse(hiddenSerialized || "[]")); }
-  catch { hidden = new Set(); }
+  try {
+    hidden = new Set(JSON.parse(hiddenSerialized || "[]"));
+  } catch {
+    hidden = new Set();
+  }
 
   const toggleHidden = (key) => {
     const next = new Set(hidden);
-    if (next.has(key)) next.delete(key); else next.add(key);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
     setHiddenSerialized(JSON.stringify(Array.from(next)));
   };
 
@@ -98,8 +100,13 @@ export default function DataTable({
       if (bv == null) return -1;
       if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
       // Try numeric coercion for stringy numbers (totals etc.)
-      const an = Number(av), bn = Number(bv);
-      if (!Number.isNaN(an) && !Number.isNaN(bn) && (typeof av === "string" || typeof bv === "string")) {
+      const an = Number(av),
+        bn = Number(bv);
+      if (
+        !Number.isNaN(an) &&
+        !Number.isNaN(bn) &&
+        (typeof av === "string" || typeof bv === "string")
+      ) {
         return (an - bn) * dir;
       }
       return String(av).localeCompare(String(bv), undefined, { numeric: true }) * dir;
@@ -116,7 +123,7 @@ export default function DataTable({
         const v = getValue(row, col);
         if (v == null) return false;
         return String(v).toLowerCase().includes(q);
-      })
+      }),
     );
   }, [sortedRows, quickFilter, visibleColumns]);
 
@@ -132,7 +139,11 @@ export default function DataTable({
   // Theme look (header height, row height, padding, colours) comes from the kit's
   // .k-table rules via --k-* tokens; `dense` maps to the kit's compact row variant.
   return (
-    <div className="sc-dt" data-grid-shell="" style={pageScroll ? { overflow: "visible" } : undefined}>
+    <div
+      className="sc-dt"
+      data-grid-shell=""
+      style={pageScroll ? { overflow: "visible" } : undefined}
+    >
       {(quickSearchPlaceholder || true) && (
         <div className="sc-dt__toolbar">
           {quickSearchPlaceholder && (
@@ -189,7 +200,11 @@ export default function DataTable({
         </div>
       )}
 
-      <div className="sc-dt__scroll" data-admin-table-region="" style={pageScroll ? { maxHeight: "none", overflow: "visible" } : { maxHeight: "70vh" }}>
+      <div
+        className="sc-dt__scroll"
+        data-admin-table-region=""
+        style={pageScroll ? { maxHeight: "none", overflow: "visible" } : { maxHeight: "70vh" }}
+      >
         <table className={dense ? "k-table k-table--compact" : "k-table"}>
           <thead>
             <tr>
@@ -209,11 +224,13 @@ export default function DataTable({
                   >
                     <span className="sc-dt__th-inner">
                       {col.header}
-                      {sortable && isSorted && (
-                        sort.dir === "asc"
-                          ? <MdArrowUpward size={13} />
-                          : <MdArrowDownward size={13} />
-                      )}
+                      {sortable &&
+                        isSorted &&
+                        (sort.dir === "asc" ? (
+                          <MdArrowUpward size={13} />
+                        ) : (
+                          <MdArrowDownward size={13} />
+                        ))}
                     </span>
                   </th>
                 );
@@ -228,49 +245,56 @@ export default function DataTable({
           <tbody>
             {filteredRows.length === 0 ? (
               <tr>
-                <td
-                  colSpan={visibleColumns.length + (actions ? 1 : 0)}
-                  className="sc-dt__empty"
-                >
+                <td colSpan={visibleColumns.length + (actions ? 1 : 0)} className="sc-dt__empty">
                   {quickFilter ? "No rows match the quick filter." : emptyMessage}
                 </td>
               </tr>
-            ) : filteredRows.map((row, i) => {
-              const k = rowKey ? rowKey(row) : (row.id ?? i);
-              const expanded = renderExpandedRow?.(row);
-              return (
-                <Fragment key={k}>
-                <tr
-                  onClick={onRowClick ? () => onRowClick(row) : undefined}
-                  style={{ cursor: onRowClick ? "pointer" : "default" }}
-                >
-                  {visibleColumns.map((col) => (
-                    <td
-                      key={col.key}
-                      style={{
-                        textAlign: col.align || "left",
-                        width: col.width,
-                      }}
+            ) : (
+              filteredRows.map((row, i) => {
+                const k = rowKey ? rowKey(row) : (row.id ?? i);
+                const expanded = renderExpandedRow?.(row);
+                return (
+                  <Fragment key={k}>
+                    <tr
+                      onClick={onRowClick ? () => onRowClick(row) : undefined}
+                      style={{ cursor: onRowClick ? "pointer" : "default" }}
                     >
-                      {col.render ? col.render(row) : (() => {
-                        const v = getValue(row, col);
-                        return v == null || v === "" ? "—" : v;
-                      })()}
-                    </td>
-                  ))}
-                  {actions && (
-                    <td
-                      className="k-actions"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="sc-dt__actions">{actions(row)}</div>
-                    </td>
-                  )}
-                </tr>
-                {expanded != null && <tr><td colSpan={visibleColumns.length + (actions ? 1 : 0)} style={{ padding: 0 }}>{expanded}</td></tr>}
-                </Fragment>
-              );
-            })}
+                      {visibleColumns.map((col) => (
+                        <td
+                          key={col.key}
+                          style={{
+                            textAlign: col.align || "left",
+                            width: col.width,
+                          }}
+                        >
+                          {col.render
+                            ? col.render(row)
+                            : (() => {
+                                const v = getValue(row, col);
+                                return v == null || v === "" ? "—" : v;
+                              })()}
+                        </td>
+                      ))}
+                      {actions && (
+                        <td className="k-actions" onClick={(e) => e.stopPropagation()}>
+                          <div className="sc-dt__actions">{actions(row)}</div>
+                        </td>
+                      )}
+                    </tr>
+                    {expanded != null && (
+                      <tr>
+                        <td
+                          colSpan={visibleColumns.length + (actions ? 1 : 0)}
+                          style={{ padding: 0 }}
+                        >
+                          {expanded}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>

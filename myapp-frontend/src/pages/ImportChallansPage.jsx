@@ -1,5 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
-import { MdFileUpload, MdCheckCircle, MdError, MdDelete, MdArrowBack, MdDownload, MdLock } from "react-icons/md";
+import {
+  MdFileUpload,
+  MdCheckCircle,
+  MdError,
+  MdDelete,
+  MdArrowBack,
+  MdDownload,
+  MdLock,
+} from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { getClientsByCompany } from "../api/clientApi";
@@ -7,7 +15,18 @@ import { hasExcelTemplate, getTemplate } from "../api/printTemplateApi";
 import { previewChallanImport, commitChallanImport } from "../api/challanImportApi";
 import { notify } from "../utils/notify";
 import SearchableClientSelect from "../Components/SearchableClientSelect";
-import { PageHeader, Button, IconButton, Field, Card, TableWrap, StatGrid, StatCard, EmptyState, Alert } from "../ui/Kit";
+import {
+  PageHeader,
+  Button,
+  IconButton,
+  Field,
+  Card,
+  TableWrap,
+  StatGrid,
+  StatCard,
+  EmptyState,
+  Alert,
+} from "../ui/Kit";
 
 const colors = {
   textSecondary: "var(--k-muted)",
@@ -96,7 +115,9 @@ export default function ImportChallansPage() {
         setTemplateSheetNames(Array.isArray(data?.excelSheetNames) ? data.excelSheetNames : []);
         setPinnedSheet(data?.excelSheetName || null);
       })
-      .catch(() => { /* leave picker in default state */ });
+      .catch(() => {
+        /* leave picker in default state */
+      });
     getClientsByCompany(targetCompany.id)
       .then(({ data }) => setClients(data || []))
       .catch(() => setClients([]));
@@ -126,10 +147,16 @@ export default function ImportChallansPage() {
         const fromName = parseDcFilename(r.fileName);
         const warnings = [...(r.warnings || [])];
         if (!fromName) {
-          warnings.push("Filename doesn't start with 'DC #' — not recognized as a Delivery Challan file.");
-        } else if (fromName.challanNumber && r.challanNumber && fromName.challanNumber !== r.challanNumber) {
           warnings.push(
-            `Filename says #${fromName.challanNumber} but the file's cell says #${r.challanNumber}. Please confirm.`
+            "Filename doesn't start with 'DC #' — not recognized as a Delivery Challan file.",
+          );
+        } else if (
+          fromName.challanNumber &&
+          r.challanNumber &&
+          fromName.challanNumber !== r.challanNumber
+        ) {
+          warnings.push(
+            `Filename says #${fromName.challanNumber} but the file's cell says #${r.challanNumber}. Please confirm.`,
           );
         }
         return { ...r, warnings };
@@ -150,7 +177,7 @@ export default function ImportChallansPage() {
     if (wrongCo) {
       notify(
         `"${wrongCo.fileName}" is for a different company. Remove it or switch the target company before importing.`,
-        "error"
+        "error",
       );
       return;
     }
@@ -158,17 +185,15 @@ export default function ImportChallansPage() {
     if (dupe) {
       notify(
         `Challan #${dupe.challanNumber} (from "${dupe.fileName}") is already in the system. Change the number or remove this row before importing.`,
-        "warning"
+        "warning",
       );
       return;
     }
-    const invalid = previewRows.find(
-      (r) => !r.challanNumber || !r.clientId || !r.items?.length
-    );
+    const invalid = previewRows.find((r) => !r.challanNumber || !r.clientId || !r.items?.length);
     if (invalid) {
       notify(
         `Row "${invalid.fileName}" is incomplete — fix challan number, client, and at least one item.`,
-        "warning"
+        "warning",
       );
       return;
     }
@@ -192,7 +217,9 @@ export default function ImportChallansPage() {
 
   if (!canImport) {
     return (
-      <EmptyState icon={MdLock} title="Access denied">You don&apos;t have permission to import challans.</EmptyState>
+      <EmptyState icon={MdLock} title="Access denied">
+        You don&apos;t have permission to import challans.
+      </EmptyState>
     );
   }
 
@@ -203,18 +230,21 @@ export default function ImportChallansPage() {
         tone="blue"
         title="Import Historical Challans"
         subtitle="Upload old Excel challan files — we'll read them using this company's print template and let you review before importing."
-        actions={step > 1 ? (
-          <Button variant="secondary" icon={MdArrowBack} onClick={reset}>Start over</Button>
-        ) : null}
+        actions={
+          step > 1 ? (
+            <Button variant="secondary" icon={MdArrowBack} onClick={reset}>
+              Start over
+            </Button>
+          ) : null
+        }
       />
 
       <Stepper step={step} />
 
       {templateReady === false && step === 1 && targetCompany && (
         <Alert tone="warn" icon={MdError}>
-          No Challan Excel template is configured for{" "}
-          <b>{targetCompany.name}</b>. Please upload one in{" "}
-          <i>Configuration → Print Templates</i> before importing.
+          No Challan Excel template is configured for <b>{targetCompany.name}</b>. Please upload one
+          in <i>Configuration → Print Templates</i> before importing.
         </Alert>
       )}
 
@@ -337,7 +367,7 @@ function UploadStep({
     if (dcRejected > 0) {
       notify(
         `${dcRejected} file(s) skipped — filename must start with "DC #" (e.g. "DC # 1073 ClientName.xls"). Only Delivery Challan files are accepted.`,
-        "error"
+        "error",
       );
     }
     setFiles((prev) => {
@@ -345,8 +375,7 @@ function UploadStep({
       return [...prev, ...dcOk.filter((f) => !seen.has(f.name + f.size))];
     });
   };
-  const removeFile = (idx) =>
-    setFiles((prev) => prev.filter((_, i) => i !== idx));
+  const removeFile = (idx) => setFiles((prev) => prev.filter((_, i) => i !== idx));
 
   const misnamedCount = files.filter((f) => !parseDcFilename(f.name)).length;
 
@@ -367,7 +396,7 @@ function UploadStep({
             onChange={(e) => {
               const picked = companies.find((c) => c.id === parseInt(e.target.value));
               setTargetCompany(picked || null);
-              setFiles([]);   // start over — old files may be wrong-template
+              setFiles([]); // start over — old files may be wrong-template
             }}
             style={{ maxWidth: "320px" }}
           >
@@ -410,7 +439,9 @@ function UploadStep({
               Use template default{pinnedSheet ? ` (${pinnedSheet})` : " (auto-detect)"}
             </option>
             {templateSheetNames.map((name) => (
-              <option key={name} value={name}>{name}</option>
+              <option key={name} value={name}>
+                {name}
+              </option>
             ))}
           </select>
           <small style={styles.sheetPickerHint}>
@@ -429,9 +460,7 @@ function UploadStep({
         onDrop={onDrop}
       >
         <MdFileUpload size={40} color="var(--k-blue)" />
-        <p style={{ margin: "0.6rem 0 0.2rem", fontWeight: 600 }}>
-          Drop Excel files here
-        </p>
+        <p style={{ margin: "0.6rem 0 0.2rem", fontWeight: 600 }}>Drop Excel files here</p>
         <p style={{ margin: 0, fontSize: "var(--k-font-sm)", color: "var(--k-muted)" }}>
           Filename should start with <code>DC #</code> • .xls, .xlsx, .xlsm
         </p>
@@ -479,10 +508,22 @@ function UploadStep({
                       </small>
                     )}
                   </div>
-                  <span style={{ color: colors.textSecondary, fontSize: "0.8rem", whiteSpace: "nowrap" }}>
+                  <span
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: "0.8rem",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     {(f.size / 1024).toFixed(1)} KB
                   </span>
-                  <IconButton danger label="Remove file" icon={MdDelete} style={styles.iconBtn} onClick={() => removeFile(i)} />
+                  <IconButton
+                    danger
+                    label="Remove file"
+                    icon={MdDelete}
+                    style={styles.iconBtn}
+                    onClick={() => removeFile(i)}
+                  />
                 </li>
               );
             })}
@@ -491,11 +532,7 @@ function UploadStep({
       )}
 
       <div style={styles.footerBtns}>
-        <Button
-          variant="primary"
-          disabled={disabled || !files.length}
-          onClick={onNext}
-        >
+        <Button variant="primary" disabled={disabled || !files.length} onClick={onNext}>
           {loading ? "Parsing..." : `Preview ${files.length} file(s)`}
         </Button>
       </div>
@@ -512,14 +549,16 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
         // If the user just edited the challan number on a row that was flagged
         // as a duplicate, optimistically clear the flag. They're signalling
         // they want a different number; commit-time validation will re-check.
-        if ("challanNumber" in patch && r.alreadyExists && patch.challanNumber !== r.challanNumber) {
+        if (
+          "challanNumber" in patch &&
+          r.alreadyExists &&
+          patch.challanNumber !== r.challanNumber
+        ) {
           merged.alreadyExists = false;
-          merged.warnings = (r.warnings || []).filter(
-            (w) => !/is already in the system/i.test(w)
-          );
+          merged.warnings = (r.warnings || []).filter((w) => !/is already in the system/i.test(w));
         }
         return merged;
-      })
+      }),
     );
 
   const updateItem = (rowIdx, itemIdx, patch) =>
@@ -530,17 +569,15 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
               ...r,
               items: r.items.map((it, j) => (j === itemIdx ? { ...it, ...patch } : it)),
             }
-          : r
-      )
+          : r,
+      ),
     );
 
   const removeItem = (rowIdx, itemIdx) =>
     setRows((prev) =>
       prev.map((r, i) =>
-        i === rowIdx
-          ? { ...r, items: r.items.filter((_, j) => j !== itemIdx) }
-          : r
-      )
+        i === rowIdx ? { ...r, items: r.items.filter((_, j) => j !== itemIdx) } : r,
+      ),
     );
 
   const addItem = (rowIdx) =>
@@ -548,16 +585,19 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
       prev.map((r, i) =>
         i === rowIdx
           ? { ...r, items: [...(r.items || []), { description: "", quantity: 0, unit: "" }] }
-          : r
-      )
+          : r,
+      ),
     );
 
-  const removeRow = (idx) =>
-    setRows((prev) => prev.filter((_, i) => i !== idx));
+  const removeRow = (idx) => setRows((prev) => prev.filter((_, i) => i !== idx));
 
   const validCount = useMemo(
-    () => rows.filter((r) => r.challanNumber && r.clientId && r.items?.length && !r.alreadyExists && !r.wrongCompany).length,
-    [rows]
+    () =>
+      rows.filter(
+        (r) =>
+          r.challanNumber && r.clientId && r.items?.length && !r.alreadyExists && !r.wrongCompany,
+      ).length,
+    [rows],
   );
   const duplicateCount = useMemo(() => rows.filter((r) => r.alreadyExists).length, [rows]);
   const wrongCompanyCount = useMemo(() => rows.filter((r) => r.wrongCompany).length, [rows]);
@@ -566,8 +606,11 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
     <Card>
       <div style={styles.reviewHeader}>
         <span>
-          <b>{rows.length}</b> file(s) parsed • <b style={{ color: validCount === rows.length ? colors.success : colors.warning }}>
-            {validCount}</b> ready to import
+          <b>{rows.length}</b> file(s) parsed •{" "}
+          <b style={{ color: validCount === rows.length ? colors.success : colors.warning }}>
+            {validCount}
+          </b>{" "}
+          ready to import
           {duplicateCount > 0 && (
             <span style={{ color: colors.danger, marginLeft: "0.5rem" }}>
               • <b>{duplicateCount}</b> already in system
@@ -586,7 +629,11 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
         const isDup = !!row.alreadyExists;
         const isBlocked = isWrongCo || isDup;
         const isValid = !isBlocked && row.challanNumber && row.clientId && row.items?.length;
-        const borderColor = isBlocked ? colors.danger : (isValid ? colors.cardBorder : colors.warning);
+        const borderColor = isBlocked
+          ? colors.danger
+          : isValid
+            ? colors.cardBorder
+            : colors.warning;
         return (
           <div
             key={rowIdx}
@@ -599,31 +646,63 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
               <div>
                 <span style={styles.fileLabel}>{row.fileName}</span>
                 {isWrongCo ? (
-                  <span style={{ ...styles.rowWarn, background: colors.dangerLight, color: colors.danger }}>
+                  <span
+                    style={{
+                      ...styles.rowWarn,
+                      background: colors.dangerLight,
+                      color: colors.danger,
+                    }}
+                  >
                     Wrong company
                   </span>
                 ) : isDup ? (
-                  <span style={{ ...styles.rowWarn, background: colors.dangerLight, color: colors.danger }}>
+                  <span
+                    style={{
+                      ...styles.rowWarn,
+                      background: colors.dangerLight,
+                      color: colors.danger,
+                    }}
+                  >
                     Already imported
                   </span>
                 ) : !isValid ? (
                   <span style={styles.rowWarn}>Needs attention</span>
                 ) : null}
               </div>
-              <IconButton danger label="Remove file" icon={MdDelete} style={styles.iconBtn} onClick={() => removeRow(rowIdx)} />
+              <IconButton
+                danger
+                label="Remove file"
+                icon={MdDelete}
+                style={styles.iconBtn}
+                onClick={() => removeRow(rowIdx)}
+              />
             </div>
 
             {isWrongCo && (
-              <div style={{ ...styles.warnStrip, background: colors.dangerLight, color: colors.danger, fontWeight: 600 }}>
-                ✗ This Excel file is for a different company. Remove this row, or switch the
-                target company on the upload step, before importing.
+              <div
+                style={{
+                  ...styles.warnStrip,
+                  background: colors.dangerLight,
+                  color: colors.danger,
+                  fontWeight: 600,
+                }}
+              >
+                ✗ This Excel file is for a different company. Remove this row, or switch the target
+                company on the upload step, before importing.
               </div>
             )}
 
             {isDup && !isWrongCo && (
-              <div style={{ ...styles.warnStrip, background: colors.dangerLight, color: colors.danger, fontWeight: 600 }}>
-                ✗ Challan #{row.challanNumber} already exists in the system for this company.
-                Change the number to a different value (or remove this row) to import.
+              <div
+                style={{
+                  ...styles.warnStrip,
+                  background: colors.dangerLight,
+                  color: colors.danger,
+                  fontWeight: 600,
+                }}
+              >
+                ✗ Challan #{row.challanNumber} already exists in the system for this company. Change
+                the number to a different value (or remove this row) to import.
               </div>
             )}
 
@@ -641,7 +720,9 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                   type="number"
                   className="k-input"
                   value={row.challanNumber || ""}
-                  onChange={(e) => updateRow(rowIdx, { challanNumber: parseInt(e.target.value) || 0 })}
+                  onChange={(e) =>
+                    updateRow(rowIdx, { challanNumber: parseInt(e.target.value) || 0 })
+                  }
                 />
               </Field>
               <Field label="Client">
@@ -652,9 +733,7 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                   placeholder="— pick client —"
                 />
                 {row.clientNameRaw && !row.clientId && (
-                  <small style={{ color: colors.warning }}>
-                    File said: "{row.clientNameRaw}"
-                  </small>
+                  <small style={{ color: colors.warning }}>File said: "{row.clientNameRaw}"</small>
                 )}
               </Field>
               <Field label="Delivery Date">
@@ -715,7 +794,9 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                           <input
                             className="k-input"
                             value={it.description}
-                            onChange={(e) => updateItem(rowIdx, itemIdx, { description: e.target.value })}
+                            onChange={(e) =>
+                              updateItem(rowIdx, itemIdx, { description: e.target.value })
+                            }
                           />
                         </td>
                         <td>
@@ -723,7 +804,11 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                             type="number"
                             className="k-input"
                             value={it.quantity}
-                            onChange={(e) => updateItem(rowIdx, itemIdx, { quantity: parseInt(e.target.value) || 0 })}
+                            onChange={(e) =>
+                              updateItem(rowIdx, itemIdx, {
+                                quantity: parseInt(e.target.value) || 0,
+                              })
+                            }
                           />
                         </td>
                         <td>
@@ -734,7 +819,13 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                           />
                         </td>
                         <td className="k-actions">
-                          <IconButton danger label="Remove item" icon={MdDelete} style={styles.iconBtn} onClick={() => removeItem(rowIdx, itemIdx)} />
+                          <IconButton
+                            danger
+                            label="Remove item"
+                            icon={MdDelete}
+                            style={styles.iconBtn}
+                            onClick={() => removeItem(rowIdx, itemIdx)}
+                          />
                         </td>
                       </tr>
                     ))}
@@ -756,9 +847,7 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                   a horizontally-scrolled table. */}
               <div className="imp-items-cards">
                 {(row.items || []).length === 0 ? (
-                  <div className="imp-items-empty">
-                    No items. Tap "+ Add item" to create one.
-                  </div>
+                  <div className="imp-items-empty">No items. Tap "+ Add item" to create one.</div>
                 ) : (
                   (row.items || []).map((it, itemIdx) => (
                     <div key={itemIdx} className="imp-item-card">
@@ -766,7 +855,9 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                         <label className="imp-item-card__label">Description</label>
                         <input
                           value={it.description}
-                          onChange={(e) => updateItem(rowIdx, itemIdx, { description: e.target.value })}
+                          onChange={(e) =>
+                            updateItem(rowIdx, itemIdx, { description: e.target.value })
+                          }
                           className="imp-item-card__input"
                         />
                       </div>
@@ -776,7 +867,11 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                           <input
                             type="number"
                             value={it.quantity}
-                            onChange={(e) => updateItem(rowIdx, itemIdx, { quantity: parseInt(e.target.value) || 0 })}
+                            onChange={(e) =>
+                              updateItem(rowIdx, itemIdx, {
+                                quantity: parseInt(e.target.value) || 0,
+                              })
+                            }
                             className="imp-item-card__input"
                           />
                         </div>
@@ -806,12 +901,10 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
       })}
 
       <div style={styles.footerBtns}>
-        <Button variant="secondary" onClick={onBack}>Back</Button>
-        <Button
-          variant="primary"
-          disabled={loading || validCount === 0}
-          onClick={onCommit}
-        >
+        <Button variant="secondary" onClick={onBack}>
+          Back
+        </Button>
+        <Button variant="primary" disabled={loading || validCount === 0} onClick={onCommit}>
           {loading ? "Importing..." : `Confirm Import (${validCount})`}
         </Button>
       </div>
@@ -850,16 +943,16 @@ function ResultsStep({ results, onRestart }) {
                     <span style={{ color: colors.danger, fontWeight: 600 }}>✗ Failed</span>
                   )}
                 </td>
-                <td className="k-muted">
-                  {r.error || (r.insertedId ? `ID ${r.insertedId}` : "")}
-                </td>
+                <td className="k-muted">{r.error || (r.insertedId ? `ID ${r.insertedId}` : "")}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </TableWrap>
       <div style={styles.footerBtns}>
-        <Button variant="primary" onClick={onRestart}>Import more</Button>
+        <Button variant="primary" onClick={onRestart}>
+          Import more
+        </Button>
       </div>
     </Card>
   );
@@ -881,93 +974,162 @@ function toInputDate(v) {
 const styles = {
   wrap: { padding: 0, maxWidth: "1100px", margin: "0 auto" },
   stepper: {
-    display: "flex", alignItems: "center", gap: "0.4rem", margin: "0 0 var(--k-gap)",
-    padding: "0.7rem 1rem", background: "var(--k-surface)", border: "1px solid var(--k-line)",
-    borderRadius: "var(--k-card-radius)", overflowX: "auto",
+    display: "flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    margin: "0 0 var(--k-gap)",
+    padding: "0.7rem 1rem",
+    background: "var(--k-surface)",
+    border: "1px solid var(--k-line)",
+    borderRadius: "var(--k-card-radius)",
+    overflowX: "auto",
   },
   stepWrap: { display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 },
   stepDot: {
-    width: "28px", height: "28px", borderRadius: "50%",
-    background: "var(--k-surface-2)", color: "var(--k-muted)",
-    display: "flex", alignItems: "center", justifyContent: "center",
-    fontWeight: 700, fontSize: "var(--k-font-sm)",
+    width: "28px",
+    height: "28px",
+    borderRadius: "50%",
+    background: "var(--k-surface-2)",
+    color: "var(--k-muted)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 700,
+    fontSize: "var(--k-font-sm)",
     border: "2px solid var(--k-line-strong)",
   },
   stepDotActive: { background: "var(--k-blue)", color: "#fff", borderColor: "var(--k-blue)" },
   stepLabel: { fontSize: "var(--k-font-sm)" },
   stepLine: { height: "2px", width: "2rem" },
   companyPickerWrap: {
-    display: "flex", flexDirection: "column", gap: "0.3rem",
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.3rem",
     padding: "0.9rem 1rem",
-    background: "var(--k-surface-2)", borderRadius: "var(--k-radius)",
+    background: "var(--k-surface-2)",
+    borderRadius: "var(--k-radius)",
     marginBottom: "var(--k-gap)",
     border: "1px solid var(--k-line-strong)",
   },
   companyPickerHint: {
-    fontSize: "var(--k-font-sm)", color: "var(--k-muted)",
+    fontSize: "var(--k-font-sm)",
+    color: "var(--k-muted)",
   },
   sheetPickerRow: {
-    display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap",
+    display: "flex",
+    alignItems: "center",
+    gap: "0.6rem",
+    flexWrap: "wrap",
     padding: "0.65rem 0.85rem",
-    background: "var(--k-surface-3)", borderRadius: "var(--k-radius)",
+    background: "var(--k-surface-3)",
+    borderRadius: "var(--k-radius)",
     border: "1px solid var(--k-line)",
     marginBottom: "var(--k-gap)",
   },
   sheetPickerLabel: {
-    fontSize: "var(--k-font)", fontWeight: 600, color: "var(--k-ink)",
+    fontSize: "var(--k-font)",
+    fontWeight: 600,
+    color: "var(--k-ink)",
   },
   sheetPickerHint: {
-    fontSize: "var(--k-font-sm)", color: "var(--k-muted)",
+    fontSize: "var(--k-font-sm)",
+    color: "var(--k-muted)",
     marginLeft: "auto",
   },
   dropzone: {
     border: "2px dashed var(--k-line-strong)",
-    borderRadius: "var(--k-radius)", padding: "2rem 1rem",
-    textAlign: "center", background: "var(--k-surface-2)",
-    display: "flex", flexDirection: "column", alignItems: "center",
+    borderRadius: "var(--k-radius)",
+    padding: "2rem 1rem",
+    textAlign: "center",
+    background: "var(--k-surface-2)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
   },
   filesHeader: {
-    display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap",
-    padding: "0.3rem 0", fontSize: "var(--k-font)", color: "var(--k-ink)",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "0.5rem",
+    flexWrap: "wrap",
+    padding: "0.3rem 0",
+    fontSize: "var(--k-font)",
+    color: "var(--k-ink)",
   },
   fileList: { listStyle: "none", padding: 0, margin: "0.4rem 0 0" },
   fileRow: {
-    display: "flex", gap: "0.6rem", alignItems: "center", justifyContent: "space-between",
-    padding: "0.45rem 0.75rem", borderRadius: "var(--k-radius)",
-    background: "var(--k-surface-2)", marginBottom: "0.3rem", fontSize: "var(--k-font)",
+    display: "flex",
+    gap: "0.6rem",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "0.45rem 0.75rem",
+    borderRadius: "var(--k-radius)",
+    background: "var(--k-surface-2)",
+    marginBottom: "0.3rem",
+    fontSize: "var(--k-font)",
   },
   reviewHeader: {
     borderBottom: "1px solid var(--k-line)",
-    paddingBottom: "0.7rem", marginBottom: "var(--k-gap)",
-    fontSize: "var(--k-font)", color: "var(--k-ink)",
+    paddingBottom: "0.7rem",
+    marginBottom: "var(--k-gap)",
+    fontSize: "var(--k-font)",
+    color: "var(--k-ink)",
   },
   rowCard: {
-    border: "2px solid var(--k-line)", borderRadius: "var(--k-radius)",
-    padding: "var(--k-card-pad)", marginBottom: "var(--k-gap)", background: "var(--k-surface-2)",
+    border: "2px solid var(--k-line)",
+    borderRadius: "var(--k-radius)",
+    padding: "var(--k-card-pad)",
+    marginBottom: "var(--k-gap)",
+    background: "var(--k-surface-2)",
   },
   rowHead: {
-    display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "0.5rem",
     marginBottom: "0.6rem",
   },
-  fileLabel: { fontWeight: 600, fontSize: "var(--k-font)", color: "var(--k-blue)", marginRight: "0.6rem", overflowWrap: "anywhere" },
+  fileLabel: {
+    fontWeight: 600,
+    fontSize: "var(--k-font)",
+    color: "var(--k-blue)",
+    marginRight: "0.6rem",
+    overflowWrap: "anywhere",
+  },
   rowWarn: {
-    display: "inline-block", background: colors.warningLight, color: "#8a6d00",
-    padding: "2px 8px", borderRadius: "4px", fontSize: "0.75rem", fontWeight: 600,
+    display: "inline-block",
+    background: colors.warningLight,
+    color: "#8a6d00",
+    padding: "2px 8px",
+    borderRadius: "4px",
+    fontSize: "0.75rem",
+    fontWeight: 600,
   },
   warnStrip: {
-    background: colors.warningLight, color: "#8a6d00",
-    borderRadius: "6px", padding: "0.5rem 0.8rem", marginBottom: "0.7rem",
-    fontSize: "var(--k-font-sm)", lineHeight: 1.5,
+    background: colors.warningLight,
+    color: "#8a6d00",
+    borderRadius: "6px",
+    padding: "0.5rem 0.8rem",
+    marginBottom: "0.7rem",
+    fontSize: "var(--k-font-sm)",
+    lineHeight: 1.5,
   },
   fieldsGrid: { gap: "0.7rem" },
   itemsHeader: {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
-    marginBottom: "0.4rem", fontSize: "var(--k-font)",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "0.4rem",
+    fontSize: "var(--k-font)",
   },
   footerBtns: {
-    display: "flex", gap: "0.6rem", justifyContent: "flex-end",
-    marginTop: "1.2rem", paddingTop: "1rem",
-    borderTop: "1px solid var(--k-line)", flexWrap: "wrap",
+    display: "flex",
+    gap: "0.6rem",
+    justifyContent: "flex-end",
+    marginTop: "1.2rem",
+    paddingTop: "1rem",
+    borderTop: "1px solid var(--k-line)",
+    flexWrap: "wrap",
   },
   iconBtn: { color: "var(--k-danger)" },
 };

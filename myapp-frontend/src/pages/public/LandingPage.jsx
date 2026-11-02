@@ -88,18 +88,139 @@ const CATEGORIES = [
     its label is auto-generated from the folder name
     (e.g. "my-new-category" → "My New Category").               */
 const CATEGORY_META = {
-  pneumatic:              { label: "Pneumatic Accessories", products: ["Push-in Fittings (Straight / Elbow / Tee)","Pneumatic Tubing (PA / PU / Nylon)","Quick Connectors & Couplings","Flow Control Valves","Check Valves","Mufflers & Silencers","Pneumatic Manifolds"] },
-  frl:                    { label: "Air Service / FRL",     products: ["Filter-Regulator-Lubricator (FRL) Units","Air Filters (Particulate & Coalescing)","Precision Regulators","Line Lubricators","Air Dryers","Service Units (Modular)"] },
-  cylinders:              { label: "Cylinders",             products: ["Double Acting Cylinders (Standard / Compact)","Single Acting Cylinders","Round Body (Tie-rod) Cylinders","Profile Cylinders","Rodless Cylinders","Cylinder Repair Kits"] },
-  valves:                 { label: "Valves",                products: ["5/2 & 5/3 Solenoid Valves","3/2 Way Valves","Directional Control Valves","Valve Manifolds","Pneumatic & Hydraulic Ball Valves","Proportional Valves"] },
-  hydraulics:             { label: "Hydraulics",            products: ["Hydraulic Cylinders","Hydraulic Hoses & Fittings","Hydraulic Pumps","Control Valves","Pressure Gauges for Hydraulics","Hydraulic Seals & Repair Kits"] },
-  "industrial-valves":    { label: "Industrial Valves",     products: ["SS Ball Valves (Manual & Actuated)","Gate Valves","Globe Valves","Butterfly Valves","Needle Valves","Safety Relief Valves"] },
-  "pressure-instruments": { label: "Pressure Instruments",  products: ["Bourdon Tube Pressure Gauges","Differential Pressure Gauges","Pressure Transmitters","Pressure Switches","Diaphragm Seals","Manometers"] },
-  "temperature-instruments": { label: "Temperature Instruments", products: ["Bi-metal Thermometers","Temperature Transmitters","Thermocouples (Type J/K/T)","RTD Sensors (PT100)","Temperature Switches","Digital Indicators"] },
-  "ss-fittings":          { label: "SS Fittings",           products: ["SS Compression Fittings (Swagelok-type)","SS Tube Fittings (Straight / Elbow / Tee / Cross)","SS NPT Adapters","SS Unions & Couplings","SS Ferrule Sets","High-Pressure Fittings"] },
-  "brass-fittings":       { label: "Brass Fittings",        products: ["Brass Compression Fittings","Brass Push-in Fittings","Brass NPT / BSP Fittings","Brass Barb Fittings","Brass Plug / Cap / Bush","Brass Unions & Nipples"] },
-  "ms-fittings":          { label: "MS Fittings",           products: ["MS Compression Fittings","MS Pipe Fittings (Tee / Elbow / Reducer)","MS Flanges","MS Unions","MS Hex Nipples","MS Tube Connectors"] },
-  "repair-kits":          { label: "Repair Kits",           products: ["Pneumatic Cylinder Repair Kits","FRL Unit Service Kits","Solenoid Valve Coils & Seals","O-Ring Assortments","Seal Kits (NBR / Viton / PTFE)","Diaphragm & Membrane Kits"] },
+  pneumatic: {
+    label: "Pneumatic Accessories",
+    products: [
+      "Push-in Fittings (Straight / Elbow / Tee)",
+      "Pneumatic Tubing (PA / PU / Nylon)",
+      "Quick Connectors & Couplings",
+      "Flow Control Valves",
+      "Check Valves",
+      "Mufflers & Silencers",
+      "Pneumatic Manifolds",
+    ],
+  },
+  frl: {
+    label: "Air Service / FRL",
+    products: [
+      "Filter-Regulator-Lubricator (FRL) Units",
+      "Air Filters (Particulate & Coalescing)",
+      "Precision Regulators",
+      "Line Lubricators",
+      "Air Dryers",
+      "Service Units (Modular)",
+    ],
+  },
+  cylinders: {
+    label: "Cylinders",
+    products: [
+      "Double Acting Cylinders (Standard / Compact)",
+      "Single Acting Cylinders",
+      "Round Body (Tie-rod) Cylinders",
+      "Profile Cylinders",
+      "Rodless Cylinders",
+      "Cylinder Repair Kits",
+    ],
+  },
+  valves: {
+    label: "Valves",
+    products: [
+      "5/2 & 5/3 Solenoid Valves",
+      "3/2 Way Valves",
+      "Directional Control Valves",
+      "Valve Manifolds",
+      "Pneumatic & Hydraulic Ball Valves",
+      "Proportional Valves",
+    ],
+  },
+  hydraulics: {
+    label: "Hydraulics",
+    products: [
+      "Hydraulic Cylinders",
+      "Hydraulic Hoses & Fittings",
+      "Hydraulic Pumps",
+      "Control Valves",
+      "Pressure Gauges for Hydraulics",
+      "Hydraulic Seals & Repair Kits",
+    ],
+  },
+  "industrial-valves": {
+    label: "Industrial Valves",
+    products: [
+      "SS Ball Valves (Manual & Actuated)",
+      "Gate Valves",
+      "Globe Valves",
+      "Butterfly Valves",
+      "Needle Valves",
+      "Safety Relief Valves",
+    ],
+  },
+  "pressure-instruments": {
+    label: "Pressure Instruments",
+    products: [
+      "Bourdon Tube Pressure Gauges",
+      "Differential Pressure Gauges",
+      "Pressure Transmitters",
+      "Pressure Switches",
+      "Diaphragm Seals",
+      "Manometers",
+    ],
+  },
+  "temperature-instruments": {
+    label: "Temperature Instruments",
+    products: [
+      "Bi-metal Thermometers",
+      "Temperature Transmitters",
+      "Thermocouples (Type J/K/T)",
+      "RTD Sensors (PT100)",
+      "Temperature Switches",
+      "Digital Indicators",
+    ],
+  },
+  "ss-fittings": {
+    label: "SS Fittings",
+    products: [
+      "SS Compression Fittings (Swagelok-type)",
+      "SS Tube Fittings (Straight / Elbow / Tee / Cross)",
+      "SS NPT Adapters",
+      "SS Unions & Couplings",
+      "SS Ferrule Sets",
+      "High-Pressure Fittings",
+    ],
+  },
+  "brass-fittings": {
+    label: "Brass Fittings",
+    products: [
+      "Brass Compression Fittings",
+      "Brass Push-in Fittings",
+      "Brass NPT / BSP Fittings",
+      "Brass Barb Fittings",
+      "Brass Plug / Cap / Bush",
+      "Brass Unions & Nipples",
+    ],
+  },
+  "ms-fittings": {
+    label: "MS Fittings",
+    products: [
+      "MS Compression Fittings",
+      "MS Pipe Fittings (Tee / Elbow / Reducer)",
+      "MS Flanges",
+      "MS Unions",
+      "MS Hex Nipples",
+      "MS Tube Connectors",
+    ],
+  },
+  "repair-kits": {
+    label: "Repair Kits",
+    products: [
+      "Pneumatic Cylinder Repair Kits",
+      "FRL Unit Service Kits",
+      "Solenoid Valve Coils & Seals",
+      "O-Ring Assortments",
+      "Seal Kits (NBR / Viton / PTFE)",
+      "Diaphragm & Membrane Kits",
+    ],
+  },
 };
 
 /** Convert folder name to display label: "my-new-category" → "My New Category" */
@@ -111,11 +232,32 @@ function folderToLabel(folder) {
 }
 
 const BRANDS = [
-  "Legris", "SMC", "Norgren", "WIKA", "Swagelok", "FESTO",
-  "CKD", "Sang-A", "Parker", "Nuova Fima", "Burkert", "AirTac",
-  "ASCO", "MAC", "WABCO", "Southman", "Whitey", "NAB",
-  "SNS", "Nitta Moore", "Danfoss", "JUMO", "Wade",
-  "Imperial England", "EAO", "KTZ",
+  "Legris",
+  "SMC",
+  "Norgren",
+  "WIKA",
+  "Swagelok",
+  "FESTO",
+  "CKD",
+  "Sang-A",
+  "Parker",
+  "Nuova Fima",
+  "Burkert",
+  "AirTac",
+  "ASCO",
+  "MAC",
+  "WABCO",
+  "Southman",
+  "Whitey",
+  "NAB",
+  "SNS",
+  "Nitta Moore",
+  "Danfoss",
+  "JUMO",
+  "Wade",
+  "Imperial England",
+  "EAO",
+  "KTZ",
 ];
 
 const CLIENTS = [
@@ -136,10 +278,10 @@ const CLIENTS = [
 ];
 
 const INDUSTRY_COLORS = {
-  Textile:    { bg: "#dbeafe", color: "#1d4ed8" },
+  Textile: { bg: "#dbeafe", color: "#1d4ed8" },
   Industrial: { bg: "#fce7f3", color: "#be185d" },
-  Pharma:     { bg: "#dcfce7", color: "#15803d" },
-  Food:       { bg: "#fef3c7", color: "#b45309" },
+  Pharma: { bg: "#dcfce7", color: "#15803d" },
+  Food: { bg: "#fef3c7", color: "#b45309" },
 };
 
 const WHY_CARDS = [
@@ -169,10 +311,18 @@ const ROTATING_WORDS = [
 ];
 
 const TICKER = [
-  "Push-in Fittings", "FRL Units", "Solenoid Valves", "Air Cylinders",
-  "Pressure Gauges", "Hydraulic Hoses", "SS Compression Fittings",
-  "Ball Valves", "Thermocouples", "Quick Couplings",
-  "Temperature Transmitters", "Repair Kits",
+  "Push-in Fittings",
+  "FRL Units",
+  "Solenoid Valves",
+  "Air Cylinders",
+  "Pressure Gauges",
+  "Hydraulic Hoses",
+  "SS Compression Fittings",
+  "Ball Valves",
+  "Thermocouples",
+  "Quick Couplings",
+  "Temperature Transmitters",
+  "Repair Kits",
 ];
 
 /* ------------------------------------------------------------------ */
@@ -185,10 +335,7 @@ function SplitWord({ word, baseDelay = 0, className = "" }) {
     <span className={`lp-split ${className}`} aria-hidden="true">
       {word.split("").map((ch, i) => (
         <span key={i} className="lp-split__mask">
-          <span
-            className="lp-split__char"
-            style={{ animationDelay: `${baseDelay + i * 55}ms` }}
-          >
+          <span className="lp-split__char" style={{ animationDelay: `${baseDelay + i * 55}ms` }}>
             {ch}
           </span>
         </span>
@@ -202,10 +349,7 @@ function SplitWord({ word, baseDelay = 0, className = "" }) {
 function RotatingWord() {
   const [idx, setIdx] = useState(0);
   useEffect(() => {
-    const t = setInterval(
-      () => setIdx((i) => (i + 1) % ROTATING_WORDS.length),
-      2600
-    );
+    const t = setInterval(() => setIdx((i) => (i + 1) % ROTATING_WORDS.length), 2600);
     return () => clearInterval(t);
   }, []);
   return (
@@ -279,7 +423,7 @@ export default function LandingPage() {
           }
         });
       },
-      { threshold: 0.12, rootMargin: "0px 0px -8% 0px" }
+      { threshold: 0.12, rootMargin: "0px 0px -8% 0px" },
     );
     els.forEach((el) => io.observe(el));
     return () => io.disconnect();
@@ -307,8 +451,8 @@ export default function LandingPage() {
       raf = requestAnimationFrame(() => {
         raf = 0;
         const r = hero.getBoundingClientRect();
-        hero.style.setProperty("--px", (((e.clientX - r.left) / r.width) - 0.5).toFixed(3));
-        hero.style.setProperty("--py", (((e.clientY - r.top) / r.height) - 0.5).toFixed(3));
+        hero.style.setProperty("--px", ((e.clientX - r.left) / r.width - 0.5).toFixed(3));
+        hero.style.setProperty("--py", ((e.clientY - r.top) / r.height - 0.5).toFixed(3));
       });
     };
     hero.addEventListener("pointermove", onMove);
@@ -343,7 +487,9 @@ export default function LandingPage() {
       if (disposed) return;
       const names = Object.keys(PRODUCT_MANIFEST).sort();
       if (names.length === 0) return; // nothing to fall back to — keep skeleton
-      setProductTabs(toTabs(names.map((name) => ({ name, imageCount: PRODUCT_MANIFEST[name].length }))));
+      setProductTabs(
+        toTabs(names.map((name) => ({ name, imageCount: PRODUCT_MANIFEST[name].length }))),
+      );
       setCategoryImages({ ...PRODUCT_MANIFEST });
     };
 
@@ -447,15 +593,19 @@ export default function LandingPage() {
           </h1>
 
           <div className="lp-hero__rotline lp-rise" style={{ "--rise-d": "1150ms" }}>
-            <span className="lp-hero__slash" aria-hidden="true">/</span>
+            <span className="lp-hero__slash" aria-hidden="true">
+              /
+            </span>
             <RotatingWord />
-            <span className="lp-hero__slash" aria-hidden="true">/</span>
+            <span className="lp-hero__slash" aria-hidden="true">
+              /
+            </span>
           </div>
 
           <p className="lp-hero__desc lp-rise" style={{ "--rise-d": "1300ms" }}>
-            Genuine pneumatic, hydraulic and instrumentation components from
-            20+ global brands &mdash; stocked in Karachi, serviced in-house,
-            and supplied to Pakistan&apos;s leading manufacturers since 2009.
+            Genuine pneumatic, hydraulic and instrumentation components from 20+ global brands
+            &mdash; stocked in Karachi, serviced in-house, and supplied to Pakistan&apos;s leading
+            manufacturers since 2009.
           </p>
 
           <div className="lp-hero__ctas lp-rise" style={{ "--rise-d": "1450ms" }}>
@@ -495,18 +645,22 @@ export default function LandingPage() {
               <SectionHead
                 index="01"
                 eyebrow="Who we are"
-                title={<>Industrial supply, <em>done properly.</em></>}
+                title={
+                  <>
+                    Industrial supply, <em>done properly.</em>
+                  </>
+                }
               />
               <div data-reveal style={{ "--rd": "120ms" }}>
                 <p>
-                  Hakimi Traders is a Karachi-based specialist supplier of pneumatic, hydraulic
-                  and industrial equipment, serving Pakistan&apos;s leading manufacturers since 2009.
-                  We supply genuine components from over 20 internationally recognized brands —
-                  giving our clients reliable, efficient and cost-effective industrial solutions.
+                  Hakimi Traders is a Karachi-based specialist supplier of pneumatic, hydraulic and
+                  industrial equipment, serving Pakistan&apos;s leading manufacturers since 2009. We
+                  supply genuine components from over 20 internationally recognized brands — giving
+                  our clients reliable, efficient and cost-effective industrial solutions.
                 </p>
                 <p>
-                  From push-in fittings and FRL units to solenoid valves, pressure instruments
-                  and complete cylinder assemblies — our inventory and expert team ensure you get
+                  From push-in fittings and FRL units to solenoid valves, pressure instruments and
+                  complete cylinder assemblies — our inventory and expert team ensure you get
                   exactly what your plant needs, when you need it.
                 </p>
                 <div className="lp-about__badges">
@@ -518,7 +672,12 @@ export default function LandingPage() {
             </div>
 
             {/* Composed visual: orbit ring + floating capability chips */}
-            <div className="lp-about__visual" data-reveal style={{ "--rd": "180ms" }} aria-hidden="true">
+            <div
+              className="lp-about__visual"
+              data-reveal
+              style={{ "--rd": "180ms" }}
+              aria-hidden="true"
+            >
               <span className="lp-about__orbit" />
               <span className="lp-about__orbit lp-about__orbit--inner" />
               <div className="lp-about__core">
@@ -567,7 +726,11 @@ export default function LandingPage() {
           <SectionHead
             index="02"
             eyebrow="What we supply"
-            title={<>Six verticals. <em>One supplier.</em></>}
+            title={
+              <>
+                Six verticals. <em>One supplier.</em>
+              </>
+            }
             sub="Comprehensive industrial supply across our core product families — click any card to jump into the catalogue."
           />
 
@@ -578,16 +741,23 @@ export default function LandingPage() {
                 className="lp-cat-card lp-spot"
                 data-reveal
                 style={{ "--rd": `${i * 70}ms` }}
-                onClick={() => document.querySelector("#products")?.scrollIntoView({ behavior: "smooth" })}
+                onClick={() =>
+                  document.querySelector("#products")?.scrollIntoView({ behavior: "smooth" })
+                }
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => e.key === "Enter" && document.querySelector("#products")?.scrollIntoView({ behavior: "smooth" })}
+                onKeyDown={(e) =>
+                  e.key === "Enter" &&
+                  document.querySelector("#products")?.scrollIntoView({ behavior: "smooth" })
+                }
                 aria-label={`${cat.title} — view products`}
               >
                 <span className="lp-cat-card__num" aria-hidden="true">
                   {String(i + 1).padStart(2, "0")}
                 </span>
-                <div className="lp-cat-card__icon" aria-hidden="true">{cat.icon}</div>
+                <div className="lp-cat-card__icon" aria-hidden="true">
+                  {cat.icon}
+                </div>
                 <h3 className="lp-cat-card__title">{cat.title}</h3>
                 <p className="lp-cat-card__desc">{cat.desc}</p>
                 <span className="lp-cat-card__cta">
@@ -608,7 +778,11 @@ export default function LandingPage() {
             light
             index="03"
             eyebrow="Our range"
-            title={<>The <em>catalogue.</em></>}
+            title={
+              <>
+                The <em>catalogue.</em>
+              </>
+            }
             sub="Browse pneumatic, hydraulic and instrumentation components by family."
           />
 
@@ -734,7 +908,11 @@ export default function LandingPage() {
             light
             index="04"
             eyebrow="Our partners"
-            title={<>Authorized stockists of <em>the world&apos;s best.</em></>}
+            title={
+              <>
+                Authorized stockists of <em>the world&apos;s best.</em>
+              </>
+            }
             sub="Genuine components from over 20 leading international manufacturers."
           />
         </div>
@@ -744,7 +922,9 @@ export default function LandingPage() {
             <div className="lp-brands__track lp-brands__track--left">
               {brandsRow1.map((b, i) => (
                 <div key={`${b}-${i}`} className="lp-brand-badge">
-                  <span className="lp-brand-badge__mono" aria-hidden="true">{b[0]}</span>
+                  <span className="lp-brand-badge__mono" aria-hidden="true">
+                    {b[0]}
+                  </span>
                   {b}
                 </div>
               ))}
@@ -755,7 +935,9 @@ export default function LandingPage() {
             <div className="lp-brands__track lp-brands__track--right">
               {brandsRow2.map((b, i) => (
                 <div key={`${b}-${i}`} className="lp-brand-badge">
-                  <span className="lp-brand-badge__mono" aria-hidden="true">{b[0]}</span>
+                  <span className="lp-brand-badge__mono" aria-hidden="true">
+                    {b[0]}
+                  </span>
                   {b}
                 </div>
               ))}
@@ -772,7 +954,11 @@ export default function LandingPage() {
           <SectionHead
             index="05"
             eyebrow="Who trusts us"
-            title={<>Trusted by Pakistan&apos;s <em>manufacturers.</em></>}
+            title={
+              <>
+                Trusted by Pakistan&apos;s <em>manufacturers.</em>
+              </>
+            }
             sub="Textile mills, pharma plants, food producers and heavy industry — running on parts we supply."
           />
 
@@ -787,7 +973,11 @@ export default function LandingPage() {
                   style={{ "--rd": `${(i % 7) * 60}ms`, "--ind": style.color }}
                 >
                   <div className="lp-client-card__initials" aria-hidden="true">
-                    {c.name.split(" ").map((w) => w[0]).slice(0, 2).join("")}
+                    {c.name
+                      .split(" ")
+                      .map((w) => w[0])
+                      .slice(0, 2)
+                      .join("")}
                   </div>
                   <span className="lp-client-card__name">{c.name}</span>
                   <span
@@ -812,7 +1002,11 @@ export default function LandingPage() {
             light
             index="06"
             eyebrow="Our advantage"
-            title={<>Why plants <em>choose Hakimi.</em></>}
+            title={
+              <>
+                Why plants <em>choose Hakimi.</em>
+              </>
+            }
           />
 
           <div className="lp-why__grid">
@@ -826,7 +1020,9 @@ export default function LandingPage() {
                 <span className="lp-why-card__num" aria-hidden="true">
                   {String(i + 1).padStart(2, "0")}
                 </span>
-                <div className="lp-why-card__icon" aria-hidden="true">{card.icon}</div>
+                <div className="lp-why-card__icon" aria-hidden="true">
+                  {card.icon}
+                </div>
                 <h3 className="lp-why-card__title">{card.title}</h3>
                 <p className="lp-why-card__desc">{card.desc}</p>
               </div>
@@ -841,8 +1037,8 @@ export default function LandingPage() {
                 Need a specific part? <em>We probably stock it.</em>
               </h3>
               <p>
-                Call with a part number or a photo — our team will identify it,
-                quote it and arrange supply.
+                Call with a part number or a photo — our team will identify it, quote it and arrange
+                supply.
               </p>
             </div>
             <div className="lp-cta__actions">
@@ -865,7 +1061,11 @@ export default function LandingPage() {
           <SectionHead
             index="07"
             eyebrow="Get in touch"
-            title={<>Let&apos;s source <em>your next part.</em></>}
+            title={
+              <>
+                Let&apos;s source <em>your next part.</em>
+              </>
+            }
             sub="Send us an enquiry or visit our office in Karachi — we respond fast."
           />
 
@@ -971,7 +1171,9 @@ export default function LandingPage() {
             <div className="lp-contact__info" data-reveal style={{ "--rd": "140ms" }}>
               <div className="lp-contact__cards">
                 <div className="lp-info-card">
-                  <span className="lp-info-card__icon"><FiMail aria-hidden="true" /></span>
+                  <span className="lp-info-card__icon">
+                    <FiMail aria-hidden="true" />
+                  </span>
                   <div>
                     <strong>Email</strong>
                     <a href="mailto:hakimitraders111@gmail.com">hakimitraders111@gmail.com</a>
@@ -979,7 +1181,9 @@ export default function LandingPage() {
                 </div>
 
                 <div className="lp-info-card">
-                  <span className="lp-info-card__icon"><FiPhone aria-hidden="true" /></span>
+                  <span className="lp-info-card__icon">
+                    <FiPhone aria-hidden="true" />
+                  </span>
                   <div>
                     <strong>Director — Sakina Dossaji</strong>
                     <a href="tel:+923355285380">0335-5285380</a>
@@ -987,7 +1191,9 @@ export default function LandingPage() {
                 </div>
 
                 <div className="lp-info-card">
-                  <span className="lp-info-card__icon"><FiPhone aria-hidden="true" /></span>
+                  <span className="lp-info-card__icon">
+                    <FiPhone aria-hidden="true" />
+                  </span>
                   <div>
                     <strong>Technical — Murtaza</strong>
                     <a href="tel:+923313368883">0331-3368883</a>
@@ -995,12 +1201,16 @@ export default function LandingPage() {
                 </div>
 
                 <div className="lp-info-card">
-                  <span className="lp-info-card__icon"><FiMapPin aria-hidden="true" /></span>
+                  <span className="lp-info-card__icon">
+                    <FiMapPin aria-hidden="true" />
+                  </span>
                   <div>
                     <strong>Office address</strong>
                     <address>
-                      Shop# 21, Falak Corporate City,<br />
-                      Talpur Road, opposite City Post Office,<br />
+                      Shop# 21, Falak Corporate City,
+                      <br />
+                      Talpur Road, opposite City Post Office,
+                      <br />
                       Karachi, Pakistan
                     </address>
                   </div>

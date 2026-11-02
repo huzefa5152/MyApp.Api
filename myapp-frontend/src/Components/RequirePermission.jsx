@@ -40,8 +40,18 @@ export default function RequirePermission() {
   if (loading || companyLoading) return null;
 
   // null = open to every signed-in user (e.g. the operator's own profile).
-  if (required === null) return <Suspense fallback={null}><Outlet key={selectedCompany?.id || "none"} /></Suspense>;
-  if (required !== undefined && has(required)) return <Suspense fallback={null}><Outlet key={selectedCompany?.id || "none"} /></Suspense>;
+  if (required === null)
+    return (
+      <Suspense fallback={null}>
+        <Outlet key={selectedCompany?.id || "none"} />
+      </Suspense>
+    );
+  if (required !== undefined && has(required))
+    return (
+      <Suspense fallback={null}>
+        <Outlet key={selectedCompany?.id || "none"} />
+      </Suspense>
+    );
 
   return <NoAccess permission={required} pathname={pathname} onRetry={reload} />;
 }
@@ -51,12 +61,16 @@ function NoAccess({ permission, pathname, onRetry }) {
   return (
     <div style={styles.wrap}>
       <div style={styles.card}>
-        <div style={styles.icon}><MdLock size={26} /></div>
+        <div style={styles.icon}>
+          <MdLock size={26} />
+        </div>
         <h2 style={styles.title}>You don't have access to this screen</h2>
         <p style={styles.body}>
           Your role doesn't include{" "}
           {permission ? (
-            <>the <code style={styles.code}>{permission}</code> permission, which is what</>
+            <>
+              the <code style={styles.code}>{permission}</code> permission, which is what
+            </>
           ) : (
             <>a permission for</>
           )}{" "}
@@ -64,11 +78,14 @@ function NoAccess({ permission, pathname, onRetry }) {
         </p>
         <p style={styles.body}>
           Ask whoever administers your account to add it under{" "}
-          <b>Administration &rarr; Roles &amp; Permissions</b>, or to move you
-          onto a role that already has it.
+          <b>Administration &rarr; Roles &amp; Permissions</b>, or to move you onto a role that
+          already has it.
         </p>
         <div style={styles.actions}>
-          <Link to={has("dashboard.view") ? "/dashboard" : "/profile"} className="k-btn k-btn--primary">
+          <Link
+            to={has("dashboard.view") ? "/dashboard" : "/profile"}
+            className="k-btn k-btn--primary"
+          >
             {has("dashboard.view") ? "Go to the dashboard" : "Go to my profile"}
           </Link>
           {/* /permissions/me failing leaves the set empty, which looks exactly
@@ -113,8 +130,17 @@ const styles = {
     backgroundColor: "#fff8e1",
     color: "#e65100",
   },
-  title: { margin: "0 0 0.6rem", fontSize: "var(--sc-panel-title, 1.15rem)", color: "var(--k-ink, #1a2332)" },
-  body: { margin: "0 0 0.7rem", fontSize: "var(--k-font, 0.9rem)", lineHeight: 1.5, color: "var(--k-muted, #5f6d7e)" },
+  title: {
+    margin: "0 0 0.6rem",
+    fontSize: "var(--sc-panel-title, 1.15rem)",
+    color: "var(--k-ink, #1a2332)",
+  },
+  body: {
+    margin: "0 0 0.7rem",
+    fontSize: "var(--k-font, 0.9rem)",
+    lineHeight: 1.5,
+    color: "var(--k-muted, #5f6d7e)",
+  },
   code: {
     fontFamily: "monospace",
     padding: "0.1rem 0.3rem",

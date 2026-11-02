@@ -40,9 +40,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   // fulfilment flow (linkage + auto-close).
   const [openOrders, setOpenOrders] = useState([]);
   const [salesOrderId, setSalesOrderId] = useState("");
-  const [items, setItems] = useState([
-    { description: "", quantity: 1, unit: "" },
-  ]);
+  const [items, setItems] = useState([{ description: "", quantity: 1, unit: "" }]);
   // Units list with the AllowsDecimalQuantity flag — drives whether each
   // row's quantity input accepts decimals or only whole numbers. Loaded
   // once on mount; cheap (≤50 rows) and the operator can flip flags via
@@ -59,22 +57,34 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   const suppliers = useChallanSuppliers(companyId);
 
   useEffect(() => {
-    getAllUnits(companyId).then(({ data }) => setUnits(data)).catch(() => setUnits([]));
+    getAllUnits(companyId)
+      .then(({ data }) => setUnits(data))
+      .catch(() => setUnits([]));
   }, []);
 
   // Client list for the searchable picker (replaces the old fetch-inside-
   // SelectDropdown). The picked option is the full client row, so client.site
   // still drives the Site dropdown below.
   useEffect(() => {
-    if (!companyId) { setClients([]); return; }
-    getClientsByCompany(companyId).then(({ data }) => setClients(data || [])).catch(() => setClients([]));
+    if (!companyId) {
+      setClients([]);
+      return;
+    }
+    getClientsByCompany(companyId)
+      .then(({ data }) => setClients(data || []))
+      .catch(() => setClients([]));
   }, [companyId]);
 
   // Open sales orders (partial + undelivered) — powers the optional
   // "From Sales Order" picker. Only fetched when the user can see orders.
   useEffect(() => {
-    if (!canUseOrders || !companyId) { setOpenOrders([]); return; }
-    getOpenSalesOrdersByCompany(companyId).then(({ data }) => setOpenOrders(data || [])).catch(() => setOpenOrders([]));
+    if (!canUseOrders || !companyId) {
+      setOpenOrders([]);
+      return;
+    }
+    getOpenSalesOrdersByCompany(companyId)
+      .then(({ data }) => setOpenOrders(data || []))
+      .catch(() => setOpenOrders([]));
   }, [companyId, canUseOrders]);
 
   // Picking a Sales Order autofills the challan from it: client, PO, site, and
@@ -83,7 +93,10 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   const selectOrder = (id) => {
     setSalesOrderId(id || "");
     if (!id) {
-      setClient(null); setSite(""); setPoNumber(""); setPoDate("");
+      setClient(null);
+      setSite("");
+      setPoNumber("");
+      setPoDate("");
       setItems([{ description: "", quantity: 1, unit: "" }]);
       return;
     }
@@ -95,7 +108,12 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
     setPoDate(o.customerPoDate ? o.customerPoDate.slice(0, 10) : "");
     const lines = (o.items || [])
       .filter((i) => (i.remainingQuantity ?? 0) > 0)
-      .map((i) => ({ salesOrderItemId: i.id, description: i.description, quantity: i.remainingQuantity, unit: i.unit }));
+      .map((i) => ({
+        salesOrderItemId: i.id,
+        description: i.description,
+        quantity: i.remainingQuantity,
+        unit: i.unit,
+      }));
     setItems(lines.length ? lines : [{ description: "", quantity: 1, unit: "" }]);
   };
 
@@ -140,22 +158,22 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
     setSaving(true);
     try {
       const payloadItems = validItems.map((i) => ({
-          description: i.description,
-          unit: i.unit,
-          // Ties the delivered line back to its ordered line (SO fulfilment).
-          salesOrderItemId: i.salesOrderItemId ?? null,
-          // Item Type isn't captured on the challan side anymore — that
-          // happens on the Invoices tab during FBR classification. Send
-          // null so the backend stores DeliveryItem.ItemTypeId=null.
-          itemTypeId: null,
-          // parseFloat preserves decimals (12.5 KG, 0.0004 Carat). The
-          // QuantityInput already coerces correctly per UOM, this is just
-          // defensive in case a string slips through.
-          quantity: typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1),
-          // Private procurement — never printed.
-          supplierId: i.supplierId || null,
-          actualUnitCost: i.actualUnitCost === "" ? null : i.actualUnitCost ?? null,
-        }));
+        description: i.description,
+        unit: i.unit,
+        // Ties the delivered line back to its ordered line (SO fulfilment).
+        salesOrderItemId: i.salesOrderItemId ?? null,
+        // Item Type isn't captured on the challan side anymore — that
+        // happens on the Invoices tab during FBR classification. Send
+        // null so the backend stores DeliveryItem.ItemTypeId=null.
+        itemTypeId: null,
+        // parseFloat preserves decimals (12.5 KG, 0.0004 Carat). The
+        // QuantityInput already coerces correctly per UOM, this is just
+        // defensive in case a string slips through.
+        quantity: typeof i.quantity === "number" ? i.quantity : parseFloat(i.quantity) || 1,
+        // Private procurement — never printed.
+        supplierId: i.supplierId || null,
+        actualUnitCost: i.actualUnitCost === "" ? null : (i.actualUnitCost ?? null),
+      }));
       const saved = await onSaved({
         // When set, the parent creates the challan through the sales-order
         // fulfilment flow (which links each line + auto-closes the order).
@@ -174,7 +192,13 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
       // Upload any files staged before the challan had an id. Best-effort —
       // the challan is already saved.
       const savedId = saved?.id;
-      if (savedId) { try { await attachmentRef.current?.flush(savedId); } catch { /* attachments best-effort */ } }
+      if (savedId) {
+        try {
+          await attachmentRef.current?.flush(savedId);
+        } catch {
+          /* attachments best-effort */
+        }
+      }
       if (saved?.purchaseWarning) notify(saved.purchaseWarning, "warning");
       onClose();
     } catch (err) {
@@ -184,7 +208,8 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
       // not user-facing, so we don't surface it.
       const serverMsg = err.response?.data?.error || err.response?.data?.message;
       if (serverMsg) setError(serverMsg);
-      else if (!err.response) setError("Could not reach the server. Please check your connection and try again.");
+      else if (!err.response)
+        setError("Could not reach the server. Please check your connection and try again.");
       else setError("Could not save the challan. Please try again or contact an administrator.");
       setSaving(false);
     }
@@ -197,43 +222,104 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   // header or the Cancel button to dismiss.
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>Create Delivery Challan</h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            &times;
+          </button>
         </div>
 
         <form onSubmit={handleSubmit}>
           <div data-admin-body="" style={formStyles.body}>
-            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
+            {error && (
+              <div ref={errRef} style={formStyles.error}>
+                {error}
+              </div>
+            )}
 
             {/* One header row: number, the order it fulfils, and the copy
                 shortcut. Stacked, each took a full line of a wide dialog. The
                 copy panel takes the full row once it is opened. */}
             <div className="doc-header-row">
-              <div className="doc-header-row__number"><BillNumberField companyId={companyId} documentType="challan" clientId={client?.id} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
+              <div className="doc-header-row__number">
+                <BillNumberField
+                  companyId={companyId}
+                  documentType="challan"
+                  clientId={client?.id}
+                  mode={numberMode}
+                  onModeChange={setNumberMode}
+                  number={customNumber}
+                  onNumberChange={setCustomNumber}
+                  onValidityChange={setNumberValid}
+                  disabled={saving}
+                />
+              </div>
               {/* Optional: fulfil a Sales Order. Picking one autofills the client,
                   PO, site and the order's undelivered lines below, and links the
                   challan to the order (fulfilment tracking + auto-close). */}
               {canUseOrders && (
                 <div className="doc-header-row__grow">
-                  <Field label={<>From Sales Order <span style={styles.opt}>(optional — autofills the challan)</span></>}>
-                  <SearchableSelect
-                    items={openOrders.map((o) => ({ id: o.id, label: `SO #${o.salesOrderNumber} — ${o.clientName}${o.customerPoNumber ? ` · PO ${o.customerPoNumber}` : ""}` }))}
-                    value={salesOrderId}
-                    onChange={(id) => selectOrder(id ? String(id) : "")}
-                    labelKey="label"
-                    placeholder={openOrders.length ? "— not from an order —" : "No open sales orders for this company"}
-                  />
+                  <Field
+                    label={
+                      <>
+                        From Sales Order{" "}
+                        <span style={styles.opt}>(optional — autofills the challan)</span>
+                      </>
+                    }
+                  >
+                    <SearchableSelect
+                      items={openOrders.map((o) => ({
+                        id: o.id,
+                        label: `SO #${o.salesOrderNumber} — ${o.clientName}${o.customerPoNumber ? ` · PO ${o.customerPoNumber}` : ""}`,
+                      }))}
+                      value={salesOrderId}
+                      onChange={(id) => selectOrder(id ? String(id) : "")}
+                      labelKey="label"
+                      placeholder={
+                        openOrders.length
+                          ? "— not from an order —"
+                          : "No open sales orders for this company"
+                      }
+                    />
                   </Field>
                 </div>
               )}
               <div className="doc-header-row__copy">
-                <DocumentCopyPicker companyId={companyId} destination="Challan" allowDetails={true} disabled={!!salesOrderId}
-                  onCopy={(source,lines,details) => {
-                    setItems(prev => appendCopiedLines(details ? [] : prev, lines, () => ({description:"",quantity:1,unit:""})));
-                    if(details) { setClient(clients.find(c=>c.id===source.clientId) || {id:source.clientId,label:source.clientName});setSite(source.site||"");setNotes(source.notes||"");setPoNumber(source.poNumber||"");setPoDate(source.poDate?.slice(0,10)||"");setIndentNo(source.indentNo||"");setSalesOrderId("");setDeliveryDate(todayYmd()); }
-                  }} />
+                <DocumentCopyPicker
+                  companyId={companyId}
+                  destination="Challan"
+                  allowDetails={true}
+                  disabled={!!salesOrderId}
+                  onCopy={(source, lines, details) => {
+                    setItems((prev) =>
+                      appendCopiedLines(details ? [] : prev, lines, () => ({
+                        description: "",
+                        quantity: 1,
+                        unit: "",
+                      })),
+                    );
+                    if (details) {
+                      setClient(
+                        clients.find((c) => c.id === source.clientId) || {
+                          id: source.clientId,
+                          label: source.clientName,
+                        },
+                      );
+                      setSite(source.site || "");
+                      setNotes(source.notes || "");
+                      setPoNumber(source.poNumber || "");
+                      setPoDate(source.poDate?.slice(0, 10) || "");
+                      setIndentNo(source.indentNo || "");
+                      setSalesOrderId("");
+                      setDeliveryDate(todayYmd());
+                    }
+                  }}
+                />
               </div>
             </div>
 
@@ -250,7 +336,10 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                     <SearchableClientSelect
                       clients={clients}
                       value={client?.id || ""}
-                      onChange={(id, item) => { setClient(item); setSite(""); }}
+                      onChange={(id, item) => {
+                        setClient(item);
+                        setSite("");
+                      }}
                       placeholder="— Select Client —"
                     />
                   </div>
@@ -258,7 +347,12 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                     <Button
                       variant="secondary"
                       icon={MdPersonAdd}
-                      style={{ ...styles.inlineAddBtn, marginTop: 0, alignSelf: "stretch", flexShrink: 0 }}
+                      style={{
+                        ...styles.inlineAddBtn,
+                        marginTop: 0,
+                        alignSelf: "stretch",
+                        flexShrink: 0,
+                      }}
                       onClick={() => setShowAddClient(true)}
                       title="Create a new client without leaving this form"
                       aria-label="New client"
@@ -267,12 +361,17 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                     </Button>
                   )}
                 </div>
-                {!canCreateClient && <PermissionLackedHint perm="clients.manage.create" what="add a new client" />}
+                {!canCreateClient && (
+                  <PermissionLackedHint perm="clients.manage.create" what="add a new client" />
+                )}
               </Field>
               <Field label="Site / Department">
                 {(() => {
                   const clientSites = client?.site
-                    ? client.site.split(";").map((s) => s.trim()).filter(Boolean)
+                    ? client.site
+                        .split(";")
+                        .map((s) => s.trim())
+                        .filter(Boolean)
                     : [];
                   return clientSites.length > 0 ? (
                     <select
@@ -282,7 +381,9 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                     >
                       <option value="">(none)</option>
                       {clientSites.map((s) => (
-                        <option key={s} value={s}>{s}</option>
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
                       ))}
                     </select>
                   ) : (
@@ -298,20 +399,48 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                 })()}
               </Field>
               <Field label="Delivery Date">
-                <input type="date" className="k-input" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
+                <input
+                  type="date"
+                  className="k-input"
+                  value={deliveryDate}
+                  onChange={(e) => setDeliveryDate(e.target.value)}
+                />
               </Field>
             </div>
 
             {/* PO row: Number + Date + Indent No — same grid as
                 ChallanEditForm's PO row so Add and Edit look identical. */}
             <div data-admin-form-row="" className="k-form-grid" style={styles.grid}>
-              <Field label={<>PO Number{salesOrderId && <span style={styles.opt}> (from the order)</span>}</>}>
-                <input type="text" className="k-input" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Enter PO number" disabled={!!salesOrderId} />
+              <Field
+                label={
+                  <>PO Number{salesOrderId && <span style={styles.opt}> (from the order)</span>}</>
+                }
+              >
+                <input
+                  type="text"
+                  className="k-input"
+                  value={poNumber}
+                  onChange={(e) => setPoNumber(e.target.value)}
+                  placeholder="Enter PO number"
+                  disabled={!!salesOrderId}
+                />
               </Field>
               <Field label="PO Date">
-                <input type="date" className="k-input" value={poDate} onChange={(e) => setPoDate(e.target.value)} disabled={!!salesOrderId} />
+                <input
+                  type="date"
+                  className="k-input"
+                  value={poDate}
+                  onChange={(e) => setPoDate(e.target.value)}
+                  disabled={!!salesOrderId}
+                />
               </Field>
-              <Field label={<>Indent No <span style={styles.opt}>(optional)</span></>}>
+              <Field
+                label={
+                  <>
+                    Indent No <span style={styles.opt}>(optional)</span>
+                  </>
+                }
+              >
                 <input
                   type="text"
                   className="k-input"
@@ -323,28 +452,51 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
             </div>
 
             <div style={{ marginTop: "0.25rem" }}>
-              <LineItemsEditor companyId={companyId}
+              <LineItemsEditor
+                companyId={companyId}
                 items={items}
                 onItemsChange={setItems}
                 makeBlankItem={() => ({ description: "", quantity: 1, unit: "" })}
                 units={units}
                 itemsLabel="Items"
               />
-              <ChallanPrivateCosts companyId={companyId} items={items} onItemsChange={setItems} suppliers={suppliers} />
+              <ChallanPrivateCosts
+                companyId={companyId}
+                items={items}
+                onItemsChange={setItems}
+                suppliers={suppliers}
+              />
             </div>
-
-
 
             <DocumentNotesEditor value={notes} onChange={setNotes} />
 
             <div style={{ marginTop: "1rem" }}>
-              <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="DeliveryChallan" entityId={null} mode="edit" />
+              <AttachmentManager
+                ref={attachmentRef}
+                companyId={companyId}
+                entityType="DeliveryChallan"
+                entityId={null}
+                mode="edit"
+              />
             </div>
           </div>
 
           <div data-admin-footer="" style={formStyles.footer}>
-            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
-            <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: isDisabled ? 0.6 : 1 }} disabled={isDisabled}>{saving ? "Saving..." : "Save Challan"}</button>
+            <button
+              data-admin-close=""
+              type="button"
+              style={{ ...formStyles.button, ...formStyles.cancel }}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={{ ...formStyles.button, ...formStyles.submit, opacity: isDisabled ? 0.6 : 1 }}
+              disabled={isDisabled}
+            >
+              {saving ? "Saving..." : "Save Challan"}
+            </button>
           </div>
         </form>
       </div>
@@ -363,8 +515,13 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
             setShowAddClient(false);
             const { data } = await getClientsByCompany(companyId).catch(() => ({ data: [] }));
             setClients(data || []);
-            if (created?.id) setClient((data || []).find((c) => String(c.id) === String(created.id))
-              || { id: created.id, label: created.name });
+            if (created?.id)
+              setClient(
+                (data || []).find((c) => String(c.id) === String(created.id)) || {
+                  id: created.id,
+                  label: created.name,
+                },
+              );
           }}
         />
       )}
@@ -374,6 +531,11 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
 
 const styles = {
   grid: { gap: "var(--k-gap)", marginBottom: "1rem" },
-  inlineAddBtn: { marginTop: "0.4rem", alignSelf: "flex-start", color: "var(--k-teal)", borderColor: "var(--k-teal)" },
+  inlineAddBtn: {
+    marginTop: "0.4rem",
+    alignSelf: "flex-start",
+    color: "var(--k-teal)",
+    borderColor: "var(--k-teal)",
+  },
   opt: { color: "var(--k-muted)", fontWeight: 400 },
 };

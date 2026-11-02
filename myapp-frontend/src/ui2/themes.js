@@ -28,4 +28,5 @@ export const THEMES = [
 ];
 
 export const DEFAULT_THEME = "classic";
-export const getTheme = (id) => THEMES.find((t) => t.id === id) || THEMES.find((t) => t.id === DEFAULT_THEME);
+export const getTheme = (id) =>
+  THEMES.find((t) => t.id === id) || THEMES.find((t) => t.id === DEFAULT_THEME);

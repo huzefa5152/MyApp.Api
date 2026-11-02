@@ -60,7 +60,11 @@ export default function SelectDropdown({
         loading={loading}
         ariaLabel={label || placeholder}
       />
-      {error && <span className="k-field__error" role="alert">{error}</span>}
+      {error && (
+        <span className="k-field__error" role="alert">
+          {error}
+        </span>
+      )}
     </div>
   );
 }

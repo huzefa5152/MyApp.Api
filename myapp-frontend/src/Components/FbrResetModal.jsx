@@ -42,8 +42,11 @@ export default function FbrResetModal({ invoice, onClose, onDone }) {
       });
       onDone?.();
     } catch (e) {
-      setError(e?.response?.data?.message || e?.response?.data?.Message ||
-        "Reset failed. Check your permissions and try again.");
+      setError(
+        e?.response?.data?.message ||
+          e?.response?.data?.Message ||
+          "Reset failed. Check your permissions and try again.",
+      );
       setBusy(false);
     }
   };
@@ -51,27 +54,65 @@ export default function FbrResetModal({ invoice, onClose, onDone }) {
   const radioRow = (value, title, desc) => (
     <label
       style={{
-        display: "flex", gap: 10, alignItems: "flex-start", padding: "0.6rem 0.8rem",
+        display: "flex",
+        gap: 10,
+        alignItems: "flex-start",
+        padding: "0.6rem 0.8rem",
         border: `1px solid ${mode === value ? "var(--k-blue)" : "var(--k-line)"}`,
-        borderRadius: "var(--k-radius)", cursor: "pointer", marginBottom: "0.6rem",
+        borderRadius: "var(--k-radius)",
+        cursor: "pointer",
+        marginBottom: "0.6rem",
         background: mode === value ? "#eef4ff" : "transparent",
       }}
     >
-      <input type="radio" name="reset-mode" value={value} checked={mode === value}
-        onChange={() => setMode(value)} style={{ marginTop: 3 }} />
+      <input
+        type="radio"
+        name="reset-mode"
+        value={value}
+        checked={mode === value}
+        onChange={() => setMode(value)}
+        style={{ marginTop: 3 }}
+      />
       <span>
-        <span style={{ fontWeight: 700, fontSize: "var(--k-font)", color: "var(--k-ink)" }}>{title}</span>
-        <span style={{ display: "block", fontSize: "var(--k-font-sm)", color: "var(--k-muted)", marginTop: 2 }}>{desc}</span>
+        <span style={{ fontWeight: 700, fontSize: "var(--k-font)", color: "var(--k-ink)" }}>
+          {title}
+        </span>
+        <span
+          style={{
+            display: "block",
+            fontSize: "var(--k-font-sm)",
+            color: "var(--k-muted)",
+            marginTop: 2,
+          }}
+        >
+          {desc}
+        </span>
       </span>
     </label>
   );
 
   return (
-    <div data-admin-backdrop="" style={formStyles.backdrop} onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onMouseDown={(e) => e.stopPropagation()}>
+    <div
+      data-admin-backdrop=""
+      style={formStyles.backdrop}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget && !busy) onClose();
+      }}
+    >
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: modalSizes.md }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
           <h3 style={formStyles.title}>Reset FBR state · Bill #{invoice.invoiceNumber}</h3>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} disabled={busy} aria-label="Close">
+          <button
+            data-admin-close=""
+            style={formStyles.closeButton}
+            onClick={onClose}
+            disabled={busy}
+            aria-label="Close"
+          >
             <MdClose size={18} />
           </button>
         </div>
@@ -80,19 +121,32 @@ export default function FbrResetModal({ invoice, onClose, onDone }) {
           <Alert tone="warn" icon={MdWarningAmber}>
             This bill is <b>{invoice.fbrStatus}</b>. A submission may already have reached FBR.
             <b> Verify on the FBR / IRIS portal first.</b> Only choose “clear for resubmission” once
-            you have confirmed FBR has <b>no</b> invoice for this bill — otherwise you will create a duplicate.
+            you have confirmed FBR has <b>no</b> invoice for this bill — otherwise you will create a
+            duplicate.
           </Alert>
 
-          {radioRow("retry", "Clear for resubmission",
-            "FBR has no record — wipe the local FBR fields so the bill can be submitted again.")}
-          {radioRow("recordExisting", "Record the IRN from FBR",
-            "FBR does have it — enter the IRN so our books match, without submitting again.")}
+          {radioRow(
+            "retry",
+            "Clear for resubmission",
+            "FBR has no record — wipe the local FBR fields so the bill can be submitted again.",
+          )}
+          {radioRow(
+            "recordExisting",
+            "Record the IRN from FBR",
+            "FBR does have it — enter the IRN so our books match, without submitting again.",
+          )}
 
           {mode === "recordExisting" && (
             <div style={formStyles.formGroup}>
               <Field label="IRN (from the FBR portal)" htmlFor="fbr-reset-irn">
-                <input id="fbr-reset-irn" className="k-input" value={irn} onChange={(e) => setIrn(e.target.value)}
-                  placeholder="e.g. 1234567890123DI000001" disabled={busy} />
+                <input
+                  id="fbr-reset-irn"
+                  className="k-input"
+                  value={irn}
+                  onChange={(e) => setIrn(e.target.value)}
+                  placeholder="e.g. 1234567890123DI000001"
+                  disabled={busy}
+                />
               </Field>
             </div>
           )}
@@ -102,8 +156,11 @@ export default function FbrResetModal({ invoice, onClose, onDone }) {
               <textarea
                 id="fbr-reset-reason"
                 className="k-textarea"
-                value={reason} onChange={(e) => setReason(e.target.value)} disabled={busy}
-                placeholder="e.g. Confirmed on IRIS that no invoice exists for bill #… — clearing to resubmit." />
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                disabled={busy}
+                placeholder="e.g. Confirmed on IRIS that no invoice exists for bill #… — clearing to resubmit."
+              />
             </Field>
           </div>
 
@@ -111,11 +168,19 @@ export default function FbrResetModal({ invoice, onClose, onDone }) {
         </div>
 
         <div data-admin-footer="" style={formStyles.footer}>
-          <button data-admin-close="" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose} disabled={busy}>
+          <button
+            data-admin-close=""
+            style={{ ...formStyles.button, ...formStyles.cancel }}
+            onClick={onClose}
+            disabled={busy}
+          >
             Cancel
           </button>
-          <button style={{ ...formStyles.button, ...formStyles.submit, opacity: busy ? 0.6 : 1 }}
-            onClick={submit} disabled={busy}>
+          <button
+            style={{ ...formStyles.button, ...formStyles.submit, opacity: busy ? 0.6 : 1 }}
+            onClick={submit}
+            disabled={busy}
+          >
             {busy ? "Applying…" : mode === "retry" ? "Clear & allow resubmit" : "Record IRN"}
           </button>
         </div>

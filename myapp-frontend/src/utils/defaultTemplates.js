@@ -109,7 +109,6 @@ export const defaultChallanTemplate = `<!DOCTYPE html><html><head><title>DC #{{c
 
 </body></html>`;
 
-
 export const defaultBillTemplate = `<!DOCTYPE html><html><head><title>Bill #{{invoiceNumber}}</title>
 <meta name="format-detection" content="telephone=no">
 <style>
@@ -308,7 +307,6 @@ export const defaultBillTemplate = `<!DOCTYPE html><html><head><title>Bill #{{in
 </div>
 
 </body></html>`;
-
 
 export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax Invoice #{{invoiceNumber}}</title>
 <meta name="format-detection" content="telephone=no">

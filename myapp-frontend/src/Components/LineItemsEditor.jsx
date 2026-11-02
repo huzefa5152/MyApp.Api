@@ -9,7 +9,13 @@ import LineItemImageCell from "./LineItemImageCell";
 import CopyLineButton from "./CopyLineButton";
 import LineEntryModeSwitch, { CalculatedField } from "./LineEntryModeSwitch";
 import useLineEntryMode from "../hooks/useLineEntryMode";
-import { ENTRY_MODE, applyLineEntry, displayUnitPrice, lineForMode, unitPriceFrom } from "../utils/lineAmount";
+import {
+  ENTRY_MODE,
+  applyLineEntry,
+  displayUnitPrice,
+  lineForMode,
+  unitPriceFrom,
+} from "../utils/lineAmount";
 
 /**
  * Shared line-item entry for the sales module (Quote / Order / Challan).
@@ -87,7 +93,7 @@ export default function LineItemsEditor({
   const showEntrySwitch = showUnitPrice && !!entryModeKey;
   const byTotal = showEntrySwitch && entryMode === ENTRY_MODE.total;
   const [isNarrow, setIsNarrow] = useState(
-    () => typeof window !== "undefined" && window.innerWidth < narrowBreakpoint
+    () => typeof window !== "undefined" && window.innerWidth < narrowBreakpoint,
   );
   const [bulkApplyMode, setBulkApplyMode] = useState("all");
   const [pasteOpen, setPasteOpen] = useState(false);
@@ -99,7 +105,9 @@ export default function LineItemsEditor({
   // capturing a stale closure — this is a controlled component, so we can't use
   // a functional setState to reach current state.
   const itemsRef = useRef(items);
-  useEffect(() => { itemsRef.current = items; });
+  useEffect(() => {
+    itemsRef.current = items;
+  });
 
   useEffect(() => {
     const onResize = () => setIsNarrow(window.innerWidth < narrowBreakpoint);
@@ -124,13 +132,22 @@ export default function LineItemsEditor({
   }, []);
   useLayoutEffect(() => {
     const wrap = tableWrapRef.current;
-    if (wrap && wrap.scrollWidth > wrap.clientWidth + 1 && wrap.scrollWidth !== tableNeeds) setTableNeeds(wrap.scrollWidth);
+    if (wrap && wrap.scrollWidth > wrap.clientWidth + 1 && wrap.scrollWidth !== tableNeeds)
+      setTableNeeds(wrap.scrollWidth);
   });
   // Below the sum of its columns (less a little slack the pickers can give up)
   // the browser would crush qty / unit / price until their values are cut, so
   // the table keeps this minimum and overflows instead, which flips to cards.
-  const tableMin = 28 + (showImage ? 64 : 0) + (showItemType ? (showDiscount ? 170 : 180) : 0) + 220 + 92 + 120
-    + (showUnitPrice ? 250 : 0) + (showDiscount && showUnitPrice ? 112 : 76) - 40;
+  const tableMin =
+    28 +
+    (showImage ? 64 : 0) +
+    (showItemType ? (showDiscount ? 170 : 180) : 0) +
+    220 +
+    92 +
+    120 +
+    (showUnitPrice ? 250 : 0) +
+    (showDiscount && showUnitPrice ? 112 : 76) -
+    40;
   const narrow = isNarrow || (panelWidth != null && tableNeeds > 0 && panelWidth < tableNeeds);
 
   // After a row is added/inserted we stash the index to focus; this runs post-
@@ -142,30 +159,43 @@ export default function LineItemsEditor({
     pendingFocus.current = null;
   });
 
-  const requestFocus = (idx) => { pendingFocus.current = idx; };
+  const requestFocus = (idx) => {
+    pendingFocus.current = idx;
+  };
 
   const setItem = (idx, patch) =>
     onItemsChange(items.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
 
-  const imageCell = (item, idx, locked) => <LineItemImageCell
-    value={item.imagePath} label={`photo for line ${idx + 1}`} disabled={locked}
-    onUpload={onUploadImage} onBusyChange={onImageBusyChange}
-    onChange={imagePath => {
-      // Async uploads follow the stable row identity, even after insert/remove
-      // or typing; they must not restore stale row values or target a new row.
-      onItemsChange(itemsRef.current.map(row => row._imageKey === item._imageKey ? { ...row, imagePath } : row));
-    }} />;
+  const imageCell = (item, idx, locked) => (
+    <LineItemImageCell
+      value={item.imagePath}
+      label={`photo for line ${idx + 1}`}
+      disabled={locked}
+      onUpload={onUploadImage}
+      onBusyChange={onImageBusyChange}
+      onChange={(imagePath) => {
+        // Async uploads follow the stable row identity, even after insert/remove
+        // or typing; they must not restore stale row values or target a new row.
+        onItemsChange(
+          itemsRef.current.map((row) =>
+            row._imageKey === item._imageKey ? { ...row, imagePath } : row,
+          ),
+        );
+      }}
+    />
+  );
 
   // Picking an item type only TAGS the row (records ItemTypeId) — it must not
   // overwrite the operator's typed description/unit (matches Quote/Order).
-  const pickItemType = (idx, newId) =>
-    setItem(idx, { itemTypeId: newId ? parseInt(newId) : null });
+  const pickItemType = (idx, newId) => setItem(idx, { itemTypeId: newId ? parseInt(newId) : null });
 
   const applyItemTypeToAll = (newId) => {
     if (!newId) return;
     const id = parseInt(newId);
     onItemsChange(
-      items.map((it) => (bulkApplyMode === "empty" && it.itemTypeId ? it : { ...it, itemTypeId: id }))
+      items.map((it) =>
+        bulkApplyMode === "empty" && it.itemTypeId ? it : { ...it, itemTypeId: id },
+      ),
     );
   };
   const clearAllItemTypes = () => onItemsChange(items.map((it) => ({ ...it, itemTypeId: null })));
@@ -190,28 +220,50 @@ export default function LineItemsEditor({
   const setByTotal = (idx, field, value) => {
     const it = items[idx];
     const r = applyLineEntry(
-      { quantity: String(it.quantity ?? ""), unitPrice: String(it.unitPrice ?? ""), lineTotal: typedTotal(it) },
-      field, String(value ?? ""), ENTRY_MODE.total,
+      {
+        quantity: String(it.quantity ?? ""),
+        unitPrice: String(it.unitPrice ?? ""),
+        lineTotal: typedTotal(it),
+      },
+      field,
+      String(value ?? ""),
+      ENTRY_MODE.total,
     );
-    setItem(idx, { quantity: field === "quantity" ? value : it.quantity, unitPrice: r.unitPrice, _lineTotal: r.lineTotal });
+    setItem(idx, {
+      quantity: field === "quantity" ? value : it.quantity,
+      unitPrice: r.unitPrice,
+      _lineTotal: r.lineTotal,
+    });
   };
-  const setQuantity = (idx, v) => (byTotal ? setByTotal(idx, "quantity", v) : setItem(idx, { quantity: v }));
+  const setQuantity = (idx, v) =>
+    byTotal ? setByTotal(idx, "quantity", v) : setItem(idx, { quantity: v });
   // Flipping the mode keeps every line's figures: Line total starts from what
   // the line comes to now; Unit price trims the derived rate to the fewest
   // decimals that still reproduce the total.
   const setEntryMode = (next) => {
-    onItemsChange(items.map((it) => {
-      const cur = { quantity: String(it.quantity ?? ""), unitPrice: String(it.unitPrice ?? ""), lineTotal: typedTotal(it) };
-      if (next === ENTRY_MODE.total) return { ...it, _lineTotal: lineForMode(cur, next).lineTotal };
-      const { _lineTotal, ...rest } = it;
-      return it.unitPrice === "" || it.unitPrice == null ? rest : { ...rest, unitPrice: lineForMode(cur, next).unitPrice };
-    }));
+    onItemsChange(
+      items.map((it) => {
+        const cur = {
+          quantity: String(it.quantity ?? ""),
+          unitPrice: String(it.unitPrice ?? ""),
+          lineTotal: typedTotal(it),
+        };
+        if (next === ENTRY_MODE.total)
+          return { ...it, _lineTotal: lineForMode(cur, next).lineTotal };
+        const { _lineTotal, ...rest } = it;
+        return it.unitPrice === "" || it.unitPrice == null
+          ? rest
+          : { ...rest, unitPrice: lineForMode(cur, next).unitPrice };
+      }),
+    );
     setEntryModePref(next);
   };
   const fmtMoney = (n) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
-  const discountOpen = (it) => showDiscount && showUnitPrice && (it._discountOpen || !!String(it.discountText || "").trim());
+  const discountOpen = (it) =>
+    showDiscount && showUnitPrice && (it._discountOpen || !!String(it.discountText || "").trim());
   const openDiscount = (idx) => setItem(idx, { _discountOpen: true });
-  const clearDiscount = (idx) => setItem(idx, { discountText: "", discountReason: "", _discountOpen: false });
+  const clearDiscount = (idx) =>
+    setItem(idx, { discountText: "", discountReason: "", _discountOpen: false });
 
   // The discount strip under a line: one box for "10%" or "500", the reason,
   // and what it takes off. A wrapping flex row, so nothing is cut at any width.
@@ -219,7 +271,9 @@ export default function LineItemsEditor({
     const { discount, error } = lineAmounts(item);
     return (
       <div style={s.discStrip}>
-        <span style={s.discTag}><MdLocalOffer size={14} /> Discount</span>
+        <span style={s.discTag}>
+          <MdLocalOffer size={14} /> Discount
+        </span>
         <div style={s.discValueWrap}>
           <input
             aria-label={`Discount for line ${idx + 1}`}
@@ -228,7 +282,12 @@ export default function LineItemsEditor({
             placeholder="10% or 500"
             disabled={locked}
             onChange={(e) => setItem(idx, { discountText: e.target.value })}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitAndAdvance(idx); } }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commitAndAdvance(idx);
+              }
+            }}
             autoFocus={!item.discountText}
           />
         </div>
@@ -241,12 +300,27 @@ export default function LineItemsEditor({
             placeholder="Reason (optional), e.g. old item taken in exchange"
             disabled={locked}
             onChange={(e) => setItem(idx, { discountReason: e.target.value })}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitAndAdvance(idx); } }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commitAndAdvance(idx);
+              }
+            }}
           />
         </div>
-        <span style={error ? s.discError : s.discAmount}>{error || (discount ? `− ${currency} ${fmtMoney(discount)}` : "")}</span>
+        <span style={error ? s.discError : s.discAmount}>
+          {error || (discount ? `− ${currency} ${fmtMoney(discount)}` : "")}
+        </span>
         {!locked && (
-          <button type="button" style={s.discRemove} onClick={() => clearDiscount(idx)} title="Remove this discount" aria-label={`Remove discount from line ${idx + 1}`}><MdClose size={16} /></button>
+          <button
+            type="button"
+            style={s.discRemove}
+            onClick={() => clearDiscount(idx)}
+            title="Remove this discount"
+            aria-label={`Remove discount from line ${idx + 1}`}
+          >
+            <MdClose size={16} />
+          </button>
         )}
       </div>
     );
@@ -263,13 +337,18 @@ export default function LineItemsEditor({
         onItemsChange(
           itemsRef.current.map((it, i) => {
             if (i !== idx) return it;
-            if (it.unitPrice && Number(it.unitPrice) !== 0) return { ...it, rateHint: res.hint || "" };
+            if (it.unitPrice && Number(it.unitPrice) !== 0)
+              return { ...it, rateHint: res.hint || "" };
             const filled = { ...it, unitPrice: res.lastUnitPrice, rateHint: res.hint || "" };
-            return byTotal && !it._lineTotal ? { ...filled, _lineTotal: String(lineAmounts(filled).gross) } : filled;
-          })
+            return byTotal && !it._lineTotal
+              ? { ...filled, _lineTotal: String(lineAmounts(filled).gross) }
+              : filled;
+          }),
         );
       }
-    } catch { /* no suggestion */ }
+    } catch {
+      /* no suggestion */
+    }
   };
 
   const handleDescChange = (idx, val) => {
@@ -297,9 +376,11 @@ export default function LineItemsEditor({
     addItem();
   };
 
-  const duplicateItem = idx => {
-    const next = [...items]; next.splice(idx+1,0,copyLine(items[idx],makeBlankItem,true));
-    onItemsChange(next); requestFocus(idx+1);
+  const duplicateItem = (idx) => {
+    const next = [...items];
+    next.splice(idx + 1, 0, copyLine(items[idx], makeBlankItem, true));
+    onItemsChange(next);
+    requestFocus(idx + 1);
   };
   const removeItem = (idx) => onItemsChange(items.filter((_, i) => i !== idx));
 
@@ -308,7 +389,10 @@ export default function LineItemsEditor({
   const commitAndAdvance = (idx) => {
     if (idx === items.length - 1) {
       if (String(items[idx].description || "").trim()) addItem();
-      else { const el = descRefs.current[idx]; if (el) el.focus(); }
+      else {
+        const el = descRefs.current[idx];
+        if (el) el.focus();
+      }
     } else {
       const el = descRefs.current[idx + 1];
       if (el) el.focus();
@@ -350,29 +434,50 @@ export default function LineItemsEditor({
   // number embedded in the description (a size like 12mm or 1/2") is left alone
   // because only whole delimited cells at the END are peeled as measurements.
   const applyPaste = () => {
-    const lines = pasteText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-    if (!lines.length) { setPasteOpen(false); setPasteText(""); return; }
-    const isNum = (s) => /^[\d,]+(\.\d+)?$/.test(s);   // pure number (rejects "12mm", "1/2\"")
+    const lines = pasteText
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+    if (!lines.length) {
+      setPasteOpen(false);
+      setPasteText("");
+      return;
+    }
+    const isNum = (s) => /^[\d,]+(\.\d+)?$/.test(s); // pure number (rejects "12mm", "1/2\"")
     const num = (s) => parseFloat(s.replace(/,/g, ""));
     const parsed = lines.map((line) => {
       const row = makeBlankItem();
       const parts = (line.includes("\t") ? line.split("\t") : line.split(","))
-        .map((p) => p.trim()).filter((p) => p !== "");
-      if (parts.length <= 1) { row.description = line; return row; }
+        .map((p) => p.trim())
+        .filter((p) => p !== "");
+      if (parts.length <= 1) {
+        row.description = line;
+        return row;
+      }
       const n = parts.length;
       // Peel the longest valid trailing tail matching qty [unit] [price], in
       // that order. `keep` = how many leading parts stay as the description.
       let tail = null;
-      for (const len of (showUnitPrice ? [3, 2, 1] : [2, 1])) {
-        if (n - len < 1) continue;            // always leave >=1 part for the description
+      for (const len of showUnitPrice ? [3, 2, 1] : [2, 1]) {
+        if (n - len < 1) continue; // always leave >=1 part for the description
         const t = parts.slice(n - len);
-        if (len === 1 && isNum(t[0])) { tail = { keep: n - 1, qty: num(t[0]) }; break; }
+        if (len === 1 && isNum(t[0])) {
+          tail = { keep: n - 1, qty: num(t[0]) };
+          break;
+        }
         if (len === 2) {
-          if (isNum(t[0]) && !isNum(t[1])) { tail = { keep: n - 2, qty: num(t[0]), unit: t[1] }; break; }
-          if (showUnitPrice && isNum(t[0]) && isNum(t[1])) { tail = { keep: n - 2, qty: num(t[0]), price: num(t[1]) }; break; }
+          if (isNum(t[0]) && !isNum(t[1])) {
+            tail = { keep: n - 2, qty: num(t[0]), unit: t[1] };
+            break;
+          }
+          if (showUnitPrice && isNum(t[0]) && isNum(t[1])) {
+            tail = { keep: n - 2, qty: num(t[0]), price: num(t[1]) };
+            break;
+          }
         }
         if (len === 3 && showUnitPrice && isNum(t[0]) && !isNum(t[1]) && isNum(t[2])) {
-          tail = { keep: n - 3, qty: num(t[0]), unit: t[1], price: num(t[2]) }; break;
+          tail = { keep: n - 3, qty: num(t[0]), unit: t[1], price: num(t[2]) };
+          break;
         }
       }
       if (tail) {
@@ -392,14 +497,14 @@ export default function LineItemsEditor({
       return row;
     });
     // Replace a lone blank starter row; otherwise append.
-    const base =
-      items.length === 1 && !String(items[0].description || "").trim() ? [] : items;
+    const base = items.length === 1 && !String(items[0].description || "").trim() ? [] : items;
     onItemsChange([...base, ...parsed]);
     setPasteText("");
     setPasteOpen(false);
   };
 
-  const nonHsPlaceholderAll = bulkApplyMode === "all" ? "— pick to apply to all —" : "— pick to fill empty rows —";
+  const nonHsPlaceholderAll =
+    bulkApplyMode === "all" ? "— pick to apply to all —" : "— pick to fill empty rows —";
   const rowLocked = (it) => (isRowLocked ? isRowLocked(it) : false);
 
   const totalInput = (item, idx) => (
@@ -412,12 +517,20 @@ export default function LineItemsEditor({
       style={{ ...s.cellInput, textAlign: "right" }}
       value={typedTotal(item)}
       onChange={(e) => setByTotal(idx, "lineTotal", e.target.value)}
-      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitAndAdvance(idx); } }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commitAndAdvance(idx);
+        }
+      }}
     />
   );
-  const priceCell = (item, idx) => (byTotal
-    ? <CalculatedField label="Unit price" value={shownRate(item)} />
-    : priceInput(item, idx));
+  const priceCell = (item, idx) =>
+    byTotal ? (
+      <CalculatedField label="Unit price" value={shownRate(item)} />
+    ) : (
+      priceInput(item, idx)
+    );
   // Price mode: the line comes to qty x price (less its discount), worked out.
   // Total mode: the typed total, with what it comes to after discount beneath.
   const amountField = (item, idx) => {
@@ -426,16 +539,25 @@ export default function LineItemsEditor({
       return (
         <>
           {totalInput(item, idx)}
-          {discount > 0 && <div style={s.afterDisc}>After discount {fmtMoney(gross - discount)}</div>}
+          {discount > 0 && (
+            <div style={s.afterDisc}>After discount {fmtMoney(gross - discount)}</div>
+          )}
         </>
       );
     }
     return (
       <CalculatedField
         label="Line total"
-        value={discount > 0
-          ? <><span>{fmtMoney(gross - discount)}</span> <span style={s.grossStruck}>{fmtMoney(gross)}</span></>
-          : fmtMoney(gross)}
+        value={
+          discount > 0 ? (
+            <>
+              <span>{fmtMoney(gross - discount)}</span>{" "}
+              <span style={s.grossStruck}>{fmtMoney(gross)}</span>
+            </>
+          ) : (
+            fmtMoney(gross)
+          )
+        }
       />
     );
   };
@@ -449,7 +571,12 @@ export default function LineItemsEditor({
       style={{ ...s.cellInput, textAlign: "right", ...styleExtra }}
       value={item.unitPrice}
       onChange={(e) => setItem(idx, { unitPrice: e.target.value })}
-      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitAndAdvance(idx); } }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commitAndAdvance(idx);
+        }
+      }}
     />
   );
 
@@ -469,17 +596,41 @@ export default function LineItemsEditor({
             />
           )}
           {enableRepeatLast && (
-            <button type="button" style={{ ...s.toolBtn, opacity: canRepeat ? 1 : 0.5, cursor: canRepeat ? "pointer" : "not-allowed" }} onClick={repeatLast} disabled={!canRepeat} title={canRepeat ? "Duplicate the last line (item type, description, qty, unit, price)" : "Fill the current line's description first"}>
+            <button
+              type="button"
+              style={{
+                ...s.toolBtn,
+                opacity: canRepeat ? 1 : 0.5,
+                cursor: canRepeat ? "pointer" : "not-allowed",
+              }}
+              onClick={repeatLast}
+              disabled={!canRepeat}
+              title={
+                canRepeat
+                  ? "Duplicate the last line (item type, description, qty, unit, price)"
+                  : "Fill the current line's description first"
+              }
+            >
               <MdRepeat size={14} /> Repeat last
             </button>
           )}
           {enablePaste && (
-            <button type="button" style={s.toolBtn} onClick={() => setPasteOpen((v) => !v)} title="Paste a list of items (one per line)">
+            <button
+              type="button"
+              style={s.toolBtn}
+              onClick={() => setPasteOpen((v) => !v)}
+              title="Paste a list of items (one per line)"
+            >
               <MdContentPaste size={14} /> Paste list
             </button>
           )}
           {canCreateItemType && onAddItemType && (
-            <button type="button" style={s.inlineAddBtn} onClick={onAddItemType} title="Add a new item type to your catalog">
+            <button
+              type="button"
+              style={s.inlineAddBtn}
+              onClick={onAddItemType}
+              title="Add a new item type to your catalog"
+            >
               <MdAdd size={14} /> New Item Type
             </button>
           )}
@@ -490,28 +641,68 @@ export default function LineItemsEditor({
         <div style={s.pastePanel}>
           <div style={s.pasteHintRow}>
             Paste one item per line, columns in order —{" "}
-            {showUnitPrice ? `description, qty, unit, ${byTotal ? "line total" : "unit price"}` : "description, qty, unit"} (tab or comma
-            separated; trailing columns optional).
+            {showUnitPrice
+              ? `description, qty, unit, ${byTotal ? "line total" : "unit price"}`
+              : "description, qty, unit"}{" "}
+            (tab or comma separated; trailing columns optional).
           </div>
           <textarea
             style={s.pasteArea}
             value={pasteText}
             onChange={(e) => setPasteText(e.target.value)}
-            placeholder={showUnitPrice ? (byTotal ? "Steel rod 12mm, 10, Pcs, 8500\nSugar, 0.5, Kg, 450" : "Steel rod 12mm, 10, Pcs, 850\nCement bag, 5, Bag") : "Steel rod 12mm, 10, Pcs\nCement bag, 5, Bag"}
+            placeholder={
+              showUnitPrice
+                ? byTotal
+                  ? "Steel rod 12mm, 10, Pcs, 8500\nSugar, 0.5, Kg, 450"
+                  : "Steel rod 12mm, 10, Pcs, 850\nCement bag, 5, Bag"
+                : "Steel rod 12mm, 10, Pcs\nCement bag, 5, Bag"
+            }
             rows={4}
             autoFocus
           />
           <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
-            <button data-admin-close="" type="button" style={s.pasteCancel} onClick={() => { setPasteOpen(false); setPasteText(""); }}>Cancel</button>
-            <button type="button" style={s.pasteApply} onClick={applyPaste} disabled={!pasteText.trim()}>Add lines</button>
+            <button
+              data-admin-close=""
+              type="button"
+              style={s.pasteCancel}
+              onClick={() => {
+                setPasteOpen(false);
+                setPasteText("");
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              style={s.pasteApply}
+              onClick={applyPaste}
+              disabled={!pasteText.trim()}
+            >
+              Add lines
+            </button>
           </div>
         </div>
       )}
 
       {showBulk && items.length > 1 && (
         <div style={s.bulkApplyBar}>
-          <span style={{ fontSize: "var(--sc-cell-font, 0.82rem)", color: colors.ink, fontWeight: 500 }}>Apply same Item Type to:</span>
-          <select value={bulkApplyMode} onChange={(e) => setBulkApplyMode(e.target.value)} style={{ ...s.input, width: "auto", minHeight: "var(--sc-cell-h, 0px)", padding: "var(--sc-select-pad, 0.3rem 0.5rem)", fontSize: "var(--sc-cell-font, 0.8rem)", maxWidth: 160 }}>
+          <span
+            style={{ fontSize: "var(--sc-cell-font, 0.82rem)", color: colors.ink, fontWeight: 500 }}
+          >
+            Apply same Item Type to:
+          </span>
+          <select
+            value={bulkApplyMode}
+            onChange={(e) => setBulkApplyMode(e.target.value)}
+            style={{
+              ...s.input,
+              width: "auto",
+              minHeight: "var(--sc-cell-h, 0px)",
+              padding: "var(--sc-select-pad, 0.3rem 0.5rem)",
+              fontSize: "var(--sc-cell-font, 0.8rem)",
+              maxWidth: 160,
+            }}
+          >
             <option value="all">All {items.length} rows</option>
             <option value="empty">Only empty rows</option>
           </select>
@@ -521,10 +712,20 @@ export default function LineItemsEditor({
               value={""}
               onChange={(newId) => applyItemTypeToAll(newId)}
               placeholder={nonHsPlaceholderAll}
-              style={{ minHeight: "var(--sc-cell-h, 0px)", padding: "var(--sc-cell-pad, 0.3rem 0.5rem)", fontSize: "var(--sc-cell-font, 0.78rem)" }}
+              style={{
+                minHeight: "var(--sc-cell-h, 0px)",
+                padding: "var(--sc-cell-pad, 0.3rem 0.5rem)",
+                fontSize: "var(--sc-cell-font, 0.78rem)",
+              }}
             />
           </div>
-          <button type="button" style={s.bulkClearBtn} onClick={clearAllItemTypes} disabled={!items.some((it) => it.itemTypeId)} title="Drop the Item Type binding from every row">
+          <button
+            type="button"
+            style={s.bulkClearBtn}
+            onClick={clearAllItemTypes}
+            disabled={!items.some((it) => it.itemTypeId)}
+            title="Drop the Item Type binding from every row"
+          >
             Clear all
           </button>
         </div>
@@ -541,24 +742,46 @@ export default function LineItemsEditor({
                   <span style={s.mnum}>{idx + 1}</span>
                   {showImage && imageCell(item, idx, locked)}
                   <div style={{ flex: 1 }} />
-                  {!locked && !items[idx].salesOrderItemId && <CopyLineButton onClick={() => duplicateItem(idx)} />}
+                  {!locked && !items[idx].salesOrderItemId && (
+                    <CopyLineButton onClick={() => duplicateItem(idx)} />
+                  )}
                   {items.length > 1 && !locked && (
-                    <button type="button" style={s.del} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={16} /></button>
+                    <button
+                      type="button"
+                      style={s.del}
+                      onClick={() => removeItem(idx)}
+                      title="Remove item"
+                    >
+                      <MdDelete size={16} />
+                    </button>
                   )}
                 </div>
                 {/* Own row: beside the photo and the two buttons it had ~80px on a phone. */}
                 {showItemType && (
                   <div style={{ marginBottom: "0.5rem" }}>
-                    <SearchableItemTypeSelect items={itemTypes} value={item.itemTypeId || ""} onChange={(newId) => pickItemType(idx, newId)} placeholder={itemTypePlaceholder} style={{ minHeight: "var(--sc-cell-h, 0px)", padding: "var(--sc-cell-pad, 0.4rem 0.55rem)", fontSize: "var(--sc-cell-font, 0.82rem)" }} />
+                    <SearchableItemTypeSelect
+                      items={itemTypes}
+                      value={item.itemTypeId || ""}
+                      onChange={(newId) => pickItemType(idx, newId)}
+                      placeholder={itemTypePlaceholder}
+                      style={{
+                        minHeight: "var(--sc-cell-h, 0px)",
+                        padding: "var(--sc-cell-pad, 0.4rem 0.55rem)",
+                        fontSize: "var(--sc-cell-font, 0.82rem)",
+                      }}
+                    />
                   </div>
                 )}
-                <LookupAutocomplete companyId={companyId}
+                <LookupAutocomplete
+                  companyId={companyId}
                   label="Item description"
                   endpoint="/lookup/items"
                   value={item.description}
                   onChange={(v) => handleDescChange(idx, v)}
                   inputStyle={{ ...s.cellInput, fontSize: "var(--sc-cell-font, 0.95rem)" }}
-                  inputRef={(el) => { descRefs.current[idx] = el; }}
+                  inputRef={(el) => {
+                    descRefs.current[idx] = el;
+                  }}
                   onEnterKey={() => commitAndAdvance(idx)}
                   multiline={descriptionMultiline}
                 />
@@ -567,11 +790,32 @@ export default function LineItemsEditor({
                 <div style={showUnitPrice ? s.m3col : s.m2col}>
                   <div>
                     <label style={s.mlabel}>Qty</label>
-                    <QuantityInput value={item.quantity} onChange={(v) => setQuantity(idx, v)} unit={item.unit} units={units} min={getRowMin ? getRowMin(item) : undefined} style={{ ...s.cellInput, textAlign: "right" }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitAndAdvance(idx); } }} />
+                    <QuantityInput
+                      value={item.quantity}
+                      onChange={(v) => setQuantity(idx, v)}
+                      unit={item.unit}
+                      units={units}
+                      min={getRowMin ? getRowMin(item) : undefined}
+                      style={{ ...s.cellInput, textAlign: "right" }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          commitAndAdvance(idx);
+                        }
+                      }}
+                    />
                   </div>
                   <div>
                     <label style={s.mlabel}>Unit</label>
-                    <LookupAutocomplete companyId={companyId} label="Unit" endpoint="/lookup/units" value={item.unit} onChange={(v) => setItem(idx, { unit: v })} inputStyle={s.cellInput} onEnterKey={() => commitAndAdvance(idx)} />
+                    <LookupAutocomplete
+                      companyId={companyId}
+                      label="Unit"
+                      endpoint="/lookup/units"
+                      value={item.unit}
+                      onChange={(v) => setItem(idx, { unit: v })}
+                      inputStyle={s.cellInput}
+                      onEnterKey={() => commitAndAdvance(idx)}
+                    />
                   </div>
                   {showUnitPrice && (
                     <div>
@@ -582,7 +826,9 @@ export default function LineItemsEditor({
                 </div>
                 {showUnitPrice && byTotal && (
                   <div style={{ ...s.mamt, alignItems: "flex-start" }}>
-                    <span style={{ paddingTop: "0.55rem" }}>{showDiscount ? "Line total (before discount)" : "Line total"}</span>
+                    <span style={{ paddingTop: "0.55rem" }}>
+                      {showDiscount ? "Line total (before discount)" : "Line total"}
+                    </span>
                     <span style={{ flex: "0 1 55%", minWidth: 0 }}>{amountField(item, idx)}</span>
                   </div>
                 )}
@@ -590,14 +836,26 @@ export default function LineItemsEditor({
                   <div style={s.mamt}>
                     <span>Amount</span>
                     <span style={{ textAlign: "right" }}>
-                      <b style={{ whiteSpace: "nowrap" }}>{currency} {fmtMoney(lineTotal(item))}</b>
-                      {lineAmounts(item).discount > 0 && <span style={{ ...s.grossStruck, display: "block" }}>{currency} {fmtMoney(lineAmounts(item).gross)}</span>}
+                      <b style={{ whiteSpace: "nowrap" }}>
+                        {currency} {fmtMoney(lineTotal(item))}
+                      </b>
+                      {lineAmounts(item).discount > 0 && (
+                        <span style={{ ...s.grossStruck, display: "block" }}>
+                          {currency} {fmtMoney(lineAmounts(item).gross)}
+                        </span>
+                      )}
                     </span>
                   </div>
                 )}
-                {discountOpen(item) ? discountStrip(item, idx, locked) : (showDiscount && showUnitPrice && !locked && (
-                  <button type="button" style={s.discAddBtn} onClick={() => openDiscount(idx)}><MdLocalOffer size={14} /> Add discount</button>
-                ))}
+                {discountOpen(item)
+                  ? discountStrip(item, idx, locked)
+                  : showDiscount &&
+                    showUnitPrice &&
+                    !locked && (
+                      <button type="button" style={s.discAddBtn} onClick={() => openDiscount(idx)}>
+                        <MdLocalOffer size={14} /> Add discount
+                      </button>
+                    )}
               </div>
             );
           })}
@@ -609,72 +867,171 @@ export default function LineItemsEditor({
               <tr>
                 <th style={{ ...s.th, width: 28, textAlign: "center" }}>#</th>
                 {showImage && <th style={{ ...s.th, width: 64 }}>Photo</th>}
-                {showItemType && <th style={{ ...s.th, width: showDiscount ? 170 : 180 }}>Item Type</th>}
+                {showItemType && (
+                  <th style={{ ...s.th, width: showDiscount ? 170 : 180 }}>Item Type</th>
+                )}
                 <th style={{ ...s.th, minWidth: 220 }}>Description</th>
                 <th style={{ ...s.th, width: 92, textAlign: "right" }}>Qty</th>
                 <th style={{ ...s.th, width: 120 }}>Unit</th>
-                {showUnitPrice && <th style={{ ...s.th, width: 120, textAlign: "right" }}>Unit Price</th>}
-                {showUnitPrice && <th style={{ ...s.th, width: 130, textAlign: "right" }}>{byTotal ? "Line total" : "Amount"}</th>}
-                <th style={{ ...s.th, width: showDiscount && showUnitPrice ? 112 : 76 }}><span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>Actions</span></th>
+                {showUnitPrice && (
+                  <th style={{ ...s.th, width: 120, textAlign: "right" }}>Unit Price</th>
+                )}
+                {showUnitPrice && (
+                  <th style={{ ...s.th, width: 130, textAlign: "right" }}>
+                    {byTotal ? "Line total" : "Amount"}
+                  </th>
+                )}
+                <th style={{ ...s.th, width: showDiscount && showUnitPrice ? 112 : 76 }}>
+                  <span
+                    style={{
+                      position: "absolute",
+                      width: 1,
+                      height: 1,
+                      overflow: "hidden",
+                      clip: "rect(0 0 0 0)",
+                    }}
+                  >
+                    Actions
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody>
               {items.map((item, idx) => {
                 const locked = rowLocked(item);
                 const hint = rowLockHint ? rowLockHint(item) : null;
-                const colCount = 5 + (showImage ? 1 : 0) + (showItemType ? 1 : 0) + (showUnitPrice ? 2 : 0);
+                const colCount =
+                  5 + (showImage ? 1 : 0) + (showItemType ? 1 : 0) + (showUnitPrice ? 2 : 0);
                 return (
                   <Fragment key={item._imageKey ?? idx}>
-                  <tr>
-                    <td style={{ ...s.td, textAlign: "center", color: colors.textSecondary, fontWeight: 700 }}>{idx + 1}</td>
-                    {showImage && <td style={s.td}>{imageCell(item, idx, locked)}</td>}
-                    {showItemType && (
-                      <td style={{ ...s.td, verticalAlign: "top" }}>
-                        <SearchableItemTypeSelect items={itemTypes} value={item.itemTypeId || ""} onChange={(newId) => pickItemType(idx, newId)} placeholder="— optional —" style={{ minHeight: "var(--sc-cell-h, 0px)", padding: "var(--sc-cell-pad, 0.3rem 0.5rem)", fontSize: "var(--sc-cell-font, 0.78rem)" }} />
-                      </td>
-                    )}
-                    <td style={{ ...s.td, verticalAlign: "top" }}>
-                      <LookupAutocomplete companyId={companyId}
-                        label="Item description"
-                        endpoint="/lookup/items"
-                        value={item.description}
-                        onChange={(v) => handleDescChange(idx, v)}
-                        inputStyle={s.cellInput}
-                        inputRef={(el) => { descRefs.current[idx] = el; }}
-                        onEnterKey={() => commitAndAdvance(idx)}
-                        multiline={descriptionMultiline}
-                      />
-                      {item.rateHint && <div style={s.hint}>{item.rateHint}</div>}
-                      {hint && <div style={s.lockHint}>{hint}</div>}
-                    </td>
-                    <td style={s.td}>
-                      <QuantityInput value={item.quantity} onChange={(v) => setQuantity(idx, v)} unit={item.unit} units={units} min={getRowMin ? getRowMin(item) : undefined} style={{ ...s.cellInput, textAlign: "right" }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitAndAdvance(idx); } }} />
-                    </td>
-                    <td style={s.td}>
-                      <LookupAutocomplete companyId={companyId} label="Unit" endpoint="/lookup/units" value={item.unit} onChange={(v) => setItem(idx, { unit: v })} inputStyle={s.cellInput} onEnterKey={() => commitAndAdvance(idx)} />
-                    </td>
-                    {showUnitPrice && <td style={s.td}>{priceCell(item, idx)}</td>}
-                    {showUnitPrice && (
-                      <td style={{ ...s.td, textAlign: "right", fontWeight: 700 }}>{amountField(item, idx)}</td>
-                    )}
-                    <td style={{ ...s.td, textAlign: "center" }}>
-                      <div style={s.rowActions}>
-                      {showDiscount && showUnitPrice && !locked && (
-                        <button type="button" style={{ ...s.discToggle, ...(discountOpen(item) ? s.discToggleOn : null) }} onClick={() => (discountOpen(item) ? clearDiscount(idx) : openDiscount(idx))} title={discountOpen(item) ? "Remove this line's discount" : "Give a discount on this line"} aria-label={discountOpen(item) ? `Remove discount from line ${idx + 1}` : `Add discount to line ${idx + 1}`} aria-pressed={discountOpen(item)}><MdLocalOffer size={16} /></button>
-                      )}
-                      {!locked && !items[idx].salesOrderItemId && <CopyLineButton onClick={() => duplicateItem(idx)} />}
-                  {items.length > 1 && !locked && (
-                        <button type="button" style={s.del} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={16} /></button>
-                      )}
-                      </div>
-                    </td>
-                  </tr>
-                  {discountOpen(item) && (
                     <tr>
-                      <td style={s.td} />
-                      <td colSpan={colCount - 1} style={{ ...s.td, paddingTop: 0 }}>{discountStrip(item, idx, locked)}</td>
+                      <td
+                        style={{
+                          ...s.td,
+                          textAlign: "center",
+                          color: colors.textSecondary,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {idx + 1}
+                      </td>
+                      {showImage && <td style={s.td}>{imageCell(item, idx, locked)}</td>}
+                      {showItemType && (
+                        <td style={{ ...s.td, verticalAlign: "top" }}>
+                          <SearchableItemTypeSelect
+                            items={itemTypes}
+                            value={item.itemTypeId || ""}
+                            onChange={(newId) => pickItemType(idx, newId)}
+                            placeholder="— optional —"
+                            style={{
+                              minHeight: "var(--sc-cell-h, 0px)",
+                              padding: "var(--sc-cell-pad, 0.3rem 0.5rem)",
+                              fontSize: "var(--sc-cell-font, 0.78rem)",
+                            }}
+                          />
+                        </td>
+                      )}
+                      <td style={{ ...s.td, verticalAlign: "top" }}>
+                        <LookupAutocomplete
+                          companyId={companyId}
+                          label="Item description"
+                          endpoint="/lookup/items"
+                          value={item.description}
+                          onChange={(v) => handleDescChange(idx, v)}
+                          inputStyle={s.cellInput}
+                          inputRef={(el) => {
+                            descRefs.current[idx] = el;
+                          }}
+                          onEnterKey={() => commitAndAdvance(idx)}
+                          multiline={descriptionMultiline}
+                        />
+                        {item.rateHint && <div style={s.hint}>{item.rateHint}</div>}
+                        {hint && <div style={s.lockHint}>{hint}</div>}
+                      </td>
+                      <td style={s.td}>
+                        <QuantityInput
+                          value={item.quantity}
+                          onChange={(v) => setQuantity(idx, v)}
+                          unit={item.unit}
+                          units={units}
+                          min={getRowMin ? getRowMin(item) : undefined}
+                          style={{ ...s.cellInput, textAlign: "right" }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              commitAndAdvance(idx);
+                            }
+                          }}
+                        />
+                      </td>
+                      <td style={s.td}>
+                        <LookupAutocomplete
+                          companyId={companyId}
+                          label="Unit"
+                          endpoint="/lookup/units"
+                          value={item.unit}
+                          onChange={(v) => setItem(idx, { unit: v })}
+                          inputStyle={s.cellInput}
+                          onEnterKey={() => commitAndAdvance(idx)}
+                        />
+                      </td>
+                      {showUnitPrice && <td style={s.td}>{priceCell(item, idx)}</td>}
+                      {showUnitPrice && (
+                        <td style={{ ...s.td, textAlign: "right", fontWeight: 700 }}>
+                          {amountField(item, idx)}
+                        </td>
+                      )}
+                      <td style={{ ...s.td, textAlign: "center" }}>
+                        <div style={s.rowActions}>
+                          {showDiscount && showUnitPrice && !locked && (
+                            <button
+                              type="button"
+                              style={{
+                                ...s.discToggle,
+                                ...(discountOpen(item) ? s.discToggleOn : null),
+                              }}
+                              onClick={() =>
+                                discountOpen(item) ? clearDiscount(idx) : openDiscount(idx)
+                              }
+                              title={
+                                discountOpen(item)
+                                  ? "Remove this line's discount"
+                                  : "Give a discount on this line"
+                              }
+                              aria-label={
+                                discountOpen(item)
+                                  ? `Remove discount from line ${idx + 1}`
+                                  : `Add discount to line ${idx + 1}`
+                              }
+                              aria-pressed={discountOpen(item)}
+                            >
+                              <MdLocalOffer size={16} />
+                            </button>
+                          )}
+                          {!locked && !items[idx].salesOrderItemId && (
+                            <CopyLineButton onClick={() => duplicateItem(idx)} />
+                          )}
+                          {items.length > 1 && !locked && (
+                            <button
+                              type="button"
+                              style={s.del}
+                              onClick={() => removeItem(idx)}
+                              title="Remove item"
+                            >
+                              <MdDelete size={16} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
-                  )}
+                    {discountOpen(item) && (
+                      <tr>
+                        <td style={s.td} />
+                        <td colSpan={colCount - 1} style={{ ...s.td, paddingTop: 0 }}>
+                          {discountStrip(item, idx, locked)}
+                        </td>
+                      </tr>
+                    )}
                   </Fragment>
                 );
               })}
@@ -684,11 +1041,20 @@ export default function LineItemsEditor({
       )}
 
       <div style={s.addRow}>
-        <button type="button" style={s.addBtn} onClick={addGuarded}><MdAdd size={16} /> Add Item</button>
+        <button type="button" style={s.addBtn} onClick={addGuarded}>
+          <MdAdd size={16} /> Add Item
+        </button>
         <span style={s.enterHint}>
-          {descriptionMultiline
-            ? <>Press <kbd style={s.kbd}>Ctrl</kbd>+<kbd style={s.kbd}>Enter</kbd> in a description, or <kbd style={s.kbd}>Enter</kbd> in qty / unit, to add the next line</>
-            : <>Press <kbd style={s.kbd}>Enter</kbd> in a row to add the next line</>}
+          {descriptionMultiline ? (
+            <>
+              Press <kbd style={s.kbd}>Ctrl</kbd>+<kbd style={s.kbd}>Enter</kbd> in a description,
+              or <kbd style={s.kbd}>Enter</kbd> in qty / unit, to add the next line
+            </>
+          ) : (
+            <>
+              Press <kbd style={s.kbd}>Enter</kbd> in a row to add the next line
+            </>
+          )}
         </span>
       </div>
     </div>
@@ -699,61 +1065,370 @@ export default function LineItemsEditor({
 // original palette). Sizes read --sc-* tokens (ui/shared-components.css) with the
 // original value as the fallback, so Classic is unchanged and Workspace is compact.
 const colors = {
-  textSecondary: "var(--k-muted, #5f6d7e)", cardBorder: "var(--k-line, #e8edf3)", inputBg: "var(--k-input-bg, #f8f9fb)",
-  inputBorder: "var(--k-line-strong, #d0d7e2)", danger: "var(--k-danger, #dc3545)", dangerLight: "var(--k-danger-bg, #fff0f1)", teal: "var(--k-teal, #00897b)",
+  textSecondary: "var(--k-muted, #5f6d7e)",
+  cardBorder: "var(--k-line, #e8edf3)",
+  inputBg: "var(--k-input-bg, #f8f9fb)",
+  inputBorder: "var(--k-line-strong, #d0d7e2)",
+  danger: "var(--k-danger, #dc3545)",
+  dangerLight: "var(--k-danger-bg, #fff0f1)",
+  teal: "var(--k-teal, #00897b)",
   ink: "var(--k-ink, #1a2332)",
 };
 const touchH = "var(--sc-touch-h, 44px)";
 const smallFont = "var(--sc-small-font, 0.78rem)";
 
 const s = {
-  itemsHeaderBar: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.5rem" },
-  label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "var(--ui-label-size, 0.85rem)", color: colors.textSecondary },
+  itemsHeaderBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: "0.5rem",
+    marginBottom: "0.5rem",
+  },
+  label: {
+    display: "block",
+    marginBottom: "0.35rem",
+    fontWeight: 600,
+    fontSize: "var(--ui-label-size, 0.85rem)",
+    color: colors.textSecondary,
+  },
   hintText: { fontWeight: 400, fontSize: "0.72rem", color: colors.textSecondary },
-  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.ink, outline: "none", boxSizing: "border-box" },
-  toolBtn: { minHeight: touchH, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "var(--sc-small-btn-pad, 0.4rem 0.7rem)", borderRadius: 6, border: `1px solid ${colors.inputBorder}`, backgroundColor: "#fff", color: colors.textSecondary, fontSize: smallFont, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
-  inlineAddBtn: { minHeight: touchH, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "var(--sc-small-btn-pad, 0.4rem 0.7rem)", borderRadius: 6, border: `1px solid ${colors.teal}`, backgroundColor: "#fff", color: colors.teal, fontSize: smallFont, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
-  pastePanel: { border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "var(--sc-box-pad, 0.7rem)", marginBottom: "0.6rem", background: "#f8faff" },
+  input: {
+    width: "100%",
+    padding: "0.55rem 0.75rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    fontSize: "0.9rem",
+    backgroundColor: colors.inputBg,
+    color: colors.ink,
+    outline: "none",
+    boxSizing: "border-box",
+  },
+  toolBtn: {
+    minHeight: touchH,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    padding: "var(--sc-small-btn-pad, 0.4rem 0.7rem)",
+    borderRadius: 6,
+    border: `1px solid ${colors.inputBorder}`,
+    backgroundColor: "#fff",
+    color: colors.textSecondary,
+    fontSize: smallFont,
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+  inlineAddBtn: {
+    minHeight: touchH,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    padding: "var(--sc-small-btn-pad, 0.4rem 0.7rem)",
+    borderRadius: 6,
+    border: `1px solid ${colors.teal}`,
+    backgroundColor: "#fff",
+    color: colors.teal,
+    fontSize: smallFont,
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+  pastePanel: {
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 10,
+    padding: "var(--sc-box-pad, 0.7rem)",
+    marginBottom: "0.6rem",
+    background: "#f8faff",
+  },
   pasteHintRow: { fontSize: "0.75rem", color: colors.textSecondary, marginBottom: "0.4rem" },
-  pasteArea: { width: "100%", boxSizing: "border-box", padding: "0.5rem 0.6rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "var(--sc-cell-font, 0.85rem)", fontFamily: "inherit", marginBottom: "0.5rem", resize: "vertical" },
-  pasteCancel: { minHeight: "var(--sc-cell-h, 0px)", padding: "var(--sc-small-btn-pad, 0.4rem 0.9rem)", borderRadius: 6, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.textSecondary, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" },
-  pasteApply: { minHeight: "var(--sc-cell-h, 0px)", padding: "var(--sc-small-btn-pad, 0.4rem 0.9rem)", borderRadius: 6, border: "none", background: colors.teal, color: "#fff", fontSize: "0.8rem", fontWeight: 700, cursor: "pointer" },
-  bulkApplyBar: { display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap", padding: "var(--sc-box-pad, 0.55rem 0.85rem)", marginBottom: "0.5rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#f8faff" },
-  bulkClearBtn: { minHeight: touchH, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "var(--sc-small-btn-pad, 0.35rem 0.7rem)", borderRadius: 6, border: `1px solid ${colors.danger}`, backgroundColor: "#fff", color: colors.danger, fontSize: smallFont, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 },
-  tableWrap: { maxHeight: 320, overflowY: "auto", overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 10 },
+  pasteArea: {
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "0.5rem 0.6rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    fontSize: "var(--sc-cell-font, 0.85rem)",
+    fontFamily: "inherit",
+    marginBottom: "0.5rem",
+    resize: "vertical",
+  },
+  pasteCancel: {
+    minHeight: "var(--sc-cell-h, 0px)",
+    padding: "var(--sc-small-btn-pad, 0.4rem 0.9rem)",
+    borderRadius: 6,
+    border: `1px solid ${colors.inputBorder}`,
+    background: "#fff",
+    color: colors.textSecondary,
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  pasteApply: {
+    minHeight: "var(--sc-cell-h, 0px)",
+    padding: "var(--sc-small-btn-pad, 0.4rem 0.9rem)",
+    borderRadius: 6,
+    border: "none",
+    background: colors.teal,
+    color: "#fff",
+    fontSize: "0.8rem",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  bulkApplyBar: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.65rem",
+    flexWrap: "wrap",
+    padding: "var(--sc-box-pad, 0.55rem 0.85rem)",
+    marginBottom: "0.5rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.cardBorder}`,
+    backgroundColor: "#f8faff",
+  },
+  bulkClearBtn: {
+    minHeight: touchH,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    padding: "var(--sc-small-btn-pad, 0.35rem 0.7rem)",
+    borderRadius: 6,
+    border: `1px solid ${colors.danger}`,
+    backgroundColor: "#fff",
+    color: colors.danger,
+    fontSize: smallFont,
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+  },
+  tableWrap: {
+    maxHeight: 320,
+    overflowY: "auto",
+    overflowX: "auto",
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 10,
+  },
   table: { width: "100%", borderCollapse: "collapse" },
-  th: { textAlign: "left", fontSize: "var(--k-th-font, 0.7rem)", textTransform: "uppercase", letterSpacing: "0.02em", fontWeight: 700, color: colors.textSecondary, padding: "var(--sc-th-pad, 0.5rem 0.4rem)", borderBottom: `2px solid ${colors.cardBorder}`, whiteSpace: "nowrap", background: "#fafbfc", position: "sticky", top: 0, zIndex: 1 },
-  td: { padding: "var(--sc-td-pad, 0.3rem 0.4rem)", verticalAlign: "middle", borderBottom: `1px solid ${colors.cardBorder}` },
-  cellInput: { width: "100%", minHeight: "var(--sc-cell-h, 0px)", padding: "var(--sc-cell-pad, 0.5rem 0.55rem)", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "var(--sc-cell-font, 0.88rem)", backgroundColor: colors.inputBg, color: colors.ink, outline: "none", boxSizing: "border-box" },
+  th: {
+    textAlign: "left",
+    fontSize: "var(--k-th-font, 0.7rem)",
+    textTransform: "uppercase",
+    letterSpacing: "0.02em",
+    fontWeight: 700,
+    color: colors.textSecondary,
+    padding: "var(--sc-th-pad, 0.5rem 0.4rem)",
+    borderBottom: `2px solid ${colors.cardBorder}`,
+    whiteSpace: "nowrap",
+    background: "#fafbfc",
+    position: "sticky",
+    top: 0,
+    zIndex: 1,
+  },
+  td: {
+    padding: "var(--sc-td-pad, 0.3rem 0.4rem)",
+    verticalAlign: "middle",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+  },
+  cellInput: {
+    width: "100%",
+    minHeight: "var(--sc-cell-h, 0px)",
+    padding: "var(--sc-cell-pad, 0.5rem 0.55rem)",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    fontSize: "var(--sc-cell-font, 0.88rem)",
+    backgroundColor: colors.inputBg,
+    color: colors.ink,
+    outline: "none",
+    boxSizing: "border-box",
+  },
   hint: { fontSize: "0.7rem", color: colors.teal, marginTop: 2, fontWeight: 600 },
   lockHint: { fontSize: "0.7rem", color: colors.textSecondary, marginTop: 2, fontStyle: "italic" },
   rowActions: { display: "flex", gap: 6, justifyContent: "center", alignItems: "center" },
-  del: { display: "grid", placeItems: "center", padding: "0.4rem", borderRadius: 8, border: "1px solid rgba(220, 53, 69, 0.15)", backgroundColor: colors.dangerLight, color: colors.danger, cursor: "pointer", margin: "0 auto" },
-  addRow: { display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "0.6rem", flexWrap: "wrap" },
-  addBtn: { minHeight: touchH, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "var(--sc-small-btn-pad, 0.4rem 0.9rem)", borderRadius: 8, border: "none", backgroundColor: "rgba(0, 137, 123, 0.08)", color: colors.teal, fontSize: "var(--sc-cell-font, 0.82rem)", fontWeight: 600, cursor: "pointer" },
+  del: {
+    display: "grid",
+    placeItems: "center",
+    padding: "0.4rem",
+    borderRadius: 8,
+    border: "1px solid rgba(220, 53, 69, 0.15)",
+    backgroundColor: colors.dangerLight,
+    color: colors.danger,
+    cursor: "pointer",
+    margin: "0 auto",
+  },
+  addRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.75rem",
+    marginTop: "0.6rem",
+    flexWrap: "wrap",
+  },
+  addBtn: {
+    minHeight: touchH,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    padding: "var(--sc-small-btn-pad, 0.4rem 0.9rem)",
+    borderRadius: 8,
+    border: "none",
+    backgroundColor: "rgba(0, 137, 123, 0.08)",
+    color: colors.teal,
+    fontSize: "var(--sc-cell-font, 0.82rem)",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
   enterHint: { fontSize: "0.72rem", color: colors.textSecondary },
   // Line discount (Quote).
-  discStrip: { display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.5rem", padding: "0.5rem 0.6rem", borderRadius: 8, background: "#f3faf9", border: "1px dashed rgba(0, 137, 123, 0.33)" },
-  discTag: { display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.74rem", fontWeight: 700, color: colors.teal, textTransform: "uppercase", letterSpacing: "0.03em", whiteSpace: "nowrap" },
+  discStrip: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    flexWrap: "wrap",
+    marginTop: "0.5rem",
+    padding: "0.5rem 0.6rem",
+    borderRadius: 8,
+    background: "#f3faf9",
+    border: "1px dashed rgba(0, 137, 123, 0.33)",
+  },
+  discTag: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    fontSize: "0.74rem",
+    fontWeight: 700,
+    color: colors.teal,
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+    whiteSpace: "nowrap",
+  },
   discValueWrap: { flex: "0 1 130px", minWidth: 110 },
   discReasonWrap: { flex: "1 1 220px", minWidth: 0 },
-  discAmount: { fontSize: "0.85rem", fontWeight: 700, color: colors.teal, whiteSpace: "nowrap", marginLeft: "auto" },
-  discError: { fontSize: "0.78rem", fontWeight: 600, color: colors.danger, whiteSpace: "nowrap", marginLeft: "auto" },
-  discRemove: { display: "grid", placeItems: "center", padding: 0, boxShadow: "none", width: 32, height: 32, borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.textSecondary, cursor: "pointer", flexShrink: 0 },
-  discToggle: { display: "grid", placeItems: "center", padding: 0, boxShadow: "none", width: 32, height: 32, borderRadius: 8, border: "1px solid rgba(0, 137, 123, 0.25)", background: "#fff", color: colors.teal, cursor: "pointer" },
+  discAmount: {
+    fontSize: "0.85rem",
+    fontWeight: 700,
+    color: colors.teal,
+    whiteSpace: "nowrap",
+    marginLeft: "auto",
+  },
+  discError: {
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    color: colors.danger,
+    whiteSpace: "nowrap",
+    marginLeft: "auto",
+  },
+  discRemove: {
+    display: "grid",
+    placeItems: "center",
+    padding: 0,
+    boxShadow: "none",
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    background: "#fff",
+    color: colors.textSecondary,
+    cursor: "pointer",
+    flexShrink: 0,
+  },
+  discToggle: {
+    display: "grid",
+    placeItems: "center",
+    padding: 0,
+    boxShadow: "none",
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    border: "1px solid rgba(0, 137, 123, 0.25)",
+    background: "#fff",
+    color: colors.teal,
+    cursor: "pointer",
+  },
   discToggleOn: { background: colors.teal, color: "#fff", borderColor: colors.teal },
-  discAddBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.35rem", marginTop: "0.5rem", padding: "0.4rem 0.8rem", borderRadius: 8, border: "1px dashed rgba(0, 137, 123, 0.5)", background: "#fff", color: colors.teal, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" },
-  afterDisc: { fontSize: "0.7rem", fontWeight: 600, color: colors.teal, marginTop: 3, textAlign: "right" },
-  grossStruck: { fontSize: "0.72rem", fontWeight: 500, color: colors.textSecondary, textDecoration: "line-through" },
+  discAddBtn: {
+    minHeight: 44,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.35rem",
+    marginTop: "0.5rem",
+    padding: "0.4rem 0.8rem",
+    borderRadius: 8,
+    border: "1px dashed rgba(0, 137, 123, 0.5)",
+    background: "#fff",
+    color: colors.teal,
+    fontSize: "0.82rem",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  afterDisc: {
+    fontSize: "0.7rem",
+    fontWeight: 600,
+    color: colors.teal,
+    marginTop: 3,
+    textAlign: "right",
+  },
+  grossStruck: {
+    fontSize: "0.72rem",
+    fontWeight: 500,
+    color: colors.textSecondary,
+    textDecoration: "line-through",
+  },
   inputError: { borderColor: colors.danger, background: colors.dangerLight },
-  kbd: { fontFamily: "monospace", fontSize: "0.7rem", padding: "0.05rem 0.35rem", borderRadius: 4, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.ink },
+  kbd: {
+    fontFamily: "monospace",
+    fontSize: "0.7rem",
+    padding: "0.05rem 0.35rem",
+    borderRadius: 4,
+    border: `1px solid ${colors.inputBorder}`,
+    background: "#fff",
+    color: colors.ink,
+  },
   // Mobile stacked-card line items (below narrowBreakpoint).
   mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
-  mcard: { border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" },
+  mcard: {
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 12,
+    padding: "0.7rem 0.75rem",
+    background: "#fff",
+  },
   mcardHead: { display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" },
-  mnum: { flex: "0 0 auto", width: 24, height: 24, borderRadius: 7, background: "#f0f3f8", color: colors.textSecondary, display: "grid", placeItems: "center", fontSize: "0.78rem", fontWeight: 700 },
-  m3col: { display: "grid", gridTemplateColumns: "1fr 1fr 1.1fr", gap: "0.5rem", marginTop: "0.5rem" },
+  mnum: {
+    flex: "0 0 auto",
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    background: "#f0f3f8",
+    color: colors.textSecondary,
+    display: "grid",
+    placeItems: "center",
+    fontSize: "0.78rem",
+    fontWeight: 700,
+  },
+  m3col: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1.1fr",
+    gap: "0.5rem",
+    marginTop: "0.5rem",
+  },
   m2col: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "0.5rem" },
-  mlabel: { display: "block", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.03em", color: colors.textSecondary, fontWeight: 700, marginBottom: "0.2rem" },
-  mamt: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.55rem", paddingTop: "0.45rem", borderTop: `1px dashed ${colors.cardBorder}`, fontSize: "0.85rem", color: colors.textSecondary },
+  mlabel: {
+    display: "block",
+    fontSize: "0.68rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+    color: colors.textSecondary,
+    fontWeight: 700,
+    marginBottom: "0.2rem",
+  },
+  mamt: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: "0.55rem",
+    paddingTop: "0.45rem",
+    borderTop: `1px dashed ${colors.cardBorder}`,
+    fontSize: "0.85rem",
+    color: colors.textSecondary,
+  },
 };

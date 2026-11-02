@@ -19,13 +19,13 @@
  */
 
 export const paymentStarters = [
-
   // ─── 1. Classic Serif (double-rule header) — DEFAULT ─────────────────────────
   {
     id: "payment-classic-serif",
     name: "Classic Serif",
     type: "Payment",
-    description: "Traditional Times New Roman payment voucher with double-rule header, indigo amount box and three-way signatures",
+    description:
+      "Traditional Times New Roman payment voucher with double-rule header, indigo amount box and three-way signatures",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Payment Voucher {{reference}}</title><style>
 @media print { @page { size: A4; margin: 12mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -122,7 +122,8 @@ tfoot td { font-weight: 700; background: #e3f2fd !important; border-top: 2px sol
     id: "payment-modern-minimal",
     name: "Modern Minimal",
     type: "Payment",
-    description: "Clean Segoe/Calibri sans layout with a thin indigo gradient accent rule, method card strip and large amount panel",
+    description:
+      "Clean Segoe/Calibri sans layout with a thin indigo gradient accent rule, method card strip and large amount panel",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Payment Voucher {{reference}}</title><style>
 @media print { @page { size: A4; margin: 12mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -221,7 +222,8 @@ tfoot td { font-weight: 700; color: #0d47a1; border-top: 2px solid #0d47a1; bord
     id: "payment-corporate-band",
     name: "Corporate Band",
     type: "Payment",
-    description: "Full-width indigo header band with reversed white company name and voucher reference, boxed reference cells",
+    description:
+      "Full-width indigo header band with reversed white company name and voucher reference, boxed reference cells",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Payment Voucher {{reference}}</title><style>
 @media print { @page { size: A4; margin: 0; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -332,7 +334,8 @@ tfoot td { font-weight: 700; background: #e3f2fd !important; }
     id: "payment-monochrome-ink",
     name: "Monochrome Ink-Saver",
     type: "Payment",
-    description: "Hairline black borders only, no fills, pure black-and-white payment voucher for minimum toner use",
+    description:
+      "Hairline black borders only, no fills, pure black-and-white payment voucher for minimum toner use",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Payment Voucher {{reference}}</title><style>
 @media print { @page { size: A4; margin: 12mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -425,5 +428,4 @@ tfoot td { font-weight: 700; }
 </div>
 </body></html>`,
   },
-
 ];

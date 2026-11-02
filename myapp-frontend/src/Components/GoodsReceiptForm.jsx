@@ -2,7 +2,11 @@ import DocumentCopyPicker from "./DocumentCopyPicker";
 import { appendCopiedLines, copyLine } from "../utils/documentCopy";
 import { useState, useEffect, useRef } from "react";
 import { MdAdd, MdDelete } from "react-icons/md";
-import { createGoodsReceipt, updateGoodsReceipt, getGoodsReceiptById } from "../api/goodsReceiptApi";
+import {
+  createGoodsReceipt,
+  updateGoodsReceipt,
+  getGoodsReceiptById,
+} from "../api/goodsReceiptApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getPurchaseBillsByCompanyPaged } from "../api/purchaseBillApi";
@@ -32,10 +36,14 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
   const [supplierChallanNumber, setSupplierChallanNumber] = useState("");
   const [site, setSite] = useState("");
   const [notes, setNotes] = useState("");
-  const [items, setItems] = useState([{ id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" }]);
+  const [items, setItems] = useState([
+    { id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" },
+  ]);
   // Responsive: the line-item table side-scrolls on a phone, so below 760px
   // each line renders as a tap-friendly stacked card instead.
-  const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 760);
+  const [isNarrow, setIsNarrow] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < 760,
+  );
   useEffect(() => {
     const onResize = () => setIsNarrow(window.innerWidth < 760);
     window.addEventListener("resize", onResize);
@@ -61,7 +69,9 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
         setSuppliers(sRes.data || []);
         setItemTypes(tRes.data || []);
         setBills(bRes.data?.items || []);
-      } catch { setError("Failed to load reference data."); }
+      } catch {
+        setError("Failed to load reference data.");
+      }
     })();
   }, [companyId]);
 
@@ -78,16 +88,30 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
         setSupplierChallanNumber(data.supplierChallanNumber || "");
         setSite(data.site || "");
         setNotes(data.notes || "");
-        setItems((data.items || []).map(i => ({ id: i.id, itemTypeId: i.itemTypeId, description: i.description, quantity: i.quantity, unit: i.unit })));
-      } catch { setError("Failed to load receipt."); }
+        setItems(
+          (data.items || []).map((i) => ({
+            id: i.id,
+            itemTypeId: i.itemTypeId,
+            description: i.description,
+            quantity: i.quantity,
+            unit: i.unit,
+          })),
+        );
+      } catch {
+        setError("Failed to load receipt.");
+      }
     })();
   }, [receiptId, isEdit]);
 
-  const billsForSupplier = bills.filter(b => !supplierId || b.supplierId === parseInt(supplierId));
+  const billsForSupplier = bills.filter(
+    (b) => !supplierId || b.supplierId === parseInt(supplierId),
+  );
 
   const updateItem = (idx, field, value) => {
-    setItems(prev => {
-      const next = [...prev]; next[idx] = { ...next[idx], [field]: value }; return next;
+    setItems((prev) => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], [field]: value };
+      return next;
     });
   };
 
@@ -97,8 +121,10 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
     setError("");
     if (!supplierId) return setError("Select a supplier.");
     if (items.length === 0) return setError("Add at least one item.");
-    if (items.some(i => !i.description?.trim())) return setError("Every line needs a description.");
-    if (items.some(i => !(parseInt(i.quantity) > 0))) return setError("Quantity must be greater than zero.");
+    if (items.some((i) => !i.description?.trim()))
+      return setError("Every line needs a description.");
+    if (items.some((i) => !(parseInt(i.quantity) > 0)))
+      return setError("Quantity must be greater than zero.");
     setSaving(true);
     try {
       const payload = {
@@ -110,7 +136,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
         supplierChallanNumber: supplierChallanNumber || null,
         site: site || null,
         notes: notes.trim() || null,
-        items: items.map(i => ({
+        items: items.map((i) => ({
           id: i.id || 0,
           itemTypeId: i.itemTypeId || null,
           description: i.description?.trim(),
@@ -125,7 +151,13 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
       // Upload any files staged before the receipt had an id (no-op on edit /
       // when nothing was staged). Best-effort — the receipt is already saved.
       const savedId = res.data?.id ?? receiptId;
-      if (savedId) { try { await attachmentRef.current?.flush(savedId); } catch { /* attachments best-effort */ } }
+      if (savedId) {
+        try {
+          await attachmentRef.current?.flush(savedId);
+        } catch {
+          /* attachments best-effort */
+        }
+      }
       onSaved(res.data);
       onClose();
     } catch (err) {
@@ -140,18 +172,68 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: 1000, width: "94vw" }}>
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? "Edit Goods Receipt" : "New Goods Receipt"}</h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            &times;
+          </button>
         </div>
         <form onSubmit={handleSubmit}>
-          <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
-            <DocumentCopyPicker companyId={companyId} destination="GoodsReceipt" allowDetails={!isEdit} disabled={!!purchaseBillId}
-              onCopy={(source,lines,details) => {
-                setItems(prev => appendCopiedLines(details ? [] : prev, lines, () => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""})));
-                if(details) { setSupplierId(String(source.supplierId));setNotes(source.notes||"");setSite(source.site||"");setSupplierChallanNumber("");setPurchaseBillId(""); }
-              }} />
-            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
-            {<div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="goods-receipt" variant={isEdit ? "edit" : "create"} currentNumber={currentNumber} editRecordId={receiptId} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.75rem" }}>
+          <div
+            data-admin-body=""
+            style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}
+          >
+            <DocumentCopyPicker
+              companyId={companyId}
+              destination="GoodsReceipt"
+              allowDetails={!isEdit}
+              disabled={!!purchaseBillId}
+              onCopy={(source, lines, details) => {
+                setItems((prev) =>
+                  appendCopiedLines(details ? [] : prev, lines, () => ({
+                    id: 0,
+                    itemTypeId: null,
+                    description: "",
+                    quantity: 1,
+                    unit: "",
+                  })),
+                );
+                if (details) {
+                  setSupplierId(String(source.supplierId));
+                  setNotes(source.notes || "");
+                  setSite(source.site || "");
+                  setSupplierChallanNumber("");
+                  setPurchaseBillId("");
+                }
+              }}
+            />
+            {error && (
+              <div ref={errRef} style={formStyles.error}>
+                {error}
+              </div>
+            )}
+            {
+              <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}>
+                <BillNumberField
+                  companyId={companyId}
+                  documentType="goods-receipt"
+                  variant={isEdit ? "edit" : "create"}
+                  currentNumber={currentNumber}
+                  editRecordId={receiptId}
+                  mode={numberMode}
+                  onModeChange={setNumberMode}
+                  number={customNumber}
+                  onNumberChange={setCustomNumber}
+                  onValidityChange={setNumberValid}
+                  disabled={saving}
+                />
+              </div>
+            }
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))",
+                gap: "0.75rem",
+              }}
+            >
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Supplier *</label>
                 <SearchableClientSelect
@@ -165,12 +247,20 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
               </div>
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Receipt Date *</label>
-                <input type="date" style={formStyles.input} value={receiptDate} onChange={e => setReceiptDate(e.target.value)} />
+                <input
+                  type="date"
+                  style={formStyles.input}
+                  value={receiptDate}
+                  onChange={(e) => setReceiptDate(e.target.value)}
+                />
               </div>
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Linked Purchase Bill</label>
                 <SearchableSelect
-                  items={billsForSupplier.map(b => ({ id: b.id, label: `PB #${b.purchaseBillNumber}` }))}
+                  items={billsForSupplier.map((b) => ({
+                    id: b.id,
+                    label: `PB #${b.purchaseBillNumber}`,
+                  }))}
                   value={purchaseBillId}
                   onChange={(id) => setPurchaseBillId(String(id))}
                   labelKey="label"
@@ -179,22 +269,56 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                 />
               </div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
+                gap: "0.75rem",
+              }}
+            >
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Supplier Challan #</label>
-                <input type="text" style={formStyles.input} value={supplierChallanNumber} onChange={e => setSupplierChallanNumber(e.target.value)} />
+                <input
+                  type="text"
+                  style={formStyles.input}
+                  value={supplierChallanNumber}
+                  onChange={(e) => setSupplierChallanNumber(e.target.value)}
+                />
               </div>
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Receiving Site</label>
-                <input type="text" style={formStyles.input} value={site} onChange={e => setSite(e.target.value)} />
+                <input
+                  type="text"
+                  style={formStyles.input}
+                  value={site}
+                  onChange={(e) => setSite(e.target.value)}
+                />
               </div>
             </div>
 
             <DocumentNotesEditor value={notes} onChange={setNotes} />
             <div style={itemsBox}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "0.5rem",
+                }}
+              >
                 <strong style={{ color: "var(--k-ink)" }}>Items ({items.length})</strong>
-                <Button size="sm" icon={MdAdd} onClick={() => setItems([...items, { id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" }])}>Add line</Button>
+                <Button
+                  size="sm"
+                  icon={MdAdd}
+                  onClick={() =>
+                    setItems([
+                      ...items,
+                      { id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" },
+                    ])
+                  }
+                >
+                  Add line
+                </Button>
               </div>
               {isNarrow ? (
                 <div style={mStyles.cards}>
@@ -208,7 +332,8 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                             onChange={(newId, picked) => {
                               updateItem(idx, "itemTypeId", newId ? parseInt(newId) : null);
                               if (picked) {
-                                if (!it.description?.trim()) updateItem(idx, "description", picked.name || "");
+                                if (!it.description?.trim())
+                                  updateItem(idx, "description", picked.name || "");
                                 if (picked.uom) updateItem(idx, "unit", picked.uom);
                               }
                             }}
@@ -216,83 +341,179 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                             style={{ padding: "0.4rem 0.55rem", fontSize: "0.82rem" }}
                           />
                         </div>
-                        <CopyLineButton onClick={() => setItems(prev => [...prev,copyLine(it,() => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""}))])} />
-                          {items.length > 1 && (
-                          <IconButton label="Remove line" icon={MdDelete} danger onClick={() => setItems(items.filter((_, i) => i !== idx))} />
+                        <CopyLineButton
+                          onClick={() =>
+                            setItems((prev) => [
+                              ...prev,
+                              copyLine(it, () => ({
+                                id: 0,
+                                itemTypeId: null,
+                                description: "",
+                                quantity: 1,
+                                unit: "",
+                              })),
+                            ])
+                          }
+                        />
+                        {items.length > 1 && (
+                          <IconButton
+                            label="Remove line"
+                            icon={MdDelete}
+                            danger
+                            onClick={() => setItems(items.filter((_, i) => i !== idx))}
+                          />
                         )}
                       </div>
                       <div style={{ marginBottom: "0.4rem" }}>
                         <label style={mStyles.label}>Description *</label>
-                        <input type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} />
+                        <input
+                          type="text"
+                          style={cellInput}
+                          value={it.description}
+                          onChange={(e) => updateItem(idx, "description", e.target.value)}
+                        />
                       </div>
                       <div style={mStyles.grid2}>
                         <div>
                           <label style={mStyles.label}>Qty *</label>
-                          <input type="number" min={1} style={{ ...cellInput, textAlign: "right" }} value={it.quantity} onChange={e => updateItem(idx, "quantity", e.target.value)} />
+                          <input
+                            type="number"
+                            min={1}
+                            style={{ ...cellInput, textAlign: "right" }}
+                            value={it.quantity}
+                            onChange={(e) => updateItem(idx, "quantity", e.target.value)}
+                          />
                         </div>
                         <div>
                           <label style={mStyles.label}>UOM</label>
-                          <input type="text" style={cellInput} value={it.unit} onChange={e => updateItem(idx, "unit", e.target.value)} />
+                          <input
+                            type="text"
+                            style={cellInput}
+                            value={it.unit}
+                            onChange={(e) => updateItem(idx, "unit", e.target.value)}
+                          />
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-              <TableWrap data-admin-table-region="">
-              <table className="k-table k-table--compact">
-                <thead>
-                  <tr>
-                    <th>Item Type</th>
-                    <th>Description *</th>
-                    <th className="k-num" style={{ width: 80 }}>Qty *</th>
-                    <th style={{ width: 100 }}>UOM</th>
-                    <th style={{ width: 76 }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((it, idx) => (
-                    <tr key={idx}>
-                      <td style={td}>
-                        <SearchableItemTypeSelect
-                          items={itemTypes}
-                          value={it.itemTypeId || ""}
-                          onChange={(newId, picked) => {
-                            updateItem(idx, "itemTypeId", newId ? parseInt(newId) : null);
-                            if (picked) {
-                              if (!it.description?.trim()) updateItem(idx, "description", picked.name || "");
-                              if (picked.uom) updateItem(idx, "unit", picked.uom);
-                            }
-                          }}
-                          placeholder="— optional —"
-                          style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
-                        />
-                      </td>
-                      <td style={td}><input type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} /></td>
-                      <td style={td}><input type="number" min={1} style={{ ...cellInput, textAlign: "right" }} value={it.quantity} onChange={e => updateItem(idx, "quantity", e.target.value)} /></td>
-                      <td style={td}><input type="text" style={cellInput} value={it.unit} onChange={e => updateItem(idx, "unit", e.target.value)} /></td>
-                      <td style={{ ...td, whiteSpace: "nowrap" }}>
-                        <CopyLineButton style={{ marginRight: 6 }} onClick={() => setItems(prev => [...prev,copyLine(it,() => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""}))])} />
-                          {items.length > 1 && (
-                          <IconButton label="Remove line" icon={MdDelete} size={16} danger onClick={() => setItems(items.filter((_, i) => i !== idx))} />
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              </TableWrap>
+                <TableWrap data-admin-table-region="">
+                  <table className="k-table k-table--compact">
+                    <thead>
+                      <tr>
+                        <th>Item Type</th>
+                        <th>Description *</th>
+                        <th className="k-num" style={{ width: 80 }}>
+                          Qty *
+                        </th>
+                        <th style={{ width: 100 }}>UOM</th>
+                        <th style={{ width: 76 }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((it, idx) => (
+                        <tr key={idx}>
+                          <td style={td}>
+                            <SearchableItemTypeSelect
+                              items={itemTypes}
+                              value={it.itemTypeId || ""}
+                              onChange={(newId, picked) => {
+                                updateItem(idx, "itemTypeId", newId ? parseInt(newId) : null);
+                                if (picked) {
+                                  if (!it.description?.trim())
+                                    updateItem(idx, "description", picked.name || "");
+                                  if (picked.uom) updateItem(idx, "unit", picked.uom);
+                                }
+                              }}
+                              placeholder="— optional —"
+                              style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                            />
+                          </td>
+                          <td style={td}>
+                            <input
+                              type="text"
+                              style={cellInput}
+                              value={it.description}
+                              onChange={(e) => updateItem(idx, "description", e.target.value)}
+                            />
+                          </td>
+                          <td style={td}>
+                            <input
+                              type="number"
+                              min={1}
+                              style={{ ...cellInput, textAlign: "right" }}
+                              value={it.quantity}
+                              onChange={(e) => updateItem(idx, "quantity", e.target.value)}
+                            />
+                          </td>
+                          <td style={td}>
+                            <input
+                              type="text"
+                              style={cellInput}
+                              value={it.unit}
+                              onChange={(e) => updateItem(idx, "unit", e.target.value)}
+                            />
+                          </td>
+                          <td style={{ ...td, whiteSpace: "nowrap" }}>
+                            <CopyLineButton
+                              style={{ marginRight: 6 }}
+                              onClick={() =>
+                                setItems((prev) => [
+                                  ...prev,
+                                  copyLine(it, () => ({
+                                    id: 0,
+                                    itemTypeId: null,
+                                    description: "",
+                                    quantity: 1,
+                                    unit: "",
+                                  })),
+                                ])
+                              }
+                            />
+                            {items.length > 1 && (
+                              <IconButton
+                                label="Remove line"
+                                icon={MdDelete}
+                                size={16}
+                                danger
+                                onClick={() => setItems(items.filter((_, i) => i !== idx))}
+                              />
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </TableWrap>
               )}
             </div>
 
             <div style={{ marginTop: "1rem" }}>
-              <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="GoodsReceipt" entityId={receiptId ?? null} mode="edit" />
+              <AttachmentManager
+                ref={attachmentRef}
+                companyId={companyId}
+                entityType="GoodsReceipt"
+                entityId={receiptId ?? null}
+                mode="edit"
+              />
             </div>
           </div>
           <div data-admin-footer="" style={formStyles.footer}>
-            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
-            <button type="submit" disabled={saving || !numberValid} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}>
-              {saving ? "Saving..." : (isEdit ? "Update" : "Create")}
+            <button
+              data-admin-close=""
+              type="button"
+              style={{ ...formStyles.button, ...formStyles.cancel }}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !numberValid}
+              style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}
+            >
+              {saving ? "Saving..." : isEdit ? "Update" : "Create"}
             </button>
           </div>
         </form>
@@ -304,13 +525,41 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
 // Line-item editor layout: the table is a kit k-table; cells stay top-aligned and the
 // cell inputs stay compact in every theme.
 const td = { verticalAlign: "top" };
-const cellInput = { width: "100%", padding: "0.3rem 0.5rem", fontSize: "var(--k-font-sm)", border: "1px solid var(--k-line-strong)", borderRadius: 6, backgroundColor: "var(--k-input-bg)", color: "var(--k-ink)", outline: "none" };
-const itemsBox = { marginTop: "0.75rem", padding: "0.75rem", borderRadius: "var(--k-radius)", border: "1px solid var(--k-line)", backgroundColor: "var(--k-surface-2)" };
+const cellInput = {
+  width: "100%",
+  padding: "0.3rem 0.5rem",
+  fontSize: "var(--k-font-sm)",
+  border: "1px solid var(--k-line-strong)",
+  borderRadius: 6,
+  backgroundColor: "var(--k-input-bg)",
+  color: "var(--k-ink)",
+  outline: "none",
+};
+const itemsBox = {
+  marginTop: "0.75rem",
+  padding: "0.75rem",
+  borderRadius: "var(--k-radius)",
+  border: "1px solid var(--k-line)",
+  backgroundColor: "var(--k-surface-2)",
+};
 // Mobile stacked-card line items (rendered below 760px instead of the table).
 const mStyles = {
   cards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
-  card: { border: "1px solid var(--k-line)", borderRadius: "var(--k-radius)", padding: "0.7rem 0.75rem", background: "var(--k-surface)" },
+  card: {
+    border: "1px solid var(--k-line)",
+    borderRadius: "var(--k-radius)",
+    padding: "0.7rem 0.75rem",
+    background: "var(--k-surface)",
+  },
   head: { display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.5rem" },
-  label: { display: "block", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.03em", color: "var(--k-muted)", fontWeight: 700, marginBottom: "0.2rem" },
+  label: {
+    display: "block",
+    fontSize: "0.68rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+    color: "var(--k-muted)",
+    fontWeight: 700,
+    marginBottom: "0.2rem",
+  },
   grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "0.4rem" },
 };

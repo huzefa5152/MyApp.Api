@@ -9,7 +9,11 @@ export const getPagedSalesOrdersByCompany = (companyId, params = {}) =>
 export const getSalesOrdersForPicker = async (companyId, params = {}, maxPages = 5) => {
   const items = [];
   for (let page = 1; page <= maxPages; page++) {
-    const { data } = await getPagedSalesOrdersByCompany(companyId, { ...params, page, pageSize: 100 });
+    const { data } = await getPagedSalesOrdersByCompany(companyId, {
+      ...params,
+      page,
+      pageSize: 100,
+    });
     items.push(...(data?.items || []));
     const total = data?.totalCount ?? items.length;
     if (!data?.items?.length || items.length >= total) break;
@@ -21,14 +25,12 @@ export const getSalesOrdersForPicker = async (companyId, params = {}, maxPages =
 export const getOpenSalesOrdersByCompany = (companyId) =>
   httpClient.get(`/salesorders/company/${companyId}/open`);
 
-export const getSalesOrderById = (id) =>
-  httpClient.get(`/salesorders/${id}`);
+export const getSalesOrderById = (id) => httpClient.get(`/salesorders/${id}`);
 
 export const createSalesOrder = (companyId, payload) =>
   httpClient.post(`/salesorders/company/${companyId}`, payload);
 
-export const updateSalesOrder = (id, payload) =>
-  httpClient.put(`/salesorders/${id}`, payload);
+export const updateSalesOrder = (id, payload) => httpClient.put(`/salesorders/${id}`, payload);
 
 export const setSalesOrderStatus = (id, status) =>
   httpClient.put(`/salesorders/${id}/status`, { status });
@@ -39,8 +41,7 @@ export const setSalesOrderStatus = (id, status) =>
 export const createChallanFromOrder = (id, payload) =>
   httpClient.post(`/salesorders/${id}/create-challan`, payload);
 
-export const deleteSalesOrder = (id) =>
-  httpClient.delete(`/salesorders/${id}`);
+export const deleteSalesOrder = (id) => httpClient.delete(`/salesorders/${id}`);
 
 // Prefill for "create a bill from this order" (FBR-off standalone billing).
 // Returns header (client, PO, site) + lines with unit prices resolved
@@ -48,12 +49,10 @@ export const deleteSalesOrder = (id) =>
 export const getSalesOrderInvoicePrefill = (id) =>
   httpClient.get(`/salesorders/${id}/invoice-prefill`);
 
-export const getSalesOrderPrintData = (id) =>
-  httpClient.get(`/salesorders/${id}/print`);
+export const getSalesOrderPrintData = (id) => httpClient.get(`/salesorders/${id}/print`);
 
 // Delivery challans raised against this order — powers the View drill-down.
-export const getSalesOrderChallans = (id) =>
-  httpClient.get(`/salesorders/${id}/challans`);
+export const getSalesOrderChallans = (id) => httpClient.get(`/salesorders/${id}/challans`);
 
 // Unlinked, unbilled challans for this order's client — candidates to attach
 // (e.g. No-PO challans raised before the PO arrived).
@@ -72,4 +71,5 @@ export const attachChallanToOrder = (id, payload) =>
 export const getSalesOrdersCount = (companyId) =>
   httpClient.get("/salesorders/count", { params: companyId ? { companyId } : {} });
 
-export const createSalesOrderFromBill = (billId) => httpClient.post(`/salesorders/from-bill/${billId}`);
+export const createSalesOrderFromBill = (billId) =>
+  httpClient.post(`/salesorders/from-bill/${billId}`);

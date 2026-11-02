@@ -60,7 +60,9 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [invoiceId]);
 
   // Sum values across the FBR items array. Keep the math consistent with
@@ -83,11 +85,15 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
           total: acc.total + value + tax + further + extra,
         };
       },
-      { qty: 0, value: 0, tax: 0, further: 0, total: 0 }
+      { qty: 0, value: 0, tax: 0, further: 0, total: 0 },
     );
   }, [payload]);
 
-  const fmtNum = (n) => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtNum = (n) =>
+    Number(n || 0).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
   const fmtQty = (n) => {
     // Strip trailing zeros, cap at 4 places — same rule as the rest of the app.
     return parseFloat(Number(n || 0).toFixed(4)).toString();
@@ -99,18 +105,22 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
       await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   };
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
-      <div data-admin-dialog=""
+      <div
+        data-admin-dialog=""
         style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>FBR Submission Preview</h5>
-          <button data-admin-close=""
+          <button
+            data-admin-close=""
             type="button"
             style={formStyles.closeButton}
             onClick={onClose}
@@ -136,7 +146,8 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
                   unbreakable FBR URL wraps instead of widening the modal. */}
               {reviewRequired && (
                 <Alert tone="warn" icon={MdWarning}>
-                  Draft preview · Complete the tax filing adjustment / review before validating or submitting to FBR. Missing classification fields are shown as —.
+                  Draft preview · Complete the tax filing adjustment / review before validating or
+                  submitting to FBR. Missing classification fields are shown as —.
                 </Alert>
               )}
               <Alert tone="info" icon={MdInfo}>
@@ -149,7 +160,13 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", wordBreak: "break-word" }}>
+                <div
+                  style={{
+                    fontSize: "var(--k-font-sm)",
+                    color: "var(--k-muted)",
+                    wordBreak: "break-word",
+                  }}
+                >
                   Will POST to <code style={s.codeInline}>{url}</code>
                 </div>
               </Alert>
@@ -167,14 +184,18 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
                 <div>
                   <div style={s.partyLabel}>Buyer ({payload?.buyerRegistrationType})</div>
                   <div style={s.partyName}>{payload?.buyerBusinessName}</div>
-                  <div style={s.partyMeta}>NTN/CNIC: {payload?.buyerNTNCNIC || <em>(unregistered)</em>}</div>
+                  <div style={s.partyMeta}>
+                    NTN/CNIC: {payload?.buyerNTNCNIC || <em>(unregistered)</em>}
+                  </div>
                   <div style={s.partyMeta}>{payload?.buyerProvince}</div>
                 </div>
                 <div>
                   <div style={s.partyLabel}>Document</div>
                   <div style={s.partyName}>{payload?.invoiceType}</div>
                   <div style={s.partyMeta}>Date: {payload?.invoiceDate}</div>
-                  {payload?.scenarioId && <div style={s.partyMeta}>Scenario: {payload.scenarioId}</div>}
+                  {payload?.scenarioId && (
+                    <div style={s.partyMeta}>Scenario: {payload.scenarioId}</div>
+                  )}
                   {/* Debit/Credit note specifics — the reference invoice IRN and
                       the reason/remarks FBR requires (0026/0027/0028). */}
                   {payload?.invoiceRefNo && (
@@ -182,8 +203,14 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
                       Ref Invoice: <code style={s.codeInline}>{payload.invoiceRefNo}</code>
                     </div>
                   )}
-                  {payload?.reason && <div style={s.partyMeta}>Reason: <strong>{payload.reason}</strong></div>}
-                  {payload?.reasonRemarks && <div style={s.partyMeta}>Remarks: {payload.reasonRemarks}</div>}
+                  {payload?.reason && (
+                    <div style={s.partyMeta}>
+                      Reason: <strong>{payload.reason}</strong>
+                    </div>
+                  )}
+                  {payload?.reasonRemarks && (
+                    <div style={s.partyMeta}>Remarks: {payload.reasonRemarks}</div>
+                  )}
                 </div>
               </div>
 
@@ -191,14 +218,14 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
                   horizontal scroll on phones (9 columns is too wide
                   to ever fit a 360px viewport). */}
               <div style={{ marginTop: "0.75rem" }}>
-                <div style={s.itemsHeader}>
-                  Items in FBR payload ({itemCount})
-                </div>
+                <div style={s.itemsHeader}>Items in FBR payload ({itemCount})</div>
                 <TableWrap data-admin-table-region="">
                   <table className="k-table" style={s.table}>
                     <thead>
                       <tr>
-                        <th className="is-center" style={s.idxCol}>#</th>
+                        <th className="is-center" style={s.idxCol}>
+                          #
+                        </th>
                         <th>Item Type / Description</th>
                         <th>HS Code</th>
                         <th>UOM</th>
@@ -252,7 +279,11 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
                         <td className="k-num">{fmtNum(totals.value)}</td>
                         <td className="k-num">{fmtNum(totals.tax)}</td>
                         <td className="k-num">
-                          {totals.further > 0 ? fmtNum(totals.further) : <span style={s.muted}>0.00</span>}
+                          {totals.further > 0 ? (
+                            fmtNum(totals.further)
+                          ) : (
+                            <span style={s.muted}>0.00</span>
+                          )}
                         </td>
                         <td className="k-num" style={{ color: "var(--k-blue)" }}>
                           {fmtNum(totals.total)}
@@ -264,25 +295,37 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
               </div>
 
               {/* Toggleable raw JSON for the curious / for support tickets. */}
-              <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+              <div
+                style={{
+                  marginTop: "1rem",
+                  display: "flex",
+                  gap: "0.5rem",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                }}
+              >
                 <Button variant="secondary" size="sm" onClick={() => setShowRawJson((v) => !v)}>
                   {showRawJson ? "Hide" : "Show"} raw JSON
                 </Button>
                 {showRawJson && (
-                  <Button variant="secondary" size="sm" icon={copied ? MdCheckCircle : MdContentCopy} onClick={copyJson}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={copied ? MdCheckCircle : MdContentCopy}
+                    onClick={copyJson}
+                  >
                     {copied ? "Copied" : "Copy"}
                   </Button>
                 )}
               </div>
-              {showRawJson && (
-                <pre style={s.rawJson}>{JSON.stringify(payload, null, 2)}</pre>
-              )}
+              {showRawJson && <pre style={s.rawJson}>{JSON.stringify(payload, null, 2)}</pre>}
             </>
           )}
         </div>
 
         <div data-admin-footer="" style={formStyles.footer}>
-          <button data-admin-close=""
+          <button
+            data-admin-close=""
             type="button"
             style={{ ...formStyles.button, ...formStyles.cancel }}
             onClick={onClose}
@@ -297,14 +340,27 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
 
 const s = {
   partyLabel: {
-    fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.04em",
-    color: "var(--k-muted)", fontWeight: 700, marginBottom: 4,
+    fontSize: "0.7rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    color: "var(--k-muted)",
+    fontWeight: 700,
+    marginBottom: 4,
   },
-  partyName: { fontSize: "calc(var(--k-font) + 0.05rem)", fontWeight: 700, color: "var(--k-ink)", overflowWrap: "anywhere" },
+  partyName: {
+    fontSize: "calc(var(--k-font) + 0.05rem)",
+    fontWeight: 700,
+    color: "var(--k-ink)",
+    overflowWrap: "anywhere",
+  },
   partyMeta: { fontSize: "var(--k-font-sm)", color: "var(--k-muted)", marginTop: 2 },
   itemsHeader: {
-    fontSize: "var(--k-font)", fontWeight: 700, color: "var(--k-ink)",
-    marginBottom: "0.4rem", display: "flex", alignItems: "center",
+    fontSize: "var(--k-font)",
+    fontWeight: 700,
+    color: "var(--k-ink)",
+    marginBottom: "0.4rem",
+    display: "flex",
+    alignItems: "center",
     justifyContent: "space-between",
   },
   // minWidth ensures columns don't collapse to unreadable widths on
@@ -315,14 +371,24 @@ const s = {
   metaSub: { fontSize: "0.75rem", color: "var(--k-muted)", marginTop: 2 },
   muted: { color: "var(--k-faint)" },
   rawJson: {
-    margin: "0.5rem 0 0", padding: "0.75rem 1rem",
-    background: "#0a1628", color: "#e8f5e9", border: "1px solid #1a2332",
-    borderRadius: 8, fontSize: "0.78rem", lineHeight: 1.45,
-    maxHeight: 360, overflow: "auto", whiteSpace: "pre",
+    margin: "0.5rem 0 0",
+    padding: "0.75rem 1rem",
+    background: "#0a1628",
+    color: "#e8f5e9",
+    border: "1px solid #1a2332",
+    borderRadius: 8,
+    fontSize: "0.78rem",
+    lineHeight: 1.45,
+    maxHeight: 360,
+    overflow: "auto",
+    whiteSpace: "pre",
   },
   codeInline: {
-    background: "rgba(13,71,161,0.08)", padding: "0.05rem 0.35rem",
-    borderRadius: 4, fontSize: "0.78rem", fontFamily: "monospace",
+    background: "rgba(13,71,161,0.08)",
+    padding: "0.05rem 0.35rem",
+    borderRadius: 4,
+    fontSize: "0.78rem",
+    fontFamily: "monospace",
     // FBR URL is a single unbreakable token — without `wordBreak`
     // it overflows the parent on phones and ends up clipped by the
     // modal edge. `break-all` is fine for URLs (operators copy via

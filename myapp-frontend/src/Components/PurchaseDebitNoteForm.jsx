@@ -1,7 +1,11 @@
 import "./PurchaseDebitNoteForm.css";
 import { useState, useEffect, useMemo } from "react";
 import { MdAdd, MdDelete } from "react-icons/md";
-import { createPurchaseDebitNote, updatePurchaseDebitNote, getPurchaseDebitNoteById } from "../api/purchaseDebitNoteApi";
+import {
+  createPurchaseDebitNote,
+  updatePurchaseDebitNote,
+  getPurchaseDebitNoteById,
+} from "../api/purchaseDebitNoteApi";
 import { getPurchaseBillsByCompanyPaged, getPurchaseBillById } from "../api/purchaseBillApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getItemTypes } from "../api/itemTypeApi";
@@ -31,7 +35,15 @@ const colors = {
 // purchase-bill form: header + a line grid where each line optionally carries an
 // Item Type (reduces on-hand when the company tracks it) and/or a GL Account
 // (else the engine derives it). Value-only lines (no item/account) are allowed.
-export default function PurchaseDebitNoteForm({ companyId, company = null, noteId, onClose, onSaved, readOnly = false, preset = null }) {
+export default function PurchaseDebitNoteForm({
+  companyId,
+  company = null,
+  noteId,
+  onClose,
+  onSaved,
+  readOnly = false,
+  preset = null,
+}) {
   const isEdit = !!noteId;
   const { has } = usePermissions();
   const canReadPurchaseBills = has("purchasebills.list.view");
@@ -59,7 +71,16 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
   const errRef = useScrollToError(error);
 
   function newRow() {
-    return { id: 0, itemTypeId: null, accountId: null, description: "", quantity: 1, unitPrice: 0, uom: "", hsCode: "" };
+    return {
+      id: 0,
+      itemTypeId: null,
+      accountId: null,
+      description: "",
+      quantity: 1,
+      unitPrice: 0,
+      uom: "",
+      hsCode: "",
+    };
   }
 
   useEffect(() => {
@@ -80,7 +101,10 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
   }, [companyId]);
 
   useEffect(() => {
-    if (!companyId) { setAccounts([]); return; }
+    if (!companyId) {
+      setAccounts([]);
+      return;
+    }
     getAccountsFlat(companyId)
       .then(({ data }) => setAccounts((data || []).filter((a) => a.isActive)))
       .catch(() => setAccounts([]));
@@ -90,9 +114,11 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
   // Invoice" picker (scoped to the supplier — you can't debit one supplier
   // against another's invoice). Cleared when no supplier is chosen.
   useEffect(() => {
-    if (!canReadPurchaseBills || !companyId || !supplierId) { setPurchaseBills([]); return; }
-    getPurchaseBillsByCompanyPaged(companyId, { supplierId: parseInt(supplierId),
-        pageSize: 100 })
+    if (!canReadPurchaseBills || !companyId || !supplierId) {
+      setPurchaseBills([]);
+      return;
+    }
+    getPurchaseBillsByCompanyPaged(companyId, { supplierId: parseInt(supplierId), pageSize: 100 })
       .then(({ data }) => setPurchaseBills(data?.items || data?.data || []))
       .catch(() => setPurchaseBills([]));
   }, [companyId, supplierId, canReadPurchaseBills]);
@@ -123,7 +149,9 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
     }
   };
 
-  useEffect(() => { if (!isEdit && preset?.purchaseBillId) prefillFromBill(String(preset.purchaseBillId)); }, [preset?.purchaseBillId]);
+  useEffect(() => {
+    if (!isEdit && preset?.purchaseBillId) prefillFromBill(String(preset.purchaseBillId));
+  }, [preset?.purchaseBillId]);
 
   useEffect(() => {
     if (!isEdit) return;
@@ -136,16 +164,18 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
         setGstRate(data.gstRate ?? 0);
         setSupplierRef(data.supplierRef || "");
         setNotes(data.notes || "");
-        setItems((data.items || []).map((i) => ({
-          id: i.id,
-          itemTypeId: i.itemTypeId ?? null,
-          accountId: i.accountId ?? null,
-          description: i.description,
-          quantity: i.quantity,
-          unitPrice: i.unitPrice,
-          uom: i.uom || "",
-          hsCode: i.hsCode || "",
-        })));
+        setItems(
+          (data.items || []).map((i) => ({
+            id: i.id,
+            itemTypeId: i.itemTypeId ?? null,
+            accountId: i.accountId ?? null,
+            description: i.description,
+            quantity: i.quantity,
+            unitPrice: i.unitPrice,
+            uom: i.uom || "",
+            hsCode: i.hsCode || "",
+          })),
+        );
       } catch {
         setError("Failed to load debit note.");
       }
@@ -153,16 +183,20 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
   }, [noteId, isEdit]);
 
   const subtotal = useMemo(
-    () => items.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.unitPrice) || 0), 0),
-    [items]
+    () =>
+      items.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.unitPrice) || 0), 0),
+    [items],
   );
   const gstAmount = useMemo(
-    () => Math.round(subtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100,
-    [subtotal, gstRate]
+    () => Math.round(((subtotal * (parseFloat(gstRate) || 0)) / 100) * 100) / 100,
+    [subtotal, gstRate],
   );
   const grandTotal = subtotal + gstAmount;
 
-  const defaultPurchaseAccountLabel = defaultAccountPlaceholder(accounts, company?.defaultPurchaseAccountId);
+  const defaultPurchaseAccountLabel = defaultAccountPlaceholder(
+    accounts,
+    company?.defaultPurchaseAccountId,
+  );
 
   const updateItem = (idx, field, value) => {
     setItems((prev) => {
@@ -182,7 +216,9 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
         if (!r.description?.trim() && picked.name) r.description = picked.name;
         r.accountId = picked.purchaseAccountId ?? null;
       } else {
-        r.uom = ""; r.hsCode = ""; r.accountId = null;
+        r.uom = "";
+        r.hsCode = "";
+        r.accountId = null;
       }
       next[idx] = r;
       return next;
@@ -195,9 +231,12 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
     setError("");
     if (!supplierId) return setError("Select a supplier.");
     if (items.length === 0) return setError("Add at least one item.");
-    if (items.some((i) => !i.description?.trim())) return setError("Every line needs a description.");
-    if (items.some((i) => !(parseFloat(i.quantity) > 0))) return setError("Quantity must be greater than zero on every line.");
-    if (items.some((i) => parseFloat(i.unitPrice) < 0)) return setError("Unit price cannot be negative.");
+    if (items.some((i) => !i.description?.trim()))
+      return setError("Every line needs a description.");
+    if (items.some((i) => !(parseFloat(i.quantity) > 0)))
+      return setError("Quantity must be greater than zero on every line.");
+    if (items.some((i) => parseFloat(i.unitPrice) < 0))
+      return setError("Unit price cannot be negative.");
     setSaving(true);
     try {
       const payload = {
@@ -225,7 +264,9 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
       onSaved?.(res.data);
       onClose();
     } catch (err) {
-      setError(err.response?.data?.error || err.response?.data?.message || "Failed to save debit note.");
+      setError(
+        err.response?.data?.error || err.response?.data?.message || "Failed to save debit note.",
+      );
     } finally {
       setSaving(false);
     }
@@ -235,82 +276,203 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: 1100, width: "96vw" }}>
         <div data-admin-header="" style={formStyles.header}>
-          <h5 style={formStyles.title}>{readOnly ? "View Purchase Debit Note" : (isEdit ? "Edit Purchase Debit Note" : "New Purchase Debit Note")}</h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <h5 style={formStyles.title}>
+            {readOnly
+              ? "View Purchase Debit Note"
+              : isEdit
+                ? "Edit Purchase Debit Note"
+                : "New Purchase Debit Note"}
+          </h5>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            &times;
+          </button>
         </div>
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
-          <div data-admin-body="" style={{ ...formStyles.body, minHeight: 0, flex: 1, overflowY: "auto" }}>
-            <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
-              {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
+        <form
+          onSubmit={handleSubmit}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            minHeight: 0,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            data-admin-body=""
+            style={{ ...formStyles.body, minHeight: 0, flex: 1, overflowY: "auto" }}
+          >
+            <fieldset
+              disabled={readOnly}
+              style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}
+            >
+              {error && (
+                <div ref={errRef} style={formStyles.error}>
+                  {error}
+                </div>
+              )}
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
+                  gap: "0.75rem",
+                }}
+              >
                 <div data-admin-field="" style={{ ...formStyles.formGroup, gridColumn: "1 / -1" }}>
                   <label style={formStyles.label}>Supplier *</label>
                   <SearchableSelect
                     items={suppliers}
                     value={supplierId}
-                    onChange={(id) => { setSupplierId(id ? String(id) : ""); setBillId(""); }}
+                    onChange={(id) => {
+                      setSupplierId(id ? String(id) : "");
+                      setBillId("");
+                    }}
                     placeholder="Select supplier…"
                   />
                 </div>
                 {canReadPurchaseBills && (
-                <div data-admin-field="" style={{ ...formStyles.formGroup, gridColumn: "1 / -1" }}>
-                  <label style={formStyles.label}>Purchase Invoice <span style={{ fontWeight: 400 }}>(optional — prefills lines &amp; GST)</span></label>
-                  <select
-                    style={{ ...formStyles.input, opacity: prefilling ? 0.6 : 1 }}
-                    value={billId}
-                    onChange={(e) => prefillFromBill(e.target.value)}
-                    disabled={!supplierId || prefilling}
+                  <div
+                    data-admin-field=""
+                    style={{ ...formStyles.formGroup, gridColumn: "1 / -1" }}
                   >
-                    <option value="">
-                      {!supplierId ? "— pick a supplier first —"
-                        : purchaseBills.length ? "— select a bill to prefill —"
-                        : "— no purchase invoices for this supplier —"}
-                    </option>
-                    {purchaseBills.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        Bill #{b.purchaseBillNumber} · {new Date(b.date).toLocaleDateString()} · Rs {Number(b.grandTotal).toLocaleString()}
+                    <label style={formStyles.label}>
+                      Purchase Invoice{" "}
+                      <span style={{ fontWeight: 400 }}>(optional — prefills lines &amp; GST)</span>
+                    </label>
+                    <select
+                      style={{ ...formStyles.input, opacity: prefilling ? 0.6 : 1 }}
+                      value={billId}
+                      onChange={(e) => prefillFromBill(e.target.value)}
+                      disabled={!supplierId || prefilling}
+                    >
+                      <option value="">
+                        {!supplierId
+                          ? "— pick a supplier first —"
+                          : purchaseBills.length
+                            ? "— select a bill to prefill —"
+                            : "— no purchase invoices for this supplier —"}
                       </option>
-                    ))}
-                  </select>
-                </div>
+                      {purchaseBills.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          Bill #{b.purchaseBillNumber} · {new Date(b.date).toLocaleDateString()} ·
+                          Rs {Number(b.grandTotal).toLocaleString()}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 )}
                 <div data-admin-field="" style={formStyles.formGroup}>
                   <label style={formStyles.label}>Date *</label>
-                  <input type="date" style={formStyles.input} value={date} onChange={(e) => setDate(e.target.value)} />
+                  <input
+                    type="date"
+                    style={formStyles.input}
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                  />
                 </div>
                 <div data-admin-field="" style={formStyles.formGroup}>
                   <label style={formStyles.label}>GST Rate (%)</label>
-                  <input type="number" min={0} step={0.01} style={formStyles.input} value={gstRate} onChange={(e) => setGstRate(e.target.value)} />
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    style={formStyles.input}
+                    value={gstRate}
+                    onChange={(e) => setGstRate(e.target.value)}
+                  />
                 </div>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
+                  gap: "0.75rem",
+                }}
+              >
                 <div data-admin-field="" style={formStyles.formGroup}>
                   <label style={formStyles.label}>Supplier Reference</label>
-                  <input type="text" style={formStyles.input} value={supplierRef} onChange={(e) => setSupplierRef(e.target.value)} placeholder="Their document reference (optional)" />
+                  <input
+                    type="text"
+                    style={formStyles.input}
+                    value={supplierRef}
+                    onChange={(e) => setSupplierRef(e.target.value)}
+                    placeholder="Their document reference (optional)"
+                  />
                 </div>
                 <div data-admin-field="" style={formStyles.formGroup}>
                   <label style={formStyles.label}>Notes</label>
-                  <input type="text" style={formStyles.input} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" />
+                  <input
+                    type="text"
+                    style={formStyles.input}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Optional"
+                  />
                 </div>
               </div>
 
-              <div style={{ marginTop: "0.75rem", padding: "0.75rem", borderRadius: 10, border: `1px solid ${colors.cardBorder}`, backgroundColor: colors.inputBg }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+              <div
+                style={{
+                  marginTop: "0.75rem",
+                  padding: "0.75rem",
+                  borderRadius: 10,
+                  border: `1px solid ${colors.cardBorder}`,
+                  backgroundColor: colors.inputBg,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "0.5rem",
+                  }}
+                >
                   <strong style={{ color: colors.textPrimary }}>Items ({items.length})</strong>
-                  <button type="button" onClick={() => setItems([...items, newRow()])} style={{ ...formStyles.button, padding: "0.3rem 0.65rem", fontSize: "0.8rem", display: "inline-flex", alignItems: "center", gap: "0.25rem", background: "#e3f2fd", color: "#0d47a1", border: "none" }}>
+                  <button
+                    type="button"
+                    onClick={() => setItems([...items, newRow()])}
+                    style={{
+                      ...formStyles.button,
+                      padding: "0.3rem 0.65rem",
+                      fontSize: "0.8rem",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.25rem",
+                      background: "#e3f2fd",
+                      color: "#0d47a1",
+                      border: "none",
+                    }}
+                  >
                     <MdAdd size={14} /> Add line
                   </button>
                 </div>
-                <BulkItemTypeBar items={items} setItems={setItems} itemTypes={itemTypes} nonInventoryItems={[]} companyId={companyId} />
-                <div data-admin-table-region="" className="purchase-debit-lines" style={{ overflowX: "auto" }}>
+                <BulkItemTypeBar
+                  items={items}
+                  setItems={setItems}
+                  itemTypes={itemTypes}
+                  nonInventoryItems={[]}
+                  companyId={companyId}
+                />
+                <div
+                  data-admin-table-region=""
+                  className="purchase-debit-lines"
+                  style={{ overflowX: "auto" }}
+                >
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
                     <thead>
                       <tr style={{ backgroundColor: "#f5f8fc" }}>
-                        <th style={th}>Item Type <span style={{ fontWeight: 400, textTransform: "none" }}>(optional — reduces stock)</span></th>
+                        <th style={th}>
+                          Item Type{" "}
+                          <span style={{ fontWeight: 400, textTransform: "none" }}>
+                            (optional — reduces stock)
+                          </span>
+                        </th>
                         <th style={th}>Description *</th>
-                        <th style={{ ...th, textAlign: "right", width: 120, minWidth: 120 }}>Qty *</th>
+                        <th style={{ ...th, textAlign: "right", width: 120, minWidth: 120 }}>
+                          Qty *
+                        </th>
                         <th style={{ ...th, textAlign: "right", width: 100 }}>Unit Price *</th>
                         <th style={{ ...th, width: 100 }}>UOM</th>
                         {glOn && <th style={{ ...th, width: 170 }}>Account (GL)</th>}
@@ -320,7 +482,8 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
                     </thead>
                     <tbody>
                       {items.map((it, idx) => {
-                        const lineTotal = (parseFloat(it.quantity) || 0) * (parseFloat(it.unitPrice) || 0);
+                        const lineTotal =
+                          (parseFloat(it.quantity) || 0) * (parseFloat(it.unitPrice) || 0);
                         return (
                           <tr key={idx}>
                             <td data-label="Item type" style={td}>
@@ -334,7 +497,18 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
                               />
                             </td>
                             <td data-label="Description" style={td}>
-                              <textarea aria-label="Line description" rows={2} style={{ ...cellInput, resize: "vertical", minHeight: 38, lineHeight: 1.4 }} value={it.description} onChange={(e) => updateItem(idx, "description", e.target.value)} />
+                              <textarea
+                                aria-label="Line description"
+                                rows={2}
+                                style={{
+                                  ...cellInput,
+                                  resize: "vertical",
+                                  minHeight: 38,
+                                  lineHeight: 1.4,
+                                }}
+                                value={it.description}
+                                onChange={(e) => updateItem(idx, "description", e.target.value)}
+                              />
                             </td>
                             <td data-label="Quantity" style={td}>
                               <QuantityInput
@@ -346,10 +520,24 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
                               />
                             </td>
                             <td data-label="Unit price" style={td}>
-                              <input aria-label="Unit price" type="number" min={0} step="any" style={{ ...cellInput, textAlign: "right" }} value={it.unitPrice} onChange={(e) => updateItem(idx, "unitPrice", e.target.value)} />
+                              <input
+                                aria-label="Unit price"
+                                type="number"
+                                min={0}
+                                step="any"
+                                style={{ ...cellInput, textAlign: "right" }}
+                                value={it.unitPrice}
+                                onChange={(e) => updateItem(idx, "unitPrice", e.target.value)}
+                              />
                             </td>
                             <td data-label="UOM" style={td}>
-                              <input aria-label="Unit of measure" type="text" style={cellInput} value={it.uom} onChange={(e) => updateItem(idx, "uom", e.target.value)} />
+                              <input
+                                aria-label="Unit of measure"
+                                type="text"
+                                style={cellInput}
+                                value={it.uom}
+                                onChange={(e) => updateItem(idx, "uom", e.target.value)}
+                              />
                             </td>
                             {glOn && (
                               <td data-label="Account" style={td}>
@@ -363,10 +551,27 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
                                 />
                               </td>
                             )}
-                            <td data-label="Line total" style={{ ...td, textAlign: "right", fontWeight: 600 }}>{lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                            <td
+                              data-label="Line total"
+                              style={{ ...td, textAlign: "right", fontWeight: 600 }}
+                            >
+                              {lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </td>
                             <td data-label="Actions" style={td}>
                               {items.length > 1 && (
-                                <button aria-label={`Remove line ${idx + 1}`} title="Remove line" type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#c62828", cursor: "pointer", padding: 0 }}>
+                                <button
+                                  aria-label={`Remove line ${idx + 1}`}
+                                  title="Remove line"
+                                  type="button"
+                                  onClick={() => setItems(items.filter((_, i) => i !== idx))}
+                                  style={{
+                                    background: "none",
+                                    border: "none",
+                                    color: "#c62828",
+                                    cursor: "pointer",
+                                    padding: 0,
+                                  }}
+                                >
                                   <MdDelete size={16} />
                                 </button>
                               )}
@@ -379,24 +584,55 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
                 </div>
               </div>
 
-              <div style={{ marginTop: "1rem", padding: "0.75rem 1rem", borderRadius: 10, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#f8faff", display: "grid", gridTemplateColumns: "1fr auto auto", rowGap: "0.35rem", columnGap: "1rem" }}>
+              <div
+                style={{
+                  marginTop: "1rem",
+                  padding: "0.75rem 1rem",
+                  borderRadius: 10,
+                  border: `1px solid ${colors.cardBorder}`,
+                  backgroundColor: "#f8faff",
+                  display: "grid",
+                  gridTemplateColumns: "1fr auto auto",
+                  rowGap: "0.35rem",
+                  columnGap: "1rem",
+                }}
+              >
                 <span style={{ color: colors.textSecondary }}>Subtotal:</span>
                 <span></span>
-                <strong>Rs. {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
+                <strong>
+                  Rs. {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </strong>
                 <span style={{ color: colors.textSecondary }}>GST ({gstRate}%):</span>
                 <span></span>
-                <strong>Rs. {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
-                <span style={{ color: colors.textPrimary, fontWeight: 700, fontSize: "1rem" }}>Grand Total:</span>
+                <strong>
+                  Rs. {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </strong>
+                <span style={{ color: colors.textPrimary, fontWeight: 700, fontSize: "1rem" }}>
+                  Grand Total:
+                </span>
                 <span></span>
-                <strong style={{ fontSize: "1.05rem", color: colors.blue }}>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
+                <strong style={{ fontSize: "1.05rem", color: colors.blue }}>
+                  Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </strong>
               </div>
             </fieldset>
           </div>
           <div data-admin-footer="" style={formStyles.footer}>
-            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>{readOnly ? "Close" : "Cancel"}</button>
+            <button
+              data-admin-close=""
+              type="button"
+              style={{ ...formStyles.button, ...formStyles.cancel }}
+              onClick={onClose}
+            >
+              {readOnly ? "Close" : "Cancel"}
+            </button>
             {!readOnly && (
-              <button type="submit" disabled={saving} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}>
-                {saving ? "Saving..." : (isEdit ? "Update" : "Create")}
+              <button
+                type="submit"
+                disabled={saving}
+                style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}
+              >
+                {saving ? "Saving..." : isEdit ? "Update" : "Create"}
               </button>
             )}
           </div>
@@ -406,6 +642,24 @@ export default function PurchaseDebitNoteForm({ companyId, company = null, noteI
   );
 }
 
-const th = { textAlign: "left", padding: "0.45rem 0.55rem", borderBottom: "1px solid #e8edf3", fontSize: "0.74rem", fontWeight: 700, color: "#5f6d7e", textTransform: "uppercase", letterSpacing: "0.04em" };
+const th = {
+  textAlign: "left",
+  padding: "0.45rem 0.55rem",
+  borderBottom: "1px solid #e8edf3",
+  fontSize: "0.74rem",
+  fontWeight: 700,
+  color: "#5f6d7e",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+};
 const td = { padding: "0.4rem 0.45rem", borderBottom: "1px solid #f3f5f9", verticalAlign: "top" };
-const cellInput = { width: "100%", padding: "0.3rem 0.5rem", fontSize: "0.8rem", border: "1px solid #d0d7e2", borderRadius: 6, backgroundColor: "#f8f9fb", color: "#1a2332", outline: "none" };
+const cellInput = {
+  width: "100%",
+  padding: "0.3rem 0.5rem",
+  fontSize: "0.8rem",
+  border: "1px solid #d0d7e2",
+  borderRadius: 6,
+  backgroundColor: "#f8f9fb",
+  color: "#1a2332",
+  outline: "none",
+};

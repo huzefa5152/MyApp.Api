@@ -7,8 +7,7 @@ import http from "./httpClient";
 export const getWithholdingReceiptsByCompany = (companyId) =>
   http.get(`/withholdingtaxreceipts/company/${companyId}`);
 
-export const getWithholdingReceiptById = (id) =>
-  http.get(`/withholdingtaxreceipts/${id}`);
+export const getWithholdingReceiptById = (id) => http.get(`/withholdingtaxreceipts/${id}`);
 
 // Print-ready certificate DTO (branding + customer NTN/STRN + amount-in-words).
 export const getWithholdingReceiptPrintData = (id) =>
@@ -21,8 +20,7 @@ export const createWithholdingReceipt = (companyId, payload) =>
 export const updateWithholdingReceipt = (id, payload) =>
   http.put(`/withholdingtaxreceipts/${id}`, payload);
 
-export const deleteWithholdingReceipt = (id) =>
-  http.delete(`/withholdingtaxreceipts/${id}`);
+export const deleteWithholdingReceipt = (id) => http.delete(`/withholdingtaxreceipts/${id}`);
 
 export const getWithholdingReceiptsCount = (companyId) =>
   http.get("/withholdingtaxreceipts/count", { params: companyId ? { companyId } : {} });

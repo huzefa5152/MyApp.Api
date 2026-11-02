@@ -1,7 +1,15 @@
 import { expect, it } from "vitest";
 import { filingErrors } from "./taxFilingRows";
-const row = { sourceLineIds: [1], itemTypeId: null, hsCode: "9403.6000", description: "Office furniture",
-  uom: "Numbers", saleType: "Goods at standard rate (default)", quantity: 3, valueExclTax: 100 };
+const row = {
+  sourceLineIds: [1],
+  itemTypeId: null,
+  hsCode: "9403.6000",
+  description: "Office furniture",
+  uom: "Numbers",
+  saleType: "Goods at standard rate (default)",
+  quantity: 3,
+  valueExclTax: 100,
+};
 const bill = { items: [{ id: 1 }], subtotal: 100 };
 it("a named new classification can be saved without a catalog id", () => {
   expect(filingErrors([row], bill)).toEqual([]);

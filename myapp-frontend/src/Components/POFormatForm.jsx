@@ -19,10 +19,22 @@ const colors = {
 };
 
 // Each form is mounted for one company; changing company closes the form.
-export default function POFormatForm({ format, companyId, companyName, onClose, onSaved, initialRawText = "", initialClientId = null }) {
+export default function POFormatForm({
+  format,
+  companyId,
+  companyName,
+  onClose,
+  onSaved,
+  initialRawText = "",
+  initialClientId = null,
+}) {
   const isEdit = !!format;
   let metadataOnly = false;
-  try { metadataOnly = isEdit && JSON.parse(format.ruleSetJson || "{}").engine !== "simple-headers-v1"; } catch { metadataOnly = isEdit; }
+  try {
+    metadataOnly = isEdit && JSON.parse(format.ruleSetJson || "{}").engine !== "simple-headers-v1";
+  } catch {
+    metadataOnly = isEdit;
+  }
   const [clients, setClients] = useState([]);
   const [selectedClientId, setSelectedClientId] = useState(format?.clientId ?? initialClientId);
   const [clientsLoading, setClientsLoading] = useState(true);
@@ -51,13 +63,23 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
   useEffect(() => {
     let cancelled = false;
     setClientsLoading(true);
-    getPoFormatClients(companyId).then(({ data }) => { if (!cancelled) setClients(data); })
-      .catch(() => { if (!cancelled) setError("Unable to load this company's clients. Close the form and try again."); })
-      .finally(() => { if (!cancelled) setClientsLoading(false); });
-    return () => { cancelled = true; };
+    getPoFormatClients(companyId)
+      .then(({ data }) => {
+        if (!cancelled) setClients(data);
+      })
+      .catch(() => {
+        if (!cancelled)
+          setError("Unable to load this company's clients. Close the form and try again.");
+      })
+      .finally(() => {
+        if (!cancelled) setClientsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [companyId]);
   const availableClients = clients;
-  const selectedClient = availableClients.find(c => c.id === selectedClientId);
+  const selectedClient = availableClients.find((c) => c.id === selectedClientId);
 
   // Preload the 5 fields when editing — parse them out of RuleSetJson
   useEffect(() => {
@@ -88,19 +110,33 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
     // with OCR in the browser, the same reader PO import uses.
     const readByOcr = async () => {
       setOcrStatus("Preparing the scan…");
-      const pages = await readPoFile(file, (fraction, label) => setOcrStatus(`${label} ${Math.round(fraction * 100)}%`));
-      if (!pages.some((p) => p.length)) throw { response: { data: { error: "No readable text was found on the scan. Try a clearer copy." } } };
+      const pages = await readPoFile(file, (fraction, label) =>
+        setOcrStatus(`${label} ${Math.round(fraction * 100)}%`),
+      );
+      if (!pages.some((p) => p.length))
+        throw {
+          response: {
+            data: { error: "No readable text was found on the scan. Try a clearer copy." },
+          },
+        };
       const read = await fingerprintOcr(pages, companyId);
-      setOcrNote(`Read from a scan with OCR (${averageConfidence(pages)}% confidence). Copy the labels exactly as they appear below.`);
+      setOcrNote(
+        `Read from a scan with OCR (${averageConfidence(pages)}% confidence). Copy the labels exactly as they appear below.`,
+      );
       return read;
     };
     try {
       let res;
       if (isImageFile(file)) res = await readByOcr();
       else {
-        try { res = await fingerprintPdf(file, companyId); }
-        catch (err) {
-          if (err.response?.status !== 400 || !/scanned|image-based|extract text/i.test(err.response?.data?.error || "")) throw err;
+        try {
+          res = await fingerprintPdf(file, companyId);
+        } catch (err) {
+          if (
+            err.response?.status !== 400 ||
+            !/scanned|image-based|extract text/i.test(err.response?.data?.error || "")
+          )
+            throw err;
           res = await readByOcr();
         }
       }
@@ -114,7 +150,9 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
         setName(`${selectedClient.name} PO`);
       }
     } catch (err) {
-      setError(err.response?.data?.error || err.response?.data?.message || "Failed to read the sample.");
+      setError(
+        err.response?.data?.error || err.response?.data?.message || "Failed to read the sample.",
+      );
     } finally {
       setUploading(false);
       setOcrStatus("");
@@ -124,7 +162,8 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
   const handleSave = async () => {
     setError("");
 
-    if (clientsLoading || !companyId || !selectedClientId) return setError("Pick the client this format applies to.");
+    if (clientsLoading || !companyId || !selectedClientId)
+      return setError("Pick the client this format applies to.");
     if (!selectedClient?.id) {
       return setError("This client has no per-company records yet — create one first via Clients.");
     }
@@ -133,7 +172,9 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
       return setError("Fill the Description and Quantity column headers.");
     }
     if (!isEdit && !rawText) {
-      return setError("Upload a sample PO (PDF, scan or photo) so we can lock in the layout fingerprint.");
+      return setError(
+        "Upload a sample PO (PDF, scan or photo) so we can lock in the layout fingerprint.",
+      );
     }
 
     const representativeClientId = selectedClient.id;
@@ -141,7 +182,11 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
     setSaving(true);
     try {
       if (metadataOnly) {
-        await updatePoFormatMetadata(format.id, { name: name.trim(), isActive, notes: notes.trim() || null });
+        await updatePoFormatMetadata(format.id, {
+          name: name.trim(),
+          isActive,
+          notes: notes.trim() || null,
+        });
       } else if (isEdit) {
         await updatePoFormatSimple(format.id, {
           name: name.trim(),
@@ -183,35 +228,63 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
   // wizard mid-fingerprint. Dismiss via the X or the Cancel button.
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? "Edit PO Format" : "Add PO Format"}</h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            &times;
+          </button>
         </div>
 
-        <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "72vh", overflowY: "auto" }}>
+        <div
+          data-admin-body=""
+          style={{ ...formStyles.body, maxHeight: "72vh", overflowY: "auto" }}
+        >
           {error && (
             <div ref={errRef}>
-              <Alert tone="error" icon={MdWarning}>{error}</Alert>
+              <Alert tone="error" icon={MdWarning}>
+                {error}
+              </Alert>
             </div>
           )}
 
           {!isEdit && existingMatchName && (
             <Alert tone="warn" icon={MdInfoOutline}>
-              A format already exists for this layout: <strong>{existingMatchName}</strong>. Check whether this is the format you need before adding another.
+              A format already exists for this layout: <strong>{existingMatchName}</strong>. Check
+              whether this is the format you need before adding another.
             </Alert>
           )}
 
-          <p style={styles.hint}>Company: <strong>{companyName}</strong>. This format is private to this company.</p>
+          <p style={styles.hint}>
+            Company: <strong>{companyName}</strong>. This format is private to this company.
+          </p>
           <div data-admin-form-row="" className="k-form-grid" style={styles.grid}>
             <Field label="Client *" htmlFor="po-format-client">
-              <select id="po-format-client" className="k-select" disabled={clientsLoading || metadataOnly}
+              <select
+                id="po-format-client"
+                className="k-select"
+                disabled={clientsLoading || metadataOnly}
                 value={selectedClientId ?? ""}
-                onChange={e => setSelectedClientId(e.target.value ? Number(e.target.value) : null)}>
+                onChange={(e) =>
+                  setSelectedClientId(e.target.value ? Number(e.target.value) : null)
+                }
+              >
                 <option value="">{clientsLoading ? "Loading clients..." : "Select client"}</option>
-                {availableClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {availableClients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
               </select>
-              {!clientsLoading && availableClients.length === 0 && <p style={styles.hint}>No available clients. Each client can have one format in this company.</p>}
+              {!clientsLoading && availableClients.length === 0 && (
+                <p style={styles.hint}>
+                  No available clients. Each client can have one format in this company.
+                </p>
+              )}
             </Field>
             <Field label="Format name *" htmlFor="po-format-name">
               <input
@@ -224,103 +297,146 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
             </Field>
           </div>
 
-          {metadataOnly ? <p>This saved layout keeps its existing extraction rules. You can rename or deactivate it here. Import a sample with a new layout to save different Excel columns.</p> : <>
-          {/* Sample PDF upload — required on create, optional on edit
+          {metadataOnly ? (
+            <p>
+              This saved layout keeps its existing extraction rules. You can rename or deactivate it
+              here. Import a sample with a new layout to save different Excel columns.
+            </p>
+          ) : (
+            <>
+              {/* Sample PDF upload — required on create, optional on edit
               (upload replaces the stored sample and recomputes the
               fingerprint hash — useful if the client's template changed). */}
-          <div style={{ marginBottom: "1rem" }}>
-            <Field label={`Sample PO (PDF, scan or photo) ${isEdit ? "(optional — upload to replace)" : "*"}`}>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={OCR_ACCEPT}
-                aria-label="Sample PO file"
-                onChange={handleFileChange}
-                style={{ display: "none" }}
-              />
-              <div style={styles.dropZone} onClick={() => fileInputRef.current?.click()}>
-                <MdUploadFile size={32} color="var(--k-muted)" />
-                <p style={{ margin: "0.5rem 0 0.25rem", color: "var(--k-muted)", fontSize: "var(--k-font)" }}>
-                  {uploading ? (ocrStatus || "Reading the sample…") : uploaded ? <><MdCheckCircle size={16} color={colors.success} style={{ verticalAlign: "middle" }} /> Sample loaded — fill the 5 fields below</> : isEdit ? "Click to upload a new sample (optional)" : "Click to upload a sample PO: PDF, scanned PDF or photo"}
-                </p>
-                <span style={{ fontSize: "0.78rem", color: "var(--k-muted)" }}>Max 10 MB</span>
+              <div style={{ marginBottom: "1rem" }}>
+                <Field
+                  label={`Sample PO (PDF, scan or photo) ${isEdit ? "(optional — upload to replace)" : "*"}`}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={OCR_ACCEPT}
+                    aria-label="Sample PO file"
+                    onChange={handleFileChange}
+                    style={{ display: "none" }}
+                  />
+                  <div style={styles.dropZone} onClick={() => fileInputRef.current?.click()}>
+                    <MdUploadFile size={32} color="var(--k-muted)" />
+                    <p
+                      style={{
+                        margin: "0.5rem 0 0.25rem",
+                        color: "var(--k-muted)",
+                        fontSize: "var(--k-font)",
+                      }}
+                    >
+                      {uploading ? (
+                        ocrStatus || "Reading the sample…"
+                      ) : uploaded ? (
+                        <>
+                          <MdCheckCircle
+                            size={16}
+                            color={colors.success}
+                            style={{ verticalAlign: "middle" }}
+                          />{" "}
+                          Sample loaded — fill the 5 fields below
+                        </>
+                      ) : isEdit ? (
+                        "Click to upload a new sample (optional)"
+                      ) : (
+                        "Click to upload a sample PO: PDF, scanned PDF or photo"
+                      )}
+                    </p>
+                    <span style={{ fontSize: "0.78rem", color: "var(--k-muted)" }}>Max 10 MB</span>
+                  </div>
+                </Field>
               </div>
-            </Field>
-          </div>
 
-          {/* Raw text preview — helps the operator see exactly what PdfPig
+              {/* Raw text preview — helps the operator see exactly what PdfPig
               extracted so they can pick the correct label strings */}
-          {rawText && (
-            <div style={{ marginBottom: "1rem" }}>
-              <Field label="Extracted text (for reference)">
-                {ocrNote && <div role="status" style={{ ...styles.hint, color: "#92400e", marginBottom: 4 }}>{ocrNote}</div>}
-                <textarea
-                  readOnly
-                  className="k-textarea"
-                  style={{ fontFamily: "monospace", fontSize: "0.78rem", backgroundColor: "var(--k-surface-2)" }}
-                  rows={8}
-                  value={rawText}
-                />
-              </Field>
-              <div style={styles.hint}>
-                Use the exact strings you see above for the 5 fields below — they must be whole-word matches.
+              {rawText && (
+                <div style={{ marginBottom: "1rem" }}>
+                  <Field label="Extracted text (for reference)">
+                    {ocrNote && (
+                      <div
+                        role="status"
+                        style={{ ...styles.hint, color: "#92400e", marginBottom: 4 }}
+                      >
+                        {ocrNote}
+                      </div>
+                    )}
+                    <textarea
+                      readOnly
+                      className="k-textarea"
+                      style={{
+                        fontFamily: "monospace",
+                        fontSize: "0.78rem",
+                        backgroundColor: "var(--k-surface-2)",
+                      }}
+                      rows={8}
+                      value={rawText}
+                    />
+                  </Field>
+                  <div style={styles.hint}>
+                    Use the exact strings you see above for the 5 fields below — they must be
+                    whole-word matches.
+                  </div>
+                </div>
+              )}
+
+              {/* The 5 fields */}
+              <h6 style={styles.sectionTitle}>Label / header strings</h6>
+              <p style={styles.sectionHint}>
+                Enter the exact text that appears on the PDF. Only the Description and Quantity
+                column headers are required — the parser reads each item's description and quantity
+                by column, so Unit and the PO labels are optional.
+              </p>
+
+              <div data-admin-form-row="" className="k-form-grid" style={styles.grid}>
+                <Field label="PO Number label">
+                  <input
+                    className="k-input"
+                    value={poNumberLabel}
+                    onChange={(e) => setPoNumberLabel(e.target.value)}
+                    placeholder='e.g. "P.O. #"'
+                  />
+                </Field>
+                <Field label="PO Date label">
+                  <input
+                    className="k-input"
+                    value={poDateLabel}
+                    onChange={(e) => setPoDateLabel(e.target.value)}
+                    placeholder='e.g. "P.O. Date"'
+                  />
+                </Field>
               </div>
-            </div>
+
+              <div data-admin-form-row="" className="k-form-grid" style={styles.grid}>
+                <Field label="Description column header *">
+                  <input
+                    className="k-input"
+                    value={descriptionHeader}
+                    onChange={(e) => setDescriptionHeader(e.target.value)}
+                    placeholder='e.g. "Item Name"'
+                  />
+                </Field>
+                <Field label="Quantity column header *">
+                  <input
+                    className="k-input"
+                    value={quantityHeader}
+                    onChange={(e) => setQuantityHeader(e.target.value)}
+                    placeholder='e.g. "Quantity" or "Qty"'
+                  />
+                </Field>
+                <Field label="Unit column header (optional)">
+                  <input
+                    className="k-input"
+                    value={unitHeader}
+                    onChange={(e) => setUnitHeader(e.target.value)}
+                    placeholder='e.g. "Unit" or "UOM" — leave blank if none'
+                  />
+                </Field>
+              </div>
+            </>
           )}
-
-          {/* The 5 fields */}
-          <h6 style={styles.sectionTitle}>Label / header strings</h6>
-          <p style={styles.sectionHint}>
-            Enter the exact text that appears on the PDF. Only the Description and Quantity column headers are required — the parser reads each item's description and quantity by column, so Unit and the PO labels are optional.
-          </p>
-
-          <div data-admin-form-row="" className="k-form-grid" style={styles.grid}>
-            <Field label="PO Number label">
-              <input
-                className="k-input"
-                value={poNumberLabel}
-                onChange={(e) => setPoNumberLabel(e.target.value)}
-                placeholder='e.g. "P.O. #"'
-              />
-            </Field>
-            <Field label="PO Date label">
-              <input
-                className="k-input"
-                value={poDateLabel}
-                onChange={(e) => setPoDateLabel(e.target.value)}
-                placeholder='e.g. "P.O. Date"'
-              />
-            </Field>
-          </div>
-
-          <div data-admin-form-row="" className="k-form-grid" style={styles.grid}>
-            <Field label="Description column header *">
-              <input
-                className="k-input"
-                value={descriptionHeader}
-                onChange={(e) => setDescriptionHeader(e.target.value)}
-                placeholder='e.g. "Item Name"'
-              />
-            </Field>
-            <Field label="Quantity column header *">
-              <input
-                className="k-input"
-                value={quantityHeader}
-                onChange={(e) => setQuantityHeader(e.target.value)}
-                placeholder='e.g. "Quantity" or "Qty"'
-              />
-            </Field>
-            <Field label="Unit column header (optional)">
-              <input
-                className="k-input"
-                value={unitHeader}
-                onChange={(e) => setUnitHeader(e.target.value)}
-                placeholder='e.g. "Unit" or "UOM" — leave blank if none'
-              />
-            </Field>
-          </div>
-
-          </>}
           <div style={{ marginBottom: "1rem" }}>
             <Field label="Notes (optional)">
               <textarea
@@ -335,8 +451,21 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
 
           {isEdit && (
             <div style={{ marginBottom: "1rem" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--k-ink)", fontSize: "var(--k-font)", cursor: "pointer" }}>
-                <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  color: "var(--k-ink)",
+                  fontSize: "var(--k-font)",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={isActive}
+                  onChange={(e) => setIsActive(e.target.checked)}
+                />
                 Active — incoming PDFs matching this layout will auto-parse
               </label>
             </div>
@@ -344,11 +473,20 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
         </div>
 
         <div data-admin-footer="" style={formStyles.footer}>
-          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+          <button
+            data-admin-close=""
+            type="button"
+            style={{ ...formStyles.button, ...formStyles.cancel }}
+            onClick={onClose}
+          >
+            Cancel
+          </button>
           <button
             type="button"
             style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}
-            disabled={saving || uploading || clientsLoading || !selectedClient || (!isEdit && !rawText)}
+            disabled={
+              saving || uploading || clientsLoading || !selectedClient || (!isEdit && !rawText)
+            }
             onClick={handleSave}
           >
             {saving ? "Saving…" : isEdit ? "Save changes" : "Save PO Format"}
@@ -361,8 +499,21 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
 
 const styles = {
   grid: { gap: "var(--k-gap)", marginBottom: "1rem" },
-  dropZone: { border: "2px dashed var(--k-line-strong)", borderRadius: "var(--k-radius)", padding: "1.5rem 1rem", textAlign: "center", cursor: "pointer", backgroundColor: "var(--k-surface-2)", transition: "border-color 0.2s, background-color 0.2s" },
-  sectionTitle: { margin: "0.5rem 0 0.25rem", fontSize: "calc(var(--k-font) + 0.05rem)", fontWeight: 600, color: "var(--k-ink)" },
+  dropZone: {
+    border: "2px dashed var(--k-line-strong)",
+    borderRadius: "var(--k-radius)",
+    padding: "1.5rem 1rem",
+    textAlign: "center",
+    cursor: "pointer",
+    backgroundColor: "var(--k-surface-2)",
+    transition: "border-color 0.2s, background-color 0.2s",
+  },
+  sectionTitle: {
+    margin: "0.5rem 0 0.25rem",
+    fontSize: "calc(var(--k-font) + 0.05rem)",
+    fontWeight: 600,
+    color: "var(--k-ink)",
+  },
   sectionHint: { margin: "0 0 0.75rem", fontSize: "var(--k-font-sm)", color: "var(--k-muted)" },
   hint: { marginTop: "0.25rem", fontSize: "0.78rem", color: "var(--k-muted)", fontStyle: "italic" },
 };

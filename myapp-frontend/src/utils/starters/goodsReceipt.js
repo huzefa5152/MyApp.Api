@@ -10,13 +10,13 @@
  */
 
 export const goodsReceiptStarters = [
-
   // ─── 1. Classic Serif (double-border header) ────────────────────────────────
   {
     id: "goodsreceipt-classic-serif",
     name: "Classic Serif",
     type: "GoodsReceipt",
-    description: "Traditional Times New Roman layout with double-rule header border and item type column",
+    description:
+      "Traditional Times New Roman layout with double-rule header border and item type column",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Goods Receipt Note #{{goodsReceiptNumber}}</title><style>
 @media print { @page { size: A4; margin: 10mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -89,7 +89,8 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
     id: "goodsreceipt-modern-minimal",
     name: "Modern Minimal",
     type: "GoodsReceipt",
-    description: "Clean sans-serif with a thin gradient accent rule, card info strip and status pill",
+    description:
+      "Clean sans-serif with a thin gradient accent rule, card info strip and status pill",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Goods Receipt Note #{{goodsReceiptNumber}}</title><style>
 @media print { @page { size: A4; margin: 10mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -243,7 +244,8 @@ tbody tr:nth-child(even) td { background: #eef2f9 !important; }
     id: "goodsreceipt-bold-banner",
     name: "Bold Colored Banner",
     type: "GoodsReceipt",
-    description: "High-contrast teal-to-blue gradient banner with large bold GRN number and vivid table header",
+    description:
+      "High-contrast teal-to-blue gradient banner with large bold GRN number and vivid table header",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Goods Receipt Note #{{goodsReceiptNumber}}</title><style>
 @media print { @page { size: A4; margin: 0; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -550,7 +552,8 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
     id: "goodsreceipt-left-sidebar",
     name: "Left Sidebar Strip",
     type: "GoodsReceipt",
-    description: "Vertical deep-blue sidebar strip on the left carrying GRN number rotated vertically",
+    description:
+      "Vertical deep-blue sidebar strip on the left carrying GRN number rotated vertically",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Goods Receipt Note #{{goodsReceiptNumber}}</title><style>
 @media print { @page { size: A4; margin: 0; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -627,7 +630,8 @@ tbody tr:nth-child(even) td { background: #e8eaf6 !important; }
     id: "goodsreceipt-boxed-traditional",
     name: "Boxed Traditional",
     type: "GoodsReceipt",
-    description: "Heavy-bordered box sections for each field group, classic Pakistani wholesale style",
+    description:
+      "Heavy-bordered box sections for each field group, classic Pakistani wholesale style",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Goods Receipt Note #{{goodsReceiptNumber}}</title><style>
 @media print { @page { size: A4; margin: 10mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -705,7 +709,8 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
     id: "goodsreceipt-bismillah-header",
     name: "Bismillah Header",
     type: "GoodsReceipt",
-    description: "Centered Bismillah calligraphy line at the top with a green-ruled traditional format",
+    description:
+      "Centered Bismillah calligraphy line at the top with a green-ruled traditional format",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Goods Receipt Note #{{goodsReceiptNumber}}</title><style>
 @media print { @page { size: A4; margin: 10mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -778,7 +783,8 @@ tbody tr:nth-child(even) td { background: #e8f5e9 !important; }
     id: "goodsreceipt-green-gold",
     name: "Green & Gold",
     type: "GoodsReceipt",
-    description: "Pakistani national colors — forest green header with gold accent lines and olive tints",
+    description:
+      "Pakistani national colors — forest green header with gold accent lines and olive tints",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Goods Receipt Note #{{goodsReceiptNumber}}</title><style>
 @media print { @page { size: A4; margin: 0; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -941,7 +947,8 @@ tbody tr:nth-child(even) td { background: #eceff1 !important; }
     id: "goodsreceipt-big-letterhead",
     name: "Big Letterhead",
     type: "GoodsReceipt",
-    description: "Oversized centered company name as letterhead with ruled lines and logo prominent",
+    description:
+      "Oversized centered company name as letterhead with ruled lines and logo prominent",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Goods Receipt Note #{{goodsReceiptNumber}}</title><style>
 @media print { @page { size: A4; margin: 10mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -1095,7 +1102,8 @@ tbody tr:nth-child(even) td { background: #f5f7f9 !important; }
     id: "goodsreceipt-govt-form-grid",
     name: "Government Form Grid",
     type: "GoodsReceipt",
-    description: "Heavy-ruled form-style grid with labeled header cells, official goods-inward register style",
+    description:
+      "Heavy-ruled form-style grid with labeled header cells, official goods-inward register style",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Goods Receipt Note #{{goodsReceiptNumber}}</title><style>
 @media print { @page { size: A4; margin: 10mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -1175,5 +1183,4 @@ table.items td.c { text-align: center; }
 </div>
 </body></html>`,
   },
-
 ];

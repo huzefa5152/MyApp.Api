@@ -16,15 +16,18 @@ export function useUiPreference(key, defaultValue) {
     }
   });
 
-  const update = useCallback((next) => {
-    setValue(next);
-    try {
-      if (next == null) localStorage.removeItem(key);
-      else localStorage.setItem(key, next);
-    } catch {
-      /* private mode — non-fatal */
-    }
-  }, [key]);
+  const update = useCallback(
+    (next) => {
+      setValue(next);
+      try {
+        if (next == null) localStorage.removeItem(key);
+        else localStorage.setItem(key, next);
+      } catch {
+        /* private mode — non-fatal */
+      }
+    },
+    [key],
+  );
 
   // Keep tabs in sync if the same key changes in another tab.
   useEffect(() => {
