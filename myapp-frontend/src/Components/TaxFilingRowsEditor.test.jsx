@@ -38,7 +38,7 @@ it("offers combining and one shared HS code in a bar that appears once rows are 
  fireEvent.click(screen.getByRole("button",{name:"Select all rows"}));
  expect(screen.getByRole("heading",{name:"2 rows selected"})).toBeTruthy();
  expect(screen.getByRole("button",{name:"Combine selected (2)"})).toBeTruthy();
- expect(screen.getByRole("button",{name:"Apply to ticked rows (2)"})).toBeTruthy();
+ expect(screen.queryByRole("button",{name:/Apply to ticked/})).toBeNull();
  fireEvent.click(screen.getByRole("button",{name:"Clear selection"}));
  expect(screen.queryByRole("region",{name:"Same HS code for several lines"})).toBeNull();
 });
@@ -50,8 +50,8 @@ it("for a company that prints its original lines, shows each bill line and offer
  expect(screen.getByText("Bill line 2")).toBeTruthy();
  expect(screen.getAllByRole("checkbox")).toHaveLength(2);
  fireEvent.click(screen.getByRole("button",{name:"Select all lines"}));
- expect(screen.getByRole("button",{name:"Combine selected (2)"})).toBeTruthy();
  expect(screen.getByRole("button",{name:"Apply to ticked lines (2)"})).toBeTruthy();
+ expect(screen.queryByRole("button",{name:/Combine selected/})).toBeNull();
 });
 it("lets an original-lines company split a combined row", async () => {
  const merged = twoLines(true);

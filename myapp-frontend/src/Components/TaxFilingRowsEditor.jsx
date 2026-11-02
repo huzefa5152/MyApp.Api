@@ -9,6 +9,21 @@ import { amount, money, mergeFilingRows, separateFilingRow, filingErrors } from 
 import "./TaxFilingRowsEditor.css";
 import InvoiceDocumentView from "./InvoiceDocumentView";
 
+// FBR HS codes are four digits, a dot, four digits, and an optional two-digit tail.
+const HS_CODE_PATTERN = /^\d{4}\.\d{4}(\.\d{2})?$/;
+
+function SelectionBar({ count, perLine, bulk, setBulk, bulkReady, saving, companyId, types, canAdjustNumbers, omitDescription, onApply, onCombine, onClear }) {
+  return <section className="tf-bulk tf-selection-bar" aria-label="Same HS code for several lines">
+    <h3>{count} {perLine ? "line" : "row"}{count === 1 ? "" : "s"} selected</h3>
+    {perLine && <FilingClassificationFields row={bulk} label="Selected lines" companyId={companyId} types={types} canAdjustNumbers={canAdjustNumbers} omitDescription={omitDescription} lineDescriptions={perLine} onChange={setBulk} />}
+    <div className="tf-selection-actions">
+      {perLine && <button type="button" className="tf-apply" disabled={saving || !bulkReady} onClick={onApply}>Apply to ticked lines ({count})</button>}
+      {!perLine && <button type="button" className="tf-apply" disabled={saving || count < 2} onClick={onCombine}>Combine selected ({count})</button>}
+      <button type="button" disabled={saving} onClick={onClear}>Clear selection</button>
+    </div>
+  </section>;
+}
+
 export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readOnly = false }) {
   const { has } = usePermissions();
   const confirm = useConfirm();
@@ -64,7 +79,7 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
     if (treatments.size > 1 || saleTypes.size > 1) return showError("Selected rows have different tax treatments. Keep them separate and adjust each HS classification.");
     changeRows(mergeFilingRows(rows, selected)); setSelected([]);
   };
-  const bulkReady = /^\d{4}\.\d{4}(\.\d{2})?$/.test(bulk.hsCode || "") && !!bulk.uom && !!bulk.saleType && (!!bulk.itemTypeId || !!bulk.description?.trim());
+  const bulkReady = HS_CODE_PATTERN.test(bulk.hsCode || "") &&!!bulk.uom && !!bulk.saleType && (!!bulk.itemTypeId || !!bulk.description?.trim());
   const applyBulk = () => {
     if (!selected.length || !bulkReady) return;
     const applied = rows.map((r, i) => !selected.includes(i) ? r : { ...r, itemTypeId: bulk.itemTypeId, hsCode: bulk.hsCode, saleType: bulk.saleType,
@@ -100,7 +115,8 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
   // separate from that, so several lines may share one HS code and be combined into one row.
   const perLine = !!data?.bill?.taxInvoiceUseOriginalBillLines;
   // For an original-lines company the FBR unit is filled in from FBR, not typed: hold Save until it has arrived for every coded row.
-  const unitPending = perLine && (busyRows.size > 0 || rows.some(r => /^\d{4}\.\d{4}(\.\d{2})?$/.test(r.hsCode || "") && !r.uom));
+  const unitWord = perLine ? "lines" : "rows";
+  const unitPending = perLine && (busyRows.size > 0 || rows.some(r => HS_CODE_PATTERN.test(r.hsCode || "") && !r.uom));
   const reportBusy = (key) => (busy) => setBusyRows(prev => prev.has(key) === busy ? prev : (() => { const next = new Set(prev); busy ? next.add(key) : next.delete(key); return next; })());
   return <div style={formStyles.backdrop}>
     <form id="tax-filing-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="filing-title" className="tax-filing" style={{ ...formStyles.modal, maxWidth: modalSizes.xxl }} onSubmit={save} onKeyDown={keyDown}>
@@ -111,13 +127,13 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
         {data && readOnly && <InvoiceDocumentView bill={data.bill} rows={rows} requiresReview={data.requiresReview} />}
         {data && !readOnly && <>
           <div className="tf-document-context"><span>Company</span><strong>{data.bill.companyName || "Selected company"}</strong><span>Invoice #{data.bill.invoiceNumber}</span></div>
-          {perLine && rows.length === 1 ? <p className="tf-grouping-help">This is your original bill line. Add its HS code, and the quantity if FBR needs a different one. The bill and invoice print the line as billed.</p> : perLine ? <p className="tf-grouping-help">Each row is one of your original bill lines. Add its HS code and, when FBR needs different figures, its filing quantity and unit. Every line is filed and printed as its own row, with its own HS code: a code already used on one line cannot be used on another.</p> : <p className="tf-grouping-help">1. Select the rows to group. 2. Combine selected. 3. Choose an HS classification and filing unit for each group.</p>}
+          {perLine && rows.length === 1 ? <p className="tf-grouping-help">This is your original bill line. Add its HS code, and the quantity if FBR needs a different one. The bill and invoice print the line as billed.</p> : perLine ? <p className="tf-grouping-help">Each row is one of your original bill lines. Add its HS code and, when FBR needs different figures, its filing quantity and unit. The printed invoice keeps every line. FBR gets one row per HS code: lines that share a code are combined.</p> : <p className="tf-grouping-help">1. Select the rows to group. 2. Combine selected. 3. Choose an HS classification and filing unit for each group.</p>}
           <p role="status">{data.bill.items.length} bill {perLine && data.bill.items.length === 1 ? "line" : "lines"} → <strong>{rows.length} FBR filing {rows.length === 1 ? "row" : "rows"}</strong>.{!perLine && " Bill item types suggest the starting groups; unclassified lines remain separate."}</p>
           <div className="tf-summary" aria-live="polite"><div>Bill subtotal<strong>Rs. {money(data.bill.subtotal)}</strong></div><div>Filing total<strong>Rs. {money(total / 100)}</strong></div><div className={difference ? "tf-mismatch" : "tf-match"}>{difference === 0 ? "Matched" : difference > 0 ? "Amount remaining" : "Amount over bill"}<strong>Rs. {money(Math.abs(difference) / 100)}</strong></div></div>
           {data.requiresReview && <div className="tf-warning">The original bill changed after its last review. Check all current source lines and amounts before saving. Rebuild rows if lines were added or removed.</div>}
           {!editable && !readOnly && <p className="tf-warning">Editing requires invoice classification permission and an invoice that has not started submission.</p>}
           {editable && !canAdjustNumbers && <p>You can update HS classifications and combine rows with the same unit. Quantity and amount changes require consultant quantity permission.</p>}
-          {editable && <div className="tf-toolbar">{rows.length > 1 && <button type="button" disabled={saving || selected.length === rows.length} onClick={() => setSelected(rows.map((_, i) => i))}>Select all {perLine ? "lines" : "rows"}</button>}{canAdjustNumbers && <button type="button" disabled={saving} onClick={rebuild}>Rebuild from current bill</button>}{rows.length > 1 && <span>Tick {perLine ? "lines" : "rows"} to give them one HS code or combine them. The actions stay pinned at the bottom while you scroll.</span>}</div>}
+          {editable && <div className="tf-toolbar">{rows.length > 1 && <button type="button" disabled={saving || selected.length === rows.length} onClick={() => setSelected(rows.map((_, i) => i))}>Select all {unitWord}</button>}{canAdjustNumbers && <button type="button" disabled={saving} onClick={rebuild}>Rebuild from current bill</button>}{rows.length > 1 && <span>{perLine ? "Tick lines to give them one HS code. Ticked lines with the same code become one FBR row." : "Tick rows to combine them into one FBR row."} The actions stay pinned at the bottom while you scroll.</span>}</div>}
           <div className="tf-rows">{rows.map((row, index) => {
             const sources = data.bill.items.filter(i => row.sourceLineIds.includes(i.id));
             const canSeparate = canAdjustNumbers || (Math.abs(Number(row.quantity) - sources.reduce((s, i) => s + Number(i.adjustment?.adjustedQuantity ?? i.quantity), 0)) < 1e-9
@@ -133,15 +149,9 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
             </section>;
           })}</div>
           {/* Pinned to the bottom of the scrolling body: tick rows anywhere in a long bill, then classify them without scrolling back up. */}
-          {editable && selected.length > 0 && <section className="tf-bulk tf-selection-bar" aria-label="Same HS code for several lines">
-            <h3>{selected.length} {perLine ? "line" : "row"}{selected.length === 1 ? "" : "s"} selected</h3>
-            <FilingClassificationFields row={bulk} label="Selected lines" companyId={data.bill.companyId} types={types} canAdjustNumbers={canAdjustNumbers} omitDescription={!!data.bill.fbrOmitProductDescription} lineDescriptions={perLine} onChange={setBulk} />
-            <div className="tf-selection-actions">
-              <button type="button" className="tf-apply" disabled={saving || !bulkReady} onClick={applyBulk}>Apply to ticked {perLine ? "lines" : "rows"} ({selected.length})</button>
-              <button type="button" disabled={saving || selected.length < 2} onClick={combine}>Combine selected ({selected.length})</button>
-              <button type="button" disabled={saving} onClick={() => setSelected([])}>Clear selection</button>
-            </div>
-          </section>}
+          {editable && selected.length > 0 && <SelectionBar count={selected.length} perLine={perLine} bulk={bulk} setBulk={setBulk} bulkReady={bulkReady} saving={saving}
+            companyId={data.bill.companyId} types={types} canAdjustNumbers={canAdjustNumbers} omitDescription={!!data.bill.fbrOmitProductDescription}
+            onApply={applyBulk} onCombine={combine} onClear={() => setSelected([])} />}
           {!types.some(t => t.hsCode && t.saleType) && editable && <p className="tf-warning">This company has no saved filing classifications yet. Search FBR HS codes above and enter an item name to save a new company classification with this review.</p>}
         </>}
       </div>
