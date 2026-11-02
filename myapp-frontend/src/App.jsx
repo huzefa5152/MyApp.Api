@@ -1,59 +1,60 @@
-import McpGuidePage from "./pages/public/McpGuidePage";
-import McpConnectPage from "./pages/McpConnectPage";
-import AdministratorsPage from "./pages/AdministratorsPage";
 // App.jsx
+import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
+const McpGuidePage = lazy(() => import("./pages/public/McpGuidePage"));
+const McpConnectPage = lazy(() => import("./pages/McpConnectPage"));
+const AdministratorsPage = lazy(() => import("./pages/AdministratorsPage"));
 import DashboardLayout from "./layouts/DashboardLayout";
 import PublicLayout from "./layouts/PublicLayout";
-import DashboardPage from "./pages/DashboardPage";
-import EmailWorkspacePage from "./pages/EmailWorkspacePage";
-import CompanyPage from "./pages/CompanyPage";
-import DivisionsPage from "./pages/DivisionsPage";
-import ChallansPage from "./pages/ChallanPage";
-import ImportChallansPage from "./pages/ImportChallansPage";
-import SalesQuotePage from "./pages/SalesQuotePage";
-import SalesOrderPage from "./pages/SalesOrderPage";
-import InvoicePage from "./pages/InvoicePage";
-import PaymentsPage from "./pages/PaymentsPage";
-import ChartOfAccountsPage from "./pages/ChartOfAccountsPage";
-import UserGuidePage from "./pages/UserGuidePage";
-import BankCashAccountsPage from "./pages/BankCashAccountsPage";
-import JournalEntriesPage from "./pages/JournalEntriesPage";
-import TransfersPage from "./pages/TransfersPage";
-import AccountingDashboardPage from "./pages/AccountingDashboardPage";
-import AccountingReportsPage from "./pages/AccountingReportsPage";
-import DataMigrationPage from "./pages/DataMigrationPage";
-import ManagerImportPage from "./pages/ManagerImportPage";
-import CreditDebitNotePage from "./pages/CreditDebitNotePage";
-import ItemRateHistoryPage from "./pages/ItemRateHistoryPage";
-import PurchaseBillsPage from "./pages/PurchaseBillsPage";
-import PurchaseDebitNotesPage from "./pages/PurchaseDebitNotesPage";
-import GoodsReceiptsPage from "./pages/GoodsReceiptsPage";
-import StockDashboardPage from "./pages/StockDashboardPage";
-import FbrPurchaseImportPage from "./pages/FbrPurchaseImportPage";
-import SalesReportPage from "./pages/SalesReportPage";
-import DocumentLinesPage from "./pages/DocumentLinesPage";
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const EmailWorkspacePage = lazy(() => import("./pages/EmailWorkspacePage"));
+const CompanyPage = lazy(() => import("./pages/CompanyPage"));
+const DivisionsPage = lazy(() => import("./pages/DivisionsPage"));
+const ChallansPage = lazy(() => import("./pages/ChallanPage"));
+const ImportChallansPage = lazy(() => import("./pages/ImportChallansPage"));
+const SalesQuotePage = lazy(() => import("./pages/SalesQuotePage"));
+const SalesOrderPage = lazy(() => import("./pages/SalesOrderPage"));
+const InvoicePage = lazy(() => import("./pages/InvoicePage"));
+const PaymentsPage = lazy(() => import("./pages/PaymentsPage"));
+const ChartOfAccountsPage = lazy(() => import("./pages/ChartOfAccountsPage"));
+const UserGuidePage = lazy(() => import("./pages/UserGuidePage"));
+const BankCashAccountsPage = lazy(() => import("./pages/BankCashAccountsPage"));
+const JournalEntriesPage = lazy(() => import("./pages/JournalEntriesPage"));
+const TransfersPage = lazy(() => import("./pages/TransfersPage"));
+const AccountingDashboardPage = lazy(() => import("./pages/AccountingDashboardPage"));
+const AccountingReportsPage = lazy(() => import("./pages/AccountingReportsPage"));
+const DataMigrationPage = lazy(() => import("./pages/DataMigrationPage"));
+const ManagerImportPage = lazy(() => import("./pages/ManagerImportPage"));
+const CreditDebitNotePage = lazy(() => import("./pages/CreditDebitNotePage"));
+const ItemRateHistoryPage = lazy(() => import("./pages/ItemRateHistoryPage"));
+const PurchaseBillsPage = lazy(() => import("./pages/PurchaseBillsPage"));
+const PurchaseDebitNotesPage = lazy(() => import("./pages/PurchaseDebitNotesPage"));
+const GoodsReceiptsPage = lazy(() => import("./pages/GoodsReceiptsPage"));
+const StockDashboardPage = lazy(() => import("./pages/StockDashboardPage"));
+const FbrPurchaseImportPage = lazy(() => import("./pages/FbrPurchaseImportPage"));
+const SalesReportPage = lazy(() => import("./pages/SalesReportPage"));
+const DocumentLinesPage = lazy(() => import("./pages/DocumentLinesPage"));
 import { lineSources } from "./utils/documentLines";
-import TaxSheetPage from "./pages/TaxSheetPage";
-import ClientsPage from "./pages/ClientsPage";
-import SuppliersPage from "./pages/SuppliersPage";
-import ItemTypesPage from "./pages/ItemTypesPage";
-import NonInventoryItemsPage from "./pages/NonInventoryItemsPage";
-import UnitsPage from "./pages/UnitsPage";
-import POFormatsPage from "./pages/POFormatsPage";
-import ProfilePage from "./pages/ProfilePage";
-import UsersPage from "./pages/UsersPage";
-import RolesPage from "./pages/RolesPage";
-import TenantAccessPage from "./pages/TenantAccessPage";
-import TemplateEditorPage from "./pages/TemplateEditorPage";
-import PrintTemplatesPage from "./pages/PrintTemplatesPage";
-import CustomerPortalsPage from "./pages/CustomerPortalsPage";
-import AuditLogsPage from "./pages/AuditLogsPage";
-import FbrSettingsPage from "./pages/FbrSettingsPage";
-import FbrSandboxPage from "./pages/FbrSandboxPage";
-import FbrMonitorPage from "./pages/FbrMonitorPage";
-import NavigationMenuPage from "./pages/NavigationMenuPage";
-import WithholdingTaxReceiptsPage from "./pages/WithholdingTaxReceiptsPage";
+const TaxSheetPage = lazy(() => import("./pages/TaxSheetPage"));
+const ClientsPage = lazy(() => import("./pages/ClientsPage"));
+const SuppliersPage = lazy(() => import("./pages/SuppliersPage"));
+const ItemTypesPage = lazy(() => import("./pages/ItemTypesPage"));
+const NonInventoryItemsPage = lazy(() => import("./pages/NonInventoryItemsPage"));
+const UnitsPage = lazy(() => import("./pages/UnitsPage"));
+const POFormatsPage = lazy(() => import("./pages/POFormatsPage"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const UsersPage = lazy(() => import("./pages/UsersPage"));
+const RolesPage = lazy(() => import("./pages/RolesPage"));
+const TenantAccessPage = lazy(() => import("./pages/TenantAccessPage"));
+const TemplateEditorPage = lazy(() => import("./pages/TemplateEditorPage"));
+const PrintTemplatesPage = lazy(() => import("./pages/PrintTemplatesPage"));
+const CustomerPortalsPage = lazy(() => import("./pages/CustomerPortalsPage"));
+const AuditLogsPage = lazy(() => import("./pages/AuditLogsPage"));
+const FbrSettingsPage = lazy(() => import("./pages/FbrSettingsPage"));
+const FbrSandboxPage = lazy(() => import("./pages/FbrSandboxPage"));
+const FbrMonitorPage = lazy(() => import("./pages/FbrMonitorPage"));
+const NavigationMenuPage = lazy(() => import("./pages/NavigationMenuPage"));
+const WithholdingTaxReceiptsPage = lazy(() => import("./pages/WithholdingTaxReceiptsPage"));
 import LoginPage from "./pages/public/LoginPage";
 import LandingPage from "./pages/public/LandingPage";
 import ProtectedRoute from "./Components/ProtectedRoute";
@@ -62,6 +63,7 @@ import "./App.css";
 
 export default function App() {
   return (
+    <Suspense fallback={null}>
     <Routes>
       {/* Public website – wrapped in PublicLayout (sticky nav + footer).
           Only rendered when the app owns the site root (base "/", i.e. the
@@ -179,5 +181,6 @@ export default function App() {
       {/* Catch-all */}
       <Route path="*" element={<h2 style={{ padding: "2rem" }}>Page Not Found</h2>} />
     </Routes>
+    </Suspense>
   );
 }

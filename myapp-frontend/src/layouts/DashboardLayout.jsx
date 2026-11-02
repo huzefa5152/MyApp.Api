@@ -1,6 +1,6 @@
 import useAdminAccessibility from "../hooks/useAdminAccessibility";
 // src/layouts/DashboardLayout.jsx
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, Suspense } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   MdDashboard,
@@ -906,7 +906,10 @@ export default function DashboardLayout() {
 
         {/* Page Content */}
         <main className="dl-main" id="main-content" tabIndex={-1}>
-          <Outlet />
+          {/* Screens load on demand; the shell stays up while one arrives. */}
+          <Suspense fallback={null}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>
