@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MdArrowDownward,
   MdArrowUpward,
-  MdSearch,
   MdViewColumn,
   MdDensityMedium,
   MdDensitySmall,

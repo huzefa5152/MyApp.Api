@@ -43,7 +43,7 @@ import { evalRowFlags } from "../Components/ChallanTable";
 import { canEditBilledDelivery } from "../utils/billedChallanEdit";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
-import { Btn, EmptyState, IconBtn, RowMenu, StatusPill, TableSkeleton } from "./primitives";
+import { Btn, EmptyState, RowMenu, StatusPill, TableSkeleton } from "./primitives";
 import DataGrid from "./DataGrid";
 import Pager from "./Pager";
 import "./ui2.css";
